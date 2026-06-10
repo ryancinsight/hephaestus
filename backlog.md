@@ -9,11 +9,11 @@ cuda-oxide + cutile).
   seam, DeviceBuffer, error vocabulary) + `hephaestus-wgpu` backend (acquisition,
   typed buffers, upload/download, elementwise ZST-op dispatch). Differential
   contract tests pass on real hardware; fmt/clippy/test/doc gates clean.
-- [ ] [minor] Pipeline + shader-module caching keyed by `(Op, T)` so repeated
+- [x] [minor] Pipeline + shader-module caching keyed by `(Op, T)` so repeated
   dispatch skips recompilation (mirrors apollo's per-kernel caches).
-- [ ] [minor] Unary elementwise dispatch (ZST markers, shared WGSL template) and
+- [x] [minor] Unary elementwise dispatch (ZST markers, shared WGSL template) and
   scalar-broadcast variants, mirroring leto-ops' op families on-device.
-- [ ] [minor] Reduction dispatch (sum/min/max) with workgroup-tree reduction.
+- [x] [minor] Reduction dispatch (sum/min/max) with workgroup-tree reduction.
 - [ ] [minor] Strided-layout-aware dispatch reusing leto host-side `Layout<N>`
   metadata (shape/stride uniform buffer) so consumers avoid materializing
   contiguous copies before dispatch.

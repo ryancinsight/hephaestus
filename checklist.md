@@ -1,8 +1,7 @@
 # Checklist — hephaestus
 
 Target version: 0.1.0. Sprint phase: Foundation → Execution.
-In-flight item: none. Next concrete increment: pipeline/shader caching keyed by
-`(Op, T)` (backlog Phase 1), then unary dispatch.
+In-flight item: none. Next concrete increment: strided-layout-aware dispatch (backlog Phase 1).
 
 ## 0.1.0 scaffold [arch]
 - [x] Workspace: `hephaestus-core` (no GPU deps, `#![forbid(unsafe_code)]`,
@@ -18,8 +17,10 @@ In-flight item: none. Next concrete increment: pipeline/shader caching keyed by
 - [x] `binary_elementwise::<Op, T>`: ZST `BinaryWgslOp` markers (Add/Sub/Mul),
   `WgslScalar` type-token substitution, arrayLength tail guard, partial
   trailing workgroup correct.
-- [x] Contract tests (5): round-trip values, length rejection (download +
-  dispatch), add vs CPU reference at 1027 elements, integral mul at 513.
+- [x] `unary_elementwise::<Op, T>`: ZST `UnaryWgslOp` markers (Exp/Ln/Sin/Cos/Sqrt/Abs/Neg/Recip) and shared WGSL template.
+- [x] `scalar_elementwise::<Op, T>`: uniform buffer binding and ZST-wrapped pipeline cache keys.
+- [x] `reduction::<Op, T>`: ZST `ReductionWgslOp` markers (Sum/Min/Max), multi-pass tree reduction, and type-safe `ReductionIdentity` mapping.
+- [x] Contract tests (9): round-trip values, length rejection (download + dispatch), add/mul/unary/scalar/reduction vs CPU reference.
   Verified on real adapter hardware; environment-gated skip otherwise.
 - [x] Gates: `cargo fmt --check`, `clippy --all-targets -- -D warnings`,
   `cargo test`, `cargo doc --no-deps` — all clean.
