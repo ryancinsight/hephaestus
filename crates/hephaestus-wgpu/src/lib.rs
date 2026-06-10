@@ -20,6 +20,7 @@ pub use application::elementwise::{
 pub use application::reduction::{
     reduction, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,
 };
+pub use application::strided::{binary_elementwise_strided_into, MAX_STRIDED_RANK};
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;

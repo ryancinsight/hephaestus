@@ -2,6 +2,36 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.2.0] - 2026-06-10
+
+Phase 1 completion: strided-layout-aware dispatch over leto metadata, plus the
+op-family/caching/pooling growth landed since 0.1.0.
+
+### Added
+
+- `hephaestus-wgpu`: `binary_elementwise_strided_into` — binary dispatch where
+  all three operands are described by leto host-side `Layout<N>` (rank ≤ 4,
+  compile-time capped). Inputs broadcast to the output shape with leto's own
+  broadcast rules (zero-stride expanded axes; pure metadata, no data
+  movement), so transposed, sliced, offset, and broadcast views dispatch with
+  no contiguous materialization. The output buffer is caller-owned (allocation
+  control stays with the consumer); zero-stride-aliasing output layouts are
+  rejected. Shape/strides/offsets travel in one packed 80-byte uniform; the
+  shader decomposes the flat index row-major and applies per-operand strides.
+- `hephaestus-wgpu`: unary (`AbsOp`/`NegOp`/`ExpOp`/`LnOp`/`SinOp`/`CosOp`/
+  `SqrtOp`/`RecipOp`) and scalar-broadcast elementwise dispatch; sum/min/max
+  workgroup-tree reductions; pipeline caching keyed by `(kernel, T)` TypeIds;
+  staging-buffer pooling on the download path.
+- `leto` (core only) added as a dependency of `hephaestus-wgpu` for layout
+  metadata — no CPU compute dependency (leto-ops is not pulled).
+
+### Tests
+
+- Strided differential suite vs CPU references over identical layout
+  metadata: transposed input, dual broadcast `[2,1]+[1,3]`, offset sub-block
+  write isolation, rank-3 inner-transpose, aliasing/short-buffer rejection.
+  14 tests total on real hardware.
+
 ## [0.1.0] - 2026-06-10
 
 Initial scaffold per atlas ADR 0001 (shared GPU/accelerator substrate).

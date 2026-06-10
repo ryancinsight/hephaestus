@@ -14,9 +14,15 @@ cuda-oxide + cutile).
 - [x] [minor] Unary elementwise dispatch (ZST markers, shared WGSL template) and
   scalar-broadcast variants, mirroring leto-ops' op families on-device.
 - [x] [minor] Reduction dispatch (sum/min/max) with workgroup-tree reduction.
-- [ ] [minor] Strided-layout-aware dispatch reusing leto host-side `Layout<N>`
-  metadata (shape/stride uniform buffer) so consumers avoid materializing
-  contiguous copies before dispatch.
+- [x] [minor] Strided-layout-aware dispatch reusing leto host-side `Layout<N>`
+  metadata: `binary_elementwise_strided_into` (rank ≤ 4, compile-time capped)
+  broadcasts inputs to the output shape with leto rules, writes through a
+  caller-owned output buffer, rejects zero-stride-aliasing outputs, and packs
+  shape/strides/offsets in one 80-byte uniform. Verification: differential
+  tests vs CPU references over identical layouts (transposed, dual-broadcast,
+  offset sub-block, rank-3 inner-transpose, rejections) on real hardware.
+- [ ] [minor] Extend strided dispatch to the unary/scalar op families through
+  the same Meta uniform (shared template; no traversal duplication).
 
 ## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
 - [ ] [arch] `hephaestus-cuda`: ComputeDevice impl with cuda-oxide owning

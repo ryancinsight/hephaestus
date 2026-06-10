@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -26,3 +26,7 @@ pollster = "0.3"
 # ── Foundations ──
 bytemuck = { version = "1.19", features = ["derive"] }
 thiserror = "2.0"
+# leto host-side layout metadata (shape/strides/offset + broadcast) reused as
+# the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
+# types only — no CPU compute dependency (leto-ops is not pulled).
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "320960ec7b99b8a4fdfe6d3974de03543b167ff9", default-features = false, features = ["std"] }

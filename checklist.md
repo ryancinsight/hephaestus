@@ -1,6 +1,18 @@
 # Checklist — hephaestus
 
-Target version: 0.1.0. Sprint phase: Foundation → Execution.
+Target version: 0.2.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Phase 1 (wgpu substrate) complete except strided unary/scalar extension; next
+concrete increment: strided unary/scalar via the shared Meta uniform, then
+Phase 2 `hephaestus-cuda` ADR (cuda-oxide + cutile composed).
+
+## 0.2.0 strided dispatch [minor]
+- [x] `binary_elementwise_strided_into` over leto `Layout<N>` (rank ≤ 4
+  compile-time cap, leto broadcast semantics, caller-owned output,
+  aliasing/short-buffer rejection, packed 80-byte Meta uniform).
+- [x] Differential strided suite (5) on real hardware; 14 tests total.
+- [x] Gates: fmt, clippy `-D warnings`, test, doc — clean.
+
+Previous sprint (0.1.0 scaffold) below.
 In-flight item: none. Next concrete increment: strided-layout-aware dispatch (backlog Phase 1).
 
 ## 0.1.0 scaffold [arch]
