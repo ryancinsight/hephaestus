@@ -21,6 +21,7 @@ pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pub(crate) pipeline_cache: Arc<Mutex<HashMap<(TypeId, TypeId), wgpu::ComputePipeline>>>,
+    pub(crate) staging_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
 }
 
 impl WgpuDevice {
@@ -32,6 +33,7 @@ impl WgpuDevice {
             device,
             queue,
             pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+            staging_pool: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -162,12 +164,22 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = (buffer.len * core::mem::size_of::<T>()) as u64;
         let padded = Self::padded_size::<T>(buffer.len);
-        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("hephaestus-staging"),
-            size: padded,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // Align staging buffer size to MAP_ALIGNMENT (8 bytes) to guarantee map_async compatibility
+        let staging_size = padded.div_ceil(8) * 8;
+
+        let staging = {
+            let mut pool = self.staging_pool.lock().unwrap();
+            if let Some(pos) = pool.iter().position(|b| b.size() >= staging_size) {
+                pool.swap_remove(pos)
+            } else {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("hephaestus-staging"),
+                    size: staging_size,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                })
+            }
+        };
 
         let mut encoder = self
             .device
@@ -177,7 +189,7 @@ impl ComputeDevice for WgpuDevice {
         encoder.copy_buffer_to_buffer(&buffer.buffer, 0, &staging, 0, padded);
         self.queue.submit(Some(encoder.finish()));
 
-        let slice = staging.slice(..);
+        let slice = staging.slice(..staging_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result);
@@ -200,6 +212,12 @@ impl ComputeDevice for WgpuDevice {
         out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len as usize]));
         drop(mapped);
         staging.unmap();
+
+        {
+            let mut pool = self.staging_pool.lock().unwrap();
+            pool.push(staging);
+        }
+
         Ok(())
     }
 }
