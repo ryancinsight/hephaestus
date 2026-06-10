@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hephaestus-core",
+    "crates/hephaestus-wgpu",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ryancinsight/hephaestus.git"
+
+[workspace.dependencies]
+# ── Local Workspace Crates ──
+hephaestus-core = { path = "crates/hephaestus-core" }
+
+# ── GPU ──
+# wgpu 26 matches apollo (the first consumer). coeus re-bases when it bumps
+# from wgpu 23; the CUDA backend (cuda-oxide + cutile composed, per atlas
+# ADR 0001) lands as a sibling crate.
+wgpu = { version = "26.0", features = ["wgsl"] }
+pollster = "0.3"
+
+# ── Foundations ──
+bytemuck = { version = "1.19", features = ["derive"] }
+thiserror = "2.0"

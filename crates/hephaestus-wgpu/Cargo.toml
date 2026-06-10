@@ -1,0 +1,14 @@
+[package]
+name = "hephaestus-wgpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "wgpu backend for the Atlas accelerator substrate: device acquisition, typed buffers, and monomorphized compute dispatch."
+
+[dependencies]
+hephaestus-core = { workspace = true }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }

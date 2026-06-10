@@ -1,0 +1,12 @@
+[package]
+name = "hephaestus-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "GPU-dependency-free device, buffer, and dispatch contracts for the Atlas accelerator substrate."
+
+[dependencies]
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
