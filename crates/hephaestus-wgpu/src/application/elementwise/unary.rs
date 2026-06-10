@@ -99,10 +99,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }
 
 /// Run `out[i] = op(a[i])` on the device, allocating the output buffer.
-pub fn unary_elementwise<Op, T>(
-    device: &WgpuDevice,
-    a: &WgpuBuffer<T>,
-) -> Result<WgpuBuffer<T>>
+pub fn unary_elementwise<Op, T>(device: &WgpuDevice, a: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
 where
     Op: UnaryWgslOp,
     T: WgslScalar + Pod,
@@ -124,16 +121,17 @@ where
                     label: Some("hephaestus-unary"),
                     source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
                 });
-            let pipeline = device
-                .inner()
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("hephaestus-unary"),
-                    layout: None,
-                    module: &module,
-                    entry_point: Some("main"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    cache: None,
-                });
+            let pipeline =
+                device
+                    .inner()
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("hephaestus-unary"),
+                        layout: None,
+                        module: &module,
+                        entry_point: Some("main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        cache: None,
+                    });
             cache.insert(key, pipeline.clone());
             pipeline
         }

@@ -4,8 +4,8 @@
 //! GPU/lavapipe) they skip with a message rather than fabricate a pass.
 
 use hephaestus_wgpu::{
-    binary_elementwise, scalar_elementwise, unary_elementwise, AbsOp, AddOp, ExpOp, MulOp, NegOp,
-    RecipOp, SqrtOp, WgpuDevice, ComputeDevice, DeviceBuffer, HephaestusError,
+    binary_elementwise, scalar_elementwise, unary_elementwise, AbsOp, AddOp, ComputeDevice,
+    DeviceBuffer, ExpOp, HephaestusError, MulOp, NegOp, RecipOp, SqrtOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -133,7 +133,11 @@ fn elementwise_unary_matches_cpu_reference() {
         assert!(
             diff < tolerance,
             "Exp mismatch at index {}: got {}, expected {}, diff {}, tol {}",
-            i, got_exp[i], expected, diff, tolerance
+            i,
+            got_exp[i],
+            expected,
+            diff,
+            tolerance
         );
     }
 

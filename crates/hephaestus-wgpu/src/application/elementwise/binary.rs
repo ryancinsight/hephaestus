@@ -100,16 +100,17 @@ where
                     label: Some("hephaestus-elementwise"),
                     source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
                 });
-            let pipeline = device
-                .inner()
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("hephaestus-elementwise"),
-                    layout: None,
-                    module: &module,
-                    entry_point: Some("main"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    cache: None,
-                });
+            let pipeline =
+                device
+                    .inner()
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("hephaestus-elementwise"),
+                        layout: None,
+                        module: &module,
+                        entry_point: Some("main"),
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        cache: None,
+                    });
             cache.insert(key, pipeline.clone());
             pipeline
         }
