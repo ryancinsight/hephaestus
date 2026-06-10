@@ -13,7 +13,10 @@ pub mod application;
 /// wgpu device, queue, and buffer infrastructure.
 pub mod infrastructure;
 
-pub use application::elementwise::{binary_elementwise, AddOp, BinaryWgslOp, MulOp, SubOp};
+pub use application::elementwise::{
+    binary_elementwise, scalar_elementwise, unary_elementwise, AddOp, BinaryWgslOp, MulOp, SubOp,
+    AbsOp, CosOp, ExpOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp, UnaryWgslOp,
+};
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;

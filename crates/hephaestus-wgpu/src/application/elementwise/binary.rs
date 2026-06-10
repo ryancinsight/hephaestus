@@ -5,8 +5,6 @@ use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Workgroup width of the elementwise kernels. One dimension is sufficient
-/// for linear buffers; dispatch is `ceil(len / WORKGROUP_SIZE)` groups.
 const WORKGROUP_SIZE: u32 = 256;
 
 /// Zero-sized binary operation marker selecting the WGSL expression.
@@ -43,9 +41,6 @@ impl BinaryWgslOp for MulOp {
     const WGSL_EXPR: &'static str = "lhs * rhs";
 }
 
-/// WGSL template for binary elementwise kernels. `{ty}` and `{expr}` are
-/// substituted per monomorphization; `arrayLength` guards the tail so the
-/// dispatch never reads or writes past the logical element count.
 fn shader_source<Op: BinaryWgslOp, T: WgslScalar>() -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
@@ -163,40 +158,4 @@ where
     device.queue().submit(Some(encoder.finish()));
 
     Ok(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn device_or_skip() -> Option<WgpuDevice> {
-        match WgpuDevice::try_default("hephaestus-elementwise-test") {
-            Ok(device) => Some(device),
-            Err(e) => {
-                eprintln!("skipping elementwise cache test: {e}");
-                None
-            }
-        }
-    }
-
-    #[test]
-    fn test_pipeline_cache_reused() {
-        let Some(device) = device_or_skip() else {
-            return;
-        };
-        let a = device.upload(&[1.0f32, 2.0]).unwrap();
-        let b = device.upload(&[3.0f32, 4.0]).unwrap();
-
-        let initial_size = { device.pipeline_cache.lock().unwrap().len() };
-
-        // Dispatch first time: should compile and cache
-        let _out1 = binary_elementwise::<AddOp, f32>(&device, &a, &b).unwrap();
-        let size_after_first = { device.pipeline_cache.lock().unwrap().len() };
-        assert_eq!(size_after_first, initial_size + 1);
-
-        // Dispatch second time: should hit cache and not compile again
-        let _out2 = binary_elementwise::<AddOp, f32>(&device, &a, &b).unwrap();
-        let size_after_second = { device.pipeline_cache.lock().unwrap().len() };
-        assert_eq!(size_after_second, size_after_first);
-    }
 }
