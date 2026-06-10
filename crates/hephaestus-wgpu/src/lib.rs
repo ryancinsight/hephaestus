@@ -17,6 +17,9 @@ pub use application::elementwise::{
     binary_elementwise, scalar_elementwise, unary_elementwise, AbsOp, AddOp, BinaryWgslOp, CosOp,
     ExpOp, LnOp, MulOp, NegOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
 };
+pub use application::reduction::{
+    reduction, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,
+};
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;

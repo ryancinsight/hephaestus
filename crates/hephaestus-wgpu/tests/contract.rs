@@ -4,8 +4,9 @@
 //! GPU/lavapipe) they skip with a message rather than fabricate a pass.
 
 use hephaestus_wgpu::{
-    binary_elementwise, scalar_elementwise, unary_elementwise, AbsOp, AddOp, ComputeDevice,
-    DeviceBuffer, ExpOp, HephaestusError, MulOp, NegOp, RecipOp, SqrtOp, WgpuDevice,
+    binary_elementwise, reduction, scalar_elementwise, unary_elementwise, AbsOp, AddOp,
+    ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
+    SqrtOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -169,4 +170,135 @@ fn elementwise_scalar_matches_cpu_reference() {
     let mut got_mul = vec![0.0f32; host.len()];
     device.download(&out_mul, &mut got_mul).unwrap();
     assert_eq!(got_mul, vec![3.0f32, 6.0, 9.0, 12.0, 15.0]);
+}
+
+#[test]
+fn reduction_sum_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let test_sizes = [0, 1, 255, 256, 257, 1027];
+
+    for &size in &test_sizes {
+        // f32
+        let host_f32: Vec<f32> = (0..size).map(|i| i as f32 * 0.5).collect();
+        let expected_f32: f32 = host_f32.iter().sum();
+        let buf_f32 = device.upload(&host_f32).unwrap();
+        let out_f32 = reduction::<SumOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_f32 = vec![0.0f32; 1];
+        device.download(&out_f32, &mut got_f32).unwrap();
+        assert_eq!(
+            got_f32[0], expected_f32,
+            "f32 sum mismatch at size {}",
+            size
+        );
+
+        // u32
+        let host_u32: Vec<u32> = (0..size).map(|i| i as u32).collect();
+        let expected_u32: u32 = host_u32.iter().sum();
+        let buf_u32 = device.upload(&host_u32).unwrap();
+        let out_u32 = reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+        let mut got_u32 = vec![0u32; 1];
+        device.download(&out_u32, &mut got_u32).unwrap();
+        assert_eq!(
+            got_u32[0], expected_u32,
+            "u32 sum mismatch at size {}",
+            size
+        );
+
+        // i32
+        let host_i32: Vec<i32> = (0..size).map(|i| if i % 2 == 0 { i } else { -i }).collect();
+        let expected_i32: i32 = host_i32.iter().sum();
+        let buf_i32 = device.upload(&host_i32).unwrap();
+        let out_i32 = reduction::<SumOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_i32 = vec![0i32; 1];
+        device.download(&out_i32, &mut got_i32).unwrap();
+        assert_eq!(
+            got_i32[0], expected_i32,
+            "i32 sum mismatch at size {}",
+            size
+        );
+    }
+}
+
+#[test]
+fn reduction_min_max_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let test_sizes = [0, 1, 255, 256, 257, 1027];
+
+    for &size in &test_sizes {
+        // f32 Min/Max
+        let host_f32: Vec<f32> = (0..size)
+            .map(|i| (i as f32 * 12.34 - 100.0).sin())
+            .collect();
+        let expected_min_f32 = if size == 0 {
+            f32::MAX
+        } else {
+            host_f32.iter().copied().fold(f32::NAN, f32::min)
+        };
+        let expected_max_f32 = if size == 0 {
+            f32::MIN
+        } else {
+            host_f32.iter().copied().fold(f32::NAN, f32::max)
+        };
+
+        let buf_f32 = device.upload(&host_f32).unwrap();
+
+        let out_min_f32 = reduction::<MinOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_min_f32 = vec![0.0f32; 1];
+        device.download(&out_min_f32, &mut got_min_f32).unwrap();
+        assert_eq!(
+            got_min_f32[0], expected_min_f32,
+            "f32 min mismatch at size {}",
+            size
+        );
+
+        let out_max_f32 = reduction::<MaxOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_max_f32 = vec![0.0f32; 1];
+        device.download(&out_max_f32, &mut got_max_f32).unwrap();
+        assert_eq!(
+            got_max_f32[0], expected_max_f32,
+            "f32 max mismatch at size {}",
+            size
+        );
+
+        // i32 Min/Max
+        let host_i32: Vec<i32> = (0..size)
+            .map(|i| if i % 3 == 0 { i * 7 } else { -(i * 5) })
+            .collect();
+        let expected_min_i32 = if size == 0 {
+            i32::MAX
+        } else {
+            *host_i32.iter().min().unwrap()
+        };
+        let expected_max_i32 = if size == 0 {
+            i32::MIN
+        } else {
+            *host_i32.iter().max().unwrap()
+        };
+
+        let buf_i32 = device.upload(&host_i32).unwrap();
+
+        let out_min_i32 = reduction::<MinOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_min_i32 = vec![0i32; 1];
+        device.download(&out_min_i32, &mut got_min_i32).unwrap();
+        assert_eq!(
+            got_min_i32[0], expected_min_i32,
+            "i32 min mismatch at size {}",
+            size
+        );
+
+        let out_max_i32 = reduction::<MaxOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_max_i32 = vec![0i32; 1];
+        device.download(&out_max_i32, &mut got_max_i32).unwrap();
+        assert_eq!(
+            got_max_i32[0], expected_max_i32,
+            "i32 max mismatch at size {}",
+            size
+        );
+    }
 }
