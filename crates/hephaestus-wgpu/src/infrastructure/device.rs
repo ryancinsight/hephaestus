@@ -107,6 +107,30 @@ impl WgpuDevice {
         let raw = (len * core::mem::size_of::<T>()) as u64;
         raw.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT
     }
+
+    /// Retrieve a staging buffer of size >= size from the pool, or create a new one.
+    /// The size is automatically aligned to `wgpu::MAP_ALIGNMENT` (8 bytes).
+    #[must_use]
+    pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
+        let staging_size = size.div_ceil(8) * 8;
+        let mut pool = self.staging_pool.lock().unwrap();
+        if let Some(pos) = pool.iter().position(|b| b.size() >= staging_size) {
+            pool.swap_remove(pos)
+        } else {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hephaestus-recycled-staging"),
+                size: staging_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        }
+    }
+
+    /// Return a staging buffer back to the pool for reuse.
+    pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
+        let mut pool = self.staging_pool.lock().unwrap();
+        pool.push(buffer);
+    }
 }
 
 impl ComputeDevice for WgpuDevice {
@@ -164,22 +188,8 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = (buffer.len * core::mem::size_of::<T>()) as u64;
         let padded = Self::padded_size::<T>(buffer.len);
-        // Align staging buffer size to MAP_ALIGNMENT (8 bytes) to guarantee map_async compatibility
-        let staging_size = padded.div_ceil(8) * 8;
-
-        let staging = {
-            let mut pool = self.staging_pool.lock().unwrap();
-            if let Some(pos) = pool.iter().position(|b| b.size() >= staging_size) {
-                pool.swap_remove(pos)
-            } else {
-                self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("hephaestus-staging"),
-                    size: staging_size,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                })
-            }
-        };
+        let staging = self.get_staging_buffer(padded);
+        let staging_size = staging.size();
 
         let mut encoder = self
             .device
@@ -213,10 +223,7 @@ impl ComputeDevice for WgpuDevice {
         drop(mapped);
         staging.unmap();
 
-        {
-            let mut pool = self.staging_pool.lock().unwrap();
-            pool.push(staging);
-        }
+        self.recycle_staging_buffer(staging);
 
         Ok(())
     }
