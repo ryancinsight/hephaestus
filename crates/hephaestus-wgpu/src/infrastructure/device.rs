@@ -5,17 +5,22 @@ use bytemuck::Pod;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use wgpu::util::DeviceExt;
 
+use std::any::TypeId;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use crate::infrastructure::buffer::WgpuBuffer;
 
 /// An acquired wgpu device + queue pair.
 ///
-/// `Clone` is cheap (two `Arc` clones). This is the single authoritative
+/// `Clone` is cheap (three `Arc` clones). This is the single authoritative
 /// adapter/device acquisition for Atlas wgpu consumers; apollo's
 /// `apollo-wgpu-helpers` delegates here instead of carrying its own copy.
 #[derive(Clone, Debug)]
 pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    pub(crate) pipeline_cache: Arc<Mutex<HashMap<(TypeId, TypeId), wgpu::ComputePipeline>>>,
 }
 
 impl WgpuDevice {
@@ -23,7 +28,11 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        Self { device, queue }
+        Self {
+            device,
+            queue,
+            pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Acquire a default high-performance adapter and device.

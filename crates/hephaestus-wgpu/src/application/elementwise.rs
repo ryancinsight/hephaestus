@@ -93,22 +93,33 @@ where
         return Ok(out);
     }
 
-    let module = device
-        .inner()
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("hephaestus-elementwise"),
-            source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
-        });
-    let pipeline = device
-        .inner()
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("hephaestus-elementwise"),
-            layout: None,
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
+    let key = (std::any::TypeId::of::<Op>(), std::any::TypeId::of::<T>());
+    let pipeline = {
+        let mut cache = device.pipeline_cache.lock().unwrap();
+        if let Some(cached) = cache.get(&key) {
+            cached.clone()
+        } else {
+            let module = device
+                .inner()
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("hephaestus-elementwise"),
+                    source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
+                });
+            let pipeline = device
+                .inner()
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("hephaestus-elementwise"),
+                    layout: None,
+                    module: &module,
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    cache: None,
+                });
+            cache.insert(key, pipeline.clone());
+            pipeline
+        }
+    };
+
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -152,4 +163,40 @@ where
     device.queue().submit(Some(encoder.finish()));
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn device_or_skip() -> Option<WgpuDevice> {
+        match WgpuDevice::try_default("hephaestus-elementwise-test") {
+            Ok(device) => Some(device),
+            Err(e) => {
+                eprintln!("skipping elementwise cache test: {e}");
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn test_pipeline_cache_reused() {
+        let Some(device) = device_or_skip() else {
+            return;
+        };
+        let a = device.upload(&[1.0f32, 2.0]).unwrap();
+        let b = device.upload(&[3.0f32, 4.0]).unwrap();
+
+        let initial_size = { device.pipeline_cache.lock().unwrap().len() };
+
+        // Dispatch first time: should compile and cache
+        let _out1 = binary_elementwise::<AddOp, f32>(&device, &a, &b).unwrap();
+        let size_after_first = { device.pipeline_cache.lock().unwrap().len() };
+        assert_eq!(size_after_first, initial_size + 1);
+
+        // Dispatch second time: should hit cache and not compile again
+        let _out2 = binary_elementwise::<AddOp, f32>(&device, &a, &b).unwrap();
+        let size_after_second = { device.pipeline_cache.lock().unwrap().len() };
+        assert_eq!(size_after_second, size_after_first);
+    }
 }
