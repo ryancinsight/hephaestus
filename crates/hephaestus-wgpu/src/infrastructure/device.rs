@@ -106,7 +106,22 @@ impl WgpuDevice {
     ///
     /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
     /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    #[inline]
     pub fn try_default_with_limits(label: &str, required_limits: wgpu::Limits) -> Result<Self> {
+        Self::try_default_with_features_and_limits(label, wgpu::Features::empty(), required_limits)
+    }
+
+    /// Acquire a default adapter and device with custom features and limits.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_default_with_features_and_limits(
+        label: &str,
+        required_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
         let instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -119,7 +134,7 @@ impl WgpuDevice {
         let topology = Self::topology_from_adapter(&adapter);
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some(label),
-            required_features: wgpu::Features::empty(),
+            required_features,
             required_limits,
             memory_hints: wgpu::MemoryHints::default(),
             trace: wgpu::Trace::Off,
