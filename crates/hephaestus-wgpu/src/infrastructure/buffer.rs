@@ -15,6 +15,17 @@ pub struct WgpuBuffer<T> {
 }
 
 impl<T> WgpuBuffer<T> {
+    /// Construct a new `WgpuBuffer` wrapper from a raw buffer and element count.
+    #[must_use]
+    #[inline]
+    pub fn new(buffer: wgpu::Buffer, len: usize) -> Self {
+        Self {
+            buffer,
+            len,
+            marker: PhantomData,
+        }
+    }
+
     /// Borrow the raw `wgpu::Buffer` for binding into custom pipelines.
     ///
     /// This is the consumer escape hatch: apollo's transform kernels build
@@ -22,6 +33,14 @@ impl<T> WgpuBuffer<T> {
     #[must_use]
     #[inline]
     pub fn raw(&self) -> &wgpu::Buffer {
+        &self.buffer
+    }
+}
+
+impl<T> std::ops::Deref for WgpuBuffer<T> {
+    type Target = wgpu::Buffer;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
         &self.buffer
     }
 }
