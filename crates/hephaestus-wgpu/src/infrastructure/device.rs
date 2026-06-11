@@ -22,6 +22,7 @@ pub struct WgpuDevice {
     queue: Arc<wgpu::Queue>,
     pub(crate) pipeline_cache: Arc<Mutex<HashMap<(TypeId, TypeId), wgpu::ComputePipeline>>>,
     pub(crate) staging_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
+    pub(crate) uniform_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
 }
 
 impl WgpuDevice {
@@ -34,6 +35,7 @@ impl WgpuDevice {
             queue,
             pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
             staging_pool: Arc::new(Mutex::new(Vec::new())),
+            uniform_pool: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -129,6 +131,33 @@ impl WgpuDevice {
     /// Return a staging buffer back to the pool for reuse.
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
         let mut pool = self.staging_pool.lock().unwrap();
+        pool.push(buffer);
+    }
+
+    /// Retrieve a uniform buffer of size ≥ `size` from the pool, or create
+    /// one. Contents are written with `queue.write_buffer`, which is ordered
+    /// on the queue timeline relative to submissions, so a recycled uniform
+    /// can be rewritten for the next dispatch without racing in-flight work
+    /// on the same queue.
+    #[must_use]
+    pub fn get_uniform_buffer(&self, size: u64) -> wgpu::Buffer {
+        let uniform_size = size.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT;
+        let mut pool = self.uniform_pool.lock().unwrap();
+        if let Some(pos) = pool.iter().position(|b| b.size() >= uniform_size) {
+            pool.swap_remove(pos)
+        } else {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hephaestus-recycled-uniform"),
+                size: uniform_size,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        }
+    }
+
+    /// Return a uniform buffer back to the pool for reuse.
+    pub fn recycle_uniform_buffer(&self, buffer: wgpu::Buffer) {
+        let mut pool = self.uniform_pool.lock().unwrap();
         pool.push(buffer);
     }
 }

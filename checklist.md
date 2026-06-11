@@ -1,9 +1,16 @@
 # Checklist — hephaestus
 
-Target version: 0.3.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
-Phase 1 (wgpu substrate) COMPLETE. Next concrete increment: Phase 2
-`hephaestus-cuda` ADR (cuda-oxide + cutile composed), then Phase 3 mnemosyne
-device pools / melinoe ownership tokens.
+Target version: 0.3.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
+— cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
+no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
+increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
+(acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.3.1 uniform pooling + CUDA ADR [patch]
+- [x] Pooled strided meta uniforms (queue-ordered write_buffer reuse);
+  one fewer buffer allocation per dispatch. 17 tests green on hardware.
+- [x] ADR 0001 accepted (Phase 2 gate).
 
 ## 0.3.0 strided unary/scalar + consolidation [minor]
 - [x] Shared strided core (SSOT): `StridedMeta` packing, WGSL Meta/decode

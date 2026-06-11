@@ -28,10 +28,15 @@ cuda-oxide + cutile).
   transposed/broadcast and scalar-equivalence tests on real hardware.
 
 ## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
-- [ ] [arch] `hephaestus-cuda`: ComputeDevice impl with cuda-oxide owning
-  driver/runtime/device-memory/streams and cutile owning tile/PTX kernel
-  authoring. Dynamic driver loading; compiles without a CUDA toolkit. ADR in
-  this repo before implementation.
+- [x] [arch] Gating ADR accepted: `docs/adr/0001-cuda-backend.md` — cuda-oxide
+  owns the device substrate (driver/context/streams/memory/transfers, mapping
+  one-to-one onto `ComputeDevice`), cutile owns tile/PTX kernel authoring,
+  with a strict SoC boundary between them; dynamic driver loading preserves
+  no-toolkit-to-compile; adapterless hosts skip like the wgpu suite.
+- [ ] [arch] `hephaestus-cuda` stage 1: device substrate on cuda-oxide
+  (acquisition, typed `PhantomData<T>` buffers, transfers) + contract tests.
+- [ ] [minor] Stage 2: elementwise/reduction kernels via cutile; stage 3:
+  strided variants over the shared packed layout metadata.
 - [ ] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
   the wgpu backend and CPU references.
 

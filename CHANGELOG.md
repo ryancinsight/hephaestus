@@ -2,6 +2,24 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.3.1] - 2026-06-10
+
+### Changed
+
+- Strided dispatch meta uniforms are now pooled (`get_uniform_buffer`/
+  `recycle_uniform_buffer`, mirroring the staging pool): contents are written
+  with `queue.write_buffer`, which is ordered on the queue timeline relative
+  to submissions, so a recycled uniform cannot race in-flight dispatches.
+  Eliminates one 80-byte buffer allocation per strided dispatch.
+
+### Docs
+
+- ADR 0001 (Phase 2 gate): the CUDA backend composes **cuda-oxide** (device
+  substrate: driver/context/streams/memory/transfers) with **cutile** (tile/
+  PTX kernel authoring), preserving the no-toolkit-to-compile property, with
+  a strict SoC boundary between the two and differential parity vs CPU and
+  wgpu. See `docs/adr/0001-cuda-backend.md`.
+
 ## [0.3.0] - 2026-06-10
 
 Strided op-family completion + dispatch consolidation.

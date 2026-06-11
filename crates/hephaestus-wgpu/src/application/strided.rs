@@ -16,7 +16,6 @@ use std::any::TypeId;
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
-use wgpu::util::DeviceExt;
 
 use crate::application::elementwise::{BinaryWgslOp, UnaryWgslOp};
 use crate::application::wgsl::WgslScalar;
@@ -165,13 +164,12 @@ fn encode_strided(
     len: usize,
     label: &str,
 ) -> Result<()> {
-    let meta_buffer = device
-        .inner()
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::bytes_of(meta),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+    // Pooled meta uniform: queue.write_buffer is ordered on the queue
+    // timeline, so recycling after submit cannot race in-flight dispatches.
+    let meta_buffer = device.get_uniform_buffer(core::mem::size_of::<StridedMeta>() as u64);
+    device
+        .queue()
+        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(meta));
 
     let mut entries = Vec::with_capacity(buffers.len() + 1);
     entries.push(wgpu::BindGroupEntry {
@@ -206,6 +204,7 @@ fn encode_strided(
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
+    device.recycle_uniform_buffer(meta_buffer);
     Ok(())
 }
 
