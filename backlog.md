@@ -21,8 +21,11 @@ cuda-oxide + cutile).
   shape/strides/offsets in one 80-byte uniform. Verification: differential
   tests vs CPU references over identical layouts (transposed, dual-broadcast,
   offset sub-block, rank-3 inner-transpose, rejections) on real hardware.
-- [ ] [minor] Extend strided dispatch to the unary/scalar op families through
-  the same Meta uniform (shared template; no traversal duplication).
+- [x] [minor] Extend strided dispatch to the unary/scalar op families through
+  the same Meta uniform: shared `StridedMeta`/WGSL-decode/`cached_pipeline`/
+  `encode_strided` core; scalar family is a zero-new-kernel wrapper over the
+  binary kernels (one-element operand, all-zero strides). Verification: unary
+  transposed/broadcast and scalar-equivalence tests on real hardware.
 
 ## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
 - [ ] [arch] `hephaestus-cuda`: ComputeDevice impl with cuda-oxide owning

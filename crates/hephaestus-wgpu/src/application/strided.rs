@@ -1,20 +1,24 @@
-//! Strided-layout-aware binary dispatch over leto host-side layout metadata.
+//! Strided-layout-aware dispatch over leto host-side layout metadata.
 //!
 //! Consumers describe operands with [`leto::Layout`] (shape/strides/offset) so
 //! transposed, sliced, and broadcast (zero-stride) views dispatch directly —
 //! no host-side materialization into contiguous staging copies. Inputs
 //! broadcast to the output shape with leto's own broadcast rules, keeping
 //! device semantics identical to leto's CPU `binary_map`.
+//!
+//! One shared metadata/pipeline/encode core serves the binary and unary op
+//! families; the scalar-broadcast family is a zero-new-kernel wrapper that
+//! reuses the binary kernels with a one-element operand at all-zero strides.
 
 use core::marker::PhantomData;
 use std::any::TypeId;
 
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 use wgpu::util::DeviceExt;
 
-use crate::application::elementwise::BinaryWgslOp;
+use crate::application::elementwise::{BinaryWgslOp, UnaryWgslOp};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -26,12 +30,15 @@ const WORKGROUP_SIZE: u32 = 256;
 /// to the offset computation.
 pub const MAX_STRIDED_RANK: usize = 4;
 
-/// Pipeline-cache discriminator so strided kernels never collide with the
+/// Pipeline-cache discriminators so strided kernels never collide with the
 /// contiguous kernels of the same `Op` in the `(TypeId, TypeId)` cache key.
 struct StridedBinaryKernel<Op>(PhantomData<Op>);
+struct StridedUnaryKernel<Op>(PhantomData<Op>);
 
 /// Packed layout metadata matching the WGSL `Meta` uniform: rank-4 padded
-/// shape, per-operand strides, and `[a_off, b_off, out_off, len]`.
+/// shape, per-operand strides, and `[a_off, b_off, out_off, len]`. The unary
+/// family reuses the same struct with the `b` lanes zeroed so one packing
+/// path and one uniform layout serve every strided kernel.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct StridedMeta {
@@ -42,13 +49,52 @@ struct StridedMeta {
     offsets: [u32; 4],
 }
 
+/// WGSL `Meta` declaration shared by every strided kernel.
+const WGSL_META: &str = r"struct Meta {
+    shape: vec4<u32>,
+    a_strides: vec4<i32>,
+    b_strides: vec4<i32>,
+    out_strides: vec4<i32>,
+    offsets: vec4<u32>,
+}
+";
+
+/// Flat-index → per-operand-offset decode shared by every strided kernel.
+/// `arrayLength` cannot guard strided access, so the logical length travels
+/// in `offsets.w` and is checked by each kernel before this body runs.
+const WGSL_DECODE: &str = r"    var rem = i;
+    var a_off = i32(lmeta.offsets.x);
+    var b_off = i32(lmeta.offsets.y);
+    var o_off = i32(lmeta.offsets.z);
+    for (var d: i32 = 3; d >= 0; d = d - 1) {
+        let dim = lmeta.shape[d];
+        let idx = i32(rem % dim);
+        rem = rem / dim;
+        a_off = a_off + idx * lmeta.a_strides[d];
+        b_off = b_off + idx * lmeta.b_strides[d];
+        o_off = o_off + idx * lmeta.out_strides[d];
+    }
+";
+
+#[inline]
+fn map_layout_err(e: leto::LetoError) -> HephaestusError {
+    HephaestusError::DispatchFailed {
+        message: format!("layout rejected: {e}"),
+    }
+}
+
+#[inline]
+fn to_u32(value: usize, what: &str) -> Result<u32> {
+    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("{what} {value} exceeds u32 range"),
+    })
+}
+
 #[inline]
 fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
     let mut out = [1u32; 4];
     for (d, &dim) in shape.iter().enumerate() {
-        out[4 - N + d] = u32::try_from(dim).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("dimension {dim} exceeds u32 range"),
-        })?;
+        out[4 - N + d] = to_u32(dim, "dimension")?;
     }
     Ok(out)
 }
@@ -64,16 +110,108 @@ fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     Ok(out)
 }
 
-fn shader_source<Op: BinaryWgslOp, T: WgslScalar>() -> String {
-    format!(
-        r#"struct Meta {{
-    shape: vec4<u32>,
-    a_strides: vec4<i32>,
-    b_strides: vec4<i32>,
-    out_strides: vec4<i32>,
-    offsets: vec4<u32>,
-}}
+/// Validate an output layout against its buffer and return the logical length.
+fn validate_out<T, const N: usize>(out: &WgpuBuffer<T>, out_layout: &Layout<N>) -> Result<usize> {
+    if out_layout.has_zero_stride_aliasing() {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output layout must not contain zero-stride aliasing".to_string(),
+        });
+    }
+    out_layout
+        .validate_storage_len(out.len)
+        .map_err(map_layout_err)?;
+    out_layout.checked_size().map_err(map_layout_err)
+}
 
+/// Fetch the cached pipeline for `key`, compiling `source` on first use.
+fn cached_pipeline(
+    device: &WgpuDevice,
+    key: (TypeId, TypeId),
+    label: &str,
+    source: impl FnOnce() -> String,
+) -> wgpu::ComputePipeline {
+    let mut cache = device.pipeline_cache.lock().unwrap();
+    if let Some(cached) = cache.get(&key) {
+        return cached.clone();
+    }
+    let module = device
+        .inner()
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(label),
+            source: wgpu::ShaderSource::Wgsl(source().into()),
+        });
+    let pipeline = device
+        .inner()
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(label),
+            layout: None,
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+    cache.insert(key, pipeline.clone());
+    pipeline
+}
+
+/// Upload the meta uniform, bind `buffers` after it at consecutive slots, and
+/// dispatch `len` invocations: the single encode path shared by every strided
+/// kernel.
+fn encode_strided(
+    device: &WgpuDevice,
+    pipeline: &wgpu::ComputePipeline,
+    meta: &StridedMeta,
+    buffers: &[&wgpu::Buffer],
+    len: usize,
+    label: &str,
+) -> Result<()> {
+    let meta_buffer = device
+        .inner()
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents: bytemuck::bytes_of(meta),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+    let mut entries = Vec::with_capacity(buffers.len() + 1);
+    entries.push(wgpu::BindGroupEntry {
+        binding: 0,
+        resource: meta_buffer.as_entire_binding(),
+    });
+    for (slot, buffer) in buffers.iter().enumerate() {
+        entries.push(wgpu::BindGroupEntry {
+            binding: u32::try_from(slot + 1).expect("binding slot fits u32"),
+            resource: buffer.as_entire_binding(),
+        });
+    }
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &entries,
+        });
+
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some(label),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        let groups = to_u32(len.div_ceil(WORKGROUP_SIZE as usize), "workgroup count")?;
+        pass.dispatch_workgroups(groups, 1, 1);
+    }
+    device.queue().submit(Some(encoder.finish()));
+    Ok(())
+}
+
+fn binary_shader<Op: BinaryWgslOp, T: WgslScalar>() -> String {
+    format!(
+        r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
 @group(0) @binding(1) var<storage, read> a: array<{ty}>;
 @group(0) @binding(2) var<storage, read> b: array<{ty}>;
@@ -85,25 +223,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     if (i >= lmeta.offsets.w) {{
         return;
     }}
-    var rem = i;
-    var a_off = i32(lmeta.offsets.x);
-    var b_off = i32(lmeta.offsets.y);
-    var o_off = i32(lmeta.offsets.z);
-    for (var d: i32 = 3; d >= 0; d = d - 1) {{
-        let dim = lmeta.shape[d];
-        let idx = i32(rem % dim);
-        rem = rem / dim;
-        a_off = a_off + idx * lmeta.a_strides[d];
-        b_off = b_off + idx * lmeta.b_strides[d];
-        o_off = o_off + idx * lmeta.out_strides[d];
-    }}
-    let lhs = a[u32(a_off)];
+{decode}    let lhs = a[u32(a_off)];
     let rhs = b[u32(b_off)];
     out[u32(o_off)] = {expr};
 }}
 "#,
+        meta = WGSL_META,
         ty = T::WGSL_TYPE,
         wg = WORKGROUP_SIZE,
+        decode = WGSL_DECODE,
+        expr = Op::WGSL_EXPR,
+    )
+}
+
+fn unary_shader<Op: UnaryWgslOp, T: WgslScalar>() -> String {
+    format!(
+        r#"{meta}
+@group(0) @binding(0) var<uniform> lmeta: Meta;
+@group(0) @binding(1) var<storage, read> a: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> out: array<{ty}>;
+
+@compute @workgroup_size({wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
+    let i = gid.x;
+    if (i >= lmeta.offsets.w) {{
+        return;
+    }}
+{decode}    let x = a[u32(a_off)];
+    out[u32(o_off)] = {expr};
+}}
+"#,
+        meta = WGSL_META,
+        ty = T::WGSL_TYPE,
+        wg = WORKGROUP_SIZE,
+        decode = WGSL_DECODE,
         expr = Op::WGSL_EXPR,
     )
 }
@@ -134,44 +287,23 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
-    let map_layout_err = |e: leto::LetoError| HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    };
-
-    // Broadcast inputs to the output shape (leto semantics; zero strides on
-    // expanded singleton axes — pure metadata, no data movement).
     let a_layout = a_layout
         .broadcast(out_layout.shape)
         .map_err(map_layout_err)?;
     let b_layout = b_layout
         .broadcast(out_layout.shape)
         .map_err(map_layout_err)?;
-
-    if out_layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
     a_layout
         .validate_storage_len(a.len)
         .map_err(map_layout_err)?;
     b_layout
         .validate_storage_len(b.len)
         .map_err(map_layout_err)?;
-    out_layout
-        .validate_storage_len(out.len)
-        .map_err(map_layout_err)?;
-
-    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let len = validate_out(out, out_layout)?;
     if len == 0 {
         return Ok(());
     }
 
-    let to_u32 = |value: usize, what: &str| {
-        u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("{what} {value} exceeds u32 range"),
-        })
-    };
     let meta = StridedMeta {
         shape: pad_shape(out_layout.shape)?,
         a_strides: pad_strides(a_layout.strides)?,
@@ -184,83 +316,107 @@ where
             to_u32(len, "dispatch size")?,
         ],
     };
-    let meta_buffer = device
-        .inner()
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("hephaestus-strided-meta"),
-            contents: bytemuck::bytes_of(&meta),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<StridedBinaryKernel<Op>>(), TypeId::of::<T>()),
+        "hephaestus-strided-binary",
+        binary_shader::<Op, T>,
+    );
+    encode_strided(
+        device,
+        &pipeline,
+        &meta,
+        &[&a.buffer, &b.buffer, &out.buffer],
+        len,
+        "hephaestus-strided-binary",
+    )
+}
 
-    let key = (TypeId::of::<StridedBinaryKernel<Op>>(), TypeId::of::<T>());
-    let pipeline = {
-        let mut cache = device.pipeline_cache.lock().unwrap();
-        if let Some(cached) = cache.get(&key) {
-            cached.clone()
-        } else {
-            let module = device
-                .inner()
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("hephaestus-strided"),
-                    source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
-                });
-            let pipeline =
-                device
-                    .inner()
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("hephaestus-strided"),
-                        layout: None,
-                        module: &module,
-                        entry_point: Some("main"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        cache: None,
-                    });
-            cache.insert(key, pipeline.clone());
-            pipeline
-        }
-    };
-
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-strided"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: meta_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: a.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: b.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: out.buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-strided"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-strided"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        let groups = to_u32(len.div_ceil(WORKGROUP_SIZE as usize), "workgroup count")?;
-        pass.dispatch_workgroups(groups, 1, 1);
+/// Run `out[idx] = op(a[idx])` over logical indices of `out_layout`, with `a`
+/// broadcast to the output shape. Same layout semantics, validation, and
+/// caller-owned output contract as [`binary_elementwise_strided_into`].
+pub fn unary_elementwise_strided_into<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    a_layout: &Layout<N>,
+    out: &WgpuBuffer<T>,
+    out_layout: &Layout<N>,
+) -> Result<()>
+where
+    Op: UnaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
-    device.queue().submit(Some(encoder.finish()));
 
-    Ok(())
+    let a_layout = a_layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(a.len)
+        .map_err(map_layout_err)?;
+    let len = validate_out(out, out_layout)?;
+    if len == 0 {
+        return Ok(());
+    }
+
+    let meta = StridedMeta {
+        shape: pad_shape(out_layout.shape)?,
+        a_strides: pad_strides(a_layout.strides)?,
+        b_strides: [0; 4],
+        out_strides: pad_strides(out_layout.strides)?,
+        offsets: [
+            to_u32(a_layout.offset, "input offset")?,
+            0,
+            to_u32(out_layout.offset, "output offset")?,
+            to_u32(len, "dispatch size")?,
+        ],
+    };
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<StridedUnaryKernel<Op>>(), TypeId::of::<T>()),
+        "hephaestus-strided-unary",
+        unary_shader::<Op, T>,
+    );
+    encode_strided(
+        device,
+        &pipeline,
+        &meta,
+        &[&a.buffer, &out.buffer],
+        len,
+        "hephaestus-strided-unary",
+    )
+}
+
+/// Run `out[idx] = op(a[idx], scalar)` over logical indices of `out_layout`.
+///
+/// Zero new kernels: the scalar is uploaded as a one-element buffer described
+/// by an all-singleton leto layout, which the binary kernel broadcasts to the
+/// output shape through zero strides — the same mechanism as any other
+/// broadcast operand, so scalar semantics can never drift from binary
+/// semantics.
+pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    a_layout: &Layout<N>,
+    scalar: T,
+    out: &WgpuBuffer<T>,
+    out_layout: &Layout<N>,
+) -> Result<()>
+where
+    Op: BinaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
+    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
+    binary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        a_layout,
+        &scalar_buffer,
+        &scalar_layout,
+        out,
+        out_layout,
+    )
 }

@@ -2,7 +2,10 @@
 //! a CPU reference computed over the same leto layout metadata.
 
 use hephaestus_core::ComputeDevice;
-use hephaestus_wgpu::{binary_elementwise_strided_into, AddOp, MulOp, WgpuDevice};
+use hephaestus_wgpu::{
+    binary_elementwise_strided_into, scalar_elementwise_strided_into,
+    unary_elementwise_strided_into, AddOp, MulOp, NegOp, SqrtOp, WgpuDevice,
+};
 use leto::Layout;
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -233,4 +236,75 @@ fn strided_rank3_batched_matches_cpu() {
     let mut got = vec![0.0f32; 24];
     device.download(&out, &mut got).unwrap();
     assert_eq!(got, expected);
+}
+
+#[test]
+fn strided_unary_transposed_matches_cpu() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // sqrt over a transposed view writes into a contiguous output in logical
+    // order; reference computed elementwise over the same logical traversal.
+    let a_host = vec![1.0f32, 9.0, 25.0, 4.0, 16.0, 36.0]; // physical [3,2]
+    let a_layout = Layout::new([2, 3], [1, 2], 0); // transposed [2,3] view
+    let out_layout = Layout::c_contiguous([2, 3]).unwrap();
+
+    let a = device.upload(&a_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(6).unwrap();
+    unary_elementwise_strided_into::<SqrtOp, f32, 2>(&device, &a, &a_layout, &out, &out_layout)
+        .unwrap();
+
+    let mut got = vec![0.0f32; 6];
+    device.download(&out, &mut got).unwrap();
+    // logical [2,3]: [[1,25,16],[9,4,36]] -> sqrt -> [[1,5,4],[3,2,6]]
+    assert_eq!(got, vec![1.0, 5.0, 4.0, 3.0, 2.0, 6.0]);
+}
+
+#[test]
+fn strided_unary_broadcasts_input_to_output_shape() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // neg over a [1,3] row broadcast into a [2,3] output.
+    let a_host = vec![1.0f32, -2.0, 3.0];
+    let a_layout = Layout::c_contiguous([1, 3]).unwrap();
+    let out_layout = Layout::c_contiguous([2, 3]).unwrap();
+
+    let a = device.upload(&a_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(6).unwrap();
+    unary_elementwise_strided_into::<NegOp, f32, 2>(&device, &a, &a_layout, &out, &out_layout)
+        .unwrap();
+
+    let mut got = vec![0.0f32; 6];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, vec![-1.0, 2.0, -3.0, -1.0, 2.0, -3.0]);
+}
+
+#[test]
+fn strided_scalar_matches_binary_broadcast_semantics() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // scalar add over a transposed input: must equal binary with an explicit
+    // broadcast one-element operand (it routes through the same kernel).
+    let a_host = vec![1.0f32, 4.0, 2.0, 5.0, 3.0, 6.0]; // physical [3,2]
+    let a_layout = Layout::new([2, 3], [1, 2], 0);
+    let out_layout = Layout::c_contiguous([2, 3]).unwrap();
+
+    let a = device.upload(&a_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(6).unwrap();
+    scalar_elementwise_strided_into::<AddOp, f32, 2>(
+        &device,
+        &a,
+        &a_layout,
+        100.0,
+        &out,
+        &out_layout,
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 6];
+    device.download(&out, &mut got).unwrap();
+    // logical [[1,2,3],[4,5,6]] + 100
+    assert_eq!(got, vec![101.0, 102.0, 103.0, 104.0, 105.0, 106.0]);
 }

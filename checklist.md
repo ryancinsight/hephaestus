@@ -1,9 +1,19 @@
 # Checklist — hephaestus
 
-Target version: 0.2.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
-Phase 1 (wgpu substrate) complete except strided unary/scalar extension; next
-concrete increment: strided unary/scalar via the shared Meta uniform, then
-Phase 2 `hephaestus-cuda` ADR (cuda-oxide + cutile composed).
+Target version: 0.3.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Phase 1 (wgpu substrate) COMPLETE. Next concrete increment: Phase 2
+`hephaestus-cuda` ADR (cuda-oxide + cutile composed), then Phase 3 mnemosyne
+device pools / melinoe ownership tokens.
+
+## 0.3.0 strided unary/scalar + consolidation [minor]
+- [x] Shared strided core (SSOT): `StridedMeta` packing, WGSL Meta/decode
+  fragments, `cached_pipeline`, `encode_strided` serve all strided kernels.
+- [x] `unary_elementwise_strided_into` (broadcast + caller-owned output).
+- [x] `scalar_elementwise_strided_into` — zero new kernels (one-element
+  operand at all-zero strides through the binary kernel).
+- [x] Tests: unary transposed sqrt, unary broadcast neg, scalar/binary
+  equivalence over a transposed view; 17 total on real hardware.
+- [x] Gates: fmt, clippy `-D warnings`, test, doc — clean.
 
 ## 0.2.0 strided dispatch [minor]
 - [x] `binary_elementwise_strided_into` over leto `Layout<N>` (rank ≤ 4

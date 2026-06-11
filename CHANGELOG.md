@@ -2,6 +2,33 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.3.0] - 2026-06-10
+
+Strided op-family completion + dispatch consolidation.
+
+### Added
+
+- `hephaestus-wgpu`: `unary_elementwise_strided_into` — unary dispatch over
+  leto layout metadata with the same broadcast/validation/caller-owned-output
+  contract as the binary form.
+- `hephaestus-wgpu`: `scalar_elementwise_strided_into` — **zero new kernels**:
+  the scalar uploads as a one-element buffer described by an all-singleton
+  leto layout, which the binary kernel broadcasts through zero strides; scalar
+  semantics can never drift from binary semantics.
+
+### Changed
+
+- `strided.rs` consolidated to one shared core (SSOT): `StridedMeta` packing,
+  WGSL `Meta`/decode fragments, `cached_pipeline`, and `encode_strided` serve
+  every strided kernel family; per-family code is reduced to its shader
+  expression and validation prologue.
+
+### Tests
+
+- Strided unary (transposed sqrt, broadcast-input neg) and scalar
+  (equivalence with binary broadcast semantics over a transposed view)
+  coverage; 17 tests total on real hardware.
+
 ## [0.2.0] - 2026-06-10
 
 Phase 1 completion: strided-layout-aware dispatch over leto metadata, plus the
