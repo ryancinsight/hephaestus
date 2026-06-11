@@ -302,3 +302,38 @@ fn reduction_min_max_matches_cpu_reference() {
         );
     }
 }
+
+#[test]
+fn acquisition_reports_themis_topology_from_adapter() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let topology = device
+        .topology()
+        .expect("acquisition path must capture a topology snapshot");
+
+    // Differential against the API itself: re-query the same default
+    // high-performance adapter and compare the reported fields.
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        force_fallback_adapter: false,
+    }))
+    .expect("adapter acquired above");
+    assert_eq!(topology.warp_width(), adapter.limits().min_subgroup_size);
+    let expected_tier = match adapter.get_info().device_type {
+        wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::Cpu => themis::MemoryTier::Dram,
+        _ => themis::MemoryTier::Device,
+    };
+    assert_eq!(topology.memory_tier(), expected_tier);
+
+    // Unreported-by-wgpu capacities must be zero, never fabricated.
+    assert_eq!(topology.compute_units(), 0);
+    assert_eq!(topology.registers_per_unit(), 0);
+    assert_eq!(topology.shared_mem_per_unit_bytes(), 0);
+
+    // The Arc-wrapping constructor has no adapter and reports none.
+    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
+    assert!(wrapped.topology().is_none());
+}

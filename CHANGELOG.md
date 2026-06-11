@@ -2,6 +2,31 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.4.0] - 2026-06-11
+
+ADR 0002 (atlas) provider role: device topology reporting into themis.
+
+### Added
+
+- `hephaestus-wgpu`: `WgpuDevice::topology()` — a themis `GpuTopology`
+  snapshot captured at adapter acquisition (`try_default*` paths; the
+  Arc-wrapping `new()` has no adapter and reports `None`). wgpu deliberately
+  abstracts hardware topology, so only API-reported fields are filled:
+  subgroup (warp/wavefront) width from adapter limits, and the memory tier
+  inferred from device type (integrated → `Dram`, discrete → the
+  technology-unspecified `Device` tier, since wgpu does not expose
+  HBM-vs-GDDR). All other capacities are zero per themis's
+  "unreported fields are zero, never fabricated" contract; the CUDA backend
+  will fill the full set from device attributes.
+- `themis` (0.6.0) added as a workspace dependency — hephaestus is the
+  topology provider; themis stays stateless law.
+
+### Tests
+
+- On-hardware contract test differentially re-queries the same adapter and
+  asserts warp width and tier match the API, unreported capacities are zero,
+  and the adapterless constructor reports no topology.
+
 ## [0.3.1] - 2026-06-10
 
 ### Changed

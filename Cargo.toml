@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -30,3 +30,6 @@ thiserror = "2.0"
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "320960ec7b99b8a4fdfe6d3974de03543b167ff9", default-features = false, features = ["std"] }
+# themis placement/topology law (atlas ADR 0002): hephaestus is the provider
+# that reports device properties into themis GpuTopology snapshots.
+themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }

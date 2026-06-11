@@ -20,6 +20,7 @@ use crate::infrastructure::buffer::WgpuBuffer;
 pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: Arc<Mutex<HashMap<(TypeId, TypeId), wgpu::ComputePipeline>>>,
     pub(crate) staging_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
     pub(crate) uniform_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
@@ -27,16 +28,61 @@ pub struct WgpuDevice {
 
 impl WgpuDevice {
     /// Wrap an existing device and queue.
+    ///
+    /// No adapter is available on this path, so no topology snapshot is
+    /// reported ([`topology`](Self::topology) returns `None`); the
+    /// `try_default*` acquisition paths capture one from the adapter.
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
         Self {
             device,
             queue,
+            topology: None,
             pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
             staging_pool: Arc::new(Mutex::new(Vec::new())),
             uniform_pool: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Build a themis topology snapshot from the adapter (atlas ADR 0002:
+    /// hephaestus is the provider; themis stays stateless law).
+    ///
+    /// wgpu deliberately abstracts hardware topology, so only what the API
+    /// reports is filled: subgroup (warp/wavefront) width from adapter
+    /// limits, and the memory tier inferred from the device type
+    /// (integrated GPUs share host DRAM; discrete devices report the
+    /// technology-unspecified `Device` tier because wgpu does not expose
+    /// HBM-vs-GDDR). Every other capacity is zero per the themis
+    /// "unreported fields are zero, never fabricated" contract — the CUDA
+    /// backend fills the full set from device attributes.
+    fn topology_from_adapter(adapter: &wgpu::Adapter) -> themis::GpuTopology {
+        let limits = adapter.limits();
+        let info = adapter.get_info();
+        let memory_tier = match info.device_type {
+            wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::Cpu => themis::MemoryTier::Dram,
+            _ => themis::MemoryTier::Device,
+        };
+        themis::GpuTopology::from_provider(themis::GpuDeviceProperties {
+            compute_units: 0,
+            warp_width: limits.min_subgroup_size,
+            max_threads_per_unit: 0,
+            registers_per_unit: 0,
+            shared_mem_per_unit_bytes: 0,
+            l2_bytes: 0,
+            memory_tier,
+            memory_bytes: 0,
+        })
+    }
+
+    /// The device topology snapshot captured at acquisition, when available.
+    ///
+    /// `None` when the device was wrapped via [`new`](Self::new) (no adapter
+    /// to report from).
+    #[must_use]
+    #[inline]
+    pub fn topology(&self) -> Option<&themis::GpuTopology> {
+        self.topology.as_deref()
     }
 
     /// Acquire a default high-performance adapter and device.
@@ -70,6 +116,7 @@ impl WgpuDevice {
         .map_err(|e| HephaestusError::AdapterUnavailable {
             message: e.to_string(),
         })?;
+        let topology = Self::topology_from_adapter(&adapter);
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some(label),
             required_features: wgpu::Features::empty(),
@@ -80,7 +127,9 @@ impl WgpuDevice {
         .map_err(|e| HephaestusError::DeviceUnavailable {
             message: e.to_string(),
         })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+        acquired.topology = Some(Arc::new(topology));
+        Ok(acquired)
     }
 
     /// Borrow the inner wgpu device for pipeline construction.

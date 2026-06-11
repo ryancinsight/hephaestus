@@ -10,6 +10,10 @@ description = "wgpu backend for the Atlas accelerator substrate: device acquisit
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
+themis = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
