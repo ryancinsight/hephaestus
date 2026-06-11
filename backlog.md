@@ -40,6 +40,21 @@ cuda-oxide + cutile).
 - [ ] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
   the wgpu backend and CPU references.
 
+## Phase 2.5: heterogeneous topology integration (atlas ADR 0002) [arch]
+- [ ] [minor] Placement-aware allocation: thread themis `PlacementHint` /
+  `MemoryTier` (Hbm, Gddr, HostPinned, unified) through `ComputeDevice`
+  allocation so consumers select device-memory tiers explicitly; wgpu maps
+  hints to buffer usages, CUDA maps to cuMemAlloc/managed/pinned variants.
+- [ ] [minor] Topology reporting: populate themis `GpuTopology` from wgpu
+  adapter limits and CUDA device attributes (provider-fed; themis stays
+  stateless law).
+- [ ] [minor] Launch shapes from moirai's occupancy planner (Stage D2)
+  replace the fixed 256-wide workgroup constant; shapes arrive as typed
+  policy parameters.
+- [ ] [arch] TPU long-term: `hephaestus-tpu` over the PJRT C API (dynamic
+  load, no SDK to compile), only when a consumer drives it; the
+  `ComputeDevice` seam already accommodates it. No speculative scaffolding.
+
 ## Phase 3: memory + ownership integration [minor]
 - [ ] [minor] Consume mnemosyne device pools / pinned-host staging (mnemosyne
   Stage D1) for buffer allocation instead of direct device allocation.
