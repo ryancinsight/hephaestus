@@ -50,9 +50,13 @@ cuda-oxide + cutile).
   subgroup width + memory tier (integrated→Dram, discrete→Device); wgpu does
   not expose SM/register/shared-mem capacities, so those stay zero per themis
   "never fabricated" law. CUDA half fills the full set from device attributes.
-- [ ] [minor] Launch shapes from moirai's occupancy planner (Stage D2)
-  replace the fixed 256-wide workgroup constant; shapes arrive as typed
-  policy parameters.
+- [x] [minor] (0.5.0) Launch widths from the occupancy pipeline, strided
+  family: `BlockWidth` (hephaestus-core, NonZero newtype, DEFAULT 256) flows
+  through per-width WGSL generation and a width-keyed pipeline cache
+  (`PipelineKey`); operands bundled as `StridedOperand`. Verified on hardware
+  at width 128 vs default. Remaining: thread `BlockWidth` through the
+  contiguous elementwise/reduction families (they pass their constant into
+  the shared key space today).
 - [ ] [arch] TPU long-term: `hephaestus-tpu` over the PJRT C API (dynamic
   load, no SDK to compile), only when a consumer drives it; the
   `ComputeDevice` seam already accommodates it. No speculative scaffolding.

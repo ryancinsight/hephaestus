@@ -14,7 +14,7 @@ use core::marker::PhantomData;
 use std::any::TypeId;
 
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
 use crate::application::elementwise::{BinaryWgslOp, UnaryWgslOp};
@@ -22,12 +22,21 @@ use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-const WORKGROUP_SIZE: u32 = 256;
-
 /// Maximum rank the packed rank-4 metadata covers. Lower-rank layouts are
 /// padded with leading size-1 / stride-0 dimensions, which contribute nothing
 /// to the offset computation.
 pub const MAX_STRIDED_RANK: usize = 4;
+
+/// A device buffer paired with the leto layout describing its logical view:
+/// the unit every strided operand is passed as. Plain `Copy` references —
+/// bundling is purely to keep signatures at parameter-object altitude.
+#[derive(Clone, Copy)]
+pub struct StridedOperand<'a, T, const N: usize> {
+    /// The device buffer.
+    pub buffer: &'a WgpuBuffer<T>,
+    /// The logical layout over that buffer.
+    pub layout: &'a Layout<N>,
+}
 
 /// Pipeline-cache discriminators so strided kernels never collide with the
 /// contiguous kernels of the same `Op` in the `(TypeId, TypeId)` cache key.
@@ -125,7 +134,7 @@ fn validate_out<T, const N: usize>(out: &WgpuBuffer<T>, out_layout: &Layout<N>) 
 /// Fetch the cached pipeline for `key`, compiling `source` on first use.
 fn cached_pipeline(
     device: &WgpuDevice,
-    key: (TypeId, TypeId),
+    key: crate::infrastructure::device::PipelineKey,
     label: &str,
     source: impl FnOnce() -> String,
 ) -> wgpu::ComputePipeline {
@@ -162,6 +171,7 @@ fn encode_strided(
     meta: &StridedMeta,
     buffers: &[&wgpu::Buffer],
     len: usize,
+    width: BlockWidth,
     label: &str,
 ) -> Result<()> {
     // Pooled meta uniform: queue.write_buffer is ordered on the queue
@@ -200,7 +210,7 @@ fn encode_strided(
         });
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let groups = to_u32(len.div_ceil(WORKGROUP_SIZE as usize), "workgroup count")?;
+        let groups = width.covering_blocks(len as u64);
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
@@ -208,7 +218,7 @@ fn encode_strided(
     Ok(())
 }
 
-fn binary_shader<Op: BinaryWgslOp, T: WgslScalar>() -> String {
+fn binary_shader<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -229,13 +239,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 "#,
         meta = WGSL_META,
         ty = T::WGSL_TYPE,
-        wg = WORKGROUP_SIZE,
+        wg = width.get(),
         decode = WGSL_DECODE,
         expr = Op::WGSL_EXPR,
     )
 }
 
-fn unary_shader<Op: UnaryWgslOp, T: WgslScalar>() -> String {
+fn unary_shader<Op: UnaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -254,7 +264,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 "#,
         meta = WGSL_META,
         ty = T::WGSL_TYPE,
-        wg = WORKGROUP_SIZE,
+        wg = width.get(),
         decode = WGSL_DECODE,
         expr = Op::WGSL_EXPR,
     )
@@ -271,12 +281,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// physical element. Rank is capped at [`MAX_STRIDED_RANK`] at compile time.
 pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
     device: &WgpuDevice,
-    a: &WgpuBuffer<T>,
-    a_layout: &Layout<N>,
-    b: &WgpuBuffer<T>,
-    b_layout: &Layout<N>,
-    out: &WgpuBuffer<T>,
-    out_layout: &Layout<N>,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
 ) -> Result<()>
 where
     Op: BinaryWgslOp,
@@ -286,19 +294,22 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
-    let a_layout = a_layout
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
         .broadcast(out_layout.shape)
         .map_err(map_layout_err)?;
-    let b_layout = b_layout
+    let b_layout = b
+        .layout
         .broadcast(out_layout.shape)
         .map_err(map_layout_err)?;
     a_layout
-        .validate_storage_len(a.len)
+        .validate_storage_len(a.buffer.len)
         .map_err(map_layout_err)?;
     b_layout
-        .validate_storage_len(b.len)
+        .validate_storage_len(b.buffer.len)
         .map_err(map_layout_err)?;
-    let len = validate_out(out, out_layout)?;
+    let len = validate_out(out.buffer, out_layout)?;
     if len == 0 {
         return Ok(());
     }
@@ -317,16 +328,21 @@ where
     };
     let pipeline = cached_pipeline(
         device,
-        (TypeId::of::<StridedBinaryKernel<Op>>(), TypeId::of::<T>()),
+        (
+            TypeId::of::<StridedBinaryKernel<Op>>(),
+            TypeId::of::<T>(),
+            width.get(),
+        ),
         "hephaestus-strided-binary",
-        binary_shader::<Op, T>,
+        || binary_shader::<Op, T>(width),
     );
     encode_strided(
         device,
         &pipeline,
         &meta,
-        &[&a.buffer, &b.buffer, &out.buffer],
+        &[&a.buffer.buffer, &b.buffer.buffer, &out.buffer.buffer],
         len,
+        width,
         "hephaestus-strided-binary",
     )
 }
@@ -336,10 +352,9 @@ where
 /// caller-owned output contract as [`binary_elementwise_strided_into`].
 pub fn unary_elementwise_strided_into<Op, T, const N: usize>(
     device: &WgpuDevice,
-    a: &WgpuBuffer<T>,
-    a_layout: &Layout<N>,
-    out: &WgpuBuffer<T>,
-    out_layout: &Layout<N>,
+    a: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
 ) -> Result<()>
 where
     Op: UnaryWgslOp,
@@ -349,13 +364,15 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
-    let a_layout = a_layout
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
         .broadcast(out_layout.shape)
         .map_err(map_layout_err)?;
     a_layout
-        .validate_storage_len(a.len)
+        .validate_storage_len(a.buffer.len)
         .map_err(map_layout_err)?;
-    let len = validate_out(out, out_layout)?;
+    let len = validate_out(out.buffer, out_layout)?;
     if len == 0 {
         return Ok(());
     }
@@ -374,16 +391,21 @@ where
     };
     let pipeline = cached_pipeline(
         device,
-        (TypeId::of::<StridedUnaryKernel<Op>>(), TypeId::of::<T>()),
+        (
+            TypeId::of::<StridedUnaryKernel<Op>>(),
+            TypeId::of::<T>(),
+            width.get(),
+        ),
         "hephaestus-strided-unary",
-        unary_shader::<Op, T>,
+        || unary_shader::<Op, T>(width),
     );
     encode_strided(
         device,
         &pipeline,
         &meta,
-        &[&a.buffer, &out.buffer],
+        &[&a.buffer.buffer, &out.buffer.buffer],
         len,
+        width,
         "hephaestus-strided-unary",
     )
 }
@@ -397,11 +419,10 @@ where
 /// semantics.
 pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
     device: &WgpuDevice,
-    a: &WgpuBuffer<T>,
-    a_layout: &Layout<N>,
+    a: StridedOperand<'_, T, N>,
     scalar: T,
-    out: &WgpuBuffer<T>,
-    out_layout: &Layout<N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
 ) -> Result<()>
 where
     Op: BinaryWgslOp,
@@ -412,10 +433,11 @@ where
     binary_elementwise_strided_into::<Op, T, N>(
         device,
         a,
-        a_layout,
-        &scalar_buffer,
-        &scalar_layout,
+        StridedOperand {
+            buffer: &scalar_buffer,
+            layout: &scalar_layout,
+        },
         out,
-        out_layout,
+        width,
     )
 }

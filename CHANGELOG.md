@@ -2,6 +2,39 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.5.0] - 2026-06-11
+
+Occupancy-planned dispatch: the strided family accepts block widths from the
+ADR-0002 planner pipeline instead of a baked-in constant.
+
+### Added
+
+- `hephaestus-core`: `BlockWidth` — a validating `#[repr(transparent)]`
+  newtype over `NonZeroU32` (zero-wide blocks are unrepresentable, not
+  checked per dispatch), with `DEFAULT` (256), `covering_blocks` saturating
+  ceil-division, and `Default`. This is the typed parameter through which
+  moirai's occupancy planner (themis `GpuTopology` × mnemosyne
+  `KernelResourceBudget`) reaches backend dispatch.
+- `hephaestus-wgpu`: `StridedOperand<'_, T, N>` — a `Copy` parameter object
+  pairing a device buffer with its leto layout, keeping strided signatures at
+  parameter-object altitude.
+
+### Changed (breaking, pre-1.0)
+
+- The strided family (`binary`/`unary`/`scalar_elementwise_strided_into`)
+  takes `StridedOperand` bundles plus a `BlockWidth`; WGSL is generated per
+  width and the pipeline cache key is now
+  `(kernel family, scalar type, width)` (`PipelineKey` alias), so widths
+  cache independently and contiguous kernels share the same key space at
+  their constant width.
+
+### Tests
+
+- On-hardware proof that a non-default width (128) produces results
+  identical to the default at 1027 elements (partial trailing blocks at both
+  widths), exercising per-width shader generation and cache keying. 21 tests
+  total.
+
 ## [0.4.0] - 2026-06-11
 
 ADR 0002 (atlas) provider role: device topology reporting into themis.

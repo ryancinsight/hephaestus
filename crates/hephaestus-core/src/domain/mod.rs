@@ -6,3 +6,5 @@ pub mod buffer;
 pub mod device;
 /// Error contracts shared by all backends.
 pub mod error;
+/// Launch-shape vocabulary for occupancy-planned dispatch.
+pub mod launch;

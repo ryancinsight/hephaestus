@@ -11,6 +11,10 @@ use std::sync::Mutex;
 
 use crate::infrastructure::buffer::WgpuBuffer;
 
+/// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
+pub(crate) type PipelineKey = (TypeId, TypeId, u32);
+pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, wgpu::ComputePipeline>>>;
+
 /// An acquired wgpu device + queue pair.
 ///
 /// `Clone` is cheap (three `Arc` clones). This is the single authoritative
@@ -21,7 +25,7 @@ pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     topology: Option<Arc<themis::GpuTopology>>,
-    pub(crate) pipeline_cache: Arc<Mutex<HashMap<(TypeId, TypeId), wgpu::ComputePipeline>>>,
+    pub(crate) pipeline_cache: PipelineCache,
     pub(crate) staging_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
     pub(crate) uniform_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
 }

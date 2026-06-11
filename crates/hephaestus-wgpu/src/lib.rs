@@ -22,7 +22,7 @@ pub use application::reduction::{
 };
 pub use application::strided::{
     binary_elementwise_strided_into, scalar_elementwise_strided_into,
-    unary_elementwise_strided_into, MAX_STRIDED_RANK,
+    unary_elementwise_strided_into, StridedOperand, MAX_STRIDED_RANK,
 };
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;

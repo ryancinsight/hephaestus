@@ -88,7 +88,11 @@ where
         return Ok(out);
     }
 
-    let key = (std::any::TypeId::of::<Op>(), std::any::TypeId::of::<T>());
+    let key = (
+        std::any::TypeId::of::<Op>(),
+        std::any::TypeId::of::<T>(),
+        WORKGROUP_SIZE,
+    );
     let pipeline = {
         let mut cache = device.pipeline_cache.lock().unwrap();
         if let Some(cached) = cache.get(&key) {

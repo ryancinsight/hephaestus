@@ -1,11 +1,18 @@
 //! Differential contract tests for strided-layout dispatch: device results vs
 //! a CPU reference computed over the same leto layout metadata.
 
-use hephaestus_core::ComputeDevice;
+use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_wgpu::{
     binary_elementwise_strided_into, scalar_elementwise_strided_into,
-    unary_elementwise_strided_into, AddOp, MulOp, NegOp, SqrtOp, WgpuDevice,
+    unary_elementwise_strided_into, AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice,
 };
+
+fn op<'a, T, const N: usize>(
+    buffer: &'a hephaestus_wgpu::WgpuBuffer<T>,
+    layout: &'a Layout<N>,
+) -> StridedOperand<'a, T, N> {
+    StridedOperand { buffer, layout }
+}
 use leto::Layout;
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -75,12 +82,10 @@ fn strided_add_transposed_input_matches_cpu() {
     let out = device.alloc_zeroed::<f32>(6).unwrap();
     binary_elementwise_strided_into::<AddOp, f32, 2>(
         &device,
-        &a,
-        &a_layout,
-        &b,
-        &b_layout,
-        &out,
-        &out_layout,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
     )
     .unwrap();
 
@@ -118,12 +123,10 @@ fn strided_broadcast_inputs_match_cpu() {
     let out = device.alloc_zeroed::<f32>(6).unwrap();
     binary_elementwise_strided_into::<AddOp, f32, 2>(
         &device,
-        &a,
-        &a_layout,
-        &b,
-        &b_layout,
-        &out,
-        &out_layout,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
     )
     .unwrap();
 
@@ -152,12 +155,10 @@ fn strided_offset_output_writes_only_selected_region() {
     let out = device.alloc_zeroed::<f32>(9).unwrap();
     binary_elementwise_strided_into::<MulOp, f32, 2>(
         &device,
-        &a,
-        &a_layout,
-        &b,
-        &b_layout,
-        &out,
-        &out_layout,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
     )
     .unwrap();
 
@@ -180,7 +181,11 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
     let aliasing = Layout::new([2, 2], [0, 1], 0);
     let flat = Layout::c_contiguous([2, 2]).unwrap();
     assert!(binary_elementwise_strided_into::<AddOp, f32, 2>(
-        &device, &a, &flat, &b, &flat, &out, &aliasing
+        &device,
+        op(&a, &flat),
+        op(&b, &flat),
+        op(&out, &aliasing),
+        BlockWidth::DEFAULT
     )
     .is_err());
 
@@ -190,7 +195,11 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
     let a1 = device.upload(&[1.0f32, 2.0]).unwrap();
     let out1 = device.alloc_zeroed::<f32>(4).unwrap();
     assert!(binary_elementwise_strided_into::<AddOp, f32, 1>(
-        &device, &a1, &too_big, &a1, &small, &out1, &too_big
+        &device,
+        op(&a1, &too_big),
+        op(&a1, &small),
+        op(&out1, &too_big),
+        BlockWidth::DEFAULT
     )
     .is_err());
 }
@@ -224,12 +233,10 @@ fn strided_rank3_batched_matches_cpu() {
     let out = device.alloc_zeroed::<f32>(24).unwrap();
     binary_elementwise_strided_into::<MulOp, f32, 3>(
         &device,
-        &a,
-        &a_layout,
-        &b,
-        &b_layout,
-        &out,
-        &out_layout,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
     )
     .unwrap();
 
@@ -251,8 +258,13 @@ fn strided_unary_transposed_matches_cpu() {
 
     let a = device.upload(&a_host).unwrap();
     let out = device.alloc_zeroed::<f32>(6).unwrap();
-    unary_elementwise_strided_into::<SqrtOp, f32, 2>(&device, &a, &a_layout, &out, &out_layout)
-        .unwrap();
+    unary_elementwise_strided_into::<SqrtOp, f32, 2>(
+        &device,
+        op(&a, &a_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
 
     let mut got = vec![0.0f32; 6];
     device.download(&out, &mut got).unwrap();
@@ -272,8 +284,13 @@ fn strided_unary_broadcasts_input_to_output_shape() {
 
     let a = device.upload(&a_host).unwrap();
     let out = device.alloc_zeroed::<f32>(6).unwrap();
-    unary_elementwise_strided_into::<NegOp, f32, 2>(&device, &a, &a_layout, &out, &out_layout)
-        .unwrap();
+    unary_elementwise_strided_into::<NegOp, f32, 2>(
+        &device,
+        op(&a, &a_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
 
     let mut got = vec![0.0f32; 6];
     device.download(&out, &mut got).unwrap();
@@ -295,11 +312,10 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
     let out = device.alloc_zeroed::<f32>(6).unwrap();
     scalar_elementwise_strided_into::<AddOp, f32, 2>(
         &device,
-        &a,
-        &a_layout,
+        op(&a, &a_layout),
         100.0,
-        &out,
-        &out_layout,
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
     )
     .unwrap();
 
@@ -307,4 +323,50 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
     device.download(&out, &mut got).unwrap();
     // logical [[1,2,3],[4,5,6]] + 100
     assert_eq!(got, vec![101.0, 102.0, 103.0, 104.0, 105.0, 106.0]);
+}
+
+#[test]
+fn non_default_block_width_produces_identical_results() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // 1027 elements exercises partial trailing blocks at both widths; the
+    // per-width pipeline-cache key must yield a correct width-128 kernel
+    // alongside the default-256 one.
+    let len = 1027usize;
+    let a_host: Vec<f32> = (0..len).map(|i| i as f32 * 0.5).collect();
+    let b_host: Vec<f32> = (0..len).map(|i| 1000.0 - i as f32).collect();
+    let layout = Layout::c_contiguous([len]).unwrap();
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+
+    let narrow = BlockWidth::new(128).unwrap();
+    let out_narrow = device.alloc_zeroed::<f32>(len).unwrap();
+    binary_elementwise_strided_into::<AddOp, f32, 1>(
+        &device,
+        op(&a, &layout),
+        op(&b, &layout),
+        op(&out_narrow, &layout),
+        narrow,
+    )
+    .unwrap();
+
+    let out_default = device.alloc_zeroed::<f32>(len).unwrap();
+    binary_elementwise_strided_into::<AddOp, f32, 1>(
+        &device,
+        op(&a, &layout),
+        op(&b, &layout),
+        op(&out_default, &layout),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got_narrow = vec![0.0f32; len];
+    let mut got_default = vec![0.0f32; len];
+    device.download(&out_narrow, &mut got_narrow).unwrap();
+    device.download(&out_default, &mut got_default).unwrap();
+    let expected: Vec<f32> = a_host.iter().zip(&b_host).map(|(x, y)| x + y).collect();
+    assert_eq!(got_narrow, expected);
+    assert_eq!(got_default, expected);
 }

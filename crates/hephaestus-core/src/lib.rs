@@ -19,3 +19,4 @@ pub mod domain;
 pub use domain::buffer::DeviceBuffer;
 pub use domain::device::ComputeDevice;
 pub use domain::error::{HephaestusError, Result};
+pub use domain::launch::BlockWidth;

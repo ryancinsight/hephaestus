@@ -181,7 +181,11 @@ where
         let out_len = current_len.div_ceil(WORKGROUP_SIZE as usize);
         let out_buffer = device.alloc_zeroed::<T>(out_len)?;
 
-        let key = (TypeId::of::<ReductionOpWrapper<Op>>(), TypeId::of::<T>());
+        let key = (
+            TypeId::of::<ReductionOpWrapper<Op>>(),
+            TypeId::of::<T>(),
+            WORKGROUP_SIZE,
+        );
 
         let pipeline = {
             let mut cache = device.pipeline_cache.lock().unwrap();

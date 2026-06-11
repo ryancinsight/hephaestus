@@ -61,6 +61,7 @@ where
     let key = (
         std::any::TypeId::of::<ScalarOpWrapper<Op>>(),
         std::any::TypeId::of::<T>(),
+        WORKGROUP_SIZE,
     );
     let pipeline = {
         let mut cache = device.pipeline_cache.lock().unwrap();
