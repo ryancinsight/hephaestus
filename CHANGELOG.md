@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.1] - 2026-06-12
+
+### Fixed
+
+- Bounded transient WGPU staging and uniform buffer pools by retained count and
+  bytes, preventing unbounded retained GPU memory after varied transfer and
+  scalar/strided dispatch sizes.
+
 ## [0.6.0] - 2026-06-12
 
 ### Added
