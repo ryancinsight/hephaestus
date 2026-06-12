@@ -10,10 +10,15 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::infrastructure::buffer::WgpuBuffer;
+use crate::infrastructure::pool::BoundedBufferPool;
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
 pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, wgpu::ComputePipeline>>>;
+
+const TRANSIENT_POOL_MAX_BUFFERS: usize = 8;
+const STAGING_POOL_MAX_BYTES: u64 = 64 * 1024 * 1024;
+const UNIFORM_POOL_MAX_BYTES: u64 = 1024 * 1024;
 
 /// An acquired wgpu device + queue pair.
 ///
@@ -26,8 +31,8 @@ pub struct WgpuDevice {
     queue: Arc<wgpu::Queue>,
     topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: PipelineCache,
-    pub(crate) staging_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
-    pub(crate) uniform_pool: Arc<Mutex<Vec<wgpu::Buffer>>>,
+    pub(crate) staging_pool: Arc<Mutex<BoundedBufferPool<wgpu::Buffer>>>,
+    pub(crate) uniform_pool: Arc<Mutex<BoundedBufferPool<wgpu::Buffer>>>,
 }
 
 impl WgpuDevice {
@@ -44,8 +49,14 @@ impl WgpuDevice {
             queue,
             topology: None,
             pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
-            staging_pool: Arc::new(Mutex::new(Vec::new())),
-            uniform_pool: Arc::new(Mutex::new(Vec::new())),
+            staging_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
+                TRANSIENT_POOL_MAX_BUFFERS,
+                STAGING_POOL_MAX_BYTES,
+            ))),
+            uniform_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
+                TRANSIENT_POOL_MAX_BUFFERS,
+                UNIFORM_POOL_MAX_BYTES,
+            ))),
         }
     }
 
@@ -178,14 +189,15 @@ impl WgpuDevice {
         raw.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT
     }
 
-    /// Retrieve a staging buffer of size >= size from the pool, or create a new one.
-    /// The size is automatically aligned to `wgpu::MAP_ALIGNMENT` (8 bytes).
+    /// Retrieve a staging buffer of size >= size from the bounded pool, or
+    /// create a new one. The size is automatically aligned to
+    /// `wgpu::MAP_ALIGNMENT` (8 bytes).
     #[must_use]
     pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
         let staging_size = size.div_ceil(8) * 8;
         let mut pool = self.staging_pool.lock().unwrap();
-        if let Some(pos) = pool.iter().position(|b| b.size() >= staging_size) {
-            pool.swap_remove(pos)
+        if let Some(buffer) = pool.take_at_least(staging_size) {
+            buffer
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-recycled-staging"),
@@ -196,23 +208,23 @@ impl WgpuDevice {
         }
     }
 
-    /// Return a staging buffer back to the pool for reuse.
+    /// Return a staging buffer back to the bounded pool for reuse.
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
         let mut pool = self.staging_pool.lock().unwrap();
-        pool.push(buffer);
+        pool.recycle(buffer);
     }
 
     /// Retrieve a uniform buffer of size ≥ `size` from the pool, or create
-    /// one. Contents are written with `queue.write_buffer`, which is ordered
-    /// on the queue timeline relative to submissions, so a recycled uniform
-    /// can be rewritten for the next dispatch without racing in-flight work
-    /// on the same queue.
+    /// one. Retention is bounded by count and bytes. Contents are written
+    /// with `queue.write_buffer`, which is ordered on the queue timeline
+    /// relative to submissions, so a recycled uniform can be rewritten for
+    /// the next dispatch without racing in-flight work on the same queue.
     #[must_use]
     pub fn get_uniform_buffer(&self, size: u64) -> wgpu::Buffer {
         let uniform_size = size.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT;
         let mut pool = self.uniform_pool.lock().unwrap();
-        if let Some(pos) = pool.iter().position(|b| b.size() >= uniform_size) {
-            pool.swap_remove(pos)
+        if let Some(buffer) = pool.take_at_least(uniform_size) {
+            buffer
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-recycled-uniform"),
@@ -223,10 +235,10 @@ impl WgpuDevice {
         }
     }
 
-    /// Return a uniform buffer back to the pool for reuse.
+    /// Return a uniform buffer back to the bounded pool for reuse.
     pub fn recycle_uniform_buffer(&self, buffer: wgpu::Buffer) {
         let mut pool = self.uniform_pool.lock().unwrap();
-        pool.push(buffer);
+        pool.recycle(buffer);
     }
 }
 

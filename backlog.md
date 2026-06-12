@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Bound WGPU transient staging and uniform buffer pools by count
+  and retained bytes. Evidence: pure pool unit tests, WGPU contract tests,
+  fmt, check, clippy, nextest, doctest, docs, metadata, benchmark, and diff
+  checks.
 - [x] [minor] Add caller-owned contiguous elementwise output APIs
   (`binary_elementwise_into`, `unary_elementwise_into`,
   `scalar_elementwise_into`), route allocating APIs through them, pool scalar

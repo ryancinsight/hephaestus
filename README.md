@@ -38,6 +38,8 @@ preserving the dynamic-load / no-toolkit-to-compile property.
 - Contiguous and strided elementwise callers can supply output buffers, so
   allocation policy stays with the consumer; scalar dispatch reuses the same
   uniform-buffer pool as strided metadata.
+- Staging and uniform buffer pools are bounded by retained count and retained
+  bytes, keeping transient GPU memory reuse from becoming unbounded growth.
 - `WgpuBuffer::raw()` is the consumer escape hatch: apollo transform kernels
   build their own pipelines/bind groups over hephaestus-allocated storage.
 
