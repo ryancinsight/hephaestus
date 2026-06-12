@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.2] - 2026-06-12
+
+### Fixed
+
+- Transient WGPU buffer pools now evict the oldest retained buffer when the
+  count cap is full, allowing the pool to adapt after larger recent staging or
+  uniform allocations instead of staying polluted by smaller buffers.
+
 ## [0.6.1] - 2026-06-12
 
 ### Fixed

@@ -15,9 +15,8 @@ impl PoolBuffer for wgpu::Buffer {
 
 /// Count- and byte-bounded pool for transient buffers.
 ///
-/// The pool is intentionally unordered: callers only need a buffer at least as
-/// large as the requested size, and recycling keeps retention bounded under
-/// adversarial alternating transfer sizes.
+/// Reuse searches by requested capacity, while count-limit eviction removes
+/// the oldest retained buffer so the pool can adapt after size-regime changes.
 #[derive(Debug)]
 pub(crate) struct BoundedBufferPool<B> {
     buffers: Vec<B>,
@@ -52,8 +51,12 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
     /// Retain a buffer for reuse when it fits the pool limits.
     pub(crate) fn recycle(&mut self, buffer: B) {
         let size = buffer.size();
-        if size > self.max_bytes || self.buffers.len() >= self.max_buffers {
+        if size > self.max_bytes || self.max_buffers == 0 {
             return;
+        }
+        while self.buffers.len() >= self.max_buffers && !self.buffers.is_empty() {
+            let evicted = self.buffers.remove(0);
+            self.retained_bytes -= evicted.size();
         }
         while self.retained_bytes + size > self.max_bytes {
             let Some(evicted) = self.buffers.pop() else {
@@ -102,5 +105,26 @@ mod tests {
 
         pool.recycle(TestBuffer(1024));
         assert!(pool.take_at_least(1024).is_none());
+    }
+
+    #[test]
+    fn pool_adapts_when_full_of_smaller_buffers() {
+        let mut pool = BoundedBufferPool::new(2, 2048);
+        pool.recycle(TestBuffer(128));
+        pool.recycle(TestBuffer(256));
+        pool.recycle(TestBuffer(1024));
+
+        assert!(pool.buffers.len() <= 2);
+        let got = pool.take_at_least(1024).unwrap();
+        assert_eq!(got.size(), 1024);
+    }
+
+    #[test]
+    fn zero_count_pool_retains_nothing() {
+        let mut pool = BoundedBufferPool::new(0, 2048);
+        pool.recycle(TestBuffer(128));
+
+        assert!(pool.take_at_least(1).is_none());
+        assert_eq!(pool.retained_bytes, 0);
     }
 }

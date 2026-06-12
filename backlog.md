@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Make bounded transient WGPU pools adaptive under count pressure
+  by evicting the oldest retained buffer instead of discarding newly recycled
+  buffers. Evidence: pool starvation regression test plus targeted pool tests.
 - [x] [patch] Bound WGPU transient staging and uniform buffer pools by count
   and retained bytes. Evidence: pure pool unit tests, WGPU contract tests,
   fmt, check, clippy, nextest, doctest, docs, metadata, benchmark, and diff
