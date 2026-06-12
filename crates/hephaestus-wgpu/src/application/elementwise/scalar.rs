@@ -1,18 +1,16 @@
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
-use wgpu::util::DeviceExt;
+use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 
 use crate::application::elementwise::binary::BinaryWgslOp;
+use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-const WORKGROUP_SIZE: u32 = 256;
-
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for scalar operations.
 struct ScalarOpWrapper<Op>(core::marker::PhantomData<Op>);
 
-fn shader_source<Op: BinaryWgslOp, T: WgslScalar>() -> String {
+fn shader_source<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
 @group(0) @binding(1) var<uniform> scalar: {ty};
@@ -30,65 +28,46 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         ty = T::WGSL_TYPE,
-        wg = WORKGROUP_SIZE,
+        wg = width.get(),
         expr = Op::WGSL_EXPR,
     )
 }
 
-/// Run `out[i] = op(a[i], scalar)` on the device, allocating the output buffer.
-pub fn scalar_elementwise<Op, T>(
+/// Run `out[i] = op(a[i], scalar)` on the device into caller-owned storage.
+pub fn scalar_elementwise_into<Op, T>(
     device: &WgpuDevice,
     a: &WgpuBuffer<T>,
     scalar: T,
-) -> Result<WgpuBuffer<T>>
+    out: &WgpuBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
 where
     Op: BinaryWgslOp,
     T: WgslScalar + Pod,
 {
-    let out = device.alloc_zeroed::<T>(a.len)?;
-    if a.len == 0 {
-        return Ok(out);
+    if out.len != a.len {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: out.len,
+            device_len: a.len,
+        });
+    }
+    if out.len == 0 {
+        return Ok(());
     }
 
-    let scalar_buffer = device
-        .inner()
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("hephaestus-scalar-uniform"),
-            contents: bytemuck::bytes_of(&scalar),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+    let scalar_buffer = device.get_uniform_buffer(core::mem::size_of::<T>() as u64);
+    device
+        .queue()
+        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
 
     let key = (
         std::any::TypeId::of::<ScalarOpWrapper<Op>>(),
         std::any::TypeId::of::<T>(),
-        WORKGROUP_SIZE,
+        width.get(),
     );
-    let pipeline = {
-        let mut cache = device.pipeline_cache.lock().unwrap();
-        if let Some(cached) = cache.get(&key) {
-            cached.clone()
-        } else {
-            let module = device
-                .inner()
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("hephaestus-scalar"),
-                    source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
-                });
-            let pipeline =
-                device
-                    .inner()
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("hephaestus-scalar"),
-                        layout: None,
-                        module: &module,
-                        entry_point: Some("main"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        cache: None,
-                    });
-            cache.insert(key, pipeline.clone());
-            pipeline
-        }
-    };
+    let pipeline = cached_pipeline(device, key, "hephaestus-scalar", || {
+        shader_source::<Op, T>(width)
+    });
 
     let bind_group = device
         .inner()
@@ -123,14 +102,25 @@ where
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let groups = u32::try_from(a.len.div_ceil(WORKGROUP_SIZE as usize)).map_err(|_| {
-            HephaestusError::DispatchFailed {
-                message: format!("dispatch size {} exceeds u32 workgroup range", a.len),
-            }
-        })?;
-        pass.dispatch_workgroups(groups, 1, 1);
+        pass.dispatch_workgroups(workgroups(out.len, width)?, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
+    device.recycle_uniform_buffer(scalar_buffer);
 
+    Ok(())
+}
+
+/// Run `out[i] = op(a[i], scalar)` on the device, allocating the output buffer.
+pub fn scalar_elementwise<Op, T>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    scalar: T,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: BinaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    let out = device.alloc_zeroed::<T>(a.len)?;
+    scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }

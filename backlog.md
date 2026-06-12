@@ -4,6 +4,20 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## Delivered
+
+- [x] [minor] Add caller-owned contiguous elementwise output APIs
+  (`binary_elementwise_into`, `unary_elementwise_into`,
+  `scalar_elementwise_into`), route allocating APIs through them, pool scalar
+  uniforms, and consolidate WGPU pipeline cache construction. Evidence:
+  differential WGPU contract test, fmt, check, clippy, nextest, doctest, docs,
+  and empirical `elementwise_into` benchmark on real adapter.
+- [x] [patch] Add default `parallel` and `mnemosyne-memory` feature markers to
+  `hephaestus-core` and `hephaestus-wgpu`, keeping provider feature policy
+  uniform across the Apollo-facing Atlas stack. Evidence: metadata audit, fmt,
+  and diff checks; compile/test blocked by Cargo lockfile write/access denial
+  before rustc.
+
 ## Phase 1: wgpu substrate (0.1.0) [arch]
 - [x] [arch] Scaffold workspace: `hephaestus-core` contracts (ComputeDevice GAT
   seam, DeviceBuffer, error vocabulary) + `hephaestus-wgpu` backend (acquisition,

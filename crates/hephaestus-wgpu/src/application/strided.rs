@@ -18,6 +18,7 @@ use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
 use crate::application::elementwise::{BinaryWgslOp, UnaryWgslOp};
+use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -131,37 +132,6 @@ fn validate_out<T, const N: usize>(out: &WgpuBuffer<T>, out_layout: &Layout<N>) 
     out_layout.checked_size().map_err(map_layout_err)
 }
 
-/// Fetch the cached pipeline for `key`, compiling `source` on first use.
-fn cached_pipeline(
-    device: &WgpuDevice,
-    key: crate::infrastructure::device::PipelineKey,
-    label: &str,
-    source: impl FnOnce() -> String,
-) -> wgpu::ComputePipeline {
-    let mut cache = device.pipeline_cache.lock().unwrap();
-    if let Some(cached) = cache.get(&key) {
-        return cached.clone();
-    }
-    let module = device
-        .inner()
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(label),
-            source: wgpu::ShaderSource::Wgsl(source().into()),
-        });
-    let pipeline = device
-        .inner()
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some(label),
-            layout: None,
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-    cache.insert(key, pipeline.clone());
-    pipeline
-}
-
 /// Upload the meta uniform, bind `buffers` after it at consecutive slots, and
 /// dispatch `len` invocations: the single encode path shared by every strided
 /// kernel.
@@ -210,7 +180,7 @@ fn encode_strided(
         });
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let groups = width.covering_blocks(len as u64);
+        let groups = workgroups(len, width)?;
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));

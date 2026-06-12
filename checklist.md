@@ -1,11 +1,38 @@
 # Checklist — hephaestus
 
-Target version: 0.3.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.6.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.6.0 caller-owned contiguous elementwise [minor]
+- [x] Added `binary_elementwise_into`, `unary_elementwise_into`, and
+  `scalar_elementwise_into` for caller-owned output buffers and `BlockWidth`
+  selection.
+- [x] Routed allocating contiguous elementwise APIs through the caller-owned
+  implementations; scalar dispatch now uses the uniform pool.
+- [x] Consolidated pipeline-cache creation into `application::pipeline` for
+  contiguous elementwise, strided elementwise, and reduction kernels.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --locked`;
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+  `cargo nextest run --workspace --locked` (22 passed);
+  `cargo test --doc --workspace --locked`; `cargo doc --workspace --no-deps
+  --locked`; `cargo metadata --no-deps --locked --format-version 1`;
+  `cargo bench --bench elementwise_into --locked` on real adapter
+  (allocating 291,410 ns/iter; caller-owned 66,350 ns/iter for 1,048,576
+  elements, 20 iterations). Evidence tier: value-semantic differential tests
+  and empirical benchmark, not a stored Criterion regression baseline.
+
+## Default provider feature contract [patch]
+- [x] Added default `parallel` and `mnemosyne-memory` feature markers to
+  `hephaestus-core` and `hephaestus-wgpu`.
+- Evidence: `cargo metadata --no-deps --locked --format-version 1`; full Atlas
+  feature-policy metadata audit; `cargo check --workspace --offline`;
+  `cargo test --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; `cargo doc --workspace --no-deps --locked`;
+  `git diff --check`.
 
 ## 0.3.1 uniform pooling + CUDA ADR [patch]
 - [x] Pooled strided meta uniforms (queue-ordered write_buffer reuse);
