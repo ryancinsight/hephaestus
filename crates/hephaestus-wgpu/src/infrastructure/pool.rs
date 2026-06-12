@@ -1,5 +1,7 @@
 //! Bounded buffer pools for transient WGPU allocations.
 
+use std::collections::VecDeque;
+
 /// A buffer value whose retained allocation size is known.
 pub(crate) trait PoolBuffer {
     /// Allocation size in bytes.
@@ -19,7 +21,7 @@ impl PoolBuffer for wgpu::Buffer {
 /// the oldest retained buffer so the pool can adapt after size-regime changes.
 #[derive(Debug)]
 pub(crate) struct BoundedBufferPool<B> {
-    buffers: Vec<B>,
+    buffers: VecDeque<B>,
     retained_bytes: u64,
     max_buffers: usize,
     max_bytes: u64,
@@ -30,7 +32,7 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
     #[must_use]
     pub(crate) fn new(max_buffers: usize, max_bytes: u64) -> Self {
         Self {
-            buffers: Vec::new(),
+            buffers: VecDeque::new(),
             retained_bytes: 0,
             max_buffers,
             max_bytes,
@@ -43,7 +45,10 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
             .buffers
             .iter()
             .position(|buffer| buffer.size() >= size)?;
-        let buffer = self.buffers.swap_remove(pos);
+        let buffer = self
+            .buffers
+            .remove(pos)
+            .expect("invariant: position came from VecDeque::position");
         self.retained_bytes -= buffer.size();
         Some(buffer)
     }
@@ -55,17 +60,20 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
             return;
         }
         while self.buffers.len() >= self.max_buffers && !self.buffers.is_empty() {
-            let evicted = self.buffers.remove(0);
+            let evicted = self
+                .buffers
+                .pop_front()
+                .expect("invariant: non-empty pool has an oldest buffer");
             self.retained_bytes -= evicted.size();
         }
         while self.retained_bytes + size > self.max_bytes {
-            let Some(evicted) = self.buffers.pop() else {
+            let Some(evicted) = self.buffers.pop_back() else {
                 return;
             };
             self.retained_bytes -= evicted.size();
         }
         self.retained_bytes += size;
-        self.buffers.push(buffer);
+        self.buffers.push_back(buffer);
     }
 }
 

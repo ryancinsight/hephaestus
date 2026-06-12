@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.3] - 2026-06-12
+
+### Changed
+
+- `BoundedBufferPool` now stores retained buffers in a `VecDeque`, preserving
+  oldest-first count-cap eviction while avoiding `Vec::remove(0)` element
+  shifts on recycle.
+
 ## [0.6.2] - 2026-06-12
 
 ### Fixed
