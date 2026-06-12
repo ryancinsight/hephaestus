@@ -1,11 +1,27 @@
 # Checklist — hephaestus
 
-Target version: 0.6.6 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.6.7 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.6.7 value-semantic negative assertions [patch]
+- [x] Replaced remaining broad absence and variant-only assertions in the
+  audited Rust test scope with concrete mapped-value or length comparisons.
+- [x] Confirmed no `is_err`, `is_ok`, `is_some`, `is_none`, or
+  `assert!(matches!)` assertions remain under the audited source/test paths.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; `cargo nextest run --workspace --locked` (28
+  passed); assertion-pattern scan with `rg` over audited source/test paths
+  returned no matches; `cargo test --doc --workspace --locked`; `cargo doc
+  --workspace --no-deps --locked`; `cargo metadata --no-deps --locked
+  --format-version 1`; `cargo bench --bench elementwise_into --locked` on
+  real adapter (allocating 197,245 ns/iter; caller-owned 58,495 ns/iter for
+  1,048,576 elements, 20 iterations); `git diff --check`. Evidence tier:
+  value-semantic tests, assertion-pattern scan, and empirical benchmark.
 
 ## 0.6.6 negative-path contract assertions [patch]
 - [x] Replaced remaining elementwise and strided negative-path `is_err()`

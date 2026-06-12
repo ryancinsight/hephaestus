@@ -102,7 +102,7 @@ mod tests {
 
         let got = pool.take_at_least(256).unwrap();
         assert_eq!(got.size(), 512);
-        assert!(pool.take_at_least(256).is_none());
+        assert_eq!(pool.take_at_least(256).map(|buffer| buffer.size()), None);
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
         assert!(pool.buffers.len() <= 2);
 
         pool.recycle(TestBuffer(1024));
-        assert!(pool.take_at_least(1024).is_none());
+        assert_eq!(pool.take_at_least(1024).map(|buffer| buffer.size()), None);
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
         let mut pool = BoundedBufferPool::new(0, 2048);
         pool.recycle(TestBuffer(128));
 
-        assert!(pool.take_at_least(1).is_none());
+        assert_eq!(pool.take_at_least(1).map(|buffer| buffer.size()), None);
         assert_eq!(pool.retained_bytes, 0);
     }
 }
