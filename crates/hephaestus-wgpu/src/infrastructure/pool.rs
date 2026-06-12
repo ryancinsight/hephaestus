@@ -17,8 +17,9 @@ impl PoolBuffer for wgpu::Buffer {
 
 /// Count- and byte-bounded pool for transient buffers.
 ///
-/// Reuse searches by requested capacity, while count-limit eviction removes
-/// the oldest retained buffer so the pool can adapt after size-regime changes.
+/// Reuse selects the smallest retained buffer that covers the requested
+/// capacity, while count-limit eviction removes the oldest retained buffer so
+/// the pool can adapt after size-regime changes.
 #[derive(Debug)]
 pub(crate) struct BoundedBufferPool<B> {
     buffers: VecDeque<B>,
@@ -44,7 +45,10 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
         let pos = self
             .buffers
             .iter()
-            .position(|buffer| buffer.size() >= size)?;
+            .enumerate()
+            .filter(|(_, buffer)| buffer.size() >= size)
+            .min_by_key(|(_, buffer)| buffer.size())
+            .map(|(pos, _)| pos)?;
         let buffer = self
             .buffers
             .remove(pos)
@@ -99,6 +103,20 @@ mod tests {
         let got = pool.take_at_least(256).unwrap();
         assert_eq!(got.size(), 512);
         assert!(pool.take_at_least(256).is_none());
+    }
+
+    #[test]
+    fn pool_uses_smallest_sufficient_buffer() {
+        let mut pool = BoundedBufferPool::new(4, 4096);
+        pool.recycle(TestBuffer(2048));
+        pool.recycle(TestBuffer(512));
+        pool.recycle(TestBuffer(1024));
+
+        let got = pool.take_at_least(500).unwrap();
+        assert_eq!(got.size(), 512);
+
+        let large = pool.take_at_least(2048).unwrap();
+        assert_eq!(large.size(), 2048);
     }
 
     #[test]

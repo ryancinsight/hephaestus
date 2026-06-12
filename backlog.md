@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Make bounded transient WGPU pool reuse best-fit by selecting
+  the smallest retained buffer that satisfies a request. Evidence: targeted
+  pool regression test and full gate.
 - [x] [patch] Store bounded transient WGPU pool entries in `VecDeque` so
   oldest-first count eviction is O(1) instead of shifting retained entries.
   Evidence: targeted pool tests and full gate.
