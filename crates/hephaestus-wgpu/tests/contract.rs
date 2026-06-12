@@ -33,6 +33,24 @@ fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
     }
 }
 
+fn assert_length_mismatch<T>(
+    result: hephaestus_wgpu::Result<T>,
+    host_len: usize,
+    device_len: usize,
+) {
+    match result {
+        Err(HephaestusError::LengthMismatch {
+            host_len: got_host,
+            device_len: got_device,
+        }) => {
+            assert_eq!(got_host, host_len);
+            assert_eq!(got_device, device_len);
+        }
+        Err(error) => panic!("expected length mismatch {host_len}->{device_len}, got {error:?}"),
+        Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
+    }
+}
+
 #[test]
 fn upload_download_round_trips_values() {
     let Some(device) = device_or_skip() else {
@@ -104,7 +122,7 @@ fn elementwise_rejects_input_length_mismatch() {
     };
     let a = device.upload(&[1.0f32, 2.0]).unwrap();
     let b = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
-    assert!(binary_elementwise::<AddOp, f32>(&device, &a, &b).is_err());
+    assert_length_mismatch(binary_elementwise::<AddOp, f32>(&device, &a, &b), 2, 3);
 }
 
 #[test]

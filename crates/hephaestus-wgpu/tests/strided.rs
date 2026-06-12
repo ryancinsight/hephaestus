@@ -1,7 +1,7 @@
 //! Differential contract tests for strided-layout dispatch: device results vs
 //! a CPU reference computed over the same leto layout metadata.
 
-use hephaestus_core::{BlockWidth, ComputeDevice};
+use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
 use hephaestus_wgpu::{
     binary_elementwise_strided_into, scalar_elementwise_strided_into,
     unary_elementwise_strided_into, AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice,
@@ -22,6 +22,14 @@ fn device_or_skip() -> Option<WgpuDevice> {
             eprintln!("skipping wgpu strided test: {e}");
             None
         }
+    }
+}
+
+fn assert_dispatch_message<T>(result: hephaestus_wgpu::Result<T>, expected: &'static str) {
+    match result {
+        Err(HephaestusError::DispatchFailed { message }) => assert_eq!(message, expected),
+        Err(error) => panic!("expected dispatch failure {expected:?}, got {error:?}"),
+        Ok(_) => panic!("expected dispatch failure {expected:?}, got success"),
     }
 }
 
@@ -173,35 +181,38 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let a = device.upload(&[1.0f32, 2.0]).unwrap();
-    let b = device.upload(&[1.0f32, 2.0]).unwrap();
-    let out = device.alloc_zeroed::<f32>(2).unwrap();
+    let a = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    let b = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    let out = device.alloc_zeroed::<f32>(4).unwrap();
 
     // Zero-stride aliasing output is rejected.
     let aliasing = Layout::new([2, 2], [0, 1], 0);
     let flat = Layout::c_contiguous([2, 2]).unwrap();
-    assert!(binary_elementwise_strided_into::<AddOp, f32, 2>(
-        &device,
-        op(&a, &flat),
-        op(&b, &flat),
-        op(&out, &aliasing),
-        BlockWidth::DEFAULT
-    )
-    .is_err());
+    assert_dispatch_message(
+        binary_elementwise_strided_into::<AddOp, f32, 2>(
+            &device,
+            op(&a, &flat),
+            op(&b, &flat),
+            op(&out, &aliasing),
+            BlockWidth::DEFAULT,
+        ),
+        "output layout must not contain zero-stride aliasing",
+    );
 
     // Layout exceeding the backing buffer is rejected before dispatch.
     let too_big = Layout::c_contiguous([4]).unwrap();
-    let small = Layout::c_contiguous([2]).unwrap();
     let a1 = device.upload(&[1.0f32, 2.0]).unwrap();
     let out1 = device.alloc_zeroed::<f32>(4).unwrap();
-    assert!(binary_elementwise_strided_into::<AddOp, f32, 1>(
-        &device,
-        op(&a1, &too_big),
-        op(&a1, &small),
-        op(&out1, &too_big),
-        BlockWidth::DEFAULT
-    )
-    .is_err());
+    assert_dispatch_message(
+        binary_elementwise_strided_into::<AddOp, f32, 1>(
+            &device,
+            op(&a1, &too_big),
+            op(&a1, &too_big),
+            op(&out1, &too_big),
+            BlockWidth::DEFAULT,
+        ),
+        "layout rejected: Storage error: storage length 2 does not cover layout physical offsets 0..=3",
+    );
 }
 
 #[test]

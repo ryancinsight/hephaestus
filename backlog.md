@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Replace remaining negative-path existence-only dispatch
+  assertions with typed `HephaestusError` contract checks. Evidence:
+  WGPU contract and strided tests plus full gate.
 - [x] [patch] Reject aliased caller-owned contiguous elementwise output
   buffers before WGPU bind-group creation. Evidence: binary left/right, unary,
   and scalar alias contract tests plus full gate.
