@@ -1,11 +1,27 @@
 # Checklist — hephaestus
 
-Target version: 0.6.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.6.2 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.6.2 adaptive transient pools [patch]
+- [x] Changed `BoundedBufferPool::recycle` to evict oldest retained buffers
+  when the count cap is full, then enforce the byte cap.
+- [x] Added regression coverage for full-pool small-buffer pollution and a
+  zero-count invariant.
+- Evidence: `cargo test -p hephaestus-wgpu infrastructure::pool --locked`.
+  Full gate: `cargo fmt --check`; `cargo check --workspace --locked`;
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+  `cargo nextest run --workspace --locked` (26 passed); `cargo test --doc
+  --workspace --locked`; `cargo doc --workspace --no-deps --locked`;
+  `cargo metadata --no-deps --locked --format-version 1`; `cargo bench
+  --bench elementwise_into --locked` on real adapter (allocating 174,145
+  ns/iter; caller-owned 95,335 ns/iter for 1,048,576 elements, 20
+  iterations); `git diff --check`. Evidence tier: value-semantic unit tests
+  and empirical benchmark.
 
 ## 0.6.1 bounded transient pools [patch]
 - [x] Added `infrastructure::pool::BoundedBufferPool` with retained-buffer
