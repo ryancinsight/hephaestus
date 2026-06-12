@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.6] - 2026-06-12
+
+### Tests
+
+- Negative elementwise and strided dispatch tests now assert exact
+  `HephaestusError` variants, lengths, and dispatch messages instead of
+  accepting any error.
+
 ## [0.6.5] - 2026-06-12
 
 ### Fixed
