@@ -2,6 +2,29 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## Unreleased
+
+## [0.6.0] - 2026-06-12
+
+### Added
+
+- Default `parallel` and `mnemosyne-memory` feature markers in
+  `hephaestus-core` and `hephaestus-wgpu`, keeping the GPU substrate aligned
+  with the Atlas provider feature contract without changing device dispatch.
+- `hephaestus-wgpu`: `binary_elementwise_into`, `unary_elementwise_into`, and
+  `scalar_elementwise_into` for caller-owned contiguous output buffers and
+  non-default `BlockWidth` selection.
+- `hephaestus-wgpu`: `elementwise_into` benchmark target comparing allocating
+  contiguous dispatch with caller-owned output dispatch on a real adapter.
+
+### Changed
+
+- Contiguous elementwise allocating APIs now delegate to the caller-owned
+  implementations; scalar dispatch reuses the WGPU uniform-buffer pool instead
+  of allocating a uniform buffer for every call.
+- Pipeline-cache construction is shared by contiguous elementwise, strided
+  elementwise, and reduction kernels.
+
 ## [0.5.0] - 2026-06-11
 
 Occupancy-planned dispatch: the strided family accepts block widths from the

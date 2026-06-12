@@ -2,8 +2,9 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, Result};
 
+use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -187,32 +188,9 @@ where
             WORKGROUP_SIZE,
         );
 
-        let pipeline = {
-            let mut cache = device.pipeline_cache.lock().unwrap();
-            if let Some(cached) = cache.get(&key) {
-                cached.clone()
-            } else {
-                let module = device
-                    .inner()
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: Some("hephaestus-reduction"),
-                        source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
-                    });
-                let pipeline =
-                    device
-                        .inner()
-                        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                            label: Some("hephaestus-reduction"),
-                            layout: None,
-                            module: &module,
-                            entry_point: Some("main"),
-                            compilation_options: wgpu::PipelineCompilationOptions::default(),
-                            cache: None,
-                        });
-                cache.insert(key, pipeline.clone());
-                pipeline
-            }
-        };
+        let pipeline = cached_pipeline(device, key, "hephaestus-reduction", || {
+            shader_source::<Op, T>()
+        });
 
         let source_resource = if temp_buffers.is_empty() {
             input.buffer.as_entire_binding()
@@ -244,10 +222,7 @@ where
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            let groups = u32::try_from(out_len).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("dispatch size {} exceeds u32 workgroup range", out_len),
-            })?;
-            pass.dispatch_workgroups(groups, 1, 1);
+            pass.dispatch_workgroups(workgroups(current_len, BlockWidth::DEFAULT)?, 1, 1);
         }
 
         temp_buffers.push(out_buffer);

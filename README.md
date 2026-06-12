@@ -17,7 +17,7 @@ kernels are forged for accelerator hardware.
 | Crate | Responsibility |
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, error vocabulary. `#![forbid(unsafe_code)]`. |
-| `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with staging, and monomorphized elementwise dispatch via ZST op markers + per-`(Op, T)` WGSL generation. |
+| `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 
 Planned sibling backend: CUDA, **composing `cuda-oxide`** (driver/runtime/
 device-memory/streams) **with `cutile`** (tile/PTX kernel authoring),
@@ -31,9 +31,13 @@ preserving the dynamic-load / no-toolkit-to-compile property.
 - Element types are bounded by `bytemuck::Pod`; buffer dtype lives in
   `PhantomData<T>` so dtype confusion is a compile error.
 - Elementwise kernels follow leto-ops' ZST operation-marker pattern on the
-  device side: one generic `binary_elementwise::<Op, T>` entry point; the op
-  contributes only its WGSL combine expression. No type names in identifiers
-  (`WgslScalar::WGSL_TYPE` substitutes the shader type token).
+  device side: generic allocating APIs delegate to caller-owned `*_into`
+  entry points, and the op contributes only its WGSL combine expression. No
+  type names appear in API identifiers (`WgslScalar::WGSL_TYPE` substitutes
+  the shader type token).
+- Contiguous and strided elementwise callers can supply output buffers, so
+  allocation policy stays with the consumer; scalar dispatch reuses the same
+  uniform-buffer pool as strided metadata.
 - `WgpuBuffer::raw()` is the consumer escape hatch: apollo transform kernels
   build their own pipelines/bind groups over hephaestus-allocated storage.
 
@@ -50,14 +54,19 @@ proofs (melinoe — planned device-buffer tokens), or scheduling (moirai).
 ```sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
-cargo test
+cargo nextest run
+cargo test --doc
 cargo doc --no-deps
+cargo bench --bench elementwise_into
 ```
 
 Contract tests run real device dispatch differentially against CPU references
 (upload/download round-trip, partial trailing workgroup add, integral mul,
 length-mismatch rejection). On hosts without an adapter the tests skip with a
 message rather than fabricate a pass.
+
+The `elementwise_into` benchmark runs real WGPU dispatch and validates output
+values. It is an empirical timing tool, not a Criterion regression baseline.
 
 ## Consumers
 

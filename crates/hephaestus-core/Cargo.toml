@@ -7,6 +7,11 @@ license.workspace = true
 repository.workspace = true
 description = "GPU-dependency-free device, buffer, and dispatch contracts for the Atlas accelerator substrate."
 
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
+
 [dependencies]
 bytemuck = { workspace = true }
 thiserror = { workspace = true }

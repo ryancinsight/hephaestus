@@ -7,6 +7,11 @@ license.workspace = true
 repository.workspace = true
 description = "wgpu backend for the Atlas accelerator substrate: device acquisition, typed buffers, and monomorphized compute dispatch."
 
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
+
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
@@ -17,3 +22,7 @@ bytemuck = { workspace = true }
 
 [dev-dependencies]
 pollster = { workspace = true }
+
+[[bench]]
+name = "elementwise_into"
+harness = false

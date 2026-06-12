@@ -2,6 +2,7 @@
 
 /// Elementwise binary kernels.
 pub mod elementwise;
+pub(crate) mod pipeline;
 /// Reduction compute operations.
 pub mod reduction;
 /// Strided-layout-aware dispatch over leto layout metadata.

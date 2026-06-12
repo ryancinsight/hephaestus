@@ -1,0 +1,51 @@
+//! Shared WGPU pipeline and dispatch utilities.
+
+use hephaestus_core::{BlockWidth, HephaestusError, Result};
+
+use crate::infrastructure::device::{PipelineKey, WgpuDevice};
+
+/// Fetch the cached pipeline for `key`, compiling `source` on first use.
+#[must_use]
+pub(crate) fn cached_pipeline(
+    device: &WgpuDevice,
+    key: PipelineKey,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> wgpu::ComputePipeline {
+    let mut cache = device.pipeline_cache.lock().unwrap();
+    if let Some(cached) = cache.get(&key) {
+        return cached.clone();
+    }
+    let module = device
+        .inner()
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(label),
+            source: wgpu::ShaderSource::Wgsl(source().into()),
+        });
+    let pipeline = device
+        .inner()
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(label),
+            layout: None,
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+    cache.insert(key, pipeline.clone());
+    pipeline
+}
+
+/// Convert a logical work-item count into WGPU workgroup count.
+pub(crate) fn workgroups(len: usize, width: BlockWidth) -> Result<u32> {
+    let len = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("dispatch size {len} exceeds u64 range"),
+    })?;
+    let groups = width.covering_blocks(len);
+    if groups == u32::MAX && len > u64::from(width.get()) * u64::from(u32::MAX) {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("dispatch size {len} exceeds u32 workgroup range"),
+        });
+    }
+    Ok(groups)
+}

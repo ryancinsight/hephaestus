@@ -3,10 +3,12 @@
 //! Tests acquire a real adapter; on hosts without one (headless CI without
 //! GPU/lavapipe) they skip with a message rather than fabricate a pass.
 
+use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise, reduction, scalar_elementwise, unary_elementwise, AbsOp, AddOp,
+    binary_elementwise, binary_elementwise_into, reduction, scalar_elementwise,
+    scalar_elementwise_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
     ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
-    SqrtOp, SumOp, WgpuDevice,
+    SqrtOp, SubOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -91,6 +93,49 @@ fn elementwise_rejects_input_length_mismatch() {
     let a = device.upload(&[1.0f32, 2.0]).unwrap();
     let b = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
     assert!(binary_elementwise::<AddOp, f32>(&device, &a, &b).is_err());
+}
+
+#[test]
+fn elementwise_into_reuses_caller_output_buffers() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let width = BlockWidth::new(128).unwrap();
+    let a_host: Vec<f32> = (0..513).map(|i| i as f32 * 0.25).collect();
+    let b_host: Vec<f32> = (0..513).map(|i| 50.0 - i as f32).collect();
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(a_host.len()).unwrap();
+
+    binary_elementwise_into::<SubOp, f32>(&device, &a, &b, &out, width).unwrap();
+    let mut got = vec![0.0f32; a_host.len()];
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().zip(&b_host).map(|(x, y)| x - y).collect();
+    assert_eq!(got, expected);
+
+    unary_elementwise_into::<NegOp, f32>(&device, &a, &out, width).unwrap();
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().map(|x| -x).collect();
+    assert_eq!(got, expected);
+
+    scalar_elementwise_into::<AddOp, f32>(&device, &a, 7.5, &out, width).unwrap();
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().map(|x| x + 7.5).collect();
+    assert_eq!(got, expected);
+
+    let short = device.alloc_zeroed::<f32>(a_host.len() - 1).unwrap();
+    assert!(matches!(
+        binary_elementwise_into::<AddOp, f32>(&device, &a, &b, &short, width),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        unary_elementwise_into::<NegOp, f32>(&device, &a, &short, width),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        scalar_elementwise_into::<AddOp, f32>(&device, &a, 1.0, &short, width),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
 }
 
 #[test]

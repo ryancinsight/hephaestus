@@ -1,11 +1,10 @@
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, Result};
 
+use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-
-const WORKGROUP_SIZE: u32 = 256;
 
 /// Zero-sized unary operation marker selecting the WGSL expression.
 pub trait UnaryWgslOp: Copy + Send + Sync + 'static {
@@ -77,7 +76,7 @@ impl UnaryWgslOp for RecipOp {
     const WGSL_EXPR: &'static str = "1.0 / x";
 }
 
-fn shader_source<Op: UnaryWgslOp, T: WgslScalar>() -> String {
+fn shader_source<Op: UnaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> out: array<{ty}>;
@@ -93,53 +92,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         ty = T::WGSL_TYPE,
-        wg = WORKGROUP_SIZE,
+        wg = width.get(),
         expr = Op::WGSL_EXPR,
     )
 }
 
-/// Run `out[i] = op(a[i])` on the device, allocating the output buffer.
-pub fn unary_elementwise<Op, T>(device: &WgpuDevice, a: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
+/// Run `out[i] = op(a[i])` on the device into caller-owned storage.
+pub fn unary_elementwise_into<Op, T>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    out: &WgpuBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
 where
     Op: UnaryWgslOp,
     T: WgslScalar + Pod,
 {
-    let out = device.alloc_zeroed::<T>(a.len)?;
-    if a.len == 0 {
-        return Ok(out);
+    if out.len != a.len {
+        return Err(hephaestus_core::HephaestusError::LengthMismatch {
+            host_len: out.len,
+            device_len: a.len,
+        });
+    }
+    if out.len == 0 {
+        return Ok(());
     }
 
     let key = (
         std::any::TypeId::of::<Op>(),
         std::any::TypeId::of::<T>(),
-        WORKGROUP_SIZE,
+        width.get(),
     );
-    let pipeline = {
-        let mut cache = device.pipeline_cache.lock().unwrap();
-        if let Some(cached) = cache.get(&key) {
-            cached.clone()
-        } else {
-            let module = device
-                .inner()
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("hephaestus-unary"),
-                    source: wgpu::ShaderSource::Wgsl(shader_source::<Op, T>().into()),
-                });
-            let pipeline =
-                device
-                    .inner()
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("hephaestus-unary"),
-                        layout: None,
-                        module: &module,
-                        entry_point: Some("main"),
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                        cache: None,
-                    });
-            cache.insert(key, pipeline.clone());
-            pipeline
-        }
-    };
+    let pipeline = cached_pipeline(device, key, "hephaestus-unary", || {
+        shader_source::<Op, T>(width)
+    });
 
     let bind_group = device
         .inner()
@@ -170,14 +156,20 @@ where
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let groups = u32::try_from(a.len.div_ceil(WORKGROUP_SIZE as usize)).map_err(|_| {
-            HephaestusError::DispatchFailed {
-                message: format!("dispatch size {} exceeds u32 workgroup range", a.len),
-            }
-        })?;
-        pass.dispatch_workgroups(groups, 1, 1);
+        pass.dispatch_workgroups(workgroups(out.len, width)?, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
 
+    Ok(())
+}
+
+/// Run `out[i] = op(a[i])` on the device, allocating the output buffer.
+pub fn unary_elementwise<Op, T>(device: &WgpuDevice, a: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
+where
+    Op: UnaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    let out = device.alloc_zeroed::<T>(a.len)?;
+    unary_elementwise_into::<Op, T>(device, a, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }
