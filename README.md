@@ -36,8 +36,9 @@ preserving the dynamic-load / no-toolkit-to-compile property.
   type names appear in API identifiers (`WgslScalar::WGSL_TYPE` substitutes
   the shader type token).
 - Contiguous and strided elementwise callers can supply output buffers, so
-  allocation policy stays with the consumer; scalar dispatch reuses the same
-  uniform-buffer pool as strided metadata.
+  allocation policy stays with the consumer. Contiguous outputs must not alias
+  inputs; scalar dispatch reuses the same uniform-buffer pool as strided
+  metadata.
 - Staging and uniform buffer pools are bounded by retained count and retained
   bytes, keeping transient GPU memory reuse from becoming unbounded growth.
 - `WgpuBuffer::raw()` is the consumer escape hatch: apollo transform kernels

@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Reject aliased caller-owned contiguous elementwise output
+  buffers before WGPU bind-group creation. Evidence: binary left/right, unary,
+  and scalar alias contract tests plus full gate.
 - [x] [patch] Make bounded transient WGPU pool reuse best-fit by selecting
   the smallest retained buffer that satisfies a request. Evidence: targeted
   pool regression test and full gate.

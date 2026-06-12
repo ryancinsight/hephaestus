@@ -35,6 +35,12 @@ impl<T> WgpuBuffer<T> {
     pub fn raw(&self) -> &wgpu::Buffer {
         &self.buffer
     }
+
+    #[must_use]
+    #[inline]
+    pub(crate) fn aliases<U>(&self, other: &WgpuBuffer<U>) -> bool {
+        self.buffer == other.buffer
+    }
 }
 
 impl<T> std::ops::Deref for WgpuBuffer<T> {

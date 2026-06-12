@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 
+use super::reject_output_alias;
 use crate::application::elementwise::binary::BinaryWgslOp;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
@@ -33,7 +34,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
-/// Run `out[i] = op(a[i], scalar)` on the device into caller-owned storage.
+/// Run `out[i] = op(a[i], scalar)` on the device into distinct caller-owned storage.
 pub fn scalar_elementwise_into<Op, T>(
     device: &WgpuDevice,
     a: &WgpuBuffer<T>,
@@ -51,6 +52,7 @@ where
             device_len: a.len,
         });
     }
+    reject_output_alias("scalar", a, out)?;
     if out.len == 0 {
         return Ok(());
     }
