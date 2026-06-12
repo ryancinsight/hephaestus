@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn zero_width_is_unrepresentable() {
-        assert!(BlockWidth::new(0).is_none());
+        assert_eq!(BlockWidth::new(0).map(BlockWidth::get), None);
         assert_eq!(BlockWidth::DEFAULT.get(), 256);
         assert_eq!(BlockWidth::default(), BlockWidth::DEFAULT);
     }

@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Remove remaining broad negative assertions from the audited Rust
+  test scope; absence and mismatch tests now compare concrete values.
+  Evidence: assertion-pattern scan and full gate.
 - [x] [patch] Replace remaining negative-path existence-only dispatch
   assertions with typed `HephaestusError` contract checks. Evidence:
   WGPU contract and strided tests plus full gate.

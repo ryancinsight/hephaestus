@@ -72,10 +72,7 @@ fn download_rejects_length_mismatch() {
     };
     let buffer = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
     let mut out = vec![0.0f32; 2];
-    assert!(matches!(
-        device.download(&buffer, &mut out),
-        Err(HephaestusError::LengthMismatch { .. })
-    ));
+    assert_length_mismatch(device.download(&buffer, &mut out), 2, 3);
 }
 
 #[test]
@@ -154,18 +151,21 @@ fn elementwise_into_reuses_caller_output_buffers() {
     assert_eq!(got, expected);
 
     let short = device.alloc_zeroed::<f32>(a_host.len() - 1).unwrap();
-    assert!(matches!(
+    assert_length_mismatch(
         binary_elementwise_into::<AddOp, f32>(&device, &a, &b, &short, width),
-        Err(HephaestusError::LengthMismatch { .. })
-    ));
-    assert!(matches!(
+        short.len(),
+        a.len(),
+    );
+    assert_length_mismatch(
         unary_elementwise_into::<NegOp, f32>(&device, &a, &short, width),
-        Err(HephaestusError::LengthMismatch { .. })
-    ));
-    assert!(matches!(
+        short.len(),
+        a.len(),
+    );
+    assert_length_mismatch(
         scalar_elementwise_into::<AddOp, f32>(&device, &a, 1.0, &short, width),
-        Err(HephaestusError::LengthMismatch { .. })
-    ));
+        short.len(),
+        a.len(),
+    );
 }
 
 #[test]
@@ -431,5 +431,8 @@ fn acquisition_reports_themis_topology_from_adapter() {
 
     // The Arc-wrapping constructor has no adapter and reports none.
     let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
-    assert!(wrapped.topology().is_none());
+    assert_eq!(
+        wrapped.topology().map(|topology| topology.compute_units()),
+        None
+    );
 }

@@ -4,6 +4,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.7] - 2026-06-12
+
+### Tests
+
+- Remaining negative-path tests now assert concrete absence or exact mismatch
+  lengths instead of broad `is_none`, `is_err`, or variant-only matches.
+
 ## [0.6.6] - 2026-06-12
 
 ### Tests
