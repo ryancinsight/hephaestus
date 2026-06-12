@@ -1,6 +1,7 @@
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 
+use super::reject_output_alias;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -97,7 +98,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
-/// Run `out[i] = op(a[i])` on the device into caller-owned storage.
+/// Run `out[i] = op(a[i])` on the device into distinct caller-owned storage.
 pub fn unary_elementwise_into<Op, T>(
     device: &WgpuDevice,
     a: &WgpuBuffer<T>,
@@ -109,11 +110,12 @@ where
     T: WgslScalar + Pod,
 {
     if out.len != a.len {
-        return Err(hephaestus_core::HephaestusError::LengthMismatch {
+        return Err(HephaestusError::LengthMismatch {
             host_len: out.len,
             device_len: a.len,
         });
     }
+    reject_output_alias("unary", a, out)?;
     if out.len == 0 {
         return Ok(());
     }

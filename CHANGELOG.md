@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.5] - 2026-06-12
+
+### Fixed
+
+- Caller-owned contiguous elementwise dispatch now rejects output buffers that
+  alias an input before WGPU bind-group creation, producing a typed
+  `DispatchFailed` contract error instead of relying on backend validation.
+
 ## [0.6.4] - 2026-06-12
 
 ### Changed

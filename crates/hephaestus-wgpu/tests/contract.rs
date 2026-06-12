@@ -21,6 +21,18 @@ fn device_or_skip() -> Option<WgpuDevice> {
     }
 }
 
+fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
+    match result {
+        Err(HephaestusError::DispatchFailed { message }) => {
+            assert!(
+                message.starts_with("output buffer must not alias "),
+                "unexpected alias rejection message: {message}"
+            );
+        }
+        other => panic!("expected elementwise alias rejection, got {other:?}"),
+    }
+}
+
 #[test]
 fn upload_download_round_trips_values() {
     let Some(device) = device_or_skip() else {
@@ -135,6 +147,27 @@ fn elementwise_into_reuses_caller_output_buffers() {
     assert!(matches!(
         scalar_elementwise_into::<AddOp, f32>(&device, &a, 1.0, &short, width),
         Err(HephaestusError::LengthMismatch { .. })
+    ));
+}
+
+#[test]
+fn elementwise_into_rejects_output_input_aliasing() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let width = BlockWidth::new(128).unwrap();
+    let a = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    let b = device.upload(&[4.0f32, 5.0, 6.0]).unwrap();
+
+    assert_elementwise_alias_rejected(binary_elementwise_into::<AddOp, f32>(
+        &device, &a, &b, &a, width,
+    ));
+    assert_elementwise_alias_rejected(binary_elementwise_into::<AddOp, f32>(
+        &device, &a, &b, &b, width,
+    ));
+    assert_elementwise_alias_rejected(unary_elementwise_into::<NegOp, f32>(&device, &a, &a, width));
+    assert_elementwise_alias_rejected(scalar_elementwise_into::<AddOp, f32>(
+        &device, &a, 1.0, &a, width,
     ));
 }
 

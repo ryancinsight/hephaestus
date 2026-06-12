@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 
+use super::reject_output_alias;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -67,7 +68,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 ///
 /// Inputs and output must have equal length. The kernel is generated from the
 /// `(Op, T, width)` monomorphization and dispatched in enough workgroups to
-/// cover `out.len()`.
+/// cover `out.len()`. The output buffer must not alias either input buffer.
 pub fn binary_elementwise_into<Op, T>(
     device: &WgpuDevice,
     a: &WgpuBuffer<T>,
@@ -91,6 +92,8 @@ where
             device_len: a.len,
         });
     }
+    reject_output_alias("left", a, out)?;
+    reject_output_alias("right", b, out)?;
     if out.len == 0 {
         return Ok(());
     }
