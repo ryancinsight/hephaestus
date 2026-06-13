@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Add real-adapter `reduction_width` benchmark coverage for
+  default vs width-128 reduction dispatch with exact `u32` output validation.
+  Evidence: benchmark run and full gate.
 - [x] [minor] Thread typed `BlockWidth` through WGPU reduction dispatch via
   `reduction_with_width`, with default `reduction` delegating to
   `BlockWidth::DEFAULT`. Evidence: non-default-width contract test and full
