@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Validate `reduction_with_width` power-of-two block widths before
+  empty and singleton fast paths so the documented dispatch contract is
+  uniform for every input length. Evidence: boundary contract tests and full
+  gate.
 - [x] [patch] Add real-adapter `reduction_width` benchmark coverage for
   default vs width-128 reduction dispatch with exact `u32` output validation.
   Evidence: benchmark run and full gate.

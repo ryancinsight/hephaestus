@@ -175,6 +175,8 @@ where
     Op: ReductionWgslOp,
     T: WgslScalar + Pod + ReductionIdentity<Op>,
 {
+    validate_reduction_width(width)?;
+
     if input.len == 0 {
         return device.upload(&[T::IDENTITY]);
     }
@@ -196,8 +198,6 @@ where
         device.queue().submit(Some(encoder.finish()));
         return Ok(out);
     }
-    validate_reduction_width(width)?;
-
     let mut current_len = input.len;
     let mut temp_buffers: Vec<WgpuBuffer<T>> = Vec::new();
 
