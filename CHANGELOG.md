@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.7.2] - 2026-06-13
+
+### Fixed
+
+- `hephaestus-wgpu`: `reduction_with_width` now validates power-of-two
+  `BlockWidth` values before empty and singleton fast paths, so invalid
+  reduction widths are rejected uniformly for every input length.
+
 ## [0.7.1] - 2026-06-13
 
 ### Added

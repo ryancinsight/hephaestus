@@ -1,11 +1,29 @@
 # Checklist — hephaestus
 
-Target version: 0.7.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.7.2 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.7.2 reduction width validation [patch]
+- [x] Moved `reduction_with_width` power-of-two validation before empty and
+  singleton fast paths.
+- [x] Added boundary contract coverage proving invalid widths are rejected for
+  empty, singleton, and multi-element inputs.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo nextest run -p hephaestus-wgpu
+  reduction_width_is_part_of_dispatch_contract --locked` (1 passed);
+  `cargo check --workspace --locked`; `cargo clippy --workspace
+  --all-targets --locked -- -D warnings`; `cargo nextest run --workspace
+  --locked` (29 passed); `cargo test --doc --workspace --locked`;
+  `cargo doc --workspace --no-deps --locked`; `cargo metadata --no-deps
+  --locked --format-version 1`; `cargo bench --bench reduction_width
+  --locked` on real adapter (default 49,945 ns/iter; width-128 55,945
+  ns/iter for 65,536 elements, 20 iterations); `git diff --check`. Evidence
+  tier: value-semantic contract tests, static diagnostics, and empirical
+  benchmark.
 
 ## 0.7.1 reduction-width benchmark [patch]
 - [x] Added `reduction_width` benchmark target for default vs width-128

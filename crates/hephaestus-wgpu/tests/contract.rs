@@ -428,6 +428,18 @@ fn reduction_width_is_part_of_dispatch_contract() {
         reduction_with_width::<SumOp, u32>(&device, &input, non_power),
         "reduction block width 192 must be a power of two",
     );
+
+    let empty = device.upload::<u32>(&[]).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &empty, non_power),
+        "reduction block width 192 must be a power of two",
+    );
+
+    let singleton = device.upload(&[13u32]).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &singleton, non_power),
+        "reduction block width 192 must be a power of two",
+    );
 }
 
 #[test]
