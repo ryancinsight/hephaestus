@@ -1,11 +1,27 @@
 # Checklist — hephaestus
 
-Target version: 0.6.8 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.6.9 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.6.9 remaining invariant panic names [patch]
+- [x] Replaced the unnamed `BlockWidth::DEFAULT` const panic with an explicit
+  invariant message.
+- [x] Normalized the strided bind-slot conversion `expect` message to the
+  same `invariant:` convention as the other library panic sites.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; invariant-panic scan confirms every non-test panic
+  site carries an `invariant:` message; `cargo nextest run --workspace
+  --locked` (28 passed); `cargo test --doc --workspace --locked`; `cargo doc
+  --workspace --no-deps --locked`; `cargo metadata --no-deps --locked
+  --format-version 1`; `cargo bench --bench elementwise_into --locked` on
+  real adapter (allocating 244,860 ns/iter; caller-owned 81,235 ns/iter for
+  1,048,576 elements, 20 iterations); `git diff --check`. Evidence tier:
+  source audit, value-semantic tests, and empirical benchmark.
 
 ## 0.6.8 library invariant panic messages [patch]
 - [x] Replaced library-code unqualified `unwrap()` sites in reduction internal

@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.9] - 2026-06-12
+
+### Changed
+
+- Remaining non-test invariant panic sites now use explicit
+  `invariant:` messages for default block width construction and strided bind
+  slot conversion.
+
 ## [0.6.8] - 2026-06-12
 
 ### Changed

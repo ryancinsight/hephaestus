@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Name remaining non-test invariant panic sites in default block
+  width construction and strided bind slot conversion. Evidence: invariant
+  panic scan and full gate.
 - [x] [patch] Replace library-code invariant `unwrap()` sites in WGPU
   reduction, pipeline cache, and transient pool locking with explicit
   invariant `expect(...)` messages. Evidence: unwrap scan and full gate.
