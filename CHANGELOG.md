@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.7.1] - 2026-06-13
+
+### Added
+
+- `hephaestus-wgpu`: `reduction_width` benchmark target comparing default
+  reduction dispatch with width-128 reduction dispatch on a real adapter while
+  validating both outputs against an exact host-side `u32` sum.
+
 ## [0.7.0] - 2026-06-13
 
 ### Added

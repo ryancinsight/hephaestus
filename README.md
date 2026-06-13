@@ -61,6 +61,7 @@ cargo nextest run
 cargo test --doc
 cargo doc --no-deps
 cargo bench --bench elementwise_into
+cargo bench --bench reduction_width
 ```
 
 Contract tests run real device dispatch differentially against CPU references
@@ -68,8 +69,9 @@ Contract tests run real device dispatch differentially against CPU references
 length-mismatch rejection). On hosts without an adapter the tests skip with a
 message rather than fabricate a pass.
 
-The `elementwise_into` benchmark runs real WGPU dispatch and validates output
-values. It is an empirical timing tool, not a Criterion regression baseline.
+The `elementwise_into` and `reduction_width` benchmarks run real WGPU dispatch
+and validate output values. They are empirical timing tools, not Criterion
+regression baselines.
 
 ## Consumers
 

@@ -1,11 +1,28 @@
 # Checklist — hephaestus
 
-Target version: 0.7.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.7.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.7.1 reduction-width benchmark [patch]
+- [x] Added `reduction_width` benchmark target for default vs width-128
+  reduction dispatch.
+- [x] Benchmark validates both device outputs against an exact host-side `u32`
+  sum before reporting timings.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; `cargo nextest run --workspace --locked` (29
+  passed); `cargo test --doc --workspace --locked`; `cargo doc --workspace
+  --no-deps --locked`; `cargo metadata --no-deps --locked --format-version 1`;
+  `cargo bench --bench elementwise_into --locked` on real adapter (allocating
+  250,445 ns/iter; caller-owned 77,795 ns/iter for 1,048,576 elements, 20
+  iterations); `cargo bench --bench reduction_width --locked` on real adapter
+  (default 40,460 ns/iter; width-128 79,655 ns/iter for 65,536 elements, 20
+  iterations); `git diff --check`. Evidence tier: value-semantic benchmark
+  validation, value-semantic tests, and empirical benchmark.
 
 ## 0.7.0 reduction block-width dispatch [minor]
 - [x] Added `reduction_with_width` so reduction WGSL generation, pipeline
