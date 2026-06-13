@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.6.8] - 2026-06-12
+
+### Changed
+
+- Library-code invariant panics in reduction, pipeline cache, and transient
+  pool locking now use explicit `expect("invariant: ...")` messages instead
+  of unqualified `unwrap()`.
+
 ## [0.6.7] - 2026-06-12
 
 ### Tests

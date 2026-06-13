@@ -1,11 +1,27 @@
 # Checklist — hephaestus
 
-Target version: 0.6.7 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.6.8 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.6.8 library invariant panic messages [patch]
+- [x] Replaced library-code unqualified `unwrap()` sites in reduction internal
+  buffer selection, pipeline-cache locking, and transient-pool locking with
+  explicit invariant `expect(...)` messages.
+- [x] Confirmed remaining `unwrap()` sites in source scan are test-local.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; source `unwrap()` scan confirms remaining hits are
+  test-local; `cargo nextest run --workspace --locked` (28 passed); `cargo
+  test --doc --workspace --locked`; `cargo doc --workspace --no-deps --locked`;
+  `cargo metadata --no-deps --locked --format-version 1`; `cargo bench
+  --bench elementwise_into --locked` on real adapter (allocating 234,105
+  ns/iter; caller-owned 79,575 ns/iter for 1,048,576 elements, 20 iterations);
+  `git diff --check`. Evidence tier: source audit, value-semantic tests, and
+  empirical benchmark.
 
 ## 0.6.7 value-semantic negative assertions [patch]
 - [x] Replaced remaining broad absence and variant-only assertions in the

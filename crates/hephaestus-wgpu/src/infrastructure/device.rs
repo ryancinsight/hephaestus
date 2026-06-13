@@ -195,7 +195,10 @@ impl WgpuDevice {
     #[must_use]
     pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
         let staging_size = size.div_ceil(8) * 8;
-        let mut pool = self.staging_pool.lock().unwrap();
+        let mut pool = self
+            .staging_pool
+            .lock()
+            .expect("invariant: staging pool mutex is not poisoned");
         if let Some(buffer) = pool.take_at_least(staging_size) {
             buffer
         } else {
@@ -210,7 +213,10 @@ impl WgpuDevice {
 
     /// Return a staging buffer back to the bounded pool for reuse.
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
-        let mut pool = self.staging_pool.lock().unwrap();
+        let mut pool = self
+            .staging_pool
+            .lock()
+            .expect("invariant: staging pool mutex is not poisoned");
         pool.recycle(buffer);
     }
 
@@ -222,7 +228,10 @@ impl WgpuDevice {
     #[must_use]
     pub fn get_uniform_buffer(&self, size: u64) -> wgpu::Buffer {
         let uniform_size = size.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT;
-        let mut pool = self.uniform_pool.lock().unwrap();
+        let mut pool = self
+            .uniform_pool
+            .lock()
+            .expect("invariant: uniform pool mutex is not poisoned");
         if let Some(buffer) = pool.take_at_least(uniform_size) {
             buffer
         } else {
@@ -237,7 +246,10 @@ impl WgpuDevice {
 
     /// Return a uniform buffer back to the bounded pool for reuse.
     pub fn recycle_uniform_buffer(&self, buffer: wgpu::Buffer) {
-        let mut pool = self.uniform_pool.lock().unwrap();
+        let mut pool = self
+            .uniform_pool
+            .lock()
+            .expect("invariant: uniform pool mutex is not poisoned");
         pool.recycle(buffer);
     }
 }

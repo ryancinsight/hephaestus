@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Replace library-code invariant `unwrap()` sites in WGPU
+  reduction, pipeline cache, and transient pool locking with explicit
+  invariant `expect(...)` messages. Evidence: unwrap scan and full gate.
 - [x] [patch] Remove remaining broad negative assertions from the audited Rust
   test scope; absence and mismatch tests now compare concrete values.
   Evidence: assertion-pattern scan and full gate.
