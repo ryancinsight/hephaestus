@@ -17,7 +17,7 @@ impl BlockWidth {
     /// wavefront width (32, 64) and within every backend's workgroup limits.
     pub const DEFAULT: Self = match Self::new(256) {
         Some(width) => width,
-        None => unreachable!(),
+        None => panic!("invariant: default block width is non-zero"),
     };
 
     /// Construct a width; `None` for zero.

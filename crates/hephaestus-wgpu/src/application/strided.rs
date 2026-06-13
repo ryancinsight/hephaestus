@@ -158,7 +158,7 @@ fn encode_strided(
     });
     for (slot, buffer) in buffers.iter().enumerate() {
         entries.push(wgpu::BindGroupEntry {
-            binding: u32::try_from(slot + 1).expect("binding slot fits u32"),
+            binding: u32::try_from(slot + 1).expect("invariant: strided bind slot count fits u32"),
             resource: buffer.as_entire_binding(),
         });
     }
