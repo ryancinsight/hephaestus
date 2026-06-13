@@ -17,7 +17,7 @@ kernels are forged for accelerator hardware.
 | Crate | Responsibility |
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, error vocabulary. `#![forbid(unsafe_code)]`. |
-| `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
+| `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 
 Planned sibling backend: CUDA, **composing `cuda-oxide`** (driver/runtime/
 device-memory/streams) **with `cutile`** (tile/PTX kernel authoring),

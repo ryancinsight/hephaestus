@@ -19,7 +19,7 @@ pub use application::elementwise::{
     MulOp, NegOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
 };
 pub use application::reduction::{
-    reduction, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,
+    reduction, reduction_with_width, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,
 };
 pub use application::strided::{
     binary_elementwise_strided_into, scalar_elementwise_strided_into,

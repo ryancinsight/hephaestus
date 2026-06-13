@@ -2,14 +2,12 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-
-const WORKGROUP_SIZE: u32 = 256;
 
 /// Zero-sized reduction operation marker selecting the WGSL combine expression.
 pub trait ReductionWgslOp: Copy + Send + Sync + 'static {
@@ -94,7 +92,7 @@ impl ReductionIdentity<MaxOp> for i32 {
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for reduction operations.
 struct ReductionOpWrapper<Op>(PhantomData<Op>);
 
-fn shader_source<Op: ReductionWgslOp, T: ReductionIdentity<Op>>() -> String {
+fn shader_source<Op: ReductionWgslOp, T: ReductionIdentity<Op>>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> input: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> output: array<{ty}>;
@@ -133,16 +131,46 @@ fn main(
 }}
 "#,
         ty = T::WGSL_TYPE,
-        wg = WORKGROUP_SIZE,
+        wg = width.get(),
         identity = T::WGSL_IDENTITY,
         expr = Op::WGSL_EXPR,
     )
+}
+
+fn validate_reduction_width(width: BlockWidth) -> Result<()> {
+    if !width.get().is_power_of_two() {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "reduction block width {} must be a power of two",
+                width.get()
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// Run reduction on the device, returning a 1-element buffer holding the result.
 ///
 /// If the input buffer is empty, it returns a 1-element buffer containing the operation's identity value.
 pub fn reduction<Op, T>(device: &WgpuDevice, input: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
+where
+    Op: ReductionWgslOp,
+    T: WgslScalar + Pod + ReductionIdentity<Op>,
+{
+    reduction_with_width::<Op, T>(device, input, BlockWidth::DEFAULT)
+}
+
+/// Run reduction on the device with a caller-selected power-of-two block width.
+///
+/// If the input buffer is empty, it returns a 1-element buffer containing the
+/// operation's identity value. `width` is part of the monomorphized pipeline
+/// cache key and WGSL workgroup size; non-power-of-two widths are rejected
+/// because the workgroup tree halves its active lane count every step.
+pub fn reduction_with_width<Op, T>(
+    device: &WgpuDevice,
+    input: &WgpuBuffer<T>,
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
 where
     Op: ReductionWgslOp,
     T: WgslScalar + Pod + ReductionIdentity<Op>,
@@ -168,6 +196,7 @@ where
         device.queue().submit(Some(encoder.finish()));
         return Ok(out);
     }
+    validate_reduction_width(width)?;
 
     let mut current_len = input.len;
     let mut temp_buffers: Vec<WgpuBuffer<T>> = Vec::new();
@@ -179,17 +208,17 @@ where
         });
 
     while current_len > 1 {
-        let out_len = current_len.div_ceil(WORKGROUP_SIZE as usize);
+        let out_len = current_len.div_ceil(width.get() as usize);
         let out_buffer = device.alloc_zeroed::<T>(out_len)?;
 
         let key = (
             TypeId::of::<ReductionOpWrapper<Op>>(),
             TypeId::of::<T>(),
-            WORKGROUP_SIZE,
+            width.get(),
         );
 
         let pipeline = cached_pipeline(device, key, "hephaestus-reduction", || {
-            shader_source::<Op, T>()
+            shader_source::<Op, T>(width)
         });
 
         let source_resource = if temp_buffers.is_empty() {
@@ -226,7 +255,7 @@ where
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(workgroups(current_len, BlockWidth::DEFAULT)?, 1, 1);
+            pass.dispatch_workgroups(workgroups(current_len, width)?, 1, 1);
         }
 
         temp_buffers.push(out_buffer);
