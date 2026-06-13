@@ -12,7 +12,10 @@ pub(crate) fn cached_pipeline(
     label: &'static str,
     source: impl FnOnce() -> String,
 ) -> wgpu::ComputePipeline {
-    let mut cache = device.pipeline_cache.lock().unwrap();
+    let mut cache = device
+        .pipeline_cache
+        .lock()
+        .expect("invariant: pipeline cache mutex is not poisoned");
     if let Some(cached) = cache.get(&key) {
         return cached.clone();
     }

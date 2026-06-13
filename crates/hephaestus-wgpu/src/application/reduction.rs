@@ -195,7 +195,11 @@ where
         let source_resource = if temp_buffers.is_empty() {
             input.buffer.as_entire_binding()
         } else {
-            temp_buffers.last().unwrap().buffer.as_entire_binding()
+            temp_buffers
+                .last()
+                .expect("invariant: non-initial reduction pass has a previous buffer")
+                .buffer
+                .as_entire_binding()
         };
 
         let bind_group = device
@@ -232,5 +236,7 @@ where
     device.queue().submit(Some(encoder.finish()));
 
     // The final result is in the last allocated buffer.
-    Ok(temp_buffers.pop().unwrap())
+    Ok(temp_buffers
+        .pop()
+        .expect("invariant: multi-element reduction allocates a final buffer"))
 }
