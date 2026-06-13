@@ -4,6 +4,20 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.7.0] - 2026-06-13
+
+### Added
+
+- `hephaestus-wgpu`: `reduction_with_width` for caller-selected power-of-two
+  `BlockWidth` reduction dispatch. The existing `reduction` API delegates to
+  it with `BlockWidth::DEFAULT`.
+
+### Changed
+
+- Reduction WGSL generation, pipeline cache keys, intermediate output sizing,
+  and dispatch group counts now use the supplied `BlockWidth` instead of a
+  baked-in workgroup size.
+
 ## [0.6.9] - 2026-06-12
 
 ### Changed

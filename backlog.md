@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Thread typed `BlockWidth` through WGPU reduction dispatch via
+  `reduction_with_width`, with default `reduction` delegating to
+  `BlockWidth::DEFAULT`. Evidence: non-default-width contract test and full
+  gate.
 - [x] [patch] Name remaining non-test invariant panic sites in default block
   width construction and strided bind slot conversion. Evidence: invariant
   panic scan and full gate.
@@ -96,9 +100,8 @@ cuda-oxide + cutile).
   family: `BlockWidth` (hephaestus-core, NonZero newtype, DEFAULT 256) flows
   through per-width WGSL generation and a width-keyed pipeline cache
   (`PipelineKey`); operands bundled as `StridedOperand`. Verified on hardware
-  at width 128 vs default. Remaining: thread `BlockWidth` through the
-  contiguous elementwise/reduction families (they pass their constant into
-  the shared key space today).
+  at width 128 vs default. Contiguous elementwise and reduction dispatch now
+  also route width through per-width WGSL generation and cache keys.
 - [ ] [arch] TPU long-term: `hephaestus-tpu` over the PJRT C API (dynamic
   load, no SDK to compile), only when a consumer drives it; the
   `ComputeDevice` seam already accommodates it. No speculative scaffolding.

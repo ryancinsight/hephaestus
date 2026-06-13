@@ -5,10 +5,10 @@
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise, binary_elementwise_into, reduction, scalar_elementwise,
-    scalar_elementwise_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
-    ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
-    SqrtOp, SubOp, SumOp, WgpuDevice,
+    binary_elementwise, binary_elementwise_into, reduction, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_into, unary_elementwise, unary_elementwise_into, AbsOp,
+    AddOp, ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp,
+    RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -48,6 +48,14 @@ fn assert_length_mismatch<T>(
         }
         Err(error) => panic!("expected length mismatch {host_len}->{device_len}, got {error:?}"),
         Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
+    }
+}
+
+fn assert_dispatch_message<T>(result: hephaestus_wgpu::Result<T>, expected: &str) {
+    match result {
+        Err(HephaestusError::DispatchFailed { message }) => assert_eq!(message, expected),
+        Err(error) => panic!("expected dispatch failure {expected:?}, got {error:?}"),
+        Ok(_) => panic!("expected dispatch failure {expected:?}, got success"),
     }
 }
 
@@ -397,6 +405,29 @@ fn reduction_min_max_matches_cpu_reference() {
             size
         );
     }
+}
+
+#[test]
+fn reduction_width_is_part_of_dispatch_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let host: Vec<u32> = (0..1027).collect();
+    let expected: u32 = host.iter().sum();
+    let input = device.upload(&host).unwrap();
+
+    let narrow = BlockWidth::new(128).unwrap();
+    let out_narrow = reduction_with_width::<SumOp, u32>(&device, &input, narrow).unwrap();
+    let mut got_narrow = vec![0u32; 1];
+    device.download(&out_narrow, &mut got_narrow).unwrap();
+    assert_eq!(got_narrow[0], expected);
+
+    let non_power = BlockWidth::new(192).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &input, non_power),
+        "reduction block width 192 must be a power of two",
+    );
 }
 
 #[test]
