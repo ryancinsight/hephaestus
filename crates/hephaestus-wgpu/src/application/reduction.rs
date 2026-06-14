@@ -149,6 +149,16 @@ fn validate_reduction_width(width: BlockWidth) -> Result<()> {
     Ok(())
 }
 
+fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
+    let width = width.get() as usize;
+    let mut passes = 0;
+    while len > 1 {
+        len = len.div_ceil(width);
+        passes += 1;
+    }
+    passes
+}
+
 /// Run reduction on the device, returning a 1-element buffer holding the result.
 ///
 /// If the input buffer is empty, it returns a 1-element buffer containing the operation's identity value.
@@ -199,7 +209,8 @@ where
         return Ok(out);
     }
     let mut current_len = input.len;
-    let mut temp_buffers: Vec<WgpuBuffer<T>> = Vec::new();
+    let mut temp_buffers: Vec<WgpuBuffer<T>> =
+        Vec::with_capacity(reduction_pass_count(input.len, width));
 
     let mut encoder = device
         .inner()
@@ -268,4 +279,23 @@ where
     Ok(temp_buffers
         .pop()
         .expect("invariant: multi-element reduction allocates a final buffer"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pass_count_matches_tree_depth() {
+        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
+        assert_eq!(reduction_pass_count(0, width), 0);
+        assert_eq!(reduction_pass_count(1, width), 0);
+        assert_eq!(reduction_pass_count(2, width), 1);
+        assert_eq!(reduction_pass_count(256, width), 1);
+        assert_eq!(reduction_pass_count(257, width), 2);
+        assert_eq!(reduction_pass_count(65_536, width), 2);
+
+        let narrow = BlockWidth::new(128).expect("invariant: test width is non-zero");
+        assert_eq!(reduction_pass_count(16_385, narrow), 3);
+    }
 }

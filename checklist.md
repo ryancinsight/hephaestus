@@ -1,11 +1,30 @@
 # Checklist — hephaestus
 
-Target version: 0.7.2 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.7.3 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.7.3 reduction pass storage [patch]
+- [x] Added a single `reduction_pass_count` helper for the multi-pass tree
+  depth calculation.
+- [x] Preallocated the intermediate `WgpuBuffer` handle vector with that pass
+  count before command encoding.
+- [x] Added value-semantic unit coverage for empty, singleton, exact-width,
+  trailing-width, and multi-pass depths.
+- Evidence: `cargo fmt --check`; `cargo test -p hephaestus-wgpu
+  application::reduction::tests::pass_count_matches_tree_depth --offline`
+  (1 passed); `cargo check --workspace --locked`; `cargo clippy --workspace
+  --all-targets --locked -- -D warnings`; `cargo nextest run --workspace
+  --locked` (30 passed); `cargo test --doc --workspace --locked`;
+  `cargo metadata --no-deps --locked --format-version 1`; `cargo doc
+  --workspace --no-deps --locked`; `cargo bench --bench reduction_width
+  --locked` on real adapter (rerun: default 50,330 ns/iter; width-128
+  97,035 ns/iter for 65,536 elements, 20 iterations). Evidence tier:
+  value-semantic unit tests, contract tests, static diagnostics, and empirical
+  benchmark.
 
 ## 0.7.2 reduction width validation [patch]
 - [x] Moved `reduction_with_width` power-of-two validation before empty and
