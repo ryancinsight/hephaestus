@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Preallocate reduction intermediate-buffer handle storage from
+  the analytically known pass count to avoid vector growth during multi-pass
+  command encoding. Evidence: pass-count unit tests, contract tests, and full
+  gate.
 - [x] [patch] Validate `reduction_with_width` power-of-two block widths before
   empty and singleton fast paths so the documented dispatch contract is
   uniform for every input length. Evidence: boundary contract tests and full

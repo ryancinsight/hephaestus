@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.7.3] - 2026-06-13
+
+### Changed
+
+- `hephaestus-wgpu`: reduction dispatch now preallocates its intermediate
+  buffer handle vector from the analytically known pass count, avoiding vector
+  growth while preserving the existing command-encoding lifetime model.
+
 ## [0.7.2] - 2026-06-13
 
 ### Fixed
