@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.8.1] - 2026-06-14
+
+### Changed
+
+- `hephaestus-wgpu`: pipeline-cache lookup now releases the cache mutex
+  before first-use WGPU shader-module and compute-pipeline creation, then
+  rechecks before insertion. This keeps unrelated cache access out of the
+  compilation critical section.
+
 ## [0.8.0] - 2026-06-14
 
 ### Added
