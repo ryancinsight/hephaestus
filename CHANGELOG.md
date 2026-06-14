@@ -4,6 +4,24 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.8.0] - 2026-06-14
+
+### Added
+
+- `hephaestus-core`: `HephaestusError::AllocationFailed` for allocation
+  requests rejected before a backend buffer is created.
+
+### Fixed
+
+- `hephaestus-wgpu`: storage allocation and download byte-size calculations
+  now use checked arithmetic before WGPU buffer creation or copy sizing,
+  rejecting impossible element counts instead of allowing wrapped byte sizes.
+
+### Breaking
+
+- Pre-1.0: exhaustive matches on `HephaestusError` must handle the new
+  `AllocationFailed` variant.
+
 ## [0.7.3] - 2026-06-13
 
 ### Changed

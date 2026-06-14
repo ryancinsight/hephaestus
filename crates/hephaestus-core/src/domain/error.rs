@@ -3,7 +3,7 @@
 /// Backend-specific failures are carried in the message of the matching
 /// variant rather than collapsed into a stringly catch-all: each variant is a
 /// distinct, caller-actionable failure mode (no adapter, device init failed,
-/// host/device size mismatch, kernel dispatch failed).
+/// allocation rejected, host/device size mismatch, kernel dispatch failed).
 #[derive(Debug, thiserror::Error)]
 pub enum HephaestusError {
     /// No compatible adapter/physical device was found on this host.
@@ -15,6 +15,13 @@ pub enum HephaestusError {
     /// An adapter was found but logical-device creation failed.
     #[error("accelerator device creation failed: {message}")]
     DeviceUnavailable {
+        /// Backend-reported detail.
+        message: String,
+    },
+    /// A device allocation request was invalid or rejected before a buffer was
+    /// created.
+    #[error("accelerator allocation failed: {message}")]
+    AllocationFailed {
         /// Backend-reported detail.
         message: String,
     },

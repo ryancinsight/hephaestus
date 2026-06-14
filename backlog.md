@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Add typed allocation-failure errors and checked WGPU byte-size
+  arithmetic so impossible element counts are rejected before buffer creation
+  or copy sizing. Evidence: overflow unit tests, contract tests, and full
+  gate.
 - [x] [patch] Preallocate reduction intermediate-buffer handle storage from
   the analytically known pass count to avoid vector growth during multi-pass
   command encoding. Evidence: pass-count unit tests, contract tests, and full

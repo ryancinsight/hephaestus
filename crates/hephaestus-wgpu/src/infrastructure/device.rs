@@ -183,10 +183,30 @@ impl WgpuDevice {
         &self.queue
     }
 
+    /// Exact byte size of `len` elements of `T`.
+    fn byte_size<T>(len: usize) -> Result<u64> {
+        len.checked_mul(core::mem::size_of::<T>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| HephaestusError::AllocationFailed {
+                message: format!(
+                    "buffer length {len} overflows byte size for {}-byte elements",
+                    core::mem::size_of::<T>()
+                ),
+            })
+    }
+
     /// Size in bytes of `len` elements of `T`, padded to wgpu copy alignment.
-    fn padded_size<T>(len: usize) -> u64 {
-        let raw = (len * core::mem::size_of::<T>()) as u64;
-        raw.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT
+    fn padded_size<T>(len: usize) -> Result<u64> {
+        let bytes = Self::byte_size::<T>(len)?;
+        bytes
+            .checked_add(wgpu::COPY_BUFFER_ALIGNMENT - 1)
+            .map(|bytes| (bytes / wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
+                message: format!(
+                    "buffer byte size {bytes} cannot be aligned to {} bytes",
+                    wgpu::COPY_BUFFER_ALIGNMENT
+                ),
+            })
     }
 
     /// Retrieve a staging buffer of size >= size from the bounded pool, or
@@ -266,7 +286,7 @@ impl ComputeDevice for WgpuDevice {
         // WebGPU guarantees newly created buffers are zero-initialized.
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("hephaestus-storage"),
-            size: Self::padded_size::<T>(len),
+            size: Self::padded_size::<T>(len)?,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -307,8 +327,8 @@ impl ComputeDevice for WgpuDevice {
             return Ok(());
         }
 
-        let byte_len = (buffer.len * core::mem::size_of::<T>()) as u64;
-        let padded = Self::padded_size::<T>(buffer.len);
+        let byte_len = Self::byte_size::<T>(buffer.len)?;
+        let padded = Self::padded_size::<T>(buffer.len)?;
         let staging = self.get_staging_buffer(padded);
         let staging_size = staging.size();
 
@@ -347,5 +367,38 @@ impl ComputeDevice for WgpuDevice {
         self.recycle_staging_buffer(staging);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn padded_size_aligns_to_copy_boundary() {
+        match WgpuDevice::byte_size::<u32>(3) {
+            Ok(bytes) => assert_eq!(bytes, 12),
+            Err(error) => panic!("expected exact byte size, got {error:?}"),
+        }
+        match WgpuDevice::padded_size::<u8>(3) {
+            Ok(bytes) => assert_eq!(bytes, wgpu::COPY_BUFFER_ALIGNMENT),
+            Err(error) => panic!("expected padded byte size, got {error:?}"),
+        }
+        match WgpuDevice::padded_size::<u32>(0) {
+            Ok(bytes) => assert_eq!(bytes, 0),
+            Err(error) => panic!("expected zero byte size, got {error:?}"),
+        }
+    }
+
+    #[test]
+    fn byte_size_overflow_is_allocation_failure() {
+        let overflowing_len = usize::MAX / core::mem::size_of::<u64>() + 1;
+        match WgpuDevice::byte_size::<u64>(overflowing_len) {
+            Err(HephaestusError::AllocationFailed { message }) => assert_eq!(
+                message,
+                format!("buffer length {overflowing_len} overflows byte size for 8-byte elements")
+            ),
+            other => panic!("expected allocation failure, got {other:?}"),
+        }
     }
 }
