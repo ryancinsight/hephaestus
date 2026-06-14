@@ -1,11 +1,29 @@
 # Checklist — hephaestus
 
-Target version: 0.8.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.8.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.8.1 pipeline cache critical section [patch]
+- [x] Split `cached_pipeline` into a locked cache-hit check, unlocked WGPU
+  pipeline compilation, and locked recheck/insert.
+- [x] Preserved cache correctness under races by rechecking the key before
+  insertion.
+- Evidence: `cargo fmt --check`; `cargo check --workspace --offline`;
+  `cargo check --workspace --locked`; `cargo clippy --workspace
+  --all-targets --locked -- -D warnings`; `cargo nextest run --workspace
+  --locked` (32 passed); `cargo test --doc --workspace --locked`;
+  `cargo metadata --no-deps --locked --format-version 1`; `cargo doc
+  --workspace --no-deps --locked`; `cargo bench --bench elementwise_into
+  --locked` on real adapter (allocating 383,335 ns/iter; caller-owned 74,275
+  ns/iter for 1,048,576 elements, 20 iterations); `cargo bench --bench
+  reduction_width --locked` on real adapter (default 56,090 ns/iter;
+  width-128 59,900 ns/iter for 65,536 elements, 20 iterations). Evidence tier:
+  value-semantic dispatch contract tests, static diagnostics, and empirical
+  benchmark.
 
 ## 0.8.0 checked allocation sizing [minor]
 - [x] Added `HephaestusError::AllocationFailed` as the typed boundary for

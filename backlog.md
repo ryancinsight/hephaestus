@@ -6,6 +6,9 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Narrow WGPU pipeline-cache mutex scope so shader-module and
+  compute-pipeline creation do not run inside the cache critical section.
+  Evidence: full dispatch contract suite and benchmark gate.
 - [x] [minor] Add typed allocation-failure errors and checked WGPU byte-size
   arithmetic so impossible element counts are rejected before buffer creation
   or copy sizing. Evidence: overflow unit tests, contract tests, and full
