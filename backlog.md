@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Validate WGPU upload byte size through the shared checked sizing
+  helper before buffer initialization, keeping allocation overflow rejection
+  consistent across upload, allocation, and download paths. Evidence:
+  byte-size overflow unit coverage, static diagnostics, and full gate.
 - [x] [patch] Validate binary, unary, and reduction workgroup ranges before
   pipeline setup or intermediate allocation, completing dispatch precheck
   ordering across kernel families. Evidence: workgroup boundary tests,
