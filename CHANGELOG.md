@@ -4,6 +4,21 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.9.0] - 2026-06-15
+
+### Changed
+
+- `hephaestus-wgpu`: `WgpuDevice::get_staging_buffer` and
+  `WgpuDevice::get_uniform_buffer` now return `Result<wgpu::Buffer>` and
+  reject alignment overflow with `HephaestusError::AllocationFailed`.
+- Transient staging, uniform, storage allocation, and download copy sizing now
+  share checked byte-alignment arithmetic.
+
+### Breaking
+
+- Pre-1.0: callers of `get_staging_buffer` and `get_uniform_buffer` must handle
+  `Result` instead of receiving a buffer directly.
+
 ## [0.8.1] - 2026-06-14
 
 ### Changed

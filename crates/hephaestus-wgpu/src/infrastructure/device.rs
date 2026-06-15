@@ -198,28 +198,33 @@ impl WgpuDevice {
     /// Size in bytes of `len` elements of `T`, padded to wgpu copy alignment.
     fn padded_size<T>(len: usize) -> Result<u64> {
         let bytes = Self::byte_size::<T>(len)?;
-        bytes
-            .checked_add(wgpu::COPY_BUFFER_ALIGNMENT - 1)
-            .map(|bytes| (bytes / wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT)
+        Self::aligned_size(bytes, wgpu::COPY_BUFFER_ALIGNMENT)
+    }
+
+    /// Align `size` upward to `alignment`.
+    fn aligned_size(size: u64, alignment: u64) -> Result<u64> {
+        size.checked_add(alignment - 1)
+            .map(|bytes| (bytes / alignment) * alignment)
             .ok_or_else(|| HephaestusError::AllocationFailed {
-                message: format!(
-                    "buffer byte size {bytes} cannot be aligned to {} bytes",
-                    wgpu::COPY_BUFFER_ALIGNMENT
-                ),
+                message: format!("buffer byte size {size} cannot be aligned to {alignment} bytes"),
             })
     }
 
     /// Retrieve a staging buffer of size >= size from the bounded pool, or
     /// create a new one. The size is automatically aligned to
     /// `wgpu::MAP_ALIGNMENT` (8 bytes).
-    #[must_use]
-    pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
-        let staging_size = size.div_ceil(8) * 8;
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AllocationFailed`] when `size` cannot be aligned
+    /// without overflowing `u64`.
+    pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
+        let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
         let mut pool = self
             .staging_pool
             .lock()
             .expect("invariant: staging pool mutex is not poisoned");
-        if let Some(buffer) = pool.take_at_least(staging_size) {
+        Ok(if let Some(buffer) = pool.take_at_least(staging_size) {
             buffer
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -228,7 +233,7 @@ impl WgpuDevice {
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             })
-        }
+        })
     }
 
     /// Return a staging buffer back to the bounded pool for reuse.
@@ -245,14 +250,18 @@ impl WgpuDevice {
     /// with `queue.write_buffer`, which is ordered on the queue timeline
     /// relative to submissions, so a recycled uniform can be rewritten for
     /// the next dispatch without racing in-flight work on the same queue.
-    #[must_use]
-    pub fn get_uniform_buffer(&self, size: u64) -> wgpu::Buffer {
-        let uniform_size = size.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT;
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AllocationFailed`] when `size` cannot be aligned
+    /// without overflowing `u64`.
+    pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
+        let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
         let mut pool = self
             .uniform_pool
             .lock()
             .expect("invariant: uniform pool mutex is not poisoned");
-        if let Some(buffer) = pool.take_at_least(uniform_size) {
+        Ok(if let Some(buffer) = pool.take_at_least(uniform_size) {
             buffer
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -261,7 +270,7 @@ impl WgpuDevice {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             })
-        }
+        })
     }
 
     /// Return a uniform buffer back to the bounded pool for reuse.
@@ -329,7 +338,7 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = Self::byte_size::<T>(buffer.len)?;
         let padded = Self::padded_size::<T>(buffer.len)?;
-        let staging = self.get_staging_buffer(padded);
+        let staging = self.get_staging_buffer(padded)?;
         let staging_size = staging.size();
 
         let mut encoder = self
@@ -387,6 +396,21 @@ mod tests {
         match WgpuDevice::padded_size::<u32>(0) {
             Ok(bytes) => assert_eq!(bytes, 0),
             Err(error) => panic!("expected zero byte size, got {error:?}"),
+        }
+    }
+
+    #[test]
+    fn aligned_size_overflow_is_allocation_failure() {
+        match WgpuDevice::aligned_size(u64::MAX, wgpu::COPY_BUFFER_ALIGNMENT) {
+            Err(HephaestusError::AllocationFailed { message }) => assert_eq!(
+                message,
+                format!(
+                    "buffer byte size {} cannot be aligned to {} bytes",
+                    u64::MAX,
+                    wgpu::COPY_BUFFER_ALIGNMENT
+                )
+            ),
+            other => panic!("expected allocation failure, got {other:?}"),
         }
     }
 

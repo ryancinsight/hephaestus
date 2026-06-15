@@ -146,7 +146,7 @@ fn encode_strided(
 ) -> Result<()> {
     // Pooled meta uniform: queue.write_buffer is ordered on the queue
     // timeline, so recycling after submit cannot race in-flight dispatches.
-    let meta_buffer = device.get_uniform_buffer(core::mem::size_of::<StridedMeta>() as u64);
+    let meta_buffer = device.get_uniform_buffer(core::mem::size_of::<StridedMeta>() as u64)?;
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(meta));
