@@ -58,7 +58,7 @@ where
     }
     let groups = workgroups(out.len, width)?;
 
-    let scalar_buffer = device.get_uniform_buffer(core::mem::size_of::<T>() as u64)?;
+    let scalar_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
     device
         .queue()
         .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));

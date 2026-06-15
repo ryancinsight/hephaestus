@@ -203,7 +203,7 @@ where
             0,
             &out.buffer,
             0,
-            std::mem::size_of::<T>() as u64,
+            WgpuDevice::byte_size::<T>(1)?,
         );
         device.queue().submit(Some(encoder.finish()));
         return Ok(out);

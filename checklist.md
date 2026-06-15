@@ -1,11 +1,34 @@
 # Checklist — hephaestus
 
-Target version: 0.9.3 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.9.4 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.9.4 WGPU byte-size SSOT [patch]
+- [x] Made the checked byte-size helper available to WGPU application modules.
+- [x] Replaced the remaining local `size_of::<...>() as u64` buffer-size
+  calculations in scalar uniform acquisition, strided metadata uniform
+  acquisition, and singleton reduction copy encoding.
+- Evidence: `cargo fmt --check`; `cargo test -p hephaestus-wgpu
+  infrastructure::device::tests --offline` (3 passed); `cargo test -p
+  hephaestus-wgpu application::reduction::tests --offline` (1 passed);
+  `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets
+  --locked -- -D warnings`; `cargo nextest run --workspace --locked` (35
+  passed); `cargo test --doc --workspace --locked`; `cargo metadata --no-deps
+  --locked --format-version 1`; `cargo doc --workspace --no-deps --locked`;
+  `cargo bench --bench elementwise_into --locked` on real adapter (allocating
+  206,970 ns/iter; caller-owned 60,640 ns/iter for 1,048,576 elements, 20
+  iterations); `cargo bench --bench reduction_width --locked` on real adapter
+  (default 47,335 ns/iter; width-128 55,895 ns/iter for 65,536 elements, 20
+  iterations); `rg` confirmed no remaining local `size_of::<...>() as u64`
+  buffer-size casts in `crates/hephaestus-wgpu/src`. Deeper gate attempted:
+  `cargo semver-checks --workspace --all-features` blocked because
+  `hephaestus-core` is not published in the registry. Evidence tier:
+  value-semantic unit tests, dispatch contract tests, static diagnostics, and
+  empirical benchmarks.
 
 ## 0.9.3 upload byte-size precheck [patch]
 - [x] Routed `WgpuDevice::upload` through the shared checked byte-size helper
