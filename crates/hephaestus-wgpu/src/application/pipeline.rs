@@ -63,3 +63,31 @@ pub(crate) fn workgroups(len: usize, width: BlockWidth) -> Result<u32> {
     }
     Ok(groups)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workgroups_accepts_exact_u32_group_limit() {
+        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
+        let len = u64::from(width.get()) * u64::from(u32::MAX);
+        match workgroups(len as usize, width) {
+            Ok(groups) => assert_eq!(groups, u32::MAX),
+            Err(error) => panic!("expected max workgroup count, got {error:?}"),
+        }
+    }
+
+    #[test]
+    fn workgroups_rejects_beyond_u32_group_limit() {
+        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
+        let len = u64::from(width.get()) * u64::from(u32::MAX) + 1;
+        match workgroups(len as usize, width) {
+            Err(HephaestusError::DispatchFailed { message }) => assert_eq!(
+                message,
+                format!("dispatch size {len} exceeds u32 workgroup range")
+            ),
+            other => panic!("expected dispatch-size rejection, got {other:?}"),
+        }
+    }
+}

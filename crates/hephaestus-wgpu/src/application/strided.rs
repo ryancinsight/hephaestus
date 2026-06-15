@@ -144,6 +144,8 @@ fn encode_strided(
     width: BlockWidth,
     label: &str,
 ) -> Result<()> {
+    let groups = workgroups(len, width)?;
+
     // Pooled meta uniform: queue.write_buffer is ordered on the queue
     // timeline, so recycling after submit cannot race in-flight dispatches.
     let meta_buffer = device.get_uniform_buffer(core::mem::size_of::<StridedMeta>() as u64)?;
@@ -180,7 +182,6 @@ fn encode_strided(
         });
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let groups = workgroups(len, width)?;
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
