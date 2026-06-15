@@ -4,6 +4,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.9.1] - 2026-06-15
+
+### Changed
+
+- `hephaestus-wgpu`: scalar and strided dispatch now validate workgroup range
+  before acquiring transient uniform buffers, avoiding pool churn on impossible
+  dispatch sizes.
+- Added boundary coverage for the shared workgroup-count helper at the exact
+  `u32::MAX` group limit and one element beyond it.
+
 ## [0.9.0] - 2026-06-15
 
 ### Changed

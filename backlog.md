@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Validate scalar and strided dispatch workgroup ranges before
+  transient uniform-buffer acquisition to avoid pool churn on impossible
+  dispatch sizes. Evidence: workgroup boundary tests, contract tests, and full
+  gate.
 - [x] [minor] Make WGPU transient staging/uniform pool acquisition fallible
   with checked alignment arithmetic, routing impossible byte sizes through
   `AllocationFailed`. Evidence: alignment overflow unit tests, contract tests,
