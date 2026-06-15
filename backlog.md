@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Make WGPU transient staging/uniform pool acquisition fallible
+  with checked alignment arithmetic, routing impossible byte sizes through
+  `AllocationFailed`. Evidence: alignment overflow unit tests, contract tests,
+  and full gate.
 - [x] [patch] Narrow WGPU pipeline-cache mutex scope so shader-module and
   compute-pipeline creation do not run inside the cache critical section.
   Evidence: full dispatch contract suite and benchmark gate.

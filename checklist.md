@@ -1,11 +1,35 @@
 # Checklist — hephaestus
 
-Target version: 0.8.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.9.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.9.0 transient buffer alignment [minor]
+- [x] Added a shared checked `aligned_size` helper for WGPU byte alignment.
+- [x] Made `get_staging_buffer` and `get_uniform_buffer` return
+  `Result<wgpu::Buffer>` and reject alignment overflow with
+  `AllocationFailed`.
+- [x] Updated scalar, strided, and download call sites to propagate allocation
+  failures.
+- [x] Added value-semantic unit coverage for alignment overflow.
+- Evidence: `cargo fmt --check`; `cargo test -p hephaestus-wgpu
+  infrastructure::device::tests --offline` (3 passed); `cargo check
+  --workspace --locked`; `cargo clippy --workspace --all-targets --locked
+  -- -D warnings`; `cargo nextest run --workspace --locked` (33 passed);
+  `cargo test --doc --workspace --locked`; `cargo metadata --no-deps
+  --locked --format-version 1`; `cargo doc --workspace --no-deps --locked`;
+  `cargo bench --bench elementwise_into --locked` on real adapter (serial
+  rerun: allocating 263,335 ns/iter; caller-owned 70,295 ns/iter for
+  1,048,576 elements, 20 iterations); `cargo bench --bench reduction_width
+  --locked` on real adapter (serial rerun: default 47,740 ns/iter; width-128
+  107,070 ns/iter for 65,536 elements, 20 iterations). Deeper gate attempted:
+  `cargo semver-checks --workspace --all-features` blocked because
+  `hephaestus-core` is not published in the registry. Evidence tier:
+  value-semantic unit tests, dispatch contract tests, static diagnostics, and
+  empirical benchmarks.
 
 ## 0.8.1 pipeline cache critical section [patch]
 - [x] Split `cached_pipeline` into a locked cache-hit check, unlocked WGPU
