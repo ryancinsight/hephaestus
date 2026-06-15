@@ -219,6 +219,7 @@ where
         });
 
     while current_len > 1 {
+        let groups = workgroups(current_len, width)?;
         let out_len = current_len.div_ceil(width.get() as usize);
         let out_buffer = device.alloc_zeroed::<T>(out_len)?;
 
@@ -266,7 +267,7 @@ where
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(workgroups(current_len, width)?, 1, 1);
+            pass.dispatch_workgroups(groups, 1, 1);
         }
 
         temp_buffers.push(out_buffer);

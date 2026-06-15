@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.9.2] - 2026-06-15
+
+### Changed
+
+- `hephaestus-wgpu`: binary, unary, and reduction dispatch now validate
+  workgroup range before pipeline setup or intermediate buffer allocation,
+  completing the dispatch precheck ordering across kernel families.
+
 ## [0.9.1] - 2026-06-15
 
 ### Changed
