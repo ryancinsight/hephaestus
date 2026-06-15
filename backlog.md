@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Validate binary, unary, and reduction workgroup ranges before
+  pipeline setup or intermediate allocation, completing dispatch precheck
+  ordering across kernel families. Evidence: workgroup boundary tests,
+  contract tests, and full gate.
 - [x] [patch] Validate scalar and strided dispatch workgroup ranges before
   transient uniform-buffer acquisition to avoid pool churn on impossible
   dispatch sizes. Evidence: workgroup boundary tests, contract tests, and full

@@ -1,11 +1,31 @@
 # Checklist — hephaestus
 
-Target version: 0.9.1 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.9.2 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.9.2 dispatch precheck completion [patch]
+- [x] Hoisted binary and unary dispatch workgroup-range validation before
+  pipeline cache lookup, bind-group creation, and command encoding.
+- [x] Hoisted reduction workgroup-range validation before intermediate output
+  buffer allocation in each reduction pass.
+- Evidence: `cargo fmt --check`; `cargo test -p hephaestus-wgpu
+  application::pipeline::tests --offline` (2 passed); `cargo check
+  --workspace --locked`; `cargo clippy --workspace --all-targets --locked
+  -- -D warnings`; `cargo nextest run --workspace --locked` (35 passed);
+  `cargo test --doc --workspace --locked`; `cargo metadata --no-deps
+  --locked --format-version 1`; `cargo doc --workspace --no-deps --locked`;
+  `cargo bench --bench elementwise_into --locked` on real adapter (allocating
+  239,850 ns/iter; caller-owned 152,440 ns/iter for 1,048,576 elements, 20
+  iterations); `cargo bench --bench reduction_width --locked` on real adapter
+  (rerun: default 44,580 ns/iter; width-128 155,995 ns/iter for 65,536
+  elements, 20 iterations). Deeper gate attempted: `cargo semver-checks
+  --workspace --all-features` blocked because `hephaestus-core` is not
+  published in the registry. Evidence tier: value-semantic unit tests,
+  dispatch contract tests, static diagnostics, and empirical benchmarks.
 
 ## 0.9.1 dispatch range precheck [patch]
 - [x] Hoisted scalar dispatch workgroup-range validation before transient

@@ -119,6 +119,7 @@ where
     if out.len == 0 {
         return Ok(());
     }
+    let groups = workgroups(out.len, width)?;
 
     let key = (
         std::any::TypeId::of::<Op>(),
@@ -158,7 +159,7 @@ where
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(workgroups(out.len, width)?, 1, 1);
+        pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
 
