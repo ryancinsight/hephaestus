@@ -309,6 +309,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn upload<T: Pod>(&self, host: &[T]) -> Result<WgpuBuffer<T>> {
+        Self::byte_size::<T>(host.len())?;
         let buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

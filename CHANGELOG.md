@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.9.3] - 2026-06-15
+
+### Fixed
+
+- `hephaestus-wgpu`: uploads now validate host slice byte size with the
+  shared checked sizing helper before handing contents to WGPU buffer
+  initialization, keeping allocation overflow rejection consistent across
+  upload, allocation, and download paths.
+
 ## [0.9.2] - 2026-06-15
 
 ### Changed
