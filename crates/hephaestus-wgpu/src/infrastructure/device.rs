@@ -184,7 +184,7 @@ impl WgpuDevice {
     }
 
     /// Exact byte size of `len` elements of `T`.
-    fn byte_size<T>(len: usize) -> Result<u64> {
+    pub(crate) fn byte_size<T>(len: usize) -> Result<u64> {
         len.checked_mul(core::mem::size_of::<T>())
             .and_then(|bytes| u64::try_from(bytes).ok())
             .ok_or_else(|| HephaestusError::AllocationFailed {

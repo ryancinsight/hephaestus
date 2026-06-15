@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.9.4] - 2026-06-15
+
+### Changed
+
+- `hephaestus-wgpu`: scalar uniform sizing, strided metadata uniform sizing,
+  and singleton reduction copy sizing now use the shared checked byte-size
+  helper instead of local casts, making WGPU buffer byte sizing a single
+  implementation within the crate.
+
 ## [0.9.3] - 2026-06-15
 
 ### Fixed

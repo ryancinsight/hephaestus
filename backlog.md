@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Route scalar uniform, strided metadata uniform, and singleton
+  reduction copy sizing through the shared checked WGPU byte-size helper.
+  Evidence: byte-size overflow unit coverage, dispatch contract tests, static
+  diagnostics, and full gate.
 - [x] [patch] Validate WGPU upload byte size through the shared checked sizing
   helper before buffer initialization, keeping allocation overflow rejection
   consistent across upload, allocation, and download paths. Evidence:
