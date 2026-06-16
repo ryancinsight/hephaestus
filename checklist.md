@@ -39,6 +39,13 @@ parity audit for remaining operator families and shared Atlas seam usage
   and `nalgebra`. Residual distinction: factorization currently delegates to
   Leto on the host and uploads factors to the device, so this is API parity and
   measured transfer/host-factorization overhead, not GPU-kernel parity.
+- [x] Added blocked WGPU Cholesky entry point with CPU panel factorization and
+  triangular solve plus GPU SYRK trailing update. Differential coverage now
+  includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
+  benchmarks now measure 128x128 blocked Cholesky against Leto and `nalgebra`.
+- [x] Routed WGPU launch planning through Mnemosyne `KernelResourceBudget` and
+  Moirai GPU `plan_launch` while preserving Hephaestus checked overflow
+  semantics from `BlockWidth::checked_covering_blocks`.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
@@ -59,22 +66,24 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Corrected `norm_l2` to return `sqrt(sum(x*x))`, matching Leto's CPU
   contract rather than exposing the squared-sum intermediate.
 - [x] Extended `comparative` benchmark coverage to WGPU vs Leto, `ndarray`,
-  and `nalgebra`; refreshed `benchmark_results.md` from a real local WGPU run.
+  and `nalgebra`; refreshed `benchmark_results.md` from a real local WGPU run
+  including blocked 128x128 Cholesky.
 - [x] Added fused WGPU map-reduction dispatch for trace and L1 norm. Dot
   product, L2 norm, and max norm retain the measured faster staged paths after
   the fused variant regressed in the local comparative run.
-- Evidence: `cargo fmt -p hephaestus-wgpu --check`; `cargo clippy -p hephaestus-wgpu
-  --all-targets -- -D warnings`; `cargo clippy -p hephaestus-python
-  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (49
-  passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo doc -p
-  hephaestus-wgpu --no-deps`; `cargo bench -p hephaestus-wgpu --bench
-  comparative` (refreshed `benchmark_results.md`, including matrix rank,
-  determinant, Cholesky, LU, and QR; CUDA rows skipped because the WGPU bench
-  depends on `hephaestus-cuda` without its `cuda` feature in this environment). Full
-  workspace all-features clippy attempted earlier and blocked before this
-  slice by `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`. Evidence tier:
-  value-semantic differential tests, static diagnostics, and empirical
-  benchmarks.
+- Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
+  `cargo clippy -p hephaestus-wgpu -p hephaestus-cuda --all-targets -- -D
+  warnings`; `cargo nextest run -p hephaestus-wgpu -p hephaestus-cuda` (89
+  passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo test
+  --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p hephaestus-wgpu
+  --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo bench -p
+  hephaestus-wgpu --bench comparative` (refreshed `benchmark_results.md`,
+  including blocked 128x128 Cholesky, matrix rank, determinant, LU, and QR;
+  CUDA rows skipped because the WGPU bench depends on `hephaestus-cuda` without
+  its `cuda` feature in this environment). Full workspace all-features clippy
+  attempted earlier and blocked before this slice by `cuda-bindings` requiring
+  `CUDA_TOOLKIT_PATH`. Evidence tier: value-semantic differential tests,
+  static diagnostics, and empirical benchmarks.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
@@ -88,6 +97,9 @@ parity audit for remaining operator families and shared Atlas seam usage
   hardware: unavailable-device tests skip by construction, while contract tests
   still exercise host-visible error paths and CPU-backed semantics available in
   the stub.
+- [x] Removed stale default-build CUDA blocked-Cholesky export/test references
+  because the CUDA blocked SYRK path is CUDA-feature gated and not verified in
+  the default stub build.
 - Evidence: `cargo fmt -p hephaestus-cuda --check`; `cargo clippy -p
   hephaestus-cuda --all-targets -- -D warnings`; `cargo test -p
   hephaestus-cuda` (38 passed); `cargo test --doc -p hephaestus-cuda` (0

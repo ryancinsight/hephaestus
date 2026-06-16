@@ -23,15 +23,32 @@
   to Leto on the host before uploading the factors. This is API parity, not
   GPU-kernel parity. Evidence tier: implementation audit, value-semantic
   differential tests, and comparative benchmark rows.
+- [minor] WGPU blocked Cholesky now offloads the trailing SYRK update to a GPU
+  kernel, but diagonal panel factorization and triangular panel solves remain
+  CPU/Leto-backed. Current empirical row: 128x128 blocked Cholesky is slower
+  than Leto and `nalgebra` on the local WGPU run. Evidence tier:
+  value-semantic differential test across a block boundary and empirical
+  benchmark row in `benchmark_results.md`.
+- [patch] Hephaestus WGPU launch planning now uses Mnemosyne
+  `KernelResourceBudget` and Moirai GPU `plan_launch`, but `moirai-gpu`
+  currently brings `wgpu 0.19` into the graph while Hephaestus uses `wgpu 26`.
+  This is an integration/build-size risk; resolve by aligning Moirai GPU to
+  `wgpu 26` or splitting the occupancy planner into a GPU-API-free crate.
+  Evidence tier: build output from `cargo bench -p hephaestus-wgpu --bench
+  comparative` showing both `wgpu v0.19.4` and `wgpu v26.0.1`.
+- [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
+  Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
+  path. Evidence tier: implementation audit.
 - [minor] Leto's dense decomposition and matrix-property surface is not yet
   mirrored by WGPU: SVD, Schur, eigenvalue/eigenvector,
   pseudoinverse, and matrix exponential. Evidence tier: API
   audit against `leto-ops/src/application/linalg`.
-- [minor] CUDA mirrors the current core operation and decomposition slice in the source tree and
-  passes stub-mode verification. Real CUDA feature verification is still
-  required on CUDA hardware/toolchain before claiming device-execution parity
-  for the CUDA kernels. Evidence tier: static diagnostics and stub-mode
-  contract tests.
+- [minor] CUDA mirrors the current core operation and decomposition slice in the
+  source tree and passes stub-mode verification. Real CUDA feature verification
+  is still required on CUDA hardware/toolchain before claiming device-execution
+  parity for the CUDA kernels. CUDA blocked Cholesky remains CUDA-feature gated
+  and is not part of the default stub-mode claim. Evidence tier: static
+  diagnostics and stub-mode contract tests.
 - [patch] Full workspace all-features clippy remains blocked by
   `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`; WGPU package-local gates are
   clean. Evidence tier: static diagnostics from the earlier attempted gate.

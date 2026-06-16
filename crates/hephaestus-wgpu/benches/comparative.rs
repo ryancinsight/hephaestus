@@ -1786,6 +1786,44 @@ fn main() {
             "GPU (WGPU):   {} ns/iter",
             elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
         );
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let cu_m = cuda.upload(&host_m).unwrap();
+            let cu_out = hephaestus_cuda::cholesky_decompose_blocked(
+                cuda,
+                CudaStridedOperand {
+                    buffer: &cu_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+            wait_cuda(cuda);
+            let mut got_cuda = vec![0.0f32; n * n];
+            cuda.download(cu_out.lower(), &mut got_cuda).unwrap();
+            assert_close_slice(
+                &got_cuda,
+                leto::Storage::as_slice(leto_out.lower().storage()),
+                blocked_cholesky_abs_tol,
+                blocked_cholesky_rel_tol,
+            );
+
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out = hephaestus_cuda::cholesky_decompose_blocked(
+                    cuda,
+                    CudaStridedOperand {
+                        buffer: &cu_m,
+                        layout: &layout2d,
+                    },
+                )
+                .unwrap();
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
 
         let t_leto = Instant::now();
         for _ in 0..ITERS {
@@ -1867,6 +1905,45 @@ fn main() {
             "GPU (WGPU):   {} ns/iter",
             elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
         );
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let cu_m = cuda.upload(&host_m).unwrap();
+            let cu_out = hephaestus_cuda::lu_decompose(
+                cuda,
+                CudaStridedOperand {
+                    buffer: &cu_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+            wait_cuda(cuda);
+            let mut got_factors = vec![0.0f32; n * n];
+            cuda.download(cu_out.factors(), &mut got_factors).unwrap();
+            assert_close_slice(
+                &got_factors,
+                leto::Storage::as_slice(leto_out.factors().storage()),
+                0.0,
+                1.0e-5,
+            );
+            assert!((cu_out.det() - na_det).abs() <= 1.0e-4 * na_det.abs().max(1.0));
+
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out = hephaestus_cuda::lu_decompose(
+                    cuda,
+                    CudaStridedOperand {
+                        buffer: &cu_m,
+                        layout: &layout2d,
+                    },
+                )
+                .unwrap();
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
 
         let t_leto = Instant::now();
         for _ in 0..ITERS {
@@ -1943,6 +2020,45 @@ fn main() {
             "GPU (WGPU):   {} ns/iter",
             elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
         );
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let cu_m = cuda.upload(&host_m).unwrap();
+            let cu_out = hephaestus_cuda::qr_decompose(
+                cuda,
+                CudaStridedOperand {
+                    buffer: &cu_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+            wait_cuda(cuda);
+            let mut got_r = vec![0.0f32; rows * cols];
+            cuda.download(cu_out.r_buffer(), &mut got_r).unwrap();
+            let leto_r = leto_out.r();
+            assert_close_slice(
+                &got_r,
+                leto::Storage::as_slice(leto_r.storage()),
+                0.0,
+                1.0e-5,
+            );
+
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out = hephaestus_cuda::qr_decompose(
+                    cuda,
+                    CudaStridedOperand {
+                        buffer: &cu_m,
+                        layout: &layout2d,
+                    },
+                )
+                .unwrap();
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
 
         let t_leto = Instant::now();
         for _ in 0..ITERS {

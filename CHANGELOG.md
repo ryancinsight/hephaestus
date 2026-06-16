@@ -38,6 +38,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   against Leto and `nalgebra`. The current implementation delegates
   factorization to Leto on the host and stores factors on the device, so this
   is API parity rather than GPU-kernel parity.
+- `hephaestus-wgpu` [minor]: blocked Cholesky entry point
+  (`cholesky_decompose_blocked`) with CPU panel factorization/solve and GPU
+  SYRK trailing update. Contract coverage includes a block-boundary SPD case;
+  comparative benchmarks now measure 128x128 blocked Cholesky against Leto and
+  `nalgebra`.
+- `hephaestus-wgpu` [patch]: dispatch launch planning now routes through
+  Mnemosyne `KernelResourceBudget` and Moirai GPU `plan_launch` while retaining
+  the Hephaestus checked overflow contract.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output
@@ -76,6 +84,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   product, matrix power, finite-`f32` matrix rank, dot, trace, and norms. Stub
   builds compile and run contract tests without fabricating a device; real CUDA
   execution remains gated behind the `cuda` feature and hardware availability.
+
+### Removed
+
+- `hephaestus-cuda` [patch]: removed stale default-build blocked-Cholesky
+  export/test references; the CUDA blocked SYRK path is CUDA-feature gated and
+  not claimed by the stub-mode default build.
 
 ### Fixed
 
