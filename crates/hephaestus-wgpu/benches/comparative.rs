@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise_into, reduction, unary_elementwise_into, AddOp, ComputeDevice, ExpOp,
-    SumOp, WgpuDevice,
+    binary_elementwise_into, reduction, unary_elementwise_into, AddOp, ComputeDevice, ExpOp, SumOp,
+    WgpuDevice,
 };
 use leto::Storage;
 use ndarray::Array1 as NdArray1;
@@ -57,12 +57,7 @@ fn main() {
     let leto_b = leto::Array::from_shape_vec([LEN], host_b.clone()).unwrap();
 
     let mut leto_add_out = leto::Array::zeros([LEN]);
-    leto_ops::add(
-        &leto_a.view(),
-        &leto_b.view(),
-        &mut leto_add_out.view_mut(),
-    )
-    .unwrap();
+    leto_ops::add(&leto_a.view(), &leto_b.view(), &mut leto_add_out.view_mut()).unwrap();
 
     let leto_exp_out = leto_ops::unary_map(leto_ops::ExpOp, &leto_a.view()).unwrap();
     let leto_sum_out = leto_ops::sum(&leto_a.view());
@@ -82,8 +77,16 @@ fn main() {
     let gpu_exp_out = device.alloc_zeroed::<f32>(LEN).expect("alloc gpu_exp_out");
 
     // Perform warmups & validate correctness
-    binary_elementwise_into::<AddOp, f32>(&device, &gpu_a, &gpu_b, &gpu_add_out, BlockWidth::DEFAULT).unwrap();
-    unary_elementwise_into::<ExpOp, f32>(&device, &gpu_a, &gpu_exp_out, BlockWidth::DEFAULT).unwrap();
+    binary_elementwise_into::<AddOp, f32>(
+        &device,
+        &gpu_a,
+        &gpu_b,
+        &gpu_add_out,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    unary_elementwise_into::<ExpOp, f32>(&device, &gpu_a, &gpu_exp_out, BlockWidth::DEFAULT)
+        .unwrap();
     let gpu_sum_buf = reduction::<SumOp, f32>(&device, &gpu_a).unwrap();
     wait(&device);
 
@@ -121,11 +124,21 @@ fn main() {
     // WGPU GPU
     let t_gpu_add = Instant::now();
     for _ in 0..ITERS {
-        binary_elementwise_into::<AddOp, f32>(&device, &gpu_a, &gpu_b, &gpu_add_out, BlockWidth::DEFAULT).unwrap();
+        binary_elementwise_into::<AddOp, f32>(
+            &device,
+            &gpu_a,
+            &gpu_b,
+            &gpu_add_out,
+            BlockWidth::DEFAULT,
+        )
+        .unwrap();
     }
     wait(&device);
     let dur_gpu_add = t_gpu_add.elapsed();
-    println!("GPU (WGPU):   {} ns/iter", elapsed_per_iter(dur_gpu_add).as_nanos());
+    println!(
+        "GPU (WGPU):   {} ns/iter",
+        elapsed_per_iter(dur_gpu_add).as_nanos()
+    );
 
     // Leto CPU
     let t_leto_add = Instant::now();
@@ -139,7 +152,10 @@ fn main() {
         .unwrap();
     }
     let dur_leto_add = t_leto_add.elapsed();
-    println!("CPU (Leto):   {} ns/iter", elapsed_per_iter(dur_leto_add).as_nanos());
+    println!(
+        "CPU (Leto):   {} ns/iter",
+        elapsed_per_iter(dur_leto_add).as_nanos()
+    );
 
     // ndarray CPU
     let t_nd_add = Instant::now();
@@ -147,7 +163,10 @@ fn main() {
         let _c = black_box(&nd_a) + black_box(&nd_b);
     }
     let dur_nd_add = t_nd_add.elapsed();
-    println!("CPU (ndarray):{} ns/iter", elapsed_per_iter(dur_nd_add).as_nanos());
+    println!(
+        "CPU (ndarray):{} ns/iter",
+        elapsed_per_iter(dur_nd_add).as_nanos()
+    );
 
     // --- Benchmark: Elementwise Exp ---
     println!("\n--- Benchmarking: Elementwise Exp (f32, N={LEN}) ---");
@@ -155,11 +174,15 @@ fn main() {
     // WGPU GPU
     let t_gpu_exp = Instant::now();
     for _ in 0..ITERS {
-        unary_elementwise_into::<ExpOp, f32>(&device, &gpu_a, &gpu_exp_out, BlockWidth::DEFAULT).unwrap();
+        unary_elementwise_into::<ExpOp, f32>(&device, &gpu_a, &gpu_exp_out, BlockWidth::DEFAULT)
+            .unwrap();
     }
     wait(&device);
     let dur_gpu_exp = t_gpu_exp.elapsed();
-    println!("GPU (WGPU):   {} ns/iter", elapsed_per_iter(dur_gpu_exp).as_nanos());
+    println!(
+        "GPU (WGPU):   {} ns/iter",
+        elapsed_per_iter(dur_gpu_exp).as_nanos()
+    );
 
     // Leto CPU
     let t_leto_exp = Instant::now();
@@ -167,7 +190,10 @@ fn main() {
         let _out = leto_ops::unary_map(leto_ops::ExpOp, black_box(&leto_a.view())).unwrap();
     }
     let dur_leto_exp = t_leto_exp.elapsed();
-    println!("CPU (Leto):   {} ns/iter", elapsed_per_iter(dur_leto_exp).as_nanos());
+    println!(
+        "CPU (Leto):   {} ns/iter",
+        elapsed_per_iter(dur_leto_exp).as_nanos()
+    );
 
     // ndarray CPU
     let t_nd_exp = Instant::now();
@@ -175,7 +201,10 @@ fn main() {
         let _c = black_box(&nd_a).mapv(f32::exp);
     }
     let dur_nd_exp = t_nd_exp.elapsed();
-    println!("CPU (ndarray):{} ns/iter", elapsed_per_iter(dur_nd_exp).as_nanos());
+    println!(
+        "CPU (ndarray):{} ns/iter",
+        elapsed_per_iter(dur_nd_exp).as_nanos()
+    );
 
     // --- Benchmark: Sum Reduction ---
     println!("\n--- Benchmarking: Sum Reduction (f32, N={LEN}) ---");
@@ -187,7 +216,10 @@ fn main() {
     }
     wait(&device);
     let dur_gpu_sum = t_gpu_sum.elapsed();
-    println!("GPU (WGPU):   {} ns/iter", elapsed_per_iter(dur_gpu_sum).as_nanos());
+    println!(
+        "GPU (WGPU):   {} ns/iter",
+        elapsed_per_iter(dur_gpu_sum).as_nanos()
+    );
 
     // Leto CPU
     let t_leto_sum = Instant::now();
@@ -195,7 +227,10 @@ fn main() {
         let _val = leto_ops::sum(black_box(&leto_a.view()));
     }
     let dur_leto_sum = t_leto_sum.elapsed();
-    println!("CPU (Leto):   {} ns/iter", elapsed_per_iter(dur_leto_sum).as_nanos());
+    println!(
+        "CPU (Leto):   {} ns/iter",
+        elapsed_per_iter(dur_leto_sum).as_nanos()
+    );
 
     // ndarray CPU
     let t_nd_sum = Instant::now();
@@ -203,5 +238,8 @@ fn main() {
         let _val = black_box(&nd_a).sum();
     }
     let dur_nd_sum = t_nd_sum.elapsed();
-    println!("CPU (ndarray):{} ns/iter", elapsed_per_iter(dur_nd_sum).as_nanos());
+    println!(
+        "CPU (ndarray):{} ns/iter",
+        elapsed_per_iter(dur_nd_sum).as_nanos()
+    );
 }

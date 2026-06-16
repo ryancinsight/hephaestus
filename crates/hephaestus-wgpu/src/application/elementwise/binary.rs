@@ -57,7 +57,6 @@ impl BinaryWgslOp for PowOp {
     const WGSL_EXPR: &'static str = "pow(lhs, rhs)";
 }
 
-
 fn shader_source<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;

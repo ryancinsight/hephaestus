@@ -1,15 +1,12 @@
 // ── Hephaestus Python Bindings (pyhephaestus) ──
 
-use pyo3::prelude::*;
-use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
-use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use hephaestus_wgpu::{
-    WgpuDevice, WgpuBuffer,
-    AddOp, SubOp, MulOp, DivOp, PowOp,
-    ExpOp, LnOp, SinOp, CosOp, SqrtOp, AbsOp, NegOp, RecipOp,
-    SumOp, MinOp, MaxOp,
-    ComputeDevice, DeviceBuffer,
+    AbsOp, AddOp, ComputeDevice, CosOp, DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp,
+    NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, SumOp, WgpuBuffer, WgpuDevice,
 };
+use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::prelude::*;
 
 /// Python wrapper around WgpuDevice.
 #[pyclass(name = "Device")]
@@ -48,7 +45,9 @@ impl PyArray {
     #[new]
     #[pyo3(signature = (data, device))]
     fn new(data: Vec<f32>, device: &PyDevice) -> PyResult<Self> {
-        let buffer = device.inner.upload(&data)
+        let buffer = device
+            .inner
+            .upload(&data)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -59,7 +58,9 @@ impl PyArray {
     /// Allocate a zeroed array of a given length on the GPU.
     #[staticmethod]
     fn zeros(len: usize, device: &PyDevice) -> PyResult<Self> {
-        let buffer = device.inner.alloc_zeroed::<f32>(len)
+        let buffer = device
+            .inner
+            .alloc_zeroed::<f32>(len)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -70,8 +71,12 @@ impl PyArray {
     /// Create an Array from a contiguous NumPy array.
     #[staticmethod]
     fn from_numpy(arr: PyReadonlyArray1<'_, f32>, device: &PyDevice) -> PyResult<Self> {
-        let slice = arr.as_slice().map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let buffer = device.inner.upload(slice)
+        let slice = arr
+            .as_slice()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let buffer = device
+            .inner
+            .upload(slice)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -82,7 +87,8 @@ impl PyArray {
     /// Download array data to a Python list.
     fn tolist(&self) -> PyResult<Vec<f32>> {
         let mut host_data = vec![0.0f32; self.buffer.len()];
-        self.device.download(&self.buffer, &mut host_data)
+        self.device
+            .download(&self.buffer, &mut host_data)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data)
     }
@@ -90,7 +96,8 @@ impl PyArray {
     /// Download array data to a NumPy 1D array.
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
         let mut host_data = vec![0.0f32; self.buffer.len()];
-        self.device.download(&self.buffer, &mut host_data)
+        self.device
+            .download(&self.buffer, &mut host_data)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))
     }
@@ -198,8 +205,12 @@ impl PyArray {
     fn mean(&self) -> PyResult<Self> {
         let summed = hephaestus_wgpu::reduction::<SumOp, f32>(&self.device, &self.buffer)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &summed, 1.0 / self.buffer.len() as f32)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(
+            &self.device,
+            &summed,
+            1.0 / self.buffer.len() as f32,
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
@@ -210,15 +221,20 @@ impl PyArray {
 
     fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
-            let out_buf = hephaestus_wgpu::binary_elementwise::<AddOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::binary_elementwise::<AddOp, f32>(
+                &self.device,
+                &self.buffer,
+                &other_arr.buffer,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &self.buffer, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &self.buffer, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -234,15 +250,20 @@ impl PyArray {
 
     fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
-            let out_buf = hephaestus_wgpu::binary_elementwise::<SubOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::binary_elementwise::<SubOp, f32>(
+                &self.device,
+                &self.buffer,
+                &other_arr.buffer,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&self.device, &self.buffer, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&self.device, &self.buffer, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -254,10 +275,12 @@ impl PyArray {
 
     fn __rsub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
-            let negated = hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&self.device, &self.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &negated, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let negated =
+                hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&self.device, &self.buffer)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &negated, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -269,15 +292,20 @@ impl PyArray {
 
     fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
-            let out_buf = hephaestus_wgpu::binary_elementwise::<MulOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::binary_elementwise::<MulOp, f32>(
+                &self.device,
+                &self.buffer,
+                &other_arr.buffer,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &self.buffer, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &self.buffer, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -293,15 +321,20 @@ impl PyArray {
 
     fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
-            let out_buf = hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::binary_elementwise::<DivOp, f32>(
+                &self.device,
+                &self.buffer,
+                &other_arr.buffer,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&self.device, &self.buffer, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&self.device, &self.buffer, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -313,10 +346,12 @@ impl PyArray {
 
     fn __rtruediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
-            let recip = hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&self.device, &self.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &recip, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let recip =
+                hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&self.device, &self.buffer)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &recip, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -326,17 +361,26 @@ impl PyArray {
         }
     }
 
-    fn __pow__(&self, other: &Bound<'_, PyAny>, _modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    fn __pow__(
+        &self,
+        other: &Bound<'_, PyAny>,
+        _modulo: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
-            let out_buf = hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::binary_elementwise::<PowOp, f32>(
+                &self.device,
+                &self.buffer,
+                &other_arr.buffer,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf = hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&self.device, &self.buffer, val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf =
+                hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&self.device, &self.buffer, val)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -346,14 +390,22 @@ impl PyArray {
         }
     }
 
-    fn __rpow__(&self, other: &Bound<'_, PyAny>, _modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    fn __rpow__(
+        &self,
+        other: &Bound<'_, PyAny>,
+        _modulo: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
             if val <= 0.0 {
                 return Err(PyValueError::new_err("power base must be positive"));
             }
             let ln_val = val.ln();
-            let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &self.buffer, ln_val)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(
+                &self.device,
+                &self.buffer,
+                ln_val,
+            )
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             let out_buf = hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&self.device, &scaled)
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
