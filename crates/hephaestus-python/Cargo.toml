@@ -1,0 +1,20 @@
+[package]
+name = "hephaestus-python"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "pyhephaestus"
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+hephaestus-core = { workspace = true }
+hephaestus-wgpu = { workspace = true }
+pyo3 = { workspace = true }
+numpy = { workspace = true }
+bytemuck = { workspace = true }
+wgpu = { workspace = true }
+leto = { workspace = true }

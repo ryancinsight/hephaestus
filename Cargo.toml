@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
+    "crates/hephaestus-python",
 ]
 
 [workspace.package]
@@ -15,6 +16,7 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 [workspace.dependencies]
 # ── Local Workspace Crates ──
 hephaestus-core = { path = "crates/hephaestus-core" }
+hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
 
 # ── GPU ──
 # wgpu 26 matches apollo (the first consumer). coeus re-bases when it bumps
@@ -33,3 +35,8 @@ leto = { git = "https://github.com/ryancinsight/leto.git", rev = "320960ec7b99b8
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
+
+# ── Python FFI ──
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = "0.23"
+
