@@ -46,6 +46,7 @@ nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 # ── Python FFI ──
 pyo3 = { version = "0.23", features = ["extension-module"] }
 numpy = "0.23"
+num-complex = "0.4"
 
 [patch."https://github.com/ryancinsight/Mnemosyne.git"]
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
