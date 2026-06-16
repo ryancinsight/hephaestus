@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Add checked `BlockWidth` grid-count arithmetic in core and route
+  WGPU dispatch validation through it, keeping overflow detection in one
+  type-level launch-policy API. Evidence: value-semantic launch and WGPU
+  workgroup boundary tests, static diagnostics, and full gate.
 - [x] [patch] Route scalar uniform, strided metadata uniform, and singleton
   reduction copy sizing through the shared checked WGPU byte-size helper.
   Evidence: byte-size overflow unit coverage, dispatch contract tests, static
@@ -153,6 +157,7 @@ cuda-oxide + cutile).
 ## Phase 4: consumers [arch]
 - [x] [minor] apollo: `apollo-wgpu-helpers` delegates acquisition to
   `hephaestus-wgpu` with its public API preserved.
-- [ ] [arch] coeus: re-base `coeus-wgpu`/`coeus-cuda` onto hephaestus once coeus
-  bumps wgpu 23 → 26 (coeus MS-60+ Stage D).
+- [/] [arch] coeus: re-base GPU backends onto `hephaestus` (coeus MS-60+ Stage D):
+  - [x] Re-base `coeus-wgpu` onto `hephaestus-wgpu`.
+  - [ ] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
 - [ ] [minor] moirai: GPU co-scheduling adapter over hephaestus (moirai Stage D).

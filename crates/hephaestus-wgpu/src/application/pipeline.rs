@@ -55,13 +55,11 @@ pub(crate) fn workgroups(len: usize, width: BlockWidth) -> Result<u32> {
     let len = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("dispatch size {len} exceeds u64 range"),
     })?;
-    let groups = width.covering_blocks(len);
-    if groups == u32::MAX && len > u64::from(width.get()) * u64::from(u32::MAX) {
-        return Err(HephaestusError::DispatchFailed {
+    width
+        .checked_covering_blocks(len)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
             message: format!("dispatch size {len} exceeds u32 workgroup range"),
-        });
-    }
-    Ok(groups)
+        })
 }
 
 #[cfg(test)]
