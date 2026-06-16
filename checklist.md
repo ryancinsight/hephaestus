@@ -32,6 +32,13 @@ parity audit for remaining operator families and shared Atlas seam usage
   Leto, `ndarray`, and `nalgebra` references. Residual distinction: WGPU uses
   exact row-reduction pivots with no tolerance for determinant while Leto uses
   its CPU determinant algorithm.
+- [x] Added WGPU device-resident Cholesky, LU, and QR decomposition surfaces
+  mirroring Leto's decomposition, solve, determinant, and inverse APIs where
+  each factorization supports them. Differential tests compare factors and
+  solve/inverse outputs against Leto; comparative benchmarks cover WGPU, Leto,
+  and `nalgebra`. Residual distinction: factorization currently delegates to
+  Leto on the host and uploads factors to the device, so this is API parity and
+  measured transfer/host-factorization overhead, not GPU-kernel parity.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
@@ -58,12 +65,12 @@ parity audit for remaining operator families and shared Atlas seam usage
   the fused variant regressed in the local comparative run.
 - Evidence: `cargo fmt -p hephaestus-wgpu --check`; `cargo clippy -p hephaestus-wgpu
   --all-targets -- -D warnings`; `cargo clippy -p hephaestus-python
-  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (46
+  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (49
   passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo doc -p
   hephaestus-wgpu --no-deps`; `cargo bench -p hephaestus-wgpu --bench
-  comparative` (refreshed `benchmark_results.md`, including matrix rank and
-  determinant; CUDA rows skipped because the WGPU bench depends on
-  `hephaestus-cuda` without its `cuda` feature in this environment). Full
+  comparative` (refreshed `benchmark_results.md`, including matrix rank,
+  determinant, Cholesky, LU, and QR; CUDA rows skipped because the WGPU bench
+  depends on `hephaestus-cuda` without its `cuda` feature in this environment). Full
   workspace all-features clippy attempted earlier and blocked before this
   slice by `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`. Evidence tier:
   value-semantic differential tests, static diagnostics, and empirical

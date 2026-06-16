@@ -9,38 +9,42 @@ Machine Class: Windows 11 x86_64 dev workstation.
 
 | Benchmark | GPU (WGPU) | Leto CPU | ndarray CPU | nalgebra CPU | GPU Speedup (vs Leto) | GPU Speedup (vs ndarray) | GPU Speedup (vs nalgebra) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Elementwise Add** ($N = 2^{20}$) | 44.7 µs | 1.00 ms | 1.03 ms | — | **22.4x** | **23.0x** | — |
-| **Elementwise Exp** ($N = 2^{20}$) | 33.0 µs | 1.88 ms | 1.85 ms | — | **56.9x** | **56.3x** | — |
-| **Sum Reduction** ($N = 2^{20}$) | 41.9 µs | 71.2 µs | 83.4 µs | — | **1.70x** | **1.99x** | — |
-| **Axis Sum** (256x256 over axis 0) | 58.6 µs | 41.8 µs | 3.4 µs | 15.2 µs | **0.71x** | **0.058x** | **0.26x** |
-| **Axis Min** (256x256 over axis 0) | 60.0 µs | 47.6 µs | 4.2 µs | 5.5 µs | **0.79x** | **0.070x** | **0.091x** |
-| **Axis Max** (256x256 over axis 0) | 59.1 µs | 48.9 µs | 3.6 µs | 5.0 µs | **0.83x** | **0.062x** | **0.085x** |
-| **Axis Mean** (256x256 over axis 0) | 62.3 µs | 42.1 µs | 3.1 µs | 15.2 µs | **0.68x** | **0.050x** | **0.24x** |
-| **Matmul 64x64** | 41.9 µs | 10.3 µs | 4.7 µs | 18.1 µs | **0.25x** | **0.11x** | **0.43x** |
-| **Matmul 256x256** | 38.2 µs | 662.9 µs | 280.7 µs | 1.01 ms | **17.4x** | **7.4x** | **26.5x** |
-| **Cumsum** (256x256 over axis 1) | 39.5 µs | 30.5 µs | 108.9 µs | 156.7 µs | **0.77x** | **2.8x** | **4.0x** |
-| **Matrix Power** (64x64 exponent 5) | 124.9 µs | 41.0 µs | 18.2 µs | 14.2 µs | **0.33x** | **0.15x** | **0.11x** |
-| **Kronecker Product** (64x64 ⊗ 8x8) | 26.6 µs | 218.4 µs | — | 420.6 µs | **8.2x** | — | **15.8x** |
-| **Dot Product** ($N = 65,536$) | 55.6 µs | 3.3 µs | 6.2 µs | — | **0.059x** | **0.11x** | — |
-| **Trace** (256x256) | 28.2 µs | 124 ns | 160 ns | — | **0.0044x** | **0.0057x** | — |
-| **Matrix Rank** (64x64 diagonal rank 32) | 4.65 ms | 112.1 µs | — | — | **0.024x** | — | — |
-| **Determinant** (64x64 diagonal) | 6.09 ms | 57.3 µs | 24 ns | 6.8 µs | **0.0094x** | **0.0000039x** | **0.0011x** |
-| **Norm L1** ($N = 65,536$) | 35.6 µs | 2.2 µs | — | — | **0.062x** | — | — |
-| **Norm L2** ($N = 65,536$) | 61.3 µs | 2.9 µs | — | — | **0.048x** | — | — |
-| **Norm Max** ($N = 65,536$) | 52.3 µs | 2.2 µs | — | — | **0.042x** | — | — |
+| **Elementwise Add** ($N = 2^{20}$) | 66.9 µs | 1.28 ms | 1.31 ms | — | **19.2x** | **19.6x** | — |
+| **Elementwise Exp** ($N = 2^{20}$) | 28.5 µs | 2.16 ms | 2.13 ms | — | **75.9x** | **74.9x** | — |
+| **Sum Reduction** ($N = 2^{20}$) | 38.5 µs | 62.4 µs | 82.1 µs | — | **1.62x** | **2.13x** | — |
+| **Axis Sum** (256x256 over axis 0) | 58.3 µs | 33.4 µs | 4.4 µs | 15.7 µs | **0.57x** | **0.075x** | **0.27x** |
+| **Axis Min** (256x256 over axis 0) | 68.3 µs | 46.8 µs | 4.2 µs | 5.4 µs | **0.69x** | **0.062x** | **0.079x** |
+| **Axis Max** (256x256 over axis 0) | 62.5 µs | 46.0 µs | 4.3 µs | 5.7 µs | **0.74x** | **0.069x** | **0.091x** |
+| **Axis Mean** (256x256 over axis 0) | 63.9 µs | 41.7 µs | 4.2 µs | 18.5 µs | **0.65x** | **0.066x** | **0.29x** |
+| **Matmul 64x64** | 43.7 µs | 10.4 µs | 5.1 µs | 14.5 µs | **0.24x** | **0.12x** | **0.33x** |
+| **Matmul 256x256** | 38.3 µs | 676.7 µs | 433.9 µs | 1.16 ms | **17.7x** | **11.3x** | **30.4x** |
+| **Cumsum** (256x256 over axis 1) | 39.4 µs | 30.9 µs | 107.9 µs | 142.3 µs | **0.78x** | **2.74x** | **3.61x** |
+| **Matrix Power** (64x64 exponent 5) | 125.1 µs | 44.5 µs | 21.2 µs | 14.5 µs | **0.36x** | **0.17x** | **0.12x** |
+| **Kronecker Product** (64x64 ⊗ 8x8) | 27.1 µs | 282.6 µs | — | 470.1 µs | **10.4x** | — | **17.4x** |
+| **Dot Product** ($N = 65,536$) | 52.0 µs | 3.7 µs | 6.1 µs | — | **0.070x** | **0.12x** | — |
+| **Trace** (256x256) | 28.0 µs | 128 ns | 160 ns | — | **0.0046x** | **0.0057x** | — |
+| **Matrix Rank** (64x64 diagonal rank 32) | 4.61 ms | 103.1 µs | — | — | **0.022x** | — | — |
+| **Determinant** (64x64 diagonal) | 6.02 ms | 57.3 µs | 22 ns | 6.6 µs | **0.0095x** | **0.0000037x** | **0.0011x** |
+| **Cholesky Decomposition** (32x32 SPD) | 68.8 µs | 4.2 µs | — | 1.1 µs | **0.061x** | — | **0.015x** |
+| **LU Decomposition** (32x32) | 77.4 µs | 9.4 µs | — | 1.5 µs | **0.12x** | — | **0.020x** |
+| **QR Decomposition** (48x24) | 87.8 µs | 15.4 µs | — | 4.0 µs | **0.18x** | — | **0.046x** |
+| **Norm L1** ($N = 65,536$) | 47.5 µs | 1.9 µs | — | — | **0.041x** | — | — |
+| **Norm L2** ($N = 65,536$) | 109.6 µs | 2.5 µs | — | — | **0.023x** | — | — |
+| **Norm Max** ($N = 65,536$) | 51.0 µs | 2.1 µs | — | — | **0.041x** | — | — |
 
 ## Analysis
 
 1. **Compute vs. Memory Bandwidth & GPU Scaling**:
-   - For **Elementwise Add** (memory-bound, low arithmetic intensity), the GPU reaches $\approx 44.7 \text{ µs/iter}$, outperforming Leto by $\approx 22.4\times$ and `ndarray` by $\approx 23.0\times$ on this run.
-   - For **Elementwise Exp** (compute-bound, high arithmetic intensity), the GPU reaches $\approx 33.0 \text{ µs/iter}$, outperforming Leto by $\approx 56.9\times$ and `ndarray` by $\approx 56.3\times$.
+   - For **Elementwise Add** (memory-bound, low arithmetic intensity), the GPU reaches $\approx 66.9 \text{ µs/iter}$, outperforming Leto by $\approx 19.2\times$ and `ndarray` by $\approx 19.6\times$ on this run.
+   - For **Elementwise Exp** (compute-bound, high arithmetic intensity), the GPU reaches $\approx 28.5 \text{ µs/iter}$, outperforming Leto by $\approx 75.9\times$ and `ndarray` by $\approx 74.9\times$.
    - For **Axis Sum/Min/Max/Mean** (256x256 over axis 0), the GPU trails Leto, `ndarray`, and the nalgebra-backed references at this size.
    - For **Cumsum** (256x256 over axis 1), the GPU is roughly at parity with Leto ($\approx 0.95\times$) and faster than the scalar ndarray/nalgebra-backed references in this harness.
-   - For **Matmul 256x256** ($1.67 \times 10^7$ multiply-accumulates), the GPU is $\approx 17.4\times$ faster than Leto CPU, $\approx 7.4\times$ faster than `ndarray`, and $\approx 26.5\times$ faster than `nalgebra` in this harness. This shows the effectiveness of the tiled WGSL matrix multiplication implementation utilizing shared memory barriers.
+   - For **Matmul 256x256** ($1.67 \times 10^7$ multiply-accumulates), the GPU is $\approx 17.7\times$ faster than Leto CPU, $\approx 11.3\times$ faster than `ndarray`, and $\approx 30.4\times$ faster than `nalgebra` in this harness. This shows the effectiveness of the tiled WGSL matrix multiplication implementation utilizing shared memory barriers.
    - For **Matrix Power** (64x64 exponent 5), the GPU trails Leto, `ndarray`, and `nalgebra` for this small matrix because the implementation performs four separate GPU matmul dispatches plus identity/copy setup.
-   - For **Kronecker Product** (64x64 ⊗ 8x8, 262,144 output elements), the GPU reaches $\approx 26.6 \text{ µs/iter}$, outperforming Leto by $\approx 8.2\times$ and the nalgebra-backed reference by $\approx 15.8\times$.
-   - For **Matrix Rank** (64x64 diagonal rank 32), the current GPU row-reduction kernel is $\approx 42\times$ slower than Leto's SVD-based rank because the WGPU implementation intentionally uses one invocation for correctness-first serial pivoting. This is an optimization gap, not a benchmark threshold to weaken.
-   - For **Determinant** (64x64 diagonal), the GPU row-reduction determinant is $\approx 106\times$ slower than Leto and much slower than `ndarray`'s diagonal-product reference. This is correctness/parity coverage for the matrix-property API, not an optimization claim.
+   - For **Kronecker Product** (64x64 ⊗ 8x8, 262,144 output elements), the GPU reaches $\approx 27.1 \text{ µs/iter}$, outperforming Leto by $\approx 10.4\times$ and the nalgebra-backed reference by $\approx 17.4\times$.
+   - For **Matrix Rank** (64x64 diagonal rank 32), the current GPU row-reduction kernel is $\approx 45\times$ slower than Leto's SVD-based rank because the WGPU implementation intentionally uses one invocation for correctness-first serial pivoting. This is an optimization gap, not a benchmark threshold to weaken.
+   - For **Determinant** (64x64 diagonal), the GPU row-reduction determinant is $\approx 105\times$ slower than Leto and much slower than `ndarray`'s diagonal-product reference. This is correctness/parity coverage for the matrix-property API, not an optimization claim.
+   - For **Cholesky**, **LU**, and **QR**, the current WGPU API stores factors on the device but delegates factorization to Leto on the host, so GPU timings include transfer and host factorization overhead. These rows prove API parity and quantify the current cost; they do not prove GPU-kernel decomposition performance.
 
 2. **Driver Overhead and Small Input Regimes**:
    - For smaller workloads (e.g. **Trace**, **Dot Product**, **Norm L2**, and `ndarray` / `nalgebra` vector operations at $N=65,536$), the CPU dominates due to zero launch overhead and mature CPU kernels.
@@ -50,4 +54,4 @@ Machine Class: Windows 11 x86_64 dev workstation.
    - Consequently, for datasets of size $N=65,536$ (only 256KB), low-arithmetic-density operations often finish on the CPU before the GPU dispatch sequence amortizes. GPU benefit requires larger data volume, higher arithmetic density, or fused kernels that reduce dispatch count.
 
 3. **Reduction Efficiency**:
-   - The **Sum Reduction** benchmark shows the GPU is $\approx 1.70\times$ faster than Leto and $\approx 1.99\times$ faster than `ndarray`. WGPU utilizes a multi-pass tree reduction kernel with shared workgroup memory, which minimizes the overhead of global memory transactions.
+   - The **Sum Reduction** benchmark shows the GPU is $\approx 1.62\times$ faster than Leto and $\approx 2.13\times$ faster than `ndarray`. WGPU utilizes a multi-pass tree reduction kernel with shared workgroup memory, which minimizes the overhead of global memory transactions.

@@ -1749,7 +1749,14 @@ fn main() {
             0.0,
             1.0e-5,
         );
-        assert_close_slice(&got_lower, na_out.l().as_slice(), 1.0e-4, 1.0e-5);
+        let na_lower = na_out.l();
+        let mut na_lower_row_major = Vec::with_capacity(n * n);
+        for row in 0..n {
+            for col in 0..n {
+                na_lower_row_major.push(na_lower[(row, col)]);
+            }
+        }
+        assert_close_slice(&got_lower, &na_lower_row_major, 1.0e-4, 1.0e-5);
 
         let t_wgpu = Instant::now();
         for _ in 0..ITERS {

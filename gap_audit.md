@@ -6,9 +6,9 @@
   slice: elementwise, strided elementwise, scalar elementwise, reductions,
   rank-2 axis reductions, rank-2 scans, matrix products, Kronecker product,
   matrix power, finite-`f32` matrix rank, finite-`f32` determinant, dot, trace,
-  and norms. Evidence tier: value-semantic contract tests against CPU
-  references and Leto, plus comparative benchmark evidence recorded in
-  `benchmark_results.md`.
+  norms, and Cholesky/LU/QR decomposition APIs. Evidence tier: value-semantic
+  contract tests against CPU references and Leto, plus comparative benchmark
+  evidence recorded in `benchmark_results.md`.
 - [minor] WGPU `matrix_rank` uses GPU row reduction with a relative pivot
   threshold; Leto `matrix_rank` uses singular values. Exact finite full-rank,
   rank-deficient, and zero cases are covered, but ill-conditioned matrices may
@@ -18,9 +18,14 @@
   tolerance; Leto uses its CPU determinant algorithm. Exact finite nonsingular
   and singular cases are covered, but ill-conditioned determinants may diverge.
   Evidence tier: documented algorithm audit and value-semantic contract tests.
+- [minor] WGPU Cholesky/LU/QR currently provide device-resident factors and
+  Leto-matching solve/inverse/determinant surfaces, but factorization delegates
+  to Leto on the host before uploading the factors. This is API parity, not
+  GPU-kernel parity. Evidence tier: implementation audit, value-semantic
+  differential tests, and comparative benchmark rows.
 - [minor] Leto's dense decomposition and matrix-property surface is not yet
-  mirrored by WGPU: LU, QR, Cholesky, SVD, Schur, eigenvalue/eigenvector,
-  inverse/solve, pseudoinverse, and matrix exponential. Evidence tier: API
+  mirrored by WGPU: SVD, Schur, eigenvalue/eigenvector,
+  pseudoinverse, and matrix exponential. Evidence tier: API
   audit against `leto-ops/src/application/linalg`.
 - [minor] CUDA mirrors the current core operation slice in the source tree and
   passes stub-mode verification. Real CUDA feature verification is still

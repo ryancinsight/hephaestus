@@ -31,6 +31,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   compare exact finite nonsingular and singular matrices against Leto and
   reject rectangular inputs; comparative benchmarks cover WGPU, Leto,
   `ndarray`, and `nalgebra` references.
+- `hephaestus-wgpu` [minor]: device-resident Cholesky, LU, and QR
+  decomposition surfaces mirroring Leto's factor/solve/determinant/inverse
+  APIs where applicable. Contract tests compare factors and solve/inverse
+  outputs against Leto; comparative benchmarks measure WGPU API overhead
+  against Leto and `nalgebra`. The current implementation delegates
+  factorization to Leto on the host and stores factors on the device, so this
+  is API parity rather than GPU-kernel parity.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output
