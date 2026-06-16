@@ -1743,11 +1743,18 @@ fn main() {
         wait_wgpu(&wgpu_dev);
         let mut got_lower = vec![0.0f32; n * n];
         wgpu_dev.download(wg_out.lower(), &mut got_lower).unwrap();
+        let gamma_rank = (64.0 * f32::EPSILON) / (1.0 - 64.0 * f32::EPSILON);
+        let blocked_cholesky_abs_tol = 4.0 * gamma_rank * (n as f32).sqrt();
+        let blocked_cholesky_rel_tol = 4.0 * gamma_rank;
+        // The blocked path reorders each SYRK trailing update into rank-64 f32
+        // accumulations before the next panel factorization.  The comparison
+        // bound uses 4 * gamma_64, where gamma_k = k*eps/(1-k*eps), with an
+        // absolute term scaled by sqrt(n) for the following panel sqrt/divides.
         assert_close_slice(
             &got_lower,
             leto::Storage::as_slice(leto_out.lower().storage()),
-            0.0,
-            1.0e-5,
+            blocked_cholesky_abs_tol,
+            blocked_cholesky_rel_tol,
         );
         let na_lower = na_out.l();
         let mut na_lower_row_major = Vec::with_capacity(n * n);
@@ -1756,7 +1763,12 @@ fn main() {
                 na_lower_row_major.push(na_lower[(row, col)]);
             }
         }
-        assert_close_slice(&got_lower, &na_lower_row_major, 1.0e-4, 1.0e-5);
+        assert_close_slice(
+            &got_lower,
+            &na_lower_row_major,
+            blocked_cholesky_abs_tol,
+            blocked_cholesky_rel_tol,
+        );
 
         let t_wgpu = Instant::now();
         for _ in 0..ITERS {

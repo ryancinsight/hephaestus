@@ -812,6 +812,53 @@ fn cholesky_decomposition_matches_leto_reference() {
 
 #[cfg(feature = "decomposition")]
 #[test]
+fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
+    let Some(dev) = device("blocked_cholesky_matches_leto_reference_across_block_boundary") else {
+        return;
+    };
+    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let n = 66usize;
+    let mut matrix_host = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                n as f32 + 4.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let leto_cholesky = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_cholesky = cholesky_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got_lower = vec![0.0f32; n * n];
+    dev.download(gpu_cholesky.lower(), &mut got_lower).unwrap();
+    let expected_lower = leto::Storage::as_slice(leto_cholesky.lower().storage());
+    for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
+        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        assert!(
+            (got - expected).abs() <= tolerance,
+            "blocked Cholesky lower mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
+        );
+    }
+    assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
 fn lu_decomposition_matches_leto_reference() {
     let Some(dev) = device("lu_decomposition_matches_leto_reference") else {
         return;

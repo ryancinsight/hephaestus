@@ -68,7 +68,7 @@ pub use infrastructure::device::CudaDevice;
 
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    cholesky_decompose, lu_decompose, qr_decompose, GpuCholesky, GpuLuDecomposition,
+    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, qr_decompose, GpuCholesky, GpuLuDecomposition,
     GpuQrDecomposition,
 };
 

@@ -11,6 +11,6 @@ pub mod cholesky;
 pub mod lu;
 pub mod qr;
 
-pub use cholesky::{cholesky_decompose, GpuCholesky};
+pub use cholesky::{cholesky_decompose, cholesky_decompose_blocked, GpuCholesky};
 pub use lu::{lu_decompose, GpuLuDecomposition};
 pub use qr::{qr_decompose, GpuQrDecomposition};
