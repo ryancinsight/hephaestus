@@ -144,9 +144,11 @@ struct HhMeta {
     trail_stride: u32,
     /// Element offset to A[0, 0] of the trailing submatrix.
     c_offset: u32,
+    /// Element offset to the active Householder vector in `v_buf`.
+    v_offset: u32,
     /// Householder coefficient β = 2 / (vᵀv).
     beta: f32,
-    _pad: [u32; 3],
+    _pad: [u32; 2],
 }
 
 // SAFETY: HhMeta is `#[repr(C)]` and every field is Pod.
@@ -174,10 +176,10 @@ fn hh_shader_source() -> String {
     trail_cols: u32,
     trail_stride: u32,
     c_offset: u32,
+    v_offset: u32,
     beta: {ty},
     _pad0: u32,
     _pad1: u32,
-    _pad2: u32,
 }}
 
 @group(0) @binding(0) var<storage, read>      v_buf: array<{ty}>;
@@ -202,13 +204,14 @@ fn main(
     let n     = params.vec_len;
     let stride = params.trail_stride;
     let off   = params.c_offset;
+    let v_off = params.v_offset;
     let beta  = params.beta;
 
     // Phase 1: partial dot = vᵀ · A[:, col]
     var partial = {ty}({zero});
     var row = tid;
     while (row < n) {{
-        partial = partial + v_buf[row] * a_buf[off + row * stride + col];
+        partial = partial + v_buf[v_off + row] * a_buf[off + row * stride + col];
         row = row + 256u;
     }}
     sdata[tid] = partial;
@@ -229,7 +232,7 @@ fn main(
     row = tid;
     while (row < n) {{
         let idx = off + row * stride + col;
-        a_buf[idx] = a_buf[idx] - beta * v_buf[row] * dot;
+        a_buf[idx] = a_buf[idx] - beta * v_buf[v_off + row] * dot;
         row = row + 256u;
     }}
 }}
@@ -248,6 +251,7 @@ struct HouseholderTrailingUpdate<'a> {
     trail_cols: usize,
     trail_stride: usize,
     c_offset: usize,
+    v_offset: usize,
     beta: f32,
 }
 
@@ -280,8 +284,11 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
         c_offset: u32::try_from(update.c_offset).map_err(|_| HephaestusError::DispatchFailed {
             message: format!("HH c_offset {} exceeds u32", update.c_offset),
         })?,
+        v_offset: u32::try_from(update.v_offset).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("HH v_offset {} exceeds u32", update.v_offset),
+        })?,
         beta: update.beta,
-        _pad: [0; 3],
+        _pad: [0; 2],
     };
 
     let pipeline = cached_pipeline(
@@ -551,19 +558,20 @@ pub fn qr_decompose_blocked(
         let work_buf = device.upload(&trailing)?;
 
         // ── Step 3: Apply b Householder reflectors to trailing columns ──
+        let mut packed_vectors = Vec::with_capacity(panel_rows * b);
+        let mut vector_offsets = Vec::with_capacity(b);
         for j in 0..b {
             let vec_len = panel_rows - j;
-
-            // Reconstruct v_j from the factored panel:
-            //   v[0] = heads[j]           (head component, at row k+j)
-            //   v[i] = panel[(j+i)*b + j] (tail, below diagonal)
-            let mut v = vec![0.0f32; vec_len];
-            v[0] = heads[j];
+            vector_offsets.push(packed_vectors.len());
+            packed_vectors.push(heads[j]);
             for i in 1..vec_len {
-                v[i] = panel[(j + i) * b + j];
+                packed_vectors.push(panel[(j + i) * b + j]);
             }
+        }
+        let vectors_dev = device.upload(&packed_vectors)?;
 
-            let v_dev = device.upload(&v)?;
+        for j in 0..b {
+            let vec_len = panel_rows - j;
 
             // Trailing submatrix rows j:m-k in the compact panel tile.
             let c_offset = j * trail_cols;
@@ -571,12 +579,13 @@ pub fn qr_decompose_blocked(
             hh_trailing_update(
                 device,
                 HouseholderTrailingUpdate {
-                    v_buf: &v_dev,
+                    v_buf: &vectors_dev,
                     a_buf: &work_buf,
                     vec_len,
                     trail_cols,
                     trail_stride: trail_cols,
                     c_offset,
+                    v_offset: vector_offsets[j],
                     beta: betas[j],
                 },
             )?;

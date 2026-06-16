@@ -12,6 +12,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: changed blocked QR to transfer compact
   trailing-column tiles per panel before GPU Householder application instead
   of writing and downloading the full working matrix.
+- `hephaestus-wgpu` [patch]: packed each blocked QR panel's Householder
+  vectors into one device buffer and selected the active vector by metadata
+  offset, removing per-reflector vector-buffer uploads.
 
 ### Added
 

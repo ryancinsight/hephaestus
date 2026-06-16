@@ -209,6 +209,19 @@ parity audit for remaining operator families and shared Atlas seam usage
   µs, nalgebra 7.1 µs; blocked QR 70x35 1.04 ms, Leto 10.4 µs, nalgebra 6.0
   µs). Evidence tier: value-semantic blocked LU/QR differential tests, static
   diagnostics, and empirical local benchmarks.
+- Additional blocked QR reflector-upload evidence: packed all panel
+  Householder vectors into one device buffer and extended the reflector kernel
+  metadata with a vector offset, removing per-reflector vector-buffer creation
+  while preserving one GPU launch per reflector. `cargo fmt -p hephaestus-wgpu
+  --check`; `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`;
+  `cargo nextest run -p hephaestus-wgpu blocked_lu blocked_qr -j 1
+  --no-fail-fast` (8 passed); `cargo bench -p hephaestus-wgpu --bench
+  decomposition_sync` (LU 66x66 sync floor 219.9 µs, QR 70x35 sync floor
+  138.5 µs); `cargo bench -p hephaestus-wgpu --bench comparative` (blocked LU
+  66x66 273.7 µs, Leto 66.2 µs, nalgebra 7.1 µs; blocked QR 70x35 1.05 ms,
+  Leto 10.5 µs, nalgebra 6.1 µs). Evidence tier: value-semantic blocked
+  LU/QR differential tests, static diagnostics, and empirical local
+  benchmarks.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:

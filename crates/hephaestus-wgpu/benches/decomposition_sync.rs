@@ -113,6 +113,7 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
     let vectors: Vec<Vec<f32>> = (0..32)
         .map(|j| vec![1.0f32 / (1.0 + j as f32); rows - j])
         .collect();
+    let packed_vectors: Vec<f32> = vectors.iter().flatten().copied().collect();
 
     let start = Instant::now();
     for _ in 0..ITERS {
@@ -124,10 +125,9 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
         device
             .write_buffer(&trailing_buf, &trailing)
             .expect("write QR trailing columns");
-        let uploaded_vectors: Vec<_> = vectors
-            .iter()
-            .map(|v| device.upload(black_box(v)).expect("upload QR reflector"))
-            .collect();
+        let uploaded_vectors = device
+            .upload(black_box(&packed_vectors))
+            .expect("upload packed QR reflectors");
         black_box(&uploaded_vectors);
 
         device
