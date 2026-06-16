@@ -73,7 +73,7 @@ parity audit for remaining operator families and shared Atlas seam usage
   the fused variant regressed in the local comparative run.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
   `cargo clippy -p hephaestus-wgpu -p hephaestus-cuda --all-targets -- -D
-  warnings`; `cargo nextest run -p hephaestus-wgpu -p hephaestus-cuda` (89
+  warnings`; `cargo nextest run -p hephaestus-wgpu -p hephaestus-cuda` (90
   passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo test
   --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p hephaestus-wgpu
   --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo bench -p
