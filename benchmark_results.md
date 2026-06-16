@@ -28,10 +28,10 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Determinant** (64x64 diagonal) | 8.42 ms | 71.4 µs | 38 ns | 9.0 µs | **0.0085x** | **0.0000045x** | **0.0011x** |
 | **Blocked Cholesky Decomposition** (128x128 SPD) | 819.3 µs | 182.9 µs | — | 28.0 µs | **0.22x** | — | **0.034x** |
 | **LU Decomposition** (32x32) | 150.7 µs | 12.7 µs | — | 1.9 µs | **0.084x** | — | **0.013x** |
-| **Blocked LU Decomposition** (66x66) | 283.9 µs | 68.2 µs | — | 7.2 µs | **0.24x** | — | **0.025x** |
+| **Blocked LU Decomposition** (66x66) | 239.8 µs | 62.1 µs | — | 7.0 µs | **0.26x** | — | **0.029x** |
 | **Full-Pivot LU Decomposition** (32x32) | 169.5 µs | 20.3 µs | — | 14.1 µs | **0.12x** | — | **0.083x** |
 | **QR Decomposition** (48x24) | 134.9 µs | 11.5 µs | — | 4.3 µs | **0.085x** | — | **0.032x** |
-| **Blocked QR Decomposition** (70x35) | 1.33 ms | 10.6 µs | — | 6.1 µs | **0.0079x** | — | **0.0046x** |
+| **Blocked QR Decomposition** (70x35) | 1.13 ms | 11.4 µs | — | 6.1 µs | **0.010x** | — | **0.0054x** |
 | **SVD Decomposition** (32x16) | 202.3 µs | 29.3 µs | — | 6.3 µs | **0.14x** | — | **0.031x** |
 | **Bidiagonalization** (32x16) | 202.8 µs | 25.6 µs | — | 9.7 µs (nalgebra SVD) | **0.13x** | — | **0.048x** |
 | **Schur Decomposition** (32x32) | 194.1 µs | 31.9 µs | — | 6.8 µs (nalgebra eigenvalues) | **0.16x** | — | **0.035x** |
@@ -51,8 +51,8 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
 | Profile | Measured floor |
 | --- | --- |
-| **Blocked LU 66x66 transfer/synchronization floor** | 308.2 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 227.8 µs |
+| **Blocked LU 66x66 transfer/synchronization floor** | 405.2 µs |
+| **Blocked QR 70x35 transfer/synchronization floor** | 240.7 µs |
 
 ## Analysis
 
@@ -67,9 +67,10 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
    - The blocked decomposition rows show the current hybrid strategy is still
      synchronization-bound at these sizes: **Blocked LU 66x66** and
      **Blocked QR 70x35** trail both Leto and `nalgebra` despite GPU trailing
-     updates. The next optimization target is reducing host/device round trips
-     before adding more native decomposition kernels.
-   - The synchronization profile attributes the 66x66 blocked LU row primarily
-     to transfer/synchronization cost. For 70x35 blocked QR, transfer cost is
-     material, but the gap also includes per-reflector kernel launches and
-     vector uploads.
+     updates. The blocked LU path now transfers only the active diagonal panel
+     and trailing submatrix regions; the comparative row improved on this
+     local run, but the result remains slower than CPU references.
+   - The synchronization profile is a synthetic sync-floor harness rather than
+     an exact helper benchmark. Its current LU floor is noisy and still
+     material; for 70x35 blocked QR, transfer cost combines with
+     per-reflector kernel launches and vector uploads.

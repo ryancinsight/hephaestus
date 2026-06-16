@@ -45,15 +45,18 @@
   value-semantic differential test across a block boundary and empirical
   benchmark row in `benchmark_results.md`.
 - [minor] WGPU blocked LU and blocked QR now have comparative benchmark rows.
-  The measured 66x66 blocked LU row is slower than Leto and `nalgebra`; the
-  70x35 blocked QR row is much slower than Leto and `nalgebra`. Evidence tier:
-  value-semantic blocked LU/QR tests plus empirical benchmark rows in
-  `benchmark_results.md`.
-- [minor] Blocked decomposition synchronization profiling shows the 66x66
-  blocked LU row is transfer/synchronization dominated, while the 70x35 blocked
-  QR row combines a material synchronization floor with per-reflector launches
-  and vector uploads. Evidence tier: empirical synchronization-profile
-  benchmark in `benchmark_results.md`.
+  Blocked LU transfers are narrowed to the active diagonal-panel and
+  trailing-submatrix regions, but the measured 66x66 blocked LU row remains
+  slower than Leto and `nalgebra`; the 70x35 blocked QR row is much slower than
+  Leto and `nalgebra`. Evidence tier: value-semantic blocked LU/QR tests plus
+  empirical benchmark rows in `benchmark_results.md`.
+- [minor] Blocked decomposition synchronization profiling shows a material,
+  noisy transfer/synchronization floor after the blocked LU region-transfer
+  reduction, while the 70x35 blocked QR row combines a material synchronization
+  floor with per-reflector launches and vector uploads. Next target: replace
+  synthetic sync-floor inference with true timestamp instrumentation and reduce
+  QR per-reflector launch/vector-upload traffic. Evidence tier: empirical
+  synchronization-profile benchmark in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:

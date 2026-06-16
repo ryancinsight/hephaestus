@@ -52,6 +52,9 @@ fn profile_blocked_lu_sync(device: &WgpuDevice) {
     let mut out = vec![0.0f32; len];
     let l21 = vec![0.25f32; 2 * 64];
     let u12 = vec![0.125f32; 64 * 2];
+    let trail = vec![0.5f32; 4];
+    let trail_buf = device.upload(&trail).expect("upload LU trailing tile");
+    let mut trail_out = vec![0.0f32; 4];
 
     let start = Instant::now();
     for _ in 0..ITERS {
@@ -68,13 +71,13 @@ fn profile_blocked_lu_sync(device: &WgpuDevice) {
         black_box((&l21_buf, &u12_buf));
 
         device
-            .download(&buffer, &mut out)
-            .expect("download LU trailing state");
-        assert_close_slice(&out, &host);
+            .download(&trail_buf, &mut trail_out)
+            .expect("download LU trailing tile");
+        assert_close_slice(&trail_out, &trail);
 
         device
-            .write_buffer(&buffer, &host)
-            .expect("write LU final panel");
+            .write_buffer(&trail_buf, &trail)
+            .expect("write LU final panel tile");
     }
     wait_wgpu(device);
 

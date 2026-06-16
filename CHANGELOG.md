@@ -4,6 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Changed
+
+- `hephaestus-wgpu` [patch]: narrowed blocked LU host/device transfers to the
+  active diagonal-panel and trailing-submatrix regions, reducing full-buffer
+  traffic in the hybrid GPU trailing-update path.
+
 ### Added
 
 - `hephaestus-wgpu` [minor]: GPU-resident linalg surface for parity with

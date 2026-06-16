@@ -187,6 +187,16 @@ parity audit for remaining operator families and shared Atlas seam usage
   hephaestus-wgpu --bench decomposition_sync`; `cargo bench -p
   hephaestus-wgpu --bench decomposition_sync` (LU 66x66 sync floor 308.2 µs,
   QR 70x35 sync floor 227.8 µs).
+- Additional blocked LU transfer evidence: narrowed blocked LU host/device
+  transfers to the active diagonal-panel and trailing-submatrix regions.
+  `cargo nextest run -p hephaestus-wgpu blocked_lu -j 1 --no-fail-fast` (4
+  passed); `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`;
+  `cargo bench -p hephaestus-wgpu --bench comparative` (blocked LU 66x66
+  239.8 µs, Leto 62.1 µs, nalgebra 7.0 µs; blocked QR 70x35 1.13 ms, Leto
+  11.4 µs, nalgebra 6.1 µs); `cargo bench -p hephaestus-wgpu --bench
+  decomposition_sync` (LU 66x66 sync floor 405.2 µs, QR 70x35 sync floor
+  240.7 µs). Evidence tier: value-semantic blocked LU differential tests,
+  static diagnostics, and empirical local benchmarks.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
