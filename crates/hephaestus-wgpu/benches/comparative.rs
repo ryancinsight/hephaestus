@@ -8,11 +8,12 @@ use std::time::{Duration, Instant};
 use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_cuda::{CudaDevice, StridedOperand as CudaStridedOperand};
 use hephaestus_wgpu::{
-    bidiagonalize, binary_elementwise_into, bunch_kaufman, cholesky_decompose_blocked, cumsum_into,
-    det, dot, eigenvalues, full_piv_lu, hessenberg, kron_into, lu_decompose, matmul_into, matpow,
-    matrix_rank, max_axis_into, mean_axis_into, min_axis_into, norm_l1, norm_l2, norm_max,
-    qr_decompose, reduction, schur, sum_axis_into, svd_decompose, symmetric_eigen_jacobi, trace,
-    unary_elementwise_into, AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    bidiagonalize, binary_elementwise_into, bunch_kaufman, cholesky_decompose_blocked, col_piv_qr,
+    cumsum_into, det, dot, eigenvalues, full_piv_lu, hessenberg, kron_into, lu_decompose, matexp,
+    matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into, norm_l1,
+    norm_l2, norm_max, pinv, qr_decompose, reduction, schur, sum_axis_into, svd_decompose,
+    symmetric_eigen_jacobi, trace, udu_decompose, unary_elementwise_into, AddOp, ExpOp,
+    StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
 };
 use leto::Storage;
 use nalgebra::DMatrix;
@@ -2588,6 +2589,88 @@ fn main() {
 
     {
         let n = 32usize;
+        println!("--- Benchmarking: UDU Decomposition (f32, {n}x{n}) ---");
+        let mut host_m = vec![0.0f32; n * n];
+        for row in 0..n {
+            for col in 0..=row {
+                let value = if row == col {
+                    if row % 2 == 0 {
+                        4.0 + row as f32 * 0.02
+                    } else {
+                        -3.0 - row as f32 * 0.015
+                    }
+                } else {
+                    ((row * 3 + col * 5 + 1) % 17) as f32 * 0.001
+                };
+                host_m[row * n + col] = value;
+                host_m[col * n + row] = value;
+            }
+        }
+
+        let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
+        let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
+        let leto_out = leto_ops::udu_decompose(&leto_m.view()).unwrap();
+        let na_m = DMatrix::from_row_slice(n, n, &host_m);
+        assert_close_slice(
+            &[leto_out.det()],
+            &[na_m.clone().determinant()],
+            1.0e-3,
+            1.0e-5,
+        );
+
+        let wg_m = wgpu_dev.upload(&host_m).unwrap();
+        let wg_out = udu_decompose(
+            &wgpu_dev,
+            WgpuStridedOperand {
+                buffer: &wg_m,
+                layout: &layout2d,
+            },
+        )
+        .unwrap();
+        wait_wgpu(&wgpu_dev);
+        assert_close_slice(&[wg_out.det()], &[leto_out.det()], 1.0e-4, 1.0e-5);
+        let mut got_d = vec![0.0f32; n];
+        wgpu_dev.download(wg_out.d_buffer(), &mut got_d).unwrap();
+        assert_close_slice(&got_d, leto_out.diagonal(), 1.0e-4, 1.0e-5);
+
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = udu_decompose(
+                &wgpu_dev,
+                WgpuStridedOperand {
+                    buffer: &wg_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::udu_decompose(black_box(&leto_m.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        let t_na = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(&na_m).clone().determinant();
+        }
+        println!(
+            "CPU (nalgebra determinant):{} ns/iter\n",
+            elapsed_per_iter(t_na.elapsed()).as_nanos()
+        );
+    }
+
+    {
+        let n = 32usize;
         println!("--- Benchmarking: Symmetric Eigen Jacobi (f32, {n}x{n}) ---");
         let mut host_m = vec![0.0f32; n * n];
         for row in 0..n {
@@ -2922,5 +3005,187 @@ fn main() {
                 elapsed_per_iter(t_leto.elapsed()).as_nanos()
             );
         }
+    }
+
+    {
+        let n = 32usize;
+        println!("--- Benchmarking: Column-Pivoted QR Decomposition (f32, {n}x{n}) ---");
+        let host_m: Vec<f32> = (0..n * n).map(|i| (i as f32 * 0.17 + 1.0) * 1e-3).collect();
+        let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
+        let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
+        let leto_out = leto_ops::col_piv_qr(&leto_m.view()).unwrap();
+        let na_m = DMatrix::from_row_slice(n, n, &host_m);
+
+        let wg_m = wgpu_dev.upload(&host_m).unwrap();
+        let wg_out = col_piv_qr(
+            &wgpu_dev,
+            WgpuStridedOperand {
+                buffer: &wg_m,
+                layout: &layout2d,
+            },
+        )
+        .unwrap();
+        wait_wgpu(&wgpu_dev);
+        let mut got_q = vec![0.0f32; n * n];
+        wgpu_dev.download(wg_out.q(), &mut got_q).unwrap();
+        assert_close_slice(
+            &got_q,
+            leto::Storage::as_slice(leto_out.q().storage()),
+            1.0e-4,
+            1.0e-5,
+        );
+
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = col_piv_qr(
+                &wgpu_dev,
+                WgpuStridedOperand {
+                    buffer: &wg_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::col_piv_qr(black_box(&leto_m.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        let t_na = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(&na_m).clone().col_piv_qr();
+        }
+        println!(
+            "CPU (nalgebra):{} ns/iter\n",
+            elapsed_per_iter(t_na.elapsed()).as_nanos()
+        );
+    }
+
+    {
+        let n = 32usize;
+        println!("--- Benchmarking: Pseudoinverse (f32, {n}x{n}) ---");
+        let host_m: Vec<f32> = (0..n * n).map(|i| (i as f32 * 0.17 + 1.0) * 1e-3).collect();
+        let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
+        let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
+        let leto_out = leto_ops::pinv(&leto_m.view()).unwrap();
+        let na_m = DMatrix::from_row_slice(n, n, &host_m);
+
+        let wg_m = wgpu_dev.upload(&host_m).unwrap();
+        let wg_out = pinv(
+            &wgpu_dev,
+            WgpuStridedOperand {
+                buffer: &wg_m,
+                layout: &layout2d,
+            },
+        )
+        .unwrap();
+        wait_wgpu(&wgpu_dev);
+        let mut got_pinv = vec![0.0f32; n * n];
+        wgpu_dev.download(&wg_out, &mut got_pinv).unwrap();
+        assert_close_slice(
+            &got_pinv,
+            leto::Storage::as_slice(leto_out.storage()),
+            1.0e-4,
+            1.0e-5,
+        );
+
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = pinv(
+                &wgpu_dev,
+                WgpuStridedOperand {
+                    buffer: &wg_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::pinv(black_box(&leto_m.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        let t_na = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(&na_m).clone().pseudo_inverse(1e-6);
+        }
+        println!(
+            "CPU (nalgebra):{} ns/iter\n",
+            elapsed_per_iter(t_na.elapsed()).as_nanos()
+        );
+    }
+
+    {
+        let n = 32usize;
+        println!("--- Benchmarking: Matrix Exponential (f32, {n}x{n}) ---");
+        let host_m: Vec<f32> = (0..n * n).map(|i| (i as f32 * 0.17 + 1.0) * 1e-3).collect();
+        let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
+        let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
+        let leto_out = leto_ops::matexp(&leto_m.view()).unwrap();
+
+        let wg_m = wgpu_dev.upload(&host_m).unwrap();
+        let wg_out = matexp(
+            &wgpu_dev,
+            WgpuStridedOperand {
+                buffer: &wg_m,
+                layout: &layout2d,
+            },
+        )
+        .unwrap();
+        wait_wgpu(&wgpu_dev);
+        let mut got_exp = vec![0.0f32; n * n];
+        wgpu_dev.download(&wg_out, &mut got_exp).unwrap();
+        assert_close_slice(
+            &got_exp,
+            leto::Storage::as_slice(leto_out.storage()),
+            1.0e-4,
+            1.0e-5,
+        );
+
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = matexp(
+                &wgpu_dev,
+                WgpuStridedOperand {
+                    buffer: &wg_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::matexp(black_box(&leto_m.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter\n",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
     }
 }
