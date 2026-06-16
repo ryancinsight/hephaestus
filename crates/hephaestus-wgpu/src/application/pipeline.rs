@@ -16,8 +16,8 @@ pub(crate) fn cached_pipeline(
     {
         let cache = device
             .pipeline_cache
-            .lock()
-            .expect("invariant: pipeline cache mutex is not poisoned");
+            .read()
+            .expect("invariant: pipeline cache lock is not poisoned");
         if let Some(cached) = cache.get(&key) {
             return cached.clone();
         }
@@ -42,8 +42,8 @@ pub(crate) fn cached_pipeline(
 
     let mut cache = device
         .pipeline_cache
-        .lock()
-        .expect("invariant: pipeline cache mutex is not poisoned");
+        .write()
+        .expect("invariant: pipeline cache lock is not poisoned");
     if let Some(cached) = cache.get(&key) {
         return cached.clone();
     }

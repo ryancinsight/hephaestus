@@ -82,6 +82,33 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
     }
 }
 
+fn assert_complex_spectra_close(
+    got: &[num_complex::Complex<f32>],
+    expected: &[num_complex::Complex<f32>],
+    abs_tol: f32,
+    rel_tol: f32,
+) {
+    assert_eq!(got.len(), expected.len());
+    let mut used = vec![false; got.len()];
+    for (expected_index, expected) in expected.iter().enumerate() {
+        let match_index = got.iter().enumerate().position(|(got_index, actual)| {
+            if used[got_index] {
+                return false;
+            }
+            let re_tolerance = abs_tol.max(rel_tol * expected.re.abs().max(1.0));
+            let im_tolerance = abs_tol.max(rel_tol * expected.im.abs().max(1.0));
+            (actual.re - expected.re).abs() <= re_tolerance
+                && (actual.im - expected.im).abs() <= im_tolerance
+        });
+        match match_index {
+            Some(index) => used[index] = true,
+            None => {
+                panic!("no eigenvalue matches oracle[{expected_index}] = {expected:?}; got {got:?}")
+            }
+        }
+    }
+}
+
 fn reconstruct_svd(
     u: &[f32],
     singular_values: &[f32],
@@ -1692,6 +1719,166 @@ fn eigenvalues_matches_leto_reference() {
             expected[i].im
         );
     }
+}
+
+#[test]
+fn eigenvalues_match_exact_complex_pair_blocks() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use num_complex::Complex;
+
+    let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
+        (
+            2,
+            vec![1.0, -1.0, 1.0, 1.0],
+            vec![Complex::new(1.0, -1.0), Complex::new(1.0, 1.0)],
+        ),
+        (
+            3,
+            vec![0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 2.0],
+            vec![
+                Complex::new(0.0, -1.0),
+                Complex::new(0.0, 1.0),
+                Complex::new(2.0, 0.0),
+            ],
+        ),
+    ];
+
+    for (n, matrix_host, expected) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+    }
+}
+
+#[test]
+fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+    use num_complex::Complex;
+
+    let cases: [(usize, Vec<f32>, f32); 4] = [
+        (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
+        (3, vec![2.0, 1.0, 1.0, 0.0, 3.0, 1.0, 0.0, 1.0, 3.0], 1.0e-5),
+        (
+            4,
+            vec![
+                0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, -2.0, 0.0, 0.0, 2.0, 1.0,
+            ],
+            1.0e-5,
+        ),
+        (
+            5,
+            (0..25)
+                .map(|index| ((index * 7 + 3) % 11) as f32 - 5.0)
+                .collect(),
+            1.0e-3,
+        ),
+    ];
+
+    for (n, matrix_host, abs_tol) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
+            .complex_eigenvalues()
+            .iter()
+            .copied()
+            .collect();
+        assert_complex_spectra_close(&got, &expected, abs_tol, 1.0e-4);
+    }
+}
+
+#[test]
+fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+    use num_complex::Complex;
+
+    let n = 3usize;
+    let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let eigen = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![Complex::new(0.0f32, 0.0); n];
+    device.download(&eigen, &mut got).unwrap();
+    for value in &got {
+        assert!(
+            value.im.abs() <= 1.0e-5,
+            "symmetric input produced complex eigenvalue {value:?}"
+        );
+    }
+    let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
+        .complex_eigenvalues()
+        .iter()
+        .copied()
+        .collect();
+    assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+}
+
+#[test]
+fn eigenvalues_rejects_non_square_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Eigenvalues require square matrix")
+    ));
 }
 
 #[test]

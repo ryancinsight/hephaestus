@@ -95,6 +95,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   a diagonal closed-form eigenvalue oracle and a nonsymmetric Leto
   differential case; comparative benchmarks now measure a 32x32 block-rotation
   matrix against Leto and `nalgebra`.
+- `hephaestus-wgpu` [minor]: strengthened general-eigenvalue contracts with
+  exact complex-pair blocks, triangular and structured nonsymmetric spectra,
+  dense `nalgebra` oracle comparison, symmetric-input real-spectrum checks,
+  unordered spectrum matching, and rectangular rejection.
 - `hephaestus-wgpu` [minor]: blocked Cholesky entry point
   (`cholesky_decompose_blocked`) with CPU panel factorization/solve and GPU
   SYRK trailing update. Contract coverage includes a block-boundary SPD case;

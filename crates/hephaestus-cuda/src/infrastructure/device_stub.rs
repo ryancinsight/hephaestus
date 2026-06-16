@@ -16,7 +16,7 @@ pub struct CudaDevice {
     _private: (),
     #[allow(dead_code)]
     pub(crate) pipeline_cache:
-        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, ()>>>,
+        std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, ()>>>,
     #[allow(dead_code)]
     topology: Option<std::sync::Arc<themis::GpuTopology>>,
 }

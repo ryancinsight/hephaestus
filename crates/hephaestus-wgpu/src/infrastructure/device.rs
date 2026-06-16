@@ -13,7 +13,7 @@ use crate::infrastructure::pool::BoundedBufferPool;
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
-pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, wgpu::ComputePipeline>>>;
+pub(crate) type PipelineCache = Arc<std::sync::RwLock<HashMap<PipelineKey, wgpu::ComputePipeline>>>;
 
 const TRANSIENT_POOL_MAX_BUFFERS: usize = 8;
 const STAGING_POOL_MAX_BYTES: u64 = 64 * 1024 * 1024;
@@ -47,7 +47,7 @@ impl WgpuDevice {
             device,
             queue,
             topology: None,
-            pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+            pipeline_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
             staging_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
                 TRANSIENT_POOL_MAX_BUFFERS,
                 STAGING_POOL_MAX_BYTES,

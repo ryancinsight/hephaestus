@@ -98,6 +98,11 @@ parity audit for remaining operator families and shared Atlas seam usage
   matrix with closed-form real eigenvalues and a nonsymmetric Leto
   differential case; comparative benchmark coverage now measures a 32x32
   block-rotation matrix against Leto and `nalgebra` complex eigenvalues.
+- [x] Strengthened WGPU general-eigenvalue contract coverage. Tests now cover
+  exact 2x2 and 3x3 complex-pair blocks, triangular spectra, structured real
+  nonsymmetric spectra, dense 5x5 `nalgebra` oracle comparison,
+  symmetric-input all-real spectra, unordered spectrum matching, and
+  rectangular rejection.
 - [x] Added blocked WGPU Cholesky entry point with CPU panel factorization and
   triangular solve plus GPU SYRK trailing update. Differential coverage now
   includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
@@ -153,6 +158,12 @@ parity audit for remaining operator families and shared Atlas seam usage
   `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
   `git diff --check`. Evidence tier: value-semantic closed-form,
   Moore-Penrose algebraic, differential, and invalid-input tests.
+- Additional general-eigenvalue evidence: `cargo nextest run -p
+  hephaestus-wgpu eigenvalues -j 1 --no-fail-fast --no-capture` (6 passed);
+  `cargo clippy -p hephaestus-wgpu --test contract -- -D warnings`;
+  `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
+  `git diff --check`. Evidence tier: closed-form, differential, and
+  invalid-input value-semantic tests.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:

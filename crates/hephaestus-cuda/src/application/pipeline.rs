@@ -19,7 +19,7 @@ pub fn cached_kernel(
     #[cfg(feature = "cuda")]
     {
         {
-            let cache = device.pipeline_cache.lock().unwrap();
+            let cache = device.pipeline_cache.read().unwrap();
             if let Some(cached) = cache.get(&key) {
                 return Ok(cached.clone());
             }
@@ -69,7 +69,7 @@ pub fn cached_kernel(
             }
 
             let kernel = Arc::new(SafeCachedKernel { module, func });
-            let mut cache = device.pipeline_cache.lock().unwrap();
+            let mut cache = device.pipeline_cache.write().unwrap();
             cache.insert(key, kernel.clone());
             Ok(kernel)
         }

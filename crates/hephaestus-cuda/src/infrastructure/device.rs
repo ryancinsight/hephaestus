@@ -18,8 +18,9 @@ use std::sync::Mutex;
 #[derive(Clone)]
 pub struct CudaDevice {
     device: Arc<cuda_core::Device>,
-    pub(crate) pipeline_cache:
-        Arc<Mutex<HashMap<String, Arc<crate::infrastructure::compiler::SafeCachedKernel>>>>,
+    pub(crate) pipeline_cache: Arc<
+        std::sync::RwLock<HashMap<String, Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
+    >,
     topology: Option<Arc<themis::GpuTopology>>,
 }
 
@@ -50,7 +51,7 @@ impl CudaDevice {
         let topology = Some(Arc::new(query_topology(&device)?));
         Ok(Self {
             device,
-            pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+            pipeline_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
             topology,
         })
     }

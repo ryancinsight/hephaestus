@@ -31,11 +31,13 @@
   GPU-kernel eigensolver parity. Evidence tier: value-semantic differential
   tests, non-symmetric rejection test, and comparative benchmark row.
 - [minor] WGPU general eigenvalues are exported with complex device buffers and
-  covered for a diagonal closed-form case plus a nonsymmetric Leto
-  differential case. Comparative benchmark coverage now includes a 32x32
-  block-rotation matrix against Leto and `nalgebra`; broader nonsymmetric
-  matrix families remain open. Evidence tier: value-semantic contract tests
-  and empirical benchmark row.
+  covered for diagonal, exact complex-pair blocks, triangular, structured
+  nonsymmetric real-spectrum, dense `nalgebra` differential, symmetric-real,
+  and rectangular-rejection cases. Comparative benchmark coverage includes a
+  32x32 block-rotation matrix against Leto and `nalgebra`. Remaining risk is
+  API/performance parity only: the wrapper delegates to Leto on the host before
+  uploading complex device buffers. Evidence tier: value-semantic closed-form,
+  differential, invalid-input tests, and empirical benchmark row.
 - [minor] WGPU blocked Cholesky now offloads the trailing SYRK update to a GPU
   kernel, but diagonal panel factorization and triangular panel solves remain
   CPU/Leto-backed. Current empirical row: 128x128 blocked Cholesky is slower
@@ -71,6 +73,7 @@
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk residual: either broaden
-  nonsymmetric general-eigenvalue families or address the Hermes direct-kernel
-  usage gap in WGPU.
+- Continue the parity audit at the next highest-risk residual: address the
+  Hermes direct-kernel usage gap in WGPU or document why the current
+  Leto-through-Hermes CPU path is the only applicable integration tier for
+  host-delegated operations.
