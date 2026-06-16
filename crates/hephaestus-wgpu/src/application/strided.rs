@@ -50,16 +50,16 @@ struct StridedUnaryKernel<Op>(PhantomData<Op>);
 /// path and one uniform layout serve every strided kernel.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct StridedMeta {
-    shape: [u32; 4],
-    a_strides: [i32; 4],
-    b_strides: [i32; 4],
-    out_strides: [i32; 4],
-    offsets: [u32; 4],
+pub(crate) struct StridedMeta {
+    pub(crate) shape: [u32; 4],
+    pub(crate) a_strides: [i32; 4],
+    pub(crate) b_strides: [i32; 4],
+    pub(crate) out_strides: [i32; 4],
+    pub(crate) offsets: [u32; 4],
 }
 
 /// WGSL `Meta` declaration shared by every strided kernel.
-const WGSL_META: &str = r"struct Meta {
+pub(crate) const WGSL_META: &str = r"struct Meta {
     shape: vec4<u32>,
     a_strides: vec4<i32>,
     b_strides: vec4<i32>,
@@ -71,7 +71,7 @@ const WGSL_META: &str = r"struct Meta {
 /// Flat-index → per-operand-offset decode shared by every strided kernel.
 /// `arrayLength` cannot guard strided access, so the logical length travels
 /// in `offsets.w` and is checked by each kernel before this body runs.
-const WGSL_DECODE: &str = r"    var rem = i;
+pub(crate) const WGSL_DECODE: &str = r"    var rem = i;
     var a_off = i32(lmeta.offsets.x);
     var b_off = i32(lmeta.offsets.y);
     var o_off = i32(lmeta.offsets.z);
@@ -86,21 +86,21 @@ const WGSL_DECODE: &str = r"    var rem = i;
 ";
 
 #[inline]
-fn map_layout_err(e: leto::LetoError) -> HephaestusError {
+pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
         message: format!("layout rejected: {e}"),
     }
 }
 
 #[inline]
-fn to_u32(value: usize, what: &str) -> Result<u32> {
+pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds u32 range"),
     })
 }
 
 #[inline]
-fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
+pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
     let mut out = [1u32; 4];
     for (d, &dim) in shape.iter().enumerate() {
         out[4 - N + d] = to_u32(dim, "dimension")?;
@@ -109,7 +109,7 @@ fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
 }
 
 #[inline]
-fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
+pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     let mut out = [0i32; 4];
     for (d, &stride) in strides.iter().enumerate() {
         out[4 - N + d] = i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
@@ -318,6 +318,41 @@ where
     )
 }
 
+/// Run `out = op(a, b)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// Inputs are broadcast to `output_shape` through the same layout contract as
+/// [`binary_elementwise_strided_into`].
+pub fn binary_elementwise_strided<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: BinaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    binary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        b,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
 /// Run `out[idx] = op(a[idx])` over logical indices of `out_layout`, with `a`
 /// broadcast to the output shape. Same layout semantics, validation, and
 /// caller-owned output contract as [`binary_elementwise_strided_into`].
@@ -381,6 +416,39 @@ where
     )
 }
 
+/// Run `out = op(a)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// The input is broadcast to `output_shape` through the same layout contract as
+/// [`unary_elementwise_strided_into`].
+pub fn unary_elementwise_strided<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: UnaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    unary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
 /// Run `out[idx] = op(a[idx], scalar)` over logical indices of `out_layout`.
 ///
 /// Zero new kernels: the scalar is uploaded as a one-element buffer described
@@ -409,6 +477,35 @@ where
             layout: &scalar_layout,
         },
         out,
+        width,
+    )
+}
+
+/// Run `out = op(a, scalar)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// The scalar path delegates through [`binary_elementwise_strided`] with a
+/// one-element broadcast operand, preserving scalar/binary semantic identity.
+pub fn scalar_elementwise_strided<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    scalar: T,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: BinaryWgslOp,
+    T: WgslScalar + Pod,
+{
+    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
+    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
+    binary_elementwise_strided::<Op, T, N>(
+        device,
+        a,
+        StridedOperand {
+            buffer: &scalar_buffer,
+            layout: &scalar_layout,
+        },
+        output_shape,
         width,
     )
 }

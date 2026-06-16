@@ -1,11 +1,54 @@
 # Checklist — hephaestus
 
 Target version: 0.10.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
-Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
-— cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
-no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
-increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
-(acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+Phase 1 COMPLETE. Phase 2 current increment: `hephaestus-wgpu` Leto parity
+linalg and comparative benchmarks. Next concrete increment: complete WGPU/Leto
+parity audit for remaining operator families and shared Atlas seam usage
+(`mnemosyne`, `moirai`, `themis`, `hermes`).
+
+## Unreleased WGPU Leto parity linalg [minor]
+- [x] Added GPU-resident `matmul`, `batched_matmul`, `dot`, `trace`,
+  `norm_l1`, `norm_l2`, and `norm_max` over strided operands.
+- [x] Added GPU-resident `kron` over strided matrix operands, with Leto
+  differential contract coverage and comparative benchmark coverage against
+  Leto, `ndarray`, and a nalgebra-backed reference implementation.
+- [x] Added GPU-resident `matpow` over strided square matrix operands, using
+  exponentiation by squaring over WGPU `matmul` dispatches. Differential tests
+  cover Leto parity for floating-point shear powers, integer `A^0`, and
+  non-square rejection; comparative benchmarks cover Leto, an `ndarray`
+  repeated-squaring reference, and `nalgebra`.
+- [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
+  `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
+  Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
+  or `[rows, 1]`). Differential tests cover caller-owned and allocating sum,
+  min, max, and mean against Leto; comparative benchmarks cover axis 0.
+- [x] Added GPU-resident rank-2 `scan_axis_into`, `scan_axis`,
+  `cumsum_axis_into`, and `cumsum`, with forward/reverse scan direction and
+  cumulative sum/product markers. Differential tests cover caller-owned and
+  allocating Cumsum plus reverse cumulative product against Leto; comparative
+  benchmarks cover Cumsum over axis 1 against Leto, an `ndarray` reference,
+  and a nalgebra-backed reference.
+- [x] Added allocating strided elementwise wrappers
+  `binary_elementwise_strided`, `unary_elementwise_strided`, and
+  `scalar_elementwise_strided`, returning C-contiguous GPU buffers while
+  delegating to the existing caller-owned strided kernels. Differential tests
+  cover allocated binary, unary, and scalar outputs against the same CPU
+  references used for caller-owned dispatch.
+- [x] Corrected `norm_l2` to return `sqrt(sum(x*x))`, matching Leto's CPU
+  contract rather than exposing the squared-sum intermediate.
+- [x] Extended `comparative` benchmark coverage to WGPU vs Leto, `ndarray`,
+  and `nalgebra`; refreshed `benchmark_results.md` from a real local WGPU run.
+- [x] Added fused WGPU map-reduction dispatch for trace and L1 norm. Dot
+  product, L2 norm, and max norm retain the measured faster staged paths after
+  the fused variant regressed in the local comparative run.
+- Evidence: `cargo fmt --check`; `cargo clippy -p hephaestus-wgpu
+  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (43
+  passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo doc -p
+  hephaestus-wgpu --no-deps`; `cargo bench -p hephaestus-wgpu --bench
+  comparative`. Full workspace all-features clippy attempted and blocked
+  before this slice by `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`. Evidence
+  tier: value-semantic differential tests, static diagnostics, and empirical
+  benchmarks.
 
 ## 0.10.0 checked launch grid arithmetic [minor]
 - [x] Added `BlockWidth::checked_covering_blocks` as the non-saturating launch

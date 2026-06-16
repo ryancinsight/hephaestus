@@ -1,0 +1,97 @@
+use crate::CudaDevice;
+use hephaestus_core::{BlockWidth, HephaestusError, Result};
+use std::sync::Arc;
+
+#[cfg(feature = "cuda")]
+use crate::infrastructure::compiler::SafeCachedKernel;
+
+#[cfg(not(feature = "cuda"))]
+/// Stub cached kernel.
+pub struct SafeCachedKernel;
+
+/// Retrieve a cached kernel, compiling the source if it is not present in the cache.
+pub fn cached_kernel(
+    device: &CudaDevice,
+    key: String,
+    func_name: &str,
+    source: impl FnOnce() -> String,
+) -> Result<Arc<SafeCachedKernel>> {
+    #[cfg(feature = "cuda")]
+    {
+        {
+            let cache = device.pipeline_cache.lock().unwrap();
+            if let Some(cached) = cache.get(&key) {
+                return Ok(cached.clone());
+            }
+        }
+
+        let src = source();
+        let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
+            HephaestusError::DispatchFailed {
+                message: format!("CUDA compilation failed for {func_name}: {e}"),
+            }
+        })?;
+
+        let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("PTX is not a valid CString: {e}"),
+        })?;
+
+        let func_name_c =
+            std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
+                message: format!("kernel name is not a valid CString: {e}"),
+            })?;
+
+        let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
+        // SAFETY: The driver and context must be initialized. CudaDevice::try_default() has bound the context.
+        // `module` is a valid out-pointer.
+        unsafe {
+            let res = cuda_core::sys::cuModuleLoadData(
+                &mut module as *mut cuda_core::sys::CUmodule,
+                ptx_c.as_ptr() as *const std::ffi::c_void,
+            );
+            if res != 0 {
+                return Err(HephaestusError::DispatchFailed {
+                    message: format!("cuModuleLoadData failed with code: {res}"),
+                });
+            }
+
+            let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
+            let res = cuda_core::sys::cuModuleGetFunction(
+                &mut func as *mut cuda_core::sys::CUfunction,
+                module as *mut _,
+                func_name_c.as_ptr(),
+            );
+            if res != 0 {
+                let _ = cuda_core::sys::cuModuleUnload(module as *mut _);
+                return Err(HephaestusError::DispatchFailed {
+                    message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
+                });
+            }
+
+            let kernel = Arc::new(SafeCachedKernel { module, func });
+            let mut cache = device.pipeline_cache.lock().unwrap();
+            cache.insert(key, kernel.clone());
+            Ok(kernel)
+        }
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (device, key, func_name, source);
+        Err(HephaestusError::AdapterUnavailable {
+            message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+        })
+    }
+}
+
+/// Convert a logical work-item count into CUDA grid size (block count).
+pub fn grid_size(len: usize, width: BlockWidth) -> Result<u32> {
+    let len = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("dispatch size {len} exceeds u64 range"),
+    })?;
+    width
+        .checked_covering_blocks(len)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!("dispatch size {len} exceeds u32 grid range"),
+        })
+}

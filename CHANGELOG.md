@@ -4,6 +4,61 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Added
+
+- `hephaestus-wgpu` [minor]: GPU-resident linalg surface for parity with
+  Leto CPU operations: matrix multiply, batched matrix multiply, dot product,
+  trace, and L1/L2/max norms over strided operands. The comparative benchmark
+  now measures WGPU against Leto, `ndarray`, and `nalgebra` for elementwise,
+  reduction, matmul, dot, trace, and norm workloads.
+- `hephaestus-wgpu` [minor]: GPU-resident Kronecker product (`kron`) over
+  strided matrix operands, with Leto differential tests and comparative
+  benchmark coverage against Leto, `ndarray`, and a nalgebra-backed CPU
+  reference.
+- `hephaestus-wgpu` [minor]: GPU-resident matrix power (`matpow`) over
+  strided square matrix operands, using exponentiation by squaring over WGPU
+  `matmul` dispatches, with Leto differential tests and comparative benchmark
+  coverage against Leto, an `ndarray` repeated-squaring reference, and
+  `nalgebra`.
+- `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
+  (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
+  caller-owned `*_into` forms) preserving Leto's rank-preserving output
+  contract, with Leto differential tests and comparative benchmark coverage
+  for axis 0.
+- `hephaestus-wgpu` [minor]: GPU-resident rank-2 scan dispatch
+  (`scan_axis_into`, `scan_axis`, `cumsum_axis_into`, `cumsum`) with
+  forward/reverse directions and cumulative sum/product markers, with Leto
+  differential tests and comparative benchmark coverage for cumulative sum
+  over axis 1.
+- `hephaestus-wgpu` [minor]: allocating strided elementwise wrappers
+  (`binary_elementwise_strided`, `unary_elementwise_strided`,
+  `scalar_elementwise_strided`) returning C-contiguous GPU buffers while
+  delegating to the existing caller-owned strided kernels.
+- `hephaestus-wgpu` [patch]: trace and L1 norm now use fused map-reduction
+  dispatches. Dot product, L2 norm, and max norm keep their staged
+  map-then-reduce implementations because the fused variant regressed in the
+  local comparative benchmark.
+- `hephaestus-cuda` *(new crate)* [minor]: CUDA backend for the accelerator
+  substrate — the GPU-side sibling of `hephaestus-wgpu`. Implements the
+  `hephaestus-core::ComputeDevice` seam (`CudaDevice` acquisition + typed
+  `CudaBuffer<T>` device buffer + `alloc_zeroed`/`upload`/`download` transfer),
+  so consumers binding `<D: ComputeDevice>` substitute CUDA for wgpu without
+  source changes. The CUDA toolchain is composed from cutile-rs
+  (`cuda-core` driver `sys` + `cuda-async` device acquisition), the same source
+  coeus-cuda uses, gated behind the `cuda` feature and dynamically loaded at
+  runtime; the default build compiles a stub that reports the backend
+  unavailable rather than fabricating a device. Five contract tests verify
+  upload/download identity (f32, i32), zeroed allocation, empty round-trip, and
+  length-mismatch rejection — value-semantic, passing on real CUDA hardware
+  (toolkit v13.2) and skipping when no device is present. Monomorphized kernel
+  dispatch (mirroring `hephaestus-wgpu`'s `application` layer) is a follow-up.
+
+### Fixed
+
+- `hephaestus-wgpu` [patch]: `norm_l2` now returns the completed
+  L2/Frobenius norm (`sqrt(sum(x*x))`) instead of exposing the intermediate
+  squared sum, matching Leto's `norm_l2` contract.
+
 ## [0.10.0] - 2026-06-15
 
 ### Added

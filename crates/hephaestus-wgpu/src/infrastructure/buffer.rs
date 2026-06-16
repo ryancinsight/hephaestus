@@ -7,7 +7,7 @@ use hephaestus_core::DeviceBuffer;
 /// buffers is a compile error; the raw `wgpu::Buffer` carries no type. The
 /// element count is stored explicitly because the underlying allocation is
 /// padded to wgpu's copy alignment and may exceed `len * size_of::<T>()`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,
     pub(crate) len: usize,

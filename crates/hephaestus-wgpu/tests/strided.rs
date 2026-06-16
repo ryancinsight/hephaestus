@@ -3,8 +3,9 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
 use hephaestus_wgpu::{
-    binary_elementwise_strided_into, scalar_elementwise_strided_into,
-    unary_elementwise_strided_into, AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice,
+    binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
+    AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice,
 };
 
 fn op<'a, T, const N: usize>(
@@ -16,13 +17,18 @@ fn op<'a, T, const N: usize>(
 use leto::Layout;
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-strided-test") {
-        Ok(device) => Some(device),
-        Err(e) => {
-            eprintln!("skipping wgpu strided test: {e}");
-            None
-        }
-    }
+    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
+    DEVICE
+        .get_or_init(
+            || match WgpuDevice::try_default("hephaestus-strided-test") {
+                Ok(device) => Some(device),
+                Err(e) => {
+                    eprintln!("skipping wgpu strided test: {e}");
+                    None
+                }
+            },
+        )
+        .clone()
 }
 
 fn assert_dispatch_message<T>(result: hephaestus_wgpu::Result<T>, expected: &'static str) {
@@ -100,6 +106,18 @@ fn strided_add_transposed_input_matches_cpu() {
     let mut got = vec![0.0f32; 6];
     device.download(&out, &mut got).unwrap();
     assert_eq!(got, expected);
+
+    let allocated = binary_elementwise_strided::<AddOp, f32, 2>(
+        &device,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = vec![0.0f32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, expected);
 }
 
 #[test]
@@ -281,6 +299,17 @@ fn strided_unary_transposed_matches_cpu() {
     device.download(&out, &mut got).unwrap();
     // logical [2,3]: [[1,25,16],[9,4,36]] -> sqrt -> [[1,5,4],[3,2,6]]
     assert_eq!(got, vec![1.0, 5.0, 4.0, 3.0, 2.0, 6.0]);
+
+    let allocated = unary_elementwise_strided::<SqrtOp, f32, 2>(
+        &device,
+        op(&a, &a_layout),
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = vec![0.0f32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, got);
 }
 
 #[test]
@@ -334,6 +363,18 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
     device.download(&out, &mut got).unwrap();
     // logical [[1,2,3],[4,5,6]] + 100
     assert_eq!(got, vec![101.0, 102.0, 103.0, 104.0, 105.0, 106.0]);
+
+    let allocated = scalar_elementwise_strided::<AddOp, f32, 2>(
+        &device,
+        op(&a, &a_layout),
+        100.0,
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = vec![0.0f32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, got);
 }
 
 #[test]

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
+    "crates/hephaestus-cuda",
     "crates/hephaestus-python",
 ]
 
@@ -17,6 +18,7 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 # ── Local Workspace Crates ──
 hephaestus-core = { path = "crates/hephaestus-core" }
 hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
+hephaestus-cuda = { path = "crates/hephaestus-cuda" }
 
 # ── GPU ──
 # wgpu 26 matches apollo (the first consumer). coeus re-bases when it bumps
@@ -31,14 +33,35 @@ thiserror = "2.0"
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "320960ec7b99b8a4fdfe6d3974de03543b167ff9", default-features = false, features = ["std"] }
+leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "320960ec7b99b8a4fdfe6d3974de03543b167ff9", default-features = false }
+leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory"] }
 ndarray = "0.15"
+nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 # ── Python FFI ──
 pyo3 = { version = "0.23", features = ["extension-module"] }
 numpy = "0.23"
+
+[patch."https://github.com/ryancinsight/Mnemosyne.git"]
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
+mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
+mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
+mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
+
+[patch."https://github.com/ryancinsight/Moirai.git"]
+moirai = { path = "../moirai/moirai" }
+moirai-core = { path = "../moirai/moirai-core" }
+moirai-scheduler = { path = "../moirai/moirai-scheduler" }
+moirai-parallel = { path = "../moirai/moirai-parallel" }
+
+[patch."https://github.com/ryancinsight/hermes.git"]
+hermes-simd = { path = "../hermes/crates/hermes-simd" }
+
+[patch."https://github.com/ryancinsight/melinoe.git"]
+melinoe = { path = "../melinoe" }
+
 

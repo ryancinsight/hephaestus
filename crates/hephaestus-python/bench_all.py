@@ -88,6 +88,51 @@ def run_bench():
         mean_ph = a_ph.mean()
         np.testing.assert_allclose(mean_ph.tolist()[0], mean_np, rtol=1e-3, atol=1e-3)
 
+        # Matrix Multiplication (matmul)
+        b_np_matmul = (np.arange(size, dtype=np.float32) * 0.0002).reshape(cols, rows)
+        matmul_np = np.matmul(a_np, b_np_matmul)
+        matmul_lp = lp.matmul(a_np, b_np_matmul)
+        a_ph_matmul = a_ph.reshape([rows, cols])
+        b_ph_matmul = ph.Array(b_np_matmul.ravel().tolist(), dev).reshape([cols, rows])
+        matmul_ph = a_ph_matmul.matmul(b_ph_matmul)
+        np.testing.assert_allclose(matmul_lp, matmul_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(np.array(matmul_ph.tolist(), dtype=np.float32), matmul_np.ravel(), rtol=1e-3, atol=1e-3)
+
+        # Dot Product
+        dot_np = np.dot(a_np.ravel(), b_np.ravel())
+        dot_lp = lp.dot(a_np.ravel(), b_np.ravel())
+        dot_ph = a_ph.dot(b_ph)
+        np.testing.assert_allclose(dot_lp, dot_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(dot_ph.tolist()[0], dot_np, rtol=1e-3, atol=1e-3)
+
+        # Trace (requires square matrix)
+        a_np_sq = (np.arange(rows * rows, dtype=np.float32) * 0.0001).reshape(rows, rows)
+        trace_np = np.trace(a_np_sq)
+        trace_lp = lp.trace(a_np_sq.astype(np.float64))
+        a_ph_sq = ph.Array(a_np_sq.ravel().tolist(), dev).reshape([rows, rows])
+        trace_ph = a_ph_sq.trace()
+        np.testing.assert_allclose(trace_lp, trace_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(trace_ph.tolist()[0], trace_np, rtol=1e-3, atol=1e-3)
+
+        # Norms
+        norm_l1_np = np.sum(np.abs(a_np_sq))
+        norm_l1_lp = lp.norm(a_np_sq.astype(np.float64), ord="1")
+        norm_l1_ph = a_ph_sq.norm_l1()
+        np.testing.assert_allclose(norm_l1_lp, norm_l1_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(norm_l1_ph.tolist()[0], norm_l1_np, rtol=1e-3, atol=1e-3)
+
+        norm_l2_np = np.linalg.norm(a_np_sq, ord="fro")
+        norm_l2_lp = lp.norm(a_np_sq.astype(np.float64), ord="fro")
+        norm_l2_ph = a_ph_sq.norm_l2()
+        np.testing.assert_allclose(norm_l2_lp, norm_l2_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(norm_l2_ph.tolist()[0], norm_l2_np, rtol=1e-3, atol=1e-3)
+
+        norm_max_np = np.max(np.abs(a_np_sq))
+        norm_max_lp = lp.norm(a_np_sq.astype(np.float64), ord="max")
+        norm_max_ph = a_ph_sq.norm_max()
+        np.testing.assert_allclose(norm_max_lp, norm_max_np, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(norm_max_ph.tolist()[0], norm_max_np, rtol=1e-3, atol=1e-3)
+
         print("-> Correctness validation checks PASSED for all substrates!")
 
         # ─── 3. Timing Benchmarks ───
@@ -102,7 +147,7 @@ def run_bench():
             out_np = np.exp(out_np)
         t_np_add_exp = (time.perf_counter() - t0) / iters
 
-        # Leto (Add only, since Exp is not exposed in leto_python)
+        # Leto (Add only)
         t0 = time.perf_counter()
         for _ in range(iters):
             out_lp = lp.add(a_np, b_np)
@@ -211,9 +256,151 @@ def run_bench():
             cp.cuda.Stream.null.synchronize()
             t_cp_red = (time.perf_counter() - t0) / iters
 
+        # --- Matrix Multiplication (matmul) ---
+        iters_matmul = 5 if rows >= 1000 else 20
+        # NumPy
+        t0 = time.perf_counter()
+        for _ in range(iters_matmul):
+            out_np = np.matmul(a_np, b_np_matmul)
+        t_np_matmul = (time.perf_counter() - t0) / iters_matmul
+
+        # Leto
+        t0 = time.perf_counter()
+        for _ in range(iters_matmul):
+            out_lp = lp.matmul(a_np, b_np_matmul)
+        t_lp_matmul = (time.perf_counter() - t0) / iters_matmul
+
+        # Hephaestus
+        for _ in range(3):
+            out_ph = a_ph_matmul.matmul(b_ph_matmul)
+        t0 = time.perf_counter()
+        for _ in range(iters_matmul):
+            out_ph = a_ph_matmul.matmul(b_ph_matmul)
+        out_ph.tolist()
+        t_ph_matmul = (time.perf_counter() - t0) / iters_matmul
+
+        # CuPy
+        t_cp_matmul = None
+        if CUPY_AVAILABLE:
+            a_cp_matmul = a_cp.reshape(rows, cols)
+            b_cp_matmul = cp.array(b_np_matmul)
+            for _ in range(3):
+                out_cp = cp.matmul(a_cp_matmul, b_cp_matmul)
+            cp.cuda.Stream.null.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(iters_matmul):
+                out_cp = cp.matmul(a_cp_matmul, b_cp_matmul)
+            cp.cuda.Stream.null.synchronize()
+            t_cp_matmul = (time.perf_counter() - t0) / iters_matmul
+
+        # --- Vector Dot Product ---
+        # NumPy
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_np = np.dot(a_np.ravel(), b_np.ravel())
+        t_np_dot = (time.perf_counter() - t0) / iters
+
+        # Leto
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_lp = lp.dot(a_np.ravel(), b_np.ravel())
+        t_lp_dot = (time.perf_counter() - t0) / iters
+
+        # Hephaestus
+        for _ in range(5):
+            out_ph = a_ph.dot(b_ph)
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_ph = a_ph.dot(b_ph)
+        out_ph.tolist()
+        t_ph_dot = (time.perf_counter() - t0) / iters
+
+        # CuPy
+        t_cp_dot = None
+        if CUPY_AVAILABLE:
+            for _ in range(5):
+                out_cp = cp.dot(a_cp.ravel(), b_cp.ravel())
+            cp.cuda.Stream.null.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(iters):
+                out_cp = cp.dot(a_cp.ravel(), b_cp.ravel())
+            cp.cuda.Stream.null.synchronize()
+            t_cp_dot = (time.perf_counter() - t0) / iters
+
+        # --- Matrix Trace ---
+        # NumPy
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_np = np.trace(a_np_sq)
+        t_np_trace = (time.perf_counter() - t0) / iters
+
+        # Leto
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_lp = lp.trace(a_np_sq.astype(np.float64))
+        t_lp_trace = (time.perf_counter() - t0) / iters
+
+        # Hephaestus
+        for _ in range(5):
+            out_ph = a_ph_sq.trace()
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_ph = a_ph_sq.trace()
+        out_ph.tolist()
+        t_ph_trace = (time.perf_counter() - t0) / iters
+
+        # CuPy
+        t_cp_trace = None
+        if CUPY_AVAILABLE:
+            a_cp_sq = cp.array(a_np_sq)
+            for _ in range(5):
+                out_cp = cp.trace(a_cp_sq)
+            cp.cuda.Stream.null.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(iters):
+                out_cp = cp.trace(a_cp_sq)
+            cp.cuda.Stream.null.synchronize()
+            t_cp_trace = (time.perf_counter() - t0) / iters
+
+        # --- Matrix Frobenius Norm (L2) ---
+        # NumPy
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_np = np.linalg.norm(a_np_sq, ord="fro")
+        t_np_norm_l2 = (time.perf_counter() - t0) / iters
+
+        # Leto
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_lp = lp.norm(a_np_sq.astype(np.float64), ord="fro")
+        t_lp_norm_l2 = (time.perf_counter() - t0) / iters
+
+        # Hephaestus
+        for _ in range(5):
+            out_ph = a_ph_sq.norm_l2()
+        t0 = time.perf_counter()
+        for _ in range(iters):
+            out_ph = a_ph_sq.norm_l2()
+        out_ph.tolist()
+        t_ph_norm_l2 = (time.perf_counter() - t0) / iters
+
+        # CuPy
+        t_cp_norm_l2 = None
+        if CUPY_AVAILABLE:
+            for _ in range(5):
+                out_cp = cp.linalg.norm(a_cp_sq)
+            cp.cuda.Stream.null.synchronize()
+            t0 = time.perf_counter()
+            for _ in range(iters):
+                out_cp = cp.linalg.norm(a_cp_sq)
+            cp.cuda.Stream.null.synchronize()
+            t_cp_norm_l2 = (time.perf_counter() - t0) / iters
+
         # Store measurements (in milliseconds)
         results.append({
             'size': size,
+            'rows': rows,
+            'cols': cols,
             'add_exp': {
                 'np': t_np_add_exp * 1000,
                 'lp_add': t_lp_add * 1000,
@@ -231,6 +418,30 @@ def run_bench():
                 'lp_sum': t_lp_red * 1000,
                 'ph': t_ph_red * 1000,
                 'cp': t_cp_red * 1000 if t_cp_red else None
+            },
+            'matmul': {
+                'np': t_np_matmul * 1000,
+                'lp': t_lp_matmul * 1000,
+                'ph': t_ph_matmul * 1000,
+                'cp': t_cp_matmul * 1000 if t_cp_matmul else None
+            },
+            'dot': {
+                'np': t_np_dot * 1000,
+                'lp': t_lp_dot * 1000,
+                'ph': t_ph_dot * 1000,
+                'cp': t_cp_dot * 1000 if t_cp_dot else None
+            },
+            'trace': {
+                'np': t_np_trace * 1000,
+                'lp': t_lp_trace * 1000,
+                'ph': t_ph_trace * 1000,
+                'cp': t_cp_trace * 1000 if t_cp_trace else None
+            },
+            'norm_l2': {
+                'np': t_np_norm_l2 * 1000,
+                'lp': t_lp_norm_l2 * 1000,
+                'ph': t_ph_norm_l2 * 1000,
+                'cp': t_cp_norm_l2 * 1000 if t_cp_norm_l2 else None
             }
         })
 
@@ -268,6 +479,46 @@ def run_bench():
         cp_val = f"{r['reduction']['cp']:.3f}" if r['reduction']['cp'] else "N/A"
         speedup = f"{r['reduction']['lp_sum'] / r['reduction']['ph']:.2f}x"
         print(f"| {r['size']:,} | {r['reduction']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
+
+    print("\n### 4. Matrix Multiplication (ms)")
+    print("| Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print("|---|---|---|---|---|---|")
+    for r in results:
+        lp_val = f"{r['matmul']['lp']:.3f}"
+        ph_val = f"{r['matmul']['ph']:.3f}"
+        cp_val = f"{r['matmul']['cp']:.3f}" if r['matmul']['cp'] else "N/A"
+        speedup = f"{r['matmul']['lp'] / r['matmul']['ph']:.2f}x"
+        print(f"| ({r['rows']}x{r['cols']}) x ({r['cols']}x{r['rows']}) | {r['matmul']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
+
+    print("\n### 5. Vector Dot Product (ms)")
+    print("| Vector Size | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print("|---|---|---|---|---|---|")
+    for r in results:
+        lp_val = f"{r['dot']['lp']:.3f}"
+        ph_val = f"{r['dot']['ph']:.3f}"
+        cp_val = f"{r['dot']['cp']:.3f}" if r['dot']['cp'] else "N/A"
+        speedup = f"{r['dot']['lp'] / r['dot']['ph']:.2f}x"
+        print(f"| {r['size']:,} | {r['dot']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
+
+    print("\n### 6. Matrix Trace (ms)")
+    print("| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print("|---|---|---|---|---|---|")
+    for r in results:
+        lp_val = f"{r['trace']['lp']:.3f}"
+        ph_val = f"{r['trace']['ph']:.3f}"
+        cp_val = f"{r['trace']['cp']:.3f}" if r['trace']['cp'] else "N/A"
+        speedup = f"{r['trace']['lp'] / r['trace']['ph']:.2f}x"
+        print(f"| {r['rows']}x{r['rows']} | {r['trace']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
+
+    print("\n### 7. Matrix Frobenius Norm (L2) (ms)")
+    print("| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print("|---|---|---|---|---|---|")
+    for r in results:
+        lp_val = f"{r['norm_l2']['lp']:.3f}"
+        ph_val = f"{r['norm_l2']['ph']:.3f}"
+        cp_val = f"{r['norm_l2']['cp']:.3f}" if r['norm_l2']['cp'] else "N/A"
+        speedup = f"{r['norm_l2']['lp'] / r['norm_l2']['ph']:.2f}x"
+        print(f"| {r['rows']}x{r['rows']} | {r['norm_l2']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
 if __name__ == "__main__":
     run_bench()

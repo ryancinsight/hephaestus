@@ -77,6 +77,14 @@ impl UnaryWgslOp for RecipOp {
     const WGSL_EXPR: &'static str = "1.0 / x";
 }
 
+/// Identity/copy operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct IdentityOp;
+
+impl UnaryWgslOp for IdentityOp {
+    const WGSL_EXPR: &'static str = "x";
+}
+
 fn shader_source<Op: UnaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;

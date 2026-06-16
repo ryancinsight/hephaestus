@@ -16,14 +16,25 @@ pub mod infrastructure;
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, DivOp, ExpOp,
-    LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
+    IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
+};
+pub use application::linalg::{
+    batched_matmul, dot, kron, matmul, matpow, norm_l1, norm_l2, norm_max, trace, L2NormScalar,
+    MatmulZero, MatrixIdentityScalar,
 };
 pub use application::reduction::{
-    reduction, reduction_with_width, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,
+    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
+    reduction, reduction_with_width, sum_axis, sum_axis_into, MaxOp, MinOp, ReductionIdentity,
+    ReductionWgslOp, SumOp,
+};
+pub use application::scan::{
+    cumsum, cumsum_axis_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
+    ScanIdentity, ScanWgslOp,
 };
 pub use application::strided::{
-    binary_elementwise_strided_into, scalar_elementwise_strided_into,
-    unary_elementwise_strided_into, StridedOperand, MAX_STRIDED_RANK,
+    binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
+    StridedOperand, MAX_STRIDED_RANK,
 };
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;

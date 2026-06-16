@@ -5,20 +5,26 @@
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise, binary_elementwise_into, reduction, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_into, unary_elementwise, unary_elementwise_into, AbsOp,
-    AddOp, ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp,
-    RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
+    binary_elementwise, binary_elementwise_into, cumsum_axis_into, max_axis, max_axis_into,
+    mean_axis, mean_axis_into, min_axis, min_axis_into, reduction, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_into, sum_axis, sum_axis_into, unary_elementwise,
+    unary_elementwise_into, AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpOp, HephaestusError,
+    MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-contract-test") {
-        Ok(device) => Some(device),
-        Err(e) => {
-            eprintln!("skipping wgpu contract test: {e}");
-            None
-        }
-    }
+    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
+    DEVICE
+        .get_or_init(
+            || match WgpuDevice::try_default("hephaestus-contract-test") {
+                Ok(device) => Some(device),
+                Err(e) => {
+                    eprintln!("skipping wgpu contract test: {e}");
+                    None
+                }
+            },
+        )
+        .clone()
 }
 
 fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
@@ -443,6 +449,238 @@ fn reduction_width_is_part_of_dispatch_contract() {
 }
 
 #[test]
+fn axis_reductions_match_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let input = device.upload(&host).unwrap();
+    let input_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+    let leto_input = leto::Array::from_shape_vec([2, 3], host).unwrap();
+
+    let out_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    let out_axis0_layout = Layout::c_contiguous([1, 3]).unwrap();
+    sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &out_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_axis0 = leto_ops::sum_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_axis0 = vec![0.0f32; 3];
+    device.download(&out_axis0, &mut got_axis0).unwrap();
+    assert_eq!(got_axis0, expected_axis0);
+
+    let allocated_axis0 = sum_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_axis0, &mut got_allocated_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_axis0, expected_axis0);
+
+    let out_axis1 = device.alloc_zeroed::<f32>(2).unwrap();
+    let out_axis1_layout = Layout::c_contiguous([2, 1]).unwrap();
+    sum_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &out_axis1,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_axis1 = leto_ops::sum_axis(&leto_input.view(), 1)
+        .unwrap()
+        .into_vec();
+    let mut got_axis1 = vec![0.0f32; 2];
+    device.download(&out_axis1, &mut got_axis1).unwrap();
+    assert_eq!(got_axis1, expected_axis1);
+
+    let min_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    min_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &min_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_min_axis0 = leto_ops::min_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_min_axis0 = vec![0.0f32; 3];
+    device.download(&min_axis0, &mut got_min_axis0).unwrap();
+    assert_eq!(got_min_axis0, expected_min_axis0);
+
+    let allocated_min_axis0 = min_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_min_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_min_axis0, &mut got_allocated_min_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_min_axis0, expected_min_axis0);
+
+    let max_axis1 = device.alloc_zeroed::<f32>(2).unwrap();
+    max_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &max_axis1,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_max_axis1 = leto_ops::max_axis(&leto_input.view(), 1)
+        .unwrap()
+        .into_vec();
+    let mut got_max_axis1 = vec![0.0f32; 2];
+    device.download(&max_axis1, &mut got_max_axis1).unwrap();
+    assert_eq!(got_max_axis1, expected_max_axis1);
+
+    let allocated_max_axis1 = max_axis(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_max_axis1 = vec![0.0f32; 2];
+    device
+        .download(&allocated_max_axis1, &mut got_allocated_max_axis1)
+        .unwrap();
+    assert_eq!(got_allocated_max_axis1, expected_max_axis1);
+
+    let mean_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    mean_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &mean_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_mean_axis0 = leto_ops::mean_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_mean_axis0 = vec![0.0f32; 3];
+    device.download(&mean_axis0, &mut got_mean_axis0).unwrap();
+    assert_eq!(got_mean_axis0, expected_mean_axis0);
+
+    let allocated_mean_axis0 = mean_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_mean_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_mean_axis0, &mut got_allocated_mean_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_mean_axis0, expected_mean_axis0);
+}
+
+#[test]
+fn axis_scans_match_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{
+        cumsum, scan_axis, scan_axis_into, CumProdOp, ScanDirection, StridedOperand,
+    };
+    use leto::Layout;
+
+    let host = vec![1i32, 2, 3, 4, 5, 6];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &layout,
+    };
+    let leto_input = leto::Array::from_shape_vec([2, 3], host).unwrap();
+
+    let cumsum_axis1 = device.alloc_zeroed::<i32>(6).unwrap();
+    cumsum_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &cumsum_axis1,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_cumsum_axis1 = leto_ops::cumsum(&leto_input.view(), 1).unwrap().into_vec();
+    let mut got_cumsum_axis1 = vec![0i32; 6];
+    device
+        .download(&cumsum_axis1, &mut got_cumsum_axis1)
+        .unwrap();
+    assert_eq!(got_cumsum_axis1, expected_cumsum_axis1);
+
+    let cumsum_allocated = cumsum(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_cumsum_allocated = vec![0i32; 6];
+    device
+        .download(&cumsum_allocated, &mut got_cumsum_allocated)
+        .unwrap();
+    assert_eq!(got_cumsum_allocated, expected_cumsum_axis1);
+
+    let cumprod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
+    scan_axis_into::<CumProdOp, i32>(
+        &device,
+        input_operand,
+        0,
+        ScanDirection::Reverse,
+        StridedOperand {
+            buffer: &cumprod_reverse,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_cumprod_reverse = leto_ops::scan_axis::<leto_ops::CumProdOp, _, 2>(
+        &leto_input.view(),
+        0,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    let mut got_cumprod_reverse = vec![0i32; 6];
+    device
+        .download(&cumprod_reverse, &mut got_cumprod_reverse)
+        .unwrap();
+    assert_eq!(got_cumprod_reverse, expected_cumprod_reverse);
+
+    let cumprod_reverse_allocated = scan_axis::<CumProdOp, i32>(
+        &device,
+        input_operand,
+        0,
+        ScanDirection::Reverse,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_cumprod_reverse_allocated = vec![0i32; 6];
+    device
+        .download(
+            &cumprod_reverse_allocated,
+            &mut got_cumprod_reverse_allocated,
+        )
+        .unwrap();
+    assert_eq!(got_cumprod_reverse_allocated, expected_cumprod_reverse);
+}
+
+#[test]
 fn acquisition_reports_themis_topology_from_adapter() {
     let Some(device) = device_or_skip() else {
         return;
@@ -478,4 +716,322 @@ fn acquisition_reports_themis_topology_from_adapter() {
         wrapped.topology().map(|topology| topology.compute_units()),
         None
     );
+}
+
+#[test]
+fn linalg_matmul_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matmul, StridedOperand};
+    use leto::Layout;
+
+    // Multiply two f32 matrices: shape [3, 2] x [2, 4] -> [3, 4]
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_host = vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0];
+    let expected = vec![
+        29.0f32, 32.0, 35.0, 38.0, 65.0, 72.0, 79.0, 86.0, 101.0, 112.0, 123.0, 134.0,
+    ];
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(12).unwrap();
+
+    let a_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 4]).unwrap();
+    let out_layout = Layout::c_contiguous([3, 4]).unwrap();
+
+    matmul(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 12];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_kron_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{kron, StridedOperand};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_host = vec![7.0f32, 8.0, 9.0, 10.0];
+    let leto_a = leto::Array::from_shape_vec([2, 3], a_host.clone()).unwrap();
+    let leto_b = leto::Array::from_shape_vec([2, 2], b_host.clone()).unwrap();
+    let expected = leto_ops::kron(&leto_a.view(), &leto_b.view())
+        .unwrap()
+        .into_vec();
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(expected.len()).unwrap();
+    let a_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let out_layout = Layout::c_contiguous([4, 6]).unwrap();
+
+    kron(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; expected.len()];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_matpow_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matpow, StridedOperand};
+    use leto::Layout;
+
+    let shear_host = vec![1.0f32, 1.0, 0.0, 1.0];
+    let shear = device.upload(&shear_host).unwrap();
+    let shear_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let shear_pow = matpow(
+        &device,
+        StridedOperand {
+            buffer: &shear,
+            layout: &shear_layout,
+        },
+        5,
+    )
+    .unwrap();
+    let leto_shear = leto::Array::from_shape_vec([2, 2], shear_host).unwrap();
+    let expected_shear = leto_ops::matpow(&leto_shear.view(), 5).unwrap().into_vec();
+    let mut got_shear = vec![0.0f32; 4];
+    device.download(&shear_pow, &mut got_shear).unwrap();
+    assert_eq!(got_shear, expected_shear);
+
+    let diagonal_host = vec![2i32, 0, 0, 3];
+    let diagonal = device.upload(&diagonal_host).unwrap();
+    let diagonal_pow = matpow(
+        &device,
+        StridedOperand {
+            buffer: &diagonal,
+            layout: &shear_layout,
+        },
+        0,
+    )
+    .unwrap();
+    let mut got_diagonal = vec![0i32; 4];
+    device.download(&diagonal_pow, &mut got_diagonal).unwrap();
+    assert_eq!(got_diagonal, vec![1, 0, 0, 1]);
+}
+
+#[test]
+fn linalg_matpow_rejects_non_square() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matpow, StridedOperand};
+    use leto::Layout;
+
+    let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert_dispatch_message(
+        matpow(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &layout,
+            },
+            2,
+        ),
+        "matpow requires a square matrix, got shape [2, 3]",
+    );
+}
+
+#[test]
+fn linalg_dot_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{dot, StridedOperand};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![5.0f32, 6.0, 7.0, 8.0];
+    let expected = 1.0 * 5.0 + 2.0 * 6.0 + 3.0 * 7.0 + 4.0 * 8.0; // 70.0
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+
+    let a_layout = Layout::c_contiguous([4]).unwrap();
+    let b_layout = Layout::c_contiguous([4]).unwrap();
+
+    let out_buf = dot(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = [0.0f32; 1];
+    device.download(&out_buf, &mut got).unwrap();
+    assert_eq!(got[0], expected);
+}
+
+#[test]
+fn linalg_trace_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{trace, StridedOperand};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+    let expected = 1.0 + 5.0 + 9.0; // 15.0
+
+    let a = device.upload(&a_host).unwrap();
+    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
+
+    let out_buf = trace(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = [0.0f32; 1];
+    device.download(&out_buf, &mut got).unwrap();
+    assert_eq!(got[0], expected);
+}
+
+#[test]
+fn linalg_norms_match_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{norm_l1, norm_l2, norm_max, StridedOperand};
+    use leto::Layout;
+
+    let a_host = vec![-1.0f32, 2.0, -3.0, 4.0];
+    let a = device.upload(&a_host).unwrap();
+    let a_layout = Layout::c_contiguous([4]).unwrap();
+    let operand = StridedOperand {
+        buffer: &a,
+        layout: &a_layout,
+    };
+
+    // L1 norm: 1 + 2 + 3 + 4 = 10
+    let l1_buf = norm_l1(&device, operand).unwrap();
+    let mut got_l1 = [0.0f32; 1];
+    device.download(&l1_buf, &mut got_l1).unwrap();
+    assert_eq!(got_l1[0], 10.0);
+
+    // L2 norm: sqrt(1 + 4 + 9 + 16) = sqrt(30)
+    let l2_buf = norm_l2(&device, operand).unwrap();
+    let mut got_l2 = [0.0f32; 1];
+    device.download(&l2_buf, &mut got_l2).unwrap();
+    let expected_l2 = 30.0f32.sqrt();
+    let l2_tolerance = 2.0 * f32::EPSILON * expected_l2.max(1.0);
+    assert!(
+        (got_l2[0] - expected_l2).abs() <= l2_tolerance,
+        "l2 norm mismatch: got {}, expected {}, tolerance {}",
+        got_l2[0],
+        expected_l2,
+        l2_tolerance
+    );
+
+    // Max norm: max(1, 2, 3, 4) = 4
+    let max_buf = norm_max(&device, operand).unwrap();
+    let mut got_max = [0.0f32; 1];
+    device.download(&max_buf, &mut got_max).unwrap();
+    assert_eq!(got_max[0], 4.0);
+}
+
+#[test]
+fn linalg_reductions_accept_strided_views() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{dot, norm_l1, norm_l2, norm_max, StridedOperand};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![10.0f32, 20.0, 30.0, 40.0];
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let reversed = Layout::new([4], [-1], 3);
+    let contiguous = Layout::c_contiguous([4]).unwrap();
+    let reversed_a = StridedOperand {
+        buffer: &a,
+        layout: &reversed,
+    };
+    let contiguous_b = StridedOperand {
+        buffer: &b,
+        layout: &contiguous,
+    };
+
+    let dot_buf = dot(&device, reversed_a, contiguous_b).unwrap();
+    let mut got_dot = [0.0f32; 1];
+    device.download(&dot_buf, &mut got_dot).unwrap();
+    assert_eq!(
+        got_dot[0],
+        4.0 * 10.0 + 3.0 * 20.0 + 2.0 * 30.0 + 1.0 * 40.0
+    );
+
+    let l1_buf = norm_l1(&device, reversed_a).unwrap();
+    let mut got_l1 = [0.0f32; 1];
+    device.download(&l1_buf, &mut got_l1).unwrap();
+    assert_eq!(got_l1[0], 10.0);
+
+    let l2_buf = norm_l2(&device, reversed_a).unwrap();
+    let mut got_l2 = [0.0f32; 1];
+    device.download(&l2_buf, &mut got_l2).unwrap();
+    let expected_l2 = 30.0f32.sqrt();
+    let l2_tolerance = 2.0 * f32::EPSILON * expected_l2.max(1.0);
+    assert!(
+        (got_l2[0] - expected_l2).abs() <= l2_tolerance,
+        "l2 norm mismatch: got {}, expected {}, tolerance {}",
+        got_l2[0],
+        expected_l2,
+        l2_tolerance
+    );
+
+    let max_buf = norm_max(&device, reversed_a).unwrap();
+    let mut got_max = [0.0f32; 1];
+    device.download(&max_buf, &mut got_max).unwrap();
+    assert_eq!(got_max[0], 4.0);
 }

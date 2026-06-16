@@ -1,0 +1,29 @@
+[package]
+name = "hephaestus-cuda"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded driver device acquisition, typed device buffers, and host/device transfer."
+
+[features]
+# Default excludes the CUDA toolchain so the crate builds (as the stub
+# substrate) on hosts without a CUDA toolkit. `cuda` pulls the dynamic-loaded
+# cutile-rs driver (no toolkit needed to build — `nvcuda`/`libcuda` is loaded
+# at runtime), mirroring coeus-cuda's gating.
+default = []
+cuda = ["dep:cutile", "dep:cuda-core", "dep:cuda-async", "dep:libloading"]
+
+[dependencies]
+hephaestus-core = { workspace = true }
+leto = { workspace = true }
+bytemuck = { workspace = true }
+themis = { workspace = true }
+libloading = { version = "0.8", optional = true }
+# cutile-rs (NVlabs): same git source coeus-cuda composes. cuda-core supplies
+# the driver `sys` bindings; cuda-async supplies device/context/stream
+# acquisition. Optional + feature-gated; absent from the default build.
+cutile = { git = "https://github.com/NVlabs/cutile-rs", optional = true }
+cuda-core = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-core", optional = true }
+cuda-async = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-async", optional = true }

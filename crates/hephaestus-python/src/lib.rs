@@ -1,9 +1,11 @@
 // ── Hephaestus Python Bindings (pyhephaestus) ──
 
 use hephaestus_wgpu::{
-    AbsOp, AddOp, ComputeDevice, CosOp, DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp,
-    NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, SumOp, WgpuBuffer, WgpuDevice,
+    dot, matmul, norm_l1, norm_l2, norm_max, trace, AbsOp, AddOp, ComputeDevice, CosOp,
+    DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp, NegOp, PowOp, RecipOp, SinOp,
+    SqrtOp, StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
 };
+use leto::Layout;
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -37,6 +39,8 @@ impl PyDevice {
 pub struct PyArray {
     pub buffer: WgpuBuffer<f32>,
     pub device: WgpuDevice,
+    #[pyo3(get)]
+    pub shape: Vec<usize>,
 }
 
 #[pymethods]
@@ -45,6 +49,7 @@ impl PyArray {
     #[new]
     #[pyo3(signature = (data, device))]
     fn new(data: Vec<f32>, device: &PyDevice) -> PyResult<Self> {
+        let len = data.len();
         let buffer = device
             .inner
             .upload(&data)
@@ -52,6 +57,7 @@ impl PyArray {
         Ok(Self {
             buffer,
             device: device.inner.clone(),
+            shape: vec![len],
         })
     }
 
@@ -65,6 +71,7 @@ impl PyArray {
         Ok(Self {
             buffer,
             device: device.inner.clone(),
+            shape: vec![len],
         })
     }
 
@@ -74,6 +81,7 @@ impl PyArray {
         let slice = arr
             .as_slice()
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let len = slice.len();
         let buffer = device
             .inner
             .upload(slice)
@@ -81,6 +89,24 @@ impl PyArray {
         Ok(Self {
             buffer,
             device: device.inner.clone(),
+            shape: vec![len],
+        })
+    }
+
+    /// Reshape the array to a new shape.
+    fn reshape(&self, shape: Vec<usize>) -> PyResult<Self> {
+        let total: usize = shape.iter().product();
+        if total != self.buffer.len() {
+            return Err(PyValueError::new_err(format!(
+                "cannot reshape array of size {} into shape {:?}",
+                self.buffer.len(),
+                shape
+            )));
+        }
+        Ok(Self {
+            buffer: self.buffer.clone(),
+            device: self.device.clone(),
+            shape,
         })
     }
 
@@ -116,6 +142,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -125,6 +152,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -134,6 +162,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -143,6 +172,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -152,6 +182,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -161,6 +192,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -170,6 +202,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: self.shape.clone(),
         })
     }
 
@@ -181,6 +214,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: vec![1],
         })
     }
 
@@ -190,6 +224,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: vec![1],
         })
     }
 
@@ -199,6 +234,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: vec![1],
         })
     }
 
@@ -214,6 +250,7 @@ impl PyArray {
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
+            shape: vec![1],
         })
     }
 
@@ -221,6 +258,12 @@ impl PyArray {
 
     fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            if self.shape != other_arr.shape {
+                return Err(PyValueError::new_err(format!(
+                    "shape mismatch: {:?} vs {:?}",
+                    self.shape, other_arr.shape
+                )));
+            }
             let out_buf = hephaestus_wgpu::binary_elementwise::<AddOp, f32>(
                 &self.device,
                 &self.buffer,
@@ -230,6 +273,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
             let out_buf =
@@ -238,6 +282,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for +"))
@@ -250,6 +295,12 @@ impl PyArray {
 
     fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            if self.shape != other_arr.shape {
+                return Err(PyValueError::new_err(format!(
+                    "shape mismatch: {:?} vs {:?}",
+                    self.shape, other_arr.shape
+                )));
+            }
             let out_buf = hephaestus_wgpu::binary_elementwise::<SubOp, f32>(
                 &self.device,
                 &self.buffer,
@@ -259,6 +310,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
             let out_buf =
@@ -267,6 +319,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for -"))
@@ -284,6 +337,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for -"))
@@ -292,6 +346,12 @@ impl PyArray {
 
     fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            if self.shape != other_arr.shape {
+                return Err(PyValueError::new_err(format!(
+                    "shape mismatch: {:?} vs {:?}",
+                    self.shape, other_arr.shape
+                )));
+            }
             let out_buf = hephaestus_wgpu::binary_elementwise::<MulOp, f32>(
                 &self.device,
                 &self.buffer,
@@ -301,6 +361,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
             let out_buf =
@@ -309,6 +370,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for *"))
@@ -321,6 +383,12 @@ impl PyArray {
 
     fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            if self.shape != other_arr.shape {
+                return Err(PyValueError::new_err(format!(
+                    "shape mismatch: {:?} vs {:?}",
+                    self.shape, other_arr.shape
+                )));
+            }
             let out_buf = hephaestus_wgpu::binary_elementwise::<DivOp, f32>(
                 &self.device,
                 &self.buffer,
@@ -330,6 +398,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
             let out_buf =
@@ -338,6 +407,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for /"))
@@ -355,6 +425,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for /"))
@@ -367,6 +438,12 @@ impl PyArray {
         _modulo: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            if self.shape != other_arr.shape {
+                return Err(PyValueError::new_err(format!(
+                    "shape mismatch: {:?} vs {:?}",
+                    self.shape, other_arr.shape
+                )));
+            }
             let out_buf = hephaestus_wgpu::binary_elementwise::<PowOp, f32>(
                 &self.device,
                 &self.buffer,
@@ -376,6 +453,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
             let out_buf =
@@ -384,6 +462,7 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for **"))
@@ -411,10 +490,223 @@ impl PyArray {
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
+                shape: self.shape.clone(),
             })
         } else {
             Err(PyTypeError::new_err("unsupported operand type(s) for **"))
         }
+    }
+
+    fn matmul(&self, other: &PyArray) -> PyResult<Self> {
+        if self.shape.len() != 2 || other.shape.len() != 2 {
+            return Err(PyValueError::new_err("matmul requires 2D arrays"));
+        }
+        if self.shape[1] != other.shape[0] {
+            return Err(PyValueError::new_err(format!(
+                "matmul shape mismatch: {:?} vs {:?}",
+                self.shape, other.shape
+            )));
+        }
+        let m = self.shape[0];
+        let k = self.shape[1];
+        let n = other.shape[1];
+
+        let layout_a = Layout::c_contiguous([m, k]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b = Layout::c_contiguous([k, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_out = Layout::c_contiguous([m, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+        let out_buf = self
+            .device
+            .alloc_zeroed::<f32>(m * n)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        matmul(
+            &self.device,
+            StridedOperand {
+                buffer: &self.buffer,
+                layout: &layout_a,
+            },
+            StridedOperand {
+                buffer: &other.buffer,
+                layout: &layout_b,
+            },
+            StridedOperand {
+                buffer: &out_buf,
+                layout: &layout_out,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![m, n],
+        })
+    }
+
+    fn dot(&self, other: &PyArray) -> PyResult<Self> {
+        if self.shape.len() != 1 || other.shape.len() != 1 {
+            return Err(PyValueError::new_err("dot requires 1D arrays"));
+        }
+        if self.shape[0] != other.shape[0] {
+            return Err(PyValueError::new_err(format!(
+                "dot shape mismatch: {:?} vs {:?}",
+                self.shape, other.shape
+            )));
+        }
+        let len = self.shape[0];
+        let layout_a = Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b = Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+        let out_buf = dot(
+            &self.device,
+            StridedOperand {
+                buffer: &self.buffer,
+                layout: &layout_a,
+            },
+            StridedOperand {
+                buffer: &other.buffer,
+                layout: &layout_b,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
+    }
+
+    fn trace(&self) -> PyResult<Self> {
+        if self.shape.len() != 2 {
+            return Err(PyValueError::new_err("trace requires a 2D array"));
+        }
+        if self.shape[0] != self.shape[1] {
+            return Err(PyValueError::new_err("trace requires a square matrix"));
+        }
+        let n = self.shape[0];
+        let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+        let out_buf = trace(
+            &self.device,
+            StridedOperand {
+                buffer: &self.buffer,
+                layout: &layout,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
+    }
+
+    fn norm_l1(&self) -> PyResult<Self> {
+        let out_buf = match self.shape.len() {
+            1 => {
+                let layout = Layout::c_contiguous([self.shape[0]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_l1(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            2 => {
+                let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_l1(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
+        };
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
+    }
+
+    fn norm_l2(&self) -> PyResult<Self> {
+        let out_buf = match self.shape.len() {
+            1 => {
+                let layout = Layout::c_contiguous([self.shape[0]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_l2(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            2 => {
+                let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_l2(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
+        };
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
+    }
+
+    fn norm_max(&self) -> PyResult<Self> {
+        let out_buf = match self.shape.len() {
+            1 => {
+                let layout = Layout::c_contiguous([self.shape[0]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_max(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            2 => {
+                let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                norm_max(
+                    &self.device,
+                    StridedOperand {
+                        buffer: &self.buffer,
+                        layout: &layout,
+                    },
+                )
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
+            }
+            _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
+        };
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
     }
 }
 
@@ -500,6 +792,42 @@ fn mean(a: &PyArray) -> PyResult<PyArray> {
     a.mean()
 }
 
+#[pyfunction]
+#[pyo3(name = "matmul")]
+fn matmul_py(a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
+    a.matmul(b)
+}
+
+#[pyfunction]
+#[pyo3(name = "dot")]
+fn dot_py(a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
+    a.dot(b)
+}
+
+#[pyfunction]
+#[pyo3(name = "trace")]
+fn trace_py(a: &PyArray) -> PyResult<PyArray> {
+    a.trace()
+}
+
+#[pyfunction]
+#[pyo3(name = "norm_l1")]
+fn norm_l1_py(a: &PyArray) -> PyResult<PyArray> {
+    a.norm_l1()
+}
+
+#[pyfunction]
+#[pyo3(name = "norm_l2")]
+fn norm_l2_py(a: &PyArray) -> PyResult<PyArray> {
+    a.norm_l2()
+}
+
+#[pyfunction]
+#[pyo3(name = "norm_max")]
+fn norm_max_py(a: &PyArray) -> PyResult<PyArray> {
+    a.norm_max()
+}
+
 /// PyHephaestus extension module definition.
 #[pymodule]
 fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -522,6 +850,12 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(min, m)?)?;
     m.add_function(wrap_pyfunction!(max, m)?)?;
     m.add_function(wrap_pyfunction!(mean, m)?)?;
+    m.add_function(wrap_pyfunction!(matmul_py, m)?)?;
+    m.add_function(wrap_pyfunction!(dot_py, m)?)?;
+    m.add_function(wrap_pyfunction!(trace_py, m)?)?;
+    m.add_function(wrap_pyfunction!(norm_l1_py, m)?)?;
+    m.add_function(wrap_pyfunction!(norm_l2_py, m)?)?;
+    m.add_function(wrap_pyfunction!(norm_max_py, m)?)?;
 
     Ok(())
 }
