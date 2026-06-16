@@ -7,6 +7,8 @@ dispatch seam with per-backend implementations, so spectral (`apollo`) and
 tensor (`coeus`) packages share one device layer without an `apollo`→`coeus`
 dependency edge.
 
+Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**. Much like `leto` serves as the non-differentiable CPU array vocabulary, `hephaestus` serves as the shared GPU buffer and compute substrate. It decouples high-level packages (such as `apollo` spectral transforms and `coeus` tensor backends) so they can share device contexts and memory allocations without direct dependencies, mirroring the role of **CuPy** in the Python (NumPy/SciPy) ecosystem.
+
 ## Naming
 
 Hephaestus is the god of the forge: the place where the stack's compute
