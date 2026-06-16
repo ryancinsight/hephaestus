@@ -68,8 +68,8 @@ pub use infrastructure::device::CudaDevice;
 
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, qr_decompose, GpuCholesky, GpuLuDecomposition,
-    GpuQrDecomposition,
+    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, qr_decompose, GpuCholesky,
+    GpuLuDecomposition, GpuQrDecomposition,
 };
 
 pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
