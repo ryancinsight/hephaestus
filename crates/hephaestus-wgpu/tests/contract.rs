@@ -207,6 +207,17 @@ fn ldl_transpose_product(l: &[f32], d: &[f32], n: usize) -> Vec<f32> {
     matmul_host(&ld, n, n, &lt, n)
 }
 
+fn udu_transpose_product(u: &[f32], d: &[f32], n: usize) -> Vec<f32> {
+    let mut ud = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            ud[row * n + col] = u[row * n + col] * d[col];
+        }
+    }
+    let ut = transpose_host(u, n, n);
+    matmul_host(&ud, n, n, &ut, n)
+}
+
 #[test]
 fn upload_download_round_trips_values() {
     let Some(device) = device_or_skip() else {
@@ -3361,10 +3372,13 @@ fn udu_decompose_matches_leto_reference() {
     use hephaestus_wgpu::{udu_decompose, StridedOperand};
     use leto::Layout;
 
-    let matrix_host = vec![4.0f32, 12.0, -16.0, 12.0, 37.0, -43.0, -16.0, -43.0, 98.0];
+    let n = 3usize;
+    let matrix_host = vec![4.0f32, 2.0, -2.0, 2.0, -3.0, 1.0, -2.0, 1.0, 2.0];
+    let rhs_host = vec![3.0f32, -1.0, 2.0];
     let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([3, 3]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    device.device().poll(wgpu::PollType::Wait).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
     let leto_decomp = leto_ops::udu_decompose(&leto_matrix.view()).unwrap();
 
     let gpu_decomp = udu_decompose(
@@ -3375,11 +3389,13 @@ fn udu_decompose_matches_leto_reference() {
         },
     )
     .unwrap();
+    device.device().poll(wgpu::PollType::Wait).unwrap();
 
-    assert_eq!(gpu_decomp.n(), 3);
+    assert_eq!(gpu_decomp.n(), n);
+    assert_close(gpu_decomp.det(), leto_decomp.det(), 1.0e-4);
 
-    let mut u = vec![0.0f32; 9];
-    let mut d = vec![0.0f32; 3];
+    let mut u = vec![0.0f32; n * n];
+    let mut d = vec![0.0f32; n];
     device.download(gpu_decomp.u_buffer(), &mut u).unwrap();
     device.download(gpu_decomp.d_buffer(), &mut d).unwrap();
 
@@ -3387,6 +3403,92 @@ fn udu_decompose_matches_leto_reference() {
     let expected_u = leto::Storage::as_slice(u_view.storage());
     assert_close_slice(&u, expected_u, 1e-4, 0.0);
     assert_close_slice(&d, leto_decomp.diagonal(), 1e-4, 0.0);
+
+    let reconstructed = udu_transpose_product(&u, &d, n);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let rhs = device.upload(&rhs_host).unwrap();
+    let x = gpu_decomp.solve(&device, &rhs).unwrap();
+    let mut got_x = vec![0.0f32; n];
+    device.download(&x, &mut got_x).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([n], rhs_host).unwrap();
+    let expected_x = leto_decomp.solve(&leto_rhs.view()).unwrap();
+    assert_close_slice(
+        &got_x,
+        leto::Storage::as_slice(expected_x.storage()),
+        1e-4,
+        0.0,
+    );
+
+    let inv = gpu_decomp.inv(&device).unwrap();
+    let mut got_inv = vec![0.0f32; n * n];
+    device.download(&inv, &mut got_inv).unwrap();
+    let expected_inv = leto_decomp.inv().unwrap();
+    assert_close_slice(
+        &got_inv,
+        leto::Storage::as_slice(expected_inv.storage()),
+        1e-4,
+        0.0,
+    );
+}
+
+#[test]
+fn udu_decompose_rejects_invalid_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{udu_decompose, StridedOperand};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("UDU decomposition requires square matrix")
+    ));
+
+    let nonsymmetric_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let nonsymmetric = device.upload(&nonsymmetric_host).unwrap();
+    let nonsymmetric_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let nonsymmetric_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &nonsymmetric,
+            layout: &nonsymmetric_layout,
+        },
+    );
+    assert!(matches!(
+        nonsymmetric_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("UDU decomposition failed")
+    ));
+
+    let zero_pivot_host = vec![1.0f32, 1.0, 1.0, 0.0];
+    let zero_pivot = device.upload(&zero_pivot_host).unwrap();
+    let zero_pivot_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let zero_pivot_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &zero_pivot,
+            layout: &zero_pivot_layout,
+        },
+    );
+    assert!(matches!(
+        zero_pivot_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("UDU decomposition failed")
+    ));
 }
 
 #[test]

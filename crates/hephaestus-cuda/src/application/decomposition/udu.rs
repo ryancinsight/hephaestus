@@ -8,7 +8,6 @@ use crate::infrastructure::device::CudaDevice;
 
 /// UDU decomposition result: device-resident factors.
 pub struct GpuUduDecomposition {
-    #[allow(dead_code)]
     inner: Option<leto_ops::UduDecomposition<f32>>,
     u: CudaBuffer<f32>,
     d: CudaBuffer<f32>,
@@ -35,6 +34,62 @@ impl GpuUduDecomposition {
     #[inline]
     pub fn d_buffer(&self) -> &CudaBuffer<f32> {
         &self.d
+    }
+
+    /// Determinant `det(A) = product(D[i])` via the host-side decomposition.
+    #[must_use]
+    #[inline]
+    pub fn det(&self) -> f32 {
+        self.inner
+            .as_ref()
+            .map_or(1.0, leto_ops::UduDecomposition::det)
+    }
+
+    /// Solve **A** · **x** = **rhs** via the stored host-side decomposition.
+    pub fn solve(&self, device: &CudaDevice, rhs: &CudaBuffer<f32>) -> Result<CudaBuffer<f32>> {
+        if rhs.len() != self.n {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: self.n,
+                device_len: rhs.len(),
+            });
+        }
+        if self.n == 0 {
+            return device.upload(&[] as &[f32]);
+        }
+
+        let inner = self
+            .inner
+            .as_ref()
+            .expect("invariant: non-empty UDU decomposition stores host factors");
+        let mut rhs_host = vec![0.0f32; self.n];
+        device.download(rhs, &mut rhs_host)?;
+
+        let rhs_view = leto::ArrayView::<f32, 1>::new(
+            leto::Layout::c_contiguous([self.n]).unwrap(),
+            &rhs_host,
+        );
+        let x = inner
+            .solve(&rhs_view)
+            .map_err(|e| HephaestusError::DispatchFailed {
+                message: format!("UDU solve failed: {e}"),
+            })?;
+
+        device.upload(leto::Storage::as_slice(x.storage()))
+    }
+
+    /// Compute the inverse **A**⁻¹ via the stored host-side decomposition.
+    pub fn inv(&self, device: &CudaDevice) -> Result<CudaBuffer<f32>> {
+        if self.n == 0 {
+            return device.alloc_zeroed::<f32>(0);
+        }
+        let inner = self
+            .inner
+            .as_ref()
+            .expect("invariant: non-empty UDU decomposition stores host factors");
+        let inv = inner.inv().map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("UDU inverse failed: {e}"),
+        })?;
+        device.upload(leto::Storage::as_slice(inv.storage()))
     }
 }
 
