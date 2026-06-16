@@ -49,6 +49,11 @@
   70x35 blocked QR row is much slower than Leto and `nalgebra`. Evidence tier:
   value-semantic blocked LU/QR tests plus empirical benchmark rows in
   `benchmark_results.md`.
+- [minor] Blocked decomposition synchronization profiling shows the 66x66
+  blocked LU row is transfer/synchronization dominated, while the 70x35 blocked
+  QR row combines a material synchronization floor with per-reflector launches
+  and vector uploads. Evidence tier: empirical synchronization-profile
+  benchmark in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:
@@ -82,5 +87,5 @@
 ## Next Increment
 
 - Continue the parity audit at the next highest-risk residual: profile the
-  blocked LU/QR host-device synchronization path before adding more native
-  decomposition kernels.
+  blocked QR per-reflector launch path and remove avoidable LU full-buffer
+  transfers before adding more native decomposition kernels.

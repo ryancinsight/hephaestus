@@ -107,6 +107,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [minor]: comparative benchmark coverage for blocked LU and
   blocked QR GPU-trailing-update paths, with value checks against Leto before
   timing against Leto and `nalgebra`.
+- `hephaestus-wgpu` [patch]: synchronization-profile benchmark for blocked
+  LU/QR decomposition transfer floors, recording the current host/device
+  synchronization cost before native-kernel expansion.
 - `hephaestus-wgpu` [patch]: dispatch launch planning now routes through
   Mnemosyne `KernelResourceBudget` and Moirai GPU `plan_launch` while retaining
   the Hephaestus checked overflow contract.
