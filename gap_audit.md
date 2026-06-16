@@ -44,13 +44,12 @@
   than Leto and `nalgebra` on the local WGPU run. Evidence tier:
   value-semantic differential test across a block boundary and empirical
   benchmark row in `benchmark_results.md`.
-- [patch] Hephaestus WGPU launch planning now uses Mnemosyne
-  `KernelResourceBudget` and Moirai GPU `plan_launch`, but `moirai-gpu`
-  currently brings `wgpu 0.19` into the graph while Hephaestus uses `wgpu 26`.
-  This is an integration/build-size risk; resolve by aligning Moirai GPU to
-  `wgpu 26` or splitting the occupancy planner into a GPU-API-free crate.
-  Evidence tier: build output from `cargo bench -p hephaestus-wgpu --bench
-  comparative` showing both `wgpu v0.19.4` and `wgpu v26.0.1`.
+- [patch] Hephaestus WGPU launch planning uses Mnemosyne
+  `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
+  planner-only feature set. The prior duplicate-WGPU risk is closed:
+  Hephaestus now depends on `moirai-gpu` with default features disabled, so
+  `moirai-gpu` no longer pulls `wgpu 0.19` into the Hephaestus graph.
+  Evidence tier: dependency-tree verification and package checks.
 - [minor] Hermes integration is intentionally host-tier for Hephaestus:
   host-delegated parity wrappers call `leto-ops` with `simd` enabled, and Leto
   routes CPU hot loops through Hermes SIMD before Hephaestus uploads verified
@@ -77,6 +76,6 @@
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk residual: resolve the
-  `moirai-gpu`/WGPU version duplication or profile the remaining host-delegated
-  decomposition wrappers for native GPU-kernel candidates.
+- Continue the parity audit at the next highest-risk residual: profile the
+  remaining host-delegated decomposition wrappers for native GPU-kernel
+  candidates.

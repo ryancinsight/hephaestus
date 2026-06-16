@@ -115,6 +115,9 @@ parity audit for remaining operator families and shared Atlas seam usage
   host-delegated Leto tier via `leto-ops`' `simd` feature; direct WGPU/CUDA
   kernel calls into Hermes are rejected as a boundary violation because Hermes
   owns CPU SIMD over host slices, not GPU shader/PTX execution.
+- [x] Switched Hephaestus' `moirai-gpu` dependency to Moirai's planner-only
+  feature set, closing the duplicate WGPU runtime dependency while preserving
+  Mnemosyne `KernelResourceBudget` + Moirai `plan_launch` dispatch sizing.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`

@@ -54,7 +54,9 @@ CPU arrays (leto — whose host-side `Layout<N>` metadata it reuses), host
 allocation/resource-budget vocabulary (mnemosyne), ownership proofs (melinoe —
 planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
 (hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
-GPU `plan_launch`; acquired devices expose Themis topology snapshots.
+GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
+expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
+and does not inherit Moirai's optional WGPU backend.
 
 Hermes integration is intentionally indirect for host-delegated Leto parity
 wrappers: Hephaestus depends on `leto-ops` with its `simd` feature enabled, and

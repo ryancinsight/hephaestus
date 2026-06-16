@@ -111,6 +111,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   Moirai, Themis, and Hermes. Hermes integration is through host-delegated Leto
   CPU SIMD (`leto-ops` with `simd` enabled); direct WGPU/CUDA kernel calls into
   Hermes are rejected as a boundary violation.
+- `hephaestus` [patch]: consumes `moirai-gpu` with default features disabled so
+  Moirai launch planning no longer pulls its optional WGPU backend into the
+  Hephaestus WGPU 26 dependency graph.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output

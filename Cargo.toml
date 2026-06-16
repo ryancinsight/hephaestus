@@ -39,7 +39,11 @@ leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
 leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
-moirai-gpu = { path = "../moirai/moirai-gpu" }
+moirai-gpu = { path = "../moirai/moirai-gpu", default-features = false, features = [
+    "std",
+    "parallel",
+    "mnemosyne-memory",
+] }
 ndarray = "0.15"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
