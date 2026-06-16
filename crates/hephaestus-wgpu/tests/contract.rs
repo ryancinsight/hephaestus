@@ -27,7 +27,6 @@ fn device_or_skip() -> Option<WgpuDevice> {
         )
         .clone()
 }
-
 fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
     match result {
         Err(HephaestusError::DispatchFailed { message }) => {
@@ -39,7 +38,6 @@ fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
         other => panic!("expected elementwise alias rejection, got {other:?}"),
     }
 }
-
 fn assert_length_mismatch<T>(
     result: hephaestus_wgpu::Result<T>,
     host_len: usize,

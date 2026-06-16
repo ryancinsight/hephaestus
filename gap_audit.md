@@ -6,7 +6,7 @@
   slice: elementwise, strided elementwise, scalar elementwise, reductions,
   rank-2 axis reductions, rank-2 scans, matrix products, Kronecker product,
   matrix power, finite-`f32` matrix rank, finite-`f32` determinant, dot, trace,
-  norms, Cholesky/LU/full-pivot LU/QR/SVD/bidiagonalization/Schur/Hessenberg/Bunch-Kaufman decomposition APIs,
+  norms, Cholesky/LU/full-pivot LU/QR/SVD/bidiagonalization/Schur/Hessenberg/Bunch-Kaufman/UDU decomposition APIs,
   symmetric Jacobi eigen decomposition/eigenvalue APIs, and general eigenvalues for diagonal
   closed-form and nonsymmetric Leto-differential cases. Evidence tier:
   value-semantic contract tests against CPU references and Leto, plus
@@ -52,9 +52,9 @@
 - [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
   Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
   path. Evidence tier: implementation audit.
-- [minor] Additional WGPU dense decomposition and matrix-function wrappers are
-  present in the source tree for UDU, pseudoinverse, and matrix
-  exponential, but they do not yet have the same value-semantic contract and
+- [minor] Additional WGPU dense matrix-function wrappers are
+  present in the source tree for pseudoinverse and matrix exponential, but
+  they do not yet have the same value-semantic contract and
   comparative benchmark coverage as the completed core/full-pivot-LU/Bunch-Kaufman/SVD/bidiagonalization/Schur/Hessenberg/eigen slice.
   Evidence tier: source/API audit and current test/benchmark coverage audit.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
@@ -70,6 +70,6 @@
 ## Next Increment
 
 - Implement value-semantic WGPU/Leto contract tests and comparative benchmark
-  rows for the next already-present dense wrapper family
-  (UDU/matrix functions), or remove any wrapper that cannot
+  rows for the next already-present dense matrix-function wrapper family
+  (pseudoinverse or matrix exponential), or remove any wrapper that cannot
   be verified without a real implementation contract.

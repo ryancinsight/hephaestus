@@ -34,6 +34,7 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Schur Decomposition** (32x32) | 194.1 µs | 31.9 µs | — | 6.8 µs (nalgebra eigenvalues) | **0.16x** | — | **0.035x** |
 | **Hessenberg Reduction** (32x32) | 211.1 µs | 45.9 µs | — | 6.7 µs | **0.22x** | — | **0.032x** |
 | **Bunch-Kaufman Decomposition** (32x32) | 99.0 µs | 10.7 µs | — | 2.1 µs (nalgebra determinant) | **0.11x** | — | **0.021x** |
+| **UDU Decomposition** (32x32) | 87.5 µs | 11.9 µs | — | 1.6 µs (nalgebra determinant) | **0.14x** | — | **0.018x** |
 | **Symmetric Eigen Jacobi** (32x32) | 564.9 µs | 380.6 µs | — | 27.9 µs | **0.67x** | — | **0.049x** |
 | **General Eigenvalues** (32x32 block rotations) | 169.2 µs | 25.9 µs | — | 6.7 µs | **0.15x** | — | **0.040x** |
 | **Norm L1** ($N = 65,536$) | 139.3 µs | 2.6 µs | — | — | **0.019x** | — | — |

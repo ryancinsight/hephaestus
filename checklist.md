@@ -68,6 +68,12 @@ parity audit for remaining operator families and shared Atlas seam usage
   `L D L^T = P A P^T` reconstruction, rectangular rejection, and
   nonsymmetric rejection; comparative benchmarks cover WGPU and Leto
   Bunch-Kaufman with `nalgebra` determinant as the external CPU comparator.
+- [x] Added WGPU device-resident UDU parity coverage. Contract tests cover
+  downloaded `U`/diagonal `D` factors, determinant, solve, inverse,
+  `U D U^T` reconstruction of a symmetric indefinite matrix, rectangular
+  rejection, nonsymmetric rejection, and zero-pivot rejection; comparative
+  benchmarks cover WGPU and Leto UDU with `nalgebra` determinant as the
+  external CPU comparator.
 - [x] Added WGPU device-resident symmetric Jacobi eigen decomposition and
   eigenvalues-only surfaces mirroring Leto. Differential tests compare
   eigenvalues and eigenvectors against Leto and reject non-symmetric inputs;
@@ -122,7 +128,7 @@ parity audit for remaining operator families and shared Atlas seam usage
   bench -p hephaestus-wgpu --bench comparative` (refreshed
   `benchmark_results.md`, including blocked 128x128 Cholesky, matrix rank,
   determinant, LU, full-pivot LU, QR, SVD, bidiagonalization, Schur,
-  Hessenberg, Bunch-Kaufman, symmetric eigen, and general eigenvalues; CUDA rows skipped because the WGPU bench depends on
+  Hessenberg, Bunch-Kaufman, UDU, symmetric eigen, and general eigenvalues; CUDA rows skipped because the WGPU bench depends on
   `hephaestus-cuda` without its
   `cuda` feature in this environment); `git diff --check`. Full workspace
   all-features clippy
