@@ -6,8 +6,8 @@
   slice: elementwise, strided elementwise, scalar elementwise, reductions,
   rank-2 axis reductions, rank-2 scans, matrix products, Kronecker product,
   matrix power, finite-`f32` matrix rank, finite-`f32` determinant, dot, trace,
-  norms, Cholesky/LU/full-pivot LU/QR/SVD/bidiagonalization/Schur/Hessenberg/Bunch-Kaufman/UDU decomposition APIs,
-  symmetric Jacobi eigen decomposition/eigenvalue APIs, and general eigenvalues for diagonal
+  norms, Cholesky/LU/full-pivot LU/QR/column-pivoted-QR/SVD/bidiagonalization/Schur/Hessenberg/Bunch-Kaufman/UDU decomposition APIs,
+  pseudoinverse and matrix exponential baseline wrappers, symmetric Jacobi eigen decomposition/eigenvalue APIs, and general eigenvalues for diagonal
   closed-form and nonsymmetric Leto-differential cases. Evidence tier:
   value-semantic contract tests against CPU references and Leto, plus
   comparative benchmark evidence recorded in `benchmark_results.md`.
@@ -52,11 +52,12 @@
 - [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
   Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
   path. Evidence tier: implementation audit.
-- [minor] Additional WGPU dense matrix-function wrappers are
-  present in the source tree for pseudoinverse and matrix exponential, but
-  they do not yet have the same value-semantic contract and
-  comparative benchmark coverage as the completed core/full-pivot-LU/Bunch-Kaufman/SVD/bidiagonalization/Schur/Hessenberg/eigen slice.
-  Evidence tier: source/API audit and current test/benchmark coverage audit.
+- [minor] WGPU pseudoinverse and matrix exponential now have baseline
+  closed-form contract tests and comparative benchmark rows, but still need
+  broader invalid-input, rank-deficient, nilpotent, and non-diagonal matrix
+  families before they match the depth of the completed decomposition slices.
+  Evidence tier: value-semantic closed-form tests and empirical benchmark
+  rows.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -69,7 +70,6 @@
 
 ## Next Increment
 
-- Implement value-semantic WGPU/Leto contract tests and comparative benchmark
-  rows for the next already-present dense matrix-function wrapper family
-  (pseudoinverse or matrix exponential), or remove any wrapper that cannot
-  be verified without a real implementation contract.
+- Strengthen WGPU pseudoinverse and matrix exponential contracts with
+  non-diagonal, invalid-input, and adversarial matrix families, or remove any
+  wrapper path that cannot be verified without a real implementation contract.

@@ -75,6 +75,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   rejection, and zero-pivot rejection; comparative benchmarks measure WGPU API
   overhead against Leto and use `nalgebra` determinant as the external CPU
   comparator.
+- `hephaestus-wgpu` [minor]: baseline device-resident column-pivoted QR,
+  pseudoinverse, and matrix-exponential coverage. Contract tests cover
+  column-pivoted QR factor agreement plus closed-form diagonal pseudoinverse
+  and matrix exponential cases; comparative benchmarks measure WGPU API
+  overhead against Leto and available `nalgebra` comparators.
 - `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
   decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
   compare eigenvalues/eigenvectors against Leto and reject non-symmetric
