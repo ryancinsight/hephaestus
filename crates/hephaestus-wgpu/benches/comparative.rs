@@ -12,8 +12,9 @@ use hephaestus_cuda::{
 use hephaestus_wgpu::{
     binary_elementwise_into, cholesky_decompose_blocked, cumsum_into, det, dot, kron_into,
     lu_decompose, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into,
-    norm_l1, norm_l2, norm_max, qr_decompose, reduction, sum_axis_into, trace,
-    unary_elementwise_into, AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    norm_l1, norm_l2, norm_max, qr_decompose, reduction, sum_axis_into, symmetric_eigen_jacobi,
+    trace, unary_elementwise_into, AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp,
+    WgpuDevice,
 };
 use leto::Storage;
 use nalgebra::DMatrix;
@@ -2072,6 +2073,91 @@ fn main() {
         let t_na = Instant::now();
         for _ in 0..ITERS {
             let _out = black_box(&na_m).clone().qr();
+        }
+        println!(
+            "CPU (nalgebra):{} ns/iter\n",
+            elapsed_per_iter(t_na.elapsed()).as_nanos()
+        );
+    }
+
+    {
+        let n = 32usize;
+        println!("--- Benchmarking: Symmetric Eigen Jacobi (f32, {n}x{n}) ---");
+        let mut host_m = vec![0.0f32; n * n];
+        for row in 0..n {
+            for col in 0..n {
+                host_m[row * n + col] = if row == col {
+                    4.0 + row as f32 * 0.05
+                } else {
+                    0.01 / (1.0 + row.abs_diff(col) as f32)
+                };
+            }
+        }
+        let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
+        let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
+        let leto_out = leto_ops::symmetric_eigen_jacobi(&leto_m.view()).unwrap();
+        let na_m = DMatrix::from_row_slice(n, n, &host_m);
+        let na_out = na_m.clone().symmetric_eigen();
+
+        let wg_m = wgpu_dev.upload(&host_m).unwrap();
+        let wg_out = symmetric_eigen_jacobi(
+            &wgpu_dev,
+            WgpuStridedOperand {
+                buffer: &wg_m,
+                layout: &layout2d,
+            },
+        )
+        .unwrap();
+        wait_wgpu(&wgpu_dev);
+
+        let mut got_values = vec![0.0f32; n];
+        wgpu_dev
+            .download(wg_out.eigenvalues(), &mut got_values)
+            .unwrap();
+        assert_close_slice(&got_values, &leto_out.eigenvalues, 0.0, 1.0e-5);
+        let na_values: Vec<f32> = na_out.eigenvalues.iter().copied().collect();
+        assert_close_slice(&got_values, &na_values, 1.0e-4, 1.0e-5);
+
+        let mut got_vectors = vec![0.0f32; n * n];
+        wgpu_dev
+            .download(wg_out.eigenvectors(), &mut got_vectors)
+            .unwrap();
+        assert_close_slice(
+            &got_vectors,
+            leto::Storage::as_slice(leto_out.eigenvectors.storage()),
+            0.0,
+            1.0e-5,
+        );
+
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = symmetric_eigen_jacobi(
+                &wgpu_dev,
+                WgpuStridedOperand {
+                    buffer: &wg_m,
+                    layout: &layout2d,
+                },
+            )
+            .unwrap();
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::symmetric_eigen_jacobi(black_box(&leto_m.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        let t_na = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(&na_m).clone().symmetric_eigen();
         }
         println!(
             "CPU (nalgebra):{} ns/iter\n",

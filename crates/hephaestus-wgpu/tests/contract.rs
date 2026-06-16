@@ -1386,13 +1386,14 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     use leto::Layout;
 
     let matrix_host = vec![
-        4.0f32, 1.0, 0.5, //
-        1.0, 3.0, 0.25, //
-        0.5, 0.25, 2.0,
+        4.0f32, 1.0, 0.5, 0.25, //
+        1.0, 3.0, 0.25, 0.125, //
+        0.5, 0.25, 2.0, 0.0625, //
+        0.25, 0.125, 0.0625, 1.5,
     ];
     let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([3, 3]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    let layout = Layout::c_contiguous([4, 4]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([4, 4], matrix_host).unwrap();
     let leto_eigen = leto_ops::symmetric_eigen_jacobi(&leto_matrix.view()).unwrap();
 
     let gpu_eigen = symmetric_eigen_jacobi(
@@ -1404,16 +1405,16 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     )
     .unwrap();
 
-    assert_eq!(gpu_eigen.n(), 3);
+    assert_eq!(gpu_eigen.n(), 4);
     assert_eq!(gpu_eigen.inner().eigenvalues, leto_eigen.eigenvalues);
 
-    let mut got_values = vec![0.0f32; 3];
+    let mut got_values = vec![0.0f32; 4];
     device
         .download(gpu_eigen.eigenvalues(), &mut got_values)
         .unwrap();
     assert_eq!(got_values, leto_eigen.eigenvalues);
 
-    let mut got_vectors = vec![0.0f32; 9];
+    let mut got_vectors = vec![0.0f32; 16];
     device
         .download(gpu_eigen.eigenvectors(), &mut got_vectors)
         .unwrap();
@@ -1431,7 +1432,7 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     )
     .unwrap();
     let leto_values_only = leto_ops::symmetric_eigenvalues_jacobi(&leto_matrix.view()).unwrap();
-    let mut got_values_only = vec![0.0f32; 3];
+    let mut got_values_only = vec![0.0f32; 4];
     device.download(&values_only, &mut got_values_only).unwrap();
     assert_eq!(got_values_only, leto_values_only);
 }
@@ -1555,7 +1556,8 @@ fn cholesky_solve_known_system_accurate() {
     use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
     use leto::Layout;
 
-    // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.75, 1.0]
+    // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5].
+    // Derivation: eliminating 2x from the second equation gives 2y = 3.
     let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
     let rhs_host = vec![8.0f32, 7.0];
     let matrix = device.upload(&matrix_host).unwrap();
@@ -1575,13 +1577,13 @@ fn cholesky_solve_known_system_accurate() {
     let mut got = vec![0.0f32; 2];
     device.download(&solution, &mut got).unwrap();
     assert!(
-        (got[0] - 1.75f32).abs() <= 1e-5,
-        "x[0] = {} expected 1.75",
+        (got[0] - 1.25f32).abs() <= 1e-5,
+        "x[0] = {} expected 1.25",
         got[0]
     );
     assert!(
-        (got[1] - 1.0f32).abs() <= 1e-5,
-        "x[1] = {} expected 1.0",
+        (got[1] - 1.5f32).abs() <= 1e-5,
+        "x[1] = {} expected 1.5",
         got[1]
     );
 

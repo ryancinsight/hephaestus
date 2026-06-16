@@ -1,0 +1,141 @@
+//! GPU-resident Column-Pivoted QR decomposition.
+
+use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+
+use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::infrastructure::buffer::WgpuBuffer;
+use crate::infrastructure::device::WgpuDevice;
+
+/// Column-pivoted QR decomposition result: device-resident factors.
+pub struct GpuColPivQrDecomposition {
+    #[allow(dead_code)]
+    inner: leto_ops::ColPivQrDecomposition<f32>,
+    q: WgpuBuffer<f32>,
+    r: WgpuBuffer<f32>,
+    permutation: Vec<usize>,
+    rank: usize,
+    m: usize,
+    n: usize,
+}
+
+impl GpuColPivQrDecomposition {
+    /// Numerical rank (count of above-threshold R diagonal entries).
+    #[must_use]
+    #[inline]
+    pub fn rank(&self) -> usize {
+        self.rank
+    }
+
+    /// Borrow the orthogonal factor **Q** buffer on the device.
+    #[must_use]
+    #[inline]
+    pub fn q(&self) -> &WgpuBuffer<f32> {
+        &self.q
+    }
+
+    /// Borrow the upper-triangular factor **R** buffer on the device.
+    #[must_use]
+    #[inline]
+    pub fn r(&self) -> &WgpuBuffer<f32> {
+        &self.r
+    }
+
+    /// Return the column permutation.
+    #[must_use]
+    #[inline]
+    pub fn permutation(&self) -> &[usize] {
+        &self.permutation
+    }
+
+    /// Solve min ‖**A** · **x** − **rhs**‖₂ (least squares).
+    pub fn solve_least_squares(
+        &self,
+        device: &WgpuDevice,
+        rhs: &WgpuBuffer<f32>,
+    ) -> Result<WgpuBuffer<f32>> {
+        if rhs.len != self.m {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: self.m,
+                device_len: rhs.len,
+            });
+        }
+        if self.m == 0 || self.n == 0 {
+            return device.upload(&[] as &[f32]);
+        }
+
+        let mut rhs_host = vec![0.0f32; self.m];
+        device.download(rhs, &mut rhs_host)?;
+
+        let rhs_view = leto::ArrayView::<f32, 1>::new(
+            leto::Layout::c_contiguous([self.m]).unwrap(),
+            &rhs_host,
+        );
+        let x = self.inner.solve_least_squares(&rhs_view).map_err(|e| {
+            HephaestusError::DispatchFailed {
+                message: format!("ColPivQR least-squares solve failed: {e}"),
+            }
+        })?;
+
+        device.upload(leto::Storage::as_slice(x.storage()))
+    }
+}
+
+/// Compute the column-pivoted QR decomposition on the GPU.
+pub fn col_piv_qr(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<GpuColPivQrDecomposition> {
+    let [rows, cols] = matrix.layout.shape;
+    matrix
+        .layout
+        .validate_storage_len(matrix.buffer.len)
+        .map_err(map_layout_err)?;
+
+    if rows == 0 || cols == 0 {
+        let q = device.alloc_zeroed::<f32>(0)?;
+        let r = device.alloc_zeroed::<f32>(0)?;
+        // Construct placeholder inner
+        let placeholder = vec![0.0f32];
+        let inner = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(
+            leto::Layout::c_contiguous([1, 1]).unwrap(),
+            &placeholder,
+        ))
+        .map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("ColPivQR decomposition failed: {e}"),
+        })?;
+        return Ok(GpuColPivQrDecomposition {
+            inner,
+            q,
+            r,
+            permutation: vec![],
+            rank: 0,
+            m: rows,
+            n: cols,
+        });
+    }
+
+    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    device.download(matrix.buffer, &mut host_data)?;
+
+    let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
+    let inner = leto_ops::col_piv_qr(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("ColPivQR decomposition failed: {e}"),
+    })?;
+
+    let q_host = inner.q();
+    let r_host = inner.r();
+    let q = device.upload(leto::Storage::as_slice(q_host.storage()))?;
+    let r = device.upload(leto::Storage::as_slice(r_host.storage()))?;
+    let permutation = inner.permutation().to_vec();
+    let rank = inner.rank();
+
+    Ok(GpuColPivQrDecomposition {
+        inner,
+        q,
+        r,
+        permutation,
+        rank,
+        m: rows,
+        n: cols,
+    })
+}

@@ -445,7 +445,7 @@ mod syrk_impl {
         };
 
         let key = "cholesky_syrk".to_string();
-        let kernel = cached_kernel(device, key, "syrk_kernel", || syrk_shader_source())?;
+        let kernel = cached_kernel(device, key, "syrk_kernel", syrk_shader_source)?;
 
         let workgroups_x = cols.div_ceil(16);
         let workgroups_y = rows.div_ceil(16);

@@ -23,6 +23,7 @@ leto = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
+num-complex = { workspace = true }
 libloading = { version = "0.8", optional = true }
 # cutile-rs (NVlabs): same git source coeus-cuda composes. cuda-core supplies
 # the driver `sys` bindings; cuda-async supplies device/context/stream

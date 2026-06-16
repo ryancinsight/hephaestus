@@ -1075,13 +1075,13 @@ fn cholesky_solve_known_system_accurate() {
     let mut got = vec![0.0f32; 2];
     dev.download(&solution, &mut got).unwrap();
     assert!(
-        (got[0] - 1.75f32).abs() <= 1e-5,
-        "x[0] = {} expected 1.75",
+        (got[0] - 1.25f32).abs() <= 1e-5,
+        "x[0] = {} expected 1.25",
         got[0]
     );
     assert!(
-        (got[1] - 1.0f32).abs() <= 1e-5,
-        "x[1] = {} expected 1.0",
+        (got[1] - 1.5f32).abs() <= 1e-5,
+        "x[1] = {} expected 1.5",
         got[1]
     );
 

@@ -1,16 +1,18 @@
 //! GPU-resident Eigendecomposition.
 
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use num_complex::Complex;
+
 use crate::application::strided::{map_layout_err, StridedOperand};
-use crate::infrastructure::buffer::WgpuBuffer;
-use crate::infrastructure::device::WgpuDevice;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use crate::infrastructure::buffer::CudaBuffer;
+use crate::infrastructure::device::CudaDevice;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {
     #[allow(dead_code)]
     inner: leto_ops::SymmetricEigenDecomposition<f32>,
-    eigenvalues: WgpuBuffer<f32>,
-    eigenvectors: WgpuBuffer<f32>,
+    eigenvalues: CudaBuffer<f32>,
+    eigenvectors: CudaBuffer<f32>,
     n: usize,
 }
 
@@ -25,31 +27,21 @@ impl GpuSymmetricEigenDecomposition {
     /// Borrow the eigenvalues buffer on the device.
     #[must_use]
     #[inline]
-    pub fn eigenvalues(&self) -> &WgpuBuffer<f32> {
+    pub fn eigenvalues(&self) -> &CudaBuffer<f32> {
         &self.eigenvalues
     }
 
     /// Borrow the eigenvectors buffer on the device.
     #[must_use]
     #[inline]
-    pub fn eigenvectors(&self) -> &WgpuBuffer<f32> {
+    pub fn eigenvectors(&self) -> &CudaBuffer<f32> {
         &self.eigenvectors
-    }
-
-    /// Borrow the host-side Leto decomposition.
-    ///
-    /// This exposes the canonical host eigenpairs without requiring a device
-    /// download when callers need scalar-side inspection.
-    #[must_use]
-    #[inline]
-    pub fn inner(&self) -> &leto_ops::SymmetricEigenDecomposition<f32> {
-        &self.inner
     }
 }
 
 /// Compute the symmetric eigendecomposition on the GPU.
 pub fn symmetric_eigen_jacobi(
-    device: &WgpuDevice,
+    device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSymmetricEigenDecomposition> {
     let [rows, cols] = matrix.layout.shape;
@@ -62,16 +54,19 @@ pub fn symmetric_eigen_jacobi(
     }
     matrix
         .layout
-        .validate_storage_len(matrix.buffer.len)
+        .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
     if rows == 0 {
         let eigenvalues = device.alloc_zeroed::<f32>(0)?;
         let eigenvectors = device.alloc_zeroed::<f32>(0)?;
-        let inner = leto_ops::SymmetricEigenDecomposition {
-            eigenvalues: vec![],
-            eigenvectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-        };
+        let empty_view =
+            leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([0, 0]).unwrap(), &[]);
+        let inner = leto_ops::symmetric_eigen_jacobi(&empty_view).map_err(|e| {
+            HephaestusError::DispatchFailed {
+                message: format!("Symmetric eigendecomposition empty failed: {e}"),
+            }
+        })?;
         return Ok(GpuSymmetricEigenDecomposition {
             inner,
             eigenvalues,
@@ -80,7 +75,7 @@ pub fn symmetric_eigen_jacobi(
         });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
@@ -104,9 +99,9 @@ pub fn symmetric_eigen_jacobi(
 
 /// Compute only the eigenvalues of a symmetric matrix on the GPU.
 pub fn symmetric_eigenvalues_jacobi(
-    device: &WgpuDevice,
+    device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
-) -> Result<WgpuBuffer<f32>> {
+) -> Result<CudaBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
@@ -117,14 +112,14 @@ pub fn symmetric_eigenvalues_jacobi(
     }
     matrix
         .layout
-        .validate_storage_len(matrix.buffer.len)
+        .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
     if rows == 0 {
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
@@ -135,4 +130,35 @@ pub fn symmetric_eigenvalues_jacobi(
     })?;
 
     device.upload(&s_host)
+}
+
+/// Compute the eigenvalues of a general (non-symmetric) matrix on the GPU, returning a complex buffer.
+pub fn eigenvalues(
+    device: &CudaDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<CudaBuffer<Complex<f32>>> {
+    let [rows, cols] = matrix.layout.shape;
+    if rows != cols {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("Eigenvalues require square matrix, got shape [{rows}, {cols}]"),
+        });
+    }
+    matrix
+        .layout
+        .validate_storage_len(matrix.buffer.len())
+        .map_err(map_layout_err)?;
+
+    if rows == 0 {
+        return device.alloc_zeroed::<Complex<f32>>(0);
+    }
+
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
+    device.download(matrix.buffer, &mut host_data)?;
+
+    let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
+    let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("General eigenvalues failed: {e}"),
+    })?;
+
+    device.upload(&e_host)
 }

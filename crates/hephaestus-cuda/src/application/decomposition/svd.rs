@@ -1,18 +1,18 @@
 //! GPU-resident SVD decomposition.
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 use crate::application::strided::{map_layout_err, StridedOperand};
-use crate::infrastructure::buffer::WgpuBuffer;
-use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::buffer::CudaBuffer;
+use crate::infrastructure::device::CudaDevice;
 
 /// SVD decomposition result: device-resident factors.
 pub struct GpuSvdDecomposition {
     #[allow(dead_code)]
     inner: leto_ops::SvdDecomposition<f32>,
-    u: WgpuBuffer<f32>,
-    v: WgpuBuffer<f32>,
-    singular_values: WgpuBuffer<f32>,
+    u: CudaBuffer<f32>,
+    v: CudaBuffer<f32>,
+    singular_values: CudaBuffer<f32>,
     rows: usize,
     cols: usize,
 }
@@ -28,21 +28,21 @@ impl GpuSvdDecomposition {
     /// Borrow the left singular vectors **U** buffer on the device.
     #[must_use]
     #[inline]
-    pub fn u(&self) -> &WgpuBuffer<f32> {
+    pub fn u(&self) -> &CudaBuffer<f32> {
         &self.u
     }
 
     /// Borrow the right singular vectors **V** buffer on the device.
     #[must_use]
     #[inline]
-    pub fn v(&self) -> &WgpuBuffer<f32> {
+    pub fn v(&self) -> &CudaBuffer<f32> {
         &self.v
     }
 
     /// Borrow the singular values buffer on the device.
     #[must_use]
     #[inline]
-    pub fn singular_values(&self) -> &WgpuBuffer<f32> {
+    pub fn singular_values(&self) -> &CudaBuffer<f32> {
         &self.singular_values
     }
 }
@@ -54,13 +54,13 @@ impl GpuSvdDecomposition {
 /// - Non-finite values in the input.
 /// - Rank-deficient input (rejected on the thin path).
 pub fn svd_decompose(
-    device: &WgpuDevice,
+    device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSvdDecomposition> {
     let [rows, cols] = matrix.layout.shape;
     matrix
         .layout
-        .validate_storage_len(matrix.buffer.len)
+        .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
     if rows == 0 || cols == 0 {
         let u = device.alloc_zeroed::<f32>(0)?;
@@ -81,7 +81,7 @@ pub fn svd_decompose(
         });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
@@ -111,13 +111,13 @@ pub fn svd_decompose(
 /// - Empty/invalid shape.
 /// - Non-finite values in the input.
 pub fn svd_rank_revealing(
-    device: &WgpuDevice,
+    device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSvdDecomposition> {
     let [rows, cols] = matrix.layout.shape;
     matrix
         .layout
-        .validate_storage_len(matrix.buffer.len)
+        .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
     if rows == 0 || cols == 0 {
         let u = device.alloc_zeroed::<f32>(0)?;
@@ -138,7 +138,7 @@ pub fn svd_rank_revealing(
         });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
@@ -169,19 +169,19 @@ pub fn svd_rank_revealing(
 /// - Empty/invalid shape.
 /// - Non-finite values in the input.
 pub fn singular_values(
-    device: &WgpuDevice,
+    device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
-) -> Result<WgpuBuffer<f32>> {
+) -> Result<CudaBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     matrix
         .layout
-        .validate_storage_len(matrix.buffer.len)
+        .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
     if rows == 0 || cols == 0 {
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
