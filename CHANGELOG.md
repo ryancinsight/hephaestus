@@ -63,6 +63,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   factor reconstruction, rank reporting, determinant, solve, inverse,
   rank-deficient inverse rejection, and rectangular rejection; comparative
   benchmarks measure WGPU API overhead against Leto and `nalgebra`.
+- `hephaestus-wgpu` [minor]: device-resident Bunch-Kaufman surface mirroring
+  Leto's `P A P^T = L D L^T` symmetric-indefinite contract. Contract tests
+  cover factor/permutation agreement, reconstruction, rectangular rejection,
+  and nonsymmetric rejection; comparative benchmarks measure WGPU API overhead
+  against Leto and use `nalgebra` determinant as the external CPU comparator.
 - `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
   decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
   compare eigenvalues/eigenvectors against Leto and reject non-symmetric
