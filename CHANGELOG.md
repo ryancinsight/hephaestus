@@ -38,6 +38,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   against Leto and `nalgebra`. The current implementation delegates
   factorization to Leto on the host and stores factors on the device, so this
   is API parity rather than GPU-kernel parity.
+- `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
+  decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
+  compare eigenvalues/eigenvectors against Leto and reject non-symmetric
+  inputs; comparative benchmarks measure WGPU API overhead against Leto and
+  `nalgebra`.
 - `hephaestus-wgpu` [minor]: blocked Cholesky entry point
   (`cholesky_decompose_blocked`) with CPU panel factorization/solve and GPU
   SYRK trailing update. Contract coverage includes a block-boundary SPD case;
@@ -84,6 +89,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   product, matrix power, finite-`f32` matrix rank, dot, trace, and norms. Stub
   builds compile and run contract tests without fabricating a device; real CUDA
   execution remains gated behind the `cuda` feature and hardware availability.
+- `hephaestus-cuda` [minor]: CUDA decomposition exports now include the same
+  host-delegated device-resident dense wrapper families as WGPU for
+  Cholesky/LU/QR, symmetric/general eigen, SVD, Schur, bidiagonalization,
+  Bunch-Kaufman, full-pivot LU, Hessenberg, and UDU. Default stub-mode
+  verification covers the existing contract-test slice; the newly exported
+  broad dense wrappers still require operation-specific value-semantic tests
+  before claiming full device parity.
 
 ### Removed
 

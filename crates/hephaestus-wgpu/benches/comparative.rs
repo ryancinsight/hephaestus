@@ -1790,7 +1790,7 @@ fn main() {
         // CUDA
         if let Some(ref cuda) = cuda_dev {
             let cu_m = cuda.upload(&host_m).unwrap();
-            let cu_out = hephaestus_cuda::cholesky_decompose_blocked(
+            let cu_out = hephaestus_cuda::cholesky_decompose(
                 cuda,
                 CudaStridedOperand {
                     buffer: &cu_m,
@@ -1810,7 +1810,7 @@ fn main() {
 
             let t_cuda = Instant::now();
             for _ in 0..ITERS {
-                let _out = hephaestus_cuda::cholesky_decompose_blocked(
+                let _out = hephaestus_cuda::cholesky_decompose(
                     cuda,
                     CudaStridedOperand {
                         buffer: &cu_m,
@@ -2115,8 +2115,11 @@ fn main() {
             .download(wg_out.eigenvalues(), &mut got_values)
             .unwrap();
         assert_close_slice(&got_values, &leto_out.eigenvalues, 0.0, 1.0e-5);
-        let na_values: Vec<f32> = na_out.eigenvalues.iter().copied().collect();
-        assert_close_slice(&got_values, &na_values, 1.0e-4, 1.0e-5);
+        let mut got_values_sorted = got_values.clone();
+        got_values_sorted.sort_by(f32::total_cmp);
+        let mut na_values: Vec<f32> = na_out.eigenvalues.iter().copied().collect();
+        na_values.sort_by(f32::total_cmp);
+        assert_close_slice(&got_values_sorted, &na_values, 1.0e-4, 1.0e-5);
 
         let mut got_vectors = vec![0.0f32; n * n];
         wgpu_dev

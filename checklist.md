@@ -39,6 +39,14 @@ parity audit for remaining operator families and shared Atlas seam usage
   and `nalgebra`. Residual distinction: factorization currently delegates to
   Leto on the host and uploads factors to the device, so this is API parity and
   measured transfer/host-factorization overhead, not GPU-kernel parity.
+- [x] Added WGPU device-resident symmetric Jacobi eigen decomposition and
+  eigenvalues-only surfaces mirroring Leto. Differential tests compare
+  eigenvalues and eigenvectors against Leto and reject non-symmetric inputs;
+  comparative benchmarks cover WGPU, Leto, and `nalgebra` eigenvalues with
+  order-insensitive cross-library eigenvalue comparison. Residual distinction:
+  eigensolve currently delegates to Leto on the host and uploads results to the
+  device, so this is API parity and measured transfer/host-eigensolve overhead,
+  not GPU-kernel eigensolver parity.
 - [x] Added blocked WGPU Cholesky entry point with CPU panel factorization and
   triangular solve plus GPU SYRK trailing update. Differential coverage now
   includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
@@ -72,15 +80,16 @@ parity audit for remaining operator families and shared Atlas seam usage
   product, L2 norm, and max norm retain the measured faster staged paths after
   the fused variant regressed in the local comparative run.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
-  `cargo clippy -p hephaestus-wgpu -p hephaestus-cuda --all-targets -- -D
-  warnings`; `cargo nextest run -p hephaestus-wgpu -p hephaestus-cuda` (90
-  passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo test
-  --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p hephaestus-wgpu
-  --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo bench -p
-  hephaestus-wgpu --bench comparative` (refreshed `benchmark_results.md`,
-  including blocked 128x128 Cholesky, matrix rank, determinant, LU, and QR;
-  CUDA rows skipped because the WGPU bench depends on `hephaestus-cuda` without
-  its `cuda` feature in this environment). Full workspace all-features clippy
+  `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo
+  nextest run -p hephaestus-wgpu -j 1` (61 passed); `cargo nextest run -p
+  hephaestus-cuda -j 1` (49 passed); `cargo test --doc -p hephaestus-wgpu` (0
+  doctests); `cargo test --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p
+  hephaestus-wgpu --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo
+  bench -p hephaestus-wgpu --bench comparative` (refreshed
+  `benchmark_results.md`, including blocked 128x128 Cholesky, matrix rank,
+  determinant, LU, QR, and symmetric eigen; CUDA rows skipped because the WGPU
+  bench depends on `hephaestus-cuda` without its `cuda` feature in this
+  environment); `git diff --check`. Full workspace all-features clippy
   attempted earlier and blocked before this slice by `cuda-bindings` requiring
   `CUDA_TOOLKIT_PATH`. Evidence tier: value-semantic differential tests,
   static diagnostics, and empirical benchmarks.
@@ -100,9 +109,10 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Removed stale default-build CUDA blocked-Cholesky export/test references
   because the CUDA blocked SYRK path is CUDA-feature gated and not verified in
   the default stub build.
-- Evidence: `cargo fmt -p hephaestus-cuda --check`; `cargo clippy -p
-  hephaestus-cuda --all-targets -- -D warnings`; `cargo test -p
-  hephaestus-cuda` (38 passed); `cargo test --doc -p hephaestus-cuda` (0
+- Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo
+  clippy -p hephaestus-wgpu --all-targets -- -D warnings` (compiles
+  `hephaestus-cuda` as the WGPU dev dependency); `cargo nextest run -p
+  hephaestus-cuda -j 1` (49 passed); `cargo test --doc -p hephaestus-cuda` (0
   doctests); `cargo doc -p hephaestus-cuda --no-deps`. Evidence tier: static
   diagnostics and value-semantic contract tests in the currently available
   stub mode.

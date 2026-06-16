@@ -6,9 +6,10 @@
   slice: elementwise, strided elementwise, scalar elementwise, reductions,
   rank-2 axis reductions, rank-2 scans, matrix products, Kronecker product,
   matrix power, finite-`f32` matrix rank, finite-`f32` determinant, dot, trace,
-  norms, and Cholesky/LU/QR decomposition APIs. Evidence tier: value-semantic
-  contract tests against CPU references and Leto, plus comparative benchmark
-  evidence recorded in `benchmark_results.md`.
+  norms, Cholesky/LU/QR decomposition APIs, and symmetric Jacobi eigen
+  decomposition/eigenvalue APIs. Evidence tier: value-semantic contract tests
+  against CPU references and Leto, plus comparative benchmark evidence
+  recorded in `benchmark_results.md`.
 - [minor] WGPU `matrix_rank` uses GPU row reduction with a relative pivot
   threshold; Leto `matrix_rank` uses singular values. Exact finite full-rank,
   rank-deficient, and zero cases are covered, but ill-conditioned matrices may
@@ -23,6 +24,11 @@
   to Leto on the host before uploading the factors. This is API parity, not
   GPU-kernel parity. Evidence tier: implementation audit, value-semantic
   differential tests, and comparative benchmark rows.
+- [minor] WGPU symmetric Jacobi eigen decomposition currently provides
+  device-resident eigenvalues/eigenvectors, but the eigensolve delegates to
+  Leto on the host before uploading the outputs. This is API parity, not
+  GPU-kernel eigensolver parity. Evidence tier: value-semantic differential
+  tests, non-symmetric rejection test, and comparative benchmark row.
 - [minor] WGPU blocked Cholesky now offloads the trailing SYRK update to a GPU
   kernel, but diagonal panel factorization and triangular panel solves remain
   CPU/Leto-backed. Current empirical row: 128x128 blocked Cholesky is slower
@@ -39,10 +45,14 @@
 - [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
   Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
   path. Evidence tier: implementation audit.
-- [minor] Leto's dense decomposition and matrix-property surface is not yet
-  mirrored by WGPU: SVD, Schur, eigenvalue/eigenvector,
-  pseudoinverse, and matrix exponential. Evidence tier: API
-  audit against `leto-ops/src/application/linalg`.
+- [minor] Additional WGPU dense decomposition and matrix-function wrappers are
+  present in the source tree for SVD, Schur, bidiagonalization,
+  Bunch-Kaufman, full-pivot LU, Hessenberg, UDU, pseudoinverse, and matrix
+  exponential, but they do not yet have the same value-semantic contract and
+  comparative benchmark coverage as the completed core/symmetric-eigen slice.
+  General nonsymmetric complex eigenvalues remain unexported in WGPU until a
+  stable device-buffer representation and tests are completed. Evidence tier:
+  source/API audit and current test/benchmark coverage audit.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -55,7 +65,7 @@
 
 ## Next Increment
 
-- Implement the next WGPU/Leto linalg parity slice from the dense algorithms
-  above only after selecting a single operation family with value-semantic
-  differential tests and comparative benchmark coverage against Leto,
-  `ndarray`, and `nalgebra` where those libraries expose the operation.
+- Implement value-semantic WGPU/Leto contract tests and comparative benchmark
+  rows for the next already-present dense wrapper family (SVD/Schur/matrix
+  functions), or remove any wrapper that cannot be verified without a real
+  implementation contract.

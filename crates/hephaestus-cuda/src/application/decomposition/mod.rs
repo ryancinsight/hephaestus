@@ -22,14 +22,15 @@ pub mod udu;
 
 pub use bidiagonal::{bidiagonalize, GpuBidiagonalDecomposition};
 pub use bunch_kaufman::{bunch_kaufman, GpuBunchKaufmanDecomposition};
-pub use cholesky::{cholesky_decompose, cholesky_decompose_blocked, GpuCholesky};
+pub use cholesky::{cholesky_decompose, GpuCholesky};
 pub use col_piv_qr::{col_piv_qr, GpuColPivQrDecomposition};
 pub use eigen::{
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, GpuSymmetricEigenDecomposition,
+    eigenvalues, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    GpuSymmetricEigenDecomposition,
 };
 pub use full_piv_lu::{full_piv_lu, GpuFullPivLuDecomposition};
 pub use hessenberg::{hessenberg, GpuHessenbergDecomposition};
-pub use lu::{lu_decompose, lu_decompose_blocked, GpuLuDecomposition};
+pub use lu::{lu_decompose, GpuLuDecomposition};
 pub use qr::{qr_decompose, GpuQrDecomposition};
 pub use schur::{schur, GpuRealSchur};
 pub use svd::{singular_values, svd_decompose, svd_rank_revealing, GpuSvdDecomposition};

@@ -147,7 +147,6 @@ struct GemmMeta {
     strides: [u32; 3],
     /// Element offset into the C (trailing) buffer.
     c_offset: u32,
-    _pad: u32,
 }
 
 // SAFETY: GemmMeta is `#[repr(C)]` and every field is Pod.
@@ -319,7 +318,6 @@ fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> 
                 message: format!("GEMM C offset {} exceeds u32", update.c_layout.offset),
             }
         })?,
-        _pad: 0,
     };
 
     let pipeline = cached_pipeline(
