@@ -66,4 +66,10 @@ pub use application::strided::{
 pub use infrastructure::buffer::CudaBuffer;
 pub use infrastructure::device::CudaDevice;
 
+#[cfg(feature = "decomposition")]
+pub use application::decomposition::{
+    cholesky_decompose, lu_decompose, qr_decompose, GpuCholesky, GpuLuDecomposition,
+    GpuQrDecomposition,
+};
+
 pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};

@@ -740,11 +740,7 @@ fn linalg_det_matches_reference() {
     };
 
     // Diagonal matrix with determinant = 3.0 * 2.0 * -1.0 = -6.0
-    let host_in = vec![
-        3.0f32, 0.0, 0.0,
-        0.0, 2.0, 0.0,
-        0.0, 0.0, -1.0,
-    ];
+    let host_in = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, -1.0];
     let a = dev.upload(&host_in).unwrap();
     let a_layout = Layout::c_contiguous([3, 3]).unwrap();
 
@@ -759,4 +755,167 @@ fn linalg_det_matches_reference() {
     let mut got = [0.0f32; 1];
     dev.download(&det_buffer, &mut got).unwrap();
     assert!((got[0] - (-6.0f32)).abs() < 1.0e-5);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_decomposition_matches_leto_reference() {
+    let Some(dev) = device("cholesky_decomposition_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::cholesky_decompose;
+
+    let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
+    let rhs_host = vec![6.0f32, 5.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
+    let leto_cholesky = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_cholesky = cholesky_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_cholesky.n(), leto_cholesky.dim());
+    assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
+
+    let mut got_lower = vec![0.0f32; 4];
+    dev.download(gpu_cholesky.lower(), &mut got_lower).unwrap();
+    let expected_lower = leto::Storage::as_slice(leto_cholesky.lower().storage());
+    assert_eq!(got_lower, expected_lower);
+
+    let solution = gpu_cholesky.solve(&dev, &rhs).unwrap();
+    let expected_solution = leto_cholesky.solve(&leto_rhs.view()).unwrap();
+    let mut got_solution = vec![0.0f32; 2];
+    dev.download(&solution, &mut got_solution).unwrap();
+    assert_eq!(
+        got_solution,
+        leto::Storage::as_slice(expected_solution.storage())
+    );
+
+    let inverse = gpu_cholesky.inv(&dev).unwrap();
+    let expected_inverse = leto_cholesky.inv().unwrap();
+    let mut got_inverse = vec![0.0f32; 4];
+    dev.download(&inverse, &mut got_inverse).unwrap();
+    assert_eq!(
+        got_inverse,
+        leto::Storage::as_slice(expected_inverse.storage())
+    );
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn lu_decomposition_matches_leto_reference() {
+    let Some(dev) = device("lu_decomposition_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::lu_decompose;
+
+    let matrix_host = vec![2.0f32, 1.0, 4.0, 3.0];
+    let rhs_host = vec![3.0f32, 7.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_lu.n(), leto_lu.dim());
+    assert_eq!(gpu_lu.det(), leto_lu.det());
+
+    let mut got_factors = vec![0.0f32; 4];
+    dev.download(gpu_lu.factors(), &mut got_factors).unwrap();
+    let expected_factors = leto::Storage::as_slice(leto_lu.factors().storage());
+    assert_eq!(got_factors, expected_factors);
+
+    let solution = gpu_lu.solve(&dev, &rhs).unwrap();
+    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
+    let mut got_solution = vec![0.0f32; 2];
+    dev.download(&solution, &mut got_solution).unwrap();
+    assert_eq!(
+        got_solution,
+        leto::Storage::as_slice(expected_solution.storage())
+    );
+
+    let inverse = gpu_lu.inv(&dev).unwrap();
+    let expected_inverse = leto_lu.inv().unwrap();
+    let mut got_inverse = vec![0.0f32; 4];
+    dev.download(&inverse, &mut got_inverse).unwrap();
+    assert_eq!(
+        got_inverse,
+        leto::Storage::as_slice(expected_inverse.storage())
+    );
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn qr_decomposition_matches_leto_reference() {
+    let Some(dev) = device("qr_decomposition_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::qr_decompose;
+
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let rhs_host = vec![1.0f32, 2.0, 3.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([3, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 2], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([3], rhs_host).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_qr = qr_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_qr.shape(), leto_qr.shape());
+
+    let mut got_r = vec![0.0f32; 6];
+    dev.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
+    let expected_r = leto_qr.r();
+    assert_eq!(got_r, leto::Storage::as_slice(expected_r.storage()));
+
+    let solution = gpu_qr.solve_least_squares(&dev, &rhs).unwrap();
+    let expected_solution = leto_qr.solve_least_squares(&leto_rhs.view()).unwrap();
+    let mut got_solution = vec![0.0f32; 2];
+    dev.download(&solution, &mut got_solution).unwrap();
+    assert_eq!(
+        got_solution,
+        leto::Storage::as_slice(expected_solution.storage())
+    );
+
+    let underdetermined = dev.alloc_zeroed::<f32>(6).unwrap();
+    let underdetermined_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let underdetermined_qr = qr_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &underdetermined,
+            layout: &underdetermined_layout,
+        },
+    );
+    assert!(matches!(
+        underdetermined_qr,
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("m ≥ n")
+    ));
 }

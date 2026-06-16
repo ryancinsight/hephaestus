@@ -37,7 +37,9 @@ leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
-leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory"] }
+leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
+mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+moirai-gpu = { path = "../moirai/moirai-gpu" }
 ndarray = "0.15"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
@@ -57,6 +59,7 @@ moirai = { path = "../moirai/moirai" }
 moirai-core = { path = "../moirai/moirai-core" }
 moirai-scheduler = { path = "../moirai/moirai-scheduler" }
 moirai-parallel = { path = "../moirai/moirai-parallel" }
+moirai-gpu = { path = "../moirai/moirai-gpu" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }

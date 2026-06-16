@@ -27,7 +27,7 @@
   mirrored by WGPU: SVD, Schur, eigenvalue/eigenvector,
   pseudoinverse, and matrix exponential. Evidence tier: API
   audit against `leto-ops/src/application/linalg`.
-- [minor] CUDA mirrors the current core operation slice in the source tree and
+- [minor] CUDA mirrors the current core operation and decomposition slice in the source tree and
   passes stub-mode verification. Real CUDA feature verification is still
   required on CUDA hardware/toolchain before claiming device-execution parity
   for the CUDA kernels. Evidence tier: static diagnostics and stub-mode

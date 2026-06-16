@@ -67,7 +67,7 @@ impl CudaDevice {
     /// Transfers and allocations execute against the thread's current context;
     /// binding makes this device's context current (CUDA contexts are
     /// thread-affine), so calls from any thread target the right device.
-    fn bind(&self) -> Result<()> {
+    pub(crate) fn bind(&self) -> Result<()> {
         self.device
             .bind_to_thread()
             .map_err(|e| HephaestusError::TransferFailed {

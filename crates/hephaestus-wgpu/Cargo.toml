@@ -19,6 +19,8 @@ hephaestus-core = { workspace = true }
 leto = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
+mnemosyne-core = { workspace = true }
+moirai-gpu = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }

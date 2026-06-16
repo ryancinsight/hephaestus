@@ -12,12 +12,15 @@ description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded 
 # substrate) on hosts without a CUDA toolkit. `cuda` pulls the dynamic-loaded
 # cutile-rs driver (no toolkit needed to build — `nvcuda`/`libcuda` is loaded
 # at runtime), mirroring coeus-cuda's gating.
-default = []
+default = ["decomposition"]
 cuda = ["dep:cutile", "dep:cuda-core", "dep:cuda-async", "dep:libloading"]
+## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
+decomposition = ["dep:leto-ops"]
 
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
+leto-ops = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
 libloading = { version = "0.8", optional = true }

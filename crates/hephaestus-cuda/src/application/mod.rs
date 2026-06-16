@@ -14,3 +14,7 @@ pub mod reduction;
 pub mod scan;
 /// Layout-aware strided elementwise operations.
 pub mod strided;
+
+#[cfg(feature = "decomposition")]
+/// Dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
+pub mod decomposition;

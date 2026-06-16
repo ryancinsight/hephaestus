@@ -10,10 +10,10 @@ use hephaestus_cuda::{
     ComputeDevice as CudaComputeDevice, CudaDevice, StridedOperand as CudaStridedOperand,
 };
 use hephaestus_wgpu::{
-    binary_elementwise_into, cholesky_decompose, cumsum_into, det, dot, kron_into, lu_decompose,
-    matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into, norm_l1,
-    norm_l2, norm_max, qr_decompose, reduction, sum_axis_into, trace, unary_elementwise_into,
-    AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    binary_elementwise_into, cholesky_decompose_blocked, cumsum_into, det, dot, kron_into,
+    lu_decompose, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into,
+    norm_l1, norm_l2, norm_max, qr_decompose, reduction, sum_axis_into, trace,
+    unary_elementwise_into, AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
 };
 use leto::Storage;
 use nalgebra::DMatrix;
@@ -1713,8 +1713,8 @@ fn main() {
     // 13. Dense Decompositions (f32)
     // ────────────────────────────────────────────────────────────────────────
     {
-        let n = 32usize;
-        println!("--- Benchmarking: Cholesky Decomposition (f32, {n}x{n} SPD) ---");
+        let n = 128usize;
+        println!("--- Benchmarking: Blocked Cholesky Decomposition (f32, {n}x{n} SPD) ---");
         let mut host_m = vec![0.0f32; n * n];
         for row in 0..n {
             for col in 0..n {
@@ -1732,7 +1732,7 @@ fn main() {
         let na_out = na_m.clone().cholesky().expect("invariant: benchmark SPD");
 
         let wg_m = wgpu_dev.upload(&host_m).unwrap();
-        let wg_out = cholesky_decompose(
+        let wg_out = cholesky_decompose_blocked(
             &wgpu_dev,
             WgpuStridedOperand {
                 buffer: &wg_m,
@@ -1760,7 +1760,7 @@ fn main() {
 
         let t_wgpu = Instant::now();
         for _ in 0..ITERS {
-            let _out = cholesky_decompose(
+            let _out = cholesky_decompose_blocked(
                 &wgpu_dev,
                 WgpuStridedOperand {
                     buffer: &wg_m,

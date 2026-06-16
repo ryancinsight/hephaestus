@@ -77,10 +77,11 @@ parity audit for remaining operator families and shared Atlas seam usage
   benchmarks.
 
 ## Unreleased CUDA Leto parity application surface [minor]
-- [x] CUDA exports mirror the current WGPU/Leto core operation slice:
+- [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
   elementwise, strided elementwise, reductions, rank-2 axis reductions,
   rank-2 scans, `cumsum_into`/`cumsum`, matrix multiplication, Kronecker
-  product, matrix power, finite-`f32` matrix rank, dot, trace, and norms.
+  product, matrix power, finite-`f32` matrix rank, dot, trace, norms, and
+  Cholesky/LU/QR decompositions.
 - [x] Renamed CUDA forward cumulative-sum caller-owned API to `cumsum_into`,
   matching Leto and WGPU with no compatibility alias.
 - [x] Stub-mode CUDA build validates the operation surface without fabricating
@@ -88,8 +89,8 @@ parity audit for remaining operator families and shared Atlas seam usage
   still exercise host-visible error paths and CPU-backed semantics available in
   the stub.
 - Evidence: `cargo fmt -p hephaestus-cuda --check`; `cargo clippy -p
-  hephaestus-cuda --all-targets -- -D warnings`; `cargo nextest run -p
-  hephaestus-cuda` (35 passed); `cargo test --doc -p hephaestus-cuda` (0
+  hephaestus-cuda --all-targets -- -D warnings`; `cargo test -p
+  hephaestus-cuda` (38 passed); `cargo test --doc -p hephaestus-cuda` (0
   doctests); `cargo doc -p hephaestus-cuda --no-deps`. Evidence tier: static
   diagnostics and value-semantic contract tests in the currently available
   stub mode.

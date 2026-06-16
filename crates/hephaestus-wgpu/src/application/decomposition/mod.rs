@@ -62,6 +62,25 @@
 //! | Decomposition | Flop count | Dominant kernel |
 //! |---|---|---|
 //! | Cholesky | n³ / 3 | rank-k update (SYRK) |
+//!
+//! # Block Algorithms
+//!
+//! For large matrices, the O(n³) trailing-matrix update dominates.  The
+//! blocked variant [`crate::application::decomposition::cholesky_decompose_blocked`] processes the
+//! matrix in `BLOCK_SIZE × BLOCK_SIZE` panels:
+//!
+//! 1. **Panel factorisation** (CPU, O(b³/3)) — the diagonal block is
+//!    factored by leto-ops.
+//! 2. **Panel solve** (CPU, O(b²(n−k)/2)) — the off-diagonal panel
+//!    L₂₁ = A₂₁ L₁₁⁻ᵀ is computed by triangular solve.
+//! 3. **Trailing SYRK** (GPU, O(b(n−k)²/2)) — a dedicated WGSL kernel
+//!    computes A₂₂ -= L₂₁ L₂₁ᵀ directly in device memory.
+//!
+//! The SYRK kernel uses 16×16 workgroup tiles with shared-memory
+//! cooperative loading of panel rows, analogous to the tiled matmul
+//! kernel but specialised for the symmetric rank-k update.  Only the
+//! lower triangle of the trailing matrix is touched, halving the
+//! compute compared to a general matmul + subtract sequence.
 //! | LU | 2n³ / 3 | panel elimination + trailing update |
 //! | QR | 2n²(m − n/3) | Householder application |
 
@@ -71,6 +90,6 @@ pub mod cholesky;
 pub mod lu;
 pub mod qr;
 
-pub use cholesky::{cholesky_decompose, GpuCholesky};
+pub use cholesky::{cholesky_decompose, cholesky_decompose_blocked, GpuCholesky};
 pub use lu::{lu_decompose, GpuLuDecomposition};
 pub use qr::{qr_decompose, GpuQrDecomposition};
