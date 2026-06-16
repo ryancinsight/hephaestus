@@ -691,14 +691,36 @@ fn acquisition_reports_themis_topology_from_adapter() {
         .expect("acquisition path must capture a topology snapshot");
 
     // Differential against the API itself: re-query the same default
-    // high-performance adapter and compare the reported fields.
+    // high-performance-then-fallback adapter selection and compare the
+    // reported fields.
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: None,
-        force_fallback_adapter: false,
-    }))
-    .expect("adapter acquired above");
+    let required_limits = wgpu::Limits::downlevel_defaults();
+    let request_device = |adapter: &wgpu::Adapter| {
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("topology-contract"),
+            required_features: wgpu::Features::empty(),
+            required_limits: required_limits.clone(),
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        }))
+    };
+    let high_performance =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .ok()
+        .and_then(|adapter| request_device(&adapter).ok().map(|_| adapter));
+    let adapter = match high_performance {
+        Some(adapter) => adapter,
+        None => pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: true,
+        }))
+        .expect("fallback adapter acquired above"),
+    };
     assert_eq!(topology.warp_width(), adapter.limits().min_subgroup_size);
     let expected_tier = match adapter.get_info().device_type {
         wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::Cpu => themis::MemoryTier::Dram,

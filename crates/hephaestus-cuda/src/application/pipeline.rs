@@ -86,12 +86,19 @@ pub fn cached_kernel(
 
 /// Convert a logical work-item count into CUDA grid size (block count).
 pub fn grid_size(len: usize, width: BlockWidth) -> Result<u32> {
-    let len = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
+    let len_u64 = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("dispatch size {len} exceeds u64 range"),
     })?;
-    width
-        .checked_covering_blocks(len)
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!("dispatch size {len} exceeds u32 grid range"),
-        })
+    let checked =
+        width
+            .checked_covering_blocks(len_u64)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("dispatch size {len} exceeds u32 grid range"),
+            })?;
+    let budget = mnemosyne_core::KernelResourceBudget::new(0, 0, width.get())
+        .expect("invariant: BlockWidth is non-zero, so budget threads are non-zero");
+    let planned = moirai_gpu::plan_launch(budget, len_u64);
+    debug_assert_eq!(planned.threads_per_block, width.get());
+    debug_assert_eq!(planned.grid_blocks, checked);
+    Ok(planned.grid_blocks)
 }

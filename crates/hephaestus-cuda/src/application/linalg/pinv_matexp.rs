@@ -7,10 +7,7 @@ use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 /// Compute the Moore-Penrose pseudoinverse A⁺ on the GPU.
-pub fn pinv(
-    device: &CudaDevice,
-    matrix: StridedOperand<'_, f32, 2>,
-) -> Result<CudaBuffer<f32>> {
+pub fn pinv(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<CudaBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     matrix
         .layout
@@ -33,14 +30,13 @@ pub fn pinv(
 }
 
 /// Compute the matrix exponential e^A on the GPU.
-pub fn matexp(
-    device: &CudaDevice,
-    matrix: StridedOperand<'_, f32, 2>,
-) -> Result<CudaBuffer<f32>> {
+pub fn matexp(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<CudaBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
-            message: format!("Matrix exponential requires square matrix, got shape [{rows}, {cols}]"),
+            message: format!(
+                "Matrix exponential requires square matrix, got shape [{rows}, {cols}]"
+            ),
         });
     }
     matrix

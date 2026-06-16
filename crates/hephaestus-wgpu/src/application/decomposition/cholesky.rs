@@ -114,53 +114,30 @@ fn main(
     let stride_col = syrk_meta.strides.y;
     let off        = syrk_meta.offset;
 
-    if (row >= rows || col >= cols) {{
-        return;
-    }}
-
-    // Only the lower triangle is touched (col <= row), matching the
-    // lower-triangular output contract.  Elements outside the triangle
-    // are left untouched, which is correct because L stores zeros there
-    // and SYRK only accumulates into the trailing submatrix.
-    if (col > row) {{
-        return;
-    }}
-
     var sum = {ty}({zero});
     let num_tiles = (k + 15u) / 16u;
 
     for (var tile: u32 = 0u; tile < num_tiles; tile = tile + 1u) {{
         // Load `panel[row, tile*16 + local_col]` into shared memory.
         let panel_col = tile * 16u + local_col;
-        if (panel_col < k) {{
+        if (row < rows && panel_col < k) {{
             panel_row[local_col] = panel[row * k + panel_col];
         }} else {{
             panel_row[local_col] = {ty}({zero});
         }}
         workgroupBarrier();
 
-        // Accumulate: sum += panel_row[0..15] * panel[row_local, col_tile]
-        let j_panel_base = tile * 16u;
-        if (local_row == 0u) {{
-            // We only need one row of the workgroup to accumulate for
-            // a given output element.  However the workgroup cooperatively
-            // accumulates across all 16 rows in the tile by reusing the
-            // single `panel_row` broadcast.
-            //
-            // For a 16×16 output tile we need `panel[row_i, t] * panel[row_j, t]`
-            // for each output (row_i, row_j).  We iterate over the tile's
-            // 16 k-columns in the inner loop below.
-        }}
-
         // Each thread computes its own output element.
         // Re-load `panel[row, t*16 + i]` for each i in the tile from shared
         // memory, and load `panel[col, t*16 + i]` directly from global memory.
-        for (var i: u32 = 0u; i < 16u; i = i + 1u) {{
-            let ki = tile * 16u + i;
-            if (ki < k) {{
-                let a_val = panel_row[i];
-                let b_val = panel[col * k + ki];
-                sum = sum + a_val * b_val;
+        if (row < rows && col < cols && col <= row) {{
+            for (var i: u32 = 0u; i < 16u; i = i + 1u) {{
+                let ki = tile * 16u + i;
+                if (ki < k) {{
+                    let a_val = panel_row[i];
+                    let b_val = panel[col * k + ki];
+                    sum = sum + a_val * b_val;
+                }}
             }}
         }}
 
@@ -168,8 +145,10 @@ fn main(
     }}
 
     // Write back: C[row, col] -= sum
-    let c_off = i32(off) + i32(row) * stride_row + i32(col) * stride_col;
-    trail[u32(c_off)] = trail[u32(c_off)] - sum;
+    if (row < rows && col < cols && col <= row) {{
+        let c_off = i32(off) + i32(row) * stride_row + i32(col) * stride_col;
+        trail[u32(c_off)] = trail[u32(c_off)] - sum;
+    }}
 }}
 "#,
         ty = TY,

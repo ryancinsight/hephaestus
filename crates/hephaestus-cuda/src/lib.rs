@@ -44,8 +44,8 @@ pub use application::elementwise::{
     IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryCudaOp,
 };
 pub use application::linalg::{
-    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matmul, matmul_into, matpow,
-    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
+    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
+    matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
     MatrixIdentityScalar, MatrixRankScalar,
 };
 pub use application::reduction::{
@@ -68,9 +68,10 @@ pub use infrastructure::device::CudaDevice;
 
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
-    hessenberg, lu_decompose, qr_decompose, schur, singular_values, svd_decompose,
-    svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
+    bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
+    eigenvalues, full_piv_lu, hessenberg, lu_decompose, lu_decompose_blocked, qr_decompose,
+    qr_decompose_blocked, schur, singular_values, svd_decompose, svd_rank_revealing,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
     GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
     GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuHessenbergDecomposition,
     GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur, GpuSvdDecomposition,

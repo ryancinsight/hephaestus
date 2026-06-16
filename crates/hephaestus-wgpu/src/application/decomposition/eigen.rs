@@ -4,6 +4,7 @@ use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use num_complex::Complex;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {
@@ -135,4 +136,35 @@ pub fn symmetric_eigenvalues_jacobi(
     })?;
 
     device.upload(&s_host)
+}
+
+/// Compute the eigenvalues of a general (non-symmetric) matrix on the GPU, returning a complex buffer.
+pub fn eigenvalues(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<WgpuBuffer<Complex<f32>>> {
+    let [rows, cols] = matrix.layout.shape;
+    if rows != cols {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("Eigenvalues require square matrix, got shape [{rows}, {cols}]"),
+        });
+    }
+    matrix
+        .layout
+        .validate_storage_len(matrix.buffer.len)
+        .map_err(map_layout_err)?;
+
+    if rows == 0 {
+        return device.alloc_zeroed::<Complex<f32>>(0);
+    }
+
+    let mut host_data = vec![0.0f32; matrix.buffer.len];
+    device.download(matrix.buffer, &mut host_data)?;
+
+    let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
+    let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("General eigenvalues failed: {e}"),
+    })?;
+
+    device.upload(&e_host)
 }

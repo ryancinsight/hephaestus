@@ -6,9 +6,9 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_cuda::{
-    binary_elementwise, binary_elementwise_into, det, dot, kron, matmul, matmul_into, matrix_rank,
-    matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, reduce_axis, reduction,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis, trace,
+    binary_elementwise, binary_elementwise_into, det, dot, kron, matexp, matmul, matmul_into,
+    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, reduce_axis,
+    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis, trace,
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp,
     MinOp, MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
 };
@@ -646,6 +646,61 @@ fn linalg_kron_matches_cpu_reference() {
     let mut got = vec![0.0f32; 16];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_pinv_matches_closed_form_diagonal() {
+    let Some(dev) = device("linalg_pinv_matches_closed_form_diagonal") else {
+        return;
+    };
+
+    let matrix_host = vec![2.0f32, 0.0, 0.0, 4.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let out = pinv(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 4];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, vec![0.5, 0.0, 0.0, 0.25]);
+}
+
+#[test]
+fn linalg_matexp_matches_closed_form_diagonal() {
+    let Some(dev) = device("linalg_matexp_matches_closed_form_diagonal") else {
+        return;
+    };
+
+    let matrix_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let out = matexp(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 4];
+    dev.download(&out, &mut got).unwrap();
+    let expected = [1.0f32, 0.0, 0.0, 1.0f32.exp()];
+    for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
+        let tolerance = 64.0 * f32::EPSILON * expected.abs().max(1.0);
+        assert!(
+            (actual - expected).abs() <= tolerance,
+            "matrix exponential mismatch at {index}: got {actual}, expected {expected}, tolerance {tolerance}"
+        );
+    }
 }
 
 #[test]

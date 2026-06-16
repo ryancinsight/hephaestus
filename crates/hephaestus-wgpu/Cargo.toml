@@ -24,6 +24,7 @@ moirai-gpu = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
+num-complex = { workspace = true }
 
 [dev-dependencies]
 pollster = { workspace = true }

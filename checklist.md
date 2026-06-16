@@ -82,7 +82,7 @@ parity audit for remaining operator families and shared Atlas seam usage
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
   `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo
   nextest run -p hephaestus-wgpu -j 1` (61 passed); `cargo nextest run -p
-  hephaestus-cuda -j 1` (49 passed); `cargo test --doc -p hephaestus-wgpu` (0
+  hephaestus-cuda -j 1` (51 passed); `cargo test --doc -p hephaestus-wgpu` (0
   doctests); `cargo test --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p
   hephaestus-wgpu --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo
   bench -p hephaestus-wgpu --bench comparative` (refreshed
@@ -112,7 +112,7 @@ parity audit for remaining operator families and shared Atlas seam usage
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo
   clippy -p hephaestus-wgpu --all-targets -- -D warnings` (compiles
   `hephaestus-cuda` as the WGPU dev dependency); `cargo nextest run -p
-  hephaestus-cuda -j 1` (49 passed); `cargo test --doc -p hephaestus-cuda` (0
+  hephaestus-cuda -j 1` (51 passed); `cargo test --doc -p hephaestus-cuda` (0
   doctests); `cargo doc -p hephaestus-cuda --no-deps`. Evidence tier: static
   diagnostics and value-semantic contract tests in the currently available
   stub mode.

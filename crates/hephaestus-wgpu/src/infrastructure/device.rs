@@ -138,25 +138,52 @@ impl WgpuDevice {
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
         let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
+
+        let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
+            (wgpu::Device, wgpu::Queue),
+            wgpu::RequestDeviceError,
+        > {
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some(label),
+                required_features,
+                required_limits: required_limits.clone(),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::Off,
+            }))
+        };
+
+        // Try High Performance hardware adapter first
+        if let Ok(adapter) =
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            }))
+        {
+            let topology = Self::topology_from_adapter(&adapter);
+            if let Ok((device, queue)) = try_device(&adapter) {
+                let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+                acquired.topology = Some(Arc::new(topology));
+                return Ok(acquired);
+            }
+        }
+
+        // Fallback to software/fallback adapter
+        let fallback_adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
-            force_fallback_adapter: false,
+            force_fallback_adapter: true,
         }))
         .map_err(|e| HephaestusError::AdapterUnavailable {
-            message: e.to_string(),
+            message: format!("High performance adapter unavailable/lost, and fallback adapter is unavailable: {e}"),
         })?;
-        let topology = Self::topology_from_adapter(&adapter);
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some(label),
-            required_features,
-            required_limits,
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| HephaestusError::DeviceUnavailable {
-            message: e.to_string(),
-        })?;
+
+        let topology = Self::topology_from_adapter(&fallback_adapter);
+        let (device, queue) =
+            try_device(&fallback_adapter).map_err(|e| HephaestusError::DeviceUnavailable {
+                message: format!("Fallback adapter device creation failed: {e}"),
+            })?;
+
         let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
         acquired.topology = Some(Arc::new(topology));
         Ok(acquired)

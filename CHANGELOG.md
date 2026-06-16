@@ -86,9 +86,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-cuda` [minor]: CUDA application-operation parity slice covering
   elementwise, strided elementwise, reductions, rank-2 axis reductions,
   rank-2 scans (`cumsum_into`/`cumsum`), matrix multiplication, Kronecker
-  product, matrix power, finite-`f32` matrix rank, dot, trace, and norms. Stub
-  builds compile and run contract tests without fabricating a device; real CUDA
-  execution remains gated behind the `cuda` feature and hardware availability.
+  product, matrix power, finite-`f32` matrix rank, dot, trace, norms,
+  pseudoinverse, and matrix exponential. Stub builds compile and run contract
+  tests without fabricating a device; real CUDA execution remains gated behind
+  the `cuda` feature and hardware availability.
 - `hephaestus-cuda` [minor]: CUDA decomposition exports now include the same
   host-delegated device-resident dense wrapper families as WGPU for
   Cholesky/LU/QR, symmetric/general eigen, SVD, Schur, bidiagonalization,

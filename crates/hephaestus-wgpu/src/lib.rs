@@ -44,12 +44,13 @@ pub use infrastructure::device::WgpuDevice;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
-    full_piv_lu, hessenberg, lu_decompose, lu_decompose_blocked, qr_decompose, schur,
-    singular_values, svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi,
-    symmetric_eigenvalues_jacobi, udu_decompose, GpuBidiagonalDecomposition,
-    GpuBunchKaufmanDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
-    GpuHessenbergDecomposition, GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur,
-    GpuSvdDecomposition, GpuSymmetricEigenDecomposition, GpuUduDecomposition,
+    eigenvalues, full_piv_lu, hessenberg, lu_decompose, lu_decompose_blocked, qr_decompose,
+    qr_decompose_blocked, schur, singular_values, svd_decompose, svd_rank_revealing,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
+    GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
+    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuHessenbergDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur, GpuSvdDecomposition,
+    GpuSymmetricEigenDecomposition, GpuUduDecomposition,
 };
 
 pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
