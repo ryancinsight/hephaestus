@@ -8,13 +8,16 @@ repository.workspace = true
 description = "wgpu backend for the Atlas accelerator substrate: device acquisition, typed buffers, and monomorphized compute dispatch."
 
 [features]
-default = ["parallel", "mnemosyne-memory"]
+default = ["parallel", "mnemosyne-memory", "decomposition"]
 parallel = []
 mnemosyne-memory = []
+## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
+decomposition = ["dep:leto-ops"]
 
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
+leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
@@ -25,6 +28,7 @@ pollster = { workspace = true }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }
 nalgebra = { workspace = true }
+hephaestus-cuda = { workspace = true }
 
 [[bench]]
 name = "elementwise_into"

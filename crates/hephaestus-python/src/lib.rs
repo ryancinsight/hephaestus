@@ -2,8 +2,8 @@
 
 use hephaestus_wgpu::{
     dot, matmul, norm_l1, norm_l2, norm_max, trace, AbsOp, AddOp, ComputeDevice, CosOp,
-    DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp, NegOp, PowOp, RecipOp, SinOp,
-    SqrtOp, StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
+    DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp,
+    StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
 };
 use leto::Layout;
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
@@ -511,16 +511,11 @@ impl PyArray {
         let k = self.shape[1];
         let n = other.shape[1];
 
-        let layout_a = Layout::c_contiguous([m, k]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let layout_b = Layout::c_contiguous([k, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let layout_out = Layout::c_contiguous([m, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-        let out_buf = self
-            .device
-            .alloc_zeroed::<f32>(m * n)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-
-        matmul(
+        let layout_a =
+            Layout::c_contiguous([m, k]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b =
+            Layout::c_contiguous([k, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let out_buf = matmul(
             &self.device,
             StridedOperand {
                 buffer: &self.buffer,
@@ -529,10 +524,6 @@ impl PyArray {
             StridedOperand {
                 buffer: &other.buffer,
                 layout: &layout_b,
-            },
-            StridedOperand {
-                buffer: &out_buf,
-                layout: &layout_out,
             },
         )
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -555,8 +546,10 @@ impl PyArray {
             )));
         }
         let len = self.shape[0];
-        let layout_a = Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let layout_b = Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_a =
+            Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b =
+            Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
         let out_buf = dot(
             &self.device,
@@ -586,7 +579,8 @@ impl PyArray {
             return Err(PyValueError::new_err("trace requires a square matrix"));
         }
         let n = self.shape[0];
-        let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout =
+            Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
         let out_buf = trace(
             &self.device,

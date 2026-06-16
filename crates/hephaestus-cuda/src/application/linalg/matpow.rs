@@ -1,13 +1,12 @@
 //! Matrix power operation on the CUDA device.
 
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use leto::Layout;
 
-use super::{map_layout_err, matmul};
+use super::{map_layout_err, matmul_into};
 use crate::application::cuda_type::CudaScalar;
-use crate::application::elementwise::unary_elementwise_strided_into;
-use crate::application::strided::StridedOperand;
+use crate::application::strided::{unary_elementwise_strided_into, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
@@ -46,7 +45,7 @@ fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Vec<T> {
 ///
 /// The algorithm is exponentiation by squaring, matching Leto's `matpow`
 /// contract: `A^0` is the identity matrix and non-square inputs are rejected.
-/// Matrix products are dispatched through [`matmul`].
+/// Matrix products are dispatched through [`matmul_into`].
 pub fn matpow<T>(
     device: &CudaDevice,
     matrix: StridedOperand<'_, T, 2>,
@@ -93,7 +92,7 @@ where
 
     loop {
         if remaining & 1 == 1 {
-            matmul(
+            matmul_into(
                 device,
                 StridedOperand {
                     buffer: &result,
@@ -116,7 +115,7 @@ where
             break;
         }
 
-        matmul(
+        matmul_into(
             device,
             StridedOperand {
                 buffer: &base,

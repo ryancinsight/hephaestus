@@ -58,7 +58,7 @@ const CUDA_DECODE: &str = r#"
 "#;
 
 #[inline]
-fn map_layout_err(e: leto::LetoError) -> HephaestusError {
+pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
         message: format!("layout rejected: {e}"),
     }
@@ -262,6 +262,41 @@ where
     Ok(())
 }
 
+/// Run `out = op(a, b)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// Inputs are broadcast to `output_shape` through the same layout contract as
+/// [`binary_elementwise_strided_into`].
+pub fn binary_elementwise_strided<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<CudaBuffer<T>>
+where
+    Op: BinaryCudaOp,
+    T: CudaScalar + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    binary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        b,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
 /// Run `out[idx] = op(a[idx])` over logical indices of `out_layout`.
 pub fn unary_elementwise_strided_into<Op, T, const N: usize>(
     device: &CudaDevice,
@@ -359,6 +394,39 @@ where
     Ok(())
 }
 
+/// Run `out = op(a)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// The input is broadcast to `output_shape` through the same layout contract as
+/// [`unary_elementwise_strided_into`].
+pub fn unary_elementwise_strided<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<CudaBuffer<T>>
+where
+    Op: UnaryCudaOp,
+    T: CudaScalar + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    unary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
 /// Run `out[idx] = op(a[idx], scalar)` over logical indices of `out_layout`.
 pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
     device: &CudaDevice,
@@ -381,6 +449,35 @@ where
             layout: &scalar_layout,
         },
         out,
+        width,
+    )
+}
+
+/// Run `out = op(a, scalar)` over `output_shape`, allocating a C-contiguous output buffer.
+///
+/// The scalar path delegates through [`binary_elementwise_strided`] with a
+/// one-element broadcast operand, preserving scalar/binary semantic identity.
+pub fn scalar_elementwise_strided<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    scalar: T,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<CudaBuffer<T>>
+where
+    Op: BinaryCudaOp,
+    T: CudaScalar + Pod,
+{
+    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
+    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
+    binary_elementwise_strided::<Op, T, N>(
+        device,
+        a,
+        StridedOperand {
+            buffer: &scalar_buffer,
+            layout: &scalar_layout,
+        },
+        output_shape,
         width,
     )
 }

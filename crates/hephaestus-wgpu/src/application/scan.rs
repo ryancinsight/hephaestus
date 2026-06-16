@@ -367,7 +367,7 @@ where
 
 /// Forward cumulative sum over a rank-2 strided matrix along `axis`.
 #[inline]
-pub fn cumsum_axis_into<T>(
+pub fn cumsum_into<T>(
     device: &WgpuDevice,
     input: StridedOperand<'_, T, 2>,
     axis: usize,

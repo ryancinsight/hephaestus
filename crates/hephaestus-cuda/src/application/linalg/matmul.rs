@@ -5,16 +5,16 @@
 //! directly through `cuLaunchKernel`. [`batched_matmul`] iterates the batch
 //! dimension over [`matmul`], honoring batch broadcasting.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::Pod;
 use core::marker::PhantomData;
-use hephaestus_core::{DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use leto::Layout;
 
-use super::{map_layout_err, to_i32, to_u32, GpuMatrixLayout, map_layout};
+use super::{map_layout, map_layout_err};
 use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::cached_kernel;
 use crate::application::strided::StridedOperand;
-use crate::CudaDevice;
+use crate::{CudaBuffer, CudaDevice};
 
 struct MatmulKernel<T>(PhantomData<T>);
 
@@ -97,7 +97,7 @@ extern "C" __global__ void matmul_kernel(
 }
 
 /// Perform matrix multiplication `out = lhs * rhs` on the CUDA device.
-pub fn matmul<T>(
+pub fn matmul_into<T>(
     device: &CudaDevice,
     lhs: StridedOperand<'_, T, 2>,
     rhs: StridedOperand<'_, T, 2>,
@@ -173,9 +173,9 @@ where
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut b_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut c_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut c_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
         ];
 
         // SAFETY: Buffers are valid, dimensions match.
@@ -210,7 +210,7 @@ where
 }
 
 /// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` on the CUDA device.
-pub fn batched_matmul<T>(
+pub fn batched_matmul_into<T>(
     device: &CudaDevice,
     lhs: StridedOperand<'_, T, 3>,
     rhs: StridedOperand<'_, T, 3>,
@@ -287,8 +287,82 @@ where
             layout: &out_mat_layout,
         };
 
-        matmul(device, lhs_operand, rhs_operand, out_operand)?;
+        matmul_into(device, lhs_operand, rhs_operand, out_operand)?;
     }
 
     Ok(())
+}
+
+/// Allocate and compute matrix multiplication `lhs * rhs` on the CUDA device.
+///
+/// The returned buffer has C-contiguous shape `[lhs.rows, rhs.cols]`.
+pub fn matmul<T>(
+    device: &CudaDevice,
+    lhs: StridedOperand<'_, T, 2>,
+    rhs: StridedOperand<'_, T, 2>,
+) -> Result<CudaBuffer<T>>
+where
+    T: CudaScalar + Pod,
+{
+    let [rows, lhs_shared] = lhs.layout.shape;
+    let [rhs_shared, cols] = rhs.layout.shape;
+    if lhs_shared != rhs_shared {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "matmul dimension mismatch: lhs {:?}, rhs {:?}",
+                lhs.layout.shape, rhs.layout.shape
+            ),
+        });
+    }
+    let out_layout = Layout::c_contiguous([rows, cols]).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    matmul_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )?;
+    Ok(out)
+}
+
+/// Allocate and compute batched matrix multiplication on the CUDA device.
+///
+/// Singleton batches broadcast to the other operand's batch count. The returned
+/// buffer has C-contiguous shape `[batch, lhs.rows, rhs.cols]`.
+pub fn batched_matmul<T>(
+    device: &CudaDevice,
+    lhs: StridedOperand<'_, T, 3>,
+    rhs: StridedOperand<'_, T, 3>,
+) -> Result<CudaBuffer<T>>
+where
+    T: CudaScalar + Pod,
+{
+    let [lhs_batch, m, lhs_k] = lhs.layout.shape;
+    let [rhs_batch, rhs_k, n] = rhs.layout.shape;
+    let batch = lhs_batch.max(rhs_batch);
+    let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
+    let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
+    if !lhs_batches_ok || !rhs_batches_ok || lhs_k != rhs_k {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "batched matmul shape mismatch: lhs {:?}, rhs {:?}",
+                lhs.layout.shape, rhs.layout.shape
+            ),
+        });
+    }
+    let out_layout = Layout::c_contiguous([batch, m, n]).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    batched_matmul_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )?;
+    Ok(out)
 }

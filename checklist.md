@@ -7,23 +7,38 @@ parity audit for remaining operator families and shared Atlas seam usage
 (`mnemosyne`, `moirai`, `themis`, `hermes`).
 
 ## Unreleased WGPU Leto parity linalg [minor]
-- [x] Added GPU-resident `matmul`, `batched_matmul`, `dot`, `trace`,
-  `norm_l1`, `norm_l2`, and `norm_max` over strided operands.
-- [x] Added GPU-resident `kron` over strided matrix operands, with Leto
-  differential contract coverage and comparative benchmark coverage against
-  Leto, `ndarray`, and a nalgebra-backed reference implementation.
+- [x] Added GPU-resident allocating `matmul`/`batched_matmul` and caller-owned
+  `matmul_into`/`batched_matmul_into`, plus `dot`, `trace`, `norm_l1`,
+  `norm_l2`, and `norm_max` over strided operands.
+- [x] Added GPU-resident allocating `kron` and caller-owned `kron_into` over
+  strided matrix operands, with Leto differential contract coverage and
+  comparative benchmark coverage against Leto, `ndarray`, and a
+  nalgebra-backed reference implementation.
 - [x] Added GPU-resident `matpow` over strided square matrix operands, using
-  exponentiation by squaring over WGPU `matmul` dispatches. Differential tests
-  cover Leto parity for floating-point shear powers, integer `A^0`, and
+  exponentiation by squaring over WGPU `matmul_into` dispatches. Differential
+  tests cover Leto parity for floating-point shear powers, integer `A^0`, and
   non-square rejection; comparative benchmarks cover Leto, an `ndarray`
   repeated-squaring reference, and `nalgebra`.
+- [x] Added GPU-resident finite-`f32` `matrix_rank` and
+  `matrix_rank_with_tolerance` over strided rank-2 operands. Differential tests
+  cover exact finite full-rank, rank-deficient, and zero matrices against Leto,
+  plus empty-matrix rejection; comparative benchmarks cover WGPU, Leto,
+  `ndarray`-backed, and `nalgebra`-backed references. Residual distinction:
+  WGPU uses row-reduction pivots while Leto's rank uses the SVD spectrum.
+- [x] Added GPU-resident finite-`f32` `det` over strided square rank-2
+  operands using the shared WGPU matrix-property row-reduction dispatch.
+  Differential tests cover exact finite nonsingular and singular matrices
+  against Leto plus rectangular rejection; comparative benchmarks cover WGPU,
+  Leto, `ndarray`, and `nalgebra` references. Residual distinction: WGPU uses
+  exact row-reduction pivots with no tolerance for determinant while Leto uses
+  its CPU determinant algorithm.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
   or `[rows, 1]`). Differential tests cover caller-owned and allocating sum,
   min, max, and mean against Leto; comparative benchmarks cover axis 0.
 - [x] Added GPU-resident rank-2 `scan_axis_into`, `scan_axis`,
-  `cumsum_axis_into`, and `cumsum`, with forward/reverse scan direction and
+  `cumsum_into`, and `cumsum`, with forward/reverse scan direction and
   cumulative sum/product markers. Differential tests cover caller-owned and
   allocating Cumsum plus reverse cumulative product against Leto; comparative
   benchmarks cover Cumsum over axis 1 against Leto, an `ndarray` reference,
@@ -41,14 +56,36 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Added fused WGPU map-reduction dispatch for trace and L1 norm. Dot
   product, L2 norm, and max norm retain the measured faster staged paths after
   the fused variant regressed in the local comparative run.
-- Evidence: `cargo fmt --check`; `cargo clippy -p hephaestus-wgpu
-  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (43
+- Evidence: `cargo fmt -p hephaestus-wgpu --check`; `cargo clippy -p hephaestus-wgpu
+  --all-targets -- -D warnings`; `cargo clippy -p hephaestus-python
+  --all-targets -- -D warnings`; `cargo nextest run -p hephaestus-wgpu` (46
   passed); `cargo test --doc -p hephaestus-wgpu` (0 doctests); `cargo doc -p
   hephaestus-wgpu --no-deps`; `cargo bench -p hephaestus-wgpu --bench
-  comparative`. Full workspace all-features clippy attempted and blocked
-  before this slice by `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`. Evidence
-  tier: value-semantic differential tests, static diagnostics, and empirical
+  comparative` (refreshed `benchmark_results.md`, including matrix rank and
+  determinant; CUDA rows skipped because the WGPU bench depends on
+  `hephaestus-cuda` without its `cuda` feature in this environment). Full
+  workspace all-features clippy attempted earlier and blocked before this
+  slice by `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`. Evidence tier:
+  value-semantic differential tests, static diagnostics, and empirical
   benchmarks.
+
+## Unreleased CUDA Leto parity application surface [minor]
+- [x] CUDA exports mirror the current WGPU/Leto core operation slice:
+  elementwise, strided elementwise, reductions, rank-2 axis reductions,
+  rank-2 scans, `cumsum_into`/`cumsum`, matrix multiplication, Kronecker
+  product, matrix power, finite-`f32` matrix rank, dot, trace, and norms.
+- [x] Renamed CUDA forward cumulative-sum caller-owned API to `cumsum_into`,
+  matching Leto and WGPU with no compatibility alias.
+- [x] Stub-mode CUDA build validates the operation surface without fabricating
+  hardware: unavailable-device tests skip by construction, while contract tests
+  still exercise host-visible error paths and CPU-backed semantics available in
+  the stub.
+- Evidence: `cargo fmt -p hephaestus-cuda --check`; `cargo clippy -p
+  hephaestus-cuda --all-targets -- -D warnings`; `cargo nextest run -p
+  hephaestus-cuda` (35 passed); `cargo test --doc -p hephaestus-cuda` (0
+  doctests); `cargo doc -p hephaestus-cuda --no-deps`. Evidence tier: static
+  diagnostics and value-semantic contract tests in the currently available
+  stub mode.
 
 ## 0.10.0 checked launch grid arithmetic [minor]
 - [x] Added `BlockWidth::checked_covering_blocks` as the non-saturating launch

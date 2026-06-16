@@ -2,13 +2,14 @@
 
 use bytemuck::Pod;
 use core::marker::PhantomData;
-use hephaestus_core::{DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use leto::Layout;
 
-use super::{map_layout, map_layout_err, GpuMatrixLayout};
+use super::{map_layout, map_layout_err};
 use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::cached_kernel;
 use crate::application::strided::StridedOperand;
-use crate::CudaDevice;
+use crate::{CudaBuffer, CudaDevice};
 
 struct KronKernel<T>(PhantomData<T>);
 
@@ -67,7 +68,7 @@ extern "C" __global__ void kron_kernel(
 ///
 /// For `lhs` with shape `[m, n]` and `rhs` with shape `[p, q]`, the output
 /// shape must be `[m * p, n * q]`.
-pub fn kron<T>(
+pub fn kron_into<T>(
     device: &CudaDevice,
     lhs: StridedOperand<'_, T, 2>,
     rhs: StridedOperand<'_, T, 2>,
@@ -154,9 +155,9 @@ where
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut b_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut out_meta_val as *mut GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+            &mut out_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
         ];
 
         unsafe {
@@ -187,4 +188,46 @@ where
     }
 
     Ok(())
+}
+
+/// Allocate and compute the Kronecker product `lhs ⊗ rhs` on the CUDA device.
+///
+/// For `lhs` with shape `[m, n]` and `rhs` with shape `[p, q]`, the returned
+/// buffer has C-contiguous shape `[m * p, n * q]`.
+pub fn kron<T>(
+    device: &CudaDevice,
+    lhs: StridedOperand<'_, T, 2>,
+    rhs: StridedOperand<'_, T, 2>,
+) -> Result<CudaBuffer<T>>
+where
+    T: CudaScalar + Pod,
+{
+    let [lhs_rows, lhs_cols] = lhs.layout.shape;
+    let [rhs_rows, rhs_cols] = rhs.layout.shape;
+    let expected_rows =
+        lhs_rows
+            .checked_mul(rhs_rows)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("Kronecker row count overflows usize: {lhs_rows} * {rhs_rows}"),
+            })?;
+    let expected_cols =
+        lhs_cols
+            .checked_mul(rhs_cols)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("Kronecker column count overflows usize: {lhs_cols} * {rhs_cols}"),
+            })?;
+
+    let out_layout =
+        Layout::c_contiguous([expected_rows, expected_cols]).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    kron_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )?;
+    Ok(out)
 }

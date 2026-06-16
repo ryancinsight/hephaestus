@@ -19,8 +19,9 @@ pub use application::elementwise::{
     IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
 };
 pub use application::linalg::{
-    batched_matmul, dot, kron, matmul, matpow, norm_l1, norm_l2, norm_max, trace, L2NormScalar,
-    MatmulZero, MatrixIdentityScalar,
+    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matmul, matmul_into, matpow,
+    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace, L2NormScalar,
+    MatmulZero, MatrixIdentityScalar, MatrixRankScalar,
 };
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
@@ -28,7 +29,7 @@ pub use application::reduction::{
     ReductionWgslOp, SumOp,
 };
 pub use application::scan::{
-    cumsum, cumsum_axis_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
+    cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
     ScanIdentity, ScanWgslOp,
 };
 pub use application::strided::{
@@ -39,5 +40,11 @@ pub use application::strided::{
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;
+
+#[cfg(feature = "decomposition")]
+pub use application::decomposition::{
+    cholesky_decompose, lu_decompose, qr_decompose, GpuCholesky, GpuLuDecomposition,
+    GpuQrDecomposition,
+};
 
 pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};

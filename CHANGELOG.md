@@ -7,26 +7,37 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 ### Added
 
 - `hephaestus-wgpu` [minor]: GPU-resident linalg surface for parity with
-  Leto CPU operations: matrix multiply, batched matrix multiply, dot product,
-  trace, and L1/L2/max norms over strided operands. The comparative benchmark
-  now measures WGPU against Leto, `ndarray`, and `nalgebra` for elementwise,
-  reduction, matmul, dot, trace, and norm workloads.
+  Leto CPU operations: allocating `matmul`/`batched_matmul`, caller-owned
+  `matmul_into`/`batched_matmul_into`, dot product, trace, and L1/L2/max norms
+  over strided operands. The comparative benchmark now measures WGPU against
+  Leto, `ndarray`, and `nalgebra` for elementwise, reduction, matmul, dot,
+  trace, and norm workloads.
 - `hephaestus-wgpu` [minor]: GPU-resident Kronecker product (`kron`) over
-  strided matrix operands, with Leto differential tests and comparative
-  benchmark coverage against Leto, `ndarray`, and a nalgebra-backed CPU
-  reference.
+  strided matrix operands, plus caller-owned `kron_into`, with Leto
+  differential tests and comparative benchmark coverage against Leto,
+  `ndarray`, and a nalgebra-backed CPU reference.
 - `hephaestus-wgpu` [minor]: GPU-resident matrix power (`matpow`) over
   strided square matrix operands, using exponentiation by squaring over WGPU
-  `matmul` dispatches, with Leto differential tests and comparative benchmark
-  coverage against Leto, an `ndarray` repeated-squaring reference, and
-  `nalgebra`.
+  `matmul_into` dispatches, with Leto differential tests and comparative
+  benchmark coverage against Leto, an `ndarray` repeated-squaring reference,
+  and `nalgebra`.
+- `hephaestus-wgpu` [minor]: GPU-resident finite-`f32` matrix-rank estimation
+  (`matrix_rank`, `matrix_rank_with_tolerance`) using row reduction in GPU
+  storage memory. Contract tests compare exact finite full-rank,
+  rank-deficient, and zero matrices against Leto; comparative benchmarks cover
+  WGPU, Leto, `ndarray`-backed, and `nalgebra`-backed references.
+- `hephaestus-wgpu` [minor]: GPU-resident finite-`f32` determinant (`det`)
+  using the shared WGPU matrix-property row-reduction dispatch. Contract tests
+  compare exact finite nonsingular and singular matrices against Leto and
+  reject rectangular inputs; comparative benchmarks cover WGPU, Leto,
+  `ndarray`, and `nalgebra` references.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output
   contract, with Leto differential tests and comparative benchmark coverage
   for axis 0.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 scan dispatch
-  (`scan_axis_into`, `scan_axis`, `cumsum_axis_into`, `cumsum`) with
+  (`scan_axis_into`, `scan_axis`, `cumsum_into`, `cumsum`) with
   forward/reverse directions and cumulative sum/product markers, with Leto
   differential tests and comparative benchmark coverage for cumulative sum
   over axis 1.
@@ -52,6 +63,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   length-mismatch rejection — value-semantic, passing on real CUDA hardware
   (toolkit v13.2) and skipping when no device is present. Monomorphized kernel
   dispatch (mirroring `hephaestus-wgpu`'s `application` layer) is a follow-up.
+- `hephaestus-cuda` [minor]: CUDA application-operation parity slice covering
+  elementwise, strided elementwise, reductions, rank-2 axis reductions,
+  rank-2 scans (`cumsum_into`/`cumsum`), matrix multiplication, Kronecker
+  product, matrix power, finite-`f32` matrix rank, dot, trace, and norms. Stub
+  builds compile and run contract tests without fabricating a device; real CUDA
+  execution remains gated behind the `cuda` feature and hardware availability.
 
 ### Fixed
 

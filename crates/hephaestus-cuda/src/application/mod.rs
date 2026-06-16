@@ -10,7 +10,7 @@ pub mod linalg;
 pub mod pipeline;
 /// Multi-pass tree reductions.
 pub mod reduction;
-/// Layout-aware strided elementwise operations.
-pub mod strided;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Layout-aware strided elementwise operations.
+pub mod strided;

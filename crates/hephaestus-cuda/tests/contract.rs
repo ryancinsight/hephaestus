@@ -6,10 +6,11 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_cuda::{
-    binary_elementwise, binary_elementwise_into, dot, matmul, norm_l1, norm_l2, norm_max,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, trace,
-    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice, ExpOp, MaxOp, MinOp,
-    MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
+    binary_elementwise, binary_elementwise_into, det, dot, kron, matmul, matmul_into, matrix_rank,
+    matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, reduce_axis, reduction,
+    reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis, trace,
+    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp,
+    MinOp, MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
 };
 use leto::Layout;
 
@@ -458,7 +459,7 @@ fn linalg_matmul_matches_cpu_reference() {
     let b_layout = Layout::c_contiguous([2, 4]).unwrap();
     let out_layout = Layout::c_contiguous([3, 4]).unwrap();
 
-    matmul(
+    matmul_into(
         &dev,
         StridedOperand {
             buffer: &a,
@@ -572,4 +573,190 @@ fn linalg_norms_match_cpu_reference() {
     let mut got_max = [0.0f32; 1];
     dev.download(&max_buf, &mut got_max).unwrap();
     assert_eq!(got_max[0], 4.0);
+}
+
+#[test]
+fn linalg_matmul_allocating_matches_cpu_reference() {
+    let Some(dev) = device("linalg_matmul_allocating_matches_cpu_reference") else {
+        return;
+    };
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_host = vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0];
+    let expected = vec![
+        29.0f32, 32.0, 35.0, 38.0, 65.0, 72.0, 79.0, 86.0, 101.0, 112.0, 123.0, 134.0,
+    ];
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+
+    let a_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 4]).unwrap();
+
+    let out = matmul(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 12];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_kron_matches_cpu_reference() {
+    let Some(dev) = device("linalg_kron_matches_cpu_reference") else {
+        return;
+    };
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![5.0f32, 6.0, 7.0, 8.0];
+    let expected = vec![
+        5.0f32, 6.0, 10.0, 12.0, 7.0, 8.0, 14.0, 16.0, 15.0, 18.0, 20.0, 24.0, 21.0, 24.0, 28.0,
+        32.0,
+    ];
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+
+    let a_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let out = kron(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 16];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn reduction_axis_reduction_generic_matches_cpu() {
+    let Some(dev) = device("reduction_axis_reduction_generic_matches_cpu") else {
+        return;
+    };
+
+    let host_in = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let a = dev.upload(&host_in).unwrap();
+    let a_layout = Layout::c_contiguous([2, 3]).unwrap();
+
+    // Sum axis 0
+    let out = reduce_axis::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got = vec![0.0f32; 3];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, vec![5.0, 7.0, 9.0]);
+}
+
+#[test]
+fn scan_scan_axis_matches_cpu() {
+    let Some(dev) = device("scan_scan_axis_matches_cpu") else {
+        return;
+    };
+
+    let host_in = vec![1.0f32, 2.0, 3.0, 4.0];
+    let a = dev.upload(&host_in).unwrap();
+    let a_layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let out = scan_axis::<CumSumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        1,
+        hephaestus_cuda::ScanDirection::Forward,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got = vec![0.0f32; 4];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, vec![1.0, 3.0, 3.0, 7.0]);
+}
+
+#[test]
+fn linalg_matrix_rank_matches_reference() {
+    let Some(dev) = device("linalg_matrix_rank_matches_reference") else {
+        return;
+    };
+
+    // Diagonal matrix with rank 2
+    let host_in = vec![3.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0];
+    let a = dev.upload(&host_in).unwrap();
+    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
+
+    let rank = matrix_rank(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+    )
+    .unwrap();
+    assert_eq!(rank, 2);
+
+    let rank_tol = matrix_rank_with_tolerance(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        0.5,
+    )
+    .unwrap();
+    assert_eq!(rank_tol, 1);
+}
+
+#[test]
+fn linalg_det_matches_reference() {
+    let Some(dev) = device("linalg_det_matches_reference") else {
+        return;
+    };
+
+    // Diagonal matrix with determinant = 3.0 * 2.0 * -1.0 = -6.0
+    let host_in = vec![
+        3.0f32, 0.0, 0.0,
+        0.0, 2.0, 0.0,
+        0.0, 0.0, -1.0,
+    ];
+    let a = dev.upload(&host_in).unwrap();
+    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
+
+    let det_buffer = det(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+    )
+    .unwrap();
+    let mut got = [0.0f32; 1];
+    dev.download(&det_buffer, &mut got).unwrap();
+    assert!((got[0] - (-6.0f32)).abs() < 1.0e-5);
 }

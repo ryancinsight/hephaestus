@@ -13,15 +13,17 @@ use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
 use leto::Layout;
 
-mod matmul;
-mod norms;
 mod kron;
+mod matmul;
 mod matpow;
+mod matrix_rank;
+mod norms;
 
-pub use matmul::{batched_matmul, matmul};
-pub use norms::{dot, norm_l1, norm_l2, norm_max, trace};
-pub use kron::kron;
+pub use kron::{kron, kron_into};
+pub use matmul::{batched_matmul, batched_matmul_into, matmul, matmul_into};
 pub use matpow::{matpow, MatrixIdentityScalar};
+pub use matrix_rank::{det, matrix_rank, matrix_rank_with_tolerance, MatrixRankScalar};
+pub use norms::{dot, norm_l1, norm_l2, norm_max, trace};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

@@ -43,13 +43,24 @@ pub use application::elementwise::{
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryCudaOp, CosOp, DivOp, ExpOp,
     IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryCudaOp,
 };
-pub use application::linalg::{batched_matmul, dot, matmul, norm_l1, norm_l2, norm_max, trace};
+pub use application::linalg::{
+    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matmul, matmul_into, matpow,
+    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
+    MatrixIdentityScalar, MatrixRankScalar,
+};
 pub use application::reduction::{
-    reduction, reduction_with_width, MaxOp, MinOp, ReductionCudaOp, ReductionIdentity, SumOp,
+    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
+    reduce_axis_into, reduction, reduction_with_width, sum_axis, sum_axis_into, MaxOp, MinOp,
+    ReductionCudaOp, ReductionIdentity, SumOp,
+};
+pub use application::scan::{
+    cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanCudaOp, ScanDirection,
+    ScanIdentity,
 };
 pub use application::strided::{
-    binary_elementwise_strided_into, scalar_elementwise_strided_into,
-    unary_elementwise_strided_into, StridedOperand, MAX_STRIDED_RANK,
+    binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
+    StridedOperand, MAX_STRIDED_RANK,
 };
 
 pub use infrastructure::buffer::CudaBuffer;

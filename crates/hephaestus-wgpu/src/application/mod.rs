@@ -1,5 +1,8 @@
 //! Monomorphized compute dispatch over the wgpu device.
 
+/// Dense matrix decompositions (Cholesky, LU, QR).
+#[cfg(feature = "decomposition")]
+pub mod decomposition;
 /// Elementwise binary kernels.
 pub mod elementwise;
 /// Linear algebra compute operations.

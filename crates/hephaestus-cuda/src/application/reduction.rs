@@ -1,10 +1,11 @@
 use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size};
-use crate::application::strided::StridedOperand;
+use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use leto::Layout;
 
 /// Zero-sized reduction operation marker selecting the CUDA combine expression.
 pub trait ReductionCudaOp: Copy + Send + Sync + 'static {
@@ -388,7 +389,10 @@ fn validate_axis_reduction<T>(
             to_u32(output_len, "output length")?,
         ],
     };
-    Ok(Some(AxisReductionDispatch { meta, grid_size: grid_size_val }))
+    Ok(Some(AxisReductionDispatch {
+        meta,
+        grid_size: grid_size_val,
+    }))
 }
 
 fn axis_reduction_shader_source<Op: ReductionCudaOp, T: ReductionIdentity<Op>>() -> String {
@@ -552,7 +556,7 @@ where
 
     #[cfg(not(feature = "cuda"))]
     {
-        let _ = (kernel, dispatch);
+        let _ = (kernel, dispatch.meta, dispatch.grid_size);
     }
 
     Ok(())
@@ -655,7 +659,7 @@ where
 
     #[cfg(not(feature = "cuda"))]
     {
-        let _ = (kernel, dispatch);
+        let _ = (kernel, dispatch.meta, dispatch.grid_size);
     }
 
     Ok(())

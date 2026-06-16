@@ -73,6 +73,11 @@ pub trait L2NormScalar: WgslScalar + Pod + ReductionIdentity<SumOp> {}
 
 impl L2NormScalar for f32 {}
 
+/// WGPU scalar whose shader type supports row-reduction rank estimation.
+pub trait MatrixRankScalar: WgslScalar + Pod {}
+
+impl MatrixRankScalar for f32 {}
+
 /// Packed layout metadata matching the WGSL `MatrixLayout` uniform.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -83,9 +88,21 @@ struct GpuMatrixLayout {
     _pad: [u32; 3], // pad to 32 bytes (multiple of 16)
 }
 
+/// Packed layout metadata matching the WGSL `RankMeta` uniform.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct RankMeta {
+    shape: [u32; 2],
+    strides: [i32; 2],
+    offset: u32,
+    tolerance: f32,
+    _pad: [u32; 2],
+}
+
 struct MatmulKernel<T>(PhantomData<T>);
 struct KronKernel<T>(PhantomData<T>);
 struct MapReductionKernel<Op>(PhantomData<Op>);
+struct MatrixPropertiesKernel<T>(PhantomData<T>);
 
 trait MapReductionWgslOp: Copy + Send + Sync + 'static {
     type ReduceOp: ReductionWgslOp;
@@ -443,11 +460,139 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
+fn matrix_properties_shader_source<T: MatrixRankScalar>() -> String {
+    format!(
+        r#"
+struct RankMeta {{
+    shape: vec2<u32>,
+    strides: vec2<i32>,
+    offset: u32,
+    tolerance: f32,
+    _pad: vec2<u32>,
+}}
+
+@group(0) @binding(0) var<uniform> rank_meta: RankMeta;
+@group(0) @binding(1) var<storage, read> input: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> scratch: array<{ty}>;
+@group(0) @binding(3) var<storage, read_write> rank_out: array<u32>;
+@group(0) @binding(4) var<storage, read_write> det_out: array<{ty}>;
+
+@compute @workgroup_size(1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
+    if (gid.x != 0u) {{
+        return;
+    }}
+
+    let rows = rank_meta.shape.x;
+    let cols = rank_meta.shape.y;
+    if (rows == 0u || cols == 0u) {{
+        rank_out[0] = 0u;
+        det_out[0] = {ty}(0.0);
+        return;
+    }}
+
+    let square = rows == cols;
+    var max_abs = {ty}(0.0);
+    let len = rows * cols;
+    for (var idx = 0u; idx < len; idx = idx + 1u) {{
+        let row = idx / cols;
+        let col = idx - row * cols;
+        let input_offset = i32(rank_meta.offset)
+            + i32(row) * rank_meta.strides.x
+            + i32(col) * rank_meta.strides.y;
+        let value = input[u32(input_offset)];
+        scratch[idx] = value;
+        max_abs = max(max_abs, abs(value));
+    }}
+
+    if (max_abs <= {ty}(0.0)) {{
+        rank_out[0] = 0u;
+        det_out[0] = {ty}(0.0);
+        return;
+    }}
+
+    let threshold = max_abs * {ty}(rank_meta.tolerance);
+    var rank = 0u;
+    var det = {ty}(1.0);
+    var sign = {ty}(1.0);
+    for (var col = 0u; col < cols; col = col + 1u) {{
+        if (rank >= rows) {{
+            break;
+        }}
+
+        var pivot_row = rank;
+        var pivot_abs = {ty}(0.0);
+        for (var row = rank; row < rows; row = row + 1u) {{
+            let magnitude = abs(scratch[row * cols + col]);
+            if (magnitude > pivot_abs) {{
+                pivot_abs = magnitude;
+                pivot_row = row;
+            }}
+        }}
+
+        if (pivot_abs > threshold) {{
+            if (pivot_row != rank) {{
+                sign = -sign;
+                for (var swap_col = 0u; swap_col < cols; swap_col = swap_col + 1u) {{
+                    let lhs = rank * cols + swap_col;
+                    let rhs = pivot_row * cols + swap_col;
+                    let tmp = scratch[lhs];
+                    scratch[lhs] = scratch[rhs];
+                    scratch[rhs] = tmp;
+                }}
+            }}
+
+            let pivot = scratch[rank * cols + col];
+            if (square) {{
+                det = det * pivot;
+            }}
+            for (var row = 0u; row < rows; row = row + 1u) {{
+                if (row != rank) {{
+                    let factor = scratch[row * cols + col] / pivot;
+                    for (var elim_col = col; elim_col < cols; elim_col = elim_col + 1u) {{
+                        let target_idx = row * cols + elim_col;
+                        let source = rank * cols + elim_col;
+                        scratch[target_idx] = scratch[target_idx] - factor * scratch[source];
+                    }}
+                }}
+            }}
+            rank = rank + 1u;
+        }}
+    }}
+
+    rank_out[0] = rank;
+    if (square && rank == rows) {{
+        det_out[0] = sign * det;
+    }} else {{
+        det_out[0] = {ty}(0.0);
+    }}
+}}
+"#,
+        ty = T::WGSL_TYPE,
+    )
+}
+
+fn kron_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
+    let [lhs_rows, lhs_cols] = lhs.shape;
+    let [rhs_rows, rhs_cols] = rhs.shape;
+    let rows = lhs_rows
+        .checked_mul(rhs_rows)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!("Kronecker row count overflows usize: {lhs_rows} * {rhs_rows}"),
+        })?;
+    let cols = lhs_cols
+        .checked_mul(rhs_cols)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!("Kronecker column count overflows usize: {lhs_cols} * {rhs_cols}"),
+        })?;
+    Ok([rows, cols])
+}
+
 /// Perform the Kronecker product `out = lhs ⊗ rhs` on the GPU.
 ///
 /// For `lhs` with shape `[m, n]` and `rhs` with shape `[p, q]`, the output
 /// shape must be `[m * p, n * q]`.
-pub fn kron<T>(
+pub fn kron_into<T>(
     device: &WgpuDevice,
     lhs: StridedOperand<'_, T, 2>,
     rhs: StridedOperand<'_, T, 2>,
@@ -456,20 +601,7 @@ pub fn kron<T>(
 where
     T: WgslScalar + Pod,
 {
-    let [lhs_rows, lhs_cols] = lhs.layout.shape;
-    let [rhs_rows, rhs_cols] = rhs.layout.shape;
-    let expected_rows =
-        lhs_rows
-            .checked_mul(rhs_rows)
-            .ok_or_else(|| HephaestusError::DispatchFailed {
-                message: format!("Kronecker row count overflows usize: {lhs_rows} * {rhs_rows}"),
-            })?;
-    let expected_cols =
-        lhs_cols
-            .checked_mul(rhs_cols)
-            .ok_or_else(|| HephaestusError::DispatchFailed {
-                message: format!("Kronecker column count overflows usize: {lhs_cols} * {rhs_cols}"),
-            })?;
+    let [expected_rows, expected_cols] = kron_output_shape(lhs.layout, rhs.layout)?;
 
     if out.layout.shape != [expected_rows, expected_cols] {
         return Err(HephaestusError::DispatchFailed {
@@ -588,11 +720,52 @@ where
     Ok(())
 }
 
+/// Allocate and compute the Kronecker product `lhs ⊗ rhs` on the GPU.
+///
+/// For `lhs` with shape `[m, n]` and `rhs` with shape `[p, q]`, the returned
+/// buffer has C-contiguous shape `[m * p, n * q]`.
+pub fn kron<T>(
+    device: &WgpuDevice,
+    lhs: StridedOperand<'_, T, 2>,
+    rhs: StridedOperand<'_, T, 2>,
+) -> Result<WgpuBuffer<T>>
+where
+    T: WgslScalar + Pod,
+{
+    let shape = kron_output_shape(lhs.layout, rhs.layout)?;
+    let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    kron_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &layout,
+        },
+    )?;
+    Ok(out)
+}
+
+fn matmul_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
+    let [rows, lhs_shared] = lhs.shape;
+    let [rhs_shared, cols] = rhs.shape;
+    if lhs_shared != rhs_shared {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "matmul dimension mismatch: lhs {:?}, rhs {:?}",
+                lhs.shape, rhs.shape
+            ),
+        });
+    }
+    Ok([rows, cols])
+}
+
 /// Perform matrix multiplication `out = lhs * rhs` on the GPU.
 ///
 /// Output shape must conform to `[lhs.rows, rhs.cols]`, and output buffer
 /// must not alias either input buffer.
-pub fn matmul<T>(
+pub fn matmul_into<T>(
     device: &WgpuDevice,
     lhs: StridedOperand<'_, T, 2>,
     rhs: StridedOperand<'_, T, 2>,
@@ -601,11 +774,11 @@ pub fn matmul<T>(
 where
     T: WgslScalar + Pod + MatmulZero,
 {
-    let [rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_shared, cols] = rhs.layout.shape;
+    let [rows, cols] = matmul_output_shape(lhs.layout, rhs.layout)?;
+    let lhs_shared = lhs.layout.shape[1];
     let [out_rows, out_cols] = out.layout.shape;
 
-    if lhs_shared != rhs_shared || rows != out_rows || cols != out_cols {
+    if rows != out_rows || cols != out_cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}, out {:?}",
@@ -724,8 +897,51 @@ where
     Ok(())
 }
 
+/// Allocate and compute matrix multiplication `lhs * rhs` on the GPU.
+///
+/// The returned buffer has C-contiguous shape `[lhs.rows, rhs.cols]`.
+pub fn matmul<T>(
+    device: &WgpuDevice,
+    lhs: StridedOperand<'_, T, 2>,
+    rhs: StridedOperand<'_, T, 2>,
+) -> Result<WgpuBuffer<T>>
+where
+    T: WgslScalar + Pod + MatmulZero,
+{
+    let shape = matmul_output_shape(lhs.layout, rhs.layout)?;
+    let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    matmul_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &layout,
+        },
+    )?;
+    Ok(out)
+}
+
+fn batched_matmul_output_shape(lhs: &Layout<3>, rhs: &Layout<3>) -> Result<[usize; 3]> {
+    let [lhs_batch, m, lhs_k] = lhs.shape;
+    let [rhs_batch, rhs_k, n] = rhs.shape;
+    let batch = lhs_batch.max(rhs_batch);
+    let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
+    let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
+    if !lhs_batches_ok || !rhs_batches_ok || lhs_k != rhs_k {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "batched matmul shape mismatch: lhs {:?}, rhs {:?}",
+                lhs.shape, rhs.shape
+            ),
+        });
+    }
+    Ok([batch, m, n])
+}
+
 /// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` on the GPU.
-pub fn batched_matmul<T>(
+pub fn batched_matmul_into<T>(
     device: &WgpuDevice,
     lhs: StridedOperand<'_, T, 3>,
     rhs: StridedOperand<'_, T, 3>,
@@ -734,6 +950,7 @@ pub fn batched_matmul<T>(
 where
     T: WgslScalar + Pod + MatmulZero,
 {
+    let expected_shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
     let [lhs_batch, m, lhs_k] = lhs.layout.shape;
     let [rhs_batch, rhs_k, n] = rhs.layout.shape;
     let [out_batch, out_m, out_n] = out.layout.shape;
@@ -741,7 +958,11 @@ where
     let batch = out_batch;
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
     let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
-    if !lhs_batches_ok || !rhs_batches_ok || lhs_k != rhs_k || m != out_m || n != out_n {
+    if !lhs_batches_ok
+        || !rhs_batches_ok
+        || lhs_k != rhs_k
+        || [out_batch, out_m, out_n] != expected_shape
+    {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
@@ -802,10 +1023,37 @@ where
             layout: &out_mat_layout,
         };
 
-        matmul(device, lhs_operand, rhs_operand, out_operand)?;
+        matmul_into(device, lhs_operand, rhs_operand, out_operand)?;
     }
 
     Ok(())
+}
+
+/// Allocate and compute batched matrix multiplication on the GPU.
+///
+/// Singleton batches broadcast to the other operand's batch count. The returned
+/// buffer has C-contiguous shape `[batch, lhs.rows, rhs.cols]`.
+pub fn batched_matmul<T>(
+    device: &WgpuDevice,
+    lhs: StridedOperand<'_, T, 3>,
+    rhs: StridedOperand<'_, T, 3>,
+) -> Result<WgpuBuffer<T>>
+where
+    T: WgslScalar + Pod + MatmulZero,
+{
+    let shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
+    let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    batched_matmul_into(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &out,
+            layout: &layout,
+        },
+    )?;
+    Ok(out)
 }
 
 fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Vec<T> {
@@ -820,7 +1068,7 @@ fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Vec<T> {
 ///
 /// The algorithm is exponentiation by squaring, matching Leto's `matpow`
 /// contract: `A^0` is the identity matrix and non-square inputs are rejected.
-/// Matrix products are dispatched through [`matmul`]; the host controls only
+/// Matrix products are dispatched through [`matmul_into`]; the host controls only
 /// the exponent bits and buffer rotation.
 pub fn matpow<T>(
     device: &WgpuDevice,
@@ -868,7 +1116,7 @@ where
 
     loop {
         if remaining & 1 == 1 {
-            matmul(
+            matmul_into(
                 device,
                 StridedOperand {
                     buffer: &result,
@@ -891,7 +1139,7 @@ where
             break;
         }
 
-        matmul(
+        matmul_into(
             device,
             StridedOperand {
                 buffer: &base,
@@ -979,6 +1227,173 @@ where
     };
 
     unary_map_reduction::<TraceOp, T, 1>(device, diag_operand)
+}
+
+fn matrix_properties_with_tolerance<T>(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, T, 2>,
+    relative_tolerance: f32,
+) -> Result<(usize, WgpuBuffer<T>)>
+where
+    T: MatrixRankScalar,
+{
+    let [rows, cols] = matrix.layout.shape;
+    if rows == 0 || cols == 0 {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "matrix rank is undefined for empty matrix with shape {:?}",
+                matrix.layout.shape
+            ),
+        });
+    }
+    if !relative_tolerance.is_finite() || relative_tolerance < 0.0 {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "matrix rank tolerance must be finite and non-negative, got {relative_tolerance}"
+            ),
+        });
+    }
+
+    matrix
+        .layout
+        .validate_storage_len(matrix.buffer.len)
+        .map_err(map_layout_err)?;
+
+    let len = matrix.layout.checked_size().map_err(map_layout_err)?;
+    let scratch = device.alloc_zeroed::<T>(len)?;
+    let rank_out = device.alloc_zeroed::<u32>(1)?;
+    let det_out = device.alloc_zeroed::<T>(1)?;
+    let meta = RankMeta {
+        shape: [
+            to_u32(rows, "rank row count")?,
+            to_u32(cols, "rank column count")?,
+        ],
+        strides: [
+            to_i32(matrix.layout.strides[0], "rank row stride")?,
+            to_i32(matrix.layout.strides[1], "rank column stride")?,
+        ],
+        offset: to_u32(matrix.layout.offset, "rank input offset")?,
+        tolerance: relative_tolerance,
+        _pad: [0; 2],
+    };
+
+    let pipeline = cached_pipeline(
+        device,
+        (
+            TypeId::of::<MatrixPropertiesKernel<T>>(),
+            TypeId::of::<T>(),
+            1,
+        ),
+        "hephaestus-matrix-properties",
+        || matrix_properties_shader_source::<T>(),
+    );
+
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<RankMeta>(1)?)?;
+    device
+        .queue()
+        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-matrix-rank"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: meta_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: matrix.buffer.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: scratch.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: rank_out.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: det_out.buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-properties"),
+        });
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-matrix-properties"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+    device.queue().submit(Some(encoder.finish()));
+    device.recycle_uniform_buffer(meta_buffer);
+
+    let mut rank = [0u32; 1];
+    device.download(&rank_out, &mut rank)?;
+    let rank = usize::try_from(rank[0]).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("matrix rank {} exceeds usize range", rank[0]),
+    })?;
+    Ok((rank, det_out))
+}
+
+/// Estimate the numerical rank of a finite rank-2 matrix on the GPU.
+///
+/// The kernel performs Gaussian row reduction in GPU storage memory and counts
+/// pivots greater than `relative_tolerance * max(abs(matrix))`. This matches
+/// Leto's relative-threshold intent for exact finite test cases, but it is a
+/// row-reduction criterion rather than Leto's SVD-spectrum criterion.
+pub fn matrix_rank_with_tolerance<T>(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, T, 2>,
+    relative_tolerance: f32,
+) -> Result<usize>
+where
+    T: MatrixRankScalar,
+{
+    matrix_properties_with_tolerance(device, matrix, relative_tolerance).map(|(rank, _)| rank)
+}
+
+/// Estimate the numerical rank of a finite rank-2 matrix on the GPU.
+///
+/// Uses Leto's default relative tolerance of `1e-9`.
+#[inline]
+pub fn matrix_rank<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<usize>
+where
+    T: MatrixRankScalar,
+{
+    matrix_rank_with_tolerance(device, matrix, 1.0e-9)
+}
+
+/// Compute the determinant of a finite square matrix on the GPU.
+///
+/// The kernel performs Gaussian row reduction in GPU storage memory and returns
+/// zero for singular matrices, matching Leto's determinant contract for exact
+/// finite cases.
+pub fn det<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<WgpuBuffer<T>>
+where
+    T: MatrixRankScalar,
+{
+    let [rows, cols] = matrix.layout.shape;
+    if rows != cols {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "det requires a square matrix, got shape {:?}",
+                matrix.layout.shape
+            ),
+        });
+    }
+    matrix_properties_with_tolerance(device, matrix, 0.0).map(|(_, determinant)| determinant)
 }
 
 /// Compute the L1 norm `Σ |x|` on the GPU.
