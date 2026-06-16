@@ -52,12 +52,13 @@
 - [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
   Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
   path. Evidence tier: implementation audit.
-- [minor] WGPU pseudoinverse and matrix exponential now have baseline
-  closed-form contract tests and comparative benchmark rows, but still need
-  broader invalid-input, rank-deficient, nilpotent, and non-diagonal matrix
-  families before they match the depth of the completed decomposition slices.
-  Evidence tier: value-semantic closed-form tests and empirical benchmark
-  rows.
+- [minor] WGPU pseudoinverse and matrix exponential now have non-diagonal,
+  rank-deficient, rectangular, nilpotent, skew-symmetric, general-matrix, and
+  invalid-input contract coverage plus comparative benchmark rows. Remaining
+  risk is performance/API parity only: both wrappers still delegate to Leto on
+  the host and upload device buffers. Evidence tier: value-semantic
+  closed-form, Moore-Penrose algebraic, differential, invalid-input tests, and
+  empirical benchmark rows.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -70,6 +71,6 @@
 
 ## Next Increment
 
-- Strengthen WGPU pseudoinverse and matrix exponential contracts with
-  non-diagonal, invalid-input, and adversarial matrix families, or remove any
-  wrapper path that cannot be verified without a real implementation contract.
+- Continue the parity audit at the next highest-risk residual: either broaden
+  nonsymmetric general-eigenvalue families or address the Hermes direct-kernel
+  usage gap in WGPU.

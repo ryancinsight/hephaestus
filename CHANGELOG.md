@@ -80,6 +80,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   column-pivoted QR factor agreement plus closed-form diagonal pseudoinverse
   and matrix exponential cases; comparative benchmarks measure WGPU API
   overhead against Leto and available `nalgebra` comparators.
+- `hephaestus-wgpu` [minor]: strengthened pseudoinverse and matrix exponential
+  contracts with rank-deficient Moore-Penrose identities, rectangular
+  pseudoinverse, non-finite rejection, nilpotent and skew-symmetric
+  matrix-exponential closed forms, a general `nalgebra` exponential oracle,
+  and rectangular/non-finite matrix-exponential rejection.
 - `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
   decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
   compare eigenvalues/eigenvectors against Leto and reject non-symmetric

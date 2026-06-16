@@ -3608,6 +3608,120 @@ fn linalg_pinv_matches_closed_form_diagonal() {
 }
 
 #[test]
+fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let n = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 2.0, 4.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+
+    let out = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; n * n];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(n, n, &matrix_host)
+        .pseudo_inverse(1.0e-6)
+        .unwrap();
+    let mut expected_host = Vec::with_capacity(n * n);
+    for row in 0..n {
+        for col in 0..n {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
+
+    let a_ap = matmul_host(&matrix_host, n, n, &got, n);
+    let a_ap_a = matmul_host(&a_ap, n, n, &matrix_host, n);
+    assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
+
+    let ap_a = matmul_host(&got, n, n, &matrix_host, n);
+    let ap_a_ap = matmul_host(&ap_a, n, n, &got, n);
+    assert_close_slice(&ap_a_ap, &got, 1.0e-4, 1.0e-4);
+}
+
+#[test]
+fn linalg_pinv_handles_rectangular_full_rank_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let rows = 3usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0, 2.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+
+    let out = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; cols * rows];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(rows, cols, &matrix_host)
+        .pseudo_inverse(1.0e-6)
+        .unwrap();
+    let mut expected_host = Vec::with_capacity(cols * rows);
+    for row in 0..cols {
+        for col in 0..rows {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
+
+    let a_ap = matmul_host(&matrix_host, rows, cols, &got, rows);
+    let a_ap_a = matmul_host(&a_ap, rows, rows, &matrix_host, cols);
+    assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
+}
+
+#[test]
+fn linalg_pinv_rejects_non_finite_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Pseudoinverse failed")
+    ));
+}
+
+#[test]
 fn linalg_matexp_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3638,4 +3752,126 @@ fn linalg_matexp_matches_closed_form_diagonal() {
             "matrix exponential mismatch at {index}: got {actual}, expected {expected}, tolerance {tolerance}"
         );
     }
+}
+
+#[test]
+fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let nilpotent_host = vec![0.0f32, 1.0, 0.0, 0.0];
+    let nilpotent = device.upload(&nilpotent_host).unwrap();
+    let nilpotent_out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &nilpotent,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_nilpotent = vec![0.0f32; 4];
+    device.download(&nilpotent_out, &mut got_nilpotent).unwrap();
+    assert_close_slice(&got_nilpotent, &[1.0, 1.0, 0.0, 1.0], 1.0e-5, 0.0);
+
+    let theta = 0.9f32;
+    let skew_host = vec![0.0f32, -theta, theta, 0.0];
+    let skew = device.upload(&skew_host).unwrap();
+    let skew_out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &skew,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_skew = vec![0.0f32; 4];
+    device.download(&skew_out, &mut got_skew).unwrap();
+    assert_close_slice(
+        &got_skew,
+        &[theta.cos(), -theta.sin(), theta.sin(), theta.cos()],
+        1.0e-5,
+        1.0e-5,
+    );
+}
+
+#[test]
+fn linalg_matexp_matches_nalgebra_general_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let n = 3usize;
+    let matrix_host = vec![1.2f32, -0.7, 0.4, 0.3, 2.1, -1.5, -0.6, 0.8, 0.5];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+
+    let out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; n * n];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(n, n, &matrix_host).exp();
+    let mut expected_host = Vec::with_capacity(n * n);
+    for row in 0..n {
+        for col in 0..n {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-3, 1.0e-4);
+}
+
+#[test]
+fn linalg_matexp_rejects_invalid_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential requires square matrix")
+    ));
+
+    let non_finite_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
+    let non_finite = device.upload(&non_finite_host).unwrap();
+    let non_finite_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let non_finite_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &non_finite,
+            layout: &non_finite_layout,
+        },
+    );
+    assert!(matches!(
+        non_finite_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential failed")
+    ));
 }

@@ -79,6 +79,12 @@ parity audit for remaining operator families and shared Atlas seam usage
   factor agreement against Leto plus closed-form diagonal pseudoinverse and
   matrix exponential cases; comparative benchmarks cover WGPU and Leto for all
   three, with `nalgebra` comparators for column-pivoted QR and pseudoinverse.
+- [x] Strengthened WGPU pseudoinverse and matrix exponential parity coverage.
+  Contract tests now cover rank-deficient Moore-Penrose identities,
+  rectangular full-rank pseudoinverse, non-finite pseudoinverse rejection,
+  nilpotent and skew-symmetric matrix-exponential closed forms, a general
+  `nalgebra` matrix-exponential oracle, and rectangular/non-finite matrix
+  exponential rejection.
 - [x] Added WGPU device-resident symmetric Jacobi eigen decomposition and
   eigenvalues-only surfaces mirroring Leto. Differential tests compare
   eigenvalues and eigenvectors against Leto and reject non-symmetric inputs;
@@ -141,6 +147,12 @@ parity audit for remaining operator families and shared Atlas seam usage
   attempted earlier and blocked before this slice by `cuda-bindings` requiring
   `CUDA_TOOLKIT_PATH`. Evidence tier: value-semantic differential tests,
   static diagnostics, and empirical benchmarks.
+- Additional matrix-function evidence: `cargo nextest run -p hephaestus-wgpu
+  linalg_pinv linalg_matexp -j 1 --no-fail-fast --no-capture` (8 passed);
+  `cargo clippy -p hephaestus-wgpu --test contract -- -D warnings`;
+  `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
+  `git diff --check`. Evidence tier: value-semantic closed-form,
+  Moore-Penrose algebraic, differential, and invalid-input tests.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
