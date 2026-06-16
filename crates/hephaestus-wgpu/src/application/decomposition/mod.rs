@@ -87,9 +87,13 @@
 pub(crate) mod validate;
 
 pub mod cholesky;
+pub mod eigen;
 pub mod lu;
 pub mod qr;
 
 pub use cholesky::{cholesky_decompose, cholesky_decompose_blocked, GpuCholesky};
+pub use eigen::{
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, GpuSymmetricEigenDecomposition,
+};
 pub use lu::{lu_decompose, GpuLuDecomposition};
 pub use qr::{qr_decompose, GpuQrDecomposition};

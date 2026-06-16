@@ -1378,6 +1378,421 @@ fn qr_decomposition_matches_leto_reference() {
 }
 
 #[test]
+fn symmetric_eigen_jacobi_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        4.0f32, 1.0, 0.5, //
+        1.0, 3.0, 0.25, //
+        0.5, 0.25, 2.0,
+    ];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    let leto_eigen = leto_ops::symmetric_eigen_jacobi(&leto_matrix.view()).unwrap();
+
+    let gpu_eigen = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_eigen.n(), 3);
+    assert_eq!(gpu_eigen.inner().eigenvalues, leto_eigen.eigenvalues);
+
+    let mut got_values = vec![0.0f32; 3];
+    device
+        .download(gpu_eigen.eigenvalues(), &mut got_values)
+        .unwrap();
+    assert_eq!(got_values, leto_eigen.eigenvalues);
+
+    let mut got_vectors = vec![0.0f32; 9];
+    device
+        .download(gpu_eigen.eigenvectors(), &mut got_vectors)
+        .unwrap();
+    assert_eq!(
+        got_vectors,
+        leto::Storage::as_slice(leto_eigen.eigenvectors.storage())
+    );
+
+    let values_only = symmetric_eigenvalues_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let leto_values_only = leto_ops::symmetric_eigenvalues_jacobi(&leto_matrix.view()).unwrap();
+    let mut got_values_only = vec![0.0f32; 3];
+    device.download(&values_only, &mut got_values_only).unwrap();
+    assert_eq!(got_values_only, leto_values_only);
+}
+
+#[test]
+fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{symmetric_eigen_jacobi, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("not symmetric")
+    ));
+}
+
+// ── Extended differential decomposition tests ─────────────────────────────
+
+#[test]
+fn cholesky_identity_matrix_yields_identity_lower() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_chol = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_chol.n(), 2);
+    assert_eq!(gpu_chol.det(), leto_chol.det());
+    assert_eq!(gpu_chol.det(), 1.0);
+
+    let mut got_lower = vec![0.0f32; 4];
+    device.download(gpu_chol.lower(), &mut got_lower).unwrap();
+    let expected_lower = leto::Storage::as_slice(leto_chol.lower().storage());
+    assert_eq!(got_lower, expected_lower);
+    assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
+}
+
+#[test]
+fn cholesky_spd_reconstruction_matches_original() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use leto::Layout;
+
+    // SPD matrix: A = [[4, 2, 0.5], [2, 5, 1], [0.5, 1, 3]]
+    let matrix_host = vec![4.0f32, 2.0, 0.5, 2.0, 5.0, 1.0, 0.5, 1.0, 3.0];
+    let n = 3;
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
+    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_chol = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    // Verify L matches leto-ops.
+    let mut got_lower = vec![0.0f32; n * n];
+    device.download(gpu_chol.lower(), &mut got_lower).unwrap();
+    let expected_lower = leto::Storage::as_slice(leto_chol.lower().storage());
+    assert_eq!(got_lower, expected_lower);
+
+    // Reconstruct A' = L * L^T and verify against original.
+    for row in 0..n {
+        for col in 0..n {
+            let mut sum = 0.0f32;
+            for k in 0..n {
+                let l_rk = got_lower[row * n + k];
+                let l_ck = got_lower[col * n + k]; // L^T[k, col] = L[col, k]
+                sum += l_rk * l_ck;
+            }
+            let expected = matrix_host[row * n + col];
+            let tolerance = 8.0 * f32::EPSILON * expected.abs().max(1.0);
+            assert!(
+                (sum - expected).abs() <= tolerance,
+                "Cholesky reconstruction mismatch at [{row},{col}]: got {sum}, expected {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn cholesky_solve_known_system_accurate() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use leto::Layout;
+
+    // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.75, 1.0]
+    let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
+    let rhs_host = vec![8.0f32, 7.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let gpu_chol = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_chol.solve(&device, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    device.download(&solution, &mut got).unwrap();
+    assert!(
+        (got[0] - 1.75f32).abs() <= 1e-5,
+        "x[0] = {} expected 1.75",
+        got[0]
+    );
+    assert!(
+        (got[1] - 1.0f32).abs() <= 1e-5,
+        "x[1] = {} expected 1.0",
+        got[1]
+    );
+
+    // Verify residual A*x ≈ b.
+    let ax0 = 4.0 * got[0] + 2.0 * got[1];
+    let ax1 = 2.0 * got[0] + 3.0 * got[1];
+    assert!(
+        (ax0 - 8.0).abs() <= 1e-4,
+        "residual[0] = {} expected 8.0",
+        ax0
+    );
+    assert!(
+        (ax1 - 7.0).abs() <= 1e-4,
+        "residual[1] = {} expected 7.0",
+        ax1
+    );
+}
+
+#[test]
+fn cholesky_rejects_singular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(
+        result.is_err(),
+        "singular matrix must be rejected by Cholesky"
+    );
+}
+
+#[test]
+fn lu_identity_yields_identity_factors() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_lu.n(), 2);
+    assert_eq!(gpu_lu.det(), leto_lu.det());
+    assert_eq!(gpu_lu.det(), 1.0);
+
+    let mut got_factors = vec![0.0f32; 4];
+    device.download(gpu_lu.factors(), &mut got_factors).unwrap();
+    let expected_factors = leto::Storage::as_slice(leto_lu.factors().storage());
+    assert_eq!(got_factors, expected_factors);
+}
+
+#[test]
+fn lu_solve_known_system_accurate() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use leto::Layout;
+
+    // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
+    let matrix_host = vec![2.0f32, 1.0, 4.0, 3.0];
+    let rhs_host = vec![5.0f32, 11.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_lu.solve(&device, &rhs).unwrap();
+    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
+    let mut got = vec![0.0f32; 2];
+    device.download(&solution, &mut got).unwrap();
+    let expected = leto::Storage::as_slice(expected_solution.storage());
+    for i in 0..2 {
+        assert!(
+            (got[i] - expected[i]).abs() <= 1e-5,
+            "LU solve x[{i}] = {} expected {}",
+            got[i],
+            expected[i]
+        );
+    }
+    assert!((got[0] - 2.0f32).abs() <= 1e-5);
+    assert!((got[1] - 1.0f32).abs() <= 1e-5);
+}
+
+#[test]
+fn lu_rejects_singular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(result.is_err(), "singular matrix must be rejected by LU");
+}
+
+#[test]
+fn qr_identity_yields_identity_r() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{qr_decompose, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_qr = qr_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_qr.shape(), (2, 2));
+    assert_eq!(gpu_qr.shape(), leto_qr.shape());
+
+    let mut got_r = vec![0.0f32; 4];
+    device.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
+    let r_ref = leto_qr.r();
+    let expected_r = leto::Storage::as_slice(r_ref.storage());
+    assert_eq!(got_r, expected_r);
+}
+
+#[test]
+fn qr_solve_known_system_accurate() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{qr_decompose, StridedOperand};
+    use leto::Layout;
+
+    // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let rhs_host = vec![1.0f32, 2.0, 3.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([3, 2]).unwrap();
+
+    let gpu_qr = qr_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_qr.solve_least_squares(&device, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    device.download(&solution, &mut got).unwrap();
+
+    // Verify A*x ≈ b (residual check).
+    let residual_0 = 1.0 * got[0] + 0.0 * got[1] - 1.0;
+    let residual_1 = 0.0 * got[0] + 1.0 * got[1] - 2.0;
+    let residual_2 = 1.0 * got[0] + 1.0 * got[1] - 3.0;
+    assert!(residual_0.abs() <= 1e-4, "QR residual[0] = {residual_0}");
+    assert!(residual_1.abs() <= 1e-4, "QR residual[1] = {residual_1}");
+    assert!(residual_2.abs() <= 1e-4, "QR residual[2] = {residual_2}");
+}
+
+#[test]
 fn linalg_norms_match_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;

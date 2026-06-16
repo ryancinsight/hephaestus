@@ -43,8 +43,9 @@ pub use infrastructure::device::WgpuDevice;
 
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, qr_decompose, GpuCholesky,
-    GpuLuDecomposition, GpuQrDecomposition,
+    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, qr_decompose,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, GpuCholesky, GpuLuDecomposition,
+    GpuQrDecomposition, GpuSymmetricEigenDecomposition,
 };
 
 pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
