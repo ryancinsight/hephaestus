@@ -107,6 +107,9 @@ parity audit for remaining operator families and shared Atlas seam usage
   triangular solve plus GPU SYRK trailing update. Differential coverage now
   includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
   benchmarks now measure 128x128 blocked Cholesky against Leto and `nalgebra`.
+- [x] Added comparative benchmark rows for blocked WGPU LU and QR paths,
+  validating blocked LU solve parity and blocked QR factor parity before
+  timing them against Leto and `nalgebra`.
 - [x] Routed WGPU launch planning through Mnemosyne `KernelResourceBudget` and
   Moirai GPU `plan_launch` while preserving Hephaestus checked overflow
   semantics from `BlockWidth::checked_covering_blocks`.
@@ -176,6 +179,10 @@ parity audit for remaining operator families and shared Atlas seam usage
   README layer-boundary update, `leto-ops` dependency audit confirming the
   `simd` feature and Hermes dispatch calls, and Hermes README/backlog boundary
   audit. Evidence tier: implementation and documentation audit.
+- Additional blocked decomposition benchmark evidence: `cargo nextest run -p
+  hephaestus-wgpu blocked_lu blocked_qr -j 1 --no-fail-fast` (8 passed);
+  `cargo check -p hephaestus-wgpu --bench comparative`; `cargo bench -p
+  hephaestus-wgpu --bench comparative` (added blocked LU/QR timing rows).
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:

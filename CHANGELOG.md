@@ -104,6 +104,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   SYRK trailing update. Contract coverage includes a block-boundary SPD case;
   comparative benchmarks now measure 128x128 blocked Cholesky against Leto and
   `nalgebra`.
+- `hephaestus-wgpu` [minor]: comparative benchmark coverage for blocked LU and
+  blocked QR GPU-trailing-update paths, with value checks against Leto before
+  timing against Leto and `nalgebra`.
 - `hephaestus-wgpu` [patch]: dispatch launch planning now routes through
   Mnemosyne `KernelResourceBudget` and Moirai GPU `plan_launch` while retaining
   the Hephaestus checked overflow contract.

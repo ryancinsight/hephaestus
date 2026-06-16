@@ -44,6 +44,11 @@
   than Leto and `nalgebra` on the local WGPU run. Evidence tier:
   value-semantic differential test across a block boundary and empirical
   benchmark row in `benchmark_results.md`.
+- [minor] WGPU blocked LU and blocked QR now have comparative benchmark rows.
+  The measured 66x66 blocked LU row is slower than Leto and `nalgebra`; the
+  70x35 blocked QR row is much slower than Leto and `nalgebra`. Evidence tier:
+  value-semantic blocked LU/QR tests plus empirical benchmark rows in
+  `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:
@@ -77,5 +82,5 @@
 ## Next Increment
 
 - Continue the parity audit at the next highest-risk residual: profile the
-  remaining host-delegated decomposition wrappers for native GPU-kernel
-  candidates.
+  blocked LU/QR host-device synchronization path before adding more native
+  decomposition kernels.
