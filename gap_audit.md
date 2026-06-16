@@ -51,9 +51,13 @@
   `wgpu 26` or splitting the occupancy planner into a GPU-API-free crate.
   Evidence tier: build output from `cargo bench -p hephaestus-wgpu --bench
   comparative` showing both `wgpu v0.19.4` and `wgpu v26.0.1`.
-- [minor] Hermes SIMD is used by Leto CPU ops through `leto-ops`, but
-  Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
-  path. Evidence tier: implementation audit.
+- [minor] Hermes integration is intentionally host-tier for Hephaestus:
+  host-delegated parity wrappers call `leto-ops` with `simd` enabled, and Leto
+  routes CPU hot loops through Hermes SIMD before Hephaestus uploads verified
+  outputs into device buffers. Direct WGPU/CUDA kernel calls into Hermes are
+  out of scope because Hermes owns CPU SIMD over host slices while Hephaestus
+  owns GPU resource lifetimes and device-resident kernels. Evidence tier:
+  dependency/implementation audit and ADR 0002.
 - [minor] WGPU pseudoinverse and matrix exponential now have non-diagonal,
   rank-deficient, rectangular, nilpotent, skew-symmetric, general-matrix, and
   invalid-input contract coverage plus comparative benchmark rows. Remaining
@@ -73,7 +77,6 @@
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk residual: address the
-  Hermes direct-kernel usage gap in WGPU or document why the current
-  Leto-through-Hermes CPU path is the only applicable integration tier for
-  host-delegated operations.
+- Continue the parity audit at the next highest-risk residual: resolve the
+  `moirai-gpu`/WGPU version duplication or profile the remaining host-delegated
+  decomposition wrappers for native GPU-kernel candidates.

@@ -110,6 +110,11 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Routed WGPU launch planning through Mnemosyne `KernelResourceBudget` and
   Moirai GPU `plan_launch` while preserving Hephaestus checked overflow
   semantics from `BlockWidth::checked_covering_blocks`.
+- [x] Documented Atlas compute-boundary integration for Mnemosyne, Moirai,
+  Themis, and Hermes in ADR 0002 and README. Hermes is integrated at the
+  host-delegated Leto tier via `leto-ops`' `simd` feature; direct WGPU/CUDA
+  kernel calls into Hermes are rejected as a boundary violation because Hermes
+  owns CPU SIMD over host slices, not GPU shader/PTX execution.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
@@ -164,6 +169,10 @@ parity audit for remaining operator families and shared Atlas seam usage
   `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
   `git diff --check`. Evidence tier: closed-form, differential, and
   invalid-input value-semantic tests.
+- Atlas compute-boundary evidence: `docs/adr/0002-atlas-compute-boundaries.md`,
+  README layer-boundary update, `leto-ops` dependency audit confirming the
+  `simd` feature and Hermes dispatch calls, and Hermes README/backlog boundary
+  audit. Evidence tier: implementation and documentation audit.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:

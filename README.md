@@ -51,8 +51,18 @@ preserving the dynamic-load / no-toolkit-to-compile property.
 Hephaestus owns device acquisition, device buffers, transfer, and generic
 dispatch. It does **not** own: autodiff (coeus), transform kernels (apollo),
 CPU arrays (leto — whose host-side `Layout<N>` metadata it reuses), host
-allocation (mnemosyne — planned device pools/pinned staging), ownership
-proofs (melinoe — planned device-buffer tokens), or scheduling (moirai).
+allocation/resource-budget vocabulary (mnemosyne), ownership proofs (melinoe —
+planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
+(hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
+GPU `plan_launch`; acquired devices expose Themis topology snapshots.
+
+Hermes integration is intentionally indirect for host-delegated Leto parity
+wrappers: Hephaestus depends on `leto-ops` with its `simd` feature enabled, and
+Leto routes CPU hot loops through Hermes SIMD before Hephaestus uploads the
+results to device buffers. Native WGPU/CUDA kernels do not call Hermes because
+Hermes is the Atlas CPU SIMD substrate over host slices, while Hephaestus owns
+GPU resource lifetimes and device-resident shader/PTX kernels. See
+[`docs/adr/0002-atlas-compute-boundaries.md`](docs/adr/0002-atlas-compute-boundaries.md).
 
 ## Verification
 

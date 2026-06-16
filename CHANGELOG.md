@@ -107,6 +107,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: dispatch launch planning now routes through
   Mnemosyne `KernelResourceBudget` and Moirai GPU `plan_launch` while retaining
   the Hephaestus checked overflow contract.
+- `hephaestus` [patch]: documented Atlas compute boundaries for Mnemosyne,
+  Moirai, Themis, and Hermes. Hermes integration is through host-delegated Leto
+  CPU SIMD (`leto-ops` with `simd` enabled); direct WGPU/CUDA kernel calls into
+  Hermes are rejected as a boundary violation.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output
