@@ -55,11 +55,13 @@
 - [minor] Blocked decomposition synchronization profiling shows a material,
   noisy transfer/synchronization floor after the blocked LU region-transfer
   reduction, blocked QR compact-tile transfer reduction, and packed reflector
-  upload. The 70x35 blocked QR row still combines a material synchronization
-  floor with per-reflector launches. Next target: replace synthetic sync-floor
-  inference with true timestamp instrumentation and reduce QR per-reflector
-  launch traffic. Evidence tier: empirical synchronization-profile benchmark
-  in `benchmark_results.md`.
+  upload. Timestamp queries now measure the QR launch component directly:
+  32 minimal reflector-equivalent compute passes total 155.2 µs on the local
+  GPU timeline, with 3.4 µs median pass duration. The 70x35 blocked QR row
+  still combines that launch cost with real reflector kernel work. Next target:
+  assess whether reflector batching can remove per-reflector launch traffic.
+  Evidence tier: empirical synchronization-profile benchmark and GPU-timeline
+  timestamp measurement in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:
@@ -93,6 +95,6 @@
 ## Next Increment
 
 - Continue the parity audit at the next highest-risk residual: profile the
-  blocked QR per-reflector launch path with true timestamp instrumentation and
-  assess whether reflector batching can remove per-reflector launch traffic
-  before adding more native decomposition kernels.
+  blocked QR reflector-batching design now that timestamp instrumentation
+  confirms per-reflector launch cost is material before adding more native
+  decomposition kernels.

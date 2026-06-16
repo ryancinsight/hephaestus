@@ -51,8 +51,10 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
 | Profile | Measured floor |
 | --- | --- |
-| **Blocked LU 66x66 transfer/synchronization floor** | 219.9 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 138.5 µs |
+| **Blocked LU 66x66 transfer/synchronization floor** | 338.4 µs |
+| **Blocked QR 70x35 transfer/synchronization floor** | 207.6 µs |
+| **Blocked QR 32-reflector timestamp launch total** | 155.2 µs |
+| **Blocked QR reflector timestamp launch median** | 3.4 µs |
 
 ## Analysis
 
@@ -72,8 +74,8 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
      Householder reflectors to compact trailing-column tiles and uploads all
      panel reflectors in one packed vector buffer. Both results remain slower
      than CPU references.
-   - The synchronization profile is a synthetic sync-floor harness rather than
-     an exact helper benchmark. Its current LU and QR floors are still
-     material; for 70x35 blocked QR, packed reflector upload reduced the
-     synthetic transfer floor, but the end-to-end row still includes
-     per-reflector kernel launches.
+   - The synchronization profile's transfer rows are synthetic and noisy, but
+     the timestamp-query row is a GPU-timeline measurement. The 70x35 blocked
+     QR path still pays one compute pass per reflector; timestamp queries
+     measured **155.2 µs** total GPU time for 32 minimal reflector-equivalent
+     launches on this run, with **3.4 µs** median pass duration.

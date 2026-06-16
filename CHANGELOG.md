@@ -15,6 +15,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: packed each blocked QR panel's Householder
   vectors into one device buffer and selected the active vector by metadata
   offset, removing per-reflector vector-buffer uploads.
+- `hephaestus-wgpu` [patch]: added timestamp-query profiling to the blocked
+  decomposition sync benchmark to measure the blocked QR per-reflector launch
+  component on the GPU timeline when the adapter supports timestamps.
 
 ### Added
 
