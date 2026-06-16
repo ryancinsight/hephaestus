@@ -9,6 +9,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: narrowed blocked LU host/device transfers to the
   active diagonal-panel and trailing-submatrix regions, reducing full-buffer
   traffic in the hybrid GPU trailing-update path.
+- `hephaestus-wgpu` [patch]: changed blocked QR to transfer compact
+  trailing-column tiles per panel before GPU Householder application instead
+  of writing and downloading the full working matrix.
 
 ### Added
 

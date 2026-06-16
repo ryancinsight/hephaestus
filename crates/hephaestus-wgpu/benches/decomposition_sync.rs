@@ -104,6 +104,12 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
 
     let buffer = device.upload(&host).expect("upload QR profile matrix");
     let mut out = vec![0.0f32; len];
+    let trail_cols = 3usize;
+    let trailing = vec![0.25f32; rows * trail_cols];
+    let trailing_buf = device
+        .upload(&trailing)
+        .expect("upload QR trailing columns");
+    let mut trailing_out = vec![0.0f32; trailing.len()];
     let vectors: Vec<Vec<f32>> = (0..32)
         .map(|j| vec![1.0f32 / (1.0 + j as f32); rows - j])
         .collect();
@@ -116,8 +122,8 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
         assert_close_slice(&out, &host);
 
         device
-            .write_buffer(&buffer, &host)
-            .expect("write QR panel state");
+            .write_buffer(&trailing_buf, &trailing)
+            .expect("write QR trailing columns");
         let uploaded_vectors: Vec<_> = vectors
             .iter()
             .map(|v| device.upload(black_box(v)).expect("upload QR reflector"))
@@ -125,13 +131,9 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
         black_box(&uploaded_vectors);
 
         device
-            .download(&buffer, &mut out)
-            .expect("download QR trailing state");
-        assert_close_slice(&out, &host);
-
-        device
-            .write_buffer(&buffer, &host)
-            .expect("write QR final panel");
+            .download(&trailing_buf, &mut trailing_out)
+            .expect("download QR trailing columns");
+        assert_close_slice(&trailing_out, &trailing);
     }
     wait_wgpu(device);
 

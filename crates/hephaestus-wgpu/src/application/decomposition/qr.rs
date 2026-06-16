@@ -428,6 +428,35 @@ pub fn qr_decompose(
 /// are applied to the trailing columns via *b* GPU kernel launches.
 const QR_BLOCK_SIZE: usize = 32;
 
+fn trailing_columns(host: &[f32], stride: usize, row_start: usize, col_start: usize) -> Vec<f32> {
+    let rows = host.len() / stride - row_start;
+    let cols = stride - col_start;
+    let mut out = vec![0.0f32; rows * cols];
+    for row in 0..rows {
+        let source = (row_start + row) * stride + col_start;
+        let target = row * cols;
+        out[target..target + cols].copy_from_slice(&host[source..source + cols]);
+    }
+    out
+}
+
+fn scatter_trailing_columns(
+    host: &mut [f32],
+    stride: usize,
+    row_start: usize,
+    col_start: usize,
+    compact: &[f32],
+) {
+    let rows = host.len() / stride - row_start;
+    let cols = stride - col_start;
+    debug_assert_eq!(compact.len(), rows * cols);
+    for row in 0..rows {
+        let target = (row_start + row) * stride + col_start;
+        let source = row * cols;
+        host[target..target + cols].copy_from_slice(&compact[source..source + cols]);
+    }
+}
+
 /// Blocked QR factorization **A = Q R** with GPU-accelerated trailing
 /// Householder application.
 ///
@@ -486,9 +515,6 @@ pub fn qr_decompose_blocked(
     // Keep a copy for the host-side solve API.
     let original_host = host.clone();
 
-    // Device-resident buffer for the working matrix.
-    let work_buf = device.alloc_zeroed::<f32>(m * n)?;
-
     let block_size = QR_BLOCK_SIZE.min(n);
 
     for k in (0..n).step_by(block_size) {
@@ -517,12 +543,12 @@ pub fn qr_decompose_blocked(
         }
 
         if trail_cols == 0 {
-            device.write_buffer(&work_buf, &host)?;
             continue;
         }
 
-        // ── Step 2: Upload working matrix to device ──
-        device.write_buffer(&work_buf, &host)?;
+        // ── Step 2: Upload the consumed trailing columns as a compact tile ──
+        let mut trailing = trailing_columns(&host, n, k, k + b);
+        let work_buf = device.upload(&trailing)?;
 
         // ── Step 3: Apply b Householder reflectors to trailing columns ──
         for j in 0..b {
@@ -539,8 +565,8 @@ pub fn qr_decompose_blocked(
 
             let v_dev = device.upload(&v)?;
 
-            // Trailing submatrix A[k+j : m, k+b : n] in the full buffer.
-            let c_offset = (k + j) * n + (k + b);
+            // Trailing submatrix rows j:m-k in the compact panel tile.
+            let c_offset = j * trail_cols;
 
             hh_trailing_update(
                 device,
@@ -549,15 +575,16 @@ pub fn qr_decompose_blocked(
                     a_buf: &work_buf,
                     vec_len,
                     trail_cols,
-                    trail_stride: n,
+                    trail_stride: trail_cols,
                     c_offset,
                     beta: betas[j],
                 },
             )?;
         }
 
-        // ── Step 4: Download updated working matrix back to host ──
-        device.download(&work_buf, &mut host)?;
+        // ── Step 4: Download the compact tile and patch host state.
+        device.download(&work_buf, &mut trailing)?;
+        scatter_trailing_columns(&mut host, n, k, k + b, &trailing);
     }
 
     // Build a leto-ops QR on the original (un-factored) matrix for the

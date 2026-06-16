@@ -153,6 +153,7 @@ pub mod full_piv_lu;
 pub mod hessenberg;
 pub mod lu;
 pub mod qr;
+pub(crate) mod region;
 pub mod schur;
 pub mod svd;
 pub mod udu;

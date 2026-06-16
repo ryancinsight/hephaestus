@@ -46,16 +46,18 @@
   benchmark row in `benchmark_results.md`.
 - [minor] WGPU blocked LU and blocked QR now have comparative benchmark rows.
   Blocked LU transfers are narrowed to the active diagonal-panel and
-  trailing-submatrix regions, but the measured 66x66 blocked LU row remains
-  slower than Leto and `nalgebra`; the 70x35 blocked QR row is much slower than
-  Leto and `nalgebra`. Evidence tier: value-semantic blocked LU/QR tests plus
-  empirical benchmark rows in `benchmark_results.md`.
+  trailing-submatrix regions. Blocked QR transfers compact trailing-column
+  tiles per panel before GPU Householder application. The measured 66x66
+  blocked LU row remains slower than Leto and `nalgebra`; the 70x35 blocked QR
+  row is much slower than Leto and `nalgebra`. Evidence tier: value-semantic
+  blocked LU/QR tests plus empirical benchmark rows in `benchmark_results.md`.
 - [minor] Blocked decomposition synchronization profiling shows a material,
   noisy transfer/synchronization floor after the blocked LU region-transfer
-  reduction, while the 70x35 blocked QR row combines a material synchronization
-  floor with per-reflector launches and vector uploads. Next target: replace
-  synthetic sync-floor inference with true timestamp instrumentation and reduce
-  QR per-reflector launch/vector-upload traffic. Evidence tier: empirical
+  reduction and blocked QR compact-tile transfer reduction. The 70x35 blocked
+  QR row still combines a material synchronization floor with per-reflector
+  launches and vector uploads. Next target: replace synthetic sync-floor
+  inference with true timestamp instrumentation and reduce QR per-reflector
+  launch/vector-upload traffic. Evidence tier: empirical
   synchronization-profile benchmark in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
@@ -90,5 +92,6 @@
 ## Next Increment
 
 - Continue the parity audit at the next highest-risk residual: profile the
-  blocked QR per-reflector launch path and remove avoidable LU full-buffer
-  transfers before adding more native decomposition kernels.
+  blocked QR per-reflector launch path with true timestamp instrumentation and
+  assess whether reflector batching can remove per-reflector upload/launch
+  traffic before adding more native decomposition kernels.
