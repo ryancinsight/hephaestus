@@ -3,11 +3,10 @@ use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
-use wgpu::util::DeviceExt;
-
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use wgpu::util::DeviceExt;
 
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::pool::BoundedBufferPool;
@@ -137,7 +136,14 @@ impl WgpuDevice {
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
-        let instance = wgpu::Instance::default();
+        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+        if cfg!(target_os = "windows")
+            && std::env::var("WGPU_BACKENDS").is_err()
+            && std::env::var("WGPU_BACKEND").is_err()
+        {
+            desc.backends = wgpu::Backends::VULKAN;
+        }
+        let instance = wgpu::Instance::new(&desc);
 
         let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
             (wgpu::Device, wgpu::Queue),
@@ -336,16 +342,28 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn upload<T: Pod>(&self, host: &[T]) -> Result<WgpuBuffer<T>> {
-        Self::byte_size::<T>(host.len())?;
-        let buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let byte_len = Self::byte_size::<T>(host.len())?;
+        let padded_len = Self::padded_size::<T>(host.len())?;
+        let buffer = if padded_len == 0 {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-upload"),
-                contents: bytemuck::cast_slice(host),
+                size: 0,
                 usage: wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_SRC
                     | wgpu::BufferUsages::COPY_DST,
-            });
+                mapped_at_creation: false,
+            })
+        } else {
+            let mut padded = vec![0u8; padded_len as usize];
+            padded[..byte_len as usize].copy_from_slice(bytemuck::cast_slice(host));
+            (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("hephaestus-upload"),
+                contents: &padded,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+            })
+        };
         Ok(WgpuBuffer {
             buffer,
             len: host.len(),
@@ -403,6 +421,18 @@ impl ComputeDevice for WgpuDevice {
 
         self.recycle_staging_buffer(staging);
 
+        Ok(())
+    }
+
+    fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
+        if host.len() != buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: host.len(),
+                device_len: buffer.len,
+            });
+        }
+        self.queue
+            .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
         Ok(())
     }
 }

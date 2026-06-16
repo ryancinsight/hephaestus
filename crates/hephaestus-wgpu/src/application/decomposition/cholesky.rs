@@ -45,23 +45,6 @@ struct SyrkMeta {
 // SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
 unsafe impl Pod for SyrkMeta {}
 
-fn write_device_buffer<T: Pod>(
-    device: &WgpuDevice,
-    host: &[T],
-    buffer: &WgpuBuffer<T>,
-) -> Result<()> {
-    if host.len() != buffer.len {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: host.len(),
-            device_len: buffer.len,
-        });
-    }
-    device
-        .queue()
-        .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // SYRK kernel
 // ---------------------------------------------------------------------------
@@ -94,7 +77,7 @@ fn syrk_shader_source() -> String {
 @group(0) @binding(1) var<storage, read_write> trail:  array<{ty}>;
 @group(0) @binding(2) var<uniform>             syrk_meta: SyrkMeta;
 
-var<workgroup> panel_row: array<{ty}, 16>;
+var<workgroup> panel_row: array<array<{ty}, 16>, 16>;
 
 @compute @workgroup_size(16, 16)
 fn main(
@@ -121,9 +104,9 @@ fn main(
         // Load `panel[row, tile*16 + local_col]` into shared memory.
         let panel_col = tile * 16u + local_col;
         if (row < rows && panel_col < k) {{
-            panel_row[local_col] = panel[row * k + panel_col];
+            panel_row[local_row][local_col] = panel[row * k + panel_col];
         }} else {{
-            panel_row[local_col] = {ty}({zero});
+            panel_row[local_row][local_col] = {ty}({zero});
         }}
         workgroupBarrier();
 
@@ -134,7 +117,7 @@ fn main(
             for (var i: u32 = 0u; i < 16u; i = i + 1u) {{
                 let ki = tile * 16u + i;
                 if (ki < k) {{
-                    let a_val = panel_row[i];
+                    let a_val = panel_row[local_row][i];
                     let b_val = panel[col * k + ki];
                     sum = sum + a_val * b_val;
                 }}
@@ -514,7 +497,7 @@ pub fn cholesky_decompose_blocked(
                 host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
             }
         }
-        write_device_buffer(device, &host, &lower_buf)?;
+        device.write_buffer(&lower_buf, &host)?;
 
         let trail_rows = n - k - b;
         if trail_rows == 0 {
@@ -547,7 +530,7 @@ pub fn cholesky_decompose_blocked(
                 host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
             }
         }
-        write_device_buffer(device, &host, &lower_buf)?;
+        device.write_buffer(&lower_buf, &host)?;
         let panel_buf = device.upload(&rhs)?;
 
         // ── Step 3: trailing SYRK update on GPU ──
@@ -571,7 +554,7 @@ pub fn cholesky_decompose_blocked(
             host[row * n + col] = 0.0;
         }
     }
-    write_device_buffer(device, &host, &lower_buf)?;
+    device.write_buffer(&lower_buf, &host)?;
 
     let original_view =
         leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([n, n]).unwrap(), &original_host);

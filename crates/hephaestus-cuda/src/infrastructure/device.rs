@@ -248,4 +248,29 @@ impl ComputeDevice for CudaDevice {
         }
         Ok(())
     }
+
+    fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
+        if host.len() != buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: host.len(),
+                device_len: buffer.len,
+            });
+        }
+        if host.is_empty() {
+            return Ok(());
+        }
+        self.bind()?;
+        let bytes = std::mem::size_of_val(host);
+        // SAFETY: `buffer.ptr` is a valid device pointer allocated by this
+        // device; `host` is `bytes` of readable host memory (`T: Pod`).
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyHtoD_v2(buffer.raw(), host.as_ptr() as *const c_void, bytes)
+        };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("write_buffer cuMemcpyHtoD_v2({bytes} bytes) -> {res}"),
+            });
+        }
+        Ok(())
+    }
 }

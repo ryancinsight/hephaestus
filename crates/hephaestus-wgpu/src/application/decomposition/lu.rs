@@ -44,7 +44,6 @@
 //! which dominates for large n, executes on the GPU's massively parallel
 //! compute units rather than on the CPU's sequential cores.
 
-use bytemuck::Pod;
 use std::any::TypeId;
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
@@ -79,6 +78,13 @@ impl GpuLuDecomposition {
     #[inline]
     pub fn factors(&self) -> &WgpuBuffer<f32> {
         &self.factors
+    }
+
+    /// Return the permutation pivots.
+    #[must_use]
+    #[inline]
+    pub fn pivots(&self) -> &[usize] {
+        self.inner.pivots()
     }
 
     /// Determinant: sign × Πᵢ Uᵢᵢ via the host-side decomposition.
@@ -141,33 +147,17 @@ impl GpuLuDecomposition {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable)]
 struct GemmMeta {
-    /// Shape: [m, n, k].
-    shape: [u32; 3],
-    /// Row strides: [C row-stride, A row-stride, B row-stride].
-    strides: [u32; 3],
+    /// Shape: [m, n, k, padding].
+    shape: [u32; 4],
+    /// Row strides: [C row-stride, A row-stride, B row-stride, padding].
+    strides: [u32; 4],
     /// Element offset into the C (trailing) buffer.
     c_offset: u32,
+    _pad: [u32; 3],
 }
 
 // SAFETY: GemmMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl Pod for GemmMeta {}
-
-fn write_device_buffer<T: Pod>(
-    device: &WgpuDevice,
-    host: &[T],
-    buffer: &WgpuBuffer<T>,
-) -> Result<()> {
-    if host.len() != buffer.len {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: host.len(),
-            device_len: buffer.len,
-        });
-    }
-    device
-        .queue()
-        .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
-    Ok(())
-}
+unsafe impl bytemuck::Pod for GemmMeta {}
 
 // ---------------------------------------------------------------------------
 // GEMM kernel  C -= A · B
@@ -188,15 +178,16 @@ fn gemm_shader_source() -> String {
 
     format!(
         r#"struct GemmMeta {{
-    shape: vec3<u32>,
-    strides: vec3<u32>,
+    shape: vec4<u32>,
+    strides: vec4<u32>,
     c_offset: u32,
+    _pad: u32,
 }}
 
 @group(0) @binding(0) var<storage, read>      a_buf: array<{ty}>;
 @group(0) @binding(1) var<storage, read>      b_buf: array<{ty}>;
 @group(0) @binding(2) var<storage, read_write> c_buf: array<{ty}>;
-@group(0) @binding(3) var<uniform>             meta: GemmMeta;
+@group(0) @binding(3) var<uniform>             params: GemmMeta;
 
 var<workgroup> tile_a: array<{ty}, 256>;
 var<workgroup> tile_b: array<{ty}, 256>;
@@ -208,17 +199,13 @@ fn main(
 ) {{
     let row = gid.y;
     let col = gid.x;
-    let m = meta.shape.x;
-    let n = meta.shape.y;
-    let k = meta.shape.z;
-    let c_stride = meta.strides.x;
-    let a_stride = meta.strides.y;
-    let b_stride = meta.strides.z;
-    let c_off = meta.c_offset;
-
-    if (row >= m || col >= n) {{
-        return;
-    }}
+    let m = params.shape.x;
+    let n = params.shape.y;
+    let k = params.shape.z;
+    let c_stride = params.strides.x;
+    let a_stride = params.strides.y;
+    let b_stride = params.strides.z;
+    let c_off = params.c_offset;
 
     var sum = {ty}({zero});
     let num_tiles = (k + 15u) / 16u;
@@ -226,7 +213,7 @@ fn main(
     for (var tile: u32 = 0u; tile < num_tiles; tile = tile + 1u) {{
         // Load tile of A: A[row, tile*16 + lid.x]
         let a_col = tile * 16u + lid.x;
-        if (a_col < k) {{
+        if (row < m && a_col < k) {{
             tile_a[lid.y * 16u + lid.x] = a_buf[row * a_stride + a_col];
         }} else {{
             tile_a[lid.y * 16u + lid.x] = {ty}({zero});
@@ -234,7 +221,7 @@ fn main(
 
         // Load tile of B: B[tile*16 + lid.y, col]
         let b_row = tile * 16u + lid.y;
-        if (b_row < k) {{
+        if (b_row < k && col < n) {{
             tile_b[lid.y * 16u + lid.x] = b_buf[b_row * b_stride + col];
         }} else {{
             tile_b[lid.y * 16u + lid.x] = {ty}({zero});
@@ -251,7 +238,9 @@ fn main(
 
     // C -= A · B
     let c_idx = c_off + row * c_stride + col;
-    c_buf[c_idx] = c_buf[c_idx] - sum;
+    if (row < m && col < n) {{
+        c_buf[c_idx] = c_buf[c_idx] - sum;
+    }}
 }}
 "#,
         ty = TY,
@@ -296,6 +285,7 @@ fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> 
             u32::try_from(k).map_err(|_| HephaestusError::DispatchFailed {
                 message: format!("GEMM k {k} exceeds u32"),
             })?,
+            0,
         ],
         strides: [
             u32::try_from(update.c_layout.strides[0]).map_err(|_| {
@@ -312,12 +302,14 @@ fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> 
             u32::try_from(n).map_err(|_| HephaestusError::DispatchFailed {
                 message: format!("GEMM B row stride {n} exceeds u32"),
             })?,
+            0,
         ],
         c_offset: u32::try_from(update.c_layout.offset).map_err(|_| {
             HephaestusError::DispatchFailed {
                 message: format!("GEMM C offset {} exceeds u32", update.c_layout.offset),
             }
         })?,
+        _pad: [0; 3],
     };
 
     let pipeline = cached_pipeline(
@@ -449,71 +441,7 @@ pub fn lu_decompose(
 /// launch overhead.
 const LU_BLOCK_SIZE: usize = 64;
 
-/// In-place partial pivoting LU factorization of a packed `n × n` row-major
-/// matrix, returning the Leto-style cumulative row permutation vector.
-///
-/// The packed result stores L (unit lower) strictly below the diagonal and U
-/// on and above it, identical to the leto-ops convention.
-///
-/// Returns the pivot vector where `pivots[k]` is the row swapped with row `k`
-/// at step *k* (identity if no swap occurred).
-fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
-    if a.len() != n * n {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: n * n,
-            device_len: a.len(),
-        });
-    }
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("LU panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
-
-    let mut pivots: Vec<usize> = (0..n).collect();
-
-    for k in 0..n {
-        // Partial pivot: find the row r ≥ k with the largest |a[r, k]|.
-        let mut pivot_row = k;
-        let mut pivot_mag = a[k * n + k].abs();
-        for r in (k + 1)..n {
-            let mag = a[r * n + k].abs();
-            if mag > pivot_mag {
-                pivot_mag = mag;
-                pivot_row = r;
-            }
-        }
-        if pivot_row != k {
-            // Swap entire rows in the working portion.
-            for c in 0..n {
-                a.swap(k * n + c, pivot_row * n + c);
-            }
-            pivots.swap(k, pivot_row);
-        }
-
-        if pivot_mag == 0.0 {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("LU panel factorisation failed: pivot column {k} is exactly zero"),
-            });
-        }
-
-        let pivot = a[k * n + k];
-        for r in (k + 1)..n {
-            let factor = a[r * n + k] / pivot;
-            a[r * n + k] = factor; // L entry
-            for c in (k + 1)..n {
-                a[r * n + c] -= factor * a[k * n + c];
-            }
-        }
-    }
-
-    Ok(pivots)
-}
+use hephaestus_core::panel_lu_packed;
 
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
@@ -610,7 +538,7 @@ pub fn lu_decompose_blocked(
         }
 
         if trail == 0 {
-            write_device_buffer(device, &host, &factors_buf)?;
+            device.write_buffer(&factors_buf, &host)?;
             continue;
         }
 
@@ -642,7 +570,7 @@ pub fn lu_decompose_blocked(
 
         // ── Step 4: Trailing GEMM update on GPU: A₂₂ -= L₂₁ · U₁₂ ──
         // Upload the updated host so the device buffer has L₂₁, U₁₂.
-        write_device_buffer(device, &host, &factors_buf)?;
+        device.write_buffer(&factors_buf, &host)?;
 
         // Upload L₂₁ and U₁₂ as compact buffers for the GEMM kernel.
         let mut l21 = vec![0.0f32; trail * b];

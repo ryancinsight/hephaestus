@@ -35,3 +35,20 @@ libloading = { version = "0.8", optional = true }
 cutile = { git = "https://github.com/NVlabs/cutile-rs", optional = true }
 cuda-core = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-core", optional = true }
 cuda-async = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-async", optional = true }
+
+[dev-dependencies]
+leto-ops = { workspace = true }
+ndarray = { workspace = true }
+nalgebra = { workspace = true }
+
+[[bench]]
+name = "comparative"
+harness = false
+
+[[example]]
+name = "cuda_init"
+required-features = ["cuda"]
+
+[[example]]
+name = "cuda_raw"
+required-features = ["cuda"]

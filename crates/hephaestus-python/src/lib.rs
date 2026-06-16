@@ -6,6 +6,7 @@ use hephaestus_wgpu::{
     StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
 };
 use leto::Layout;
+use num_complex::Complex;
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -822,6 +823,443 @@ fn norm_max_py(a: &PyArray) -> PyResult<PyArray> {
     a.norm_max()
 }
 
+#[pyfunction]
+fn cholesky(a: &PyArray) -> PyResult<PyArray> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "cholesky requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::cholesky_decompose_blocked(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    Ok(PyArray {
+        buffer: decomp.into_lower(),
+        device: a.device.clone(),
+        shape: vec![n, n],
+    })
+}
+
+#[pyfunction]
+fn lu(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err("lu requires a square 2D matrix"));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::lu_decompose_blocked(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let mut host_factors = vec![0.0f32; n * n];
+    a.device
+        .download(decomp.factors(), &mut host_factors)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let mut host_l = vec![0.0f32; n * n];
+    let mut host_u = vec![0.0f32; n * n];
+    for r in 0..n {
+        for c in 0..n {
+            let idx = r * n + c;
+            let val = host_factors[idx];
+            if r > c {
+                host_l[idx] = val;
+            } else if r == c {
+                host_l[idx] = 1.0;
+                host_u[idx] = val;
+            } else {
+                host_u[idx] = val;
+            }
+        }
+    }
+
+    let l_buf = a
+        .device
+        .upload(&host_l)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let u_buf = a
+        .device
+        .upload(&host_u)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: l_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+        PyArray {
+            buffer: u_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+        decomp.pivots().to_vec(),
+    ))
+}
+
+#[pyfunction]
+fn qr(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err("qr requires a 2D matrix"));
+    }
+    let [rows, cols] = [a.shape[0], a.shape[1]];
+    let layout =
+        Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::qr_decompose_blocked(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let q_host = decomp.inner().q();
+    let r_host = decomp.inner().r();
+
+    let q_buf = a
+        .device
+        .upload(leto::Storage::as_slice(q_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let r_buf = a
+        .device
+        .upload(leto::Storage::as_slice(r_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: q_buf,
+            device: a.device.clone(),
+            shape: vec![q_host.shape()[0], q_host.shape()[1]],
+        },
+        PyArray {
+            buffer: r_buf,
+            device: a.device.clone(),
+            shape: vec![r_host.shape()[0], r_host.shape()[1]],
+        },
+    ))
+}
+
+#[pyfunction]
+fn col_piv_qr(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err("col_piv_qr requires a 2D matrix"));
+    }
+    let [rows, cols] = [a.shape[0], a.shape[1]];
+    let layout =
+        Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::col_piv_qr(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let q_buf = decomp.q().clone();
+    let r_buf = decomp.r().clone();
+    let m = (q_buf.len() as f64).sqrt() as usize;
+    let n = if m > 0 { r_buf.len() / m } else { 0 };
+    let perm = decomp
+        .permutation()
+        .iter()
+        .map(|&x| x as u64)
+        .collect::<Vec<_>>();
+
+    Ok((
+        PyArray {
+            buffer: q_buf,
+            device: a.device.clone(),
+            shape: vec![m, m],
+        },
+        PyArray {
+            buffer: r_buf,
+            device: a.device.clone(),
+            shape: vec![m, n],
+        },
+        perm,
+    ))
+}
+
+#[pyfunction]
+fn svd(a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err("svd requires a 2D matrix"));
+    }
+    let [rows, cols] = [a.shape[0], a.shape[1]];
+    let layout =
+        Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::svd_decompose(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let u_host = decomp.inner().left_singular_vectors.clone();
+    let s_host = leto::Array1::from_shape_vec(
+        [decomp.inner().singular_values.len()],
+        decomp.inner().singular_values.clone(),
+    )
+    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+    let vt_transposed = decomp
+        .inner()
+        .right_singular_vectors
+        .transpose([1, 0])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let vt_host = vt_transposed.to_contiguous();
+
+    let u_buf = a
+        .device
+        .upload(leto::Storage::as_slice(u_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let s_buf = a
+        .device
+        .upload(leto::Storage::as_slice(s_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let vt_buf = a
+        .device
+        .upload(leto::Storage::as_slice(vt_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: u_buf,
+            device: a.device.clone(),
+            shape: vec![u_host.shape()[0], u_host.shape()[1]],
+        },
+        PyArray {
+            buffer: s_buf,
+            device: a.device.clone(),
+            shape: vec![s_host.shape()[0]],
+        },
+        PyArray {
+            buffer: vt_buf,
+            device: a.device.clone(),
+            shape: vec![vt_host.shape()[0], vt_host.shape()[1]],
+        },
+    ))
+}
+
+#[pyfunction]
+fn symmetric_eigen(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "symmetric_eigen requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::symmetric_eigen_jacobi(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let w_host = &decomp.inner().eigenvalues;
+    let v_host = decomp.inner().eigenvectors.clone();
+
+    let w_buf = a
+        .device
+        .upload(w_host)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let v_buf = a
+        .device
+        .upload(leto::Storage::as_slice(v_host.storage()))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: w_buf,
+            device: a.device.clone(),
+            shape: vec![w_host.len()],
+        },
+        PyArray {
+            buffer: v_buf,
+            device: a.device.clone(),
+            shape: vec![v_host.shape()[0], v_host.shape()[1]],
+        },
+    ))
+}
+
+#[pyfunction]
+fn singular_values(a: &PyArray) -> PyResult<PyArray> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err(
+            "singular_values requires a 2D matrix",
+        ));
+    }
+    let [rows, cols] = [a.shape[0], a.shape[1]];
+    let layout =
+        Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let s_buf = hephaestus_wgpu::singular_values(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyArray {
+        buffer: s_buf,
+        device: a.device.clone(),
+        shape: vec![rows.min(cols)],
+    })
+}
+
+#[pyfunction]
+fn schur(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err("schur requires a square 2D matrix"));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::schur(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let q_buf = decomp.q_buffer().clone();
+    let t_buf = decomp.t_buffer().clone();
+    let n_val = decomp.n();
+
+    Ok((
+        PyArray {
+            buffer: q_buf,
+            device: a.device.clone(),
+            shape: vec![n_val, n_val],
+        },
+        PyArray {
+            buffer: t_buf,
+            device: a.device.clone(),
+            shape: vec![n_val, n_val],
+        },
+    ))
+}
+
+#[pyfunction]
+fn bunch_kaufman(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "bunch_kaufman requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let decomp = hephaestus_wgpu::bunch_kaufman(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let l_buf = decomp.l_buffer().clone();
+    let d_buf = decomp.d_buffer().clone();
+    let perm = decomp
+        .permutation()
+        .iter()
+        .map(|&x| x as u64)
+        .collect::<Vec<_>>();
+    let n_val = decomp.n();
+
+    Ok((
+        PyArray {
+            buffer: l_buf,
+            device: a.device.clone(),
+            shape: vec![n_val, n_val],
+        },
+        PyArray {
+            buffer: d_buf,
+            device: a.device.clone(),
+            shape: vec![n_val, n_val],
+        },
+        perm,
+    ))
+}
+
+#[pyfunction]
+fn matexp(a: &PyArray) -> PyResult<PyArray> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err("matexp requires a square 2D matrix"));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let out_buf = hephaestus_wgpu::matexp(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyArray {
+        buffer: out_buf,
+        device: a.device.clone(),
+        shape: vec![n, n],
+    })
+}
+
+#[pyfunction]
+fn pinv(a: &PyArray) -> PyResult<PyArray> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err("pinv requires a 2D matrix"));
+    }
+    let [rows, cols] = [a.shape[0], a.shape[1]];
+    let layout =
+        Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let out_buf =
+        hephaestus_wgpu::pinv(&a.device, op).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyArray {
+        buffer: out_buf,
+        device: a.device.clone(),
+        shape: vec![cols, rows],
+    })
+}
+
+#[pyfunction]
+fn eigenvalues<'py>(
+    py: Python<'py>,
+    a: &PyArray,
+) -> PyResult<Bound<'py, PyArray1<numpy::Complex32>>> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "eigenvalues requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let op = StridedOperand {
+        buffer: &a.buffer,
+        layout: &layout,
+    };
+    let e_buf = hephaestus_wgpu::eigenvalues(&a.device, op)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
+    a.device
+        .download(&e_buf, &mut host_data)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let py_data = host_data
+        .into_iter()
+        .map(|c| numpy::Complex32::new(c.re, c.im))
+        .collect::<Vec<_>>();
+
+    Ok(PyArray1::from_vec(py, py_data))
+}
+
 /// PyHephaestus extension module definition.
 #[pymodule]
 fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -850,6 +1288,19 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(norm_l1_py, m)?)?;
     m.add_function(wrap_pyfunction!(norm_l2_py, m)?)?;
     m.add_function(wrap_pyfunction!(norm_max_py, m)?)?;
+
+    m.add_function(wrap_pyfunction!(cholesky, m)?)?;
+    m.add_function(wrap_pyfunction!(lu, m)?)?;
+    m.add_function(wrap_pyfunction!(qr, m)?)?;
+    m.add_function(wrap_pyfunction!(col_piv_qr, m)?)?;
+    m.add_function(wrap_pyfunction!(svd, m)?)?;
+    m.add_function(wrap_pyfunction!(symmetric_eigen, m)?)?;
+    m.add_function(wrap_pyfunction!(singular_values, m)?)?;
+    m.add_function(wrap_pyfunction!(schur, m)?)?;
+    m.add_function(wrap_pyfunction!(bunch_kaufman, m)?)?;
+    m.add_function(wrap_pyfunction!(matexp, m)?)?;
+    m.add_function(wrap_pyfunction!(pinv, m)?)?;
+    m.add_function(wrap_pyfunction!(eigenvalues, m)?)?;
 
     Ok(())
 }

@@ -45,6 +45,13 @@ impl GpuSvdDecomposition {
     pub fn singular_values(&self) -> &WgpuBuffer<f32> {
         &self.singular_values
     }
+
+    /// Borrow the host-side Leto decomposition.
+    #[must_use]
+    #[inline]
+    pub fn inner(&self) -> &leto_ops::SvdDecomposition<f32> {
+        &self.inner
+    }
 }
 
 /// Compute the thin SVD decomposition on the GPU.

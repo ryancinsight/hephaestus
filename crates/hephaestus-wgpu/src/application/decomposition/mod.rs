@@ -59,15 +59,16 @@
 //!
 //! # Complexity
 //!
-//! | Decomposition | Flop count | Dominant kernel |
+//! | Decomposition | Flop count | Dominant GPU kernel |
 //! |---|---|---|
-//! | Cholesky | n³ / 3 | rank-k update (SYRK) |
+//! | Cholesky | n³ / 3 | rank-k SYRK update |
+//! | LU | 2n³ / 3 | trailing GEMM (C -= L₂₁ U₁₂) |
+//! | QR | 2n²(m − n/3) | Householder column application |
 //!
-//! # Block Algorithms
+//! # Blocked Cholesky — SYRK Trailing Update
 //!
-//! For large matrices, the O(n³) trailing-matrix update dominates.  The
-//! blocked variant [`crate::application::decomposition::cholesky_decompose_blocked`] processes the
-//! matrix in `BLOCK_SIZE × BLOCK_SIZE` panels:
+//! [`cholesky_decompose_blocked`] processes the matrix in
+//! `BLOCK_SIZE × BLOCK_SIZE` panels:
 //!
 //! 1. **Panel factorisation** (CPU, O(b³/3)) — the diagonal block is
 //!    factored by leto-ops.
@@ -77,12 +78,69 @@
 //!    computes A₂₂ -= L₂₁ L₂₁ᵀ directly in device memory.
 //!
 //! The SYRK kernel uses 16×16 workgroup tiles with shared-memory
-//! cooperative loading of panel rows, analogous to the tiled matmul
-//! kernel but specialised for the symmetric rank-k update.  Only the
-//! lower triangle of the trailing matrix is touched, halving the
-//! compute compared to a general matmul + subtract sequence.
-//! | LU | 2n³ / 3 | panel elimination + trailing update |
-//! | QR | 2n²(m − n/3) | Householder application |
+//! cooperative loading of panel rows.  Only the lower triangle of the
+//! trailing matrix is touched, halving the compute compared to a
+//! general matmul.
+//!
+//! # Blocked LU — Trailing GEMM Update
+//!
+//! **Theorem (Blocked LU complexity).** For *n × n* with block size *b*,
+//! the total flop count is 2n³/3, identical to unblocked LU.
+//!
+//! **Proof.** Partition **P A = L U** into *b × b* blocks:
+//!
+//! ```text
+//! ┌           ┐   ┌       ┐ ┌       ┐
+//! │ A₁₁  A₁₂ │   │ L₁₁ 0 │ │ U₁₁ U₁₂│
+//! │ A₂₁  A₂₂ │ = │ L₂₁ I │ │  0  S₂₂│
+//! └           ┘   └       ┘ └       ┘
+//! ```
+//!
+//! The Schur complement is **S₂₂ = A₂₂ − L₂₁ U₁₂** and the dominant
+//! cost is the rank-b GEMM update.  Each block iteration costs:
+//!
+//! - Panel factor: 2b³/3
+//! - Panel solve (L₂₁): b²(n−k)/2
+//! - Panel solve (U₁₂): b²(n−k)/2
+//! - **Trailing GEMM: 2b(n−k)²** (GPU)
+//!
+//! Summing over all ⌈n/b⌉ blocks recovers 2n³/3 total flops.  The
+//! key performance gain is that the trailing GEMM, which dominates
+//! for large *n*, executes on the GPU's massively parallel compute
+//! units. ∎
+//!
+//! The [`lu_decompose_blocked`] entry point implements this: the panel
+//! factorisation uses the same partial-pivoting rule as leto-ops
+//! [`panel_lu_packed`](hephaestus_core::panel_lu_packed), and the
+//! trailing GEMM runs via a dedicated 16×16 tiled WGSL kernel with
+//! shared-memory cooperative loading.
+//!
+//! # Blocked QR — Trailing Householder Application
+//!
+//! **Theorem (Blocked QR complexity).** For *m × n* with block size *b*,
+//! the total flop count is 2n²(m − n/3), identical to unblocked QR.
+//!
+//! **Proof.** At step *k*, the Householder reflector **Hₖ** = **I** −
+//! βₖ **vₖ vₖ**ᵀ zeros entries below the diagonal of column *k*.
+//! Each block of *b* columns produces *b* reflectors that are
+//! applied to the trailing *m × (n−k−b)* submatrix.  Each
+//! application costs O((m−k)(n−k)) flops — *b* applications per
+//! panel gives O(b·(m−k)·(n−k)) — and is embarrassingly parallel
+//! across columns.  Each block iteration costs:
+//!
+//! - Panel factor: 2b²(m−k) − 2b³/3
+//! - **Trailing apply: 2b(m−k)(n−k−b)** (GPU, *b* kernel launches)
+//!
+//! Summing over all ⌈n/b⌉ blocks recovers 2n²(m − n/3) total
+//! flops. ∎
+//!
+//! The [`qr_decompose_blocked`] entry point implements this: the panel
+//! factorisation uses the same Householder convention as leto-ops
+//! [`panel_qr_packed`](hephaestus_core::panel_qr_packed), and each
+//! of the *b* reflectors is applied to the trailing columns via a
+//! dedicated 256-thread workgroup kernel that computes
+//! `A[:, col] -= β · v · (vᵀ · A[:, col])` using a parallel
+//! tree reduction for the dot product.
 
 pub(crate) mod validate;
 

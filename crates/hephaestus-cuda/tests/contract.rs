@@ -1022,6 +1022,65 @@ fn qr_decomposition_matches_leto_reference() {
     ));
 }
 
+// ── write_buffer tests ────────────────────────────────────────────────
+
+#[test]
+fn write_buffer_overwrites_existing_data() {
+    let Some(dev) = device("write_buffer_overwrites_existing_data") else {
+        return;
+    };
+
+    // Upload initial data.
+    let initial = vec![1.0f32, 2.0, 3.0, 4.0];
+    let buf = dev.upload(&initial).unwrap();
+
+    // Overwrite with new data via write_buffer.
+    let updated = vec![10.0f32, 20.0, 30.0, 40.0];
+    dev.write_buffer(&buf, &updated).unwrap();
+
+    // Download and verify the overwritten data.
+    let mut got = vec![0.0f32; 4];
+    dev.download(&buf, &mut got).unwrap();
+    assert_eq!(got, updated);
+}
+
+#[test]
+fn write_buffer_rejects_length_mismatch() {
+    let Some(dev) = device("write_buffer_rejects_length_mismatch") else {
+        return;
+    };
+
+    let buf = dev.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    let wrong_len = vec![1.0f32, 2.0]; // len 2, buffer len 3
+    assert_length_mismatch(dev.write_buffer(&buf, &wrong_len), 2, 3);
+}
+
+#[test]
+fn write_buffer_empty_is_noop() {
+    let Some(dev) = device("write_buffer_empty_is_noop") else {
+        return;
+    };
+
+    let buf = dev.upload::<f32>(&[]).unwrap();
+    dev.write_buffer(&buf, &[] as &[f32]).unwrap();
+    assert_eq!(buf.len(), 0);
+}
+
+#[test]
+fn write_buffer_integer_types() {
+    let Some(dev) = device("write_buffer_integer_types") else {
+        return;
+    };
+
+    let buf = dev.upload(&[0i32, 0, 0]).unwrap();
+    let data = vec![42i32, -7, 100];
+    dev.write_buffer(&buf, &data).unwrap();
+
+    let mut got = vec![0i32; 3];
+    dev.download(&buf, &mut got).unwrap();
+    assert_eq!(got, data);
+}
+
 // ── Extended differential decomposition tests ─────────────────────────────
 
 #[cfg(feature = "decomposition")]
@@ -1345,3 +1404,1442 @@ fn qr_solve_known_system_accurate() {
     assert!(residual_1.abs() <= 1e-4, "QR residual[1] = {residual_1}");
     assert!(residual_2.abs() <= 1e-4, "QR residual[2] = {residual_2}");
 }
+
+// ── Blocked decomposition differential tests ────────────────────────────
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_matches_leto_reference() {
+    let Some(dev) = device("blocked_lu_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // 66×66 matrix exercises the block boundary (LU_BLOCK_SIZE = 64).
+    let n = 66usize;
+    let mut matrix_host = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                n as f32 + 4.0
+            } else {
+                0.1 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    // The host-side inner decomposition (on original matrix) must match leto-ops.
+    assert_eq!(gpu_lu.n(), leto_lu.dim());
+    assert_eq!(gpu_lu.det(), leto_lu.det());
+
+    // Solve via host-side decomposition must match.
+    let rhs_host = vec![1.0f32; n];
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([n], rhs_host).unwrap();
+    let solution = gpu_lu.solve(&dev, &rhs).unwrap();
+    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
+    let mut got = vec![0.0f32; n];
+    dev.download(&solution, &mut got).unwrap();
+    let expected = leto::Storage::as_slice(expected_solution.storage());
+    for i in 0..n {
+        assert!(
+            (got[i] - expected[i]).abs() <= 1e-4,
+            "blocked LU solve x[{i}] = {} expected {}",
+            got[i],
+            expected[i]
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_identity_yields_identity_factors() {
+    let Some(dev) = device("blocked_lu_identity_yields_identity_factors") else {
+        return;
+    };
+    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_lu.n(), 2);
+    assert_eq!(gpu_lu.det(), leto_lu.det());
+    assert_eq!(gpu_lu.det(), 1.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_solve_known_system_accurate() {
+    let Some(dev) = device("blocked_lu_solve_known_system_accurate") else {
+        return;
+    };
+    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
+    let matrix_host = vec![2.0f32, 1.0, 4.0, 3.0];
+    let rhs_host = vec![5.0f32, 11.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
+    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_lu = lu_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_lu.solve(&dev, &rhs).unwrap();
+    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
+    let mut got = vec![0.0f32; 2];
+    dev.download(&solution, &mut got).unwrap();
+    let expected = leto::Storage::as_slice(expected_solution.storage());
+    for i in 0..2 {
+        assert!(
+            (got[i] - expected[i]).abs() <= 1e-5,
+            "blocked LU solve x[{i}] = {} expected {}",
+            got[i],
+            expected[i]
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_rejects_singular_matrix() {
+    let Some(dev) = device("blocked_lu_rejects_singular_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = lu_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(
+        result.is_err(),
+        "singular matrix must be rejected by blocked LU"
+    );
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_matches_leto_reference() {
+    let Some(dev) = device("blocked_qr_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // 70×35 matrix exercises two QR blocks (QR_BLOCK_SIZE = 32).
+    let (m, n) = (70, 35);
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([m, n], matrix_host.clone()).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_qr = qr_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_qr.shape(), (m, n));
+
+    // R should be upper triangular — check lower triangle is zero.
+    let mut got_r = vec![0.0f32; m * n];
+    dev.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
+    for i in 1..m {
+        for j in 0..n.min(i) {
+            assert!(
+                got_r[i * n + j].abs() <= f32::EPSILON,
+                "blocked QR R[{i},{j}] = {} should be zero (lower triangle)",
+                got_r[i * n + j]
+            );
+        }
+    }
+
+    // Upper n×n block of R must match leto-ops.
+    let leto_r = leto_qr.r();
+    let expected_r = leto::Storage::as_slice(leto_r.storage());
+    for i in 0..n {
+        for j in 0..n {
+            let got = got_r[i * n + j];
+            let expected = expected_r[i * n + j];
+            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+            assert!(
+                (got - expected).abs() <= tolerance,
+                "blocked QR R[{i},{j}]: got {got}, expected {expected}"
+            );
+        }
+    }
+
+    // Least-squares solve must match leto-ops.
+    let rhs_host: Vec<f32> = (0..m).map(|i| (i + 1) as f32).collect();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([m], rhs_host).unwrap();
+    let solution = gpu_qr.solve_least_squares(&dev, &rhs).unwrap();
+    let expected_solution = leto_qr.solve_least_squares(&leto_rhs.view()).unwrap();
+    let mut got = vec![0.0f32; n];
+    dev.download(&solution, &mut got).unwrap();
+    let expected = leto::Storage::as_slice(expected_solution.storage());
+    for i in 0..n {
+        assert!(
+            (got[i] - expected[i]).abs() <= 1e-3,
+            "blocked QR solve x[{i}] = {} expected {}",
+            got[i],
+            expected[i]
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_identity_yields_identity_r() {
+    let Some(dev) = device("blocked_qr_identity_yields_identity_r") else {
+        return;
+    };
+    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_qr = qr_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_qr.shape(), (2, 2));
+
+    let mut got_r = vec![0.0f32; 4];
+    dev.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
+    let r_ref = leto_qr.r();
+    let expected_r = leto::Storage::as_slice(r_ref.storage());
+    for i in 0..4 {
+        let tolerance = 8.0 * f32::EPSILON * expected_r[i].abs().max(1.0);
+        assert!(
+            (got_r[i] - expected_r[i]).abs() <= tolerance,
+            "blocked QR R[{i}] = {} expected {}",
+            got_r[i],
+            expected_r[i]
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_solve_known_system_accurate() {
+    let Some(dev) = device("blocked_qr_solve_known_system_accurate") else {
+        return;
+    };
+    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let rhs_host = vec![1.0f32, 2.0, 3.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([3, 2]).unwrap();
+
+    let gpu_qr = qr_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_qr.solve_least_squares(&dev, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    dev.download(&solution, &mut got).unwrap();
+
+    // Verify residual A*x ≈ b.
+    let residual_0 = 1.0 * got[0] + 0.0 * got[1] - 1.0;
+    let residual_1 = 0.0 * got[0] + 1.0 * got[1] - 2.0;
+    let residual_2 = 1.0 * got[0] + 1.0 * got[1] - 3.0;
+    assert!(
+        residual_0.abs() <= 1e-4,
+        "blocked QR residual[0] = {residual_0}"
+    );
+    assert!(
+        residual_1.abs() <= 1e-4,
+        "blocked QR residual[1] = {residual_1}"
+    );
+    assert!(
+        residual_2.abs() <= 1e-4,
+        "blocked QR residual[2] = {residual_2}"
+    );
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_rejects_underdetermined() {
+    let Some(dev) = device("blocked_qr_rejects_underdetermined") else {
+        return;
+    };
+    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let host = vec![0.0f32; 6];
+    let input = dev.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = qr_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("m ≥ n")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_identity_yields_identity_lower() {
+    let Some(dev) = device("blocked_cholesky_identity_yields_identity_lower") else {
+        return;
+    };
+    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_chol = cholesky_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_chol.n(), 2);
+    assert_eq!(gpu_chol.det(), leto_chol.det());
+    assert_eq!(gpu_chol.det(), 1.0);
+
+    let mut got_lower = vec![0.0f32; 4];
+    dev.download(gpu_chol.lower(), &mut got_lower).unwrap();
+    assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_spd_reconstruction_matches_original() {
+    let Some(dev) = device("blocked_cholesky_spd_reconstruction_matches_original") else {
+        return;
+    };
+    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // 66×66 SPD matrix exercises the block boundary.
+    let n = 66usize;
+    let mut matrix_host = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                n as f32 + 4.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
+    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_chol = cholesky_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    // Reconstruct A' = L * L^T and verify against original.
+    let mut got_lower = vec![0.0f32; n * n];
+    dev.download(gpu_chol.lower(), &mut got_lower).unwrap();
+    let expected_lower = leto::Storage::as_slice(leto_chol.lower().storage());
+    for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
+        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        assert!(
+            (got - expected).abs() <= tolerance,
+            "blocked Cholesky L mismatch at {index}: got {got}, expected {expected}"
+        );
+    }
+
+    for row in 0..n {
+        for col in 0..n {
+            let mut sum = 0.0f32;
+            for k in 0..n {
+                sum += got_lower[row * n + k] * got_lower[col * n + k];
+            }
+            let expected = matrix_host[row * n + col];
+            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+            assert!(
+                (sum - expected).abs() <= tolerance,
+                "blocked Cholesky reconstruction [{row},{col}]: got {sum}, expected {expected}"
+            );
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_solve_known_system_accurate() {
+    let Some(dev) = device("blocked_cholesky_solve_known_system_accurate") else {
+        return;
+    };
+    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5]
+    let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
+    let rhs_host = vec![8.0f32, 7.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let gpu_chol = cholesky_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_chol.solve(&dev, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    dev.download(&solution, &mut got).unwrap();
+    assert!(
+        (got[0] - 1.25f32).abs() <= 1e-5,
+        "x[0] = {} expected 1.25",
+        got[0]
+    );
+    assert!(
+        (got[1] - 1.5f32).abs() <= 1e-5,
+        "x[1] = {} expected 1.5",
+        got[1]
+    );
+
+    // Verify residual A*x ≈ b.
+    let ax0 = 4.0 * got[0] + 2.0 * got[1];
+    let ax1 = 2.0 * got[0] + 3.0 * got[1];
+    assert!((ax0 - 8.0).abs() <= 1e-4, "residual[0] = {ax0}");
+    assert!((ax1 - 7.0).abs() <= 1e-4, "residual[1] = {ax1}");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_rejects_singular_matrix() {
+    let Some(dev) = device("blocked_cholesky_rejects_singular_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = cholesky_decompose_blocked(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(
+        result.is_err(),
+        "singular matrix must be rejected by blocked Cholesky"
+    );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Telemetry and Decomposition Contract Helper Functions
+// ────────────────────────────────────────────────────────────────────────
+
+fn assert_close(actual: f32, expected: f32, tolerance: f32) {
+    assert!(
+        (actual - expected).abs() <= tolerance,
+        "got {actual}, expected {expected}, tolerance {tolerance}"
+    );
+}
+
+fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32) {
+    assert_eq!(got.len(), expected.len());
+    for (index, (&got, &expected)) in got.iter().zip(expected.iter()).enumerate() {
+        let tolerance = abs_tol.max(rel_tol * expected.abs().max(1.0));
+        assert!(
+            (got - expected).abs() <= tolerance,
+            "slice mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
+        );
+    }
+}
+
+fn reconstruct_svd(
+    u: &[f32],
+    singular_values: &[f32],
+    v: &[f32],
+    rows: usize,
+    cols: usize,
+) -> Vec<f32> {
+    let rank = singular_values.len();
+    let mut reconstructed = vec![0.0f32; rows * cols];
+    for row in 0..rows {
+        for col in 0..cols {
+            let mut value = 0.0f32;
+            for component in 0..rank {
+                value += u[row * rank + component]
+                    * singular_values[component]
+                    * v[col * rank + component];
+            }
+            reconstructed[row * cols + col] = value;
+        }
+    }
+    reconstructed
+}
+
+fn matmul_host(
+    lhs: &[f32],
+    lhs_rows: usize,
+    shared: usize,
+    rhs: &[f32],
+    rhs_cols: usize,
+) -> Vec<f32> {
+    let mut out = vec![0.0f32; lhs_rows * rhs_cols];
+    for row in 0..lhs_rows {
+        for col in 0..rhs_cols {
+            let mut value = 0.0f32;
+            for k in 0..shared {
+                value += lhs[row * shared + k] * rhs[k * rhs_cols + col];
+            }
+            out[row * rhs_cols + col] = value;
+        }
+    }
+    out
+}
+
+fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; rows * cols];
+    for row in 0..rows {
+        for col in 0..cols {
+            out[col * rows + row] = matrix[row * cols + col];
+        }
+    }
+    out
+}
+
+fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
+    let transposed = transpose_host(matrix, n, n);
+    let gram = matmul_host(&transposed, n, n, matrix, n);
+    for row in 0..n {
+        for col in 0..n {
+            assert_close(
+                gram[row * n + col],
+                if row == col { 1.0 } else { 0.0 },
+                tolerance,
+            );
+        }
+    }
+}
+
+fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
+    values.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+}
+
+fn assert_complex_spectrum_close(
+    actual: &[num_complex::Complex<f32>],
+    expected: &[num_complex::Complex<f32>],
+    tolerance: f32,
+) {
+    assert_eq!(actual.len(), expected.len());
+    let mut actual = actual.to_vec();
+    let mut expected = expected.to_vec();
+    sort_complex(&mut actual);
+    sort_complex(&mut expected);
+    for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+        assert_close(actual.re, expected.re, tolerance);
+        assert_close(actual.im, expected.im, tolerance);
+        assert!(
+            (actual - expected).norm() <= tolerance,
+            "complex spectrum mismatch at {index}: got {actual:?}, expected {expected:?}, tolerance {tolerance}"
+        );
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Decomposition Contract Tests
+// ────────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn symmetric_eigen_jacobi_matches_leto_reference() {
+    let Some(dev) = device("symmetric_eigen_jacobi_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        4.0f32, 1.0, 0.5, 0.25,
+        1.0, 3.0, 0.25, 0.125,
+        0.5, 0.25, 2.0, 0.0625,
+        0.25, 0.125, 0.0625, 1.5,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([4, 4]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([4, 4], matrix_host).unwrap();
+    let leto_eigen = leto_ops::symmetric_eigen_jacobi(&leto_matrix.view()).unwrap();
+
+    let gpu_eigen = symmetric_eigen_jacobi(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_eigen.n(), 4);
+    assert_eq!(gpu_eigen.inner().eigenvalues, leto_eigen.eigenvalues);
+
+    let mut got_values = vec![0.0f32; 4];
+    dev.download(gpu_eigen.eigenvalues(), &mut got_values).unwrap();
+    assert_eq!(got_values, leto_eigen.eigenvalues);
+
+    let mut got_vectors = vec![0.0f32; 16];
+    dev.download(gpu_eigen.eigenvectors(), &mut got_vectors).unwrap();
+    assert_eq!(
+        got_vectors,
+        leto::Storage::as_slice(leto_eigen.eigenvectors.storage())
+    );
+
+    let values_only = symmetric_eigenvalues_jacobi(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let leto_values_only = leto_ops::symmetric_eigenvalues_jacobi(&leto_matrix.view()).unwrap();
+    let mut got_values_only = vec![0.0f32; 4];
+    dev.download(&values_only, &mut got_values_only).unwrap();
+    assert_eq!(got_values_only, leto_values_only);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
+    let Some(dev) = device("symmetric_eigen_jacobi_rejects_non_symmetric_input") else {
+        return;
+    };
+    use hephaestus_cuda::{symmetric_eigen_jacobi, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = symmetric_eigen_jacobi(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("not symmetric")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn eigenvalues_match_closed_form_diagonal() {
+    let Some(dev) = device("eigenvalues_match_closed_form_diagonal") else {
+        return;
+    };
+    use hephaestus_cuda::{eigenvalues, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![2.0f32, 0.0, 0.0, 3.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let eigen = eigenvalues(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    dev.download(&eigen, &mut got).unwrap();
+    got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
+
+    let expected = [
+        num_complex::Complex::new(2.0f32, 0.0),
+        num_complex::Complex::new(3.0f32, 0.0),
+    ];
+    for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
+        assert_eq!(
+            actual, expected,
+            "general eigenvalue mismatch at {index}: got {actual:?}, expected {expected:?}"
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn eigenvalues_matches_leto_reference() {
+    let Some(dev) = device("eigenvalues_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{eigenvalues, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![0.0f32, 1.0, -2.0, 3.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let eigen = eigenvalues(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    dev.download(&eigen, &mut got).unwrap();
+
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let expected = leto_ops::eigenvalues(&leto_matrix.view()).unwrap();
+
+    assert_eq!(got.len(), expected.len());
+    for i in 0..got.len() {
+        assert!(
+            (got[i].re - expected[i].re).abs() < 1e-5,
+            "real part mismatch at {i}: got {}, expected {}",
+            got[i].re,
+            expected[i].re
+        );
+        assert!(
+            (got[i].im - expected[i].im).abs() < 1e-5,
+            "imag part mismatch at {i}: got {}, expected {}",
+            got[i].im,
+            expected[i].im
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn singular_values_match_closed_form_diagonal() {
+    let Some(dev) = device("singular_values_match_closed_form_diagonal") else {
+        return;
+    };
+    use hephaestus_cuda::{singular_values, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let values = singular_values(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 2];
+    dev.download(&values, &mut got).unwrap();
+    assert_eq!(got.len(), 2);
+    assert_close(got[0], 3.0, 1.0e-5);
+    assert_close(got[1], 2.0, 1.0e-5);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn svd_decompose_reconstructs_leto_reference() {
+    let Some(dev) = device("svd_decompose_reconstructs_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{svd_decompose, StridedOperand};
+    use leto::Layout;
+
+    let rows = 4usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_svd = svd_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_svd.shape(), (rows, cols));
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host.clone()).unwrap();
+    let leto_svd = leto_ops::svd_decompose(&leto_matrix.view()).unwrap();
+
+    let rank = leto_svd.singular_values.len();
+    let mut got_singular = vec![0.0f32; rank];
+    let mut got_u = vec![0.0f32; rows * rank];
+    let mut got_v = vec![0.0f32; cols * rank];
+    dev.download(gpu_svd.singular_values(), &mut got_singular).unwrap();
+    dev.download(gpu_svd.u(), &mut got_u).unwrap();
+    dev.download(gpu_svd.v(), &mut got_v).unwrap();
+
+    for (actual, expected) in got_singular.iter().zip(leto_svd.singular_values.iter()) {
+        assert_close(*actual, *expected, 1.0e-5);
+    }
+
+    let reconstructed = reconstruct_svd(&got_u, &got_singular, &got_v, rows, cols);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn svd_rank_revealing_accepts_rank_deficient_matrix() {
+    let Some(dev) = device("svd_rank_revealing_accepts_rank_deficient_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{svd_rank_revealing, StridedOperand};
+    use leto::Layout;
+
+    let rows = 3usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 2.0, 4.0, 3.0, 6.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_svd = svd_rank_revealing(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host).unwrap();
+    let leto_svd = leto_ops::svd_rank_revealing(&leto_matrix.view()).unwrap();
+    let rank = leto_svd.singular_values.len();
+    let mut got_singular = vec![0.0f32; rank];
+    dev.download(gpu_svd.singular_values(), &mut got_singular).unwrap();
+
+    assert_eq!(rank, 2);
+    assert!(got_singular[0] >= got_singular[1]);
+    assert_close(got_singular[1], 0.0, 1.0e-5);
+    for (actual, expected) in got_singular.iter().zip(leto_svd.singular_values.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bidiagonalize_reconstructs_and_preserves_singular_values() {
+    let Some(dev) = device("bidiagonalize_reconstructs_and_preserves_singular_values") else {
+        return;
+    };
+    use hephaestus_cuda::{bidiagonalize, singular_values, StridedOperand};
+    use leto::Layout;
+
+    let rows = 4usize;
+    let cols = 3usize;
+    let matrix_host = vec![
+        4.0f32, 1.0, -2.0, 2.0, 3.0, 0.0, 1.0, -1.0, 2.0, 0.0, 5.0, -3.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_bd = bidiagonalize(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_bd.shape(), (rows, cols));
+    let mut u = vec![0.0f32; rows * rows];
+    let mut b = vec![0.0f32; rows * cols];
+    let mut v = vec![0.0f32; cols * cols];
+    dev.download(gpu_bd.u_buffer(), &mut u).unwrap();
+    dev.download(gpu_bd.b_buffer(), &mut b).unwrap();
+    dev.download(gpu_bd.v_buffer(), &mut v).unwrap();
+
+    assert_orthogonal_host(&u, rows, 1.0e-4);
+    assert_orthogonal_host(&v, cols, 1.0e-4);
+    for row in 0..rows {
+        for col in 0..cols {
+            if col < row || col > row + 1 {
+                assert_close(b[row * cols + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+
+    let ub = matmul_host(&u, rows, rows, &b, cols);
+    let vt = transpose_host(&v, cols, cols);
+    let reconstructed = matmul_host(&ub, rows, cols, &vt, cols);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let b_buffer = dev.upload(&b).unwrap();
+    let b_layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let sv_b = singular_values(
+        &dev,
+        StridedOperand {
+            buffer: &b_buffer,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let sv_a = singular_values(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_b = vec![0.0f32; cols];
+    let mut got_a = vec![0.0f32; cols];
+    dev.download(&sv_b, &mut got_b).unwrap();
+    dev.download(&sv_a, &mut got_a).unwrap();
+    for (actual, expected) in got_b.iter().zip(got_a.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bidiagonalize_rejects_wide_matrix() {
+    let Some(dev) = device("bidiagonalize_rejects_wide_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{bidiagonalize, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = bidiagonalize(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Bidiagonalization requires")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
+    let Some(dev) = device("schur_reconstructs_quasi_triangular_and_preserves_spectrum") else {
+        return;
+    };
+    use hephaestus_cuda::{eigenvalues, schur, StridedOperand};
+    use leto::Layout;
+
+    let n = 3usize;
+    let matrix_host = vec![
+        1.0f32, -3.0, 0.0,
+        2.0, 1.0, 0.0,
+        0.0, 0.0, 5.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_schur = schur(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_schur.n(), n);
+    let mut q = vec![0.0f32; n * n];
+    let mut t = vec![0.0f32; n * n];
+    dev.download(gpu_schur.q_buffer(), &mut q).unwrap();
+    dev.download(gpu_schur.t_buffer(), &mut t).unwrap();
+
+    assert_orthogonal_host(&q, n, 1.0e-4);
+    for row in 0..n {
+        for col in 0..n {
+            if row > col + 1 {
+                assert_close(t[row * n + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+    for block in 0..(n - 1) {
+        if t[(block + 1) * n + block].abs() > 1.0e-4 {
+            let aa = t[block * n + block];
+            let bb = t[block * n + block + 1];
+            let cc = t[(block + 1) * n + block];
+            let dd = t[(block + 1) * n + block + 1];
+            let discriminant = (aa - dd) * (aa - dd) + 4.0 * bb * cc;
+            assert!(
+                discriminant <= 1.0e-4,
+                "real Schur 2x2 block must encode a complex pair, discriminant {discriminant}"
+            );
+        }
+    }
+
+    let qt = matmul_host(&q, n, n, &t, n);
+    let q_transposed = transpose_host(&q, n, n);
+    let reconstructed = matmul_host(&qt, n, n, &q_transposed, n);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let t_buffer = dev.upload(&t).unwrap();
+    let t_values = eigenvalues(
+        &dev,
+        StridedOperand {
+            buffer: &t_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_values = eigenvalues(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_t = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    dev.download(&t_values, &mut got_t).unwrap();
+    dev.download(&a_values, &mut got_a).unwrap();
+    assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_rejects_rectangular_matrix() {
+    let Some(dev) = device("schur_rejects_rectangular_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{schur, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = schur(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Schur decomposition requires square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
+    let Some(dev) = device("hessenberg_reconstructs_and_preserves_similarity_invariants") else {
+        return;
+    };
+    use hephaestus_cuda::{hessenberg, norm_l2, trace, StridedOperand};
+    use leto::Layout;
+
+    let n = 4usize;
+    let matrix_host = vec![
+        4.0f32, 5.0, -2.0, 2.0,
+        1.0, 2.0, 0.0, 1.0,
+        -2.0, 0.0, 3.0, -2.0,
+        2.0, 1.0, -2.0, -1.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_hessenberg = hessenberg(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_hessenberg.n(), n);
+    let mut q = vec![0.0f32; n * n];
+    let mut h = vec![0.0f32; n * n];
+    dev.download(gpu_hessenberg.q_buffer(), &mut q).unwrap();
+    dev.download(gpu_hessenberg.h_buffer(), &mut h).unwrap();
+
+    assert_orthogonal_host(&q, n, 1.0e-4);
+    for row in 0..n {
+        for col in 0..n {
+            if row > col + 1 {
+                assert_close(h[row * n + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+
+    let qh = matmul_host(&q, n, n, &h, n);
+    let q_transposed = transpose_host(&q, n, n);
+    let reconstructed = matmul_host(&qh, n, n, &q_transposed, n);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let h_buffer = dev.upload(&h).unwrap();
+    let h_trace = trace(
+        &dev,
+        StridedOperand {
+            buffer: &h_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_trace = trace(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_h_trace = vec![0.0f32; 1];
+    let mut got_a_trace = vec![0.0f32; 1];
+    dev.download(&h_trace, &mut got_h_trace).unwrap();
+    dev.download(&a_trace, &mut got_a_trace).unwrap();
+    assert_close(got_h_trace[0], got_a_trace[0], 1.0e-4);
+
+    let h_norm = norm_l2(
+        &dev,
+        StridedOperand {
+            buffer: &h_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_norm = norm_l2(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_h_norm = vec![0.0f32; 1];
+    let mut got_a_norm = vec![0.0f32; 1];
+    dev.download(&h_norm, &mut got_h_norm).unwrap();
+    dev.download(&a_norm, &mut got_a_norm).unwrap();
+    assert_close(got_h_norm[0], got_a_norm[0], 1.0e-3);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_rejects_rectangular_matrix() {
+    let Some(dev) = device("hessenberg_rejects_rectangular_matrix") else {
+        return;
+    };
+    use hephaestus_cuda::{hessenberg, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = hessenberg(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Hessenberg reduction requires square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn col_piv_qr_matches_leto_reference() {
+    let Some(dev) = device("col_piv_qr_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{col_piv_qr, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        1.0f32, 2.0, 3.0,
+        4.0, 5.0, 6.0,
+        7.0, 8.0, 9.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    let leto_decomp = leto_ops::col_piv_qr(&leto_matrix.view()).unwrap();
+
+    let gpu_decomp = col_piv_qr(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_decomp.rank(), leto_decomp.rank());
+    assert_eq!(gpu_decomp.permutation(), leto_decomp.permutation());
+
+    let mut q = vec![0.0f32; 9];
+    let mut r = vec![0.0f32; 9];
+    dev.download(gpu_decomp.q(), &mut q).unwrap();
+    dev.download(gpu_decomp.r(), &mut r).unwrap();
+
+    let q_view = leto_decomp.q();
+    let r_view = leto_decomp.r();
+    let expected_q = leto::Storage::as_slice(q_view.storage());
+    let expected_r = leto::Storage::as_slice(r_view.storage());
+
+    assert_close_slice(&q, expected_q, 1e-4, 0.0);
+    assert_close_slice(&r, expected_r, 1e-4, 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn full_piv_lu_matches_leto_reference() {
+    let Some(dev) = device("full_piv_lu_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{full_piv_lu, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        1.0f32, 2.0,
+        3.0, 4.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
+    let leto_decomp = leto_ops::full_piv_lu(&leto_matrix.view()).unwrap();
+
+    let gpu_decomp = full_piv_lu(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_decomp.n(), 2);
+    assert_eq!(gpu_decomp.rank(), leto_decomp.rank());
+    assert_close(gpu_decomp.det(), leto_decomp.det(), 1e-5);
+    assert_eq!(gpu_decomp.row_permutation(), leto_decomp.row_permutation());
+    assert_eq!(gpu_decomp.col_permutation(), leto_decomp.col_permutation());
+
+    let mut lu = vec![0.0f32; 4];
+    dev.download(gpu_decomp.lu_buffer(), &mut lu).unwrap();
+    assert_close_slice(&lu, leto_decomp.lu_factors(), 1e-4, 0.0);
+
+    let rhs_host = vec![5.0f32, 11.0];
+    let rhs = dev.upload(&rhs_host).unwrap();
+    let sol = gpu_decomp.solve(&dev, &rhs).unwrap();
+    let mut got_sol = vec![0.0f32; 2];
+    dev.download(&sol, &mut got_sol).unwrap();
+
+    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
+    let expected_sol = leto_decomp.solve(&leto_rhs.view()).unwrap();
+    assert_close_slice(&got_sol, leto::Storage::as_slice(expected_sol.storage()), 1e-4, 0.0);
+
+    let inv = gpu_decomp.inv(&dev).unwrap();
+    let mut got_inv = vec![0.0f32; 4];
+    dev.download(&inv, &mut got_inv).unwrap();
+    let expected_inv = leto_decomp.inv().unwrap();
+    assert_close_slice(&got_inv, leto::Storage::as_slice(expected_inv.storage()), 1e-4, 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn udu_decompose_matches_leto_reference() {
+    let Some(dev) = device("udu_decompose_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{udu_decompose, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        4.0f32, 12.0, -16.0,
+        12.0, 37.0, -43.0,
+        -16.0, -43.0, 98.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    let leto_decomp = leto_ops::udu_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_decomp = udu_decompose(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_decomp.n(), 3);
+
+    let mut u = vec![0.0f32; 9];
+    let mut d = vec![0.0f32; 3];
+    dev.download(gpu_decomp.u_buffer(), &mut u).unwrap();
+    dev.download(gpu_decomp.d_buffer(), &mut d).unwrap();
+
+    let u_view = leto_decomp.u();
+    let expected_u = leto::Storage::as_slice(u_view.storage());
+    assert_close_slice(&u, expected_u, 1e-4, 0.0);
+    assert_close_slice(&d, leto_decomp.diagonal(), 1e-4, 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bunch_kaufman_matches_leto_reference() {
+    let Some(dev) = device("bunch_kaufman_matches_leto_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{bunch_kaufman, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![
+        1.0f32, 2.0, 3.0,
+        2.0, 4.0, 5.0,
+        3.0, 5.0, 6.0,
+    ];
+    let matrix = dev.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
+    let leto_decomp = leto_ops::bunch_kaufman(&leto_matrix.view()).unwrap();
+
+    let gpu_decomp = bunch_kaufman(
+        &dev,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_decomp.n(), 3);
+    assert_eq!(gpu_decomp.permutation(), leto_decomp.permutation());
+
+    let mut l = vec![0.0f32; 9];
+    let mut d = vec![0.0f32; 9];
+    dev.download(gpu_decomp.l_buffer(), &mut l).unwrap();
+    dev.download(gpu_decomp.d_buffer(), &mut d).unwrap();
+
+    let l_view = leto_decomp.l();
+    let d_view = leto_decomp.d();
+    let expected_l = leto::Storage::as_slice(l_view.storage());
+    let expected_d = leto::Storage::as_slice(d_view.storage());
+    assert_close_slice(&l, expected_l, 1e-4, 0.0);
+    assert_close_slice(&d, expected_d, 1e-4, 0.0);
+}
+

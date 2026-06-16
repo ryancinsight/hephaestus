@@ -221,7 +221,7 @@ pub fn cholesky_decompose_blocked(
                     host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
                 }
             }
-            write_device_buffer(device, &host, &lower_buf)?;
+            device.write_buffer(&lower_buf, &host)?;
 
             let trail_rows = n - k - b;
             if trail_rows == 0 {
@@ -252,7 +252,7 @@ pub fn cholesky_decompose_blocked(
                     host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
                 }
             }
-            write_device_buffer(device, &host, &lower_buf)?;
+            device.write_buffer(&lower_buf, &host)?;
             let panel_buf = device.upload(&rhs)?;
 
             // ── Step 3: trailing SYRK update on GPU ──
@@ -272,7 +272,7 @@ pub fn cholesky_decompose_blocked(
                 host[row * n + col] = 0.0;
             }
         }
-        write_device_buffer(device, &host, &lower_buf)?;
+        device.write_buffer(&lower_buf, &host)?;
 
         let original_view = leto::ArrayView::<f32, 2>::new(
             leto::Layout::c_contiguous([n, n]).unwrap(),
@@ -319,38 +319,6 @@ mod syrk_impl {
 
     // SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
     unsafe impl Pod for SyrkMeta {}
-
-    pub fn write_device_buffer<T: Pod>(
-        device: &CudaDevice,
-        host: &[T],
-        buffer: &CudaBuffer<T>,
-    ) -> Result<()> {
-        if host.len() != buffer.len() {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: host.len(),
-                device_len: buffer.len(),
-            });
-        }
-        if host.is_empty() {
-            return Ok(());
-        }
-        device.bind()?;
-        let bytes = std::mem::size_of_val(host);
-        // SAFETY: `buffer.raw()` is a valid device pointer. `host` is valid host memory of `bytes` size.
-        unsafe {
-            let res = cuda_core::sys::cuMemcpyHtoD_v2(
-                buffer.raw(),
-                host.as_ptr() as *const std::ffi::c_void,
-                bytes,
-            );
-            if res != 0 {
-                return Err(HephaestusError::TransferFailed {
-                    message: format!("write_device_buffer cuMemcpyHtoD_v2 failed with code: {res}"),
-                });
-            }
-        }
-        Ok(())
-    }
 
     fn syrk_shader_source() -> String {
         r#"
@@ -487,4 +455,4 @@ mod syrk_impl {
 }
 
 #[cfg(feature = "cuda")]
-use syrk_impl::{syrk_trailing_update, write_device_buffer};
+use syrk_impl::syrk_trailing_update;

@@ -33,4 +33,11 @@ pub trait ComputeDevice {
     ///
     /// [`HephaestusError::LengthMismatch`]: crate::domain::error::HephaestusError::LengthMismatch
     fn download<T: Pod>(&self, buffer: &Self::Buffer<T>, out: &mut [T]) -> Result<()>;
+
+    /// Overwrite an existing device buffer with host data (host→device).
+    ///
+    /// Unlike [`upload`](Self::upload) which allocates a new buffer, this
+    /// writes into an already-allocated buffer.  `host.len()` must equal the
+    /// buffer's element count.
+    fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()>;
 }

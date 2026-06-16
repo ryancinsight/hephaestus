@@ -23,6 +23,9 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
+#[cfg(feature = "cuda")]
+use hephaestus_core::panel_qr_packed;
+
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -51,6 +54,13 @@ impl GpuQrDecomposition {
     #[inline]
     pub fn r_buffer(&self) -> &CudaBuffer<f32> {
         &self.r
+    }
+
+    /// Borrow the host-side Leto decomposition.
+    #[must_use]
+    #[inline]
+    pub fn inner(&self) -> &leto_ops::QrDecomposition<f32> {
+        &self.inner
     }
 
     /// Solve min ‖**A** · **x** − **rhs**‖₂ (least squares).
@@ -153,80 +163,6 @@ pub fn qr_decompose(
 #[cfg(feature = "cuda")]
 const QR_BLOCK_SIZE: usize = 32;
 
-/// In-place Householder QR factorization of an (*m* × *n*) packed row-major
-/// matrix, returning the Householder vector heads and β coefficients.
-#[cfg(feature = "cuda")]
-fn panel_qr_packed(a: &mut [f32], m: usize, n: usize) -> Result<(Vec<f32>, Vec<f32>)> {
-    if a.len() != m * n {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: m * n,
-            device_len: a.len(),
-        });
-    }
-    if m < n {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("QR panel requires m ≥ n, got [{m}, {n}]"),
-        });
-    }
-
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("QR panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
-
-    let mut heads = vec![0.0f32; n];
-    let mut betas = vec![0.0f32; n];
-
-    for k in 0..n {
-        let mut norm_sq = 0.0f32;
-        for r in k..m {
-            let x = a[r * n + k];
-            norm_sq += x * x;
-        }
-        let norm = norm_sq.sqrt();
-        if norm == 0.0 {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("QR pivot column {k} has zero norm: matrix is rank-deficient"),
-            });
-        }
-
-        let pivot = a[k * n + k];
-        let alpha = if pivot > 0.0 { -norm } else { norm };
-        let head = pivot - alpha;
-
-        let mut v_norm_sq = head * head;
-        for r in (k + 1)..m {
-            let x = a[r * n + k];
-            v_norm_sq += x * x;
-        }
-        let beta = 2.0 / v_norm_sq;
-
-        for c in (k + 1)..n {
-            let mut s = head * a[k * n + c];
-            for r in (k + 1)..m {
-                s += a[r * n + k] * a[r * n + c];
-            }
-            let bs = beta * s;
-            a[k * n + c] -= bs * head;
-            for r in (k + 1)..m {
-                a[r * n + c] -= bs * a[r * n + k];
-            }
-        }
-
-        a[k * n + k] = alpha;
-        heads[k] = head;
-        betas[k] = beta;
-    }
-
-    Ok((heads, betas))
-}
-
 /// Blocked QR factorization **A = Q R** with GPU-accelerated trailing
 /// Householder application.
 ///
@@ -292,10 +228,10 @@ pub fn qr_decompose_blocked(
             }
             let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
 
-            // Write R (upper triangle) back to host, zero below diagonal.
+            // Write R (upper triangle, j >= i) back to host, zero tails (j < i).
             for i in 0..panel_rows {
                 for j in 0..b {
-                    if j <= i {
+                    if j >= i {
                         host[(k + i) * n + (k + j)] = panel[i * b + j];
                     } else {
                         host[(k + i) * n + (k + j)] = 0.0;
@@ -304,12 +240,12 @@ pub fn qr_decompose_blocked(
             }
 
             if trail_cols == 0 {
-                hh_impl::write_device_buffer(device, &host, &work_buf)?;
+                device.write_buffer(&work_buf, &host)?;
                 continue;
             }
 
             // ── Step 2: Upload working matrix to device ──
-            hh_impl::write_device_buffer(device, &host, &work_buf)?;
+            device.write_buffer(&work_buf, &host)?;
 
             // ── Step 3: Apply b Householder reflectors on GPU ──
             for j in 0..b {
@@ -376,7 +312,7 @@ pub fn qr_decompose_blocked(
 #[cfg(feature = "cuda")]
 mod hh_impl {
     use super::*;
-    use crate::application::linalg::{to_i32, to_u32};
+    use crate::application::linalg::to_u32;
     use crate::application::pipeline::cached_kernel;
 
     #[repr(C)]
@@ -391,37 +327,6 @@ mod hh_impl {
     }
 
     unsafe impl bytemuck::Pod for HhMeta {}
-
-    pub fn write_device_buffer<T: bytemuck::Pod>(
-        device: &CudaDevice,
-        host: &[T],
-        buffer: &CudaBuffer<T>,
-    ) -> Result<()> {
-        if host.len() != buffer.len() {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: host.len(),
-                device_len: buffer.len(),
-            });
-        }
-        if host.is_empty() {
-            return Ok(());
-        }
-        device.bind()?;
-        let bytes = std::mem::size_of_val(host);
-        unsafe {
-            let res = cuda_core::sys::cuMemcpyHtoD_v2(
-                buffer.raw(),
-                host.as_ptr() as *const std::ffi::c_void,
-                bytes,
-            );
-            if res != 0 {
-                return Err(HephaestusError::TransferFailed {
-                    message: format!("write_device_buffer cuMemcpyHtoD_v2 failed with code: {res}"),
-                });
-            }
-        }
-        Ok(())
-    }
 
     fn hh_shader_source() -> String {
         r#"

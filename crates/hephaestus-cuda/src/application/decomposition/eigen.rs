@@ -37,6 +37,16 @@ impl GpuSymmetricEigenDecomposition {
     pub fn eigenvectors(&self) -> &CudaBuffer<f32> {
         &self.eigenvectors
     }
+
+    /// Borrow the host-side Leto decomposition.
+    ///
+    /// This exposes the canonical host eigenpairs without requiring a device
+    /// download when callers need scalar-side inspection.
+    #[must_use]
+    #[inline]
+    pub fn inner(&self) -> &leto_ops::SymmetricEigenDecomposition<f32> {
+        &self.inner
+    }
 }
 
 /// Compute the symmetric eigendecomposition on the GPU.

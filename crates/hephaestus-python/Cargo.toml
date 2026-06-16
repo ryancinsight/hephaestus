@@ -18,3 +18,4 @@ numpy = { workspace = true }
 bytemuck = { workspace = true }
 wgpu = { workspace = true }
 leto = { workspace = true }
+num-complex = { workspace = true }

@@ -39,6 +39,35 @@ parity audit for remaining operator families and shared Atlas seam usage
   and `nalgebra`. Residual distinction: factorization currently delegates to
   Leto on the host and uploads factors to the device, so this is API parity and
   measured transfer/host-factorization overhead, not GPU-kernel parity.
+- [x] Added WGPU device-resident SVD parity coverage. Contract tests cover
+  closed-form singular values, thin-SVD reconstruction against Leto, and
+  rank-revealing behavior on a rank-deficient matrix; comparative benchmarks
+  cover WGPU, Leto, and `nalgebra` SVD on a 32x16 full-column-rank matrix.
+- [x] Added WGPU device-resident bidiagonalization parity coverage. Contract
+  tests cover orthogonal `U`/`V`, upper-bidiagonal structure, `U B V^T`
+  reconstruction, singular-value preservation, and wide-matrix rejection;
+  comparative benchmarks cover WGPU, Leto, and `nalgebra` SVD on a 32x16
+  matrix.
+- [x] Added WGPU device-resident Schur parity coverage. Contract tests cover
+  orthogonal `Q`, quasi-upper-triangular `T`, `Q T Q^T` reconstruction,
+  spectrum preservation, and rectangular rejection; comparative benchmarks
+  cover WGPU, Leto, and `nalgebra` complex eigenvalues on a 32x32 block
+  matrix.
+- [x] Added WGPU device-resident Hessenberg parity coverage. Contract tests
+  cover orthogonal `Q`, upper-Hessenberg `H`, `Q H Q^T` reconstruction,
+  trace/norm similarity invariants, and rectangular rejection; comparative
+  benchmarks cover WGPU, Leto, and `nalgebra` Hessenberg reduction on a 32x32
+  matrix.
+- [x] Added WGPU device-resident full-pivot LU parity coverage. Contract tests
+  cover packed `L/U` reconstruction of `P A Q`, rank reporting, determinant,
+  solve, inverse, rank-deficient inverse rejection, and rectangular rejection;
+  comparative benchmarks cover WGPU, Leto, and `nalgebra` full-pivot LU on a
+  32x32 matrix.
+- [x] Added WGPU device-resident Bunch-Kaufman parity coverage. Contract tests
+  cover downloaded `L`/`D` factors, permutation agreement with Leto,
+  `L D L^T = P A P^T` reconstruction, rectangular rejection, and
+  nonsymmetric rejection; comparative benchmarks cover WGPU and Leto
+  Bunch-Kaufman with `nalgebra` determinant as the external CPU comparator.
 - [x] Added WGPU device-resident symmetric Jacobi eigen decomposition and
   eigenvalues-only surfaces mirroring Leto. Differential tests compare
   eigenvalues and eigenvectors against Leto and reject non-symmetric inputs;
@@ -47,6 +76,11 @@ parity audit for remaining operator families and shared Atlas seam usage
   eigensolve currently delegates to Leto on the host and uploads results to the
   device, so this is API parity and measured transfer/host-eigensolve overhead,
   not GPU-kernel eigensolver parity.
+- [x] Added WGPU device-resident general eigenvalues over complex output
+  buffers for square `f32` matrices. Contract coverage includes a diagonal
+  matrix with closed-form real eigenvalues and a nonsymmetric Leto
+  differential case; comparative benchmark coverage now measures a 32x32
+  block-rotation matrix against Leto and `nalgebra` complex eigenvalues.
 - [x] Added blocked WGPU Cholesky entry point with CPU panel factorization and
   triangular solve plus GPU SYRK trailing update. Differential coverage now
   includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
@@ -81,15 +115,17 @@ parity audit for remaining operator families and shared Atlas seam usage
   the fused variant regressed in the local comparative run.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
   `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo
-  nextest run -p hephaestus-wgpu -j 1` (61 passed); `cargo nextest run -p
+  nextest run -p hephaestus-wgpu -j 1` (62 passed); `cargo nextest run -p
   hephaestus-cuda -j 1` (51 passed); `cargo test --doc -p hephaestus-wgpu` (0
   doctests); `cargo test --doc -p hephaestus-cuda` (0 doctests); `cargo doc -p
   hephaestus-wgpu --no-deps`; `cargo doc -p hephaestus-cuda --no-deps`; `cargo
   bench -p hephaestus-wgpu --bench comparative` (refreshed
   `benchmark_results.md`, including blocked 128x128 Cholesky, matrix rank,
-  determinant, LU, QR, and symmetric eigen; CUDA rows skipped because the WGPU
-  bench depends on `hephaestus-cuda` without its `cuda` feature in this
-  environment); `git diff --check`. Full workspace all-features clippy
+  determinant, LU, full-pivot LU, QR, SVD, bidiagonalization, Schur,
+  Hessenberg, Bunch-Kaufman, symmetric eigen, and general eigenvalues; CUDA rows skipped because the WGPU bench depends on
+  `hephaestus-cuda` without its
+  `cuda` feature in this environment); `git diff --check`. Full workspace
+  all-features clippy
   attempted earlier and blocked before this slice by `cuda-bindings` requiring
   `CUDA_TOOLKIT_PATH`. Evidence tier: value-semantic differential tests,
   static diagnostics, and empirical benchmarks.

@@ -35,6 +35,9 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
+#[cfg(feature = "cuda")]
+use hephaestus_core::panel_lu_packed;
+
 use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
@@ -63,6 +66,13 @@ impl GpuLuDecomposition {
     #[inline]
     pub fn factors(&self) -> &CudaBuffer<f32> {
         &self.factors
+    }
+
+    /// Return the permutation pivots.
+    #[must_use]
+    #[inline]
+    pub fn pivots(&self) -> &[usize] {
+        self.inner.pivots()
     }
 
     /// Determinant: sign × Πᵢ Uᵢᵢ via the host-side decomposition.
@@ -175,65 +185,6 @@ pub fn lu_decompose(
 #[cfg(feature = "cuda")]
 const LU_BLOCK_SIZE: usize = 64;
 
-/// In-place partial pivoting LU factorization of a packed `n × n` row-major
-/// matrix, returning the Leto-style cumulative row permutation vector.
-#[cfg(feature = "cuda")]
-fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
-    if a.len() != n * n {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: n * n,
-            device_len: a.len(),
-        });
-    }
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("LU panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
-
-    let mut pivots: Vec<usize> = (0..n).collect();
-
-    for k in 0..n {
-        let mut pivot_row = k;
-        let mut pivot_mag = a[k * n + k].abs();
-        for r in (k + 1)..n {
-            let mag = a[r * n + k].abs();
-            if mag > pivot_mag {
-                pivot_mag = mag;
-                pivot_row = r;
-            }
-        }
-        if pivot_row != k {
-            for c in 0..n {
-                a.swap(k * n + c, pivot_row * n + c);
-            }
-            pivots.swap(k, pivot_row);
-        }
-
-        if pivot_mag == 0.0 {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("LU panel factorisation failed: pivot column {k} is exactly zero"),
-            });
-        }
-
-        let pivot = a[k * n + k];
-        for r in (k + 1)..n {
-            let factor = a[r * n + k] / pivot;
-            a[r * n + k] = factor;
-            for c in (k + 1)..n {
-                a[r * n + c] -= factor * a[k * n + c];
-            }
-        }
-    }
-
-    Ok(pivots)
-}
-
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
 ///
@@ -305,7 +256,7 @@ pub fn lu_decompose_blocked(
             }
 
             if trail == 0 {
-                gemm_impl::write_device_buffer(device, &host, &factors_buf)?;
+                device.write_buffer(&factors_buf, &host)?;
                 continue;
             }
 
@@ -332,7 +283,7 @@ pub fn lu_decompose_blocked(
             }
 
             // ── Step 4: Trailing GEMM on GPU: A₂₂ -= L₂₁ · U₁₂ ──
-            gemm_impl::write_device_buffer(device, &host, &factors_buf)?;
+            device.write_buffer(&factors_buf, &host)?;
 
             let mut l21 = vec![0.0f32; trail * b];
             let mut u12 = vec![0.0f32; b * trail];
@@ -415,37 +366,6 @@ mod gemm_impl {
     }
 
     unsafe impl bytemuck::Pod for GemmMeta {}
-
-    pub fn write_device_buffer<T: bytemuck::Pod>(
-        device: &CudaDevice,
-        host: &[T],
-        buffer: &CudaBuffer<T>,
-    ) -> Result<()> {
-        if host.len() != buffer.len() {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: host.len(),
-                device_len: buffer.len(),
-            });
-        }
-        if host.is_empty() {
-            return Ok(());
-        }
-        device.bind()?;
-        let bytes = std::mem::size_of_val(host);
-        unsafe {
-            let res = cuda_core::sys::cuMemcpyHtoD_v2(
-                buffer.raw(),
-                host.as_ptr() as *const std::ffi::c_void,
-                bytes,
-            );
-            if res != 0 {
-                return Err(HephaestusError::TransferFailed {
-                    message: format!("write_device_buffer cuMemcpyHtoD_v2 failed with code: {res}"),
-                });
-            }
-        }
-        Ok(())
-    }
 
     fn gemm_shader_source() -> String {
         r#"

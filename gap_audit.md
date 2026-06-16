@@ -6,10 +6,11 @@
   slice: elementwise, strided elementwise, scalar elementwise, reductions,
   rank-2 axis reductions, rank-2 scans, matrix products, Kronecker product,
   matrix power, finite-`f32` matrix rank, finite-`f32` determinant, dot, trace,
-  norms, Cholesky/LU/QR decomposition APIs, and symmetric Jacobi eigen
-  decomposition/eigenvalue APIs. Evidence tier: value-semantic contract tests
-  against CPU references and Leto, plus comparative benchmark evidence
-  recorded in `benchmark_results.md`.
+  norms, Cholesky/LU/full-pivot LU/QR/SVD/bidiagonalization/Schur/Hessenberg/Bunch-Kaufman decomposition APIs,
+  symmetric Jacobi eigen decomposition/eigenvalue APIs, and general eigenvalues for diagonal
+  closed-form and nonsymmetric Leto-differential cases. Evidence tier:
+  value-semantic contract tests against CPU references and Leto, plus
+  comparative benchmark evidence recorded in `benchmark_results.md`.
 - [minor] WGPU `matrix_rank` uses GPU row reduction with a relative pivot
   threshold; Leto `matrix_rank` uses singular values. Exact finite full-rank,
   rank-deficient, and zero cases are covered, but ill-conditioned matrices may
@@ -29,6 +30,12 @@
   Leto on the host before uploading the outputs. This is API parity, not
   GPU-kernel eigensolver parity. Evidence tier: value-semantic differential
   tests, non-symmetric rejection test, and comparative benchmark row.
+- [minor] WGPU general eigenvalues are exported with complex device buffers and
+  covered for a diagonal closed-form case plus a nonsymmetric Leto
+  differential case. Comparative benchmark coverage now includes a 32x32
+  block-rotation matrix against Leto and `nalgebra`; broader nonsymmetric
+  matrix families remain open. Evidence tier: value-semantic contract tests
+  and empirical benchmark row.
 - [minor] WGPU blocked Cholesky now offloads the trailing SYRK update to a GPU
   kernel, but diagonal panel factorization and triangular panel solves remain
   CPU/Leto-backed. Current empirical row: 128x128 blocked Cholesky is slower
@@ -46,13 +53,10 @@
   Hephaestus WGPU does not yet directly consume Hermes in a device-side kernel
   path. Evidence tier: implementation audit.
 - [minor] Additional WGPU dense decomposition and matrix-function wrappers are
-  present in the source tree for SVD, Schur, bidiagonalization,
-  Bunch-Kaufman, full-pivot LU, Hessenberg, UDU, pseudoinverse, and matrix
+  present in the source tree for UDU, pseudoinverse, and matrix
   exponential, but they do not yet have the same value-semantic contract and
-  comparative benchmark coverage as the completed core/symmetric-eigen slice.
-  General nonsymmetric complex eigenvalues remain unexported in WGPU until a
-  stable device-buffer representation and tests are completed. Evidence tier:
-  source/API audit and current test/benchmark coverage audit.
+  comparative benchmark coverage as the completed core/full-pivot-LU/Bunch-Kaufman/SVD/bidiagonalization/Schur/Hessenberg/eigen slice.
+  Evidence tier: source/API audit and current test/benchmark coverage audit.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -66,6 +70,6 @@
 ## Next Increment
 
 - Implement value-semantic WGPU/Leto contract tests and comparative benchmark
-  rows for the next already-present dense wrapper family (SVD/Schur/matrix
-  functions), or remove any wrapper that cannot be verified without a real
-  implementation contract.
+  rows for the next already-present dense wrapper family
+  (UDU/matrix functions), or remove any wrapper that cannot
+  be verified without a real implementation contract.

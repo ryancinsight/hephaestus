@@ -43,7 +43,6 @@
 //!
 //! Summing over all ⌈n/b⌉ blocks recovers 2n²(m − n/3) total flops. ∎
 
-use bytemuck::Pod;
 use std::any::TypeId;
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
@@ -52,6 +51,8 @@ use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+
+use hephaestus_core::panel_qr_packed;
 
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.
@@ -77,6 +78,13 @@ impl GpuQrDecomposition {
     #[inline]
     pub fn r_buffer(&self) -> &WgpuBuffer<f32> {
         &self.r
+    }
+
+    /// Borrow the host-side Leto decomposition.
+    #[must_use]
+    #[inline]
+    pub fn inner(&self) -> &leto_ops::QrDecomposition<f32> {
+        &self.inner
     }
 
     /// Solve min ‖**A** · **x** − **rhs**‖₂ (least squares).
@@ -142,24 +150,7 @@ struct HhMeta {
 }
 
 // SAFETY: HhMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl Pod for HhMeta {}
-
-fn write_device_buffer<T: Pod>(
-    device: &WgpuDevice,
-    host: &[T],
-    buffer: &WgpuBuffer<T>,
-) -> Result<()> {
-    if host.len() != buffer.len {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: host.len(),
-            device_len: buffer.len,
-        });
-    }
-    device
-        .queue()
-        .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
-    Ok(())
-}
+unsafe impl bytemuck::Pod for HhMeta {}
 
 // ---------------------------------------------------------------------------
 // Householder apply kernel:  A[:, col] -= β · v · (vᵀ · A[:, col])
@@ -191,7 +182,7 @@ fn hh_shader_source() -> String {
 
 @group(0) @binding(0) var<storage, read>      v_buf: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> a_buf: array<{ty}>;
-@group(0) @binding(2) var<uniform>             meta: HhMeta;
+@group(0) @binding(2) var<uniform>             params: HhMeta;
 
 var<workgroup> sdata: array<{ty}, 256>;
 
@@ -204,14 +195,14 @@ fn main(
     let col = wid.x;
     let tid = lid.x;
 
-    if (col >= meta.trail_cols) {{
+    if (col >= params.trail_cols) {{
         return;
     }}
 
-    let n     = meta.vec_len;
-    let stride = meta.trail_stride;
-    let off   = meta.c_offset;
-    let beta  = meta.beta;
+    let n     = params.vec_len;
+    let stride = params.trail_stride;
+    let off   = params.c_offset;
+    let beta  = params.beta;
 
     // Phase 1: partial dot = vᵀ · A[:, col]
     var partial = {ty}({zero});
@@ -355,89 +346,7 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
 // Inline panel Householder QR
 // ---------------------------------------------------------------------------
 
-/// In-place Householder QR factorization of an (*m* × *n*) packed row-major
-/// matrix (*m* ≥ *n*), returning the Householder vector heads and β
-/// coefficients.
-///
-/// After factorization, the upper triangle of `a` (including diagonal)
-/// stores **R**, and the strictly lower triangle stores the Householder
-/// vector tails.  The heads are stored in the returned `heads` vector
-/// because the diagonal slots are occupied by R's diagonal (α).
-fn panel_qr_packed(a: &mut [f32], m: usize, n: usize) -> Result<(Vec<f32>, Vec<f32>)> {
-    if a.len() != m * n {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: m * n,
-            device_len: a.len(),
-        });
-    }
-    if m < n {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("QR panel requires m ≥ n, got [{m}, {n}]"),
-        });
-    }
-
-    // Validate non-finite inputs.
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("QR panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
-
-    let mut heads = vec![0.0f32; n];
-    let mut betas = vec![0.0f32; n];
-
-    for k in 0..n {
-        // ‖x‖ for the column segment a[k..m, k].
-        let mut norm_sq = 0.0f32;
-        for r in k..m {
-            let x = a[r * n + k];
-            norm_sq += x * x;
-        }
-        let norm = norm_sq.sqrt();
-        if norm == 0.0 {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("QR pivot column {k} has zero norm: matrix is rank-deficient"),
-            });
-        }
-
-        // α = −sign(a[k,k]) · ‖x‖ for cancellation-free head computation.
-        let pivot = a[k * n + k];
-        let alpha = if pivot > 0.0 { -norm } else { norm };
-        let head = pivot - alpha;
-
-        // β = 2 / (vᵀv)  where v = (head, a[k+1,k], ..., a[m-1,k]).
-        let mut v_norm_sq = head * head;
-        for r in (k + 1)..m {
-            let x = a[r * n + k];
-            v_norm_sq += x * x;
-        }
-        let beta = 2.0 / v_norm_sq;
-
-        // Apply H = I − β·v·vᵀ to trailing columns k+1..n-1.
-        for c in (k + 1)..n {
-            let mut s = head * a[k * n + c];
-            for r in (k + 1)..m {
-                s += a[r * n + k] * a[r * n + c];
-            }
-            let bs = beta * s;
-            a[k * n + c] -= bs * head;
-            for r in (k + 1)..m {
-                a[r * n + c] -= bs * a[r * n + k];
-            }
-        }
-
-        a[k * n + k] = alpha; // R diagonal; v tails remain below.
-        heads[k] = head;
-        betas[k] = beta;
-    }
-
-    Ok((heads, betas))
-}
+// panel_qr_packed is re-exported from hephaestus_core::decomposition.
 
 // ---------------------------------------------------------------------------
 // Entry point 1 — host delegation
@@ -596,29 +505,24 @@ pub fn qr_decompose_blocked(
         }
         let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
 
-        // Write R (upper triangle of factored panel) back to host.
-        // Below-diagonal entries hold Householder vector tails.
+        // Write R (upper triangle, j >= i) back to host, zero tails (j < i).
         for i in 0..panel_rows {
-            for j in 0..b.min(i + 1) {
-                // Upper triangle including diagonal.
-                host[(k + i) * n + (k + j)] = panel[i * b + j];
-            }
-        }
-        // Explicitly zero the strictly lower triangle of the panel in host
-        // (Householder tails are in `panel`, not needed in `host` for output).
-        for i in 1..panel_rows {
-            for j in 0..b.min(i) {
-                host[(k + i) * n + (k + j)] = 0.0;
+            for j in 0..b {
+                if j >= i {
+                    host[(k + i) * n + (k + j)] = panel[i * b + j];
+                } else {
+                    host[(k + i) * n + (k + j)] = 0.0;
+                }
             }
         }
 
         if trail_cols == 0 {
-            write_device_buffer(device, &host, &work_buf)?;
+            device.write_buffer(&work_buf, &host)?;
             continue;
         }
 
         // ── Step 2: Upload working matrix to device ──
-        write_device_buffer(device, &host, &work_buf)?;
+        device.write_buffer(&work_buf, &host)?;
 
         // ── Step 3: Apply b Householder reflectors to trailing columns ──
         for j in 0..b {

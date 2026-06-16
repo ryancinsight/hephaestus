@@ -38,11 +38,41 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   against Leto and `nalgebra`. The current implementation delegates
   factorization to Leto on the host and stores factors on the device, so this
   is API parity rather than GPU-kernel parity.
+- `hephaestus-wgpu` [minor]: device-resident SVD decomposition surfaces
+  mirroring Leto's thin and rank-revealing SVD contracts. Contract tests cover
+  closed-form singular values, reconstruction from downloaded `UΣVᵀ`, and
+  rank-deficient rank-revealing singular values; comparative benchmarks
+  measure WGPU API overhead against Leto and `nalgebra`.
+- `hephaestus-wgpu` [minor]: device-resident bidiagonalization surface
+  mirroring Leto's `A = U B V^T` contract. Contract tests cover orthogonal
+  factors, upper-bidiagonal structure, reconstruction, singular-value
+  preservation, and wide-matrix rejection; comparative benchmarks measure WGPU
+  API overhead against Leto and `nalgebra` SVD.
+- `hephaestus-wgpu` [minor]: device-resident Schur decomposition surface
+  mirroring Leto's `A = Q T Q^T` real-Schur contract. Contract tests cover
+  orthogonal factors, quasi-upper-triangular structure, reconstruction,
+  spectrum preservation, and rectangular rejection; comparative benchmarks
+  measure WGPU API overhead against Leto and `nalgebra` complex eigenvalues.
+- `hephaestus-wgpu` [minor]: device-resident Hessenberg reduction surface
+  mirroring Leto's `A = Q H Q^T` contract. Contract tests cover orthogonal
+  factors, upper-Hessenberg structure, reconstruction, trace/norm similarity
+  invariants, and rectangular rejection; comparative benchmarks measure WGPU
+  API overhead against Leto and `nalgebra`.
+- `hephaestus-wgpu` [minor]: device-resident full-pivot LU surface mirroring
+  Leto's `P A Q = L U` rank-revealing contract. Contract tests cover packed
+  factor reconstruction, rank reporting, determinant, solve, inverse,
+  rank-deficient inverse rejection, and rectangular rejection; comparative
+  benchmarks measure WGPU API overhead against Leto and `nalgebra`.
 - `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
   decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
   compare eigenvalues/eigenvectors against Leto and reject non-symmetric
   inputs; comparative benchmarks measure WGPU API overhead against Leto and
   `nalgebra`.
+- `hephaestus-wgpu` [minor]: device-resident general eigenvalues for square
+  `f32` matrices, returning complex device buffers. Contract coverage includes
+  a diagonal closed-form eigenvalue oracle and a nonsymmetric Leto
+  differential case; comparative benchmarks now measure a 32x32 block-rotation
+  matrix against Leto and `nalgebra`.
 - `hephaestus-wgpu` [minor]: blocked Cholesky entry point
   (`cholesky_decompose_blocked`) with CPU panel factorization/solve and GPU
   SYRK trailing update. Contract coverage includes a block-boundary SPD case;
@@ -109,6 +139,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: `norm_l2` now returns the completed
   L2/Frobenius norm (`sqrt(sum(x*x))`) instead of exposing the intermediate
   squared sum, matching Leto's `norm_l2` contract.
+- `hephaestus-wgpu` [patch]: uploads now allocate the same padded byte extent
+  that download copies require and initialize the buffer through
+  mapped-at-creation contents, preserving WGPU copy alignment without leaving a
+  pending queue write on short-lived upload buffers.
 
 ## [0.10.0] - 2026-06-15
 

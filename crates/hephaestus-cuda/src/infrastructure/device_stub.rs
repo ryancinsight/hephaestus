@@ -64,4 +64,8 @@ impl ComputeDevice for CudaDevice {
     fn download<T: Pod>(&self, _buffer: &Self::Buffer<T>, _out: &mut [T]) -> Result<()> {
         Self::unavailable()
     }
+
+    fn write_buffer<T: Pod>(&self, _buffer: &Self::Buffer<T>, _host: &[T]) -> Result<()> {
+        Self::unavailable()
+    }
 }
