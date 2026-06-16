@@ -1,11 +1,33 @@
 # Checklist — hephaestus
 
-Target version: 0.9.4 (bumped; CHANGELOG synced). Sprint phase: Execution.
+Target version: 0.10.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 gating ADR ACCEPTED (`docs/adr/0001-cuda-backend.md`
 — cuda-oxide device substrate + cutile kernel authoring, SoC boundary,
 no-toolkit-to-compile, differential parity vs CPU and wgpu). Next concrete
 increment: `hephaestus-cuda` crate, stage 1 — device substrate on cuda-oxide
 (acquisition, typed buffers, transfers) with skip-without-driver contract tests.
+
+## 0.10.0 checked launch grid arithmetic [minor]
+- [x] Added `BlockWidth::checked_covering_blocks` as the non-saturating launch
+  grid arithmetic API for backends that need typed dispatch errors.
+- [x] Routed WGPU `workgroups` through the checked core API, leaving WGPU only
+  responsible for converting `None` into `HephaestusError::DispatchFailed`.
+- Evidence: `cargo fmt --check`; `cargo test -p hephaestus-core
+  domain::launch::tests --offline` (2 passed); `cargo test -p
+  hephaestus-wgpu application::pipeline::tests --offline` (2 passed);
+  `cargo check --workspace --offline`; `cargo check --workspace --locked`;
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+  `cargo nextest run --workspace --locked` (35 passed); `cargo test --doc
+  --workspace --locked`; `cargo metadata --no-deps --locked --format-version
+  1`; `cargo doc --workspace --no-deps --locked`; `cargo bench --bench
+  elementwise_into --locked` on real adapter (allocating 332,480 ns/iter;
+  caller-owned 102,150 ns/iter for 1,048,576 elements, 20 iterations);
+  `cargo bench --bench reduction_width --locked` on real adapter (default
+  42,960 ns/iter; width-128 91,620 ns/iter for 65,536 elements, 20
+  iterations). Deeper gate attempted: `cargo semver-checks --workspace
+  --all-features` blocked because `hephaestus-core` is not published in the
+  registry. Evidence tier: value-semantic unit tests, dispatch contract tests,
+  static diagnostics, and empirical benchmarks.
 
 ## 0.9.4 WGPU byte-size SSOT [patch]
 - [x] Made the checked byte-size helper available to WGPU application modules.

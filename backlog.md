@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Add checked `BlockWidth` grid-count arithmetic in core and route
+  WGPU dispatch validation through it, keeping overflow detection in one
+  type-level launch-policy API. Evidence: value-semantic launch and WGPU
+  workgroup boundary tests, static diagnostics, and full gate.
 - [x] [patch] Route scalar uniform, strided metadata uniform, and singleton
   reduction copy sizing through the shared checked WGPU byte-size helper.
   Evidence: byte-size overflow unit coverage, dispatch contract tests, static

@@ -4,6 +4,19 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+## [0.10.0] - 2026-06-15
+
+### Added
+
+- `hephaestus-core`: `BlockWidth::checked_covering_blocks` returns `None`
+  when a grid exceeds the portable `u32` block-count range.
+
+### Changed
+
+- `hephaestus-wgpu`: dispatch workgroup validation now uses the checked core
+  grid-count API instead of duplicating overflow detection around the
+  saturating helper.
+
 ## [0.9.4] - 2026-06-15
 
 ### Changed
