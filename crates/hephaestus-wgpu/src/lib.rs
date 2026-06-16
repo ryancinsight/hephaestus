@@ -16,7 +16,7 @@ pub mod infrastructure;
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, ExpOp, LnOp,
-    MulOp, NegOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
+    MulOp, NegOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp, DivOp, PowOp,
 };
 pub use application::reduction::{
     reduction, reduction_with_width, MaxOp, MinOp, ReductionIdentity, ReductionWgslOp, SumOp,

@@ -5,12 +5,11 @@ use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use hephaestus_wgpu::{
     WgpuDevice, WgpuBuffer,
-    AddOp, SubOp, MulOp,
-    ExpOp, LnOp, SinOp, CosOp, SqrtOp, AbsOp, NegOp,
+    AddOp, SubOp, MulOp, DivOp, PowOp,
+    ExpOp, LnOp, SinOp, CosOp, SqrtOp, AbsOp, NegOp, RecipOp,
     SumOp, MinOp, MaxOp,
     ComputeDevice, DeviceBuffer,
 };
-
 
 /// Python wrapper around WgpuDevice.
 #[pyclass(name = "Device")]
@@ -196,6 +195,17 @@ impl PyArray {
         })
     }
 
+    fn mean(&self) -> PyResult<Self> {
+        let summed = hephaestus_wgpu::reduction::<SumOp, f32>(&self.device, &self.buffer)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &summed, 1.0 / self.buffer.len() as f32)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+        })
+    }
+
     // ── Binary Operations ──
 
     fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
@@ -280,6 +290,80 @@ impl PyArray {
     fn __rmul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         self.__mul__(other)
     }
+
+    fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            let out_buf = hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else if let Ok(val) = other.extract::<f32>() {
+            let out_buf = hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&self.device, &self.buffer, val)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else {
+            Err(PyTypeError::new_err("unsupported operand type(s) for /"))
+        }
+    }
+
+    fn __rtruediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if let Ok(val) = other.extract::<f32>() {
+            let recip = hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&self.device, &self.buffer)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &recip, val)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else {
+            Err(PyTypeError::new_err("unsupported operand type(s) for /"))
+        }
+    }
+
+    fn __pow__(&self, other: &Bound<'_, PyAny>, _modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
+            let out_buf = hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&self.device, &self.buffer, &other_arr.buffer)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else if let Ok(val) = other.extract::<f32>() {
+            let out_buf = hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&self.device, &self.buffer, val)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else {
+            Err(PyTypeError::new_err("unsupported operand type(s) for **"))
+        }
+    }
+
+    fn __rpow__(&self, other: &Bound<'_, PyAny>, _modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        if let Ok(val) = other.extract::<f32>() {
+            if val <= 0.0 {
+                return Err(PyValueError::new_err("power base must be positive"));
+            }
+            let ln_val = val.ln();
+            let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &self.buffer, ln_val)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let out_buf = hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&self.device, &scaled)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self {
+                buffer: out_buf,
+                device: self.device.clone(),
+            })
+        } else {
+            Err(PyTypeError::new_err("unsupported operand type(s) for **"))
+        }
+    }
 }
 
 // ── Top-level functions ──
@@ -297,6 +381,16 @@ fn sub(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
 #[pyfunction]
 fn mul(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
     a.__mul__(b)
+}
+
+#[pyfunction]
+fn div(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__truediv__(b)
+}
+
+#[pyfunction]
+fn pow(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__pow__(b, None)
 }
 
 #[pyfunction]
@@ -325,6 +419,16 @@ fn sqrt(a: &PyArray) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
+fn abs(a: &PyArray) -> PyResult<PyArray> {
+    a.abs()
+}
+
+#[pyfunction]
+fn neg(a: &PyArray) -> PyResult<PyArray> {
+    a.neg()
+}
+
+#[pyfunction]
 fn sum(a: &PyArray) -> PyResult<PyArray> {
     a.sum()
 }
@@ -339,6 +443,11 @@ fn max(a: &PyArray) -> PyResult<PyArray> {
     a.max()
 }
 
+#[pyfunction]
+fn mean(a: &PyArray) -> PyResult<PyArray> {
+    a.mean()
+}
+
 /// PyHephaestus extension module definition.
 #[pymodule]
 fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -348,14 +457,19 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(add, m)?)?;
     m.add_function(wrap_pyfunction!(sub, m)?)?;
     m.add_function(wrap_pyfunction!(mul, m)?)?;
+    m.add_function(wrap_pyfunction!(div, m)?)?;
+    m.add_function(wrap_pyfunction!(pow, m)?)?;
     m.add_function(wrap_pyfunction!(exp, m)?)?;
     m.add_function(wrap_pyfunction!(log, m)?)?;
     m.add_function(wrap_pyfunction!(sin, m)?)?;
     m.add_function(wrap_pyfunction!(cos, m)?)?;
     m.add_function(wrap_pyfunction!(sqrt, m)?)?;
+    m.add_function(wrap_pyfunction!(abs, m)?)?;
+    m.add_function(wrap_pyfunction!(neg, m)?)?;
     m.add_function(wrap_pyfunction!(sum, m)?)?;
     m.add_function(wrap_pyfunction!(min, m)?)?;
     m.add_function(wrap_pyfunction!(max, m)?)?;
+    m.add_function(wrap_pyfunction!(mean, m)?)?;
 
     Ok(())
 }

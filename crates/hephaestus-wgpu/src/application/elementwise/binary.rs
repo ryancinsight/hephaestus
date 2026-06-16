@@ -29,6 +29,14 @@ pub struct SubOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MulOp;
 
+/// Division marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DivOp;
+
+/// Power marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PowOp;
+
 impl BinaryWgslOp for AddOp {
     const WGSL_EXPR: &'static str = "lhs + rhs";
 }
@@ -40,6 +48,15 @@ impl BinaryWgslOp for SubOp {
 impl BinaryWgslOp for MulOp {
     const WGSL_EXPR: &'static str = "lhs * rhs";
 }
+
+impl BinaryWgslOp for DivOp {
+    const WGSL_EXPR: &'static str = "lhs / rhs";
+}
+
+impl BinaryWgslOp for PowOp {
+    const WGSL_EXPR: &'static str = "pow(lhs, rhs)";
+}
+
 
 fn shader_source<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
     format!(
