@@ -31,7 +31,7 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Blocked LU Decomposition** (66x66) | 273.7 µs | 66.2 µs | — | 7.1 µs | **0.24x** | — | **0.026x** |
 | **Full-Pivot LU Decomposition** (32x32) | 169.5 µs | 20.3 µs | — | 14.1 µs | **0.12x** | — | **0.083x** |
 | **QR Decomposition** (48x24) | 134.9 µs | 11.5 µs | — | 4.3 µs | **0.085x** | — | **0.032x** |
-| **Blocked QR Decomposition** (70x35) | 1.05 ms | 10.5 µs | — | 6.1 µs | **0.010x** | — | **0.0058x** |
+| **Blocked QR Decomposition** (70x35) | 420.8 µs | 10.7 µs | — | 6.1 µs | **0.025x** | — | **0.014x** |
 | **SVD Decomposition** (32x16) | 202.3 µs | 29.3 µs | — | 6.3 µs | **0.14x** | — | **0.031x** |
 | **Bidiagonalization** (32x16) | 202.8 µs | 25.6 µs | — | 9.7 µs (nalgebra SVD) | **0.13x** | — | **0.048x** |
 | **Schur Decomposition** (32x32) | 194.1 µs | 31.9 µs | — | 6.8 µs (nalgebra eigenvalues) | **0.16x** | — | **0.035x** |
@@ -53,8 +53,8 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | --- | --- |
 | **Blocked LU 66x66 transfer/synchronization floor** | 338.4 µs |
 | **Blocked QR 70x35 transfer/synchronization floor** | 207.6 µs |
-| **Blocked QR 32-reflector timestamp launch total** | 155.2 µs |
-| **Blocked QR reflector timestamp launch median** | 3.4 µs |
+| **Blocked QR one-pass panel timestamp total** | 8.4 µs |
+| **Blocked QR one-pass panel timestamp median** | 160 ns |
 
 ## Analysis
 
@@ -76,6 +76,6 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
      than CPU references.
    - The synchronization profile's transfer rows are synthetic and noisy, but
      the timestamp-query row is a GPU-timeline measurement. The 70x35 blocked
-     QR path still pays one compute pass per reflector; timestamp queries
-     measured **155.2 µs** total GPU time for 32 minimal reflector-equivalent
-     launches on this run, with **3.4 µs** median pass duration.
+     QR path now applies one compute pass per panel instead of one pass per
+     reflector; timestamp queries measured **8.4 µs** total GPU time for the
+     batched panel launch on this run, with **160 ns** median pass duration.

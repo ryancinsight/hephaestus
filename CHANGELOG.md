@@ -18,6 +18,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: added timestamp-query profiling to the blocked
   decomposition sync benchmark to measure the blocked QR per-reflector launch
   component on the GPU timeline when the adapter supports timestamps.
+- `hephaestus-wgpu` [patch]: batched blocked QR panel reflectors into one
+  compute pass per panel, preserving reflector order within each column
+  workgroup and removing per-reflector compute-pass launches.
 
 ### Added
 

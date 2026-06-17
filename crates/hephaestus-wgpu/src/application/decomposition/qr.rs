@@ -126,29 +126,23 @@ impl GpuQrDecomposition {
 // Householder apply uniform
 // ---------------------------------------------------------------------------
 
-/// Packed metadata for the Householder reflector application kernel.
+/// Packed metadata for the panel Householder reflector application kernel.
 ///
-/// Applies **H = I − β v vᵀ** to each column of the trailing submatrix:
-/// `A[:, col] -= β · v · (vᵀ · A[:, col])`
-///
-/// The trailing submatrix occupies `A[offset .. offset + vec_len * trail_stride]`
-/// with elements at `offset + row * trail_stride + col`.
+/// Applies every reflector from a factored panel to each trailing column. One
+/// workgroup owns one trailing column and applies the panel reflectors
+/// sequentially, preserving the Householder dependency order without requiring
+/// cross-workgroup synchronization.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable)]
 struct HhMeta {
-    /// Length of the Householder vector v.
-    vec_len: u32,
+    /// Number of rows in the current compact panel tile.
+    panel_rows: u32,
+    /// Number of Householder reflectors in the panel.
+    reflector_count: u32,
     /// Number of trailing columns.
     trail_cols: u32,
-    /// Row stride of the trailing matrix in the full buffer.
+    /// Row stride of the compact trailing matrix.
     trail_stride: u32,
-    /// Element offset to A[0, 0] of the trailing submatrix.
-    c_offset: u32,
-    /// Element offset to the active Householder vector in `v_buf`.
-    v_offset: u32,
-    /// Householder coefficient β = 2 / (vᵀv).
-    beta: f32,
-    _pad: [u32; 2],
 }
 
 // SAFETY: HhMeta is `#[repr(C)]` and every field is Pod.
@@ -158,33 +152,28 @@ unsafe impl bytemuck::Pod for HhMeta {}
 // Householder apply kernel:  A[:, col] -= β · v · (vᵀ · A[:, col])
 // ---------------------------------------------------------------------------
 
-/// WGSL source for the Householder reflector application kernel.
+/// WGSL source for applying all panel Householder reflectors.
 ///
-/// For each column of the trailing matrix, computes
-/// `dot = vᵀ · A[:, col]` via a parallel reduction, then applies
-/// `A[:, col] -= β · v · dot`.
-///
-/// One workgroup (256 threads) per trailing column; threads cooperatively
-/// iterate over the row dimension with stride 256.
+/// One workgroup owns one trailing column. Within the workgroup, reflectors
+/// are applied sequentially; each reflector uses a parallel dot-product
+/// reduction across the active rows and then updates those same rows.
 fn hh_shader_source() -> String {
     const TY: &str = "f32";
     const ZERO: &str = "0.0";
 
     format!(
         r#"struct HhMeta {{
-    vec_len: u32,
+    panel_rows: u32,
+    reflector_count: u32,
     trail_cols: u32,
     trail_stride: u32,
-    c_offset: u32,
-    v_offset: u32,
-    beta: {ty},
-    _pad0: u32,
-    _pad1: u32,
 }}
 
 @group(0) @binding(0) var<storage, read>      v_buf: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> a_buf: array<{ty}>;
-@group(0) @binding(2) var<uniform>             params: HhMeta;
+@group(0) @binding(2) var<storage, read>      offsets_buf: array<u32>;
+@group(0) @binding(3) var<storage, read>      beta_buf: array<{ty}>;
+@group(0) @binding(4) var<uniform>             params: HhMeta;
 
 var<workgroup> sdata: array<{ty}, 256>;
 
@@ -201,39 +190,44 @@ fn main(
         return;
     }}
 
-    let n     = params.vec_len;
     let stride = params.trail_stride;
-    let off   = params.c_offset;
-    let v_off = params.v_offset;
-    let beta  = params.beta;
 
-    // Phase 1: partial dot = vᵀ · A[:, col]
-    var partial = {ty}({zero});
-    var row = tid;
-    while (row < n) {{
-        partial = partial + v_buf[v_off + row] * a_buf[off + row * stride + col];
-        row = row + 256u;
-    }}
-    sdata[tid] = partial;
-    workgroupBarrier();
+    for (var reflector = 0u; reflector < params.reflector_count; reflector = reflector + 1u) {{
+        let n = params.panel_rows - reflector;
+        let off = reflector * stride;
+        let v_off = offsets_buf[reflector];
+        let beta = beta_buf[reflector];
 
-    // Parallel tree reduction
-    for (var s = 128u; s > 0u; s = s >> 1u) {{
-        if (tid < s) {{
-            sdata[tid] = sdata[tid] + sdata[tid + s];
+        // Phase 1: partial dot = vᵀ · A[:, col]
+        var partial = {ty}({zero});
+        var row = tid;
+        while (row < n) {{
+            partial = partial + v_buf[v_off + row] * a_buf[off + row * stride + col];
+            row = row + 256u;
         }}
+        sdata[tid] = partial;
         workgroupBarrier();
-    }}
 
-    let dot = sdata[0];
-    workgroupBarrier();
+        // Parallel tree reduction.
+        for (var s = 128u; s > 0u; s = s >> 1u) {{
+            if (tid < s) {{
+                sdata[tid] = sdata[tid] + sdata[tid + s];
+            }}
+            workgroupBarrier();
+        }}
 
-    // Phase 2: A[:, col] -= beta * v * dot
-    row = tid;
-    while (row < n) {{
-        let idx = off + row * stride + col;
-        a_buf[idx] = a_buf[idx] - beta * v_buf[v_off + row] * dot;
-        row = row + 256u;
+        let dot = sdata[0];
+        workgroupBarrier();
+
+        // Phase 2: A[:, col] -= beta * v * dot
+        row = tid;
+        while (row < n) {{
+            let idx = off + row * stride + col;
+            a_buf[idx] = a_buf[idx] - beta * v_buf[v_off + row] * dot;
+            row = row + 256u;
+        }}
+        storageBarrier();
+        workgroupBarrier();
     }}
 }}
 "#,
@@ -244,52 +238,21 @@ fn main(
 
 struct HhKernel;
 
-struct HouseholderTrailingUpdate<'a> {
-    v_buf: &'a WgpuBuffer<f32>,
+struct HouseholderPanelUpdate<'a> {
     a_buf: &'a WgpuBuffer<f32>,
-    vec_len: usize,
+    v_buf: &'a WgpuBuffer<f32>,
+    panel_rows: usize,
     trail_cols: usize,
     trail_stride: usize,
-    c_offset: usize,
-    v_offset: usize,
-    beta: f32,
+    reflector_count: usize,
+    vector_offsets: &'a [usize],
+    betas: &'a [f32],
 }
 
-/// GPU dispatch for one Householder reflector application:
-///
-/// ```text
-/// A[offset + row * stride + col] -= β · v[row] · Σᵢ v[i] · A[offset + i * stride + col]
-/// ```
-///
-/// One workgroup (256 threads) per trailing column.
-fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>) -> Result<()> {
-    let vec_len = update.vec_len;
-    let trail_cols = update.trail_cols;
-    if vec_len == 0 || trail_cols == 0 {
+fn hh_trailing_update(device: &WgpuDevice, update: HouseholderPanelUpdate<'_>) -> Result<()> {
+    if update.panel_rows == 0 || update.trail_cols == 0 || update.reflector_count == 0 {
         return Ok(());
     }
-
-    let meta = HhMeta {
-        vec_len: u32::try_from(vec_len).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("HH vec_len {vec_len} exceeds u32"),
-        })?,
-        trail_cols: u32::try_from(trail_cols).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("HH trail_cols {trail_cols} exceeds u32"),
-        })?,
-        trail_stride: u32::try_from(update.trail_stride).map_err(|_| {
-            HephaestusError::DispatchFailed {
-                message: format!("HH trail_stride {} exceeds u32", update.trail_stride),
-            }
-        })?,
-        c_offset: u32::try_from(update.c_offset).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("HH c_offset {} exceeds u32", update.c_offset),
-        })?,
-        v_offset: u32::try_from(update.v_offset).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("HH v_offset {} exceeds u32", update.v_offset),
-        })?,
-        beta: update.beta,
-        _pad: [0; 2],
-    };
 
     let pipeline = cached_pipeline(
         device,
@@ -298,7 +261,43 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
         hh_shader_source,
     );
 
-    let meta_buf = device.get_uniform_buffer(std::mem::size_of::<HhMeta>() as u64)?;
+    let offset_host: Vec<u32> = update
+        .vector_offsets
+        .iter()
+        .copied()
+        .map(|offset| {
+            u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("HH vector offset {offset} exceeds u32"),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let offsets_buf = device.upload(&offset_host)?;
+    let betas_buf = device.upload(update.betas)?;
+
+    let meta = HhMeta {
+        panel_rows: u32::try_from(update.panel_rows).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: format!("HH panel_rows {} exceeds u32", update.panel_rows),
+            }
+        })?,
+        reflector_count: u32::try_from(update.reflector_count).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: format!("HH reflector_count {} exceeds u32", update.reflector_count),
+            }
+        })?,
+        trail_cols: u32::try_from(update.trail_cols).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: format!("HH trail_cols {} exceeds u32", update.trail_cols),
+            }
+        })?,
+        trail_stride: u32::try_from(update.trail_stride).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: format!("HH trail_stride {} exceeds u32", update.trail_stride),
+            }
+        })?,
+    };
+
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
@@ -306,7 +305,7 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-hh"),
+            label: Some("hephaestus-hh-panel"),
             layout: &pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -319,6 +318,14 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
+                    resource: offsets_buf.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: betas_buf.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
                     resource: meta_buf.as_entire_binding(),
                 },
             ],
@@ -327,22 +334,23 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderTrailingUpdate<'_>
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-hh"),
+            label: Some("hephaestus-hh-panel"),
         });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-hh"),
+            label: Some("hephaestus-hh-panel"),
             timestamp_writes: None,
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
 
-        // One workgroup per trailing column.
-        let wg_x = u32::try_from(trail_cols).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("HH workgroup count {trail_cols} exceeds u32"),
-        })?;
+        let wg_x =
+            u32::try_from(update.trail_cols).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("HH workgroup count {} exceeds u32", update.trail_cols),
+            })?;
         pass.dispatch_workgroups(wg_x, 1, 1);
     }
+
     device.queue().submit(Some(encoder.finish()));
     device.recycle_uniform_buffer(meta_buf);
 
@@ -431,8 +439,8 @@ pub fn qr_decompose(
 /// Panel block size for the blocked QR algorithm.
 ///
 /// A value of 32 balances CPU panel factorisation cost against GPU kernel
-/// launch overhead.  Each panel produces *b* Householder reflectors that
-/// are applied to the trailing columns via *b* GPU kernel launches.
+/// launch overhead. Each panel produces *b* Householder reflectors that are
+/// applied to the trailing columns in one GPU dispatch.
 const QR_BLOCK_SIZE: usize = 32;
 
 fn trailing_columns(host: &[f32], stride: usize, row_start: usize, col_start: usize) -> Vec<f32> {
@@ -570,26 +578,19 @@ pub fn qr_decompose_blocked(
         }
         let vectors_dev = device.upload(&packed_vectors)?;
 
-        for j in 0..b {
-            let vec_len = panel_rows - j;
-
-            // Trailing submatrix rows j:m-k in the compact panel tile.
-            let c_offset = j * trail_cols;
-
-            hh_trailing_update(
-                device,
-                HouseholderTrailingUpdate {
-                    v_buf: &vectors_dev,
-                    a_buf: &work_buf,
-                    vec_len,
-                    trail_cols,
-                    trail_stride: trail_cols,
-                    c_offset,
-                    v_offset: vector_offsets[j],
-                    beta: betas[j],
-                },
-            )?;
-        }
+        hh_trailing_update(
+            device,
+            HouseholderPanelUpdate {
+                a_buf: &work_buf,
+                v_buf: &vectors_dev,
+                panel_rows,
+                trail_cols,
+                trail_stride: trail_cols,
+                reflector_count: b,
+                vector_offsets: &vector_offsets,
+                betas: &betas,
+            },
+        )?;
 
         // ── Step 4: Download the compact tile and patch host state.
         device.download(&work_buf, &mut trailing)?;
