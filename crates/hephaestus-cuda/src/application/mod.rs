@@ -18,3 +18,8 @@ pub mod strided;
 #[cfg(feature = "decomposition")]
 /// Dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
 pub mod decomposition;
+
+/// Seeded host-delegated PRNG initializers.
+pub mod random;
+/// GPU Compressed Sparse Row (CSR) sparse matrix operations.
+pub mod sparse;

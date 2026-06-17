@@ -8,11 +8,13 @@ repository.workspace = true
 description = "wgpu backend for the Atlas accelerator substrate: device acquisition, typed buffers, and monomorphized compute dispatch."
 
 [features]
-default = ["parallel", "mnemosyne-memory", "decomposition"]
+default = ["parallel", "mnemosyne-memory", "decomposition", "sparse"]
 parallel = []
 mnemosyne-memory = []
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
 decomposition = ["dep:leto-ops"]
+## Enable CSR sparse matrix upload/download and GPU sparse products.
+sparse = ["dep:leto-ops"]
 
 [dependencies]
 hephaestus-core = { workspace = true }
@@ -21,6 +23,7 @@ leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }
 moirai-gpu = { workspace = true }
+moirai-sync = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
@@ -43,4 +46,12 @@ harness = false
 
 [[bench]]
 name = "comparative"
+harness = false
+
+[[bench]]
+name = "sparse_comparative"
+harness = false
+
+[[bench]]
+name = "decomposition_sync"
 harness = false

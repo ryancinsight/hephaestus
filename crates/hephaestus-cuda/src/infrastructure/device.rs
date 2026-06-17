@@ -6,9 +6,6 @@ use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 /// An acquired CUDA device.
 ///
 /// Holds the cutile-rs (`cuda-core`) device handle for the default ordinal.
@@ -18,8 +15,12 @@ use std::sync::Mutex;
 #[derive(Clone)]
 pub struct CudaDevice {
     device: Arc<cuda_core::Device>,
-    pub(crate) pipeline_cache:
-        Arc<Mutex<HashMap<String, Arc<crate::infrastructure::compiler::SafeCachedKernel>>>>,
+    pub(crate) pipeline_cache: Arc<
+        moirai_sync::sync::ConcurrentHashMap<
+            String,
+            Arc<crate::infrastructure::compiler::SafeCachedKernel>,
+        >,
+    >,
     topology: Option<Arc<themis::GpuTopology>>,
 }
 
@@ -50,7 +51,7 @@ impl CudaDevice {
         let topology = Some(Arc::new(query_topology(&device)?));
         Ok(Self {
             device,
-            pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+            pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             topology,
         })
     }
@@ -144,13 +145,19 @@ fn query_topology(device: &cuda_core::Device) -> Result<themis::GpuTopology> {
         "l2_cache_size",
     )?) as usize;
 
+    // Total device memory via `cuMemGetInfo_v2` (memory-management family,
+    // current-context query) rather than `cuDeviceTotalMem_v2`: the latter's
+    // dynamic symbol is unresolved in this cutile-rs binding and faults when
+    // called, whereas the memory-family entry points (e.g. `cuMemAlloc_v2`)
+    // resolve correctly. The context was made current by `bind_to_thread`.
+    let mut free_bytes: usize = 0;
     let mut total_bytes: usize = 0;
-    // SAFETY: `cu` is a valid `CUdevice` handle; `total_bytes` is a valid
-    // out-pointer for one `usize`.
-    let res = unsafe { sys::cuDeviceTotalMem_v2(&mut total_bytes, cu) };
+    // SAFETY: the device context is current (bound above); `free_bytes` and
+    // `total_bytes` are valid out-pointers for one `usize` each.
+    let res = unsafe { sys::cuMemGetInfo_v2(&mut free_bytes, &mut total_bytes) };
     if res != 0 {
         return Err(HephaestusError::DeviceUnavailable {
-            message: format!("cuDeviceTotalMem_v2 -> {res}"),
+            message: format!("cuMemGetInfo_v2 -> {res}"),
         });
     }
 

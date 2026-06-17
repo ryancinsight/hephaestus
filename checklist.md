@@ -6,6 +6,16 @@ linalg and comparative benchmarks. Next concrete increment: complete WGPU/Leto
 parity audit for remaining operator families and shared Atlas seam usage
 (`mnemosyne`, `moirai`, `themis`, `hermes`).
 
+Latest verification: `cargo fmt --check`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings`,
+`cargo nextest run --workspace --locked` (229 passed),
+`cargo test --doc --workspace --locked`,
+`cargo doc --workspace --no-deps --locked`,
+`cargo metadata --no-deps --locked --format-version 1`, `git diff --check`,
+and `cargo bench -p hephaestus-wgpu --bench sparse_comparative --locked`.
+`cargo semver-checks --workspace --all-features` is blocked because
+`hephaestus-core` has no crates.io baseline.
+
 ## Unreleased WGPU Leto parity linalg [minor]
 - [x] Added GPU-resident allocating `matmul`/`batched_matmul` and caller-owned
   `matmul_into`/`batched_matmul_into`, plus `dot`, `trace`, `norm_l1`,
@@ -74,6 +84,17 @@ parity audit for remaining operator families and shared Atlas seam usage
   rejection, nonsymmetric rejection, and zero-pivot rejection; comparative
   benchmarks cover WGPU and Leto UDU with `nalgebra` determinant as the
   external CPU comparator.
+- [x] Added WGPU device-resident column-pivoted QR, pseudoinverse, and matrix
+  exponential baseline parity coverage. Contract tests cover column-pivoted QR
+  factor agreement against Leto plus closed-form diagonal pseudoinverse and
+  matrix exponential cases; comparative benchmarks cover WGPU and Leto for all
+  three, with `nalgebra` comparators for column-pivoted QR and pseudoinverse.
+- [x] Strengthened WGPU pseudoinverse and matrix exponential parity coverage.
+  Contract tests now cover rank-deficient Moore-Penrose identities,
+  rectangular full-rank pseudoinverse, non-finite pseudoinverse rejection,
+  nilpotent and skew-symmetric matrix-exponential closed forms, a general
+  `nalgebra` matrix-exponential oracle, and rectangular/non-finite matrix
+  exponential rejection.
 - [x] Added WGPU device-resident symmetric Jacobi eigen decomposition and
   eigenvalues-only surfaces mirroring Leto. Differential tests compare
   eigenvalues and eigenvectors against Leto and reject non-symmetric inputs;
@@ -87,13 +108,29 @@ parity audit for remaining operator families and shared Atlas seam usage
   matrix with closed-form real eigenvalues and a nonsymmetric Leto
   differential case; comparative benchmark coverage now measures a 32x32
   block-rotation matrix against Leto and `nalgebra` complex eigenvalues.
+- [x] Strengthened WGPU general-eigenvalue contract coverage. Tests now cover
+  exact 2x2 and 3x3 complex-pair blocks, triangular spectra, structured real
+  nonsymmetric spectra, dense 5x5 `nalgebra` oracle comparison,
+  symmetric-input all-real spectra, unordered spectrum matching, and
+  rectangular rejection.
 - [x] Added blocked WGPU Cholesky entry point with CPU panel factorization and
   triangular solve plus GPU SYRK trailing update. Differential coverage now
   includes a 66x66 SPD matrix crossing the 64-wide block boundary; comparative
   benchmarks now measure 128x128 blocked Cholesky against Leto and `nalgebra`.
+- [x] Added comparative benchmark rows for blocked WGPU LU and QR paths,
+  validating blocked LU solve parity and blocked QR factor parity before
+  timing them against Leto and `nalgebra`.
 - [x] Routed WGPU launch planning through Mnemosyne `KernelResourceBudget` and
   Moirai GPU `plan_launch` while preserving Hephaestus checked overflow
   semantics from `BlockWidth::checked_covering_blocks`.
+- [x] Documented Atlas compute-boundary integration for Mnemosyne, Moirai,
+  Themis, and Hermes in ADR 0002 and README. Hermes is integrated at the
+  host-delegated Leto tier via `leto-ops`' `simd` feature; direct WGPU/CUDA
+  kernel calls into Hermes are rejected as a boundary violation because Hermes
+  owns CPU SIMD over host slices, not GPU shader/PTX execution.
+- [x] Switched Hephaestus' `moirai-gpu` dependency to Moirai's planner-only
+  feature set, closing the duplicate WGPU runtime dependency while preserving
+  Mnemosyne `KernelResourceBudget` + Moirai `plan_launch` dispatch sizing.
 - [x] Added GPU-resident rank-2 `reduce_axis`, `sum_axis`, `min_axis`,
   `max_axis`, `mean_axis`, and caller-owned `*_axis_into` forms, preserving
   Leto's rank-preserving axis-reduction contract (`[rows, cols] -> [1, cols]`
@@ -119,6 +156,11 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Added fused WGPU map-reduction dispatch for trace and L1 norm. Dot
   product, L2 norm, and max norm retain the measured faster staged paths after
   the fused variant regressed in the local comparative run.
+- [x] Replaced WGPU CSR SpMV and SpMM host-delegated products with real WGSL
+  kernels over device-resident CSR values, packed CSR index buffers, and
+  device-resident dense operands/results. The `sparse` feature owns the Leto
+  CSR upload/download boundary, while dispatch sizing flows through the shared
+  Mnemosyne `KernelResourceBudget` and Moirai `plan_launch` helper.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
   `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo
   nextest run -p hephaestus-wgpu -j 1` (62 passed); `cargo nextest run -p
@@ -128,13 +170,125 @@ parity audit for remaining operator families and shared Atlas seam usage
   bench -p hephaestus-wgpu --bench comparative` (refreshed
   `benchmark_results.md`, including blocked 128x128 Cholesky, matrix rank,
   determinant, LU, full-pivot LU, QR, SVD, bidiagonalization, Schur,
-  Hessenberg, Bunch-Kaufman, UDU, symmetric eigen, and general eigenvalues; CUDA rows skipped because the WGPU bench depends on
+  Hessenberg, Bunch-Kaufman, UDU, column-pivoted QR, pseudoinverse, matrix
+  exponential, symmetric eigen, and general eigenvalues; CUDA rows skipped because the WGPU bench depends on
   `hephaestus-cuda` without its
   `cuda` feature in this environment); `git diff --check`. Full workspace
   all-features clippy
   attempted earlier and blocked before this slice by `cuda-bindings` requiring
   `CUDA_TOOLKIT_PATH`. Evidence tier: value-semantic differential tests,
   static diagnostics, and empirical benchmarks.
+- Additional matrix-function evidence: `cargo nextest run -p hephaestus-wgpu
+  linalg_pinv linalg_matexp -j 1 --no-fail-fast --no-capture` (8 passed);
+  `cargo clippy -p hephaestus-wgpu --test contract -- -D warnings`;
+  `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
+  `git diff --check`. Evidence tier: value-semantic closed-form,
+  Moore-Penrose algebraic, differential, and invalid-input tests.
+- Additional general-eigenvalue evidence: `cargo nextest run -p
+  hephaestus-wgpu eigenvalues -j 1 --no-fail-fast --no-capture` (6 passed);
+  `cargo clippy -p hephaestus-wgpu --test contract -- -D warnings`;
+  `rustfmt --edition 2021 --check crates/hephaestus-wgpu/tests/contract.rs`;
+  `git diff --check`. Evidence tier: closed-form, differential, and
+  invalid-input value-semantic tests.
+- Atlas compute-boundary evidence: `docs/adr/0002-atlas-compute-boundaries.md`,
+  README layer-boundary update, `leto-ops` dependency audit confirming the
+  `simd` feature and Hermes dispatch calls, and Hermes README/backlog boundary
+  audit. Evidence tier: implementation and documentation audit.
+- Additional blocked decomposition benchmark evidence: `cargo nextest run -p
+  hephaestus-wgpu blocked_lu blocked_qr -j 1 --no-fail-fast` (8 passed);
+  `cargo check -p hephaestus-wgpu --bench comparative`; `cargo bench -p
+  hephaestus-wgpu --bench comparative` (added blocked LU/QR timing rows).
+- Additional blocked decomposition synchronization evidence: `cargo check -p
+  hephaestus-wgpu --bench decomposition_sync`; `cargo bench -p
+  hephaestus-wgpu --bench decomposition_sync` (LU 66x66 sync floor 308.2 µs,
+  QR 70x35 sync floor 227.8 µs).
+- Additional blocked LU transfer evidence: narrowed blocked LU host/device
+  transfers to the active diagonal-panel and trailing-submatrix regions.
+  `cargo nextest run -p hephaestus-wgpu blocked_lu -j 1 --no-fail-fast` (4
+  passed); `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`;
+  `cargo bench -p hephaestus-wgpu --bench comparative` (blocked LU 66x66
+  239.8 µs, Leto 62.1 µs, nalgebra 7.0 µs; blocked QR 70x35 1.13 ms, Leto
+  11.4 µs, nalgebra 6.1 µs); `cargo bench -p hephaestus-wgpu --bench
+  decomposition_sync` (LU 66x66 sync floor 405.2 µs, QR 70x35 sync floor
+  240.7 µs). Evidence tier: value-semantic blocked LU differential tests,
+  static diagnostics, and empirical local benchmarks.
+- Additional blocked QR transfer evidence: factored LU region transfers into
+  a decomposition-local helper and changed blocked QR to upload/download a
+  compact trailing-column tile per panel before applying Householder
+  reflectors. `cargo fmt -p hephaestus-wgpu --check`; `cargo clippy -p
+  hephaestus-wgpu --all-targets -- -D warnings`; `cargo nextest run -p
+  hephaestus-wgpu blocked_lu blocked_qr -j 1 --no-fail-fast` (8 passed);
+  `cargo bench -p hephaestus-wgpu --bench decomposition_sync` (LU 66x66 sync
+  floor 220.7 µs, QR 70x35 sync floor 205.6 µs); `cargo bench -p
+  hephaestus-wgpu --bench comparative` (blocked LU 66x66 260.5 µs, Leto 63.5
+  µs, nalgebra 7.1 µs; blocked QR 70x35 1.04 ms, Leto 10.4 µs, nalgebra 6.0
+  µs). Evidence tier: value-semantic blocked LU/QR differential tests, static
+  diagnostics, and empirical local benchmarks.
+- Additional blocked QR reflector-upload evidence: packed all panel
+  Householder vectors into one device buffer and extended the reflector kernel
+  metadata with a vector offset, removing per-reflector vector-buffer creation
+  while preserving one GPU launch per reflector. `cargo fmt -p hephaestus-wgpu
+  --check`; `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`;
+  `cargo nextest run -p hephaestus-wgpu blocked_lu blocked_qr -j 1
+  --no-fail-fast` (8 passed); `cargo bench -p hephaestus-wgpu --bench
+  decomposition_sync` (LU 66x66 sync floor 219.9 µs, QR 70x35 sync floor
+  138.5 µs); `cargo bench -p hephaestus-wgpu --bench comparative` (blocked LU
+  66x66 273.7 µs, Leto 66.2 µs, nalgebra 7.1 µs; blocked QR 70x35 1.05 ms,
+  Leto 10.5 µs, nalgebra 6.1 µs). Evidence tier: value-semantic blocked
+  LU/QR differential tests, static diagnostics, and empirical local
+  benchmarks.
+- Additional blocked QR timestamp evidence: extended `decomposition_sync` with
+  a `wgpu::TIMESTAMP_QUERY` path that creates a timestamp-capable device when
+  available, wraps 32 minimal compute passes with begin/end timestamps, and
+  resolves them to host memory. `rustfmt --edition 2021 --check
+  crates/hephaestus-wgpu/benches/decomposition_sync.rs`; `cargo clippy -p
+  hephaestus-wgpu --all-targets -- -D warnings`; `cargo nextest run -p
+  hephaestus-wgpu blocked_lu blocked_qr -j 1 --no-fail-fast` (8 passed);
+  `cargo bench -p hephaestus-wgpu --bench decomposition_sync` (LU 66x66 sync
+  floor 338.4 µs, QR 70x35 sync floor 207.6 µs, QR 32-reflector timestamp
+  launch total 155.2 µs, median 3.4 µs). Evidence tier: value-semantic blocked
+  LU/QR tests, static diagnostics, synthetic transfer benchmark, and
+  GPU-timeline timestamp-query measurement.
+- Additional blocked QR reflector-batching evidence: changed the WGPU
+  Householder panel kernel so one compute pass owns a trailing column and
+  applies all panel reflectors sequentially inside that workgroup, eliminating
+  per-reflector compute-pass launches while preserving reflector order.
+  `rustfmt --edition 2021 --check
+  crates/hephaestus-wgpu/src/application/decomposition/qr.rs`; `cargo clippy
+  -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo nextest run -p
+  hephaestus-wgpu blocked_qr -j 1 --no-fail-fast` (4 passed); `cargo bench -p
+  hephaestus-wgpu --bench decomposition_sync` (QR timestamp total 8.4 µs,
+  median 160 ns); `cargo bench -p hephaestus-wgpu --bench comparative`
+  (blocked QR 70x35 420.8 µs, Leto 10.7 µs, nalgebra 6.1 µs). Evidence tier:
+  value-semantic blocked QR tests, static diagnostics, empirical benchmark,
+  and GPU-timeline timestamp-query measurement.
+- Additional blocked QR component-profile evidence: extended
+  `decomposition_sync` to measure the 70x35 CPU panel-factorization lower
+  bound and the final Leto recompute paid by `qr_decompose_blocked`.
+  `rustfmt --edition 2021 --check
+  crates/hephaestus-wgpu/benches/decomposition_sync.rs`; `cargo check -p
+  hephaestus-wgpu --bench decomposition_sync`; `cargo clippy -p
+  hephaestus-wgpu --bench decomposition_sync -- -D warnings`; `cargo bench -p
+  hephaestus-wgpu --bench decomposition_sync` (LU sync floor 359.6 µs, QR sync
+  floor 222.6 µs, QR CPU panel lower bound 26.3 µs, QR final Leto recompute
+  11.5 µs, QR timestamp total 8.2 µs, median 160 ns). Evidence tier: static
+  diagnostics, empirical component benchmark, and GPU-timeline timestamp-query
+  measurement.
+- Additional blocked QR metadata-transfer evidence: packed the panel
+  Householder vector offsets and beta coefficients into one
+  `HhReflectorMeta` storage buffer, replacing two per-panel metadata uploads
+  and bindings with one while preserving reflector order and arithmetic.
+  `rustfmt --edition 2021 --check
+  crates/hephaestus-wgpu/src/application/decomposition/qr.rs`; `cargo check
+  -p hephaestus-wgpu`; `cargo clippy -p hephaestus-wgpu --all-targets --
+  -D warnings`; `cargo nextest run -p hephaestus-wgpu blocked_qr -j 1
+  --no-fail-fast` (4 passed); `cargo bench -p hephaestus-wgpu --bench
+  decomposition_sync` (QR sync floor 219.9 µs, CPU panel lower bound 25.3 µs,
+  final Leto recompute 12.9 µs, timestamp total 8.3 µs, median 192 ns);
+  `cargo bench -p hephaestus-wgpu --bench comparative` (blocked QR 70x35
+  480.8 µs, Leto 14.9 µs, nalgebra 10.0 µs). Evidence tier:
+  value-semantic blocked QR tests, static diagnostics, empirical benchmark,
+  and GPU-timeline timestamp-query measurement.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
@@ -151,6 +305,16 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Removed stale default-build CUDA blocked-Cholesky export/test references
   because the CUDA blocked SYRK path is CUDA-feature gated and not verified in
   the default stub build.
+- Additional WGPU sparse evidence: `cargo check -p hephaestus-wgpu`; `cargo
+  clippy -p hephaestus-wgpu --lib -- -D warnings`; `rustfmt --edition 2021
+  --check` over the WGPU sparse/module/export files; `cargo nextest run -p
+  hephaestus-wgpu sparse -j 1 --no-fail-fast` (1 passed);
+  `cargo check -p hephaestus-wgpu --bench sparse_comparative`;
+  `cargo bench -p hephaestus-wgpu --bench sparse_comparative` (SpMV
+  1000x1000 CSR: WGPU 122.216 µs, Leto 1.274 µs; SpMM 1000x1000x128:
+  WGPU 50.046 µs, Leto 38.346 µs). Evidence tier: static diagnostics,
+  value-semantic GPU sparse contract test, value-checked benchmark outputs,
+  and empirical local benchmark.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo
   clippy -p hephaestus-wgpu --all-targets -- -D warnings` (compiles
   `hephaestus-cuda` as the WGPU dev dependency); `cargo nextest run -p

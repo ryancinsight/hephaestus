@@ -15,8 +15,7 @@ use crate::infrastructure::buffer::CudaBuffer;
 pub struct CudaDevice {
     _private: (),
     #[allow(dead_code)]
-    pub(crate) pipeline_cache:
-        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, ()>>>,
+    pub(crate) pipeline_cache: std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<String, ()>>,
     #[allow(dead_code)]
     topology: Option<std::sync::Arc<themis::GpuTopology>>,
 }

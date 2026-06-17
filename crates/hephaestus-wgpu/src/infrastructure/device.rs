@@ -4,7 +4,6 @@ use std::sync::Arc;
 use bytemuck::Pod;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use std::any::TypeId;
-use std::collections::HashMap;
 use std::sync::Mutex;
 use wgpu::util::DeviceExt;
 
@@ -13,7 +12,8 @@ use crate::infrastructure::pool::BoundedBufferPool;
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
-pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, wgpu::ComputePipeline>>>;
+pub(crate) type PipelineCache =
+    Arc<moirai_sync::sync::ConcurrentHashMap<PipelineKey, wgpu::ComputePipeline>>;
 
 const TRANSIENT_POOL_MAX_BUFFERS: usize = 8;
 const STAGING_POOL_MAX_BYTES: u64 = 64 * 1024 * 1024;
@@ -47,7 +47,7 @@ impl WgpuDevice {
             device,
             queue,
             topology: None,
-            pipeline_cache: Arc::new(Mutex::new(HashMap::new())),
+            pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             staging_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
                 TRANSIENT_POOL_MAX_BUFFERS,
                 STAGING_POOL_MAX_BYTES,
@@ -136,63 +136,133 @@ impl WgpuDevice {
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
-        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
-        if cfg!(target_os = "windows")
-            && std::env::var("WGPU_BACKENDS").is_err()
-            && std::env::var("WGPU_BACKEND").is_err()
-        {
-            desc.backends = wgpu::Backends::VULKAN;
-        }
-        let instance = wgpu::Instance::new(&desc);
+        let try_acquire = |instance: &wgpu::Instance| -> Option<Self> {
+            let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
+                (wgpu::Device, wgpu::Queue),
+                wgpu::RequestDeviceError,
+            > {
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                    label: Some(label),
+                    required_features,
+                    required_limits: required_limits.clone(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                    trace: wgpu::Trace::Off,
+                }))
+            };
 
-        let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
-            (wgpu::Device, wgpu::Queue),
-            wgpu::RequestDeviceError,
-        > {
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                label: Some(label),
-                required_features,
-                required_limits: required_limits.clone(),
-                memory_hints: wgpu::MemoryHints::default(),
-                trace: wgpu::Trace::Off,
-            }))
+            // Try High Performance hardware adapter first
+            if let Ok(adapter) =
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                }))
+            {
+                let topology = Self::topology_from_adapter(&adapter);
+                if let Ok((device, queue)) = try_device(&adapter) {
+                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+                    acquired.topology = Some(Arc::new(topology));
+                    return Some(acquired);
+                }
+            }
+
+            // Fallback to software/fallback adapter
+            if let Ok(fallback_adapter) =
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: true,
+                }))
+            {
+                let topology = Self::topology_from_adapter(&fallback_adapter);
+                if let Ok((device, queue)) = try_device(&fallback_adapter) {
+                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+                    acquired.topology = Some(Arc::new(topology));
+                    return Some(acquired);
+                }
+            }
+            None
         };
 
-        // Try High Performance hardware adapter first
-        if let Ok(adapter) =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-            }))
-        {
-            let topology = Self::topology_from_adapter(&adapter);
-            if let Ok((device, queue)) = try_device(&adapter) {
-                let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-                acquired.topology = Some(Arc::new(topology));
-                return Ok(acquired);
+        let has_env =
+            std::env::var("WGPU_BACKENDS").is_ok() || std::env::var("WGPU_BACKEND").is_ok();
+
+        if cfg!(target_os = "windows") && !has_env {
+            // Try DX12 first to completely avoid Vulkan driver access violations in parallel nextest runs.
+            let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+            desc.backends = wgpu::Backends::DX12;
+            let instance = wgpu::Instance::new(&desc);
+            if let Some(device) = try_acquire(&instance) {
+                return Ok(device);
+            }
+
+            // Fallback to Vulkan if DX12 is unavailable on the host
+            let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+            desc.backends = wgpu::Backends::VULKAN;
+            let instance = wgpu::Instance::new(&desc);
+            if let Some(device) = try_acquire(&instance) {
+                return Ok(device);
+            }
+        } else {
+            let desc = wgpu::InstanceDescriptor::from_env_or_default();
+            let instance = wgpu::Instance::new(&desc);
+            if let Some(device) = try_acquire(&instance) {
+                return Ok(device);
             }
         }
 
-        // Fallback to software/fallback adapter
-        let fallback_adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::LowPower,
-            compatible_surface: None,
-            force_fallback_adapter: true,
-        }))
-        .map_err(|e| HephaestusError::AdapterUnavailable {
-            message: format!("High performance adapter unavailable/lost, and fallback adapter is unavailable: {e}"),
-        })?;
+        Err(HephaestusError::AdapterUnavailable {
+            message: "No compatible GPU adapter or device could be acquired.".to_string(),
+        })
+    }
 
-        let topology = Self::topology_from_adapter(&fallback_adapter);
-        let (device, queue) =
-            try_device(&fallback_adapter).map_err(|e| HephaestusError::DeviceUnavailable {
-                message: format!("Fallback adapter device creation failed: {e}"),
-            })?;
+    /// Acquire a default adapter and device, specifically targeting the Metal backend.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no Metal adapter can be acquired.
+    pub fn try_metal(label: &str) -> Result<Self> {
+        let try_acquire = |instance: &wgpu::Instance| -> Option<Self> {
+            let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
+                (wgpu::Device, wgpu::Queue),
+                wgpu::RequestDeviceError,
+            > {
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                    label: Some(label),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                    trace: wgpu::Trace::Off,
+                }))
+            };
 
-        let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-        acquired.topology = Some(Arc::new(topology));
-        Ok(acquired)
+            if let Ok(adapter) =
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                }))
+            {
+                let topology = Self::topology_from_adapter(&adapter);
+                if let Ok((device, queue)) = try_device(&adapter) {
+                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+                    acquired.topology = Some(Arc::new(topology));
+                    return Some(acquired);
+                }
+            }
+            None
+        };
+
+        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+        desc.backends = wgpu::Backends::METAL;
+        let instance = wgpu::Instance::new(&desc);
+        if let Some(device) = try_acquire(&instance) {
+            Ok(device)
+        } else {
+            Err(HephaestusError::AdapterUnavailable {
+                message: "No compatible Metal GPU adapter or device could be acquired.".to_string(),
+            })
+        }
     }
 
     /// Borrow the inner wgpu device for pipeline construction.
@@ -253,6 +323,7 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
+
         let mut pool = self
             .staging_pool
             .lock()
@@ -290,6 +361,7 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
+
         let mut pool = self
             .uniform_pool
             .lock()
@@ -313,6 +385,24 @@ impl WgpuDevice {
             .lock()
             .expect("invariant: uniform pool mutex is not poisoned");
         pool.recycle(buffer);
+    }
+
+    /// Drop transient buffers retained for reuse.
+    ///
+    /// The bounded pools avoid repeated staging and uniform allocations on hot
+    /// paths. Bindings and short-lived host integrations can call this at an
+    /// ownership boundary to release cached allocations before the host runtime
+    /// tears down GPU state.
+    #[inline]
+    pub fn clear_transient_pools(&self) {
+        self.staging_pool
+            .lock()
+            .expect("invariant: staging pool mutex is not poisoned")
+            .clear();
+        self.uniform_pool
+            .lock()
+            .expect("invariant: uniform pool mutex is not poisoned")
+            .clear();
     }
 }
 

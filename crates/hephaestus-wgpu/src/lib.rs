@@ -18,20 +18,26 @@ pub use application::elementwise::{
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, DivOp, ExpOp,
     IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
 };
+#[cfg(feature = "decomposition")]
+pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
-    L2NormScalar, MatmulZero, MatrixIdentityScalar, MatrixRankScalar,
+    AsGpuMatrixOperand, L2NormScalar, MatmulZero, MatrixFunction, MatrixIdentityScalar, MatrixNorm,
+    MatrixProduct, MatrixProperties, MatrixRankScalar, MatrixSolve,
 };
+pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
-    reduction, reduction_with_width, sum_axis, sum_axis_into, MaxOp, MinOp, ReductionIdentity,
-    ReductionWgslOp, SumOp,
+    reduce_axis_into, reduction, reduction_with_width, sum_axis, sum_axis_into, MaxOp, MinOp,
+    ReductionIdentity, ReductionWgslOp, SumOp,
 };
 pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
     ScanIdentity, ScanWgslOp,
 };
+#[cfg(feature = "sparse")]
+pub use application::sparse::{spmm, spmm_into, spmv, spmv_into, GpuCsrMatrix};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,

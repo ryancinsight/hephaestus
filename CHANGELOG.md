@@ -4,8 +4,44 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Changed
+
+- `hephaestus-wgpu` [patch]: narrowed blocked LU host/device transfers to the
+  active diagonal-panel and trailing-submatrix regions, reducing full-buffer
+  traffic in the hybrid GPU trailing-update path.
+- `hephaestus-wgpu` [patch]: changed blocked QR to transfer compact
+  trailing-column tiles per panel before GPU Householder application instead
+  of writing and downloading the full working matrix.
+- `hephaestus-wgpu` [patch]: packed each blocked QR panel's Householder
+  vectors into one device buffer and selected the active vector by metadata
+  offset, removing per-reflector vector-buffer uploads.
+- `hephaestus-wgpu` [patch]: added timestamp-query profiling to the blocked
+  decomposition sync benchmark to measure the blocked QR per-reflector launch
+  component on the GPU timeline when the adapter supports timestamps.
+- `hephaestus-wgpu` [patch]: batched blocked QR panel reflectors into one
+  compute pass per panel, preserving reflector order within each column
+  workgroup and removing per-reflector compute-pass launches.
+- `hephaestus-wgpu` [patch]: extended the blocked decomposition sync
+  benchmark with 70x35 blocked-QR CPU panel and final Leto recompute component
+  timings, isolating those costs from the host/device synchronization floor.
+- `hephaestus-wgpu` [patch]: packed blocked QR Householder vector offsets and
+  beta coefficients into one reflector metadata buffer, reducing per-panel
+  metadata uploads and storage bindings in the WGPU trailing-update kernel.
+- `hephaestus-wgpu` [patch]: exposed an explicit transient-pool drain for
+  bounded staging and uniform buffer pools so short-lived host integrations
+  can release cached GPU allocations at ownership boundaries.
+- `hephaestus-python` [patch]: drains WGPU transient pools when a Python
+  `Device` wrapper is dropped, preventing the RNG binding test process from
+  hanging after the value-semantic assertions complete.
+
 ### Added
 
+- `hephaestus-wgpu` [minor]: device-resident CSR sparse matrix storage plus
+  WGPU SpMV and SpMM kernels over packed CSR index buffers. The sparse feature
+  owns the Leto CSR upload/download boundary, while the products execute on
+  WGPU buffers and use the shared Mnemosyne/Moirai launch-planning path.
+  Added a focused sparse comparative benchmark that validates WGPU outputs
+  against Leto before reporting SpMV and SpMM timings.
 - `hephaestus-wgpu` [minor]: GPU-resident linalg surface for parity with
   Leto CPU operations: allocating `matmul`/`batched_matmul`, caller-owned
   `matmul_into`/`batched_matmul_into`, dot product, trace, and L1/L2/max norms
@@ -75,6 +111,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   rejection, and zero-pivot rejection; comparative benchmarks measure WGPU API
   overhead against Leto and use `nalgebra` determinant as the external CPU
   comparator.
+- `hephaestus-wgpu` [minor]: baseline device-resident column-pivoted QR,
+  pseudoinverse, and matrix-exponential coverage. Contract tests cover
+  column-pivoted QR factor agreement plus closed-form diagonal pseudoinverse
+  and matrix exponential cases; comparative benchmarks measure WGPU API
+  overhead against Leto and available `nalgebra` comparators.
+- `hephaestus-wgpu` [minor]: strengthened pseudoinverse and matrix exponential
+  contracts with rank-deficient Moore-Penrose identities, rectangular
+  pseudoinverse, non-finite rejection, nilpotent and skew-symmetric
+  matrix-exponential closed forms, a general `nalgebra` exponential oracle,
+  and rectangular/non-finite matrix-exponential rejection.
 - `hephaestus-wgpu` [minor]: device-resident symmetric Jacobi eigen
   decomposition and eigenvalues-only surfaces mirroring Leto. Contract tests
   compare eigenvalues/eigenvectors against Leto and reject non-symmetric
@@ -85,14 +131,31 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   a diagonal closed-form eigenvalue oracle and a nonsymmetric Leto
   differential case; comparative benchmarks now measure a 32x32 block-rotation
   matrix against Leto and `nalgebra`.
+- `hephaestus-wgpu` [minor]: strengthened general-eigenvalue contracts with
+  exact complex-pair blocks, triangular and structured nonsymmetric spectra,
+  dense `nalgebra` oracle comparison, symmetric-input real-spectrum checks,
+  unordered spectrum matching, and rectangular rejection.
 - `hephaestus-wgpu` [minor]: blocked Cholesky entry point
   (`cholesky_decompose_blocked`) with CPU panel factorization/solve and GPU
   SYRK trailing update. Contract coverage includes a block-boundary SPD case;
   comparative benchmarks now measure 128x128 blocked Cholesky against Leto and
   `nalgebra`.
+- `hephaestus-wgpu` [minor]: comparative benchmark coverage for blocked LU and
+  blocked QR GPU-trailing-update paths, with value checks against Leto before
+  timing against Leto and `nalgebra`.
+- `hephaestus-wgpu` [patch]: synchronization-profile benchmark for blocked
+  LU/QR decomposition transfer floors, recording the current host/device
+  synchronization cost before native-kernel expansion.
 - `hephaestus-wgpu` [patch]: dispatch launch planning now routes through
   Mnemosyne `KernelResourceBudget` and Moirai GPU `plan_launch` while retaining
   the Hephaestus checked overflow contract.
+- `hephaestus` [patch]: documented Atlas compute boundaries for Mnemosyne,
+  Moirai, Themis, and Hermes. Hermes integration is through host-delegated Leto
+  CPU SIMD (`leto-ops` with `simd` enabled); direct WGPU/CUDA kernel calls into
+  Hermes are rejected as a boundary violation.
+- `hephaestus` [patch]: consumes `moirai-gpu` with default features disabled so
+  Moirai launch planning no longer pulls its optional WGPU backend into the
+  Hephaestus WGPU 26 dependency graph.
 - `hephaestus-wgpu` [minor]: GPU-resident rank-2 axis reductions
   (`reduce_axis`, `sum_axis`, `min_axis`, `max_axis`, `mean_axis`, and their
   caller-owned `*_into` forms) preserving Leto's rank-preserving output

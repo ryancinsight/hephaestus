@@ -67,7 +67,7 @@
 //!
 //! # Blocked Cholesky — SYRK Trailing Update
 //!
-//! [`cholesky_decompose_blocked`] processes the matrix in
+//! [`crate::application::decomposition::cholesky::cholesky_decompose_blocked`] processes the matrix in
 //! `BLOCK_SIZE × BLOCK_SIZE` panels:
 //!
 //! 1. **Panel factorisation** (CPU, O(b³/3)) — the diagonal block is
@@ -101,7 +101,7 @@
 //!
 //! Summing over all ⌈n/b⌉ blocks recovers 2n³/3 total flops. ∎
 //!
-//! The [`lu_decompose_blocked`] entry point implements this with a PTX
+//! The [`crate::application::decomposition::lu::lu_decompose_blocked`] entry point implements this with a PTX
 //! GEMM kernel launched via `cuLaunchKernel`.
 //!
 //! # Blocked QR — Trailing Householder Application
@@ -120,7 +120,7 @@
 //! Summing over all ⌈n/b⌉ blocks recovers 2n²(m − n/3) total
 //! flops. ∎
 //!
-//! The [`qr_decompose_blocked`] entry point implements this with a PTX
+//! The [`crate::application::decomposition::qr::qr_decompose_blocked`] entry point implements this with a PTX
 //! kernel that applies one Householder reflector per launch.
 
 pub(crate) mod validate;

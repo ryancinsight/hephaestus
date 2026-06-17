@@ -82,6 +82,33 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
     }
 }
 
+fn assert_complex_spectra_close(
+    got: &[num_complex::Complex<f32>],
+    expected: &[num_complex::Complex<f32>],
+    abs_tol: f32,
+    rel_tol: f32,
+) {
+    assert_eq!(got.len(), expected.len());
+    let mut used = vec![false; got.len()];
+    for (expected_index, expected) in expected.iter().enumerate() {
+        let match_index = got.iter().enumerate().position(|(got_index, actual)| {
+            if used[got_index] {
+                return false;
+            }
+            let re_tolerance = abs_tol.max(rel_tol * expected.re.abs().max(1.0));
+            let im_tolerance = abs_tol.max(rel_tol * expected.im.abs().max(1.0));
+            (actual.re - expected.re).abs() <= re_tolerance
+                && (actual.im - expected.im).abs() <= im_tolerance
+        });
+        match match_index {
+            Some(index) => used[index] = true,
+            None => {
+                panic!("no eigenvalue matches oracle[{expected_index}] = {expected:?}; got {got:?}")
+            }
+        }
+    }
+}
+
 fn reconstruct_svd(
     u: &[f32],
     singular_values: &[f32],
@@ -1692,6 +1719,166 @@ fn eigenvalues_matches_leto_reference() {
             expected[i].im
         );
     }
+}
+
+#[test]
+fn eigenvalues_match_exact_complex_pair_blocks() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use num_complex::Complex;
+
+    let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
+        (
+            2,
+            vec![1.0, -1.0, 1.0, 1.0],
+            vec![Complex::new(1.0, -1.0), Complex::new(1.0, 1.0)],
+        ),
+        (
+            3,
+            vec![0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 2.0],
+            vec![
+                Complex::new(0.0, -1.0),
+                Complex::new(0.0, 1.0),
+                Complex::new(2.0, 0.0),
+            ],
+        ),
+    ];
+
+    for (n, matrix_host, expected) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+    }
+}
+
+#[test]
+fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+    use num_complex::Complex;
+
+    let cases: [(usize, Vec<f32>, f32); 4] = [
+        (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
+        (3, vec![2.0, 1.0, 1.0, 0.0, 3.0, 1.0, 0.0, 1.0, 3.0], 1.0e-5),
+        (
+            4,
+            vec![
+                0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, -2.0, 0.0, 0.0, 2.0, 1.0,
+            ],
+            1.0e-5,
+        ),
+        (
+            5,
+            (0..25)
+                .map(|index| ((index * 7 + 3) % 11) as f32 - 5.0)
+                .collect(),
+            1.0e-3,
+        ),
+    ];
+
+    for (n, matrix_host, abs_tol) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
+            .complex_eigenvalues()
+            .iter()
+            .copied()
+            .collect();
+        assert_complex_spectra_close(&got, &expected, abs_tol, 1.0e-4);
+    }
+}
+
+#[test]
+fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+    use num_complex::Complex;
+
+    let n = 3usize;
+    let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let eigen = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![Complex::new(0.0f32, 0.0); n];
+    device.download(&eigen, &mut got).unwrap();
+    for value in &got {
+        assert!(
+            value.im.abs() <= 1.0e-5,
+            "symmetric input produced complex eigenvalue {value:?}"
+        );
+    }
+    let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
+        .complex_eigenvalues()
+        .iter()
+        .copied()
+        .collect();
+    assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+}
+
+#[test]
+fn eigenvalues_rejects_non_square_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Eigenvalues require square matrix")
+    ));
 }
 
 #[test]
@@ -3608,6 +3795,120 @@ fn linalg_pinv_matches_closed_form_diagonal() {
 }
 
 #[test]
+fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let n = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 2.0, 4.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+
+    let out = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; n * n];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(n, n, &matrix_host)
+        .pseudo_inverse(1.0e-6)
+        .unwrap();
+    let mut expected_host = Vec::with_capacity(n * n);
+    for row in 0..n {
+        for col in 0..n {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
+
+    let a_ap = matmul_host(&matrix_host, n, n, &got, n);
+    let a_ap_a = matmul_host(&a_ap, n, n, &matrix_host, n);
+    assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
+
+    let ap_a = matmul_host(&got, n, n, &matrix_host, n);
+    let ap_a_ap = matmul_host(&ap_a, n, n, &got, n);
+    assert_close_slice(&ap_a_ap, &got, 1.0e-4, 1.0e-4);
+}
+
+#[test]
+fn linalg_pinv_handles_rectangular_full_rank_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let rows = 3usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0, 2.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+
+    let out = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; cols * rows];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(rows, cols, &matrix_host)
+        .pseudo_inverse(1.0e-6)
+        .unwrap();
+    let mut expected_host = Vec::with_capacity(cols * rows);
+    for row in 0..cols {
+        for col in 0..rows {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
+
+    let a_ap = matmul_host(&matrix_host, rows, cols, &got, rows);
+    let a_ap_a = matmul_host(&a_ap, rows, rows, &matrix_host, cols);
+    assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
+}
+
+#[test]
+fn linalg_pinv_rejects_non_finite_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{pinv, StridedOperand};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = pinv(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Pseudoinverse failed")
+    ));
+}
+
+#[test]
 fn linalg_matexp_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3638,4 +3939,208 @@ fn linalg_matexp_matches_closed_form_diagonal() {
             "matrix exponential mismatch at {index}: got {actual}, expected {expected}, tolerance {tolerance}"
         );
     }
+}
+
+#[test]
+fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let nilpotent_host = vec![0.0f32, 1.0, 0.0, 0.0];
+    let nilpotent = device.upload(&nilpotent_host).unwrap();
+    let nilpotent_out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &nilpotent,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_nilpotent = vec![0.0f32; 4];
+    device.download(&nilpotent_out, &mut got_nilpotent).unwrap();
+    assert_close_slice(&got_nilpotent, &[1.0, 1.0, 0.0, 1.0], 1.0e-5, 0.0);
+
+    let theta = 0.9f32;
+    let skew_host = vec![0.0f32, -theta, theta, 0.0];
+    let skew = device.upload(&skew_host).unwrap();
+    let skew_out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &skew,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_skew = vec![0.0f32; 4];
+    device.download(&skew_out, &mut got_skew).unwrap();
+    assert_close_slice(
+        &got_skew,
+        &[theta.cos(), -theta.sin(), theta.sin(), theta.cos()],
+        1.0e-5,
+        1.0e-5,
+    );
+}
+
+#[test]
+fn linalg_matexp_matches_nalgebra_general_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+    use nalgebra::DMatrix;
+
+    let n = 3usize;
+    let matrix_host = vec![1.2f32, -0.7, 0.4, 0.3, 2.1, -1.5, -0.6, 0.8, 0.5];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+
+    let out = matexp(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; n * n];
+    device.download(&out, &mut got).unwrap();
+
+    let expected = DMatrix::from_row_slice(n, n, &matrix_host).exp();
+    let mut expected_host = Vec::with_capacity(n * n);
+    for row in 0..n {
+        for col in 0..n {
+            expected_host.push(expected[(row, col)]);
+        }
+    }
+    assert_close_slice(&got, &expected_host, 1.0e-3, 1.0e-4);
+}
+
+#[test]
+fn linalg_matexp_rejects_invalid_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{matexp, StridedOperand};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential requires square matrix")
+    ));
+
+    let non_finite_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
+    let non_finite = device.upload(&non_finite_host).unwrap();
+    let non_finite_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let non_finite_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &non_finite,
+            layout: &non_finite_layout,
+        },
+    );
+    assert!(matches!(
+        non_finite_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential failed")
+    ));
+}
+
+#[test]
+fn test_wgpu_uniform_and_normal_with_seed() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{normal_with_seed, uniform_with_seed};
+
+    let shape = [1000];
+    let low = -2.0f32;
+    let high = 5.0f32;
+    let u_buf = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u = vec![0.0f32; 1000];
+    device.download(&u_buf, &mut got_u).unwrap();
+
+    // Verify determinism & range
+    let u_buf_2 = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u_2 = vec![0.0f32; 1000];
+    device.download(&u_buf_2, &mut got_u_2).unwrap();
+    assert_eq!(got_u, got_u_2);
+
+    for &val in &got_u {
+        assert!(val >= low && val < high, "value out of bounds: {val}");
+    }
+
+    let n_buf = normal_with_seed(&device, shape, 0.0f32, 1.0f32, 42).unwrap();
+    let mut got_n = vec![0.0f32; 1000];
+    device.download(&n_buf, &mut got_n).unwrap();
+    assert!(got_n.iter().any(|&val| val != 0.0));
+}
+
+#[test]
+fn test_wgpu_sparse_matrix_spmv_spmm() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{spmm, spmv, GpuCsrMatrix, StridedOperand};
+    use leto::Layout;
+
+    // Create a 3x3 diagonal-ish matrix:
+    // [ 2.0  0.0 -1.0 ]
+    // [ 0.0  3.0  0.0 ]
+    // [ 0.0  0.0  4.0 ]
+    let dense_host = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).unwrap();
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+
+    // Round-trip back to CPU
+    let cpu_csr_2 = gpu_csr.to_cpu(&device).unwrap();
+    assert_eq!(cpu_csr, cpu_csr_2);
+
+    // SpMV: y = A * x, x = [1.0, 2.0, 3.0]
+    // Expected y = [ 2*1 - 3, 3*2, 4*3 ] = [ -1.0, 6.0, 12.0 ]
+    let x_host = vec![1.0f32, 2.0, 3.0];
+    let x_buf = device.upload(&x_host).unwrap();
+    let y_buf = spmv(&device, &gpu_csr, &x_buf).unwrap();
+    let mut got_y = vec![0.0f32; 3];
+    device.download(&y_buf, &mut got_y).unwrap();
+    assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 1.0e-4);
+
+    // SpMM: C = A * B, B = [ 1.0  2.0 ]
+    //                      [ 3.0  4.0 ]
+    //                      [ 5.0  6.0 ]
+    // Expected C = [ 2*1 - 5, 2*2 - 6 ] = [ -3.0, -2.0 ]
+    //              [ 3*3,     3*4     ]   [  9.0, 12.0 ]
+    //              [ 4*5,     4*6     ]   [ 20.0, 24.0 ]
+    let b_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_buf = device.upload(&b_host).unwrap();
+    let b_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_op = StridedOperand {
+        buffer: &b_buf,
+        layout: &b_layout,
+    };
+    let c_buf = spmm(&device, &gpu_csr, &b_op).unwrap();
+    let mut got_c = vec![0.0f32; 6];
+    device.download(&c_buf, &mut got_c).unwrap();
+    assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 1.0e-4);
 }

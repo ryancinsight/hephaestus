@@ -4,6 +4,7 @@ members = [
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
     "crates/hephaestus-cuda",
+    "crates/hephaestus-metal",
     "crates/hephaestus-python",
 ]
 
@@ -19,6 +20,7 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 hephaestus-core = { path = "crates/hephaestus-core" }
 hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
 hephaestus-cuda = { path = "crates/hephaestus-cuda" }
+hephaestus-metal = { path = "crates/hephaestus-metal" }
 
 # ── GPU ──
 # wgpu 26 matches apollo (the first consumer). coeus re-bases when it bumps
@@ -39,7 +41,12 @@ leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
 leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
-moirai-gpu = { path = "../moirai/moirai-gpu" }
+moirai-gpu = { path = "../moirai/moirai-gpu", default-features = false, features = [
+    "std",
+    "parallel",
+    "mnemosyne-memory",
+] }
+moirai-sync = { path = "../moirai/moirai-sync" }
 ndarray = "0.15"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
@@ -61,6 +68,7 @@ moirai-core = { path = "../moirai/moirai-core" }
 moirai-scheduler = { path = "../moirai/moirai-scheduler" }
 moirai-parallel = { path = "../moirai/moirai-parallel" }
 moirai-gpu = { path = "../moirai/moirai-gpu" }
+moirai-sync = { path = "../moirai/moirai-sync" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }

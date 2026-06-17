@@ -2057,10 +2057,8 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     use leto::Layout;
 
     let matrix_host = vec![
-        4.0f32, 1.0, 0.5, 0.25,
-        1.0, 3.0, 0.25, 0.125,
-        0.5, 0.25, 2.0, 0.0625,
-        0.25, 0.125, 0.0625, 1.5,
+        4.0f32, 1.0, 0.5, 0.25, 1.0, 3.0, 0.25, 0.125, 0.5, 0.25, 2.0, 0.0625, 0.25, 0.125, 0.0625,
+        1.5,
     ];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([4, 4]).unwrap();
@@ -2080,11 +2078,13 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     assert_eq!(gpu_eigen.inner().eigenvalues, leto_eigen.eigenvalues);
 
     let mut got_values = vec![0.0f32; 4];
-    dev.download(gpu_eigen.eigenvalues(), &mut got_values).unwrap();
+    dev.download(gpu_eigen.eigenvalues(), &mut got_values)
+        .unwrap();
     assert_eq!(got_values, leto_eigen.eigenvalues);
 
     let mut got_vectors = vec![0.0f32; 16];
-    dev.download(gpu_eigen.eigenvectors(), &mut got_vectors).unwrap();
+    dev.download(gpu_eigen.eigenvectors(), &mut got_vectors)
+        .unwrap();
     assert_eq!(
         got_vectors,
         leto::Storage::as_slice(leto_eigen.eigenvectors.storage())
@@ -2270,7 +2270,8 @@ fn svd_decompose_reconstructs_leto_reference() {
     let mut got_singular = vec![0.0f32; rank];
     let mut got_u = vec![0.0f32; rows * rank];
     let mut got_v = vec![0.0f32; cols * rank];
-    dev.download(gpu_svd.singular_values(), &mut got_singular).unwrap();
+    dev.download(gpu_svd.singular_values(), &mut got_singular)
+        .unwrap();
     dev.download(gpu_svd.u(), &mut got_u).unwrap();
     dev.download(gpu_svd.v(), &mut got_v).unwrap();
 
@@ -2311,7 +2312,8 @@ fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     let leto_svd = leto_ops::svd_rank_revealing(&leto_matrix.view()).unwrap();
     let rank = leto_svd.singular_values.len();
     let mut got_singular = vec![0.0f32; rank];
-    dev.download(gpu_svd.singular_values(), &mut got_singular).unwrap();
+    dev.download(gpu_svd.singular_values(), &mut got_singular)
+        .unwrap();
 
     assert_eq!(rank, 2);
     assert!(got_singular[0] >= got_singular[1]);
@@ -2435,11 +2437,7 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     use leto::Layout;
 
     let n = 3usize;
-    let matrix_host = vec![
-        1.0f32, -3.0, 0.0,
-        2.0, 1.0, 0.0,
-        0.0, 0.0, 5.0,
-    ];
+    let matrix_host = vec![1.0f32, -3.0, 0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 5.0];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([n, n]).unwrap();
     let gpu_schur = schur(
@@ -2548,10 +2546,7 @@ fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
 
     let n = 4usize;
     let matrix_host = vec![
-        4.0f32, 5.0, -2.0, 2.0,
-        1.0, 2.0, 0.0, 1.0,
-        -2.0, 0.0, 3.0, -2.0,
-        2.0, 1.0, -2.0, -1.0,
+        4.0f32, 5.0, -2.0, 2.0, 1.0, 2.0, 0.0, 1.0, -2.0, 0.0, 3.0, -2.0, 2.0, 1.0, -2.0, -1.0,
     ];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([n, n]).unwrap();
@@ -2668,11 +2663,7 @@ fn col_piv_qr_matches_leto_reference() {
     use hephaestus_cuda::{col_piv_qr, StridedOperand};
     use leto::Layout;
 
-    let matrix_host = vec![
-        1.0f32, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-        7.0, 8.0, 9.0,
-    ];
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([3, 3]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
@@ -2713,10 +2704,7 @@ fn full_piv_lu_matches_leto_reference() {
     use hephaestus_cuda::{full_piv_lu, StridedOperand};
     use leto::Layout;
 
-    let matrix_host = vec![
-        1.0f32, 2.0,
-        3.0, 4.0,
-    ];
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([2, 2]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
@@ -2749,13 +2737,23 @@ fn full_piv_lu_matches_leto_reference() {
 
     let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
     let expected_sol = leto_decomp.solve(&leto_rhs.view()).unwrap();
-    assert_close_slice(&got_sol, leto::Storage::as_slice(expected_sol.storage()), 1e-4, 0.0);
+    assert_close_slice(
+        &got_sol,
+        leto::Storage::as_slice(expected_sol.storage()),
+        1e-4,
+        0.0,
+    );
 
     let inv = gpu_decomp.inv(&dev).unwrap();
     let mut got_inv = vec![0.0f32; 4];
     dev.download(&inv, &mut got_inv).unwrap();
     let expected_inv = leto_decomp.inv().unwrap();
-    assert_close_slice(&got_inv, leto::Storage::as_slice(expected_inv.storage()), 1e-4, 0.0);
+    assert_close_slice(
+        &got_inv,
+        leto::Storage::as_slice(expected_inv.storage()),
+        1e-4,
+        0.0,
+    );
 }
 
 #[cfg(feature = "decomposition")]
@@ -2767,11 +2765,7 @@ fn udu_decompose_matches_leto_reference() {
     use hephaestus_cuda::{udu_decompose, StridedOperand};
     use leto::Layout;
 
-    let matrix_host = vec![
-        4.0f32, 12.0, -16.0,
-        12.0, 37.0, -43.0,
-        -16.0, -43.0, 98.0,
-    ];
+    let matrix_host = vec![4.0f32, 12.0, -16.0, 12.0, 37.0, -43.0, -16.0, -43.0, 98.0];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([3, 3]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
@@ -2808,11 +2802,7 @@ fn bunch_kaufman_matches_leto_reference() {
     use hephaestus_cuda::{bunch_kaufman, StridedOperand};
     use leto::Layout;
 
-    let matrix_host = vec![
-        1.0f32, 2.0, 3.0,
-        2.0, 4.0, 5.0,
-        3.0, 5.0, 6.0,
-    ];
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0, 3.0, 5.0, 6.0];
     let matrix = dev.upload(&matrix_host).unwrap();
     let layout = Layout::c_contiguous([3, 3]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([3, 3], matrix_host).unwrap();
@@ -2843,3 +2833,84 @@ fn bunch_kaufman_matches_leto_reference() {
     assert_close_slice(&d, expected_d, 1e-4, 0.0);
 }
 
+#[test]
+fn test_cuda_uniform_and_normal_with_seed() {
+    let Some(dev) = device("test_cuda_uniform_and_normal_with_seed") else {
+        return;
+    };
+    use hephaestus_cuda::{normal_with_seed, uniform_with_seed};
+
+    let shape = [1000];
+    let low = -2.0f32;
+    let high = 5.0f32;
+    let u_buf = uniform_with_seed(&dev, shape, low, high, 42).unwrap();
+    let mut got_u = vec![0.0f32; 1000];
+    dev.download(&u_buf, &mut got_u).unwrap();
+
+    // Verify determinism & range
+    let u_buf_2 = uniform_with_seed(&dev, shape, low, high, 42).unwrap();
+    let mut got_u_2 = vec![0.0f32; 1000];
+    dev.download(&u_buf_2, &mut got_u_2).unwrap();
+    assert_eq!(got_u, got_u_2);
+
+    for &val in &got_u {
+        assert!(val >= low && val < high, "value out of bounds: {val}");
+    }
+
+    let n_buf = normal_with_seed(&dev, shape, 0.0f32, 1.0f32, 42).unwrap();
+    let mut got_n = vec![0.0f32; 1000];
+    dev.download(&n_buf, &mut got_n).unwrap();
+    assert!(got_n.iter().any(|&val| val != 0.0));
+}
+
+#[test]
+fn test_cuda_sparse_matrix_spmv_spmm() {
+    let Some(dev) = device("test_cuda_sparse_matrix_spmv_spmm") else {
+        return;
+    };
+    use hephaestus_cuda::{spmm, spmv, GpuCsrMatrix, StridedOperand};
+    use leto::Layout;
+
+    // Create a 3x3 diagonal-ish matrix:
+    // [ 2.0  0.0 -1.0 ]
+    // [ 0.0  3.0  0.0 ]
+    // [ 0.0  0.0  4.0 ]
+    let dense_host = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+
+    let gpu_csr = GpuCsrMatrix::from_cpu(&dev, &cpu_csr).unwrap();
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+
+    // Round-trip back to CPU
+    let cpu_csr_2 = gpu_csr.to_cpu(&dev).unwrap();
+    assert_eq!(cpu_csr, cpu_csr_2);
+
+    // SpMV: y = A * x, x = [1.0, 2.0, 3.0]
+    // Expected y = [ 2*1 - 3, 3*2, 4*3 ] = [ -1.0, 6.0, 12.0 ]
+    let x_host = vec![1.0f32, 2.0, 3.0];
+    let x_buf = dev.upload(&x_host).unwrap();
+    let y_buf = spmv(&dev, &gpu_csr, &x_buf).unwrap();
+    let mut got_y = vec![0.0f32; 3];
+    dev.download(&y_buf, &mut got_y).unwrap();
+    assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 0.0);
+
+    // SpMM: C = A * B, B = [ 1.0  2.0 ]
+    //                      [ 3.0  4.0 ]
+    //                      [ 5.0  6.0 ]
+    // Expected C = [ 2*1 - 5, 2*2 - 6 ] = [ -3.0, -2.0 ]
+    //              [ 3*3,     3*4     ]   [  9.0, 12.0 ]
+    //              [ 4*5,     4*6     ]   [ 20.0, 24.0 ]
+    let b_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_buf = dev.upload(&b_host).unwrap();
+    let b_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_op = StridedOperand {
+        buffer: &b_buf,
+        layout: &b_layout,
+    };
+    let c_buf = spmm(&dev, &gpu_csr, &b_op).unwrap();
+    let mut got_c = vec![0.0f32; 6];
+    dev.download(&c_buf, &mut got_c).unwrap();
+    assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 0.0);
+}

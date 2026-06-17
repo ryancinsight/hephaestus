@@ -16,6 +16,7 @@ use leto::Layout;
 mod kron;
 mod matmul;
 mod matpow;
+mod matrix;
 mod matrix_rank;
 mod norms;
 mod pinv_matexp;
@@ -23,6 +24,11 @@ mod pinv_matexp;
 pub use kron::{kron, kron_into};
 pub use matmul::{batched_matmul, batched_matmul_into, matmul, matmul_into};
 pub use matpow::{matpow, MatrixIdentityScalar};
+#[cfg(feature = "decomposition")]
+pub use matrix::MatrixDecompose;
+pub use matrix::{
+    AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
+};
 pub use matrix_rank::{det, matrix_rank, matrix_rank_with_tolerance, MatrixRankScalar};
 pub use norms::{dot, norm_l1, norm_l2, norm_max, trace};
 pub use pinv_matexp::{matexp, pinv};

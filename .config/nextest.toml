@@ -1,0 +1,11 @@
+# Nextest configuration for the hephaestus workspace.
+
+# GPU device tests must run one at a time to prevent driver-level contention,
+# deadlocks, and access violations (0xc0000005) when multiple processes
+# concurrently request device contexts (DX12, Vulkan, CUDA) on the same GPU.
+[test-groups]
+gpu-serial = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(hephaestus-wgpu) | package(hephaestus-cuda) | package(hephaestus-python)'
+test-group = 'gpu-serial'

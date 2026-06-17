@@ -49,6 +49,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
+use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -319,7 +320,7 @@ fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> 
         gemm_shader_source,
     );
 
-    let meta_buf = device.get_uniform_buffer(std::mem::size_of::<GemmMeta>() as u64)?;
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<GemmMeta>(1)?)?;
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
@@ -538,7 +539,18 @@ pub fn lu_decompose_blocked(
         }
 
         if trail == 0 {
-            device.write_buffer(&factors_buf, &host)?;
+            write_matrix_region(
+                device,
+                &factors_buf,
+                &host,
+                MatrixRegion {
+                    stride: n,
+                    row_start: k,
+                    col_start: k,
+                    rows: b,
+                    cols: b,
+                },
+            )?;
             continue;
         }
 
@@ -606,8 +618,20 @@ pub fn lu_decompose_blocked(
             },
         )?;
 
-        // Download the updated trailing matrix back to host.
-        device.download(&factors_buf, &mut host)?;
+        // Download only the updated trailing matrix back to host for the next
+        // CPU panel; the already-factored panels are unchanged by this kernel.
+        download_matrix_region(
+            device,
+            &factors_buf,
+            &mut host,
+            MatrixRegion {
+                stride: n,
+                row_start: k + b,
+                col_start: k + b,
+                rows: trail,
+                cols: trail,
+            },
+        )?;
     }
 
     // Build a leto-ops LU on the original (un-permuted) matrix for the

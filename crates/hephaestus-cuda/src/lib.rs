@@ -43,10 +43,13 @@ pub use application::elementwise::{
     unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryCudaOp, CosOp, DivOp, ExpOp,
     IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryCudaOp,
 };
+#[cfg(feature = "decomposition")]
+pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
-    MatrixIdentityScalar, MatrixRankScalar,
+    AsGpuMatrixOperand, MatrixFunction, MatrixIdentityScalar, MatrixNorm, MatrixProduct,
+    MatrixProperties, MatrixRankScalar, MatrixSolve,
 };
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
@@ -63,6 +66,8 @@ pub use application::strided::{
     StridedOperand, MAX_STRIDED_RANK,
 };
 
+pub use application::random::{normal_with_seed, uniform_with_seed};
+pub use application::sparse::{spmm, spmm_into, spmv, spmv_into, GpuCsrMatrix};
 pub use infrastructure::buffer::CudaBuffer;
 pub use infrastructure::device::CudaDevice;
 
