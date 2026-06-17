@@ -27,6 +27,7 @@ bytemuck = { workspace = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }
 moirai-gpu = { workspace = true }
+moirai-sync = { workspace = true }
 num-complex = { workspace = true }
 libloading = { version = "0.8", optional = true }
 # cutile-rs (NVlabs): same git source coeus-cuda composes. cuda-core supplies

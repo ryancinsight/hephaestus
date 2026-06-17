@@ -320,7 +320,7 @@ fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> 
         gemm_shader_source,
     );
 
-    let meta_buf = device.get_uniform_buffer(std::mem::size_of::<GemmMeta>() as u64)?;
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<GemmMeta>(1)?)?;
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));

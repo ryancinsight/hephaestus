@@ -18,11 +18,12 @@ pub fn cached_kernel(
 ) -> Result<Arc<SafeCachedKernel>> {
     #[cfg(feature = "cuda")]
     {
+        if let Some(cached) = device
+            .pipeline_cache
+            .get(&key)
+            .expect("invariant: pipeline cache is not poisoned")
         {
-            let cache = device.pipeline_cache.read().unwrap();
-            if let Some(cached) = cache.get(&key) {
-                return Ok(cached.clone());
-            }
+            return Ok(cached);
         }
 
         let src = source();
@@ -69,9 +70,15 @@ pub fn cached_kernel(
             }
 
             let kernel = Arc::new(SafeCachedKernel { module, func });
-            let mut cache = device.pipeline_cache.write().unwrap();
-            cache.insert(key, kernel.clone());
-            Ok(kernel)
+            if let Some(cached) = device
+                .pipeline_cache
+                .insert(key, kernel.clone())
+                .expect("invariant: pipeline cache is not poisoned")
+            {
+                Ok(cached)
+            } else {
+                Ok(kernel)
+            }
         }
     }
 

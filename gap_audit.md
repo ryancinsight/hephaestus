@@ -100,13 +100,19 @@
   within WGPU's portable four-storage-buffer limit, and dispatch sizing reuses
   the shared Mnemosyne/Moirai launch-planning helper. The focused sparse
   comparative harness validates WGPU outputs against Leto before timing:
-  SpMV 1000x1000 CSR measured WGPU 122.216 µs vs Leto 1.274 µs; SpMM
-  1000x1000x128 measured WGPU 50.046 µs vs Leto 38.346 µs. Remaining risk:
-  sparse performance parity is not achieved for SpMV and is near parity for
-  SpMM; no `ndarray`/`nalgebra` sparse comparator is recorded because the
+  SpMV 1000x1000 CSR measured WGPU 100.888 µs vs Leto 1.280 µs; SpMM
+  1000x1000x128 measured WGPU 73.634 µs vs Leto 32.470 µs. Remaining risk:
+  sparse performance parity is not achieved for either SpMV or SpMM on this
+  run; no `ndarray`/`nalgebra` sparse comparator is recorded because the
   current Leto sparse API benchmark has no dense-library sparse equivalent in
   this harness. Evidence tier: static diagnostics, value-semantic WGPU sparse
   contract test, value-checked benchmark outputs, and empirical benchmark.
+- [patch] Python binding tests previously hung after the RNG binding test body
+  completed because transient WGPU staging/uniform buffers could remain
+  retained across short-lived host-runtime teardown. `PyDevice` now drains the
+  bounded WGPU transient pools on drop. Evidence tier: root-cause diagnostic
+  run showing the test body completed before process hang, Python package
+  nextest, and full workspace nextest.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution

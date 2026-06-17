@@ -1,0 +1,34 @@
+[package]
+name = "hephaestus-metal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Metal backend for the Atlas accelerator substrate: macOS device acquisition, typed buffers, and compute kernels."
+
+[features]
+default = ["parallel", "mnemosyne-memory", "decomposition"]
+parallel = []
+mnemosyne-memory = []
+metal = []
+## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
+decomposition = ["dep:leto-ops"]
+
+[dependencies]
+hephaestus-core = { workspace = true }
+hephaestus-wgpu = { workspace = true }
+leto = { workspace = true }
+leto-ops = { workspace = true, optional = true }
+bytemuck = { workspace = true }
+themis = { workspace = true }
+mnemosyne-core = { workspace = true }
+moirai-gpu = { workspace = true }
+moirai-sync = { workspace = true }
+num-complex = { workspace = true }
+wgpu = { workspace = true }
+
+[dev-dependencies]
+leto-ops = { workspace = true }
+ndarray = { workspace = true }
+nalgebra = { workspace = true }

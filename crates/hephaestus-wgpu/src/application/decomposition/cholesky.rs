@@ -200,7 +200,7 @@ fn syrk_trailing_update(
         syrk_shader_source,
     );
 
-    let meta_buf = device.get_uniform_buffer(std::mem::size_of::<SyrkMeta>() as u64)?;
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));

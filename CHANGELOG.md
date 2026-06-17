@@ -27,6 +27,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: packed blocked QR Householder vector offsets and
   beta coefficients into one reflector metadata buffer, reducing per-panel
   metadata uploads and storage bindings in the WGPU trailing-update kernel.
+- `hephaestus-wgpu` [patch]: exposed an explicit transient-pool drain for
+  bounded staging and uniform buffer pools so short-lived host integrations
+  can release cached GPU allocations at ownership boundaries.
+- `hephaestus-python` [patch]: drains WGPU transient pools when a Python
+  `Device` wrapper is dropped, preventing the RNG binding test process from
+  hanging after the value-semantic assertions complete.
 
 ### Added
 

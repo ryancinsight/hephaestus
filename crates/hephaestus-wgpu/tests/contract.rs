@@ -4062,3 +4062,85 @@ fn linalg_matexp_rejects_invalid_contracts() {
             if message.contains("Matrix exponential failed")
     ));
 }
+
+#[test]
+fn test_wgpu_uniform_and_normal_with_seed() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{normal_with_seed, uniform_with_seed};
+
+    let shape = [1000];
+    let low = -2.0f32;
+    let high = 5.0f32;
+    let u_buf = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u = vec![0.0f32; 1000];
+    device.download(&u_buf, &mut got_u).unwrap();
+
+    // Verify determinism & range
+    let u_buf_2 = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u_2 = vec![0.0f32; 1000];
+    device.download(&u_buf_2, &mut got_u_2).unwrap();
+    assert_eq!(got_u, got_u_2);
+
+    for &val in &got_u {
+        assert!(val >= low && val < high, "value out of bounds: {val}");
+    }
+
+    let n_buf = normal_with_seed(&device, shape, 0.0f32, 1.0f32, 42).unwrap();
+    let mut got_n = vec![0.0f32; 1000];
+    device.download(&n_buf, &mut got_n).unwrap();
+    assert!(got_n.iter().any(|&val| val != 0.0));
+}
+
+#[test]
+fn test_wgpu_sparse_matrix_spmv_spmm() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{spmm, spmv, GpuCsrMatrix, StridedOperand};
+    use leto::Layout;
+
+    // Create a 3x3 diagonal-ish matrix:
+    // [ 2.0  0.0 -1.0 ]
+    // [ 0.0  3.0  0.0 ]
+    // [ 0.0  0.0  4.0 ]
+    let dense_host = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).unwrap();
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+
+    // Round-trip back to CPU
+    let cpu_csr_2 = gpu_csr.to_cpu(&device).unwrap();
+    assert_eq!(cpu_csr, cpu_csr_2);
+
+    // SpMV: y = A * x, x = [1.0, 2.0, 3.0]
+    // Expected y = [ 2*1 - 3, 3*2, 4*3 ] = [ -1.0, 6.0, 12.0 ]
+    let x_host = vec![1.0f32, 2.0, 3.0];
+    let x_buf = device.upload(&x_host).unwrap();
+    let y_buf = spmv(&device, &gpu_csr, &x_buf).unwrap();
+    let mut got_y = vec![0.0f32; 3];
+    device.download(&y_buf, &mut got_y).unwrap();
+    assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 1.0e-4);
+
+    // SpMM: C = A * B, B = [ 1.0  2.0 ]
+    //                      [ 3.0  4.0 ]
+    //                      [ 5.0  6.0 ]
+    // Expected C = [ 2*1 - 5, 2*2 - 6 ] = [ -3.0, -2.0 ]
+    //              [ 3*3,     3*4     ]   [  9.0, 12.0 ]
+    //              [ 4*5,     4*6     ]   [ 20.0, 24.0 ]
+    let b_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_buf = device.upload(&b_host).unwrap();
+    let b_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_op = StridedOperand {
+        buffer: &b_buf,
+        layout: &b_layout,
+    };
+    let c_buf = spmm(&device, &gpu_csr, &b_op).unwrap();
+    let mut got_c = vec![0.0f32; 6];
+    device.download(&c_buf, &mut got_c).unwrap();
+    assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 1.0e-4);
+}

@@ -6,6 +6,16 @@ linalg and comparative benchmarks. Next concrete increment: complete WGPU/Leto
 parity audit for remaining operator families and shared Atlas seam usage
 (`mnemosyne`, `moirai`, `themis`, `hermes`).
 
+Latest verification: `cargo fmt --check`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings`,
+`cargo nextest run --workspace --locked` (229 passed),
+`cargo test --doc --workspace --locked`,
+`cargo doc --workspace --no-deps --locked`,
+`cargo metadata --no-deps --locked --format-version 1`, `git diff --check`,
+and `cargo bench -p hephaestus-wgpu --bench sparse_comparative --locked`.
+`cargo semver-checks --workspace --all-features` is blocked because
+`hephaestus-core` has no crates.io baseline.
+
 ## Unreleased WGPU Leto parity linalg [minor]
 - [x] Added GPU-resident allocating `matmul`/`batched_matmul` and caller-owned
   `matmul_into`/`batched_matmul_into`, plus `dot`, `trace`, `norm_l1`,

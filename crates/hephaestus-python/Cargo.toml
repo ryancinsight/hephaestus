@@ -8,6 +8,7 @@ license.workspace = true
 [lib]
 name = "pyhephaestus"
 crate-type = ["cdylib", "rlib"]
+doc = false
 doctest = false
 
 [dependencies]
@@ -18,4 +19,5 @@ numpy = { workspace = true }
 bytemuck = { workspace = true }
 wgpu = { workspace = true }
 leto = { workspace = true }
+leto-ops = { workspace = true }
 num-complex = { workspace = true }

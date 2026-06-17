@@ -527,7 +527,7 @@ mod tests {
         for i in 0..5 {
             for j in 0..3 {
                 let mut qr_val = 0.0f32;
-                for k in 0..5.min(3) {
+                for k in 0..3 {
                     let r_kj = if j >= k { a[k * 3 + j] } else { 0.0 };
                     qr_val += q[i * 5 + k] * r_kj;
                 }

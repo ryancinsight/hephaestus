@@ -67,7 +67,7 @@
 //!
 //! # Blocked Cholesky — SYRK Trailing Update
 //!
-//! [`cholesky_decompose_blocked`] processes the matrix in
+//! [`crate::application::decomposition::cholesky::cholesky_decompose_blocked`] processes the matrix in
 //! `BLOCK_SIZE × BLOCK_SIZE` panels:
 //!
 //! 1. **Panel factorisation** (CPU, O(b³/3)) — the diagonal block is
@@ -109,7 +109,7 @@
 //! for large *n*, executes on the GPU's massively parallel compute
 //! units. ∎
 //!
-//! The [`lu_decompose_blocked`] entry point implements this: the panel
+//! The [`crate::application::decomposition::lu::lu_decompose_blocked`] entry point implements this: the panel
 //! factorisation uses the same partial-pivoting rule as leto-ops
 //! [`panel_lu_packed`](hephaestus_core::panel_lu_packed), and the
 //! trailing GEMM runs via a dedicated 16×16 tiled WGSL kernel with
@@ -134,7 +134,7 @@
 //! Summing over all ⌈n/b⌉ blocks recovers 2n²(m − n/3) total
 //! flops. ∎
 //!
-//! The [`qr_decompose_blocked`] entry point implements this: the panel
+//! The [`crate::application::decomposition::qr::qr_decompose_blocked`] entry point implements this: the panel
 //! factorisation uses the same Householder convention as leto-ops
 //! [`panel_qr_packed`](hephaestus_core::panel_qr_packed), and each
 //! of the *b* reflectors is applied to the trailing columns via a

@@ -79,6 +79,12 @@ impl<B: PoolBuffer> BoundedBufferPool<B> {
         self.retained_bytes += size;
         self.buffers.push_back(buffer);
     }
+
+    /// Drop all retained buffers.
+    pub(crate) fn clear(&mut self) {
+        self.buffers.clear();
+        self.retained_bytes = 0;
+    }
 }
 
 #[cfg(test)]

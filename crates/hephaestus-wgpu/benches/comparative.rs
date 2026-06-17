@@ -6,14 +6,19 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use hephaestus_core::{BlockWidth, ComputeDevice};
-use hephaestus_cuda::{CudaDevice, StridedOperand as CudaStridedOperand};
+use hephaestus_cuda::{
+    normal_with_seed as cuda_normal_with_seed, spmm as cuda_spmm, spmv as cuda_spmv,
+    uniform_with_seed as cuda_uniform_with_seed, CudaDevice, GpuCsrMatrix as CudaCsrMatrix,
+    StridedOperand as CudaStridedOperand,
+};
 use hephaestus_wgpu::{
     bidiagonalize, binary_elementwise_into, bunch_kaufman, cholesky_decompose_blocked, col_piv_qr,
     cumsum_into, det, dot, eigenvalues, full_piv_lu, hessenberg, kron_into, lu_decompose,
     lu_decompose_blocked, matexp, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into,
-    min_axis_into, norm_l1, norm_l2, norm_max, pinv, qr_decompose, qr_decompose_blocked, reduction,
-    schur, sum_axis_into, svd_decompose, symmetric_eigen_jacobi, trace, udu_decompose,
-    unary_elementwise_into, AddOp, ExpOp, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    min_axis_into, norm_l1, norm_l2, norm_max, normal_with_seed, pinv, qr_decompose,
+    qr_decompose_blocked, reduction, schur, spmm, spmv, sum_axis_into, svd_decompose,
+    symmetric_eigen_jacobi, trace, udu_decompose, unary_elementwise_into, uniform_with_seed, AddOp,
+    ExpOp, GpuCsrMatrix, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
 };
 use leto::Storage;
 use nalgebra::DMatrix;
@@ -3343,5 +3348,246 @@ fn main() {
             "CPU (Leto):   {} ns/iter\n",
             elapsed_per_iter(t_leto.elapsed()).as_nanos()
         );
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 34. PRNG Uniform With Seed (f32, size 1<<20)
+    // ────────────────────────────────────────────────────────────────────────
+    {
+        println!("--- Benchmarking: PRNG Uniform With Seed (f32, N={LEN}) ---");
+
+        // Leto / CPU
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(leto_ops::uniform_with_seed([LEN], 0.0f32, 1.0f32, 42).unwrap());
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        // WGPU
+        let _u = uniform_with_seed(&wgpu_dev, [LEN], 0.0f32, 1.0f32, 42).unwrap();
+        wait_wgpu(&wgpu_dev);
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(uniform_with_seed(&wgpu_dev, [LEN], 0.0f32, 1.0f32, 42).unwrap());
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let _cu = cuda_uniform_with_seed(cuda, [LEN], 0.0f32, 1.0f32, 42).unwrap();
+            wait_cuda(cuda);
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out =
+                    black_box(cuda_uniform_with_seed(cuda, [LEN], 0.0f32, 1.0f32, 42).unwrap());
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
+        println!();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 35. PRNG Normal With Seed (f32, size 1<<20)
+    // ────────────────────────────────────────────────────────────────────────
+    {
+        println!("--- Benchmarking: PRNG Normal With Seed (f32, N={LEN}) ---");
+
+        // Leto / CPU
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(leto_ops::normal_with_seed([LEN], 0.0f32, 1.0f32, 42).unwrap());
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        // WGPU
+        let _u = normal_with_seed(&wgpu_dev, [LEN], 0.0f32, 1.0f32, 42).unwrap();
+        wait_wgpu(&wgpu_dev);
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(normal_with_seed(&wgpu_dev, [LEN], 0.0f32, 1.0f32, 42).unwrap());
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let _cu = cuda_normal_with_seed(cuda, [LEN], 0.0f32, 1.0f32, 42).unwrap();
+            wait_cuda(cuda);
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out =
+                    black_box(cuda_normal_with_seed(cuda, [LEN], 0.0f32, 1.0f32, 42).unwrap());
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
+        println!();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 36. Sparse Matrix-Vector Product (SpMV, 1000x1000 CSR)
+    // ────────────────────────────────────────────────────────────────────────
+    {
+        let rows = 1000;
+        let cols = 1000;
+        println!("--- Benchmarking: SpMV (f32, {rows}x{cols} CSR) ---");
+
+        let mut dense_host = vec![0.0f32; rows * cols];
+        for i in 0..rows {
+            dense_host[i * cols + i] = 2.0f32;
+            if i > 0 {
+                dense_host[i * cols + (i - 1)] = -1.0f32;
+            }
+            if i < cols - 1 {
+                dense_host[i * cols + (i + 1)] = -1.0f32;
+            }
+        }
+        let layout = leto::Layout::c_contiguous([rows, cols]).unwrap();
+        let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+        let x_host = vec![1.0f32; cols];
+        let x_leto = leto::Array::from_shape_vec([cols], x_host.clone()).unwrap();
+
+        // CPU Leto
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out =
+                black_box(leto_ops::spmv(black_box(&cpu_csr), black_box(&x_leto.view())).unwrap());
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        // WGPU
+        let gpu_csr = GpuCsrMatrix::from_cpu(&wgpu_dev, &cpu_csr).unwrap();
+        let x_wg = wgpu_dev.upload(&x_host).unwrap();
+        let _y_wg = spmv(&wgpu_dev, &gpu_csr, &x_wg).unwrap();
+        wait_wgpu(&wgpu_dev);
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(spmv(&wgpu_dev, &gpu_csr, &x_wg).unwrap());
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let cu_csr = CudaCsrMatrix::from_cpu(cuda, &cpu_csr).unwrap();
+            let x_cu = cuda.upload(&x_host).unwrap();
+            let _y_cu = cuda_spmv(cuda, &cu_csr, &x_cu).unwrap();
+            wait_cuda(cuda);
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out = black_box(cuda_spmv(cuda, &cu_csr, &x_cu).unwrap());
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
+        println!();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 37. Sparse Matrix-Matrix Product (SpMM, 1000x1000 CSR * 1000x128 dense)
+    // ────────────────────────────────────────────────────────────────────────
+    {
+        let rows = 1000;
+        let cols = 1000;
+        let b_cols = 128;
+        println!("--- Benchmarking: SpMM (f32, {rows}x{cols} CSR * {cols}x{b_cols} dense) ---");
+
+        let mut dense_host = vec![0.0f32; rows * cols];
+        for i in 0..rows {
+            dense_host[i * cols + i] = 2.0f32;
+            if i > 0 {
+                dense_host[i * cols + (i - 1)] = -1.0f32;
+            }
+            if i < cols - 1 {
+                dense_host[i * cols + (i + 1)] = -1.0f32;
+            }
+        }
+        let layout = leto::Layout::c_contiguous([rows, cols]).unwrap();
+        let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+        let b_host: Vec<f32> = (0..cols * b_cols).map(|i| i as f32 * 0.01 + 0.5).collect();
+        let b_leto = leto::Array::from_shape_vec([cols, b_cols], b_host.clone()).unwrap();
+
+        // CPU Leto
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out =
+                black_box(leto_ops::spmm(black_box(&cpu_csr), black_box(&b_leto.view())).unwrap());
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        // WGPU
+        let gpu_csr = GpuCsrMatrix::from_cpu(&wgpu_dev, &cpu_csr).unwrap();
+        let b_wg = wgpu_dev.upload(&b_host).unwrap();
+        let b_layout = leto::Layout::c_contiguous([cols, b_cols]).unwrap();
+        let b_wg_op = WgpuStridedOperand {
+            buffer: &b_wg,
+            layout: &b_layout,
+        };
+        let _c_wg = spmm(&wgpu_dev, &gpu_csr, &b_wg_op).unwrap();
+        wait_wgpu(&wgpu_dev);
+        let t_wgpu = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(spmm(&wgpu_dev, &gpu_csr, &b_wg_op).unwrap());
+        }
+        wait_wgpu(&wgpu_dev);
+        println!(
+            "GPU (WGPU):   {} ns/iter",
+            elapsed_per_iter(t_wgpu.elapsed()).as_nanos()
+        );
+
+        // CUDA
+        if let Some(ref cuda) = cuda_dev {
+            let cu_csr = CudaCsrMatrix::from_cpu(cuda, &cpu_csr).unwrap();
+            let b_cu = cuda.upload(&b_host).unwrap();
+            let b_layout = leto::Layout::c_contiguous([cols, b_cols]).unwrap();
+            let b_cu_op = CudaStridedOperand {
+                buffer: &b_cu,
+                layout: &b_layout,
+            };
+            let _c_cu = cuda_spmm(cuda, &cu_csr, &b_cu_op).unwrap();
+            wait_cuda(cuda);
+            let t_cuda = Instant::now();
+            for _ in 0..ITERS {
+                let _out = black_box(cuda_spmm(cuda, &cu_csr, &b_cu_op).unwrap());
+            }
+            wait_cuda(cuda);
+            println!(
+                "GPU (CUDA):   {} ns/iter",
+                elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+            );
+        }
+        println!();
     }
 }

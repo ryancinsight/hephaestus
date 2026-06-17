@@ -18,6 +18,12 @@ pub struct PyDevice {
     pub inner: WgpuDevice,
 }
 
+impl Drop for PyDevice {
+    fn drop(&mut self) {
+        self.inner.clear_transient_pools();
+    }
+}
+
 #[pymethods]
 impl PyDevice {
     /// Create a new device context.
@@ -49,11 +55,11 @@ impl PyArray {
     /// Upload a python list/iterable of floats to the GPU.
     #[new]
     #[pyo3(signature = (data, device))]
-    fn new(data: Vec<f32>, device: &PyDevice) -> PyResult<Self> {
+    fn new(py: Python<'_>, data: Vec<f32>, device: &PyDevice) -> PyResult<Self> {
         let len = data.len();
-        let buffer = device
-            .inner
-            .upload(&data)
+        let dev = device.inner.clone();
+        let buffer = py
+            .allow_threads(move || dev.upload(&data))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -78,14 +84,18 @@ impl PyArray {
 
     /// Create an Array from a contiguous NumPy array.
     #[staticmethod]
-    fn from_numpy(arr: PyReadonlyArray1<'_, f32>, device: &PyDevice) -> PyResult<Self> {
+    fn from_numpy(
+        py: Python<'_>,
+        arr: PyReadonlyArray1<'_, f32>,
+        device: &PyDevice,
+    ) -> PyResult<Self> {
         let slice = arr
             .as_slice()
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let len = slice.len();
-        let buffer = device
-            .inner
-            .upload(slice)
+        let dev = device.inner.clone();
+        let buffer = py
+            .allow_threads(move || dev.upload(slice))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -112,19 +122,29 @@ impl PyArray {
     }
 
     /// Download array data to a Python list.
-    fn tolist(&self) -> PyResult<Vec<f32>> {
-        let mut host_data = vec![0.0f32; self.buffer.len()];
-        self.device
-            .download(&self.buffer, &mut host_data)
+    fn tolist(&self, py: Python<'_>) -> PyResult<Vec<f32>> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let len = self.buffer.len();
+        let host_data = py
+            .allow_threads(move || {
+                let mut host_data = vec![0.0f32; len];
+                dev.download(&buf, &mut host_data).map(|_| host_data)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data)
     }
 
     /// Download array data to a NumPy 1D array.
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
-        let mut host_data = vec![0.0f32; self.buffer.len()];
-        self.device
-            .download(&self.buffer, &mut host_data)
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let len = self.buffer.len();
+        let host_data = py
+            .allow_threads(move || {
+                let mut host_data = vec![0.0f32; len];
+                dev.download(&buf, &mut host_data).map(|_| host_data)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))
     }
@@ -964,7 +984,7 @@ fn col_piv_qr(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
     let q_buf = decomp.q().clone();
     let r_buf = decomp.r().clone();
     let m = (q_buf.len() as f64).sqrt() as usize;
-    let n = if m > 0 { r_buf.len() / m } else { 0 };
+    let n = r_buf.len().checked_div(m).unwrap_or(0);
     let perm = decomp
         .permutation()
         .iter()
@@ -1260,11 +1280,216 @@ fn eigenvalues<'py>(
     Ok(PyArray1::from_vec(py, py_data))
 }
 
+/// Python wrapper around a GPU-resident GpuCsrMatrix<f32>.
+#[pyclass(name = "SparseMatrix")]
+#[derive(Debug)]
+pub struct PyCsrMatrix {
+    pub inner: hephaestus_wgpu::GpuCsrMatrix<f32>,
+    pub device: WgpuDevice,
+}
+
+#[pymethods]
+impl PyCsrMatrix {
+    /// Create a SparseMatrix from a dense PyArray on the GPU.
+    #[staticmethod]
+    fn from_dense(py: Python<'_>, arr: &PyArray) -> PyResult<Self> {
+        if arr.shape.len() != 2 {
+            return Err(PyValueError::new_err(
+                "SparseMatrix can only be constructed from a 2D array",
+            ));
+        }
+        let [rows, cols] = [arr.shape[0], arr.shape[1]];
+        let layout =
+            Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let device = arr.device.clone();
+        let buffer = arr.buffer.clone();
+        let len = arr.buffer.len();
+
+        let host_data = py
+            .allow_threads(move || {
+                let mut host_data = vec![0.0f32; len];
+                device.download(&buffer, &mut host_data).map(|_| host_data)
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let view = leto::ArrayView2::new(layout, &host_data);
+        let cpu_csr = leto_ops::CsrMatrix::from_dense(&view);
+
+        let inner = hephaestus_wgpu::GpuCsrMatrix::from_cpu(&arr.device, &cpu_csr)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            inner,
+            device: arr.device.clone(),
+        })
+    }
+
+    /// Reconstruct the dense matrix as a PyArray.
+    fn to_dense(&self, py: Python<'_>) -> PyResult<PyArray> {
+        let device = self.device.clone();
+        let inner = self.inner.clone();
+        let (rows, cols) = inner.shape();
+
+        let cpu_csr = py
+            .allow_threads(move || inner.to_cpu(&device))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let cpu_dense = cpu_csr.to_dense();
+        let dense_buf = self
+            .device
+            .upload(leto::Storage::as_slice(cpu_dense.storage()))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(PyArray {
+            buffer: dense_buf,
+            device: self.device.clone(),
+            shape: vec![rows, cols],
+        })
+    }
+
+    /// shape of the matrix: (rows, cols)
+    #[getter]
+    fn shape(&self) -> (usize, usize) {
+        self.inner.shape()
+    }
+
+    /// number of non-zero elements
+    #[getter]
+    fn nnz(&self) -> usize {
+        self.inner.nnz()
+    }
+}
+
+#[pyfunction]
+fn spmv(py: Python<'_>, a: &PyCsrMatrix, x: &PyArray) -> PyResult<PyArray> {
+    let device = a.device.clone();
+    let inner_a = a.inner.clone();
+    let buf_x = x.buffer.clone();
+
+    let out_buf = py
+        .allow_threads(move || hephaestus_wgpu::spmv(&device, &inner_a, &buf_x))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let (rows, _) = a.inner.shape();
+    Ok(PyArray {
+        buffer: out_buf,
+        device: a.device.clone(),
+        shape: vec![rows],
+    })
+}
+
+#[pyfunction]
+fn spmm(py: Python<'_>, a: &PyCsrMatrix, b: &PyArray) -> PyResult<PyArray> {
+    if b.shape.len() != 2 {
+        return Err(PyValueError::new_err(
+            "spmm requires a 2D dense matrix as the right-hand side",
+        ));
+    }
+    let device = a.device.clone();
+    let inner_a = a.inner.clone();
+    let buf_b = b.buffer.clone();
+    let [b_rows, bcols] = [b.shape[0], b.shape[1]];
+    let layout_b =
+        Layout::c_contiguous([b_rows, bcols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+    let out_buf = py
+        .allow_threads(move || {
+            let op_b = StridedOperand {
+                buffer: &buf_b,
+                layout: &layout_b,
+            };
+            hephaestus_wgpu::spmm(&device, &inner_a, &op_b)
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let (rows, _) = a.inner.shape();
+    Ok(PyArray {
+        buffer: out_buf,
+        device: a.device.clone(),
+        shape: vec![rows, bcols],
+    })
+}
+
+#[pyfunction]
+fn uniform_with_seed(
+    py: Python<'_>,
+    shape: Vec<usize>,
+    low: f32,
+    high: f32,
+    seed: u64,
+    device: &PyDevice,
+) -> PyResult<PyArray> {
+    let dev = device.inner.clone();
+    let shape_cloned = shape.clone();
+    let out_buf = py
+        .allow_threads(move || match shape_cloned.len() {
+            1 => hephaestus_wgpu::uniform_with_seed(&dev, [shape_cloned[0]], low, high, seed),
+            2 => hephaestus_wgpu::uniform_with_seed(
+                &dev,
+                [shape_cloned[0], shape_cloned[1]],
+                low,
+                high,
+                seed,
+            ),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!(
+                    "RNG only supports 1D or 2D shapes, got rank {}",
+                    shape_cloned.len()
+                ),
+            }),
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyArray {
+        buffer: out_buf,
+        device: device.inner.clone(),
+        shape,
+    })
+}
+
+#[pyfunction]
+fn normal_with_seed(
+    py: Python<'_>,
+    shape: Vec<usize>,
+    mean: f32,
+    std_dev: f32,
+    seed: u64,
+    device: &PyDevice,
+) -> PyResult<PyArray> {
+    let dev = device.inner.clone();
+    let shape_cloned = shape.clone();
+    let out_buf = py
+        .allow_threads(move || match shape_cloned.len() {
+            1 => hephaestus_wgpu::normal_with_seed(&dev, [shape_cloned[0]], mean, std_dev, seed),
+            2 => hephaestus_wgpu::normal_with_seed(
+                &dev,
+                [shape_cloned[0], shape_cloned[1]],
+                mean,
+                std_dev,
+                seed,
+            ),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!(
+                    "RNG only supports 1D or 2D shapes, got rank {}",
+                    shape_cloned.len()
+                ),
+            }),
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyArray {
+        buffer: out_buf,
+        device: device.inner.clone(),
+        shape,
+    })
+}
+
 /// PyHephaestus extension module definition.
 #[pymodule]
 fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDevice>()?;
     m.add_class::<PyArray>()?;
+    m.add_class::<PyCsrMatrix>()?;
 
     m.add_function(wrap_pyfunction!(add, m)?)?;
     m.add_function(wrap_pyfunction!(sub, m)?)?;
@@ -1301,6 +1526,100 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matexp, m)?)?;
     m.add_function(wrap_pyfunction!(pinv, m)?)?;
     m.add_function(wrap_pyfunction!(eigenvalues, m)?)?;
+    m.add_function(wrap_pyfunction!(spmv, m)?)?;
+    m.add_function(wrap_pyfunction!(spmm, m)?)?;
+    m.add_function(wrap_pyfunction!(uniform_with_seed, m)?)?;
+    m.add_function(wrap_pyfunction!(normal_with_seed, m)?)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use numpy::PyArrayMethods;
+    use std::sync::Once;
+
+    static INIT_PYTHON: Once = Once::new();
+
+    fn prepare_python() {
+        INIT_PYTHON.call_once(pyo3::prepare_freethreaded_python);
+    }
+
+    #[test]
+    fn test_py_array_tolist_and_numpy() {
+        prepare_python();
+        Python::with_gil(|py| {
+            let device = PyDevice::new().unwrap();
+            let data = vec![1.0f32, 2.0, 3.0, 4.0];
+            let py_arr = PyArray::new(py, data.clone(), &device).unwrap();
+            assert_eq!(py_arr.tolist(py).unwrap(), data);
+
+            let np_arr = py_arr.to_numpy(py).unwrap();
+            assert_eq!(np_arr.readonly().as_slice().unwrap(), &data[..]);
+        });
+    }
+
+    #[test]
+    fn test_py_sparse_matrix_roundtrip_spmv_spmm() {
+        prepare_python();
+        Python::with_gil(|py| {
+            let device = PyDevice::new().unwrap();
+
+            // Create a 3x3 matrix:
+            // [ 2.0  0.0 -1.0 ]
+            // [ 0.0  3.0  0.0 ]
+            // [ 0.0  0.0  4.0 ]
+            let dense_data = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
+            let dense_arr = PyArray::new(py, dense_data.clone(), &device)
+                .unwrap()
+                .reshape(vec![3, 3])
+                .unwrap();
+
+            let sparse = PyCsrMatrix::from_dense(py, &dense_arr).unwrap();
+            assert_eq!(sparse.shape(), (3, 3));
+            assert_eq!(sparse.nnz(), 4);
+
+            // test to_dense
+            let dense_reconstructed = sparse.to_dense(py).unwrap();
+            assert_eq!(dense_reconstructed.tolist(py).unwrap(), dense_data);
+
+            // test spmv: y = A * x, x = [1.0, 2.0, 3.0]
+            let x = PyArray::new(py, vec![1.0f32, 2.0, 3.0], &device).unwrap();
+            let y = spmv(py, &sparse, &x).unwrap();
+            assert_eq!(y.tolist(py).unwrap(), vec![-1.0f32, 6.0, 12.0]);
+
+            // test spmm: C = A * B, B = [ 1.0  2.0 ]
+            //                            [ 3.0  4.0 ]
+            //                            [ 5.0  6.0 ]
+            let b = PyArray::new(py, vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0], &device)
+                .unwrap()
+                .reshape(vec![3, 2])
+                .unwrap();
+            let c = spmm(py, &sparse, &b).unwrap();
+            assert_eq!(
+                c.tolist(py).unwrap(),
+                vec![-3.0f32, -2.0, 9.0, 12.0, 20.0, 24.0]
+            );
+        });
+    }
+
+    #[test]
+    fn test_py_rng_initializers() {
+        prepare_python();
+        Python::with_gil(|py| {
+            let device = PyDevice::new().unwrap();
+            let u = uniform_with_seed(py, vec![100], -1.0, 2.0, 13, &device).unwrap();
+            assert_eq!(u.shape, vec![100]);
+            let u_list = u.tolist(py).unwrap();
+            for &val in &u_list {
+                assert!((-1.0..2.0).contains(&val));
+            }
+
+            let n = normal_with_seed(py, vec![100], 0.0, 1.0, 13, &device).unwrap();
+            assert_eq!(n.shape, vec![100]);
+            let n_list = n.tolist(py).unwrap();
+            assert!(n_list.iter().any(|&val| val != 0.0));
+        });
+    }
 }

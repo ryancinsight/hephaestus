@@ -8,6 +8,8 @@ pub mod elementwise;
 /// Linear algebra compute operations.
 pub mod linalg;
 pub(crate) mod pipeline;
+/// Seeded host-delegated PRNG initializers.
+pub mod random;
 /// Reduction compute operations.
 pub mod reduction;
 /// Prefix and suffix scan compute operations.

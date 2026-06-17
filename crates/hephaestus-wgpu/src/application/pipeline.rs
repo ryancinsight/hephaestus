@@ -13,14 +13,12 @@ pub(crate) fn cached_pipeline(
     label: &'static str,
     source: impl FnOnce() -> String,
 ) -> wgpu::ComputePipeline {
+    if let Some(cached) = device
+        .pipeline_cache
+        .get(&key)
+        .expect("invariant: pipeline cache is not poisoned")
     {
-        let cache = device
-            .pipeline_cache
-            .read()
-            .expect("invariant: pipeline cache lock is not poisoned");
-        if let Some(cached) = cache.get(&key) {
-            return cached.clone();
-        }
+        return cached;
     }
 
     let module = device
@@ -40,15 +38,15 @@ pub(crate) fn cached_pipeline(
             cache: None,
         });
 
-    let mut cache = device
+    if let Some(cached) = device
         .pipeline_cache
-        .write()
-        .expect("invariant: pipeline cache lock is not poisoned");
-    if let Some(cached) = cache.get(&key) {
-        return cached.clone();
+        .insert(key, pipeline.clone())
+        .expect("invariant: pipeline cache is not poisoned")
+    {
+        cached
+    } else {
+        pipeline
     }
-    cache.insert(key, pipeline.clone());
-    pipeline
 }
 
 /// Convert a logical work-item count into WGPU workgroup count.

@@ -248,20 +248,32 @@ pub fn qr_decompose_blocked(
             device.write_buffer(&work_buf, &host)?;
 
             // ── Step 3: Apply b Householder reflectors on GPU ──
+            let mut packed_vectors = Vec::with_capacity(panel_rows * b);
+            let mut vector_offsets = Vec::with_capacity(b);
             for j in 0..b {
                 let vec_len = panel_rows - j;
-
-                let mut v = vec![0.0f32; vec_len];
-                v[0] = heads[j];
+                vector_offsets.push(packed_vectors.len());
+                packed_vectors.push(heads[j]);
                 for i in 1..vec_len {
-                    v[i] = panel[(j + i) * b + j];
+                    packed_vectors.push(panel[(j + i) * b + j]);
                 }
+            }
+            let vectors_dev = device.upload(&packed_vectors)?;
 
-                let v_dev = device.upload(&v)?;
+            for j in 0..b {
+                let vec_len = panel_rows - j;
                 let c_offset = (k + j) * n + (k + b);
 
                 hh_impl::hh_trailing_update(
-                    device, &v_dev, &work_buf, vec_len, trail_cols, n, c_offset, betas[j],
+                    device,
+                    &vectors_dev,
+                    vector_offsets[j],
+                    &work_buf,
+                    vec_len,
+                    trail_cols,
+                    n,
+                    c_offset,
+                    betas[j],
                 )?;
             }
 
@@ -396,6 +408,7 @@ mod hh_impl {
     pub fn hh_trailing_update(
         device: &CudaDevice,
         v_buf: &CudaBuffer<f32>,
+        v_offset: usize,
         a_buf: &CudaBuffer<f32>,
         vec_len: usize,
         trail_cols: usize,
@@ -419,7 +432,7 @@ mod hh_impl {
         let key = "qr_householder".to_string();
         let kernel = cached_kernel(device, key, "householder_kernel", hh_shader_source)?;
 
-        let mut v_ptr = v_buf.raw();
+        let mut v_ptr = v_buf.raw() + (v_offset * std::mem::size_of::<f32>()) as u64;
         let mut a_ptr = a_buf.raw();
         let mut meta_val = meta;
 
