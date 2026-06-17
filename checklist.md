@@ -271,12 +271,13 @@ parity audit for remaining operator families and shared Atlas seam usage
 - Additional WGPU sparse evidence: `cargo check -p hephaestus-wgpu`; `cargo
   clippy -p hephaestus-wgpu --lib -- -D warnings`; `rustfmt --edition 2021
   --check` over the WGPU sparse/module/export files; `cargo nextest run -p
-  hephaestus-wgpu sparse -j 1 --no-fail-fast` (1 passed). A full comparative
-  run reached the sparse SpMV row but failed during WGPU synchronization before
-  producing WGPU sparse timings; a subsequent targeted rerun was interrupted by
-  concurrent target cleanup (`os error 3`). Evidence tier: static diagnostics
-  plus value-semantic GPU sparse contract test; sparse benchmark evidence is
-  not yet established for the new kernels.
+  hephaestus-wgpu sparse -j 1 --no-fail-fast` (1 passed);
+  `cargo check -p hephaestus-wgpu --bench sparse_comparative`;
+  `cargo bench -p hephaestus-wgpu --bench sparse_comparative` (SpMV
+  1000x1000 CSR: WGPU 122.216 µs, Leto 1.274 µs; SpMM 1000x1000x128:
+  WGPU 50.046 µs, Leto 38.346 µs). Evidence tier: static diagnostics,
+  value-semantic GPU sparse contract test, value-checked benchmark outputs,
+  and empirical local benchmark.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo
   clippy -p hephaestus-wgpu --all-targets -- -D warnings` (compiles
   `hephaestus-cuda` as the WGPU dev dependency); `cargo nextest run -p

@@ -90,12 +90,15 @@
   device-resident values plus one packed index buffer and executes SpMV/SpMM
   in WGSL without downloading operands to the host. The kernel layout stays
   within WGPU's portable four-storage-buffer limit, and dispatch sizing reuses
-  the shared Mnemosyne/Moirai launch-planning helper. Remaining risk:
-  comparative sparse timings are not yet recorded for the new kernels because
-  the full comparative run timed out during WGPU synchronization at the SpMV
-  row and the subsequent targeted rerun was interrupted by concurrent target
-  cleanup. Evidence tier: static diagnostics and value-semantic WGPU sparse
-  contract test; benchmark evidence missing.
+  the shared Mnemosyne/Moirai launch-planning helper. The focused sparse
+  comparative harness validates WGPU outputs against Leto before timing:
+  SpMV 1000x1000 CSR measured WGPU 122.216 µs vs Leto 1.274 µs; SpMM
+  1000x1000x128 measured WGPU 50.046 µs vs Leto 38.346 µs. Remaining risk:
+  sparse performance parity is not achieved for SpMV and is near parity for
+  SpMM; no `ndarray`/`nalgebra` sparse comparator is recorded because the
+  current Leto sparse API benchmark has no dense-library sparse equivalent in
+  this harness. Evidence tier: static diagnostics, value-semantic WGPU sparse
+  contract test, value-checked benchmark outputs, and empirical benchmark.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -108,6 +111,6 @@
 
 ## Next Increment
 
-- Re-run the sparse comparative benchmark in an uncontended target directory
-  state and record WGPU CSR SpMV/SpMM timings against Leto before moving to the
-  next blocked decomposition profiling increment.
+- Continue the parity audit at the next highest-risk residual: profile the
+  remaining blocked QR CPU panel and host-transfer costs before adding more
+  native decomposition kernels.

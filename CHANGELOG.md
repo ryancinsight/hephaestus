@@ -28,6 +28,8 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   WGPU SpMV and SpMM kernels over packed CSR index buffers. The sparse feature
   owns the Leto CSR upload/download boundary, while the products execute on
   WGPU buffers and use the shared Mnemosyne/Moirai launch-planning path.
+  Added a focused sparse comparative benchmark that validates WGPU outputs
+  against Leto before reporting SpMV and SpMM timings.
 - `hephaestus-wgpu` [minor]: GPU-resident linalg surface for parity with
   Leto CPU operations: allocating `matmul`/`batched_matmul`, caller-owned
   `matmul_into`/`batched_matmul_into`, dot product, trace, and L1/L2/max norms

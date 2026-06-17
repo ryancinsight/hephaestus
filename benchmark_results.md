@@ -3,6 +3,7 @@
 Harness: `crates/hephaestus-wgpu/benches/comparative.rs` (`cargo bench --bench comparative -p hephaestus-wgpu`).
 Methodology: 50 iterations, wall-time divided by iteration count, including GPU synchronization (`poll(wgpu::PollType::Wait)`) on the host side.
 Synchronization profile harness: `crates/hephaestus-wgpu/benches/decomposition_sync.rs` (`cargo bench --bench decomposition_sync -p hephaestus-wgpu`).
+Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (`cargo bench --bench sparse_comparative -p hephaestus-wgpu`).
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
@@ -46,6 +47,8 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Column-Pivoted QR Decomposition** (32x32) | 104.2 µs | 26.3 µs | — | 14.5 µs | **0.25x** | — | **0.14x** |
 | **Pseudoinverse** (32x32) | 1.92 ms | 1.78 ms | — | 19.6 µs | **0.93x** | — | **0.010x** |
 | **Matrix Exponential** (32x32) | 347.1 µs | 196.0 µs | — | — | **0.56x** | — | — |
+| **SpMV** ($1000 \times 1000$ CSR) | 122.22 µs | 1.27 µs | — | — | **0.010x** | — | — |
+| **SpMM** ($1000 \times 1000 \times 128$) | 50.05 µs | 38.35 µs | — | — | **0.77x** | — | — |
 
 ## Synchronization Profile
 

@@ -48,5 +48,9 @@ name = "comparative"
 harness = false
 
 [[bench]]
+name = "sparse_comparative"
+harness = false
+
+[[bench]]
 name = "decomposition_sync"
 harness = false
