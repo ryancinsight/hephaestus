@@ -24,6 +24,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: extended the blocked decomposition sync
   benchmark with 70x35 blocked-QR CPU panel and final Leto recompute component
   timings, isolating those costs from the host/device synchronization floor.
+- `hephaestus-wgpu` [patch]: packed blocked QR Householder vector offsets and
+  beta coefficients into one reflector metadata buffer, reducing per-panel
+  metadata uploads and storage bindings in the WGPU trailing-update kernel.
 
 ### Added
 

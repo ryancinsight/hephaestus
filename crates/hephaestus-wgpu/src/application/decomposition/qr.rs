@@ -148,6 +148,19 @@ struct HhMeta {
 // SAFETY: HhMeta is `#[repr(C)]` and every field is Pod.
 unsafe impl bytemuck::Pod for HhMeta {}
 
+/// Per-reflector metadata consumed by the panel Householder kernel.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable)]
+struct HhReflectorMeta {
+    /// Offset of this reflector in the packed vector buffer.
+    vector_offset: u32,
+    /// Householder scale factor β.
+    beta: f32,
+}
+
+// SAFETY: HhReflectorMeta is `#[repr(C)]` and every field is Pod.
+unsafe impl bytemuck::Pod for HhReflectorMeta {}
+
 // ---------------------------------------------------------------------------
 // Householder apply kernel:  A[:, col] -= β · v · (vᵀ · A[:, col])
 // ---------------------------------------------------------------------------
@@ -171,9 +184,12 @@ fn hh_shader_source() -> String {
 
 @group(0) @binding(0) var<storage, read>      v_buf: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> a_buf: array<{ty}>;
-@group(0) @binding(2) var<storage, read>      offsets_buf: array<u32>;
-@group(0) @binding(3) var<storage, read>      beta_buf: array<{ty}>;
-@group(0) @binding(4) var<uniform>             params: HhMeta;
+struct ReflectorMeta {{
+    vector_offset: u32,
+    beta: {ty},
+}}
+@group(0) @binding(2) var<storage, read>      reflector_buf: array<ReflectorMeta>;
+@group(0) @binding(3) var<uniform>             params: HhMeta;
 
 var<workgroup> sdata: array<{ty}, 256>;
 
@@ -195,8 +211,8 @@ fn main(
     for (var reflector = 0u; reflector < params.reflector_count; reflector = reflector + 1u) {{
         let n = params.panel_rows - reflector;
         let off = reflector * stride;
-        let v_off = offsets_buf[reflector];
-        let beta = beta_buf[reflector];
+        let v_off = reflector_buf[reflector].vector_offset;
+        let beta = reflector_buf[reflector].beta;
 
         // Phase 1: partial dot = vᵀ · A[:, col]
         var partial = {ty}({zero});
@@ -261,18 +277,23 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderPanelUpdate<'_>) -
         hh_shader_source,
     );
 
-    let offset_host: Vec<u32> = update
+    let reflector_host: Vec<HhReflectorMeta> = update
         .vector_offsets
         .iter()
         .copied()
-        .map(|offset| {
-            u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("HH vector offset {offset} exceeds u32"),
+        .zip(update.betas.iter().copied())
+        .map(|(offset, beta)| {
+            let vector_offset =
+                u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("HH vector offset {offset} exceeds u32"),
+                })?;
+            Ok(HhReflectorMeta {
+                vector_offset,
+                beta,
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let offsets_buf = device.upload(&offset_host)?;
-    let betas_buf = device.upload(update.betas)?;
+    let reflector_buf = device.upload(&reflector_host)?;
 
     let meta = HhMeta {
         panel_rows: u32::try_from(update.panel_rows).map_err(|_| {
@@ -318,14 +339,10 @@ fn hh_trailing_update(device: &WgpuDevice, update: HouseholderPanelUpdate<'_>) -
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: offsets_buf.buffer.as_entire_binding(),
+                    resource: reflector_buf.buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: betas_buf.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
                     resource: meta_buf.as_entire_binding(),
                 },
             ],

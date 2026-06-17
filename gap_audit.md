@@ -63,12 +63,17 @@
   duration, and the 70x35 blocked QR row measures 420.8 µs. The component
   profile measures the 70x35 CPU panel-factorization lower bound at 26.3 µs
   and the duplicated final Leto recompute at 11.5 µs, while the synthetic QR
-  host/device synchronization floor remains 222.6 µs. Remaining risk: blocked
-  QR still trails Leto and `nalgebra`; the next measured lever is reducing
-  host/device transfer and synchronization before replacing more panel
-  arithmetic with native GPU work. Evidence tier: value-semantic blocked QR
-  tests, empirical synchronization/component-profile benchmarks, comparative
-  benchmark, and GPU-timeline timestamp measurement in `benchmark_results.md`.
+  host/device synchronization floor remains 222.6 µs. The WGPU QR
+  trailing-update kernel now packs Householder vector offsets and beta
+  coefficients into one reflector metadata buffer, reducing per-panel metadata
+  uploads and storage bindings from two to one. The 70x35 comparative row did
+  not improve on the local run after this packing change: WGPU measured
+  480.8 µs vs Leto 14.9 µs and `nalgebra` 10.0 µs. Remaining risk: blocked QR
+  still trails Leto and `nalgebra`; the next measured lever is reducing the
+  host/device synchronization count, not only metadata buffer count or CPU
+  panel arithmetic. Evidence tier: value-semantic blocked QR tests, empirical
+  synchronization/component-profile benchmarks, comparative benchmark, and
+  GPU-timeline timestamp measurement in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:

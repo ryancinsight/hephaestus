@@ -32,7 +32,7 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Blocked LU Decomposition** (66x66) | 273.7 µs | 66.2 µs | — | 7.1 µs | **0.24x** | — | **0.026x** |
 | **Full-Pivot LU Decomposition** (32x32) | 169.5 µs | 20.3 µs | — | 14.1 µs | **0.12x** | — | **0.083x** |
 | **QR Decomposition** (48x24) | 134.9 µs | 11.5 µs | — | 4.3 µs | **0.085x** | — | **0.032x** |
-| **Blocked QR Decomposition** (70x35) | 420.8 µs | 10.7 µs | — | 6.1 µs | **0.025x** | — | **0.014x** |
+| **Blocked QR Decomposition** (70x35) | 480.8 µs | 14.9 µs | — | 10.0 µs | **0.031x** | — | **0.021x** |
 | **SVD Decomposition** (32x16) | 202.3 µs | 29.3 µs | — | 6.3 µs | **0.14x** | — | **0.031x** |
 | **Bidiagonalization** (32x16) | 202.8 µs | 25.6 µs | — | 9.7 µs (nalgebra SVD) | **0.13x** | — | **0.048x** |
 | **Schur Decomposition** (32x32) | 194.1 µs | 31.9 µs | — | 6.8 µs (nalgebra eigenvalues) | **0.16x** | — | **0.035x** |
@@ -54,12 +54,12 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
 | Profile | Measured floor |
 | --- | --- |
-| **Blocked LU 66x66 transfer/synchronization floor** | 359.6 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 222.6 µs |
-| **Blocked QR 70x35 CPU panel lower bound** | 26.3 µs |
-| **Blocked QR 70x35 final Leto recompute** | 11.5 µs |
-| **Blocked QR one-pass panel timestamp total** | 8.2 µs |
-| **Blocked QR one-pass panel timestamp median** | 160 ns |
+| **Blocked LU 66x66 transfer/synchronization floor** | 333.6 µs |
+| **Blocked QR 70x35 transfer/synchronization floor** | 219.9 µs |
+| **Blocked QR 70x35 CPU panel lower bound** | 25.3 µs |
+| **Blocked QR 70x35 final Leto recompute** | 12.9 µs |
+| **Blocked QR one-pass panel timestamp total** | 8.3 µs |
+| **Blocked QR one-pass panel timestamp median** | 192 ns |
 
 ## Analysis
 
@@ -82,10 +82,15 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
    - The synchronization profile's transfer rows are synthetic and noisy, but
      the timestamp-query row is a GPU-timeline measurement. The 70x35 blocked
      QR path now applies one compute pass per panel instead of one pass per
-     reflector; timestamp queries measured **8.2 µs** total GPU time for the
-     batched panel launch on this run, with **160 ns** median pass duration.
-     The component profile measures the CPU panel lower bound at **26.3 µs**
-     and the final Leto recompute at **11.5 µs**, while the synthetic
-     host/device synchronization floor remains **222.6 µs**. At this shape,
+     reflector; timestamp queries measured **8.3 µs** total GPU time for the
+     batched panel launch on this run, with **192 ns** median pass duration.
+     The component profile measures the CPU panel lower bound at **25.3 µs**
+     and the final Leto recompute at **12.9 µs**, while the synthetic
+     host/device synchronization floor remains **219.9 µs**. At this shape,
      the next measured bottleneck is transfer and synchronization, not CPU
      panel arithmetic.
+   - Packing Householder vector offsets and beta coefficients into one
+     reflector metadata buffer reduces per-panel metadata uploads and storage
+     bindings from two to one. The 70x35 blocked QR row still trails Leto and
+     `nalgebra` after this change, so this is static transfer-surface
+     reduction, not measured performance parity.
