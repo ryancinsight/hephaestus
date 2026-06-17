@@ -86,6 +86,16 @@
   the host and upload device buffers. Evidence tier: value-semantic
   closed-form, Moore-Penrose algebraic, differential, invalid-input tests, and
   empirical benchmark rows.
+- [minor] WGPU CSR sparse storage now uploads Leto CSR matrices into
+  device-resident values plus one packed index buffer and executes SpMV/SpMM
+  in WGSL without downloading operands to the host. The kernel layout stays
+  within WGPU's portable four-storage-buffer limit, and dispatch sizing reuses
+  the shared Mnemosyne/Moirai launch-planning helper. Remaining risk:
+  comparative sparse timings are not yet recorded for the new kernels because
+  the full comparative run timed out during WGPU synchronization at the SpMV
+  row and the subsequent targeted rerun was interrupted by concurrent target
+  cleanup. Evidence tier: static diagnostics and value-semantic WGPU sparse
+  contract test; benchmark evidence missing.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification
   is still required on CUDA hardware/toolchain before claiming device-execution
@@ -98,6 +108,6 @@
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk residual: profile the
-  remaining blocked QR CPU panel and host-transfer costs before adding more
-  native decomposition kernels.
+- Re-run the sparse comparative benchmark in an uncontended target directory
+  state and record WGPU CSR SpMV/SpMM timings against Leto before moving to the
+  next blocked decomposition profiling increment.

@@ -12,6 +12,9 @@ pub(crate) mod pipeline;
 pub mod reduction;
 /// Prefix and suffix scan compute operations.
 pub mod scan;
+#[cfg(feature = "sparse")]
+/// GPU Compressed Sparse Row (CSR) sparse matrix operations.
+pub mod sparse;
 /// Strided-layout-aware dispatch over leto layout metadata.
 pub mod strided;
 /// WGSL scalar-type mapping.

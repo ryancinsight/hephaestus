@@ -32,6 +32,8 @@ pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
     ScanIdentity, ScanWgslOp,
 };
+#[cfg(feature = "sparse")]
+pub use application::sparse::{spmm, spmm_into, spmv, spmv_into, GpuCsrMatrix};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,

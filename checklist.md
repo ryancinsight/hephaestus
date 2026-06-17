@@ -146,6 +146,11 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Added fused WGPU map-reduction dispatch for trace and L1 norm. Dot
   product, L2 norm, and max norm retain the measured faster staged paths after
   the fused variant regressed in the local comparative run.
+- [x] Replaced WGPU CSR SpMV and SpMM host-delegated products with real WGSL
+  kernels over device-resident CSR values, packed CSR index buffers, and
+  device-resident dense operands/results. The `sparse` feature owns the Leto
+  CSR upload/download boundary, while dispatch sizing flows through the shared
+  Mnemosyne `KernelResourceBudget` and Moirai `plan_launch` helper.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`;
   `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`; `cargo
   nextest run -p hephaestus-wgpu -j 1` (62 passed); `cargo nextest run -p
@@ -263,6 +268,15 @@ parity audit for remaining operator families and shared Atlas seam usage
 - [x] Removed stale default-build CUDA blocked-Cholesky export/test references
   because the CUDA blocked SYRK path is CUDA-feature gated and not verified in
   the default stub build.
+- Additional WGPU sparse evidence: `cargo check -p hephaestus-wgpu`; `cargo
+  clippy -p hephaestus-wgpu --lib -- -D warnings`; `rustfmt --edition 2021
+  --check` over the WGPU sparse/module/export files; `cargo nextest run -p
+  hephaestus-wgpu sparse -j 1 --no-fail-fast` (1 passed). A full comparative
+  run reached the sparse SpMV row but failed during WGPU synchronization before
+  producing WGPU sparse timings; a subsequent targeted rerun was interrupted by
+  concurrent target cleanup (`os error 3`). Evidence tier: static diagnostics
+  plus value-semantic GPU sparse contract test; sparse benchmark evidence is
+  not yet established for the new kernels.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo
   clippy -p hephaestus-wgpu --all-targets -- -D warnings` (compiles
   `hephaestus-cuda` as the WGPU dev dependency); `cargo nextest run -p
