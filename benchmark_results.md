@@ -54,9 +54,11 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
 | Profile | Measured floor |
 | --- | --- |
-| **Blocked LU 66x66 transfer/synchronization floor** | 338.4 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 207.6 µs |
-| **Blocked QR one-pass panel timestamp total** | 8.4 µs |
+| **Blocked LU 66x66 transfer/synchronization floor** | 359.6 µs |
+| **Blocked QR 70x35 transfer/synchronization floor** | 222.6 µs |
+| **Blocked QR 70x35 CPU panel lower bound** | 26.3 µs |
+| **Blocked QR 70x35 final Leto recompute** | 11.5 µs |
+| **Blocked QR one-pass panel timestamp total** | 8.2 µs |
 | **Blocked QR one-pass panel timestamp median** | 160 ns |
 
 ## Analysis
@@ -80,5 +82,10 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
    - The synchronization profile's transfer rows are synthetic and noisy, but
      the timestamp-query row is a GPU-timeline measurement. The 70x35 blocked
      QR path now applies one compute pass per panel instead of one pass per
-     reflector; timestamp queries measured **8.4 µs** total GPU time for the
+     reflector; timestamp queries measured **8.2 µs** total GPU time for the
      batched panel launch on this run, with **160 ns** median pass duration.
+     The component profile measures the CPU panel lower bound at **26.3 µs**
+     and the final Leto recompute at **11.5 µs**, while the synthetic
+     host/device synchronization floor remains **222.6 µs**. At this shape,
+     the next measured bottleneck is transfer and synchronization, not CPU
+     panel arithmetic.

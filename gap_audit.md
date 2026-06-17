@@ -59,13 +59,16 @@
   32 separate reflector-equivalent compute passes previously totaled 155.2 µs
   on the local GPU timeline, with 3.4 µs median pass duration. The WGPU QR
   panel path now applies all panel reflectors in one compute pass per panel;
-  the corresponding timestamp profile is 8.4 µs total with 160 ns median pass
-  duration, and the 70x35 blocked QR row measures 420.8 µs. Remaining risk:
-  blocked QR still trails Leto and `nalgebra`, so the next lever is reducing
-  the hybrid CPU panel/host-transfer cost or replacing more of the panel
-  factorization with native GPU work. Evidence tier: value-semantic blocked QR
-  tests, empirical synchronization-profile benchmark, comparative benchmark,
-  and GPU-timeline timestamp measurement in `benchmark_results.md`.
+  the corresponding timestamp profile is 8.2 µs total with 160 ns median pass
+  duration, and the 70x35 blocked QR row measures 420.8 µs. The component
+  profile measures the 70x35 CPU panel-factorization lower bound at 26.3 µs
+  and the duplicated final Leto recompute at 11.5 µs, while the synthetic QR
+  host/device synchronization floor remains 222.6 µs. Remaining risk: blocked
+  QR still trails Leto and `nalgebra`; the next measured lever is reducing
+  host/device transfer and synchronization before replacing more panel
+  arithmetic with native GPU work. Evidence tier: value-semantic blocked QR
+  tests, empirical synchronization/component-profile benchmarks, comparative
+  benchmark, and GPU-timeline timestamp measurement in `benchmark_results.md`.
 - [patch] Hephaestus WGPU launch planning uses Mnemosyne
   `KernelResourceBudget` and Moirai GPU `plan_launch` through Moirai's
   planner-only feature set. The prior duplicate-WGPU risk is closed:
@@ -111,6 +114,6 @@
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk residual: profile the
-  remaining blocked QR CPU panel and host-transfer costs before adding more
-  native decomposition kernels.
+- Continue the parity audit at the next highest-risk residual: reduce blocked
+  QR host/device transfer and synchronization costs before replacing CPU panel
+  arithmetic with native GPU kernels.

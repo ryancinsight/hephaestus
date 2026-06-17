@@ -21,6 +21,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - `hephaestus-wgpu` [patch]: batched blocked QR panel reflectors into one
   compute pass per panel, preserving reflector order within each column
   workgroup and removing per-reflector compute-pass launches.
+- `hephaestus-wgpu` [patch]: extended the blocked decomposition sync
+  benchmark with 70x35 blocked-QR CPU panel and final Leto recompute component
+  timings, isolating those costs from the host/device synchronization floor.
 
 ### Added
 

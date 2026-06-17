@@ -252,6 +252,18 @@ parity audit for remaining operator families and shared Atlas seam usage
   (blocked QR 70x35 420.8 µs, Leto 10.7 µs, nalgebra 6.1 µs). Evidence tier:
   value-semantic blocked QR tests, static diagnostics, empirical benchmark,
   and GPU-timeline timestamp-query measurement.
+- Additional blocked QR component-profile evidence: extended
+  `decomposition_sync` to measure the 70x35 CPU panel-factorization lower
+  bound and the final Leto recompute paid by `qr_decompose_blocked`.
+  `rustfmt --edition 2021 --check
+  crates/hephaestus-wgpu/benches/decomposition_sync.rs`; `cargo check -p
+  hephaestus-wgpu --bench decomposition_sync`; `cargo clippy -p
+  hephaestus-wgpu --bench decomposition_sync -- -D warnings`; `cargo bench -p
+  hephaestus-wgpu --bench decomposition_sync` (LU sync floor 359.6 µs, QR sync
+  floor 222.6 µs, QR CPU panel lower bound 26.3 µs, QR final Leto recompute
+  11.5 µs, QR timestamp total 8.2 µs, median 160 ns). Evidence tier: static
+  diagnostics, empirical component benchmark, and GPU-timeline timestamp-query
+  measurement.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:

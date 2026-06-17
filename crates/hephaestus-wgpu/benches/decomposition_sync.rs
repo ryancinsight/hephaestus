@@ -8,11 +8,14 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{panel_qr_packed, ComputeDevice, HephaestusError, Result};
 use hephaestus_wgpu::WgpuDevice;
 
 const ITERS: usize = 100;
 const QR_REFLECTORS: usize = 32;
+const QR_ROWS: usize = 70;
+const QR_COLS: usize = 35;
+const QR_BLOCK_SIZE: usize = 32;
 
 fn wait_wgpu(device: &WgpuDevice) {
     device
@@ -89,8 +92,8 @@ fn profile_blocked_lu_sync(device: &WgpuDevice) {
 }
 
 fn profile_blocked_qr_sync(device: &WgpuDevice) {
-    let rows = 70usize;
-    let cols = 35usize;
+    let rows = QR_ROWS;
+    let cols = QR_COLS;
     let len = rows * cols;
     let mut host = vec![0.0f32; len];
     for row in 0..rows {
@@ -140,6 +143,76 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
 
     println!(
         "Blocked QR 70x35 sync floor: {} ns/iter",
+        elapsed_per_iter(start.elapsed()).as_nanos()
+    );
+}
+
+fn profile_blocked_qr_cpu_panel_lower_bound() {
+    let mut source = vec![0.0f32; QR_ROWS * QR_COLS];
+    for row in 0..QR_ROWS {
+        for col in 0..QR_COLS {
+            source[row * QR_COLS + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+
+    let start = Instant::now();
+    for _ in 0..ITERS {
+        let mut host = source.clone();
+        for k in (0..QR_COLS).step_by(QR_BLOCK_SIZE) {
+            let b = QR_BLOCK_SIZE.min(QR_COLS - k);
+            let panel_rows = QR_ROWS - k;
+            let mut panel = vec![0.0f32; panel_rows * b];
+            for i in 0..panel_rows {
+                for j in 0..b {
+                    panel[i * b + j] = host[(k + i) * QR_COLS + (k + j)];
+                }
+            }
+            let (heads, betas) =
+                panel_qr_packed(&mut panel, panel_rows, b).expect("factor QR profile panel");
+            black_box((&heads, &betas));
+
+            for i in 0..panel_rows {
+                for j in 0..b {
+                    host[(k + i) * QR_COLS + (k + j)] = if j >= i { panel[i * b + j] } else { 0.0 };
+                }
+            }
+        }
+        black_box(&host);
+    }
+
+    println!(
+        "Blocked QR 70x35 CPU panel lower bound: {} ns/iter",
+        elapsed_per_iter(start.elapsed()).as_nanos()
+    );
+}
+
+fn profile_blocked_qr_final_leto_recompute() {
+    let mut source = vec![0.0f32; QR_ROWS * QR_COLS];
+    for row in 0..QR_ROWS {
+        for col in 0..QR_COLS {
+            source[row * QR_COLS + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+
+    let layout = leto::Layout::c_contiguous([QR_ROWS, QR_COLS])
+        .expect("invariant: QR profile shape has valid contiguous layout");
+    let start = Instant::now();
+    for _ in 0..ITERS {
+        let view = leto::ArrayView::<f32, 2>::new(layout, &source);
+        let qr = leto_ops::qr_decompose(&view).expect("factor QR profile matrix");
+        black_box(qr.r());
+    }
+
+    println!(
+        "Blocked QR 70x35 final Leto recompute: {} ns/iter",
         elapsed_per_iter(start.elapsed()).as_nanos()
     );
 }
@@ -302,5 +375,7 @@ fn main() {
     println!("WGPU GPU Backend: {}", device.backend_name());
     profile_blocked_lu_sync(&device);
     profile_blocked_qr_sync(&device);
+    profile_blocked_qr_cpu_panel_lower_bound();
+    profile_blocked_qr_final_leto_recompute();
     profile_blocked_qr_timestamp_queries();
 }
