@@ -1,162 +1,94 @@
-//! Bounded buffer pools for transient WGPU allocations.
+//! Transient buffer pooling using Moirai's sharded resource pool.
 
-use std::collections::VecDeque;
+use crate::infrastructure::device::WgpuDevice;
 
-/// A buffer value whose retained allocation size is known.
-pub(crate) trait PoolBuffer {
-    /// Allocation size in bytes.
-    fn size(&self) -> u64;
-}
+/// Zero-cost orphan-rule wrapper around wgpu::Buffer that implements SizeBounded.
+#[repr(transparent)]
+pub struct PoolBuffer(pub wgpu::Buffer);
 
-impl PoolBuffer for wgpu::Buffer {
+impl moirai_sync::SizeBounded for PoolBuffer {
     #[inline]
     fn size(&self) -> u64 {
-        self.size()
+        self.0.size()
     }
 }
 
-/// Count- and byte-bounded pool for transient buffers.
-///
-/// Reuse selects the smallest retained buffer that covers the requested
-/// capacity, while count-limit eviction removes the oldest retained buffer so
-/// the pool can adapt after size-regime changes.
-#[derive(Debug)]
-pub(crate) struct BoundedBufferPool<B> {
-    buffers: VecDeque<B>,
-    retained_bytes: u64,
-    max_buffers: usize,
-    max_bytes: u64,
+impl std::ops::Deref for PoolBuffer {
+    type Target = wgpu::Buffer;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl<B: PoolBuffer> BoundedBufferPool<B> {
-    /// Construct an empty pool with explicit retention limits.
+/// RAII guard that automatically recycles a staging buffer back to the device's pool on drop.
+pub struct StagingBufferGuard {
+    pub(crate) device: WgpuDevice,
+    pub(crate) buffer: Option<wgpu::Buffer>,
+}
+
+impl StagingBufferGuard {
+    #[inline]
     #[must_use]
-    pub(crate) fn new(max_buffers: usize, max_bytes: u64) -> Self {
+    pub(crate) fn new(device: WgpuDevice, buffer: wgpu::Buffer) -> Self {
         Self {
-            buffers: VecDeque::new(),
-            retained_bytes: 0,
-            max_buffers,
-            max_bytes,
+            device,
+            buffer: Some(buffer),
         }
-    }
-
-    /// Remove and return any retained buffer whose allocation covers `size`.
-    pub(crate) fn take_at_least(&mut self, size: u64) -> Option<B> {
-        let pos = self
-            .buffers
-            .iter()
-            .enumerate()
-            .filter(|(_, buffer)| buffer.size() >= size)
-            .min_by_key(|(_, buffer)| buffer.size())
-            .map(|(pos, _)| pos)?;
-        let buffer = self
-            .buffers
-            .remove(pos)
-            .expect("invariant: position came from VecDeque::position");
-        self.retained_bytes -= buffer.size();
-        Some(buffer)
-    }
-
-    /// Retain a buffer for reuse when it fits the pool limits.
-    pub(crate) fn recycle(&mut self, buffer: B) {
-        let size = buffer.size();
-        if size > self.max_bytes || self.max_buffers == 0 {
-            return;
-        }
-        while self.buffers.len() >= self.max_buffers && !self.buffers.is_empty() {
-            let evicted = self
-                .buffers
-                .pop_front()
-                .expect("invariant: non-empty pool has an oldest buffer");
-            self.retained_bytes -= evicted.size();
-        }
-        while self.retained_bytes + size > self.max_bytes {
-            let Some(evicted) = self.buffers.pop_back() else {
-                return;
-            };
-            self.retained_bytes -= evicted.size();
-        }
-        self.retained_bytes += size;
-        self.buffers.push_back(buffer);
-    }
-
-    /// Drop all retained buffers.
-    pub(crate) fn clear(&mut self) {
-        self.buffers.clear();
-        self.retained_bytes = 0;
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl std::ops::Deref for StagingBufferGuard {
+    type Target = wgpu::Buffer;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.buffer
+            .as_ref()
+            .expect("invariant: buffer is not dropped")
+    }
+}
 
-    #[derive(Debug)]
-    struct TestBuffer(u64);
-
-    impl PoolBuffer for TestBuffer {
-        fn size(&self) -> u64 {
-            self.0
+impl Drop for StagingBufferGuard {
+    #[inline]
+    fn drop(&mut self) {
+        if let Some(buffer) = self.buffer.take() {
+            self.device.recycle_staging_buffer(buffer);
         }
     }
+}
 
-    #[test]
-    fn pool_reuses_buffer_covering_request() {
-        let mut pool = BoundedBufferPool::new(4, 1024);
-        pool.recycle(TestBuffer(128));
-        pool.recycle(TestBuffer(512));
+/// RAII guard that automatically recycles a uniform buffer back to the device's pool on drop.
+pub struct UniformBufferGuard {
+    pub(crate) device: WgpuDevice,
+    pub(crate) buffer: Option<wgpu::Buffer>,
+}
 
-        let got = pool.take_at_least(256).unwrap();
-        assert_eq!(got.size(), 512);
-        assert_eq!(pool.take_at_least(256).map(|buffer| buffer.size()), None);
+impl UniformBufferGuard {
+    #[inline]
+    #[must_use]
+    pub(crate) fn new(device: WgpuDevice, buffer: wgpu::Buffer) -> Self {
+        Self {
+            device,
+            buffer: Some(buffer),
+        }
     }
+}
 
-    #[test]
-    fn pool_uses_smallest_sufficient_buffer() {
-        let mut pool = BoundedBufferPool::new(4, 4096);
-        pool.recycle(TestBuffer(2048));
-        pool.recycle(TestBuffer(512));
-        pool.recycle(TestBuffer(1024));
-
-        let got = pool.take_at_least(500).unwrap();
-        assert_eq!(got.size(), 512);
-
-        let large = pool.take_at_least(2048).unwrap();
-        assert_eq!(large.size(), 2048);
+impl std::ops::Deref for UniformBufferGuard {
+    type Target = wgpu::Buffer;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.buffer
+            .as_ref()
+            .expect("invariant: buffer is not dropped")
     }
+}
 
-    #[test]
-    fn pool_enforces_count_and_byte_limits() {
-        let mut pool = BoundedBufferPool::new(2, 512);
-        pool.recycle(TestBuffer(128));
-        pool.recycle(TestBuffer(256));
-        pool.recycle(TestBuffer(256));
-
-        assert!(pool.retained_bytes <= 512);
-        assert!(pool.buffers.len() <= 2);
-
-        pool.recycle(TestBuffer(1024));
-        assert_eq!(pool.take_at_least(1024).map(|buffer| buffer.size()), None);
-    }
-
-    #[test]
-    fn pool_adapts_when_full_of_smaller_buffers() {
-        let mut pool = BoundedBufferPool::new(2, 2048);
-        pool.recycle(TestBuffer(128));
-        pool.recycle(TestBuffer(256));
-        pool.recycle(TestBuffer(1024));
-
-        assert!(pool.buffers.len() <= 2);
-        let got = pool.take_at_least(1024).unwrap();
-        assert_eq!(got.size(), 1024);
-    }
-
-    #[test]
-    fn zero_count_pool_retains_nothing() {
-        let mut pool = BoundedBufferPool::new(0, 2048);
-        pool.recycle(TestBuffer(128));
-
-        assert_eq!(pool.take_at_least(1).map(|buffer| buffer.size()), None);
-        assert_eq!(pool.retained_bytes, 0);
+impl Drop for UniformBufferGuard {
+    #[inline]
+    fn drop(&mut self) {
+        if let Some(buffer) = self.buffer.take() {
+            self.device.recycle_uniform_buffer(buffer);
+        }
     }
 }

@@ -84,3 +84,54 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
      bindings from two to one. The 70x35 blocked QR row still trails Leto and
      `nalgebra` after this change, so this is static transfer-surface
      reduction, not measured performance parity.
+
+---
+
+## Local Workstation Fallback Baselines (Vulkan Software Emulation / Stub CUDA)
+
+The following baselines were measured in the virtualized workstation sandbox environment. In this environment, WGPU runs via a CPU-emulated software-rasterized adapter (Vulkan software driver), and CUDA runs in stub mode (compiles out GPU operations).
+
+These numbers showcase performance on a system without hardware GPU acceleration:
+
+| Benchmark | GPU (WGPU Fallback) | Leto CPU | ndarray CPU | nalgebra CPU | GPU Speedup (vs Leto) |
+| --- | --- | --- | --- | --- | --- |
+| **Elementwise Add** ($N = 2^{20}$) | 623.91 µs | 1.04 ms | 1.26 ms | — | **1.66x** |
+| **Elementwise Exp** ($N = 2^{20}$) | 943.10 µs | 2.02 ms | 1.99 ms | — | **2.14x** |
+| **Sum Reduction** ($N = 2^{20}$) | 2.08 ms | 64.77 µs | 79.76 µs | — | **0.03x** |
+| **Axis Sum** (256x256 over axis 0) | 559.91 µs | 42.23 µs | 5.34 µs | 19.74 µs | **0.08x** |
+| **Axis Min** (256x256 over axis 0) | 594.03 µs | 42.50 µs | 8.07 µs | 12.56 µs | **0.07x** |
+| **Axis Max** (256x256 over axis 0) | 543.70 µs | 39.61 µs | 7.31 µs | 11.96 µs | **0.07x** |
+| **Axis Mean** (256x256 over axis 0) | 509.68 µs | 41.29 µs | 4.72 µs | 22.46 µs | **0.08x** |
+| **Matmul 64x64** | 289.06 µs | 42.97 µs | 11.12 µs | 32.68 µs | **0.15x** |
+| **Matmul 256x256** | 4.89 ms | 960.50 µs | 566.17 µs | 1.47 ms | **0.20x** |
+| **Cumsum** (256x256 over axis 1) | 3.74 ms | 94.50 µs | 139.73 µs | 178.16 µs | **0.03x** |
+| **Matrix Power** (64x64 exponent 5) | 3.95 ms | 168.16 µs | 42.83 µs | 33.21 µs | **0.04x** |
+| **Kronecker Product** (64x64 ⊗ 8x8) | 864.03 µs | 236.19 µs | — | 681.66 µs | **0.27x** |
+| **Dot Product** ($N = 65,536$) | 755.58 µs | 4.15 µs | 5.58 µs | — | **0.01x** |
+| **Trace** (256x256) | 117.54 µs | 140 ns | 216 ns | — | **0.001x** |
+| **Matrix Rank** (64x64 diagonal rank 32) | 4.87 ms | 25.67 µs | — | — | **0.005x** |
+| **Determinant** (64x64 diagonal) | 7.68 ms | 12.24 µs | 16 ns | 6.96 µs | **0.002x** |
+| **Blocked Cholesky** (128x128 SPD) | 32.80 ms | 146.15 µs | — | 27.95 µs | **0.004x** |
+| **LU Decomposition** (32x32) | 650.57 µs | 2.18 µs | — | 1.54 µs | **0.003x** |
+| **Blocked LU Decomposition** (66x66) | 3.24 ms | 13.40 µs | — | 10.28 µs | **0.004x** |
+| **Full-Pivot LU** (32x32) | 605.03 µs | 20.81 µs | — | 8.24 µs | **0.034x** |
+| **QR Decomposition** (48x24) | 652.82 µs | 6.78 µs | — | 4.04 µs | **0.010x** |
+| **Blocked QR Decomposition** (70x35) | 6.38 ms | 13.74 µs | — | 9.84 µs | **0.002x** |
+| **SVD Decomposition** (32x16) | 529.61 µs | 18.47 µs | — | 4.75 µs | **0.035x** |
+| **Bidiagonalization** (32x16) | 987.54 µs | 15.52 µs | — | 9.53 µs (SVD) | **0.016x** |
+| **Schur Decomposition** (32x32) | 1.14 ms | 14.81 µs | — | 6.33 µs (eigen) | **0.013x** |
+| **Hessenberg Reduction** (32x32) | 1.10 ms | 25.61 µs | — | 6.88 µs | **0.023x** |
+| **Bunch-Kaufman** (32x32) | 1.06 ms | 3.57 µs | — | 1.75 µs | **0.003x** |
+| **UDU Decomposition** (32x32) | 609.59 µs | 14.16 µs | — | 1.77 µs | **0.023x** |
+| **Symmetric Eigen Jacobi** (32x32) | 979.86 µs | 359.39 µs | — | 21.29 µs | **0.37x** |
+| **General Eigenvalues** (32x32) | 132.19 µs | 9.82 µs | — | 6.21 µs | **0.07x** |
+| **Norm L1** ($N = 65,536$) | 438.91 µs | 2.56 µs | — | — | **0.006x** |
+| **Norm L2** ($N = 65,536$) | 733.71 µs | 3.21 µs | — | — | **0.004x** |
+| **Norm Max** ($N = 65,536$) | 716.00 µs | 2.25 µs | — | — | **0.003x** |
+| **Column-Pivoted QR** (32x32) | 1.01 ms | 21.96 µs | — | 13.97 µs | **0.022x** |
+| **Pseudoinverse** (32x32) | 2.39 ms | 1.90 ms | — | 20.18 µs | **0.79x** |
+| **Matrix Exponential** (32x32) | 629.96 µs | 59.34 µs | — | — | **0.09x** |
+| **PRNG Uniform** ($N = 2^{20}$) | 3.99 ms | 1.83 ms | — | — | **0.46x** |
+| **PRNG Normal** ($N = 2^{20}$) | 18.71 ms | 16.03 ms | — | — | **0.86x** |
+| **SpMV** ($1000 \times 1000$ CSR) | 107.20 µs | 2.77 µs | — | — | **0.026x** |
+| **SpMM** ($1000 \times 1000 \times 128$) | 586.58 µs | 35.63 µs | — | — | **0.061x** |

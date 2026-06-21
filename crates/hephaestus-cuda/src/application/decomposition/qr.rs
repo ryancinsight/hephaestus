@@ -26,6 +26,9 @@ use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 #[cfg(feature = "cuda")]
 use hephaestus_core::panel_qr_packed;
 
+#[cfg(feature = "cuda")]
+use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -206,48 +209,60 @@ pub fn qr_decompose_blocked(
             });
         }
 
-        let mut host = vec![0.0f32; m * n];
-        device.download(matrix.buffer, &mut host)?;
-        let original_host = host.clone();
+        let mut original_host = vec![0.0f32; m * n];
+        device.download(matrix.buffer, &mut original_host)?;
 
-        let work_buf = device.alloc_zeroed::<f32>(m * n)?;
+        let work_buf = device.upload(&original_host)?;
 
         let block_size = QR_BLOCK_SIZE.min(n);
+
+        let mut packed = vec![0.0f32; m * n];
+        let mut cumulative_heads = Vec::with_capacity(n.min(m));
+        let mut cumulative_betas = Vec::with_capacity(n.min(m));
+
+        // Pre-allocate vectors buffer.
+        let vectors_dev = device.alloc_zeroed::<f32>(m * block_size)?;
+
+        // Pre-allocate reflector buffer.
+        let reflector_dev = device.alloc_zeroed::<hh_impl::HhReflectorMeta>(block_size)?;
 
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
             let panel_rows = m - k;
             let trail_cols = n - k - b;
 
-            // ── Step 1: Factor the panel A[k:m, k:k+b] on CPU ──
+            // ── Step 1 & 2: Download active panel from work_buf into original_host ──
+            let panel_region = MatrixRegion {
+                stride: n,
+                row_start: k,
+                col_start: k,
+                rows: panel_rows,
+                cols: b,
+            };
+            download_matrix_region(device, &work_buf, &mut original_host, panel_region)?;
+
             let mut panel = vec![0.0f32; panel_rows * b];
             for i in 0..panel_rows {
                 for j in 0..b {
-                    panel[i * b + j] = host[(k + i) * n + (k + j)];
+                    panel[i * b + j] = original_host[(k + i) * n + (k + j)];
                 }
             }
+
+            // ── Step 3: Factor active panel region on CPU ──
             let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
 
-            // Write R (upper triangle, j >= i) back to host, zero tails (j < i).
-            for i in 0..panel_rows {
-                for j in 0..b {
-                    if j >= i {
-                        host[(k + i) * n + (k + j)] = panel[i * b + j];
-                    } else {
-                        host[(k + i) * n + (k + j)] = 0.0;
-                    }
+            cumulative_heads.extend_from_slice(&heads);
+            cumulative_betas.extend_from_slice(&betas);
+
+            for j in 0..b {
+                let col = k + j;
+                for r in (col + 1)..m {
+                    let panel_row = r - k;
+                    packed[r * n + col] = panel[panel_row * b + j];
                 }
             }
 
-            if trail_cols == 0 {
-                device.write_buffer(&work_buf, &host)?;
-                continue;
-            }
-
-            // ── Step 2: Upload working matrix to device ──
-            device.write_buffer(&work_buf, &host)?;
-
-            // ── Step 3: Apply b Householder reflectors on GPU ──
+            // Zero out the strictly lower-triangular part of panel before writing back
             let mut packed_vectors = Vec::with_capacity(panel_rows * b);
             let mut vector_offsets = Vec::with_capacity(b);
             for j in 0..b {
@@ -258,38 +273,63 @@ pub fn qr_decompose_blocked(
                     packed_vectors.push(panel[(j + i) * b + j]);
                 }
             }
-            let vectors_dev = device.upload(&packed_vectors)?;
 
-            for j in 0..b {
-                let vec_len = panel_rows - j;
-                let c_offset = (k + j) * n + (k + b);
-
-                hh_impl::hh_trailing_update(
-                    device,
-                    &vectors_dev,
-                    vector_offsets[j],
-                    &work_buf,
-                    vec_len,
-                    trail_cols,
-                    n,
-                    c_offset,
-                    betas[j],
-                )?;
+            for r in 0..panel_rows {
+                for c in 0..b {
+                    if c < r {
+                        panel[r * b + c] = 0.0;
+                    }
+                }
             }
 
-            // ── Step 4: Download updated working matrix ──
-            device.download(&work_buf, &mut host)?;
+            // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
+            for i in 0..panel_rows {
+                for j in 0..b {
+                    original_host[(k + i) * n + (k + j)] = panel[i * b + j];
+                }
+            }
+            write_matrix_region(device, &work_buf, &original_host, panel_region)?;
+
+            if trail_cols == 0 {
+                continue;
+            }
+
+            // ── Step 6: Apply b Householder reflectors on GPU in-place ──
+            device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
+
+            hh_impl::hh_trailing_update(
+                device,
+                &vectors_dev,
+                &work_buf,
+                &reflector_dev,
+                panel_rows,
+                trail_cols,
+                n,
+                k,
+                b,
+                &vector_offsets,
+                &betas,
+            )?;
         }
 
-        let original_view = leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([m, n]).unwrap(),
-            &original_host,
-        );
-        let inner = leto_ops::qr_decompose(&original_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("QR blocked finalisation failed: {e}"),
+        // Download final matrix to extract R.
+        let mut host = vec![0.0f32; m * n];
+        device.download(&work_buf, &mut host)?;
+
+        // Merge R (upper triangle of host) with the accumulated reflector tails.
+        for i in 0..m {
+            for j in i..n {
+                packed[i * n + j] = host[i * n + j];
             }
-        })?;
+        }
+
+        let inner = leto_ops::QrDecomposition::from_raw_parts(
+            packed,
+            cumulative_heads,
+            cumulative_betas,
+            m,
+            n,
+        );
 
         // Materialize R from blocked result.
         let mut r_host = vec![0.0f32; m * n];
@@ -317,9 +357,7 @@ pub fn qr_decompose_blocked(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Householder apply kernel (CUDA PTX)
-// ---------------------------------------------------------------------------
+// Custom gather/scatter compute kernels removed in favor of generic MatrixRegion transfers.
 
 #[cfg(feature = "cuda")]
 mod hh_impl {
@@ -329,12 +367,21 @@ mod hh_impl {
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
+    pub(super) struct HhReflectorMeta {
+        pub(super) vector_offset: u32,
+        pub(super) beta: f32,
+    }
+
+    unsafe impl bytemuck::Pod for HhReflectorMeta {}
+
+    #[repr(C)]
+    #[derive(Clone, Copy, bytemuck::Zeroable)]
     pub struct HhMeta {
-        vec_len: u32,
+        panel_rows: u32,
+        reflector_count: u32,
         trail_cols: u32,
-        trail_stride: u32,
-        c_offset: u32,
-        beta: f32,
+        matrix_cols: u32,
+        k: u32,
         _pad: [u32; 3],
     }
 
@@ -342,12 +389,17 @@ mod hh_impl {
 
     fn hh_shader_source() -> String {
         r#"
-    struct HhMeta {
-        unsigned int vec_len;
-        unsigned int trail_cols;
-        unsigned int trail_stride;
-        unsigned int c_offset;
+    struct ReflectorMeta {
+        unsigned int vector_offset;
         float beta;
+    };
+
+    struct HhMeta {
+        unsigned int panel_rows;
+        unsigned int reflector_count;
+        unsigned int trail_cols;
+        unsigned int matrix_cols;
+        unsigned int k;
         unsigned int _pad0;
         unsigned int _pad1;
         unsigned int _pad2;
@@ -356,89 +408,117 @@ mod hh_impl {
     extern "C" __global__ void householder_kernel(
         const float* v_buf,
         float* a_buf,
+        const ReflectorMeta* reflector_buf,
         HhMeta meta
     ) {
         __shared__ float sdata[256];
 
-        unsigned int col = blockIdx.x;
+        unsigned int wid_x = blockIdx.x;
+        unsigned int col = meta.k + meta.reflector_count + wid_x;
         unsigned int tid = threadIdx.x;
 
-        if (col >= meta.trail_cols) {
+        if (col >= meta.matrix_cols) {
             return;
         }
 
-        unsigned int n = meta.vec_len;
-        unsigned int stride = meta.trail_stride;
-        unsigned int off = meta.c_offset;
-        float beta = meta.beta;
+        unsigned int n_cols = meta.matrix_cols;
+        unsigned int k_offset = meta.k;
 
-        // Phase 1: partial dot = v^T · A[:, col]
-        float partial = 0.0f;
-        unsigned int row = tid;
-        while (row < n) {
-            partial += v_buf[row] * a_buf[off + row * stride + col];
-            row += 256u;
-        }
-        sdata[tid] = partial;
-        __syncthreads();
+        for (unsigned int reflector = 0u; reflector < meta.reflector_count; reflector++) {
+            unsigned int n_rows = meta.panel_rows - reflector;
+            unsigned int start_row = k_offset + reflector;
+            unsigned int v_off = reflector_buf[reflector].vector_offset;
+            float beta = reflector_buf[reflector].beta;
 
-        // Parallel tree reduction
-        for (unsigned int s = 128u; s > 0u; s >>= 1u) {
-            if (tid < s) {
-                sdata[tid] += sdata[tid + s];
+            // Phase 1: partial dot = v^T · A[start_row:m, col]
+            float partial = 0.0f;
+            unsigned int row = tid;
+            while (row < n_rows) {
+                unsigned int a_idx = (start_row + row) * n_cols + col;
+                partial += v_buf[v_off + row] * a_buf[a_idx];
+                row += 256u;
+            }
+            sdata[tid] = partial;
+            __syncthreads();
+
+            // Parallel tree reduction
+            for (unsigned int s = 128u; s > 0u; s >>= 1u) {
+                if (tid < s) {
+                    sdata[tid] += sdata[tid + s];
+                }
+                __syncthreads();
+            }
+
+            float dot = sdata[0];
+            __syncthreads();
+
+            // Phase 2: A[start_row:m, col] -= beta * v * dot
+            row = tid;
+            while (row < n_rows) {
+                unsigned int a_idx = (start_row + row) * n_cols + col;
+                a_buf[a_idx] -= beta * v_buf[v_off + row] * dot;
+                row += 256u;
             }
             __syncthreads();
-        }
-
-        float dot = sdata[0];
-        __syncthreads();
-
-        // Phase 2: A[:, col] -= beta * v * dot
-        row = tid;
-        while (row < n) {
-            unsigned int idx = off + row * stride + col;
-            a_buf[idx] -= beta * v_buf[row] * dot;
-            row += 256u;
         }
     }
         "#
         .to_string()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn hh_trailing_update(
         device: &CudaDevice,
         v_buf: &CudaBuffer<f32>,
-        v_offset: usize,
         a_buf: &CudaBuffer<f32>,
-        vec_len: usize,
+        reflector_buf: &CudaBuffer<HhReflectorMeta>,
+        panel_rows: usize,
         trail_cols: usize,
-        trail_stride: usize,
-        c_offset: usize,
-        beta: f32,
+        matrix_cols: usize,
+        k: usize,
+        reflector_count: usize,
+        vector_offsets: &[usize],
+        betas: &[f32],
     ) -> Result<()> {
-        if vec_len == 0 || trail_cols == 0 {
+        if panel_rows == 0 || trail_cols == 0 || reflector_count == 0 {
             return Ok(());
         }
 
         let meta = HhMeta {
-            vec_len: to_u32(vec_len, "HH vec_len")?,
+            panel_rows: to_u32(panel_rows, "HH panel_rows")?,
+            reflector_count: to_u32(reflector_count, "HH reflector_count")?,
             trail_cols: to_u32(trail_cols, "HH trail_cols")?,
-            trail_stride: to_u32(trail_stride, "HH trail_stride")?,
-            c_offset: to_u32(c_offset, "HH c_offset")?,
-            beta,
+            matrix_cols: to_u32(matrix_cols, "HH matrix_cols")?,
+            k: to_u32(k, "HH k")?,
             _pad: [0; 3],
         };
+
+        let reflector_host: Vec<HhReflectorMeta> = vector_offsets
+            .iter()
+            .copied()
+            .zip(betas.iter().copied())
+            .map(|(offset, beta)| {
+                let vector_offset = to_u32(offset, "HH vector_offset")?;
+                Ok(HhReflectorMeta {
+                    vector_offset,
+                    beta,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        device.write_sub_buffer(reflector_buf, 0, &reflector_host)?;
 
         let key = "qr_householder".to_string();
         let kernel = cached_kernel(device, key, "householder_kernel", hh_shader_source)?;
 
-        let mut v_ptr = v_buf.raw() + (v_offset * std::mem::size_of::<f32>()) as u64;
+        let mut v_ptr = v_buf.raw();
         let mut a_ptr = a_buf.raw();
+        let mut ref_ptr = reflector_buf.raw();
         let mut meta_val = meta;
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
+        let mut args: [*mut std::ffi::c_void; 4] = [
             &mut v_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+            &mut ref_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut meta_val as *mut HhMeta as *mut std::ffi::c_void,
         ];
 

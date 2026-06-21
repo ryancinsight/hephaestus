@@ -7,6 +7,7 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for scalar operations.
 struct ScalarOpWrapper<Op>(core::marker::PhantomData<Op>);
@@ -58,7 +59,8 @@ where
     }
     let groups = workgroups(out.len, width)?;
 
-    let scalar_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let raw_scalar_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let scalar_buffer = UniformBufferGuard::new(device.clone(), raw_scalar_buf);
     device
         .queue()
         .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
@@ -108,7 +110,6 @@ where
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(scalar_buffer);
 
     Ok(())
 }

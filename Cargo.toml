@@ -41,13 +41,14 @@ leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
 leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
 moirai-gpu = { path = "../moirai/moirai-gpu", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
 moirai-sync = { path = "../moirai/moirai-sync" }
-ndarray = "0.15"
+ndarray = "0.16"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 # ── Python FFI ──
@@ -69,6 +70,16 @@ moirai-scheduler = { path = "../moirai/moirai-scheduler" }
 moirai-parallel = { path = "../moirai/moirai-parallel" }
 moirai-gpu = { path = "../moirai/moirai-gpu" }
 moirai-sync = { path = "../moirai/moirai-sync" }
+moirai-async = { path = "../moirai/moirai-async" }
+moirai-executor = { path = "../moirai/moirai-executor" }
+moirai-transport = { path = "../moirai/moirai-transport" }
+moirai-iter = { path = "../moirai/moirai-iter" }
+moirai-pal = { path = "../moirai/moirai-pal" }
+moirai-tls = { path = "../moirai/moirai-tls" }
+moirai-http = { path = "../moirai/moirai-http" }
+moirai-python = { path = "../moirai/moirai-python" }
+moirai-utils = { path = "../moirai/moirai-utils" }
+moirai-metrics = { path = "../moirai/moirai-metrics" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }

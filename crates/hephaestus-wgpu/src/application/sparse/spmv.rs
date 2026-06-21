@@ -6,6 +6,7 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
@@ -103,7 +104,8 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
         "hephaestus-spmv",
         || spmv_shader_source::<T>(width),
     );
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmvMeta>(1)?)?;
+    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmvMeta>(1)?)?;
+    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
@@ -151,7 +153,6 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buffer);
 
     Ok(())
 }

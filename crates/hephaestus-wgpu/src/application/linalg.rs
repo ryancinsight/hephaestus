@@ -20,6 +20,7 @@ use crate::application::strided::{
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
 pub trait MatmulZero: WgslScalar {
@@ -259,7 +260,8 @@ where
         || map_reduction_shader_source::<Op, T>(width),
     );
 
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
@@ -304,7 +306,6 @@ where
         pass.dispatch_workgroups(groups as u32, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buffer);
 
     Ok(out)
 }
@@ -643,9 +644,12 @@ where
     let out_meta = map_layout(out.layout)?;
 
     let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let a_layout_buf = device.get_uniform_buffer(size)?;
-    let b_layout_buf = device.get_uniform_buffer(size)?;
-    let out_layout_buf = device.get_uniform_buffer(size)?;
+    let raw_a = device.get_uniform_buffer(size)?;
+    let raw_b = device.get_uniform_buffer(size)?;
+    let raw_out = device.get_uniform_buffer(size)?;
+    let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
+    let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
+    let out_layout_buf = UniformBufferGuard::new(device.clone(), raw_out);
 
     device
         .queue()
@@ -712,10 +716,6 @@ where
         );
     }
     device.queue().submit(Some(encoder.finish()));
-
-    device.recycle_uniform_buffer(a_layout_buf);
-    device.recycle_uniform_buffer(b_layout_buf);
-    device.recycle_uniform_buffer(out_layout_buf);
 
     Ok(())
 }
@@ -818,9 +818,12 @@ where
     let c_meta = map_layout(out.layout)?;
 
     let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let a_layout_buf = device.get_uniform_buffer(size)?;
-    let b_layout_buf = device.get_uniform_buffer(size)?;
-    let c_layout_buf = device.get_uniform_buffer(size)?;
+    let raw_a = device.get_uniform_buffer(size)?;
+    let raw_b = device.get_uniform_buffer(size)?;
+    let raw_c = device.get_uniform_buffer(size)?;
+    let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
+    let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
+    let c_layout_buf = UniformBufferGuard::new(device.clone(), raw_c);
 
     device
         .queue()
@@ -889,10 +892,6 @@ where
     }
 
     device.queue().submit(Some(encoder.finish()));
-
-    device.recycle_uniform_buffer(a_layout_buf);
-    device.recycle_uniform_buffer(b_layout_buf);
-    device.recycle_uniform_buffer(c_layout_buf);
 
     Ok(())
 }
@@ -981,6 +980,10 @@ where
         .validate_storage_len(out.buffer.len)
         .map_err(map_layout_err)?;
 
+    if batch == 0 || m == 0 || n == 0 || lhs_k == 0 {
+        return Ok(());
+    }
+
     let lhs_batch_stride = if lhs_batch == 1 {
         0
     } else {
@@ -992,6 +995,20 @@ where
         rhs.layout.strides[0]
     };
     let out_batch_stride = out.layout.strides[0];
+
+    let key = (TypeId::of::<MatmulKernel<T>>(), TypeId::of::<T>(), 16);
+    let pipeline = cached_pipeline(device, key, "hephaestus-matmul", || {
+        matmul_shader_source::<T>()
+    });
+
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-batched-matmul"),
+        });
+
+    let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
+    let mut uniform_guards = Vec::with_capacity(3 * batch);
 
     for b in 0..batch {
         let lhs_mat_layout = Layout::new(
@@ -1010,21 +1027,96 @@ where
             (out.layout.offset as isize + b as isize * out_batch_stride) as usize,
         );
 
-        let lhs_operand = StridedOperand {
-            buffer: lhs.buffer,
-            layout: &lhs_mat_layout,
-        };
-        let rhs_operand = StridedOperand {
-            buffer: rhs.buffer,
-            layout: &rhs_mat_layout,
-        };
-        let out_operand = StridedOperand {
-            buffer: out.buffer,
-            layout: &out_mat_layout,
-        };
+        lhs_mat_layout
+            .validate_storage_len(lhs.buffer.len)
+            .map_err(map_layout_err)?;
+        rhs_mat_layout
+            .validate_storage_len(rhs.buffer.len)
+            .map_err(map_layout_err)?;
+        out_mat_layout
+            .validate_storage_len(out.buffer.len)
+            .map_err(map_layout_err)?;
 
-        matmul_into(device, lhs_operand, rhs_operand, out_operand)?;
+        if out_mat_layout.has_zero_stride_aliasing() {
+            return Err(HephaestusError::DispatchFailed {
+                message: "matmul output layout must not contain zero-stride aliasing".to_string(),
+            });
+        }
+
+        let a_meta = map_layout(&lhs_mat_layout)?;
+        let b_meta = map_layout(&rhs_mat_layout)?;
+        let c_meta = map_layout(&out_mat_layout)?;
+
+        let raw_a = device.get_uniform_buffer(size)?;
+        let raw_b = device.get_uniform_buffer(size)?;
+        let raw_c = device.get_uniform_buffer(size)?;
+        let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
+        let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
+        let c_layout_buf = UniformBufferGuard::new(device.clone(), raw_c);
+
+        device
+            .queue()
+            .write_buffer(&a_layout_buf, 0, bytemuck::bytes_of(&a_meta));
+        device
+            .queue()
+            .write_buffer(&b_layout_buf, 0, bytemuck::bytes_of(&b_meta));
+        device
+            .queue()
+            .write_buffer(&c_layout_buf, 0, bytemuck::bytes_of(&c_meta));
+
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("hephaestus-matmul-batched"),
+                layout: &pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: lhs.buffer.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: rhs.buffer.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: out.buffer.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: a_layout_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: b_layout_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: c_layout_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hephaestus-matmul-batched"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            let workgroups_x = n.div_ceil(16);
+            let workgroups_y = m.div_ceil(16);
+            pass.dispatch_workgroups(workgroups_x as u32, workgroups_y as u32, 1);
+        }
+
+        uniform_guards.push(a_layout_buf);
+        uniform_guards.push(b_layout_buf);
+        uniform_guards.push(c_layout_buf);
     }
+
+    device.queue().submit(Some(encoder.finish()));
+
+    drop(uniform_guards);
 
     Ok(())
 }
@@ -1288,7 +1380,8 @@ where
         || matrix_properties_shader_source::<T>(),
     );
 
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<RankMeta>(1)?)?;
+    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RankMeta>(1)?)?;
+    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
@@ -1337,7 +1430,6 @@ where
         pass.dispatch_workgroups(1, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buffer);
 
     let mut rank = [0u32; 1];
     device.download(&rank_out, &mut rank)?;

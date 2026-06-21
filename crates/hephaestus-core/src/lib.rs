@@ -18,6 +18,6 @@ pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
 pub use domain::decomposition::{panel_lu_packed, panel_qr_packed};
-pub use domain::device::ComputeDevice;
+pub use domain::device::{validate_buffer_size, validate_slice_alignment, ComputeDevice};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::launch::BlockWidth;

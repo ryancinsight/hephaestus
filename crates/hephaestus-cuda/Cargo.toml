@@ -8,11 +8,11 @@ repository.workspace = true
 description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded driver device acquisition, typed device buffers, and host/device transfer."
 
 [features]
-# Default excludes the CUDA toolchain so the crate builds (as the stub
-# substrate) on hosts without a CUDA toolkit. `cuda` pulls the dynamic-loaded
-# cutile-rs driver (no toolkit needed to build — `nvcuda`/`libcuda` is loaded
-# at runtime), mirroring coeus-cuda's gating.
-default = ["parallel", "mnemosyne-memory", "decomposition"]
+# Default includes the CUDA toolchain so the crate builds and runs with CUDA
+# support enabled by default. `cuda` pulls the dynamic-loaded cutile-rs driver
+# (no toolkit needed to build — `nvcuda`/`libcuda` is loaded at runtime),
+# mirroring coeus-cuda's gating.
+default = ["parallel", "mnemosyne-memory", "decomposition", "cuda"]
 parallel = []
 mnemosyne-memory = []
 cuda = ["dep:cutile", "dep:cuda-core", "dep:cuda-async", "dep:libloading"]
@@ -26,6 +26,7 @@ leto-ops = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }
+mnemosyne-backend = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 num-complex = { workspace = true }

@@ -13,6 +13,8 @@
 use bytemuck::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
+#[cfg(feature = "cuda")]
+use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
 use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
@@ -183,7 +185,6 @@ pub fn cholesky_decompose_blocked(
         // Download the full matrix to host (panels are factored on CPU).
         let mut host = vec![0.0f32; n * n];
         device.download(matrix.buffer, &mut host)?;
-        let original_host = host.clone();
 
         // Device-resident buffer for the packed lower factor, updated in-place
         // by the SYRK trailing kernel.
@@ -192,8 +193,20 @@ pub fn cholesky_decompose_blocked(
         const BLOCK_SIZE: usize = 64;
         let block_size = BLOCK_SIZE.min(n);
 
+        let panel_dev = device.alloc_zeroed::<f32>(n * block_size)?;
+
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
+
+            // Download only the active panel column (diagonal block + off-diagonal panel)
+            let panel_region = MatrixRegion {
+                stride: n,
+                row_start: k,
+                col_start: k,
+                rows: n - k,
+                cols: b,
+            };
+            download_matrix_region(device, &lower_buf, &mut host, panel_region)?;
 
             // ── Step 1: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
             let mut diag_host = vec![0.0f32; b * b];
@@ -214,17 +227,17 @@ pub fn cholesky_decompose_blocked(
             let diag_lower = diag_chol.lower();
             let diag_slice = leto::Storage::as_slice(diag_lower.storage());
 
-            // Write the factored diagonal block back to the host array and
-            // upload to the device buffer.
+            // Write the factored diagonal block back to the host array
             for i in 0..b {
                 for j in 0..b {
                     host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
                 }
             }
-            device.write_buffer(&lower_buf, &host)?;
 
             let trail_rows = n - k - b;
             if trail_rows == 0 {
+                // Write the final diagonal block back to the device buffer
+                write_matrix_region(device, &lower_buf, &host, panel_region)?;
                 continue;
             }
 
@@ -246,14 +259,17 @@ pub fn cholesky_decompose_blocked(
                 }
             }
 
-            // Write L₂₁ back to host and upload to the device.
+            // Write L₂₁ back to host
             for i in 0..trail_rows {
                 for j in 0..b {
                     host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
                 }
             }
-            device.write_buffer(&lower_buf, &host)?;
-            let panel_buf = device.upload(&rhs)?;
+
+            // Write the entire updated active panel back to device buffer
+            write_matrix_region(device, &lower_buf, &host, panel_region)?;
+
+            device.write_sub_buffer(&panel_dev, 0, &rhs)?;
 
             // ── Step 3: trailing SYRK update on GPU ──
             let trail_layout = leto::Layout::new(
@@ -261,10 +277,7 @@ pub fn cholesky_decompose_blocked(
                 [n as isize, 1],
                 (k + b) * n + (k + b),
             );
-            syrk_trailing_update(device, &lower_buf, &trail_layout, &panel_buf, b)?;
-
-            // Download the updated trailing matrix back to host.
-            device.download(&lower_buf, &mut host)?;
+            syrk_trailing_update(device, &lower_buf, &trail_layout, &panel_dev, b)?;
         }
 
         for row in 0..n {
@@ -274,15 +287,9 @@ pub fn cholesky_decompose_blocked(
         }
         device.write_buffer(&lower_buf, &host)?;
 
-        let original_view = leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([n, n]).unwrap(),
-            &original_host,
+        let inner = leto_ops::CholeskyDecomposition::from_raw_parts(
+            leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
         );
-        let inner = leto_ops::cholesky_decompose(&original_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("Cholesky blocked finalisation failed: {e}"),
-            }
-        })?;
 
         Ok(GpuCholesky {
             inner,

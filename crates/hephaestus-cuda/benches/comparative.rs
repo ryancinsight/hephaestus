@@ -9,8 +9,8 @@ use hephaestus_core::BlockWidth;
 use hephaestus_cuda::{
     binary_elementwise_into, cholesky_decompose_blocked, cumsum_into, det, dot, kron_into,
     lu_decompose, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into,
-    norm_l1, norm_l2, norm_max, qr_decompose, reduction, sum_axis_into, symmetric_eigen_jacobi,
-    trace, unary_elementwise_into, AddOp, ComputeDevice, CudaDevice, ExpOp,
+    norm_l1, norm_l2, norm_max, qr_decompose, qr_decompose_blocked, reduction, sum_axis_into,
+    symmetric_eigen_jacobi, trace, unary_elementwise_into, AddOp, ComputeDevice, CudaDevice, ExpOp,
     StridedOperand as CudaStridedOperand, SumOp,
 };
 use nalgebra::DMatrix;
@@ -1385,6 +1385,72 @@ fn main() {
         let t_cuda = Instant::now();
         for _ in 0..ITERS {
             let _out = qr_decompose(&cuda_dev, black_box(op_a)).unwrap();
+        }
+        wait_cuda(&cuda_dev);
+        println!(
+            "GPU (CUDA):   {} ns/iter\n",
+            elapsed_per_iter(t_cuda.elapsed()).as_nanos()
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 15b. Blocked QR Decomposition (f32, 70x35)
+    // ────────────────────────────────────────────────────────────────────────
+    {
+        let rows = 70;
+        let cols = 35;
+        println!("--- Benchmarking: Blocked QR Decomposition (f32, {rows}x{cols}) ---");
+        let host_m: Vec<f32> = (0..(rows * cols))
+            .map(|i| (i as f32 * 0.731 + 1.0) * 1e-4)
+            .collect();
+
+        // Leto
+        let leto_a = leto::Array::from_shape_vec([rows, cols], host_m.clone()).unwrap();
+        let leto_out = leto_ops::qr_decompose(&leto_a.view()).unwrap();
+        let na_a = DMatrix::from_vec(rows, cols, host_m.clone());
+
+        // CUDA
+        let cu_m = cuda_dev.upload(&host_m).unwrap();
+        let layout2d = leto::Layout::c_contiguous([rows, cols]).unwrap();
+        let op_a = CudaStridedOperand {
+            buffer: &cu_m,
+            layout: &layout2d,
+        };
+        let cu_out = qr_decompose_blocked(&cuda_dev, op_a).unwrap();
+        wait_cuda(&cuda_dev);
+        let mut got_cuda = vec![0.0f32; rows * cols];
+        cuda_dev.download(cu_out.r_buffer(), &mut got_cuda).unwrap();
+        assert_close_slice(
+            &got_cuda,
+            leto::Storage::as_slice(leto_out.r().storage()),
+            1e-3,
+            1e-3,
+        );
+
+        // Benchmark Leto
+        let t_leto = Instant::now();
+        for _ in 0..ITERS {
+            let _out = leto_ops::qr_decompose(black_box(&leto_a.view())).unwrap();
+        }
+        println!(
+            "CPU (Leto):   {} ns/iter",
+            elapsed_per_iter(t_leto.elapsed()).as_nanos()
+        );
+
+        // Benchmark nalgebra
+        let t_nalgebra = Instant::now();
+        for _ in 0..ITERS {
+            let _out = black_box(na_a.clone()).qr();
+        }
+        println!(
+            "CPU (nalgebra):{} ns/iter",
+            elapsed_per_iter(t_nalgebra.elapsed()).as_nanos()
+        );
+
+        // Benchmark CUDA
+        let t_cuda = Instant::now();
+        for _ in 0..ITERS {
+            let _out = qr_decompose_blocked(&cuda_dev, black_box(op_a)).unwrap();
         }
         wait_cuda(&cuda_dev);
         println!(

@@ -2,18 +2,24 @@ use core::marker::PhantomData;
 use std::sync::Arc;
 
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    validate_buffer_size, validate_slice_alignment, ComputeDevice, HephaestusError, Result,
+};
 use std::any::TypeId;
-use std::sync::Mutex;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::buffer::WgpuBuffer;
-use crate::infrastructure::pool::BoundedBufferPool;
+use crate::infrastructure::pool::PoolBuffer;
+use moirai_sync::ShardedResourcePool;
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
-pub(crate) type PipelineCache =
-    Arc<moirai_sync::sync::ConcurrentHashMap<PipelineKey, wgpu::ComputePipeline>>;
+pub(crate) type PipelineCache = Arc<
+    moirai_sync::sync::ConcurrentHashMap<
+        PipelineKey,
+        Arc<std::sync::OnceLock<wgpu::ComputePipeline>>,
+    >,
+>;
 
 const TRANSIENT_POOL_MAX_BUFFERS: usize = 8;
 const STAGING_POOL_MAX_BYTES: u64 = 64 * 1024 * 1024;
@@ -30,8 +36,8 @@ pub struct WgpuDevice {
     queue: Arc<wgpu::Queue>,
     topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: PipelineCache,
-    pub(crate) staging_pool: Arc<Mutex<BoundedBufferPool<wgpu::Buffer>>>,
-    pub(crate) uniform_pool: Arc<Mutex<BoundedBufferPool<wgpu::Buffer>>>,
+    pub(crate) staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    pub(crate) uniform_pool: Arc<ShardedResourcePool<PoolBuffer>>,
 }
 
 impl WgpuDevice {
@@ -48,14 +54,14 @@ impl WgpuDevice {
             queue,
             topology: None,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
-            staging_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
+            staging_pool: Arc::new(ShardedResourcePool::new(
                 TRANSIENT_POOL_MAX_BUFFERS,
                 STAGING_POOL_MAX_BYTES,
-            ))),
-            uniform_pool: Arc::new(Mutex::new(BoundedBufferPool::new(
+            )),
+            uniform_pool: Arc::new(ShardedResourcePool::new(
                 TRANSIENT_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
-            ))),
+            )),
         }
     }
 
@@ -323,13 +329,8 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
-
-        let mut pool = self
-            .staging_pool
-            .lock()
-            .expect("invariant: staging pool mutex is not poisoned");
-        Ok(if let Some(buffer) = pool.take_at_least(staging_size) {
-            buffer
+        Ok(if let Some(buffer) = self.staging_pool.take_at_least(staging_size) {
+            buffer.0
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-recycled-staging"),
@@ -342,11 +343,7 @@ impl WgpuDevice {
 
     /// Return a staging buffer back to the bounded pool for reuse.
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
-        let mut pool = self
-            .staging_pool
-            .lock()
-            .expect("invariant: staging pool mutex is not poisoned");
-        pool.recycle(buffer);
+        self.staging_pool.recycle(PoolBuffer(buffer));
     }
 
     /// Retrieve a uniform buffer of size ≥ `size` from the pool, or create
@@ -361,13 +358,8 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
-
-        let mut pool = self
-            .uniform_pool
-            .lock()
-            .expect("invariant: uniform pool mutex is not poisoned");
-        Ok(if let Some(buffer) = pool.take_at_least(uniform_size) {
-            buffer
+        Ok(if let Some(buffer) = self.uniform_pool.take_at_least(uniform_size) {
+            buffer.0
         } else {
             self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-recycled-uniform"),
@@ -380,11 +372,7 @@ impl WgpuDevice {
 
     /// Return a uniform buffer back to the bounded pool for reuse.
     pub fn recycle_uniform_buffer(&self, buffer: wgpu::Buffer) {
-        let mut pool = self
-            .uniform_pool
-            .lock()
-            .expect("invariant: uniform pool mutex is not poisoned");
-        pool.recycle(buffer);
+        self.uniform_pool.recycle(PoolBuffer(buffer));
     }
 
     /// Drop transient buffers retained for reuse.
@@ -395,14 +383,130 @@ impl WgpuDevice {
     /// tears down GPU state.
     #[inline]
     pub fn clear_transient_pools(&self) {
-        self.staging_pool
-            .lock()
-            .expect("invariant: staging pool mutex is not poisoned")
-            .clear();
-        self.uniform_pool
-            .lock()
-            .expect("invariant: uniform pool mutex is not poisoned")
-            .clear();
+        self.staging_pool.clear();
+        self.uniform_pool.clear();
+    }
+
+    /// Copy a subset of a device buffer's contents into a host slice (device→host).
+    ///
+    /// The transfer starts at element `offset` in the device buffer and copies
+    /// `out.len()` elements. The range `offset..offset + out.len()` must be within
+    /// `buffer.len`.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::LengthMismatch`] if the requested range falls outside the buffer bounds.
+    /// [`HephaestusError::AllocationFailed`] if element byte conversion overflows `u64`.
+    pub fn download_sub_buffer<T: Pod>(
+        &self,
+        buffer: &WgpuBuffer<T>,
+        offset: usize,
+        out: &mut [T],
+    ) -> Result<()> {
+        validate_slice_alignment(out)?;
+        let end = offset.checked_add(out.len()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
+            }
+        })?;
+        if end > buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: end,
+                device_len: buffer.len,
+            });
+        }
+        if out.is_empty() {
+            return Ok(());
+        }
+
+        let element_size = core::mem::size_of::<T>();
+        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("byte offset calculation overflows u64 for offset {offset}"),
+            }
+        })?;
+        let byte_len = Self::byte_size::<T>(out.len())?;
+        let padded = Self::padded_size::<T>(out.len())?;
+        let raw_staging = self.get_staging_buffer(padded)?;
+        let staging_size = raw_staging.size();
+        let staging =
+            crate::infrastructure::pool::StagingBufferGuard::new(self.clone(), raw_staging);
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-download-sub"),
+            });
+        encoder.copy_buffer_to_buffer(&buffer.buffer, byte_offset, &staging, 0, padded);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = staging.slice(..staging_size);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.device
+            .poll(wgpu::PollType::Wait)
+            .map_err(|e| HephaestusError::TransferFailed {
+                message: format!("device poll failed: {e:?}"),
+            })?;
+        receiver
+            .recv()
+            .map_err(|_| HephaestusError::TransferFailed {
+                message: "map_async callback dropped".to_string(),
+            })?
+            .map_err(|e| HephaestusError::TransferFailed {
+                message: format!("buffer mapping failed: {e:?}"),
+            })?;
+
+        let mapped = slice.get_mapped_range();
+        out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len as usize]));
+        drop(mapped);
+        staging.unmap();
+
+        Ok(())
+    }
+
+    /// Overwrite a subset of a device buffer with host data (host→device).
+    ///
+    /// Writes `host.len()` elements starting at element `offset` in the device buffer.
+    /// The range `offset..offset + host.len()` must be within `buffer.len`.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::LengthMismatch`] if the requested range falls outside the buffer bounds.
+    /// [`HephaestusError::AllocationFailed`] if element byte conversion overflows `u64`.
+    pub fn write_sub_buffer<T: Pod>(
+        &self,
+        buffer: &WgpuBuffer<T>,
+        offset: usize,
+        host: &[T],
+    ) -> Result<()> {
+        validate_slice_alignment(host)?;
+        let end = offset.checked_add(host.len()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("offset {offset} + host.len() {} overflows usize", host.len()),
+            }
+        })?;
+        if end > buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: end,
+                device_len: buffer.len,
+            });
+        }
+        if host.is_empty() {
+            return Ok(());
+        }
+
+        let element_size = core::mem::size_of::<T>();
+        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("byte offset calculation overflows u64 for offset {offset}"),
+            }
+        })?;
+        self.queue
+            .write_buffer(buffer.raw(), byte_offset, bytemuck::cast_slice(host));
+        Ok(())
     }
 }
 
@@ -415,6 +519,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<WgpuBuffer<T>> {
+        validate_buffer_size::<T>(len)?;
         // WebGPU guarantees newly created buffers are zero-initialized.
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("hephaestus-storage"),
@@ -432,6 +537,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn upload<T: Pod>(&self, host: &[T]) -> Result<WgpuBuffer<T>> {
+        validate_slice_alignment(host)?;
         let byte_len = Self::byte_size::<T>(host.len())?;
         let padded_len = Self::padded_size::<T>(host.len())?;
         let buffer = if padded_len == 0 {
@@ -462,6 +568,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn download<T: Pod>(&self, buffer: &WgpuBuffer<T>, out: &mut [T]) -> Result<()> {
+        validate_slice_alignment(out)?;
         if out.len() != buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: out.len(),
@@ -474,8 +581,10 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = Self::byte_size::<T>(buffer.len)?;
         let padded = Self::padded_size::<T>(buffer.len)?;
-        let staging = self.get_staging_buffer(padded)?;
-        let staging_size = staging.size();
+        let raw_staging = self.get_staging_buffer(padded)?;
+        let staging_size = raw_staging.size();
+        let staging =
+            crate::infrastructure::pool::StagingBufferGuard::new(self.clone(), raw_staging);
 
         let mut encoder = self
             .device
@@ -509,12 +618,11 @@ impl ComputeDevice for WgpuDevice {
         drop(mapped);
         staging.unmap();
 
-        self.recycle_staging_buffer(staging);
-
         Ok(())
     }
 
     fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
+        validate_slice_alignment(host)?;
         if host.len() != buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: host.len(),

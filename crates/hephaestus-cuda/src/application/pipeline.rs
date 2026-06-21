@@ -18,67 +18,65 @@ pub fn cached_kernel(
 ) -> Result<Arc<SafeCachedKernel>> {
     #[cfg(feature = "cuda")]
     {
-        if let Some(cached) = device
-            .pipeline_cache
-            .get(&key)
-            .expect("invariant: pipeline cache is not poisoned")
-        {
-            return Ok(cached);
-        }
-
-        let src = source();
-        let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("CUDA compilation failed for {func_name}: {e}"),
-            }
-        })?;
-
-        let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("PTX is not a valid CString: {e}"),
-        })?;
-
-        let func_name_c =
-            std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("kernel name is not a valid CString: {e}"),
+        let compile = || -> Result<Arc<SafeCachedKernel>> {
+            let src = source();
+            let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
+                HephaestusError::DispatchFailed {
+                    message: format!("CUDA compilation failed for {func_name}: {e}"),
+                }
             })?;
 
-        let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
-        // SAFETY: The driver and context must be initialized. CudaDevice::try_default() has bound the context.
-        // `module` is a valid out-pointer.
-        unsafe {
-            let res = cuda_core::sys::cuModuleLoadData(
-                &mut module as *mut cuda_core::sys::CUmodule,
-                ptx_c.as_ptr() as *const std::ffi::c_void,
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuModuleLoadData failed with code: {res}"),
-                });
-            }
+            let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
+                message: format!("PTX is not a valid CString: {e}"),
+            })?;
 
-            let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
-            let res = cuda_core::sys::cuModuleGetFunction(
-                &mut func as *mut cuda_core::sys::CUfunction,
-                module as *mut _,
-                func_name_c.as_ptr(),
-            );
-            if res != 0 {
-                let _ = cuda_core::sys::cuModuleUnload(module as *mut _);
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
-                });
-            }
+            let func_name_c =
+                std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
+                    message: format!("kernel name is not a valid CString: {e}"),
+                })?;
 
-            let kernel = Arc::new(SafeCachedKernel { module, func });
-            if let Some(cached) = device
-                .pipeline_cache
-                .insert(key, kernel.clone())
-                .expect("invariant: pipeline cache is not poisoned")
-            {
-                Ok(cached)
-            } else {
-                Ok(kernel)
+            let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
+            // SAFETY: The driver and context must be initialized. CudaDevice::try_default() has bound the context.
+            // `module` is a valid out-pointer.
+            unsafe {
+                let res = cuda_core::sys::cuModuleLoadData(
+                    &mut module as *mut cuda_core::sys::CUmodule,
+                    ptx_c.as_ptr() as *const std::ffi::c_void,
+                );
+                if res != 0 {
+                    return Err(HephaestusError::DispatchFailed {
+                        message: format!("cuModuleLoadData failed with code: {res}"),
+                    });
+                }
+
+                let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
+                let res = cuda_core::sys::cuModuleGetFunction(
+                    &mut func as *mut cuda_core::sys::CUfunction,
+                    module as *mut _,
+                    func_name_c.as_ptr(),
+                );
+                if res != 0 {
+                    let _ = cuda_core::sys::cuModuleUnload(module as *mut _);
+                    return Err(HephaestusError::DispatchFailed {
+                        message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
+                    });
+                }
+
+                Ok(Arc::new(SafeCachedKernel { module, func }))
             }
+        };
+
+        let cell = device
+            .pipeline_cache
+            .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
+            .expect("invariant: pipeline cache is not poisoned");
+
+        match cell
+            .get_or_init(|| compile().map_err(|e| e.to_string()))
+            .clone()
+        {
+            Ok(k) => Ok(k),
+            Err(e) => Err(HephaestusError::DispatchFailed { message: e }),
         }
     }
 

@@ -157,8 +157,11 @@ impl PyArray {
 
     // ── Unary Operations ──
 
-    fn exp(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&self.device, &self.buffer)
+    fn exp(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -167,8 +170,11 @@ impl PyArray {
         })
     }
 
-    fn log(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<LnOp, f32>(&self.device, &self.buffer)
+    fn log(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<LnOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -177,8 +183,11 @@ impl PyArray {
         })
     }
 
-    fn sin(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<SinOp, f32>(&self.device, &self.buffer)
+    fn sin(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<SinOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -187,8 +196,11 @@ impl PyArray {
         })
     }
 
-    fn cos(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<CosOp, f32>(&self.device, &self.buffer)
+    fn cos(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<CosOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -197,8 +209,11 @@ impl PyArray {
         })
     }
 
-    fn sqrt(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<SqrtOp, f32>(&self.device, &self.buffer)
+    fn sqrt(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<SqrtOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -207,8 +222,11 @@ impl PyArray {
         })
     }
 
-    fn abs(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<AbsOp, f32>(&self.device, &self.buffer)
+    fn abs(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<AbsOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -217,8 +235,11 @@ impl PyArray {
         })
     }
 
-    fn neg(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&self.device, &self.buffer)
+    fn neg(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -229,8 +250,11 @@ impl PyArray {
 
     // ── Reductions ──
 
-    fn sum(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::reduction::<SumOp, f32>(&self.device, &self.buffer)
+    fn sum(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::reduction::<SumOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -239,8 +263,11 @@ impl PyArray {
         })
     }
 
-    fn min(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::reduction::<MinOp, f32>(&self.device, &self.buffer)
+    fn min(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::reduction::<MinOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -249,8 +276,11 @@ impl PyArray {
         })
     }
 
-    fn max(&self) -> PyResult<Self> {
-        let out_buf = hephaestus_wgpu::reduction::<MaxOp, f32>(&self.device, &self.buffer)
+    fn max(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || hephaestus_wgpu::reduction::<MaxOp, f32>(&dev, &buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -259,15 +289,16 @@ impl PyArray {
         })
     }
 
-    fn mean(&self) -> PyResult<Self> {
-        let summed = hephaestus_wgpu::reduction::<SumOp, f32>(&self.device, &self.buffer)
+    fn mean(&self, py: Python<'_>) -> PyResult<Self> {
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let len = self.buffer.len();
+        let out_buf = py
+            .allow_threads(move || {
+                let summed = hephaestus_wgpu::reduction::<SumOp, f32>(&dev, &buf)?;
+                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &summed, 1.0 / len as f32)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        let out_buf = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(
-            &self.device,
-            &summed,
-            1.0 / self.buffer.len() as f32,
-        )
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
             device: self.device.clone(),
@@ -277,7 +308,7 @@ impl PyArray {
 
     // ── Binary Operations ──
 
-    fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __add__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -285,21 +316,23 @@ impl PyArray {
                     self.shape, other_arr.shape
                 )));
             }
-            let out_buf = hephaestus_wgpu::binary_elementwise::<AddOp, f32>(
-                &self.device,
-                &self.buffer,
-                &other_arr.buffer,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let other_buf = other_arr.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<AddOp, f32>(&dev, &buf, &other_buf))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
                 shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &self.buffer, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &buf, val))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -310,11 +343,11 @@ impl PyArray {
         }
     }
 
-    fn __radd__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        self.__add__(other)
+    fn __radd__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.__add__(py, other)
     }
 
-    fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -322,21 +355,23 @@ impl PyArray {
                     self.shape, other_arr.shape
                 )));
             }
-            let out_buf = hephaestus_wgpu::binary_elementwise::<SubOp, f32>(
-                &self.device,
-                &self.buffer,
-                &other_arr.buffer,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let other_buf = other_arr.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<SubOp, f32>(&dev, &buf, &other_buf))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
                 shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&self.device, &self.buffer, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&dev, &buf, val))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -347,14 +382,16 @@ impl PyArray {
         }
     }
 
-    fn __rsub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __rsub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
-            let negated =
-                hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&self.device, &self.buffer)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&self.device, &negated, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || {
+                    let negated = hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&dev, &buf)?;
+                    hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &negated, val)
+                })
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -365,7 +402,7 @@ impl PyArray {
         }
     }
 
-    fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -373,21 +410,23 @@ impl PyArray {
                     self.shape, other_arr.shape
                 )));
             }
-            let out_buf = hephaestus_wgpu::binary_elementwise::<MulOp, f32>(
-                &self.device,
-                &self.buffer,
-                &other_arr.buffer,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let other_buf = other_arr.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<MulOp, f32>(&dev, &buf, &other_buf))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
                 shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &self.buffer, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, val))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -398,11 +437,11 @@ impl PyArray {
         }
     }
 
-    fn __rmul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        self.__mul__(other)
+    fn __rmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.__mul__(py, other)
     }
 
-    fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __truediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -410,21 +449,23 @@ impl PyArray {
                     self.shape, other_arr.shape
                 )));
             }
-            let out_buf = hephaestus_wgpu::binary_elementwise::<DivOp, f32>(
-                &self.device,
-                &self.buffer,
-                &other_arr.buffer,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let other_buf = other_arr.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&dev, &buf, &other_buf))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
                 shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&self.device, &self.buffer, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&dev, &buf, val))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -435,14 +476,16 @@ impl PyArray {
         }
     }
 
-    fn __rtruediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn __rtruediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
-            let recip =
-                hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&self.device, &self.buffer)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&self.device, &recip, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || {
+                    let recip = hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&dev, &buf)?;
+                    hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &recip, val)
+                })
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -455,6 +498,7 @@ impl PyArray {
 
     fn __pow__(
         &self,
+        py: Python<'_>,
         other: &Bound<'_, PyAny>,
         _modulo: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
@@ -465,21 +509,23 @@ impl PyArray {
                     self.shape, other_arr.shape
                 )));
             }
-            let out_buf = hephaestus_wgpu::binary_elementwise::<PowOp, f32>(
-                &self.device,
-                &self.buffer,
-                &other_arr.buffer,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let other_buf = other_arr.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&dev, &buf, &other_buf))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
                 shape: self.shape.clone(),
             })
         } else if let Ok(val) = other.extract::<f32>() {
-            let out_buf =
-                hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&self.device, &self.buffer, val)
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
+            let out_buf = py
+                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&dev, &buf, val))
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
                 device: self.device.clone(),
@@ -492,6 +538,7 @@ impl PyArray {
 
     fn __rpow__(
         &self,
+        py: Python<'_>,
         other: &Bound<'_, PyAny>,
         _modulo: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
@@ -499,14 +546,14 @@ impl PyArray {
             if val <= 0.0 {
                 return Err(PyValueError::new_err("power base must be positive"));
             }
+            let dev = self.device.clone();
+            let buf = self.buffer.clone();
             let ln_val = val.ln();
-            let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(
-                &self.device,
-                &self.buffer,
-                ln_val,
-            )
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            let out_buf = hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&self.device, &scaled)
+            let out_buf = py
+                .allow_threads(move || {
+                    let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, ln_val)?;
+                    hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&dev, &scaled)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -518,7 +565,7 @@ impl PyArray {
         }
     }
 
-    fn matmul(&self, other: &PyArray) -> PyResult<Self> {
+    fn matmul(&self, py: Python<'_>, other: &PyArray) -> PyResult<Self> {
         if self.shape.len() != 2 || other.shape.len() != 2 {
             return Err(PyValueError::new_err("matmul requires 2D arrays"));
         }
@@ -536,18 +583,24 @@ impl PyArray {
             Layout::c_contiguous([m, k]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let layout_b =
             Layout::c_contiguous([k, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let out_buf = matmul(
-            &self.device,
-            StridedOperand {
-                buffer: &self.buffer,
-                layout: &layout_a,
-            },
-            StridedOperand {
-                buffer: &other.buffer,
-                layout: &layout_b,
-            },
-        )
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf_a = self.buffer.clone();
+        let buf_b = other.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                matmul(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf_a,
+                        layout: &layout_a,
+                    },
+                    StridedOperand {
+                        buffer: &buf_b,
+                        layout: &layout_b,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(Self {
             buffer: out_buf,
@@ -556,7 +609,7 @@ impl PyArray {
         })
     }
 
-    fn dot(&self, other: &PyArray) -> PyResult<Self> {
+    fn dot(&self, py: Python<'_>, other: &PyArray) -> PyResult<Self> {
         if self.shape.len() != 1 || other.shape.len() != 1 {
             return Err(PyValueError::new_err("dot requires 1D arrays"));
         }
@@ -571,19 +624,24 @@ impl PyArray {
             Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let layout_b =
             Layout::c_contiguous([len]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-        let out_buf = dot(
-            &self.device,
-            StridedOperand {
-                buffer: &self.buffer,
-                layout: &layout_a,
-            },
-            StridedOperand {
-                buffer: &other.buffer,
-                layout: &layout_b,
-            },
-        )
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf_a = self.buffer.clone();
+        let buf_b = other.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                dot(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf_a,
+                        layout: &layout_a,
+                    },
+                    StridedOperand {
+                        buffer: &buf_b,
+                        layout: &layout_b,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(Self {
             buffer: out_buf,
@@ -592,7 +650,7 @@ impl PyArray {
         })
     }
 
-    fn trace(&self) -> PyResult<Self> {
+    fn trace(&self, py: Python<'_>) -> PyResult<Self> {
         if self.shape.len() != 2 {
             return Err(PyValueError::new_err("trace requires a 2D array"));
         }
@@ -602,15 +660,19 @@ impl PyArray {
         let n = self.shape[0];
         let layout =
             Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-        let out_buf = trace(
-            &self.device,
-            StridedOperand {
-                buffer: &self.buffer,
-                layout: &layout,
-            },
-        )
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                trace(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(Self {
             buffer: out_buf,
@@ -619,30 +681,38 @@ impl PyArray {
         })
     }
 
-    fn norm_l1(&self) -> PyResult<Self> {
+    fn norm_l1(&self, py: Python<'_>) -> PyResult<Self> {
         let out_buf = match self.shape.len() {
             1 => {
                 let layout = Layout::c_contiguous([self.shape[0]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_l1(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_l1(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             2 => {
                 let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_l1(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_l1(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
@@ -654,30 +724,38 @@ impl PyArray {
         })
     }
 
-    fn norm_l2(&self) -> PyResult<Self> {
+    fn norm_l2(&self, py: Python<'_>) -> PyResult<Self> {
         let out_buf = match self.shape.len() {
             1 => {
                 let layout = Layout::c_contiguous([self.shape[0]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_l2(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_l2(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             2 => {
                 let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_l2(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_l2(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
@@ -689,30 +767,38 @@ impl PyArray {
         })
     }
 
-    fn norm_max(&self) -> PyResult<Self> {
+    fn norm_max(&self, py: Python<'_>) -> PyResult<Self> {
         let out_buf = match self.shape.len() {
             1 => {
                 let layout = Layout::c_contiguous([self.shape[0]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_max(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_max(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             2 => {
                 let layout = Layout::c_contiguous([self.shape[0], self.shape[1]])
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
-                norm_max(
-                    &self.device,
-                    StridedOperand {
-                        buffer: &self.buffer,
-                        layout: &layout,
-                    },
-                )
+                let dev = self.device.clone();
+                let buf = self.buffer.clone();
+                py.allow_threads(move || {
+                    norm_max(
+                        &dev,
+                        StridedOperand {
+                            buffer: &buf,
+                            layout: &layout,
+                        },
+                    )
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
             }
             _ => return Err(PyValueError::new_err("norm only supports 1D or 2D arrays")),
@@ -728,123 +814,123 @@ impl PyArray {
 // ── Top-level functions ──
 
 #[pyfunction]
-fn add(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__add__(b)
+fn add(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__add__(py, b)
 }
 
 #[pyfunction]
-fn sub(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__sub__(b)
+fn sub(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__sub__(py, b)
 }
 
 #[pyfunction]
-fn mul(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__mul__(b)
+fn mul(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__mul__(py, b)
 }
 
 #[pyfunction]
-fn div(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__truediv__(b)
+fn div(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__truediv__(py, b)
 }
 
 #[pyfunction]
-fn pow(a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__pow__(b, None)
+fn pow(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
+    a.__pow__(py, b, None)
 }
 
 #[pyfunction]
-fn exp(a: &PyArray) -> PyResult<PyArray> {
-    a.exp()
+fn exp(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.exp(py)
 }
 
 #[pyfunction]
-fn log(a: &PyArray) -> PyResult<PyArray> {
-    a.log()
+fn log(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.log(py)
 }
 
 #[pyfunction]
-fn sin(a: &PyArray) -> PyResult<PyArray> {
-    a.sin()
+fn sin(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.sin(py)
 }
 
 #[pyfunction]
-fn cos(a: &PyArray) -> PyResult<PyArray> {
-    a.cos()
+fn cos(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.cos(py)
 }
 
 #[pyfunction]
-fn sqrt(a: &PyArray) -> PyResult<PyArray> {
-    a.sqrt()
+fn sqrt(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.sqrt(py)
 }
 
 #[pyfunction]
-fn abs(a: &PyArray) -> PyResult<PyArray> {
-    a.abs()
+fn abs(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.abs(py)
 }
 
 #[pyfunction]
-fn neg(a: &PyArray) -> PyResult<PyArray> {
-    a.neg()
+fn neg(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.neg(py)
 }
 
 #[pyfunction]
-fn sum(a: &PyArray) -> PyResult<PyArray> {
-    a.sum()
+fn sum(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.sum(py)
 }
 
 #[pyfunction]
-fn min(a: &PyArray) -> PyResult<PyArray> {
-    a.min()
+fn min(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.min(py)
 }
 
 #[pyfunction]
-fn max(a: &PyArray) -> PyResult<PyArray> {
-    a.max()
+fn max(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.max(py)
 }
 
 #[pyfunction]
-fn mean(a: &PyArray) -> PyResult<PyArray> {
-    a.mean()
+fn mean(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.mean(py)
 }
 
 #[pyfunction]
 #[pyo3(name = "matmul")]
-fn matmul_py(a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
-    a.matmul(b)
+fn matmul_py(py: Python<'_>, a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
+    a.matmul(py, b)
 }
 
 #[pyfunction]
 #[pyo3(name = "dot")]
-fn dot_py(a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
-    a.dot(b)
+fn dot_py(py: Python<'_>, a: &PyArray, b: &PyArray) -> PyResult<PyArray> {
+    a.dot(py, b)
 }
 
 #[pyfunction]
 #[pyo3(name = "trace")]
-fn trace_py(a: &PyArray) -> PyResult<PyArray> {
-    a.trace()
+fn trace_py(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.trace(py)
 }
 
 #[pyfunction]
 #[pyo3(name = "norm_l1")]
-fn norm_l1_py(a: &PyArray) -> PyResult<PyArray> {
-    a.norm_l1()
+fn norm_l1_py(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.norm_l1(py)
 }
 
 #[pyfunction]
 #[pyo3(name = "norm_l2")]
-fn norm_l2_py(a: &PyArray) -> PyResult<PyArray> {
-    a.norm_l2()
+fn norm_l2_py(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.norm_l2(py)
 }
 
 #[pyfunction]
 #[pyo3(name = "norm_max")]
-fn norm_max_py(a: &PyArray) -> PyResult<PyArray> {
-    a.norm_max()
+fn norm_max_py(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
+    a.norm_max(py)
 }
 
 #[pyfunction]
-fn cholesky(a: &PyArray) -> PyResult<PyArray> {
+fn cholesky(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err(
             "cholesky requires a square 2D matrix",
@@ -852,11 +938,16 @@ fn cholesky(a: &PyArray) -> PyResult<PyArray> {
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::cholesky_decompose_blocked(&a.device, op)
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+    let decomp = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            hephaestus_wgpu::cholesky_decompose_blocked(&dev, op)
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
     Ok(PyArray {
         buffer: decomp.into_lower(),
@@ -866,48 +957,48 @@ fn cholesky(a: &PyArray) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
-fn lu(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
+fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err("lu requires a square 2D matrix"));
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::lu_decompose_blocked(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let mut host_factors = vec![0.0f32; n * n];
-    a.device
-        .download(decomp.factors(), &mut host_factors)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let (decomp, l_buf, u_buf) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::lu_decompose_blocked(&dev, op)?;
 
-    let mut host_l = vec![0.0f32; n * n];
-    let mut host_u = vec![0.0f32; n * n];
-    for r in 0..n {
-        for c in 0..n {
-            let idx = r * n + c;
-            let val = host_factors[idx];
-            if r > c {
-                host_l[idx] = val;
-            } else if r == c {
-                host_l[idx] = 1.0;
-                host_u[idx] = val;
-            } else {
-                host_u[idx] = val;
+            let mut host_factors = vec![0.0f32; n * n];
+            dev.download(decomp.factors(), &mut host_factors)?;
+
+            let mut host_l = vec![0.0f32; n * n];
+            let mut host_u = vec![0.0f32; n * n];
+            for r in 0..n {
+                for c in 0..n {
+                    let idx = r * n + c;
+                    let val = host_factors[idx];
+                    if r > c {
+                        host_l[idx] = val;
+                    } else if r == c {
+                        host_l[idx] = 1.0;
+                        host_u[idx] = val;
+                    } else {
+                        host_u[idx] = val;
+                    }
+                }
             }
-        }
-    }
 
-    let l_buf = a
-        .device
-        .upload(&host_l)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let u_buf = a
-        .device
-        .upload(&host_u)
+            let l_buf = dev.upload(&host_l)?;
+            let u_buf = dev.upload(&host_u)?;
+
+            Ok::<_, hephaestus_core::HephaestusError>((decomp, l_buf, u_buf))
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
@@ -926,70 +1017,85 @@ fn lu(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
 }
 
 #[pyfunction]
-fn qr(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     if a.shape.len() != 2 {
         return Err(PyValueError::new_err("qr requires a 2D matrix"));
     }
     let [rows, cols] = [a.shape[0], a.shape[1]];
     let layout =
         Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::qr_decompose_blocked(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let q_host = decomp.inner().q();
-    let r_host = decomp.inner().r();
+    let (q_buf, r_buf, q_shape, r_shape) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::qr_decompose_blocked(&dev, op)?;
 
-    let q_buf = a
-        .device
-        .upload(leto::Storage::as_slice(q_host.storage()))
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let r_buf = a
-        .device
-        .upload(leto::Storage::as_slice(r_host.storage()))
+            let q_host = decomp.inner().q();
+            let r_host = decomp.inner().r();
+
+            let q_buf = dev.upload(leto::Storage::as_slice(q_host.storage()))?;
+            let r_buf = dev.upload(leto::Storage::as_slice(r_host.storage()))?;
+
+            Ok::<_, hephaestus_core::HephaestusError>((
+                q_buf,
+                r_buf,
+                vec![q_host.shape()[0], q_host.shape()[1]],
+                vec![r_host.shape()[0], r_host.shape()[1]],
+            ))
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
             buffer: q_buf,
             device: a.device.clone(),
-            shape: vec![q_host.shape()[0], q_host.shape()[1]],
+            shape: q_shape,
         },
         PyArray {
             buffer: r_buf,
             device: a.device.clone(),
-            shape: vec![r_host.shape()[0], r_host.shape()[1]],
+            shape: r_shape,
         },
     ))
 }
 
 #[pyfunction]
-fn col_piv_qr(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
+fn col_piv_qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
     if a.shape.len() != 2 {
         return Err(PyValueError::new_err("col_piv_qr requires a 2D matrix"));
     }
     let [rows, cols] = [a.shape[0], a.shape[1]];
     let layout =
         Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::col_piv_qr(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let q_buf = decomp.q().clone();
-    let r_buf = decomp.r().clone();
-    let m = (q_buf.len() as f64).sqrt() as usize;
-    let n = r_buf.len().checked_div(m).unwrap_or(0);
-    let perm = decomp
-        .permutation()
-        .iter()
-        .map(|&x| x as u64)
-        .collect::<Vec<_>>();
+    let (q_buf, r_buf, m, n, perm) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::col_piv_qr(&dev, op)?;
+
+            let q_buf = decomp.q().clone();
+            let r_buf = decomp.r().clone();
+            let m = (q_buf.len() as f64).sqrt() as usize;
+            let n = r_buf.len().checked_div(m).unwrap_or(0);
+            let perm = decomp
+                .permutation()
+                .iter()
+                .map(|&x| x as u64)
+                .collect::<Vec<_>>();
+
+            Ok::<_, hephaestus_core::HephaestusError>((q_buf, r_buf, m, n, perm))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
@@ -1007,68 +1113,82 @@ fn col_piv_qr(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
 }
 
 #[pyfunction]
-fn svd(a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
+fn svd(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
     if a.shape.len() != 2 {
         return Err(PyValueError::new_err("svd requires a 2D matrix"));
     }
     let [rows, cols] = [a.shape[0], a.shape[1]];
     let layout =
         Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::svd_decompose(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let u_host = decomp.inner().left_singular_vectors.clone();
-    let s_host = leto::Array1::from_shape_vec(
-        [decomp.inner().singular_values.len()],
-        decomp.inner().singular_values.clone(),
-    )
-    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (u_buf, s_buf, vt_buf, u_shape, s_shape, vt_shape) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::svd_decompose(&dev, op)?;
 
-    let vt_transposed = decomp
-        .inner()
-        .right_singular_vectors
-        .transpose([1, 0])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let vt_host = vt_transposed.to_contiguous();
+            let u_host = decomp.inner().left_singular_vectors.clone();
+            let s_host = leto::Array1::from_shape_vec(
+                [decomp.inner().singular_values.len()],
+                decomp.inner().singular_values.clone(),
+            )
+            .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
+                message: e.to_string(),
+            })?;
 
-    let u_buf = a
-        .device
-        .upload(leto::Storage::as_slice(u_host.storage()))
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let s_buf = a
-        .device
-        .upload(leto::Storage::as_slice(s_host.storage()))
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let vt_buf = a
-        .device
-        .upload(leto::Storage::as_slice(vt_host.storage()))
+            let vt_transposed = decomp
+                .inner()
+                .right_singular_vectors
+                .transpose([1, 0])
+                .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
+                    message: e.to_string(),
+                })?;
+            let vt_host = vt_transposed.to_contiguous();
+
+            let u_buf = dev.upload(leto::Storage::as_slice(u_host.storage()))?;
+            let s_buf = dev.upload(leto::Storage::as_slice(s_host.storage()))?;
+            let vt_buf = dev.upload(leto::Storage::as_slice(vt_host.storage()))?;
+
+            let u_shape = vec![u_host.shape()[0], u_host.shape()[1]];
+            let s_shape = vec![s_host.shape()[0]];
+            let vt_shape = vec![vt_host.shape()[0], vt_host.shape()[1]];
+
+            Ok::<_, hephaestus_core::HephaestusError>((
+                u_buf,
+                s_buf,
+                vt_buf,
+                u_shape,
+                s_shape,
+                vt_shape,
+            ))
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
             buffer: u_buf,
             device: a.device.clone(),
-            shape: vec![u_host.shape()[0], u_host.shape()[1]],
+            shape: u_shape,
         },
         PyArray {
             buffer: s_buf,
             device: a.device.clone(),
-            shape: vec![s_host.shape()[0]],
+            shape: s_shape,
         },
         PyArray {
             buffer: vt_buf,
             device: a.device.clone(),
-            shape: vec![vt_host.shape()[0], vt_host.shape()[1]],
+            shape: vt_shape,
         },
     ))
 }
 
 #[pyfunction]
-fn symmetric_eigen(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+fn symmetric_eigen(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err(
             "symmetric_eigen requires a square 2D matrix",
@@ -1076,41 +1196,46 @@ fn symmetric_eigen(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::symmetric_eigen_jacobi(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let w_host = &decomp.inner().eigenvalues;
-    let v_host = decomp.inner().eigenvectors.clone();
+    let (w_buf, v_buf, w_shape, v_shape) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::symmetric_eigen_jacobi(&dev, op)?;
 
-    let w_buf = a
-        .device
-        .upload(w_host)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-    let v_buf = a
-        .device
-        .upload(leto::Storage::as_slice(v_host.storage()))
+            let w_host = &decomp.inner().eigenvalues;
+            let v_host = decomp.inner().eigenvectors.clone();
+
+            let w_buf = dev.upload(w_host)?;
+            let v_buf = dev.upload(leto::Storage::as_slice(v_host.storage()))?;
+
+            let w_shape = vec![w_host.len()];
+            let v_shape = vec![v_host.shape()[0], v_host.shape()[1]];
+
+            Ok::<_, hephaestus_core::HephaestusError>((w_buf, v_buf, w_shape, v_shape))
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
             buffer: w_buf,
             device: a.device.clone(),
-            shape: vec![w_host.len()],
+            shape: w_shape,
         },
         PyArray {
             buffer: v_buf,
             device: a.device.clone(),
-            shape: vec![v_host.shape()[0], v_host.shape()[1]],
+            shape: v_shape,
         },
     ))
 }
 
 #[pyfunction]
-fn singular_values(a: &PyArray) -> PyResult<PyArray> {
+fn singular_values(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     if a.shape.len() != 2 {
         return Err(PyValueError::new_err(
             "singular_values requires a 2D matrix",
@@ -1119,11 +1244,17 @@ fn singular_values(a: &PyArray) -> PyResult<PyArray> {
     let [rows, cols] = [a.shape[0], a.shape[1]];
     let layout =
         Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let s_buf = hephaestus_wgpu::singular_values(&a.device, op)
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let s_buf = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            hephaestus_wgpu::singular_values(&dev, op)
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok(PyArray {
@@ -1134,22 +1265,30 @@ fn singular_values(a: &PyArray) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
-fn schur(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+fn schur(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err("schur requires a square 2D matrix"));
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::schur(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let q_buf = decomp.q_buffer().clone();
-    let t_buf = decomp.t_buffer().clone();
-    let n_val = decomp.n();
+    let (q_buf, t_buf, n_val) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::schur(&dev, op)?;
+
+            let q_buf = decomp.q_buffer().clone();
+            let t_buf = decomp.t_buffer().clone();
+            let n_val = decomp.n();
+
+            Ok::<_, hephaestus_core::HephaestusError>((q_buf, t_buf, n_val))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
@@ -1166,7 +1305,7 @@ fn schur(a: &PyArray) -> PyResult<(PyArray, PyArray)> {
 }
 
 #[pyfunction]
-fn bunch_kaufman(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
+fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err(
             "bunch_kaufman requires a square 2D matrix",
@@ -1174,21 +1313,29 @@ fn bunch_kaufman(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let decomp = hephaestus_wgpu::bunch_kaufman(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let l_buf = decomp.l_buffer().clone();
-    let d_buf = decomp.d_buffer().clone();
-    let perm = decomp
-        .permutation()
-        .iter()
-        .map(|&x| x as u64)
-        .collect::<Vec<_>>();
-    let n_val = decomp.n();
+    let (l_buf, d_buf, perm, n_val) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::bunch_kaufman(&dev, op)?;
+
+            let l_buf = decomp.l_buffer().clone();
+            let d_buf = decomp.d_buffer().clone();
+            let perm = decomp
+                .permutation()
+                .iter()
+                .map(|&x| x as u64)
+                .collect::<Vec<_>>();
+            let n_val = decomp.n();
+
+            Ok::<_, hephaestus_core::HephaestusError>((l_buf, d_buf, perm, n_val))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok((
         PyArray {
@@ -1206,17 +1353,23 @@ fn bunch_kaufman(a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
 }
 
 #[pyfunction]
-fn matexp(a: &PyArray) -> PyResult<PyArray> {
+fn matexp(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err("matexp requires a square 2D matrix"));
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let out_buf = hephaestus_wgpu::matexp(&a.device, op)
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let out_buf = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            hephaestus_wgpu::matexp(&dev, op)
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok(PyArray {
@@ -1227,19 +1380,25 @@ fn matexp(a: &PyArray) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
-fn pinv(a: &PyArray) -> PyResult<PyArray> {
+fn pinv(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     if a.shape.len() != 2 {
         return Err(PyValueError::new_err("pinv requires a 2D matrix"));
     }
     let [rows, cols] = [a.shape[0], a.shape[1]];
     let layout =
         Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let out_buf =
-        hephaestus_wgpu::pinv(&a.device, op).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let out_buf = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            hephaestus_wgpu::pinv(&dev, op)
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     Ok(PyArray {
         buffer: out_buf,
@@ -1260,16 +1419,21 @@ fn eigenvalues<'py>(
     }
     let n = a.shape[0];
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let op = StridedOperand {
-        buffer: &a.buffer,
-        layout: &layout,
-    };
-    let e_buf = hephaestus_wgpu::eigenvalues(&a.device, op)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
 
-    let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
-    a.device
-        .download(&e_buf, &mut host_data)
+    let host_data = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let e_buf = hephaestus_wgpu::eigenvalues(&dev, op)?;
+
+            let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
+            dev.download(&e_buf, &mut host_data)?;
+            Ok::<_, hephaestus_core::HephaestusError>(host_data)
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     let py_data = host_data

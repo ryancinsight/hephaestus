@@ -123,6 +123,7 @@
 //! The [`crate::application::decomposition::qr::qr_decompose_blocked`] entry point implements this with a PTX
 //! kernel that applies one Householder reflector per launch.
 
+pub(crate) mod region;
 pub(crate) mod validate;
 
 pub mod bidiagonal;

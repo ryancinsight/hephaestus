@@ -15,11 +15,13 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
+
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 
 // ---------------------------------------------------------------------------
 // SYRK uniform
@@ -39,7 +41,9 @@ struct SyrkMeta {
     offset: u32,
     /// Rank-k dimension (number of columns in the panel).
     panel_cols: u32,
-    _pad: [u32; 2],
+    /// Row offset in the panel buffer where the active panel begins.
+    panel_row_offset: u32,
+    _pad: u32,
 }
 
 // SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
@@ -70,7 +74,8 @@ fn syrk_shader_source() -> String {
     strides: vec2<i32>,
     offset: u32,
     panel_cols: u32,
-    _pad: vec2<u32>,
+    panel_row_offset: u32,
+    _pad: u32,
 }}
 
 @group(0) @binding(0) var<storage, read>      panel: array<{ty}>;
@@ -101,10 +106,10 @@ fn main(
     let num_tiles = (k + 15u) / 16u;
 
     for (var tile: u32 = 0u; tile < num_tiles; tile = tile + 1u) {{
-        // Load `panel[row, tile*16 + local_col]` into shared memory.
+        // Load `panel[row + panel_row_offset, tile*16 + local_col]` into shared memory.
         let panel_col = tile * 16u + local_col;
         if (row < rows && panel_col < k) {{
-            panel_row[local_row][local_col] = panel[row * k + panel_col];
+            panel_row[local_row][local_col] = panel[(row + syrk_meta.panel_row_offset) * k + panel_col];
         }} else {{
             panel_row[local_row][local_col] = {ty}({zero});
         }}
@@ -118,7 +123,7 @@ fn main(
                 let ki = tile * 16u + i;
                 if (ki < k) {{
                     let a_val = panel_row[local_row][i];
-                    let b_val = panel[col * k + ki];
+                    let b_val = panel[(col + syrk_meta.panel_row_offset) * k + ki];
                     sum = sum + a_val * b_val;
                 }}
             }}
@@ -151,10 +156,12 @@ struct SyrkKernel;
 /// updated, which is sufficient for the blocked Cholesky loop.
 fn syrk_trailing_update(
     device: &WgpuDevice,
+    encoder: &mut wgpu::CommandEncoder,
     trail: &WgpuBuffer<f32>,
     trail_layout: &Layout<2>,
     panel: &WgpuBuffer<f32>,
     panel_cols: usize,
+    panel_row_offset: usize,
 ) -> Result<()> {
     let [rows, cols] = trail_layout.shape;
     if rows == 0 || cols == 0 || panel_cols == 0 {
@@ -190,7 +197,12 @@ fn syrk_trailing_update(
         panel_cols: u32::try_from(panel_cols).map_err(|_| HephaestusError::DispatchFailed {
             message: format!("SYRK panel cols {panel_cols} exceeds u32"),
         })?,
-        _pad: [0; 2],
+        panel_row_offset: u32::try_from(panel_row_offset).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: format!("SYRK panel row offset {panel_row_offset} exceeds u32"),
+            }
+        })?,
+        _pad: 0,
     };
 
     let pipeline = cached_pipeline(
@@ -200,7 +212,8 @@ fn syrk_trailing_update(
         syrk_shader_source,
     );
 
-    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
+    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
+    let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
@@ -226,11 +239,6 @@ fn syrk_trailing_update(
             ],
         });
 
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-syrk"),
-        });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("hephaestus-syrk"),
@@ -249,10 +257,84 @@ fn syrk_trailing_update(
             })?;
         pass.dispatch_workgroups(wg_x, wg_y, 1);
     }
-    device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buf);
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Cholesky Panel Gather/Scatter compute kernels
+// ---------------------------------------------------------------------------
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable)]
+struct CholCopyMeta {
+    k: u32,
+    b: u32,
+    panel_rows: u32,
+    n: u32,
+}
+
+// SAFETY: CholCopyMeta is `#[repr(C)]` and every field is Pod.
+unsafe impl bytemuck::Pod for CholCopyMeta {}
+
+struct CholCopyKernel;
+
+fn chol_gather_shader_source() -> String {
+    r#"struct CopyMeta {
+    k: u32,
+    b: u32,
+    panel_rows: u32,
+    n: u32,
+}
+@group(0) @binding(0) var<storage, read_write> main_matrix: array<f32>;
+@group(0) @binding(1) var<storage, read_write> panel_matrix: array<f32>;
+@group(0) @binding(2) var<uniform> params: CopyMeta;
+
+@compute @workgroup_size(256)
+fn main(
+    @builtin(global_invocation_id) gid: vec3<u32>,
+) {
+    let total_elements = params.panel_rows * params.b;
+    let idx = gid.x;
+    if (idx >= total_elements) {
+        return;
+    }
+    let r = idx / params.b;
+    let c = idx % params.b;
+    let src_idx = (params.k + r) * params.n + (params.k + c);
+    panel_matrix[idx] = main_matrix[src_idx];
+}
+"#
+    .to_string()
+}
+
+fn chol_scatter_shader_source() -> String {
+    r#"struct CopyMeta {
+    k: u32,
+    b: u32,
+    panel_rows: u32,
+    n: u32,
+}
+@group(0) @binding(0) var<storage, read_write> main_matrix: array<f32>;
+@group(0) @binding(1) var<storage, read_write> panel_matrix: array<f32>;
+@group(0) @binding(2) var<uniform> params: CopyMeta;
+
+@compute @workgroup_size(256)
+fn main(
+    @builtin(global_invocation_id) gid: vec3<u32>,
+) {
+    let total_elements = params.panel_rows * params.b;
+    let idx = gid.x;
+    if (idx >= total_elements) {
+        return;
+    }
+    let r = idx / params.b;
+    let c = idx % params.b;
+    let dst_idx = (params.k + r) * params.n + (params.k + c);
+    main_matrix[dst_idx] = panel_matrix[idx];
+}
+"#
+    .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -461,23 +543,114 @@ pub fn cholesky_decompose_blocked(
     // Download the full matrix to host (panels are factored on CPU).
     let mut host = vec![0.0f32; n * n];
     device.download(matrix.buffer, &mut host)?;
-    let original_host = host.clone();
 
     // Device-resident buffer for the packed lower factor, updated in-place
-    // by the SYRK trailing kernel (the trailing submatrix *is* the Schur
-    // complement, stored in the not-yet-factorised portion of L).
+    // by the SYRK trailing kernel.
     let lower_buf = device.upload(&host)?;
 
     let block_size = BLOCK_SIZE.min(n);
 
+    // Pre-allocate device-resident panel buffer of maximum needed size: n * block_size.
+    let panel_dev = device.alloc_zeroed::<f32>(n * block_size)?;
+
+    let gather_pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<CholCopyKernel>(), TypeId::of::<f32>(), 0),
+        "hephaestus-chol-gather",
+        chol_gather_shader_source,
+    );
+    let scatter_pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<CholCopyKernel>(), TypeId::of::<f32>(), 1),
+        "hephaestus-chol-scatter",
+        chol_scatter_shader_source,
+    );
+
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);
+        let panel_rows = n - k;
 
-        // ── Step 1: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
+        // ── Step 1: Gather active panel column on the GPU, then download contiguously ──
+        let copy_meta = CholCopyMeta {
+            k: k as u32,
+            b: b as u32,
+            panel_rows: panel_rows as u32,
+            n: n as u32,
+        };
+        let raw_copy_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<CholCopyMeta>(1)?)?;
+        let copy_meta_buf = UniformBufferGuard::new(device.clone(), raw_copy_meta_buf);
+        device
+            .queue()
+            .write_buffer(&copy_meta_buf, 0, bytemuck::bytes_of(&copy_meta));
+
+        let gather_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("hephaestus-cholesky-gather-bind-group"),
+                layout: &gather_pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: lower_buf.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: panel_dev.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: copy_meta_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+        let scatter_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("hephaestus-cholesky-scatter-bind-group"),
+                layout: &scatter_pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: lower_buf.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: panel_dev.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: copy_meta_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+        let mut gather_encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-cholesky-panel-gather"),
+            });
+        {
+            let mut pass = gather_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hephaestus-cholesky-panel-gather"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&gather_pipeline);
+            pass.set_bind_group(0, &gather_bind_group, &[]);
+            let total_elements = panel_rows * b;
+            let wg_x = total_elements.div_ceil(256);
+            pass.dispatch_workgroups(wg_x as u32, 1, 1);
+        }
+        device.queue().submit(Some(gather_encoder.finish()));
+
+        let mut panel_host = vec![0.0f32; panel_rows * b];
+        device.download_sub_buffer(&panel_dev, 0, &mut panel_host)?;
+
+        // ── Step 1.5: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
         let mut diag_host = vec![0.0f32; b * b];
         for i in 0..b {
             for j in 0..b {
-                diag_host[i * b + j] = host[(k + i) * n + (k + j)];
+                diag_host[i * b + j] = panel_host[i * b + j];
             }
         }
         let diag_view =
@@ -490,17 +663,35 @@ pub fn cholesky_decompose_blocked(
         let diag_lower = diag_chol.lower();
         let diag_slice = leto::Storage::as_slice(diag_lower.storage());
 
-        // Write the factored diagonal block back to the host array and
-        // upload to the device buffer.
+        // Write the factored diagonal block back to panel_host
         for i in 0..b {
             for j in 0..b {
-                host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
+                panel_host[i * b + j] = diag_slice[i * b + j];
             }
         }
-        device.write_buffer(&lower_buf, &host)?;
 
         let trail_rows = n - k - b;
         if trail_rows == 0 {
+            // Upload the final diagonal block back to device buffer and scatter
+            device.write_sub_buffer(&panel_dev, 0, &panel_host)?;
+
+            let mut scatter_encoder = device
+                .inner()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("hephaestus-cholesky-panel-scatter"),
+                });
+            {
+                let mut pass = scatter_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("hephaestus-cholesky-panel-scatter"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&scatter_pipeline);
+                pass.set_bind_group(0, &scatter_bind_group, &[]);
+                let total_elements = panel_rows * b;
+                let wg_x = total_elements.div_ceil(256);
+                pass.dispatch_workgroups(wg_x as u32, 1, 1);
+            }
+            device.queue().submit(Some(scatter_encoder.finish()));
             continue;
         }
 
@@ -508,7 +699,7 @@ pub fn cholesky_decompose_blocked(
         let mut rhs = vec![0.0f32; trail_rows * b];
         for i in 0..trail_rows {
             for j in 0..b {
-                rhs[i * b + j] = host[(k + b + i) * n + (k + j)];
+                rhs[i * b + j] = panel_host[(b + i) * b + j];
             }
         }
 
@@ -524,14 +715,15 @@ pub fn cholesky_decompose_blocked(
             }
         }
 
-        // Write L₂₁ back to host and upload to the device.
+        // Write L₂₁ back to panel_host
         for i in 0..trail_rows {
             for j in 0..b {
-                host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
+                panel_host[(b + i) * b + j] = rhs[i * b + j];
             }
         }
-        device.write_buffer(&lower_buf, &host)?;
-        let panel_buf = device.upload(&rhs)?;
+
+        // Upload the entire updated active panel (diagonal + off-diagonal) back to device buffer and scatter
+        device.write_sub_buffer(&panel_dev, 0, &panel_host)?;
 
         // ── Step 3: trailing SYRK update on GPU ──
         let trail_layout = leto::Layout::new(
@@ -539,15 +731,43 @@ pub fn cholesky_decompose_blocked(
             [n as isize, 1],
             (k + b) * n + (k + b),
         );
-        // WGPU storage bindings cannot bind the same buffer as read-only and
-        // read-write in one dispatch, so the solved panel is uploaded as a
-        // compact read-only buffer before the in-place trailing update.
-        syrk_trailing_update(device, &lower_buf, &trail_layout, &panel_buf, b)?;
 
-        // Download the updated trailing matrix back to host so the next
-        // iteration's panel factorisation sees the Schur complement.
-        device.download(&lower_buf, &mut host)?;
+        let mut scatter_encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-cholesky-panel-scatter-and-update"),
+            });
+
+        // 1. Scatter Compute Pass
+        {
+            let mut pass = scatter_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hephaestus-cholesky-panel-scatter"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&scatter_pipeline);
+            pass.set_bind_group(0, &scatter_bind_group, &[]);
+            let total_elements = panel_rows * b;
+            let wg_x = total_elements.div_ceil(256);
+            pass.dispatch_workgroups(wg_x as u32, 1, 1);
+        }
+
+        // 2. Trailing SYRK Update
+        syrk_trailing_update(
+            device,
+            &mut scatter_encoder,
+            &lower_buf,
+            &trail_layout,
+            &panel_dev,
+            b,
+            b,
+        )?;
+
+        device.queue().submit(Some(scatter_encoder.finish()));
     }
+
+    // Download the full factored matrix to host
+    let mut host = vec![0.0f32; n * n];
+    device.download(&lower_buf, &mut host)?;
 
     for row in 0..n {
         for col in (row + 1)..n {
@@ -556,13 +776,9 @@ pub fn cholesky_decompose_blocked(
     }
     device.write_buffer(&lower_buf, &host)?;
 
-    let original_view =
-        leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([n, n]).unwrap(), &original_host);
-    let inner = leto_ops::cholesky_decompose(&original_view).map_err(|e| {
-        HephaestusError::DispatchFailed {
-            message: format!("Cholesky blocked finalisation failed: {e}"),
-        }
-    })?;
+    let inner = leto_ops::CholeskyDecomposition::from_raw_parts(
+        leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
+    );
 
     Ok(GpuCholesky {
         inner,

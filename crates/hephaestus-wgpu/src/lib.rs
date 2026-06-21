@@ -46,6 +46,7 @@ pub use application::strided::{
 pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;
+pub use infrastructure::{StagingBufferGuard, UniformBufferGuard};
 
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{

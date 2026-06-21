@@ -37,10 +37,35 @@ impl CudaDevice {
         None
     }
 
+    /// Stub implementation of bind.
+    pub fn bind(&self) -> Result<()> {
+        Self::unavailable()
+    }
+
     fn unavailable<R>() -> Result<R> {
         Err(HephaestusError::AdapterUnavailable {
             message: "hephaestus-cuda built without the `cuda` feature".to_string(),
         })
+    }
+
+    /// Copy a subset of a device buffer's contents into a host slice (device→host).
+    pub fn download_sub_buffer<T: Pod>(
+        &self,
+        _buffer: &CudaBuffer<T>,
+        _offset: usize,
+        _out: &mut [T],
+    ) -> Result<()> {
+        Self::unavailable()
+    }
+
+    /// Overwrite a subset of a device buffer with host data (host→device).
+    pub fn write_sub_buffer<T: Pod>(
+        &self,
+        _buffer: &CudaBuffer<T>,
+        _offset: usize,
+        _host: &[T],
+    ) -> Result<()> {
+        Self::unavailable()
     }
 }
 

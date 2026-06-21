@@ -36,6 +36,8 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
+use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+#[cfg(feature = "cuda")]
 use hephaestus_core::panel_lu_packed;
 
 use super::validate::validate_square;
@@ -218,9 +220,11 @@ pub fn lu_decompose_blocked(
 
         let mut host = vec![0.0f32; n * n];
         device.download(matrix.buffer, &mut host)?;
-        let original_host = host.clone();
 
-        let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
+        let factors_buf = device.upload(&host)?;
+
+        let mut perm: Vec<usize> = (0..n).collect();
+        let mut sign = 1i8;
 
         let block_size = LU_BLOCK_SIZE.min(n);
 
@@ -237,14 +241,19 @@ pub fn lu_decompose_blocked(
             }
             let pivots = panel_lu_packed(&mut diag, b)?;
 
-            // Apply the panel's row swaps to trailing columns.
-            for i in 0..b {
-                if pivots[i] != i {
+            // Apply the panel's row swaps to the trailing columns and to
+            // the cumulative permutation vector.
+            for (i, &pivot) in pivots.iter().enumerate().take(b) {
+                if pivot != i {
                     let row_a = k + i;
-                    let row_b = k + pivots[i];
-                    for j in (k + b)..n {
+                    let row_b = k + pivot;
+                    // Swap entire rows in host.
+                    for j in 0..n {
                         host.swap(row_a * n + j, row_b * n + j);
                     }
+                    // Update cumulative permutation.
+                    perm.swap(row_a, row_b);
+                    sign = -sign;
                 }
             }
 
@@ -256,7 +265,18 @@ pub fn lu_decompose_blocked(
             }
 
             if trail == 0 {
-                device.write_buffer(&factors_buf, &host)?;
+                write_matrix_region(
+                    device,
+                    &factors_buf,
+                    &host,
+                    MatrixRegion {
+                        stride: n,
+                        row_start: k,
+                        col_start: 0,
+                        rows: b,
+                        cols: n,
+                    },
+                )?;
                 continue;
             }
 
@@ -282,51 +302,83 @@ pub fn lu_decompose_blocked(
                 }
             }
 
-            // ── Step 4: Trailing GEMM on GPU: A₂₂ -= L₂₁ · U₁₂ ──
-            device.write_buffer(&factors_buf, &host)?;
-
-            let mut l21 = vec![0.0f32; trail * b];
-            let mut u12 = vec![0.0f32; b * trail];
-            for i in 0..trail {
-                for j in 0..b {
-                    l21[i * b + j] = host[(k + b + i) * n + (k + j)];
-                }
-            }
-            for i in 0..b {
-                for j in 0..trail {
-                    u12[i * trail + j] = host[(k + i) * n + (k + b + j)];
-                }
-            }
-
-            let l21_buf = device.upload(&l21)?;
-            let u12_buf = device.upload(&u12)?;
-
-            let trail_layout =
-                leto::Layout::new([trail, trail], [n as isize, 1], (k + b) * n + (k + b));
+            // Upload only the updated active column panel (L₂₁) and U₁₂ row panel (covering columns 0..n).
+            let col_region = MatrixRegion {
+                stride: n,
+                row_start: k + b,
+                col_start: k,
+                rows: trail,
+                cols: b,
+            };
+            let row_region = MatrixRegion {
+                stride: n,
+                row_start: k,
+                col_start: 0,
+                rows: b,
+                cols: n,
+            };
+            write_matrix_region(device, &factors_buf, &host, col_region)?;
+            write_matrix_region(device, &factors_buf, &host, row_region)?;
 
             gemm_impl::gemm_trailing_update(
                 device,
-                &l21_buf,
+                &factors_buf,
+                (k + b) * n + k,
+                n,
                 trail,
                 b,
-                &u12_buf,
+                &factors_buf,
+                k * n + (k + b),
+                n,
                 trail,
                 &factors_buf,
-                &trail_layout,
+                (k + b) * n + (k + b),
+                n,
             )?;
 
-            device.download(&factors_buf, &mut host)?;
+            // Download only the next column and row panels instead of the full trailing matrix.
+            let k_next = k + b;
+            if k_next < n {
+                let b_next = block_size.min(n - k_next);
+                // Download the next column panel
+                download_matrix_region(
+                    device,
+                    &factors_buf,
+                    &mut host,
+                    MatrixRegion {
+                        stride: n,
+                        row_start: k_next,
+                        col_start: k_next,
+                        rows: n - k_next,
+                        cols: b_next,
+                    },
+                )?;
+                // Download the next row panel
+                if k_next + b_next < n {
+                    download_matrix_region(
+                        device,
+                        &factors_buf,
+                        &mut host,
+                        MatrixRegion {
+                            stride: n,
+                            row_start: k_next,
+                            col_start: k_next + b_next,
+                            rows: b_next,
+                            cols: n - k_next - b_next,
+                        },
+                    )?;
+                }
+            }
         }
 
-        let original_view = leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([n, n]).unwrap(),
-            &original_host,
+        // Download the final factored matrix back to host.
+        device.download(&factors_buf, &mut host)?;
+
+        let inner = leto_ops::LuDecomposition::from_raw_parts(
+            leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
+            perm,
+            sign,
         );
-        let inner = leto_ops::lu_decompose(&original_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("LU blocked finalisation failed: {e}"),
-            }
-        })?;
 
         Ok(GpuLuDecomposition {
             inner,
@@ -361,8 +413,8 @@ mod gemm_impl {
         shape: [u32; 3],
         /// Row strides: [C row-stride, A row-stride, B row-stride].
         strides: [u32; 3],
-        /// Element offset into the C (trailing) buffer.
-        c_offset: u32,
+        /// Element offsets: [C offset, A offset, B offset].
+        offsets: [u32; 3],
     }
 
     unsafe impl bytemuck::Pod for GemmMeta {}
@@ -372,7 +424,7 @@ mod gemm_impl {
     struct GemmMeta {
         unsigned int shape[3];
         unsigned int strides[3];
-        unsigned int c_offset;
+        unsigned int offsets[3];
     };
 
     extern "C" __global__ void gemm_kernel(
@@ -392,7 +444,9 @@ mod gemm_impl {
         unsigned int c_stride = meta.strides[0];
         unsigned int a_stride = meta.strides[1];
         unsigned int b_stride = meta.strides[2];
-        unsigned int c_off = meta.c_offset;
+        unsigned int c_off = meta.offsets[0];
+        unsigned int a_off = meta.offsets[1];
+        unsigned int b_off = meta.offsets[2];
 
         if (row >= m || col >= n) {
             return;
@@ -405,7 +459,7 @@ mod gemm_impl {
             // Load tile of A: A[row, tile*16 + threadIdx.x]
             unsigned int a_col = tile * 16u + threadIdx.x;
             if (a_col < k) {
-                tile_a[threadIdx.y][threadIdx.x] = a_buf[row * a_stride + a_col];
+                tile_a[threadIdx.y][threadIdx.x] = a_buf[a_off + row * a_stride + a_col];
             } else {
                 tile_a[threadIdx.y][threadIdx.x] = 0.0f;
             }
@@ -413,7 +467,7 @@ mod gemm_impl {
             // Load tile of B: B[tile*16 + threadIdx.y, col]
             unsigned int b_row = tile * 16u + threadIdx.y;
             if (b_row < k) {
-                tile_b[threadIdx.y][threadIdx.x] = b_buf[b_row * b_stride + col];
+                tile_b[threadIdx.y][threadIdx.x] = b_buf[b_off + b_row * b_stride + col];
             } else {
                 tile_b[threadIdx.y][threadIdx.x] = 0.0f;
             }
@@ -435,15 +489,21 @@ mod gemm_impl {
         .to_string()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn gemm_trailing_update(
         device: &CudaDevice,
         a_buf: &CudaBuffer<f32>,
+        a_offset: usize,
+        a_stride: usize,
         a_rows: usize,
         a_cols: usize,
         b_buf: &CudaBuffer<f32>,
+        b_offset: usize,
+        b_stride: usize,
         b_cols: usize,
         c_buf: &CudaBuffer<f32>,
-        c_layout: &leto::Layout<2>,
+        c_offset: usize,
+        c_stride: usize,
     ) -> Result<()> {
         let m = a_rows;
         let k = a_cols;
@@ -452,8 +512,6 @@ mod gemm_impl {
             return Ok(());
         }
 
-        // A is compact (m×k): row stride = k.
-        // B is compact (k×n): row stride = n.
         let meta = GemmMeta {
             shape: [
                 to_u32(m, "GEMM m")?,
@@ -461,11 +519,15 @@ mod gemm_impl {
                 to_u32(k, "GEMM k")?,
             ],
             strides: [
-                to_u32(c_layout.strides[0] as usize, "GEMM C stride")?,
-                to_u32(k, "GEMM A stride")?,
-                to_u32(n, "GEMM B stride")?,
+                to_u32(c_stride, "GEMM C stride")?,
+                to_u32(a_stride, "GEMM A stride")?,
+                to_u32(b_stride, "GEMM B stride")?,
             ],
-            c_offset: to_u32(c_layout.offset, "GEMM C offset")?,
+            offsets: [
+                to_u32(c_offset, "GEMM C offset")?,
+                to_u32(a_offset, "GEMM A offset")?,
+                to_u32(b_offset, "GEMM B offset")?,
+            ],
         };
 
         let key = "lu_gemm".to_string();

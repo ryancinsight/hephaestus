@@ -2,7 +2,9 @@ use core::ffi::c_void;
 use std::sync::Arc;
 
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    validate_buffer_size, validate_slice_alignment, ComputeDevice, HephaestusError, Result,
+};
 
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 
@@ -13,12 +15,17 @@ use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 /// driver: the CUDA driver is dynamically loaded, so constructing this never
 /// requires a CUDA toolkit at build time, only `nvcuda`/`libcuda` at runtime.
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct CudaDevice {
     device: Arc<cuda_core::Device>,
     pub(crate) pipeline_cache: Arc<
         moirai_sync::sync::ConcurrentHashMap<
             String,
-            Arc<crate::infrastructure::compiler::SafeCachedKernel>,
+            Arc<
+                std::sync::OnceLock<
+                    std::result::Result<Arc<crate::infrastructure::compiler::SafeCachedKernel>, String>,
+                >,
+            >,
         >,
     >,
     topology: Option<Arc<themis::GpuTopology>>,
@@ -37,16 +44,47 @@ impl CudaDevice {
     /// device is present, rather than fabricating a device. The acquired
     /// device is bound to the calling thread.
     pub fn try_default() -> Result<Self> {
+        if !mnemosyne_backend::is_cuda_available() {
+            return Err(HephaestusError::AdapterUnavailable {
+                message: "CUDA unified memory driver not available or initialization failed"
+                    .to_string(),
+            });
+        }
+
+        let mut device_ordinal = 0;
+        if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
+            if let Ok(thread_id) = thread_id_str.parse::<i32>() {
+                static STAGGERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
+                    && STAGGERED
+                        .compare_exchange(
+                            false,
+                            true,
+                            std::sync::atomic::Ordering::AcqRel,
+                            std::sync::atomic::Ordering::Acquire,
+                        )
+                        .is_ok()
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(thread_id as u64 * 100));
+                }
+
+                let mut count: core::ffi::c_int = 0;
+                if unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
+                    device_ordinal = thread_id % count;
+                }
+            }
+        }
+
         let device =
-            cuda_async::device_context::with_device(0, |device| device.clone()).map_err(|e| {
+            cuda_async::device_context::with_device(device_ordinal as usize, |device| device.clone()).map_err(|e| {
                 HephaestusError::AdapterUnavailable {
-                    message: format!("CUDA device 0 unavailable: {e:?}"),
+                    message: format!("CUDA device {device_ordinal} unavailable: {e:?}"),
                 }
             })?;
         device
             .bind_to_thread()
             .map_err(|e| HephaestusError::DeviceUnavailable {
-                message: format!("bind device 0 to thread: {e:?}"),
+                message: format!("bind device {device_ordinal} to thread: {e:?}"),
             })?;
         let topology = Some(Arc::new(query_topology(&device)?));
         Ok(Self {
@@ -68,7 +106,7 @@ impl CudaDevice {
     /// Transfers and allocations execute against the thread's current context;
     /// binding makes this device's context current (CUDA contexts are
     /// thread-affine), so calls from any thread target the right device.
-    pub(crate) fn bind(&self) -> Result<()> {
+    pub fn bind(&self) -> Result<()> {
         self.device
             .bind_to_thread()
             .map_err(|e| HephaestusError::TransferFailed {
@@ -90,6 +128,94 @@ impl CudaDevice {
             });
         }
         Ok(ptr)
+    }
+
+    /// Copy a subset of a device buffer's contents into a host slice (device→host).
+    pub fn download_sub_buffer<T: Pod>(
+        &self,
+        buffer: &CudaBuffer<T>,
+        offset: usize,
+        out: &mut [T],
+    ) -> Result<()> {
+        validate_slice_alignment(out)?;
+        let end = offset.checked_add(out.len()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
+            }
+        })?;
+        if end > buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: end,
+                device_len: buffer.len,
+            });
+        }
+        if out.is_empty() {
+            return Ok(());
+        }
+        self.bind()?;
+        let element_size = std::mem::size_of::<T>();
+        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("byte offset calculation overflows u64 for offset {offset}"),
+            }
+        })?;
+        let bytes = std::mem::size_of_val(out);
+        let src_ptr = buffer.raw() + byte_offset;
+        // SAFETY: `src_ptr` is a valid device pointer offset from a pointer allocated by this device;
+        // `out` is `bytes` of writable host memory (`T: Pod`).
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyDtoH_v2(out.as_mut_ptr() as *mut c_void, src_ptr, bytes)
+        };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("download_sub_buffer cuMemcpyDtoH_v2({bytes} bytes) -> {res}"),
+            });
+        }
+        Ok(())
+    }
+
+    /// Overwrite a subset of a device buffer with host data (host→device).
+    pub fn write_sub_buffer<T: Pod>(
+        &self,
+        buffer: &CudaBuffer<T>,
+        offset: usize,
+        host: &[T],
+    ) -> Result<()> {
+        validate_slice_alignment(host)?;
+        let end = offset.checked_add(host.len()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("offset {offset} + host.len() {} overflows usize", host.len()),
+            }
+        })?;
+        if end > buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: end,
+                device_len: buffer.len,
+            });
+        }
+        if host.is_empty() {
+            return Ok(());
+        }
+        self.bind()?;
+        let element_size = std::mem::size_of::<T>();
+        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("byte offset calculation overflows u64 for offset {offset}"),
+            }
+        })?;
+        let bytes = std::mem::size_of_val(host);
+        let dest_ptr = buffer.raw() + byte_offset;
+        // SAFETY: `dest_ptr` is a valid device pointer offset from a pointer allocated by this device;
+        // `host` is `bytes` of readable host memory (`T: Pod`).
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyHtoD_v2(dest_ptr, host.as_ptr() as *const c_void, bytes)
+        };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("write_sub_buffer cuMemcpyHtoD_v2({bytes} bytes) -> {res}"),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -184,6 +310,7 @@ impl ComputeDevice for CudaDevice {
     }
 
     fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>> {
+        validate_buffer_size::<T>(len)?;
         if len == 0 {
             return Ok(CudaBuffer::new(0, 0));
         }
@@ -194,22 +321,19 @@ impl ComputeDevice for CudaDevice {
         })?;
         self.bind()?;
         let ptr = self.alloc_bytes(bytes)?;
-        let zeros = vec![0u8; bytes];
-        // SAFETY: `ptr` addresses `bytes` of device memory just allocated;
-        // `zeros` is `bytes` of readable host memory. The buffer owns `ptr`, so
-        // it is freed if the copy fails.
-        let res =
-            unsafe { cuda_core::sys::cuMemcpyHtoD_v2(ptr, zeros.as_ptr().cast::<c_void>(), bytes) };
+        // SAFETY: `ptr` addresses `bytes` of device memory just allocated.
+        let res = unsafe { cuda_core::sys::cuMemsetD8_v2(ptr, 0, bytes) };
         let buffer = CudaBuffer::<T>::new(ptr, len);
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
-                message: format!("zero-init cuMemcpyHtoD_v2 -> {res}"),
+                message: format!("zero-init cuMemsetD8_v2 -> {res}"),
             });
         }
         Ok(buffer)
     }
 
     fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>> {
+        validate_slice_alignment(host)?;
         let len = host.len();
         if len == 0 {
             return Ok(CudaBuffer::new(0, 0));
@@ -232,6 +356,7 @@ impl ComputeDevice for CudaDevice {
     }
 
     fn download<T: Pod>(&self, buffer: &Self::Buffer<T>, out: &mut [T]) -> Result<()> {
+        validate_slice_alignment(out)?;
         if out.len() != buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: out.len(),
@@ -257,6 +382,7 @@ impl ComputeDevice for CudaDevice {
     }
 
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
+        validate_slice_alignment(host)?;
         if host.len() != buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: host.len(),

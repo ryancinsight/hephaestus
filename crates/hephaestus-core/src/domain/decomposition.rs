@@ -40,7 +40,7 @@ pub fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
         });
     }
 
-    let mut pivots: Vec<usize> = (0..n).collect();
+    let mut pivots = vec![0; n];
 
     for k in 0..n {
         // Partial pivot: find the row r ≥ k with the largest |a[r, k]|.
@@ -58,8 +58,8 @@ pub fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
             for c in 0..n {
                 a.swap(k * n + c, pivot_row * n + c);
             }
-            pivots.swap(k, pivot_row);
         }
+        pivots[k] = pivot_row;
 
         if pivot_mag == 0.0 {
             return Err(HephaestusError::DispatchFailed {
@@ -211,17 +211,14 @@ mod tests {
                 lu[i * n + j] = s;
             }
         }
-        // Apply inverse permutation: P·A = L·U  =>  A[i,:] = (P·A)[inv_perm[i],:].
-        // pivots[i] = original row at factored position i.
-        // inv_perm[j] = factored position of original row j.
-        let mut inv_perm = vec![0usize; n];
-        for i in 0..n {
-            inv_perm[pivots[i]] = i;
-        }
-        let mut a = vec![0.0f32; n * n];
-        for i in 0..n {
-            for j in 0..n {
-                a[i * n + j] = lu[inv_perm[i] * n + j];
+        // Apply transpositions in reverse order to recover A from L·U (A = Pᵀ · L · U).
+        let mut a = lu;
+        for k in (0..n).rev() {
+            let pivot = pivots[k];
+            if pivot != k {
+                for j in 0..n {
+                    a.swap(k * n + j, pivot * n + j);
+                }
             }
         }
         a
@@ -346,8 +343,13 @@ mod tests {
         let mut a = original.clone();
         let pivots = panel_lu_packed(&mut a, 3).unwrap();
 
-        // Verify the permutation is valid (each value 0..n appears once).
-        let mut sorted = pivots.clone();
+        // Since pivots is a sequence of transpositions, we construct the cumulative
+        // permutation vector to verify it is a valid permutation of 0..n.
+        let mut perm: Vec<usize> = (0..3).collect();
+        for (i, &pivot) in pivots.iter().enumerate() {
+            perm.swap(i, pivot);
+        }
+        let mut sorted = perm.clone();
         sorted.sort();
         assert_eq!(sorted, vec![0, 1, 2]);
 

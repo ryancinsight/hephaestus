@@ -22,6 +22,7 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 
 /// Maximum rank the packed rank-4 metadata covers. Lower-rank layouts are
 /// padded with leading size-1 / stride-0 dimensions, which contribute nothing
@@ -148,7 +149,8 @@ fn encode_strided(
 
     // Pooled meta uniform: queue.write_buffer is ordered on the queue
     // timeline, so recycling after submit cannot race in-flight dispatches.
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(meta));
@@ -185,7 +187,6 @@ fn encode_strided(
         pass.dispatch_workgroups(groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buffer);
     Ok(())
 }
 

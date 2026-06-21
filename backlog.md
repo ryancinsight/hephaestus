@@ -121,11 +121,11 @@ cuda-oxide + cutile).
   one-to-one onto `ComputeDevice`), cutile owns tile/PTX kernel authoring,
   with a strict SoC boundary between them; dynamic driver loading preserves
   no-toolkit-to-compile; adapterless hosts skip like the wgpu suite.
-- [ ] [arch] `hephaestus-cuda` stage 1: device substrate on cuda-oxide
+- [x] [arch] `hephaestus-cuda` stage 1: device substrate on cuda-oxide
   (acquisition, typed `PhantomData<T>` buffers, transfers) + contract tests.
-- [ ] [minor] Stage 2: elementwise/reduction kernels via cutile; stage 3:
+- [x] [minor] Stage 2: elementwise/reduction kernels via cutile; stage 3:
   strided variants over the shared packed layout metadata.
-- [ ] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
+- [x] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
   the wgpu backend and CPU references.
 
 ## Phase 2.5: heterogeneous topology integration (atlas ADR 0002) [arch]

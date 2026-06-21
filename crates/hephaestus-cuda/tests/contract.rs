@@ -2650,7 +2650,7 @@ fn hessenberg_rejects_rectangular_matrix() {
     assert!(matches!(
         result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("Hessenberg reduction requires square matrix")
+            if message.contains("Hessenberg requires square matrix")
     ));
 }
 

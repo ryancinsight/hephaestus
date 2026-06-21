@@ -13,40 +13,30 @@ pub(crate) fn cached_pipeline(
     label: &'static str,
     source: impl FnOnce() -> String,
 ) -> wgpu::ComputePipeline {
-    if let Some(cached) = device
+    let cell = device
         .pipeline_cache
-        .get(&key)
-        .expect("invariant: pipeline cache is not poisoned")
-    {
-        return cached;
-    }
+        .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
+        .expect("invariant: pipeline cache is not poisoned");
 
-    let module = device
-        .inner()
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(label),
-            source: wgpu::ShaderSource::Wgsl(source().into()),
-        });
-    let pipeline = device
-        .inner()
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some(label),
-            layout: None,
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-
-    if let Some(cached) = device
-        .pipeline_cache
-        .insert(key, pipeline.clone())
-        .expect("invariant: pipeline cache is not poisoned")
-    {
-        cached
-    } else {
-        pipeline
-    }
+    cell.get_or_init(|| {
+        let module = device
+            .inner()
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(label),
+                source: wgpu::ShaderSource::Wgsl(source().into()),
+            });
+        device
+            .inner()
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(label),
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            })
+    })
+    .clone()
 }
 
 /// Convert a logical work-item count into WGPU workgroup count.

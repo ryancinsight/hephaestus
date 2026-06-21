@@ -41,3 +41,66 @@ pub trait ComputeDevice {
     /// buffer's element count.
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()>;
 }
+
+/// Validate that a buffer size is a multiple of 4 bytes.
+#[inline]
+pub fn validate_buffer_size<T>(len: usize) -> Result<()> {
+    let byte_len = len
+        .checked_mul(core::mem::size_of::<T>())
+        .ok_or_else(|| crate::domain::error::HephaestusError::AllocationFailed {
+            message: format!(
+                "Buffer byte size calculation overflows (elements: {}, element size: {})",
+                len,
+                core::mem::size_of::<T>()
+            ),
+        })?;
+    if !byte_len.is_multiple_of(4) {
+        return Err(crate::domain::error::HephaestusError::AllocationFailed {
+            message: format!(
+                "Buffer byte size {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
+                byte_len, len, core::mem::size_of::<T>()
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Validate that a host slice satisfies both size and pointer 4-byte alignment.
+#[inline]
+pub fn validate_slice_alignment<T>(slice: &[T]) -> Result<()> {
+    let byte_len = core::mem::size_of_val(slice);
+    if !byte_len.is_multiple_of(4) {
+        return Err(crate::domain::error::HephaestusError::TransferFailed {
+            message: format!(
+                "Transfer byte length {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
+                byte_len, slice.len(), core::mem::size_of::<T>()
+            ),
+        });
+    }
+    let addr = slice.as_ptr() as usize;
+    if !addr.is_multiple_of(4) {
+        return Err(crate::domain::error::HephaestusError::TransferFailed {
+            message: format!(
+                "Transfer host memory address 0x{:x} is not 4-byte aligned",
+                addr
+            ),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_buffer_size_overflow() {
+        assert!(validate_buffer_size::<f32>(usize::MAX).is_err());
+    }
+
+    #[test]
+    fn test_validate_buffer_size_alignment() {
+        assert!(validate_buffer_size::<u8>(4).is_ok());
+        assert!(validate_buffer_size::<u8>(3).is_err());
+    }
+}

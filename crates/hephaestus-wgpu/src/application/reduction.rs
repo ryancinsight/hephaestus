@@ -10,6 +10,7 @@ use crate::application::strided::{map_layout_err, to_u32, StridedOperand};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::UniformBufferGuard;
 
 /// Zero-sized reduction operation marker selecting the WGSL combine expression.
 pub trait ReductionWgslOp: Copy + Send + Sync + 'static {
@@ -372,7 +373,9 @@ fn dispatch_axis_reduction<T>(
     output: StridedOperand<'_, T, 2>,
     dispatch: AxisReductionDispatch,
 ) -> Result<()> {
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let raw_meta_buffer =
+        device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
@@ -411,7 +414,6 @@ fn dispatch_axis_reduction<T>(
         pass.dispatch_workgroups(dispatch.groups, 1, 1);
     }
     device.queue().submit(Some(encoder.finish()));
-    device.recycle_uniform_buffer(meta_buffer);
     Ok(())
 }
 
