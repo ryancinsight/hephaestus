@@ -586,18 +586,9 @@ pub fn qr_decompose_blocked(
     let inner =
         leto_ops::QrDecomposition::from_raw_parts(packed, cumulative_heads, cumulative_betas, m, n);
 
-    // Materialize R from the blocked loop factorization results.
-    let mut r_host = vec![0.0f32; m * n];
-    for i in 0..m.min(n) {
-        for j in i..n {
-            r_host[i * n + j] = host[i * n + j];
-        }
-    }
-    let r_buf = device.upload(&r_host)?;
-
     Ok(GpuQrDecomposition {
         inner,
-        r: r_buf,
+        r: work_buf,
         rows: m,
         cols: n,
     })
