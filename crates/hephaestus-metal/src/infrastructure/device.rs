@@ -47,14 +47,22 @@ impl ComputeDevice for MetalDevice {
     }
 
     #[inline]
-    fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>> {
-        let inner = self.inner.alloc_zeroed(len)?;
+    fn alloc_zeroed_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
+        let inner = self.inner.alloc_zeroed_with_hint(len, hint)?;
         Ok(MetalBuffer { inner })
     }
 
     #[inline]
-    fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>> {
-        let inner = self.inner.upload(host)?;
+    fn upload_with_hint<T: Pod>(
+        &self,
+        host: &[T],
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
+        let inner = self.inner.upload_with_hint(host, hint)?;
         Ok(MetalBuffer { inner })
     }
 

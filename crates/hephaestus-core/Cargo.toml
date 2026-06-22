@@ -15,3 +15,4 @@ mnemosyne-memory = []
 [dependencies]
 bytemuck = { workspace = true }
 thiserror = { workspace = true }
+themis = { workspace = true }

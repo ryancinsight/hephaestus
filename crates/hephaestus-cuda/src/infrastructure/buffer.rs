@@ -21,6 +21,7 @@ pub type DevicePtr = u64;
 pub struct CudaBuffer<T> {
     pub(crate) ptr: DevicePtr,
     pub(crate) len: usize,
+    pub(crate) tier: themis::MemoryTier,
     pub(crate) marker: PhantomData<T>,
 }
 
@@ -32,10 +33,11 @@ impl<T> CudaBuffer<T> {
     /// and frees it on drop.
     #[must_use]
     #[inline]
-    pub(crate) fn new(ptr: DevicePtr, len: usize) -> Self {
+    pub(crate) fn new(ptr: DevicePtr, len: usize, tier: themis::MemoryTier) -> Self {
         Self {
             ptr,
             len,
+            tier,
             marker: PhantomData,
         }
     }
@@ -62,18 +64,27 @@ impl<T> DeviceBuffer<T> for CudaBuffer<T> {
     fn len(&self) -> usize {
         self.len
     }
+
+    #[inline]
+    fn tier(&self) -> themis::MemoryTier {
+        self.tier
+    }
 }
 
 impl<T> Drop for CudaBuffer<T> {
     fn drop(&mut self) {
         if self.ptr != 0 {
-            // SAFETY: `ptr` is non-zero, so it was returned by `cuMemAlloc_v2`
+            // SAFETY: `ptr` is non-zero, so it was returned by allocation functions
             // in `CudaDevice` and has not been freed (drop runs once, and no
             // other `CudaBuffer` holds this address — ownership is unique). The
             // free return code is intentionally ignored: there is no recovery
             // action in a destructor, and a failed free cannot be propagated.
             unsafe {
-                let _ = cuda_core::sys::cuMemFree_v2(self.ptr);
+                if self.tier == themis::MemoryTier::HostPinned {
+                    let _ = cuda_core::sys::cuMemFreeHost(self.ptr as *mut core::ffi::c_void);
+                } else {
+                    let _ = cuda_core::sys::cuMemFree_v2(self.ptr);
+                }
             }
         }
     }

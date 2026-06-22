@@ -114,18 +114,61 @@ impl CudaDevice {
             })
     }
 
-    /// Allocate `bytes` of device memory, returning the raw pointer.
-    fn alloc_bytes(&self, bytes: usize) -> Result<DevicePtr> {
+    /// Allocate `bytes` of device memory according to the tier.
+    fn alloc_bytes_with_tier(&self, bytes: usize, tier: themis::MemoryTier) -> Result<DevicePtr> {
         let mut ptr: DevicePtr = 0;
-        // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`; the
-        // context is current (caller binds first). On a non-zero return code
-        // no allocation was made, so there is nothing to free.
-        let res =
-            unsafe { cuda_core::sys::cuMemAlloc_v2(core::ptr::addr_of_mut!(ptr).cast(), bytes) };
-        if res != 0 {
-            return Err(HephaestusError::AllocationFailed {
-                message: format!("cuMemAlloc_v2({bytes} bytes) -> {res}"),
-            });
+        self.bind()?;
+        
+        match tier {
+            themis::MemoryTier::HostPinned => {
+                let mut host_ptr: *mut core::ffi::c_void = core::ptr::null_mut();
+                // SAFETY: `host_ptr` is a valid out-pointer for host allocations; the
+                // context is current. Flag 0x02 is CU_MEMHOSTALLOC_DEVICEMAP.
+                let res = unsafe {
+                    cuda_core::sys::cuMemHostAlloc(
+                        core::ptr::addr_of_mut!(host_ptr),
+                        bytes,
+                        0x02,
+                    )
+                };
+                if res != 0 {
+                    return Err(HephaestusError::AllocationFailed {
+                        message: format!("cuMemHostAlloc({bytes} bytes) -> {res}"),
+                    });
+                }
+                ptr = host_ptr as DevicePtr;
+            }
+            themis::MemoryTier::Dram => {
+                // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`;
+                // the context is current. Flag 0x01 is CU_MEMATTACH_GLOBAL.
+                let res = unsafe {
+                    cuda_core::sys::cuMemAllocManaged(
+                        core::ptr::addr_of_mut!(ptr).cast(),
+                        bytes,
+                        0x01,
+                    )
+                };
+                if res != 0 {
+                    return Err(HephaestusError::AllocationFailed {
+                        message: format!("cuMemAllocManaged({bytes} bytes) -> {res}"),
+                    });
+                }
+            }
+            _ => {
+                // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`; the
+                // context is current.
+                let res = unsafe {
+                    cuda_core::sys::cuMemAlloc_v2(
+                        core::ptr::addr_of_mut!(ptr).cast(),
+                        bytes,
+                    )
+                };
+                if res != 0 {
+                    return Err(HephaestusError::AllocationFailed {
+                        message: format!("cuMemAlloc_v2({bytes} bytes) -> {res}"),
+                    });
+                }
+            }
         }
         Ok(ptr)
     }
@@ -309,21 +352,28 @@ impl ComputeDevice for CudaDevice {
         "cuda"
     }
 
-    fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>> {
+    fn alloc_zeroed_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         validate_buffer_size::<T>(len)?;
+        let tier = match hint {
+            themis::PlacementHint::Tier(t) => t,
+            _ => themis::MemoryTier::Device,
+        };
         if len == 0 {
-            return Ok(CudaBuffer::new(0, 0));
+            return Ok(CudaBuffer::new(0, 0, tier));
         }
         let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
             HephaestusError::AllocationFailed {
                 message: format!("byte count overflow for {len} elements"),
             }
         })?;
-        self.bind()?;
-        let ptr = self.alloc_bytes(bytes)?;
+        let ptr = self.alloc_bytes_with_tier(bytes, tier)?;
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated.
         let res = unsafe { cuda_core::sys::cuMemsetD8_v2(ptr, 0, bytes) };
-        let buffer = CudaBuffer::<T>::new(ptr, len);
+        let buffer = CudaBuffer::<T>::new(ptr, len, tier);
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("zero-init cuMemsetD8_v2 -> {res}"),
@@ -332,21 +382,28 @@ impl ComputeDevice for CudaDevice {
         Ok(buffer)
     }
 
-    fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>> {
+    fn upload_with_hint<T: Pod>(
+        &self,
+        host: &[T],
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         validate_slice_alignment(host)?;
         let len = host.len();
+        let tier = match hint {
+            themis::PlacementHint::Tier(t) => t,
+            _ => themis::MemoryTier::Device,
+        };
         if len == 0 {
-            return Ok(CudaBuffer::new(0, 0));
+            return Ok(CudaBuffer::new(0, 0, tier));
         }
         let bytes = core::mem::size_of_val(host);
-        self.bind()?;
-        let ptr = self.alloc_bytes(bytes)?;
+        let ptr = self.alloc_bytes_with_tier(bytes, tier)?;
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated;
         // `host` is `bytes` of readable host memory (`T: Pod`). The buffer owns
         // `ptr`, so it is freed if the copy fails.
         let res =
-            unsafe { cuda_core::sys::cuMemcpyHtoD_v2(ptr, host.as_ptr().cast::<c_void>(), bytes) };
-        let buffer = CudaBuffer::<T>::new(ptr, len);
+            unsafe { cuda_core::sys::cuMemcpyHtoD_v2(ptr, host.as_ptr().cast::<core::ffi::c_void>(), bytes) };
+        let buffer = CudaBuffer::<T>::new(ptr, len, tier);
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("upload cuMemcpyHtoD_v2({bytes} bytes) -> {res}"),

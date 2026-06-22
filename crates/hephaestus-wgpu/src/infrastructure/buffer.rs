@@ -11,6 +11,7 @@ use hephaestus_core::DeviceBuffer;
 pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,
     pub(crate) len: usize,
+    pub(crate) tier: themis::MemoryTier,
     pub(crate) marker: PhantomData<T>,
 }
 
@@ -18,10 +19,11 @@ impl<T> WgpuBuffer<T> {
     /// Construct a new `WgpuBuffer` wrapper from a raw buffer and element count.
     #[must_use]
     #[inline]
-    pub fn new(buffer: wgpu::Buffer, len: usize) -> Self {
+    pub fn new(buffer: wgpu::Buffer, len: usize, tier: themis::MemoryTier) -> Self {
         Self {
             buffer,
             len,
+            tier,
             marker: PhantomData,
         }
     }
@@ -55,5 +57,10 @@ impl<T> DeviceBuffer<T> for WgpuBuffer<T> {
     #[inline]
     fn len(&self) -> usize {
         self.len
+    }
+
+    #[inline]
+    fn tier(&self) -> themis::MemoryTier {
+        self.tier
     }
 }

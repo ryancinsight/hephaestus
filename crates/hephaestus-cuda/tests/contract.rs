@@ -74,6 +74,34 @@ fn upload_download_roundtrip_f32() {
 }
 
 #[test]
+fn test_placement_aware_allocation() {
+    let Some(dev) = device("test_placement_aware_allocation") else {
+        return;
+    };
+    use themis::{PlacementHint, MemoryTier};
+
+    // Test HostPinned
+    let hint = PlacementHint::Tier(MemoryTier::HostPinned);
+    let buf1 = dev.alloc_zeroed_with_hint::<f32>(128, hint).unwrap();
+    assert_eq!(buf1.len(), 128);
+    assert_eq!(buf1.tier(), MemoryTier::HostPinned);
+
+    let host = vec![1.5f32; 128];
+    let buf2 = dev.upload_with_hint(&host, hint).unwrap();
+    assert_eq!(buf2.len(), 128);
+    assert_eq!(buf2.tier(), MemoryTier::HostPinned);
+
+    // Test Dram / Unified
+    let hint_dram = PlacementHint::Tier(MemoryTier::Dram);
+    let buf3 = dev.alloc_zeroed_with_hint::<f32>(128, hint_dram).unwrap();
+    assert_eq!(buf3.tier(), MemoryTier::Dram);
+
+    // Test default non-hinted delegates
+    let buf4 = dev.alloc_zeroed::<f32>(128).unwrap();
+    assert_eq!(buf4.tier(), MemoryTier::Device);
+}
+
+#[test]
 fn upload_download_roundtrip_i32() {
     let Some(dev) = device("upload_download_roundtrip_i32") else {
         return;

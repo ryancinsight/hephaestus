@@ -13,10 +13,22 @@ use hephaestus_core::DeviceBuffer;
 #[derive(Debug)]
 pub struct CudaBuffer<T> {
     len: usize,
+    tier: themis::MemoryTier,
     marker: PhantomData<T>,
 }
 
 impl<T> CudaBuffer<T> {
+    /// Construct a new stub buffer.
+    #[must_use]
+    #[inline]
+    pub(crate) fn new(len: usize, tier: themis::MemoryTier) -> Self {
+        Self {
+            len,
+            tier,
+            marker: PhantomData,
+        }
+    }
+
     /// Borrow the raw device pointer (stub returns 0).
     #[must_use]
     #[inline]
@@ -35,5 +47,10 @@ impl<T> DeviceBuffer<T> for CudaBuffer<T> {
     #[inline]
     fn len(&self) -> usize {
         self.len
+    }
+
+    #[inline]
+    fn tier(&self) -> themis::MemoryTier {
+        self.tier
     }
 }

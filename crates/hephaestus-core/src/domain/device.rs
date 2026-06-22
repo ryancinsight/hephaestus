@@ -21,10 +21,30 @@ pub trait ComputeDevice {
     fn backend_name(&self) -> &'static str;
 
     /// Allocate a zero-initialized device buffer of `len` elements.
-    fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>>;
+    #[inline]
+    fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>> {
+        self.alloc_zeroed_with_hint(len, themis::PlacementHint::default())
+    }
+
+    /// Allocate a zero-initialized device buffer of `len` elements with a placement hint.
+    fn alloc_zeroed_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>>;
 
     /// Allocate a device buffer initialized from a host slice (host→device).
-    fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>>;
+    #[inline]
+    fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>> {
+        self.upload_with_hint(host, themis::PlacementHint::default())
+    }
+
+    /// Allocate a device buffer initialized from a host slice with a placement hint (host→device).
+    fn upload_with_hint<T: Pod>(
+        &self,
+        host: &[T],
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>>;
 
     /// Copy a device buffer's contents into a host slice (device→host).
     ///

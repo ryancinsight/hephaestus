@@ -21,4 +21,9 @@ impl<T> DeviceBuffer<T> for MetalBuffer<T> {
     fn len(&self) -> usize {
         self.inner.len()
     }
+
+    #[inline]
+    fn tier(&self) -> themis::MemoryTier {
+        self.inner.tier()
+    }
 }

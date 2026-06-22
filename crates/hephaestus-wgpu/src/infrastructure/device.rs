@@ -518,35 +518,68 @@ impl ComputeDevice for WgpuDevice {
         "wgpu"
     }
 
-    fn alloc_zeroed<T: Pod>(&self, len: usize) -> Result<WgpuBuffer<T>> {
+    fn alloc_zeroed_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<WgpuBuffer<T>> {
         validate_buffer_size::<T>(len)?;
+        let tier = match hint {
+            themis::PlacementHint::Tier(t) => t,
+            _ => themis::MemoryTier::Device,
+        };
+        let usage = match tier {
+            themis::MemoryTier::HostPinned => {
+                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST
+            }
+            _ => {
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST
+            }
+        };
         // WebGPU guarantees newly created buffers are zero-initialized.
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("hephaestus-storage"),
             size: Self::padded_size::<T>(len)?,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
+            usage,
             mapped_at_creation: false,
         });
         Ok(WgpuBuffer {
             buffer,
             len,
+            tier,
             marker: PhantomData,
         })
     }
 
-    fn upload<T: Pod>(&self, host: &[T]) -> Result<WgpuBuffer<T>> {
+    fn upload_with_hint<T: Pod>(
+        &self,
+        host: &[T],
+        hint: themis::PlacementHint,
+    ) -> Result<WgpuBuffer<T>> {
         validate_slice_alignment(host)?;
         let byte_len = Self::byte_size::<T>(host.len())?;
         let padded_len = Self::padded_size::<T>(host.len())?;
+        let tier = match hint {
+            themis::PlacementHint::Tier(t) => t,
+            _ => themis::MemoryTier::Device,
+        };
+        let usage = match tier {
+            themis::MemoryTier::HostPinned => {
+                wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC
+            }
+            _ => {
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST
+            }
+        };
         let buffer = if padded_len == 0 {
             self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("hephaestus-upload"),
                 size: 0,
-                usage: wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST,
+                usage,
                 mapped_at_creation: false,
             })
         } else {
@@ -555,14 +588,13 @@ impl ComputeDevice for WgpuDevice {
             (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("hephaestus-upload"),
                 contents: &padded,
-                usage: wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST,
+                usage,
             })
         };
         Ok(WgpuBuffer {
             buffer,
             len: host.len(),
+            tier,
             marker: PhantomData,
         })
     }

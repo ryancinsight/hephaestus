@@ -77,11 +77,19 @@ impl ComputeDevice for CudaDevice {
         "cuda"
     }
 
-    fn alloc_zeroed<T: Pod>(&self, _len: usize) -> Result<Self::Buffer<T>> {
+    fn alloc_zeroed_with_hint<T: Pod>(
+        &self,
+        _len: usize,
+        _hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         Self::unavailable()
     }
 
-    fn upload<T: Pod>(&self, _host: &[T]) -> Result<Self::Buffer<T>> {
+    fn upload_with_hint<T: Pod>(
+        &self,
+        _host: &[T],
+        _hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         Self::unavailable()
     }
 

@@ -8,6 +8,9 @@ pub trait DeviceBuffer<T> {
     /// Number of `T` elements in the buffer.
     fn len(&self) -> usize;
 
+    /// Get the memory tier classification of the buffer allocation.
+    fn tier(&self) -> themis::MemoryTier;
+
     /// Returns true when the buffer holds zero elements.
     #[inline]
     fn is_empty(&self) -> bool {
