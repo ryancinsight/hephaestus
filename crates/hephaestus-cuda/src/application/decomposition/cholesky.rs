@@ -193,8 +193,6 @@ pub fn cholesky_decompose_blocked(
         const BLOCK_SIZE: usize = 64;
         let block_size = BLOCK_SIZE.min(n);
 
-        let panel_dev = device.alloc_zeroed::<f32>(n * block_size)?;
-
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
 
@@ -269,15 +267,21 @@ pub fn cholesky_decompose_blocked(
             // Write the entire updated active panel back to device buffer
             write_matrix_region(device, &lower_buf, &host, panel_region)?;
 
-            device.write_sub_buffer(&panel_dev, 0, &rhs)?;
-
             // ── Step 3: trailing SYRK update on GPU ──
             let trail_layout = leto::Layout::new(
                 [trail_rows, trail_rows],
                 [n as isize, 1],
                 (k + b) * n + (k + b),
             );
-            syrk_trailing_update(device, &lower_buf, &trail_layout, &panel_dev, b)?;
+            syrk_trailing_update(
+                device,
+                &lower_buf,
+                &trail_layout,
+                &lower_buf,
+                b,
+                (k + b) * n + k,
+                n,
+            )?;
         }
 
         for row in 0..n {
@@ -321,7 +325,8 @@ mod syrk_impl {
         strides: [i32; 2],
         offset: u32,
         panel_cols: u32,
-        _pad: [u32; 2],
+        panel_offset: u32,
+        panel_stride: u32,
     }
 
     // SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
@@ -334,6 +339,8 @@ mod syrk_impl {
         int strides[2];
         unsigned int offset;
         unsigned int panel_cols;
+        unsigned int panel_offset;
+        unsigned int panel_stride;
     };
 
     extern "C" __global__ void syrk_kernel(
@@ -370,7 +377,7 @@ mod syrk_impl {
         for (unsigned int tile = 0u; tile < num_tiles; tile++) {
             unsigned int panel_col = tile * 16u + local_col;
             if (panel_col < k) {
-                panel_row_shared[local_row][local_col] = panel[row * k + panel_col];
+                panel_row_shared[local_row][local_col] = panel[meta.panel_offset + row * meta.panel_stride + panel_col];
             } else {
                 panel_row_shared[local_row][local_col] = 0.0f;
             }
@@ -381,7 +388,7 @@ mod syrk_impl {
                 unsigned int ki = tile * 16u + i;
                 if (ki < k) {
                     float a_val = panel_row_shared[local_row][i];
-                    float b_val = panel[col * k + ki];
+                    float b_val = panel[meta.panel_offset + col * meta.panel_stride + ki];
                     sum += a_val * b_val;
                 }
             }
@@ -402,6 +409,8 @@ mod syrk_impl {
         trail_layout: &leto::Layout<2>,
         panel: &CudaBuffer<f32>,
         panel_cols: usize,
+        panel_offset: usize,
+        panel_stride: usize,
     ) -> Result<()> {
         let [rows, cols] = trail_layout.shape;
         if rows == 0 || cols == 0 || panel_cols == 0 {
@@ -416,7 +425,8 @@ mod syrk_impl {
             ],
             offset: to_u32(trail_layout.offset, "SYRK offset")?,
             panel_cols: to_u32(panel_cols, "SYRK panel cols")?,
-            _pad: [0; 2],
+            panel_offset: to_u32(panel_offset, "SYRK panel offset")?,
+            panel_stride: to_u32(panel_stride, "SYRK panel stride")?,
         };
 
         let key = "cholesky_syrk".to_string();
