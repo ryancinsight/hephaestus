@@ -47,7 +47,9 @@ use std::any::TypeId;
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+use super::region::{
+    download_matrix_region_compact, write_matrix_region_compact, MatrixRegion,
+};
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -386,12 +388,19 @@ pub fn qr_decompose_blocked(
         });
     }
 
-    // Download the full matrix to host once for the host-side solve_least_squares API.
-    let mut original_host = vec![0.0f32; m * n];
-    device.download(matrix.buffer, &mut original_host)?;
-
     // Create a GPU working buffer that is a copy of the input matrix.
-    let work_buf = device.upload(&original_host)?;
+    let work_buf = device.alloc_zeroed::<f32>(m * n)?;
+    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("hephaestus-qr-copy"),
+    });
+    encoder.copy_buffer_to_buffer(
+        &matrix.buffer.buffer,
+        0,
+        &work_buf.buffer,
+        0,
+        WgpuDevice::byte_size::<f32>(m * n)?,
+    );
+    device.queue().submit(Some(encoder.finish()));
 
     let block_size = QR_BLOCK_SIZE.min(n);
 
@@ -417,7 +426,7 @@ pub fn qr_decompose_blocked(
         let panel_rows = m - k;
         let trail_cols = n - k - b;
 
-        // ── Step 1 & 2: Gather panel from work_buf to original_host on the CPU, then extract it ──
+        // ── Step 1 & 2: Gather panel from work_buf directly to host panel ──
         let panel_region = MatrixRegion {
             stride: n,
             row_start: k,
@@ -425,14 +434,7 @@ pub fn qr_decompose_blocked(
             rows: panel_rows,
             cols: b,
         };
-        download_matrix_region(device, &work_buf, &mut original_host, panel_region)?;
-
-        let mut panel = vec![0.0f32; panel_rows * b];
-        for i in 0..panel_rows {
-            for j in 0..b {
-                panel[i * b + j] = original_host[(k + i) * n + (k + j)];
-            }
-        }
+        let mut panel = download_matrix_region_compact(device, &work_buf, panel_region)?;
 
         // ── Step 3: Factor the active panel region on the CPU ──
         let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
@@ -470,12 +472,7 @@ pub fn qr_decompose_blocked(
         }
 
         // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
-        for i in 0..panel_rows {
-            for j in 0..b {
-                original_host[(k + i) * n + (k + j)] = panel[i * b + j];
-            }
-        }
-        write_matrix_region(device, &work_buf, &original_host, panel_region)?;
+        write_matrix_region_compact(device, &work_buf, &panel, panel_region)?;
 
         if trail_cols > 0 {
             device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;

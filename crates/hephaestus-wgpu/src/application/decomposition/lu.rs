@@ -497,18 +497,55 @@ pub fn lu_decompose_blocked(
         });
     }
 
-    // Download the full matrix to host.
-    let mut host = vec![0.0f32; n * n];
-    device.download(matrix.buffer, &mut host)?;
+    // Allocate the device-resident buffer and copy matrix.buffer into it on the GPU
+    let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
+    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("hephaestus-lu-copy"),
+    });
+    encoder.copy_buffer_to_buffer(
+        &matrix.buffer.buffer,
+        0,
+        &factors_buf.buffer,
+        0,
+        WgpuDevice::byte_size::<f32>(n * n)?,
+    );
+    device.queue().submit(Some(encoder.finish()));
 
-    // Device-resident buffer for the packed L/U factors.
-    let factors_buf = device.upload(&host)?;
+    let mut host = vec![0.0f32; n * n];
+
+    let block_size = LU_BLOCK_SIZE.min(n);
+
+    // Download initial panels for the first iteration (k = 0)
+    download_matrix_region(
+        device,
+        &factors_buf,
+        &mut host,
+        MatrixRegion {
+            stride: n,
+            row_start: 0,
+            col_start: 0,
+            rows: n,
+            cols: block_size,
+        },
+    )?;
+    if block_size < n {
+        download_matrix_region(
+            device,
+            &factors_buf,
+            &mut host,
+            MatrixRegion {
+                stride: n,
+                row_start: 0,
+                col_start: block_size,
+                rows: block_size,
+                cols: n - block_size,
+            },
+        )?;
+    }
 
     // Track cumulative row permutation applied to the full matrix.
     let mut perm: Vec<usize> = (0..n).collect();
     let mut sign = 1i8;
-
-    let block_size = LU_BLOCK_SIZE.min(n);
 
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);

@@ -15,7 +15,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
-use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -464,13 +464,19 @@ pub fn cholesky_decompose_blocked(
         return Ok(GpuCholesky { inner, lower, n: 0 });
     }
 
-    // Download the full matrix to host (panels are factored on CPU).
-    let mut host = vec![0.0f32; n * n];
-    device.download(matrix.buffer, &mut host)?;
-
-    // Device-resident buffer for the packed lower factor, updated in-place
-    // by the SYRK trailing kernel.
-    let lower_buf = device.upload(&host)?;
+    // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
+    let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
+    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("hephaestus-cholesky-copy"),
+    });
+    encoder.copy_buffer_to_buffer(
+        &matrix.buffer.buffer,
+        0,
+        &lower_buf.buffer,
+        0,
+        WgpuDevice::byte_size::<f32>(n * n)?,
+    );
+    device.queue().submit(Some(encoder.finish()));
 
     let block_size = BLOCK_SIZE.min(n);
 
@@ -486,17 +492,12 @@ pub fn cholesky_decompose_blocked(
             rows: panel_rows,
             cols: b,
         };
-        download_matrix_region(device, &lower_buf, &mut host, panel_region)?;
+        let mut panel = download_matrix_region_compact(device, &lower_buf, panel_region)?;
 
         // ── Step 1.5: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-        let mut diag_host = vec![0.0f32; b * b];
-        for i in 0..b {
-            for j in 0..b {
-                diag_host[i * b + j] = host[(k + i) * n + (k + j)];
-            }
-        }
+        let (diag_part, rhs_part) = panel.split_at_mut(b * b);
         let diag_view =
-            leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([b, b]).unwrap(), &diag_host);
+            leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([b, b]).unwrap(), diag_part);
         let diag_chol = leto_ops::cholesky_decompose(&diag_view).map_err(|e| {
             HephaestusError::DispatchFailed {
                 message: format!("Cholesky panel factorisation failed: {e}"),
@@ -505,49 +506,31 @@ pub fn cholesky_decompose_blocked(
         let diag_lower = diag_chol.lower();
         let diag_slice = leto::Storage::as_slice(diag_lower.storage());
 
-        // Write the factored diagonal block back to host
-        for i in 0..b {
-            for j in 0..b {
-                host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
-            }
-        }
+        // Write the factored diagonal block back to panel
+        diag_part.copy_from_slice(diag_slice);
 
         let trail_rows = n - k - b;
         if trail_rows == 0 {
             // Upload the final diagonal block back to device buffer
-            write_matrix_region(device, &lower_buf, &host, panel_region)?;
+            write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
             continue;
         }
 
         // ── Step 2: panel solve  L₂₁ = A₂₁ · L₁₁⁻ᵀ  on CPU ──
-        let mut rhs = vec![0.0f32; trail_rows * b];
-        for i in 0..trail_rows {
-            for j in 0..b {
-                rhs[i * b + j] = host[(k + b + i) * n + (k + j)];
-            }
-        }
-
         // Triangular solve: each column of L₂₁ via back-substitution with L₁₁ᵀ.
         for col in 0..b {
             // Back-substitute against L₁₁ᵀ (i.e. forward-substitute against L₁₁).
             for i in 0..trail_rows {
-                let mut s = rhs[i * b + col];
+                let mut s = rhs_part[i * b + col];
                 for p in 0..col {
-                    s -= rhs[i * b + p] * diag_slice[col * b + p];
+                    s -= rhs_part[i * b + p] * diag_slice[col * b + p];
                 }
-                rhs[i * b + col] = s / diag_slice[col * b + col];
-            }
-        }
-
-        // Write L₂₁ back to host
-        for i in 0..trail_rows {
-            for j in 0..b {
-                host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
+                rhs_part[i * b + col] = s / diag_slice[col * b + col];
             }
         }
 
         // Upload the entire updated active panel (diagonal + off-diagonal) back to device buffer
-        write_matrix_region(device, &lower_buf, &host, panel_region)?;
+        write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
 
         // ── Step 3: trailing SYRK update on GPU ──
         let trail_layout = leto::Layout::new(

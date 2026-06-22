@@ -14,7 +14,7 @@ use bytemuck::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
-use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
 use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
@@ -182,40 +182,45 @@ pub fn cholesky_decompose_blocked(
             return Ok(GpuCholesky { inner, lower, n: 0 });
         }
 
-        // Download the full matrix to host (panels are factored on CPU).
-        let mut host = vec![0.0f32; n * n];
-        device.download(matrix.buffer, &mut host)?;
-
-        // Device-resident buffer for the packed lower factor, updated in-place
-        // by the SYRK trailing kernel.
-        let lower_buf = device.upload(&host)?;
+        // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
+        let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
+        device.bind()?;
+        let bytes = n * n * std::mem::size_of::<f32>();
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyDtoD_v2(
+                lower_buf.raw(),
+                matrix.buffer.raw(),
+                bytes,
+            )
+        };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("cholesky startup cuMemcpyDtoD_v2 failed: {res}"),
+            });
+        }
 
         const BLOCK_SIZE: usize = 64;
         let block_size = BLOCK_SIZE.min(n);
 
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
+            let panel_rows = n - k;
 
             // Download only the active panel column (diagonal block + off-diagonal panel)
             let panel_region = MatrixRegion {
                 stride: n,
                 row_start: k,
                 col_start: k,
-                rows: n - k,
+                rows: panel_rows,
                 cols: b,
             };
-            download_matrix_region(device, &lower_buf, &mut host, panel_region)?;
+            let mut panel = download_matrix_region_compact(device, &lower_buf, panel_region)?;
 
             // ── Step 1: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-            let mut diag_host = vec![0.0f32; b * b];
-            for i in 0..b {
-                for j in 0..b {
-                    diag_host[i * b + j] = host[(k + i) * n + (k + j)];
-                }
-            }
+            let (diag_part, rhs_part) = panel.split_at_mut(b * b);
             let diag_view = leto::ArrayView::<f32, 2>::new(
                 leto::Layout::c_contiguous([b, b]).unwrap(),
-                &diag_host,
+                diag_part,
             );
             let diag_chol = leto_ops::cholesky_decompose(&diag_view).map_err(|e| {
                 HephaestusError::DispatchFailed {
@@ -225,47 +230,29 @@ pub fn cholesky_decompose_blocked(
             let diag_lower = diag_chol.lower();
             let diag_slice = leto::Storage::as_slice(diag_lower.storage());
 
-            // Write the factored diagonal block back to the host array
-            for i in 0..b {
-                for j in 0..b {
-                    host[(k + i) * n + (k + j)] = diag_slice[i * b + j];
-                }
-            }
+            // Write the factored diagonal block back to the panel
+            diag_part.copy_from_slice(diag_slice);
 
             let trail_rows = n - k - b;
             if trail_rows == 0 {
                 // Write the final diagonal block back to the device buffer
-                write_matrix_region(device, &lower_buf, &host, panel_region)?;
+                write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
                 continue;
             }
 
             // ── Step 2: panel solve  L₂₁ = A₂₁ · L₁₁⁻ᵀ  on CPU ──
-            let mut rhs = vec![0.0f32; trail_rows * b];
-            for i in 0..trail_rows {
-                for j in 0..b {
-                    rhs[i * b + j] = host[(k + b + i) * n + (k + j)];
-                }
-            }
-
             for col in 0..b {
                 for i in 0..trail_rows {
-                    let mut s = rhs[i * b + col];
+                    let mut s = rhs_part[i * b + col];
                     for p in 0..col {
-                        s -= rhs[i * b + p] * diag_slice[col * b + p];
+                        s -= rhs_part[i * b + p] * diag_slice[col * b + p];
                     }
-                    rhs[i * b + col] = s / diag_slice[col * b + col];
-                }
-            }
-
-            // Write L₂₁ back to host
-            for i in 0..trail_rows {
-                for j in 0..b {
-                    host[(k + b + i) * n + (k + j)] = rhs[i * b + j];
+                    rhs_part[i * b + col] = s / diag_slice[col * b + col];
                 }
             }
 
             // Write the entire updated active panel back to device buffer
-            write_matrix_region(device, &lower_buf, &host, panel_region)?;
+            write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
 
             // ── Step 3: trailing SYRK update on GPU ──
             let trail_layout = leto::Layout::new(
@@ -283,6 +270,10 @@ pub fn cholesky_decompose_blocked(
                 n,
             )?;
         }
+
+        // Download the final factored matrix back to host.
+        let mut host = vec![0.0f32; n * n];
+        device.download(&lower_buf, &mut host)?;
 
         for row in 0..n {
             for col in (row + 1)..n {
@@ -362,21 +353,12 @@ mod syrk_impl {
         int stride_col = meta.strides[1];
         unsigned int off = meta.offset;
 
-        if (row >= rows || col >= cols) {
-            return;
-        }
-
-        // Only the lower triangle is touched (col <= row).
-        if (col > row) {
-            return;
-        }
-
         float sum = 0.0f;
         unsigned int num_tiles = (k + 15u) / 16u;
 
         for (unsigned int tile = 0u; tile < num_tiles; tile++) {
             unsigned int panel_col = tile * 16u + local_col;
-            if (panel_col < k) {
+            if (row < rows && panel_col < k) {
                 panel_row_shared[local_row][local_col] = panel[meta.panel_offset + row * meta.panel_stride + panel_col];
             } else {
                 panel_row_shared[local_row][local_col] = 0.0f;
@@ -384,20 +366,24 @@ mod syrk_impl {
 
             __syncthreads();
 
-            for (unsigned int i = 0u; i < 16u; i++) {
-                unsigned int ki = tile * 16u + i;
-                if (ki < k) {
-                    float a_val = panel_row_shared[local_row][i];
-                    float b_val = panel[meta.panel_offset + col * meta.panel_stride + ki];
-                    sum += a_val * b_val;
+            if (row < rows && col < cols && col <= row) {
+                for (unsigned int i = 0u; i < 16u; i++) {
+                    unsigned int ki = tile * 16u + i;
+                    if (ki < k) {
+                        float a_val = panel_row_shared[local_row][i];
+                        float b_val = panel[meta.panel_offset + col * meta.panel_stride + ki];
+                        sum += a_val * b_val;
+                    }
                 }
             }
 
             __syncthreads();
         }
 
-        int c_off = (int)off + (int)row * stride_row + (int)col * stride_col;
-        trail[c_off] -= sum;
+        if (row < rows && col < cols && col <= row) {
+            int c_off = (int)off + (int)row * stride_row + (int)col * stride_col;
+            trail[c_off] -= sum;
+        }
     }
         "#
         .to_string()

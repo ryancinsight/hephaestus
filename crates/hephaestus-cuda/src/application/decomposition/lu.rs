@@ -218,15 +218,56 @@ pub fn lu_decompose_blocked(
             });
         }
 
-        let mut host = vec![0.0f32; n * n];
-        device.download(matrix.buffer, &mut host)?;
+        let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
+        device.bind()?;
+        let bytes = n * n * std::mem::size_of::<f32>();
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyDtoD_v2(
+                factors_buf.raw(),
+                matrix.buffer.raw(),
+                bytes,
+            )
+        };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("LU startup cuMemcpyDtoD_v2 failed: {res}"),
+            });
+        }
 
-        let factors_buf = device.upload(&host)?;
+        let mut host = vec![0.0f32; n * n];
+
+        let block_size = LU_BLOCK_SIZE.min(n);
+
+        // Download initial panels for the first iteration (k = 0)
+        download_matrix_region(
+            device,
+            &factors_buf,
+            &mut host,
+            MatrixRegion {
+                stride: n,
+                row_start: 0,
+                col_start: 0,
+                rows: n,
+                cols: block_size,
+            },
+        )?;
+        if block_size < n {
+            download_matrix_region(
+                device,
+                &factors_buf,
+                &mut host,
+                MatrixRegion {
+                    stride: n,
+                    row_start: 0,
+                    col_start: block_size,
+                    rows: block_size,
+                    cols: n - block_size,
+                },
+            )?;
+        }
 
         let mut perm: Vec<usize> = (0..n).collect();
         let mut sign = 1i8;
-
-        let block_size = LU_BLOCK_SIZE.min(n);
 
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
@@ -448,17 +489,13 @@ mod gemm_impl {
         unsigned int a_off = meta.offsets[1];
         unsigned int b_off = meta.offsets[2];
 
-        if (row >= m || col >= n) {
-            return;
-        }
-
         float sum = 0.0f;
         unsigned int num_tiles = (k + 15u) / 16u;
 
         for (unsigned int tile = 0u; tile < num_tiles; tile++) {
             // Load tile of A: A[row, tile*16 + threadIdx.x]
             unsigned int a_col = tile * 16u + threadIdx.x;
-            if (a_col < k) {
+            if (row < m && a_col < k) {
                 tile_a[threadIdx.y][threadIdx.x] = a_buf[a_off + row * a_stride + a_col];
             } else {
                 tile_a[threadIdx.y][threadIdx.x] = 0.0f;
@@ -466,7 +503,7 @@ mod gemm_impl {
 
             // Load tile of B: B[tile*16 + threadIdx.y, col]
             unsigned int b_row = tile * 16u + threadIdx.y;
-            if (b_row < k) {
+            if (b_row < k && col < n) {
                 tile_b[threadIdx.y][threadIdx.x] = b_buf[b_off + b_row * b_stride + col];
             } else {
                 tile_b[threadIdx.y][threadIdx.x] = 0.0f;
@@ -474,16 +511,20 @@ mod gemm_impl {
 
             __syncthreads();
 
-            for (unsigned int i = 0u; i < 16u; i++) {
-                sum += tile_a[threadIdx.y][i] * tile_b[i][threadIdx.x];
+            if (row < m && col < n) {
+                for (unsigned int i = 0u; i < 16u; i++) {
+                    sum += tile_a[threadIdx.y][i] * tile_b[i][threadIdx.x];
+                }
             }
 
             __syncthreads();
         }
 
         // C -= A * B
-        unsigned int c_idx = c_off + row * c_stride + col;
-        c_buf[c_idx] -= sum;
+        if (row < m && col < n) {
+            unsigned int c_idx = c_off + row * c_stride + col;
+            c_buf[c_idx] -= sum;
+        }
     }
         "#
         .to_string()
