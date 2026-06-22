@@ -48,7 +48,7 @@ use std::any::TypeId;
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use super::region::{download_matrix_region, write_matrix_region, MatrixRegion};
+use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -511,37 +511,7 @@ pub fn lu_decompose_blocked(
     );
     device.queue().submit(Some(encoder.finish()));
 
-    let mut host = vec![0.0f32; n * n];
-
     let block_size = LU_BLOCK_SIZE.min(n);
-
-    // Download initial panels for the first iteration (k = 0)
-    download_matrix_region(
-        device,
-        &factors_buf,
-        &mut host,
-        MatrixRegion {
-            stride: n,
-            row_start: 0,
-            col_start: 0,
-            rows: n,
-            cols: block_size,
-        },
-    )?;
-    if block_size < n {
-        download_matrix_region(
-            device,
-            &factors_buf,
-            &mut host,
-            MatrixRegion {
-                stride: n,
-                row_start: 0,
-                col_start: block_size,
-                rows: block_size,
-                cols: n - block_size,
-            },
-        )?;
-    }
 
     // Track cumulative row permutation applied to the full matrix.
     let mut perm: Vec<usize> = (0..n).collect();
@@ -551,88 +521,17 @@ pub fn lu_decompose_blocked(
         let b = block_size.min(n - k);
         let trail = n - k - b;
 
-        // ── Step 1: Factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-        let mut diag = vec![0.0f32; b * b];
-        for i in 0..b {
-            for j in 0..b {
-                diag[i * b + j] = host[(k + i) * n + (k + j)];
-            }
-        }
-        let pivots = panel_lu_packed(&mut diag, b)?;
-
-        // Apply the panel's row swaps to the trailing columns and to
-        // the cumulative permutation vector.
-        for (i, &pivot) in pivots.iter().enumerate().take(b) {
-            if pivot != i {
-                let row_a = k + i;
-                let row_b = k + pivot;
-                // Swap entire rows in host.
-                for j in 0..n {
-                    host.swap(row_a * n + j, row_b * n + j);
-                }
-                // Update cumulative permutation.
-                perm.swap(row_a, row_b);
-                sign = -sign;
-            }
-        }
-
-        // Write the factored diagonal block (packed L/U) back to host.
-        for i in 0..b {
-            for j in 0..b {
-                host[(k + i) * n + (k + j)] = diag[i * b + j];
-            }
-        }
-
-        if trail == 0 {
-            write_matrix_region(
-                device,
-                &factors_buf,
-                &host,
-                MatrixRegion {
-                    stride: n,
-                    row_start: k,
-                    col_start: 0,
-                    rows: b,
-                    cols: n,
-                },
-            )?;
-            continue;
-        }
-
-        // ── Step 2: Solve L₂₁ = A₂₁ · U₁₁⁻¹ on CPU ──
-        // For each column j of U₁₁, solve forward:
-        //   L₂₁[i,j] = (A₂₁[i,j] - Σₚ₌₀ʲ⁻¹ L₂₁[i,p] · U₁₁[p,j]) / U₁₁[j,j]
-        for i in 0..trail {
-            for j in 0..b {
-                let mut s = host[(k + b + i) * n + (k + j)];
-                for p in 0..j {
-                    s -= host[(k + b + i) * n + (k + p)] * diag[p * b + j];
-                }
-                host[(k + b + i) * n + (k + j)] = s / diag[j * b + j];
-            }
-        }
-
-        // ── Step 3: Solve U₁₂ = L₁₁⁻¹ · A₁₂ on CPU ──
-        // For each row i (unit diagonal L₁₁):
-        //   U₁₂[i,j] = A₁₂[i,j] - Σₚ₌₀ⁱ⁻¹ L₁₁[i,p] · U₁₂[p,j]
-        for j in 0..trail {
-            for i in 0..b {
-                let mut s = host[(k + i) * n + (k + b + j)];
-                for p in 0..i {
-                    s -= diag[i * b + p] * host[(k + p) * n + (k + b + j)];
-                }
-                host[(k + i) * n + (k + b + j)] = s;
-            }
-        }
-
-        // Upload only the updated active column panel (L₂₁) and U₁₂ row panel (covering columns 0..n).
+        // Download active column panel A[k..n, k..k+b] (size: (n-k) * b)
         let col_region = MatrixRegion {
             stride: n,
-            row_start: k + b,
+            row_start: k,
             col_start: k,
-            rows: trail,
+            rows: n - k,
             cols: b,
         };
+        let mut col_panel = download_matrix_region_compact(device, &factors_buf, col_region)?;
+
+        // Download active row panel A[k..k+b, 0..n] (size: b * n)
         let row_region = MatrixRegion {
             stride: n,
             row_start: k,
@@ -640,8 +539,84 @@ pub fn lu_decompose_blocked(
             rows: b,
             cols: n,
         };
-        write_matrix_region(device, &factors_buf, &host, col_region)?;
-        write_matrix_region(device, &factors_buf, &host, row_region)?;
+        let mut row_panel = download_matrix_region_compact(device, &factors_buf, row_region)?;
+
+        // ── Step 1: Factor the diagonal block A[k..k+b, k..k+b] on CPU ──
+        let mut diag = vec![0.0f32; b * b];
+        for i in 0..b {
+            for j in 0..b {
+                diag[i * b + j] = col_panel[i * b + j];
+            }
+        }
+        let pivots = panel_lu_packed(&mut diag, b)?;
+
+        // Apply the panel's row swaps to the cumulative permutation vector,
+        // and to the row panel.
+        for (i, &pivot) in pivots.iter().enumerate().take(b) {
+            if pivot != i {
+                let row_a = k + i;
+                let row_b = k + pivot;
+                perm.swap(row_a, row_b);
+                sign = -sign;
+
+                // Swap row i and row pivot in row_panel (each row has n elements)
+                for j in 0..n {
+                    row_panel.swap(i * n + j, pivot * n + j);
+                }
+            }
+        }
+
+        if trail == 0 {
+            // Update row_panel with factored diag
+            for i in 0..b {
+                for j in 0..b {
+                    row_panel[i * n + (k + j)] = diag[i * b + j];
+                }
+            }
+            write_matrix_region_compact(device, &factors_buf, &row_panel, row_region)?;
+            continue;
+        }
+
+        // ── Step 2: Solve L₂₁ = A₂₁ · U₁₁⁻¹ on CPU ──
+        for i in 0..trail {
+            for j in 0..b {
+                let mut s = col_panel[(b + i) * b + j];
+                for p in 0..j {
+                    s -= col_panel[(b + i) * b + p] * diag[p * b + j];
+                }
+                col_panel[(b + i) * b + j] = s / diag[j * b + j];
+            }
+        }
+
+        // ── Step 3: Solve U₁₂ = L₁₁⁻¹ · A₁₂ on CPU ──
+        for j in 0..trail {
+            for i in 0..b {
+                let mut s = row_panel[i * n + (k + b + j)];
+                for p in 0..i {
+                    s -= diag[i * b + p] * row_panel[p * n + (k + b + j)];
+                }
+                row_panel[i * n + (k + b + j)] = s;
+            }
+        }
+
+        // Copy factored diag back to row_panel so it is uploaded
+        for i in 0..b {
+            for j in 0..b {
+                row_panel[i * n + (k + j)] = diag[i * b + j];
+            }
+        }
+
+        // Upload updated panels
+        let col_write_region = MatrixRegion {
+            stride: n,
+            row_start: k + b,
+            col_start: k,
+            rows: trail,
+            cols: b,
+        };
+        let col_write_data = &col_panel[(b * b)..];
+        write_matrix_region_compact(device, &factors_buf, col_write_data, col_write_region)?;
+        write_matrix_region_compact(device, &factors_buf, &row_panel, row_region)?;
 
         // C -= A · B trailing GEMM update done directly on factors_buf.
         gemm_trailing_update(
@@ -661,43 +636,10 @@ pub fn lu_decompose_blocked(
                 c_stride: n,
             },
         )?;
-
-        // Download only the next column and row panels instead of the full trailing matrix.
-        let k_next = k + b;
-        if k_next < n {
-            let b_next = block_size.min(n - k_next);
-            // Download the next column panel
-            download_matrix_region(
-                device,
-                &factors_buf,
-                &mut host,
-                MatrixRegion {
-                    stride: n,
-                    row_start: k_next,
-                    col_start: k_next,
-                    rows: n - k_next,
-                    cols: b_next,
-                },
-            )?;
-            // Download the next row panel
-            if k_next + b_next < n {
-                download_matrix_region(
-                    device,
-                    &factors_buf,
-                    &mut host,
-                    MatrixRegion {
-                        stride: n,
-                        row_start: k_next,
-                        col_start: k_next + b_next,
-                        rows: b_next,
-                        cols: n - k_next - b_next,
-                    },
-                )?;
-            }
-        }
     }
 
     // Download the final factored matrix back to host.
+    let mut host = vec![0.0f32; n * n];
     device.download(&factors_buf, &mut host)?;
 
     let inner = leto_ops::LuDecomposition::from_raw_parts(
