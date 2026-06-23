@@ -4,7 +4,7 @@ use super::GpuCsrMatrix;
 use crate::application::linalg::AsGpuMatrixOperand;
 use crate::application::linalg::MatmulZero;
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::strided::map_layout_err;
+use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -24,17 +24,6 @@ struct SpmmMeta {
 
 struct SparseSpmmKernel<T>(PhantomData<T>);
 
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
 
 fn spmm_shader_source<T: MatmulZero>(width: BlockWidth) -> String {
     format!(
@@ -102,7 +91,9 @@ pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a,
         });
     }
 
-    let expected_c_len = nrows * bcols;
+    let expected_c_len = nrows.checked_mul(bcols).ok_or_else(|| HephaestusError::DispatchFailed {
+        message: format!("spmm output size {nrows}×{bcols} overflows usize"),
+    })?;
     if c.len() != expected_c_len {
         return Err(HephaestusError::LengthMismatch {
             host_len: expected_c_len,
@@ -210,7 +201,10 @@ pub fn spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     let b_op = b.as_operand();
     let [_, bcols] = b_op.layout.shape;
 
-    let mut c = device.alloc_zeroed::<T>(nrows * bcols)?;
+    let c_len = nrows.checked_mul(bcols).ok_or_else(|| HephaestusError::DispatchFailed {
+        message: format!("spmm output size {nrows}×{bcols} overflows usize"),
+    })?;
+    let mut c = device.alloc_zeroed::<T>(c_len)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)
 }

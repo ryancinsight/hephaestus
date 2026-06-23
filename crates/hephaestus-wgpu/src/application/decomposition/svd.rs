@@ -54,6 +54,31 @@ impl GpuSvdDecomposition {
     }
 }
 
+/// Build the zero-sized `GpuSvdDecomposition` returned by the empty-matrix fast path.
+///
+/// Extracted to eliminate the duplicate 17-line block in `svd_decompose` and
+/// `svd_rank_revealing` (same shape, same allocation, same inner construction).
+fn svd_empty(device: &WgpuDevice, rows: usize, cols: usize) -> Result<GpuSvdDecomposition> {
+    let u = device.alloc_zeroed::<f32>(0)?;
+    let v = device.alloc_zeroed::<f32>(0)?;
+    let s = device.alloc_zeroed::<f32>(0)?;
+    let inner = leto_ops::SvdDecomposition {
+        singular_values: vec![],
+        left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+            .expect("invariant: shape [0,0] is consistent with an empty vec"),
+        right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+            .expect("invariant: shape [0,0] is consistent with an empty vec"),
+    };
+    Ok(GpuSvdDecomposition {
+        inner,
+        u,
+        v,
+        singular_values: s,
+        rows,
+        cols,
+    })
+}
+
 /// Compute the thin SVD decomposition on the GPU.
 ///
 /// # Errors
@@ -70,22 +95,7 @@ pub fn svd_decompose(
         .validate_storage_len(matrix.buffer.len)
         .map_err(map_layout_err)?;
     if rows == 0 || cols == 0 {
-        let u = device.alloc_zeroed::<f32>(0)?;
-        let v = device.alloc_zeroed::<f32>(0)?;
-        let s = device.alloc_zeroed::<f32>(0)?;
-        let inner = leto_ops::SvdDecomposition {
-            singular_values: vec![],
-            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-        };
-        return Ok(GpuSvdDecomposition {
-            inner,
-            u,
-            v,
-            singular_values: s,
-            rows,
-            cols,
-        });
+        return svd_empty(device, rows, cols);
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -127,22 +137,7 @@ pub fn svd_rank_revealing(
         .validate_storage_len(matrix.buffer.len)
         .map_err(map_layout_err)?;
     if rows == 0 || cols == 0 {
-        let u = device.alloc_zeroed::<f32>(0)?;
-        let v = device.alloc_zeroed::<f32>(0)?;
-        let s = device.alloc_zeroed::<f32>(0)?;
-        let inner = leto_ops::SvdDecomposition {
-            singular_values: vec![],
-            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-        };
-        return Ok(GpuSvdDecomposition {
-            inner,
-            u,
-            v,
-            singular_values: s,
-            rows,
-            cols,
-        });
+        return svd_empty(device, rows, cols);
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];

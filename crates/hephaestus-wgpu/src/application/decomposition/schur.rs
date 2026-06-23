@@ -2,7 +2,8 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -40,33 +41,12 @@ impl GpuRealSchur {
 
 /// Compute the real Schur decomposition on the GPU.
 pub fn schur(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<GpuRealSchur> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "Schur decomposition requires square matrix, got shape [{rows}, {cols}]"
-            ),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let t = device.alloc_zeroed::<f32>(0)?;
-        let empty_view =
-            leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([0, 0]).unwrap(), &[]);
-        let inner = leto_ops::schur(&empty_view).map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Schur empty decomposition failed: {e}"),
-        })?;
-        return Ok(GpuRealSchur {
-            inner: Some(inner),
-            q,
-            t,
-            n: 0,
-        });
+        return Ok(GpuRealSchur { inner: None, q, t, n: 0 });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -88,6 +68,6 @@ pub fn schur(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
         inner: Some(inner),
         q,
         t,
-        n: rows,
+        n,
     })
 }

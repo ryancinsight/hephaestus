@@ -7,6 +7,25 @@
 
 use crate::domain::error::{HephaestusError, Result};
 
+/// Validate that every element of `a` is finite.
+///
+/// Used by all panel factorisation routines before the main computation loop.
+/// Consolidates the identical non-finite-check pattern to a single SSOT.
+#[inline]
+fn validate_finite(a: &[f32], op: &str) -> Result<()> {
+    if let Some((idx, value)) = a
+        .iter()
+        .copied()
+        .enumerate()
+        .find(|(_, v)| !v.is_finite())
+    {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("{op} failed: entry {idx} is non-finite ({value})"),
+        });
+    }
+    Ok(())
+}
+
 /// In-place partial-pivoting LU factorisation of a packed *n* × *n*
 /// row-major matrix, returning the LAPACK-style cumulative row
 /// permutation vector.
@@ -29,16 +48,7 @@ pub fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
             device_len: a.len(),
         });
     }
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("LU panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
+    validate_finite(a, "LU panel factorisation")?;
 
     let mut pivots = vec![0; n];
 
@@ -110,17 +120,8 @@ pub fn panel_qr_packed(a: &mut [f32], m: usize, n: usize) -> Result<(Vec<f32>, V
         });
     }
 
-    // Validate non-finite inputs.
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, value)| !value.is_finite())
-    {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("QR panel factorisation failed: entry {idx} is non-finite ({value})"),
-        });
-    }
+    // Validate non-finite inputs via the shared helper.
+    validate_finite(a, "QR panel factorisation")?;
 
     let mut heads = vec![0.0f32; n];
     let mut betas = vec![0.0f32; n];

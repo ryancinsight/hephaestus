@@ -1,6 +1,7 @@
 //! GPU-resident Eigendecomposition.
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::StridedOperand;
+use crate::application::decomposition::validate::validate_square;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
@@ -53,25 +54,15 @@ pub fn symmetric_eigen_jacobi(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSymmetricEigenDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "Symmetric eigendecomposition requires square matrix, got shape [{rows}, {cols}]"
-            ),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let eigenvalues = device.alloc_zeroed::<f32>(0)?;
         let eigenvectors = device.alloc_zeroed::<f32>(0)?;
         let inner = leto_ops::SymmetricEigenDecomposition {
             eigenvalues: vec![],
-            eigenvectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
+            eigenvectors: leto::Array2::from_shape_vec([0, 0], vec![])
+                .expect("invariant: shape [0,0] is consistent with an empty vec"),
         };
         return Ok(GpuSymmetricEigenDecomposition {
             inner,
@@ -99,7 +90,7 @@ pub fn symmetric_eigen_jacobi(
         inner,
         eigenvalues,
         eigenvectors,
-        n: rows,
+        n,
     })
 }
 
@@ -108,20 +99,9 @@ pub fn symmetric_eigenvalues_jacobi(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<WgpuBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "Symmetric eigenvalues require square matrix, got shape [{rows}, {cols}]"
-            ),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         return device.alloc_zeroed::<f32>(0);
     }
 
@@ -143,18 +123,9 @@ pub fn eigenvalues(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<WgpuBuffer<Complex<f32>>> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("Eigenvalues require square matrix, got shape [{rows}, {cols}]"),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         return device.alloc_zeroed::<Complex<f32>>(0);
     }
 

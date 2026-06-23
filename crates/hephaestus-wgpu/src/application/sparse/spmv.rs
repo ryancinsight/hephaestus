@@ -3,6 +3,7 @@
 use super::GpuCsrMatrix;
 use crate::application::linalg::MatmulZero;
 use crate::application::pipeline::{cached_pipeline, workgroups};
+use crate::application::strided::to_u32;
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -83,12 +84,7 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
     let groups = workgroups(nrows, width)?;
     let meta = SpmvMeta {
         offsets: [
-            u32::try_from(a.row_ptr_offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!(
-                    "CSR row pointer offset {} exceeds u32 range",
-                    a.row_ptr_offset()
-                ),
-            })?,
+            to_u32(a.row_ptr_offset(), "CSR row pointer offset")?,
             0,
             0,
             0,

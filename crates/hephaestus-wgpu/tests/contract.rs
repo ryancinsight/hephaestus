@@ -1907,7 +1907,7 @@ fn eigenvalues_rejects_non_square_input() {
     assert!(matches!(
         result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("Eigenvalues require square matrix")
+            if message.contains("square matrix")
     ));
 }
 
@@ -2231,7 +2231,7 @@ fn schur_rejects_rectangular_matrix() {
     assert!(matches!(
         result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("Schur decomposition requires square matrix")
+            if message.contains("square matrix")
     ));
     device.device().poll(wgpu::PollType::Wait).unwrap();
 }
@@ -2352,7 +2352,7 @@ fn hessenberg_rejects_rectangular_matrix() {
     assert!(matches!(
         result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("Hessenberg requires square matrix")
+            if message.contains("square matrix")
     ));
 }
 
@@ -2476,7 +2476,7 @@ fn full_piv_lu_rejects_rectangular_matrix() {
     assert!(matches!(
         result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("FullPivLU requires square matrix")
+            if message.contains("square matrix")
     ));
 }
 
@@ -3676,7 +3676,7 @@ fn udu_decompose_rejects_invalid_contracts() {
     assert!(matches!(
         rectangular_result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("UDU decomposition requires square matrix")
+            if message.contains("square matrix")
     ));
 
     let nonsymmetric_host = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -3784,7 +3784,7 @@ fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     assert!(matches!(
         rectangular_result,
         Err(HephaestusError::DispatchFailed { message })
-            if message.contains("Bunch-Kaufman requires square matrix")
+            if message.contains("square matrix")
     ));
 
     let nonsymmetric_host = vec![1.0f32, 2.0, 3.0, 4.0];

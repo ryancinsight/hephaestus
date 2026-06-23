@@ -2,7 +2,8 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -65,7 +66,8 @@ impl GpuUduDecomposition {
         device.download(rhs, &mut rhs_host)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
-            leto::Layout::c_contiguous([self.n]).unwrap(),
+            leto::Layout::c_contiguous([self.n])
+                .expect("invariant: self.n > 0 is checked before this point"),
             &rhs_host,
         );
         let x = inner
@@ -98,20 +100,9 @@ pub fn udu_decompose(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuUduDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "UDU decomposition requires square matrix, got shape [{rows}, {cols}]"
-            ),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let u = device.alloc_zeroed::<f32>(0)?;
         let d = device.alloc_zeroed::<f32>(0)?;
         return Ok(GpuUduDecomposition {
@@ -139,6 +130,6 @@ pub fn udu_decompose(
         inner: Some(inner),
         u,
         d,
-        n: rows,
+        n,
     })
 }

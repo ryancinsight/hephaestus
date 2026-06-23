@@ -2,7 +2,8 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -51,18 +52,9 @@ pub fn bunch_kaufman(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuBunchKaufmanDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("Bunch-Kaufman requires square matrix, got shape [{rows}, {cols}]"),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let l = device.alloc_zeroed::<f32>(0)?;
         let d = device.alloc_zeroed::<f32>(0)?;
         return Ok(GpuBunchKaufmanDecomposition {
@@ -95,6 +87,6 @@ pub fn bunch_kaufman(
         l,
         d,
         permutation,
-        n: rows,
+        n,
     })
 }

@@ -9,7 +9,7 @@ use crate::infrastructure::device::WgpuDevice;
 /// Bidiagonal decomposition result: device-resident factors.
 pub struct GpuBidiagonalDecomposition {
     #[allow(dead_code)]
-    inner: leto_ops::BidiagonalDecomposition<f32>,
+    inner: Option<leto_ops::BidiagonalDecomposition<f32>>,
     u: WgpuBuffer<f32>,
     b: WgpuBuffer<f32>,
     v: WgpuBuffer<f32>,
@@ -67,22 +67,7 @@ pub fn bidiagonalize(
         let u = device.alloc_zeroed::<f32>(0)?;
         let b = device.alloc_zeroed::<f32>(0)?;
         let v = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::bidiagonalize(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Bidiagonalization failed: {e}"),
-        })?;
-        return Ok(GpuBidiagonalDecomposition {
-            inner,
-            u,
-            b,
-            v,
-            m,
-            n,
-        });
+        return Ok(GpuBidiagonalDecomposition { inner: None, u, b, v, m, n });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -101,7 +86,7 @@ pub fn bidiagonalize(
     let v = device.upload(v_slice)?;
 
     Ok(GpuBidiagonalDecomposition {
-        inner,
+        inner: Some(inner),
         u,
         b,
         v,

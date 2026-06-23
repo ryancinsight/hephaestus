@@ -8,7 +8,7 @@ use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::strided::{map_layout_err, to_u32, StridedOperand};
+use crate::application::strided::{map_layout_err, to_i32, to_u32, StridedOperand};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -90,13 +90,6 @@ struct AxisScanMeta {
 struct AxisScanDispatch {
     meta: AxisScanMeta,
     groups: u32,
-}
-
-#[inline]
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
 }
 
 fn scan_shader_source<Op, T>(width: BlockWidth) -> String

@@ -9,7 +9,7 @@ use crate::infrastructure::device::WgpuDevice;
 /// Column-pivoted QR decomposition result: device-resident factors.
 pub struct GpuColPivQrDecomposition {
     #[allow(dead_code)]
-    inner: leto_ops::ColPivQrDecomposition<f32>,
+    inner: Option<leto_ops::ColPivQrDecomposition<f32>>,
     q: WgpuBuffer<f32>,
     r: WgpuBuffer<f32>,
     permutation: Vec<usize>,
@@ -66,11 +66,16 @@ impl GpuColPivQrDecomposition {
         let mut rhs_host = vec![0.0f32; self.m];
         device.download(rhs, &mut rhs_host)?;
 
+        let inner = self
+            .inner
+            .as_ref()
+            .expect("invariant: non-empty ColPivQR stores host factors");
         let rhs_view = leto::ArrayView::<f32, 1>::new(
-            leto::Layout::c_contiguous([self.m]).unwrap(),
+            leto::Layout::c_contiguous([self.m])
+                .expect("invariant: self.m > 0 is checked before this point"),
             &rhs_host,
         );
-        let x = self.inner.solve_least_squares(&rhs_view).map_err(|e| {
+        let x = inner.solve_least_squares(&rhs_view).map_err(|e| {
             HephaestusError::DispatchFailed {
                 message: format!("ColPivQR least-squares solve failed: {e}"),
             }
@@ -94,17 +99,8 @@ pub fn col_piv_qr(
     if rows == 0 || cols == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let r = device.alloc_zeroed::<f32>(0)?;
-        // Construct placeholder inner
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("ColPivQR decomposition failed: {e}"),
-        })?;
         return Ok(GpuColPivQrDecomposition {
-            inner,
+            inner: None,
             q,
             r,
             permutation: vec![],
@@ -130,7 +126,7 @@ pub fn col_piv_qr(
     let rank = inner.rank();
 
     Ok(GpuColPivQrDecomposition {
-        inner,
+        inner: Some(inner),
         q,
         r,
         permutation,

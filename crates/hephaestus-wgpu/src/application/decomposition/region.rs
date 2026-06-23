@@ -269,7 +269,12 @@ pub(crate) fn download_matrix_region_compact_reusable(
 
     let mapped = slice.get_mapped_range();
     let mut compact = vec![0.0f32; compact_len];
-    compact.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes as usize]));
+    // compact_bytes == compact_len * size_of::<f32>(); compute in usize to avoid the
+    // silent u64-as-usize truncation on 32-bit targets.
+    let compact_bytes_usize = compact_len
+        .checked_mul(core::mem::size_of::<f32>())
+        .expect("invariant: compact_len * 4 fits usize (compact_len is bounded by matrix_region_len)");
+    compact.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes_usize]));
     drop(mapped);
     staging.unmap();
 
@@ -370,4 +375,3 @@ pub(crate) fn write_matrix_region_compact_reusable(
 
     Ok(())
 }
-

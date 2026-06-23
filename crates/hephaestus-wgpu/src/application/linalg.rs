@@ -14,7 +14,7 @@ use crate::application::elementwise::{unary_elementwise_into, AbsOp, MulOp, Sqrt
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::reduction::{reduction, MaxOp, ReductionIdentity, ReductionWgslOp, SumOp};
 use crate::application::strided::{
-    binary_elementwise_strided_into, map_layout_err, pad_shape, pad_strides,
+    binary_elementwise_strided_into, map_layout_err, pad_shape, pad_strides, to_i32, to_u32,
     unary_elementwise_strided_into, StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META,
 };
 use crate::application::wgsl::WgslScalar;
@@ -124,20 +124,6 @@ impl MapReductionWgslOp for TraceOp {
 impl MapReductionWgslOp for NormL1Op {
     type ReduceOp = SumOp;
     const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
-}
-
-#[inline]
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
-#[inline]
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
 }
 
 fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {

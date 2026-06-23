@@ -2,14 +2,15 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 /// Hessenberg reduction result: device-resident factors.
 pub struct GpuHessenbergDecomposition {
     #[allow(dead_code)]
-    inner: leto_ops::HessenbergDecomposition<f32>,
+    inner: Option<leto_ops::HessenbergDecomposition<f32>>,
     q: WgpuBuffer<f32>,
     h: WgpuBuffer<f32>,
     n: usize,
@@ -43,29 +44,12 @@ pub fn hessenberg(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuHessenbergDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("Hessenberg requires square matrix, got shape [{rows}, {cols}]"),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let h = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::hessenberg(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Hessenberg reduction failed: {e}"),
-        })?;
-        return Ok(GpuHessenbergDecomposition { inner, q, h, n: 0 });
+        return Ok(GpuHessenbergDecomposition { inner: None, q, h, n: 0 });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -82,9 +66,9 @@ pub fn hessenberg(
     let h = device.upload(h_slice)?;
 
     Ok(GpuHessenbergDecomposition {
-        inner,
+        inner: Some(inner),
         q,
         h,
-        n: rows,
+        n,
     })
 }

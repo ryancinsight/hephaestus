@@ -2,13 +2,14 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 /// Complete-pivoted LU decomposition result: device-resident factors.
 pub struct GpuFullPivLuDecomposition {
-    inner: leto_ops::FullPivLuDecomposition<f32>,
+    inner: Option<leto_ops::FullPivLuDecomposition<f32>>,
     lu: WgpuBuffer<f32>,
     row_perm: Vec<usize>,
     col_perm: Vec<usize>,
@@ -56,7 +57,9 @@ impl GpuFullPivLuDecomposition {
     #[must_use]
     #[inline]
     pub fn det(&self) -> f32 {
-        self.inner.det()
+        self.inner
+            .as_ref()
+            .map_or(1.0, leto_ops::FullPivLuDecomposition::det)
     }
 
     /// Solve **A** · **x** = **rhs** via host-side substitution.
@@ -74,12 +77,16 @@ impl GpuFullPivLuDecomposition {
         let mut rhs_host = vec![0.0f32; self.n];
         device.download(rhs, &mut rhs_host)?;
 
+        let inner = self
+            .inner
+            .as_ref()
+            .expect("invariant: non-empty FullPivLU decomposition stores host factors");
         let rhs_view = leto::ArrayView::<f32, 1>::new(
-            leto::Layout::c_contiguous([self.n]).unwrap(),
+            leto::Layout::c_contiguous([self.n])
+                .expect("invariant: self.n > 0 is checked before this point"),
             &rhs_host,
         );
-        let x = self
-            .inner
+        let x = inner
             .solve(&rhs_view)
             .map_err(|e| HephaestusError::DispatchFailed {
                 message: format!("FullPivLU solve failed: {e}"),
@@ -93,8 +100,11 @@ impl GpuFullPivLuDecomposition {
         if self.n == 0 {
             return device.alloc_zeroed::<f32>(0);
         }
-        let inv = self
+        let inner = self
             .inner
+            .as_ref()
+            .expect("invariant: non-empty FullPivLU decomposition stores host factors");
+        let inv = inner
             .inv()
             .map_err(|e| HephaestusError::DispatchFailed {
                 message: format!("FullPivLU inverse failed: {e}"),
@@ -108,29 +118,12 @@ pub fn full_piv_lu(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuFullPivLuDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("FullPivLU requires square matrix, got shape [{rows}, {cols}]"),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
+    let n = validate_square(&matrix)?;
 
-    if rows == 0 {
+    if n == 0 {
         let lu = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::full_piv_lu(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("FullPivLU decomposition failed: {e}"),
-        })?;
         return Ok(GpuFullPivLuDecomposition {
-            inner,
+            inner: None,
             lu,
             row_perm: vec![],
             col_perm: vec![],
@@ -153,11 +146,11 @@ pub fn full_piv_lu(
     let rank = inner.rank();
 
     Ok(GpuFullPivLuDecomposition {
-        inner,
+        inner: Some(inner),
         lu,
         row_perm,
         col_perm,
         rank,
-        n: rows,
+        n,
     })
 }
