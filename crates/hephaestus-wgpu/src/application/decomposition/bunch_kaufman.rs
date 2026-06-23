@@ -9,8 +9,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Bunch-Kaufman decomposition result: device-resident factors.
 pub struct GpuBunchKaufmanDecomposition {
-    #[allow(dead_code)]
-    inner: Option<leto_ops::BunchKaufmanDecomposition<f32>>,
     l: WgpuBuffer<f32>,
     d: WgpuBuffer<f32>,
     permutation: Vec<usize>,
@@ -58,7 +56,6 @@ pub fn bunch_kaufman(
         let l = device.alloc_zeroed::<f32>(0)?;
         let d = device.alloc_zeroed::<f32>(0)?;
         return Ok(GpuBunchKaufmanDecomposition {
-            inner: None,
             l,
             d,
             permutation: vec![],
@@ -81,12 +78,8 @@ pub fn bunch_kaufman(
     let l = device.upload(l_slice)?;
     let d = device.upload(d_slice)?;
     let permutation = inner.permutation().to_vec();
+    // inner consumed; device buffers and permutation are the sole surviving representation.
+    drop(inner);
 
-    Ok(GpuBunchKaufmanDecomposition {
-        inner: Some(inner),
-        l,
-        d,
-        permutation,
-        n,
-    })
+    Ok(GpuBunchKaufmanDecomposition { l, d, permutation, n })
 }

@@ -9,8 +9,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Hessenberg reduction result: device-resident factors.
 pub struct GpuHessenbergDecomposition {
-    #[allow(dead_code)]
-    inner: Option<leto_ops::HessenbergDecomposition<f32>>,
     q: WgpuBuffer<f32>,
     h: WgpuBuffer<f32>,
     n: usize,
@@ -49,7 +47,7 @@ pub fn hessenberg(
     if n == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let h = device.alloc_zeroed::<f32>(0)?;
-        return Ok(GpuHessenbergDecomposition { inner: None, q, h, n: 0 });
+        return Ok(GpuHessenbergDecomposition { q, h, n: 0 });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -64,11 +62,8 @@ pub fn hessenberg(
     let h_slice = leto::Storage::as_slice(inner.h().storage());
     let q = device.upload(q_slice)?;
     let h = device.upload(h_slice)?;
+    // inner consumed; device buffers are the sole surviving representation.
+    drop(inner);
 
-    Ok(GpuHessenbergDecomposition {
-        inner: Some(inner),
-        q,
-        h,
-        n,
-    })
+    Ok(GpuHessenbergDecomposition { q, h, n })
 }

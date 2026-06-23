@@ -127,37 +127,7 @@ fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
 // Core reusable implementation — callers supply the compact device buffer
 // ---------------------------------------------------------------------------
 
-/// Gather a matrix region from `buffer` into a freshly-allocated host `Vec<f32>`.
-#[allow(dead_code)]
-pub(crate) fn download_matrix_region_compact(
-    device: &WgpuDevice,
-    buffer: &WgpuBuffer<f32>,
-    region: MatrixRegion,
-) -> Result<Vec<f32>> {
-    if region.rows == 0 || region.cols == 0 {
-        return Ok(vec![]);
-    }
-    let compact_len = matrix_region_len(region.rows, region.cols)?;
-    let temp = device.alloc_zeroed::<f32>(compact_len)?;
-    download_matrix_region_compact_reusable(device, buffer, &temp, region)
-}
 
-/// Scatter `compact_host` into a region of `buffer` using a fresh temporary
-/// device buffer.
-#[allow(dead_code)]
-pub(crate) fn write_matrix_region_compact(
-    device: &WgpuDevice,
-    buffer: &WgpuBuffer<f32>,
-    compact_host: &[f32],
-    region: MatrixRegion,
-) -> Result<()> {
-    if region.rows == 0 || region.cols == 0 {
-        return Ok(());
-    }
-    let compact_len = matrix_region_len(region.rows, region.cols)?;
-    let temp = device.alloc_zeroed::<f32>(compact_len)?;
-    write_matrix_region_compact_reusable(device, buffer, &temp, compact_host, region)
-}
 
 /// Gather a matrix region from `buffer` into caller-supplied `temp_compact_buf`
 /// and return the region as a host `Vec<f32>`.

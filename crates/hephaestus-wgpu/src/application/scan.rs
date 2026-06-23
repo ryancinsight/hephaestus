@@ -342,6 +342,12 @@ where
     T: WgslScalar + Pod + ScanIdentity<Op>,
 {
     let len = input.layout.checked_size().map_err(map_layout_err)?;
+    // Guard before device allocation: an empty layout has no elements to scan.
+    // scan_axis_into would return Ok(()) immediately for len==0, but we avoid
+    // the unnecessary device-pool call by returning an empty buffer here.
+    if len == 0 {
+        return device.alloc_zeroed::<T>(0);
+    }
     let output = device.alloc_zeroed::<T>(len)?;
     let output_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
     scan_axis_into::<Op, T>(

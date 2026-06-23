@@ -8,7 +8,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// SVD decomposition result: device-resident factors.
 pub struct GpuSvdDecomposition {
-    #[allow(dead_code)]
     inner: leto_ops::SvdDecomposition<f32>,
     u: WgpuBuffer<f32>,
     v: WgpuBuffer<f32>,

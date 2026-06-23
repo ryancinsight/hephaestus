@@ -114,6 +114,34 @@ cuda-oxide + cutile).
   `encode_strided` core; scalar family is a zero-new-kernel wrapper over the
   binary kernels (one-element operand, all-zero strides). Verification: unary
   transposed/broadcast and scalar-equivalence tests on real hardware.
+- [x] [patch] Consolidate the duplicate GPU→host staging block shared by
+  `download` and `download_sub_buffer` into a single private
+  `stage_and_read` helper (SSOT for all synchronous device→host readback
+  paths). Fixed 4× `as usize` narrowing casts on `u64` byte sizes and 2×
+  inline `element_size as u64` patterns, replacing all with `byte_size::<T>`
+  checked helper. Evidence: 107/107 wgpu + 21/21 core tests.
+- [x] [patch] Consolidate `StagingBufferGuard`/`UniformBufferGuard` (two
+  structurally-identical 40-line RAII types in pool.rs) into a single generic
+  `PoolBufferGuard<F: Fn(&WgpuDevice, wgpu::Buffer)>` with type aliases.
+  Migrated all 12 call-site files to constructor functions `staging_guard` /
+  `uniform_guard`. Removed now-unused `crate::UniformBufferGuard` imports.
+  Evidence: 107/107 wgpu tests.
+- [x] [patch] Extract `encode_elementwise` SSOT in `elementwise/mod.rs` —
+  removes 3 structurally-identical 15-line encode-bind-dispatch blocks from
+  `binary.rs`, `unary.rs`, and `scalar.rs`. All three `*_into` functions
+  now delegate. Evidence: 107/107 wgpu tests.
+- [x] [safety] Fix `identity_matrix` and 3× `matpow` allocations using
+  unchecked `n * n` / `rows * rows` arithmetic. Both now use
+  `checked_mul(...).ok_or(DispatchFailed)` before any allocation.
+  Evidence: 107/107 wgpu tests including `linalg_matpow_*`.
+- [x] [patch] Normalize workgroup dimension casts in `matmul_into` and
+  `batched_matmul_into` to use the shared `to_u32` helper, consistent with
+  `kron_into`. Eliminated 3 divergent inline `u32::try_from + format!` sites.
+- [x] [patch] Demote `WgpuBuffer::new` to `pub(crate)` and add a
+  `debug_assert` validating `len * size_of::<T>() <= buffer.size()`, closing
+  the unsound public construction path. Added aliasing semantics doc to Clone.
+- [x] [patch] Fix `as usize` casts on test-only `u64` values in
+  `pipeline.rs` tests; replaced with `try_into().expect("invariant: ...")`.
 
 ## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
 - [x] [arch] Gating ADR accepted: `docs/adr/0001-cuda-backend.md` — cuda-oxide

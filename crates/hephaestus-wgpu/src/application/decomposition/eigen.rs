@@ -9,7 +9,6 @@ use num_complex::Complex;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {
-    #[allow(dead_code)]
     inner: leto_ops::SymmetricEigenDecomposition<f32>,
     eigenvalues: WgpuBuffer<f32>,
     eigenvectors: WgpuBuffer<f32>,

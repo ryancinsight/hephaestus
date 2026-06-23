@@ -639,6 +639,9 @@ where
 }
 
 fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
+    // width.get() is u32; `as usize` is a lossless widening on all supported targets
+    // (usize >= 32 bits). std does not implement From<u32> for usize because it
+    // would be narrowing on hypothetical 16-bit targets.
     let width = width.get() as usize;
     let mut passes = 0;
     while len > 1 {
@@ -707,20 +710,26 @@ where
             label: Some("hephaestus-reduction-multi-pass"),
         });
 
+    // width.get() is u32; `as usize` is lossless on all supported targets (usize >= 32 bits).
+    let width_usize = width.get() as usize;
+
+    // The pipeline is loop-invariant: same Op, T, and width on every pass.
+    // Hoist the cache lookup above the loop to avoid O(log n) key reconstructions.
+    let key = (
+        TypeId::of::<ReductionOpWrapper<Op>>(),
+        TypeId::of::<T>(),
+        width.get(),
+    );
+    let pipeline = cached_pipeline(device, key, "hephaestus-reduction", || {
+        shader_source::<Op, T>(width)
+    });
+
     while current_len > 1 {
         let groups = workgroups(current_len, width)?;
-        let out_len = current_len.div_ceil(width.get() as usize);
+        // Each pass needs a distinct buffer (output size differs per pass);
+        // alloc count equals reduction_pass_count ≤ log2(input.len), capped by tree depth.
+        let out_len = current_len.div_ceil(width_usize);
         let out_buffer = device.alloc_zeroed::<T>(out_len)?;
-
-        let key = (
-            TypeId::of::<ReductionOpWrapper<Op>>(),
-            TypeId::of::<T>(),
-            width.get(),
-        );
-
-        let pipeline = cached_pipeline(device, key, "hephaestus-reduction", || {
-            shader_source::<Op, T>(width)
-        });
 
         let source_resource = if temp_buffers.is_empty() {
             input.buffer.as_entire_binding()

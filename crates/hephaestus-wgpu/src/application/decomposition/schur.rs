@@ -9,7 +9,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Schur decomposition result: device-resident factors.
 pub struct GpuRealSchur {
-    #[allow(dead_code)]
     inner: Option<leto_ops::RealSchur<f32>>,
     q: WgpuBuffer<f32>,
     t: WgpuBuffer<f32>,

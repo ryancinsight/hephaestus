@@ -8,7 +8,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Column-pivoted QR decomposition result: device-resident factors.
 pub struct GpuColPivQrDecomposition {
-    #[allow(dead_code)]
     inner: Option<leto_ops::ColPivQrDecomposition<f32>>,
     q: WgpuBuffer<f32>,
     r: WgpuBuffer<f32>,
