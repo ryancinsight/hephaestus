@@ -177,7 +177,7 @@ cuda-oxide + cutile).
   `ComputeDevice` seam already accommodates it. No speculative scaffolding.
 
 ## Phase 3: memory + ownership integration [minor]
-- [ ] [minor] Consume mnemosyne device pools / pinned-host staging (mnemosyne
+- [x] [minor] Consume mnemosyne device pools / pinned-host staging (mnemosyne
   Stage D1) for buffer allocation instead of direct device allocation.
 - [ ] [minor] melinoe-branded device buffers: ownership transfer across
   host/device/stream as compile-time proofs (melinoe Stage D1 pattern).
