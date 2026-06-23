@@ -74,11 +74,12 @@ impl GpuColPivQrDecomposition {
                 .expect("invariant: self.m > 0 is checked before this point"),
             &rhs_host,
         );
-        let x = inner.solve_least_squares(&rhs_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("ColPivQR least-squares solve failed: {e}"),
-            }
-        })?;
+        let x =
+            inner
+                .solve_least_squares(&rhs_view)
+                .map_err(|e| HephaestusError::DispatchFailed {
+                    message: format!("ColPivQR least-squares solve failed: {e}"),
+                })?;
 
         device.upload(leto::Storage::as_slice(x.storage()))
     }

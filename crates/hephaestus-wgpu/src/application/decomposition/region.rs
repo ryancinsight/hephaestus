@@ -1,6 +1,6 @@
 //! Row-major matrix-region transfers for hybrid decomposition kernels.
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{HephaestusError, Result};
 use std::any::TypeId;
 
 use crate::application::pipeline::cached_pipeline;
@@ -127,8 +127,6 @@ fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
 // Core reusable implementation — callers supply the compact device buffer
 // ---------------------------------------------------------------------------
 
-
-
 /// Gather a matrix region from `buffer` into caller-supplied `temp_compact_buf`
 /// and return the region as a host `Vec<f32>`.
 ///
@@ -240,9 +238,9 @@ pub(crate) fn download_matrix_region_compact_reusable(
     let mut compact = vec![0.0f32; compact_len];
     // compact_bytes == compact_len * size_of::<f32>(); compute in usize to avoid the
     // silent u64-as-usize truncation on 32-bit targets.
-    let compact_bytes_usize = compact_len
-        .checked_mul(core::mem::size_of::<f32>())
-        .expect("invariant: compact_len * 4 fits usize (compact_len is bounded by matrix_region_len)");
+    let compact_bytes_usize = compact_len.checked_mul(core::mem::size_of::<f32>()).expect(
+        "invariant: compact_len * 4 fits usize (compact_len is bounded by matrix_region_len)",
+    );
     compact.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes_usize]));
     drop(mapped);
     staging.unmap();

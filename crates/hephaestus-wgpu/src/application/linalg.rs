@@ -1134,11 +1134,13 @@ where
 }
 
 fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Result<Vec<T>> {
-    let len = n.checked_mul(n).ok_or_else(|| HephaestusError::DispatchFailed {
-        message: format!(
-            "identity matrix size {n}\u{00d7}{n} overflows usize ({n}^2 > usize::MAX)"
-        ),
-    })?;
+    let len = n
+        .checked_mul(n)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!(
+                "identity matrix size {n}\u{00d7}{n} overflows usize ({n}^2 > usize::MAX)"
+            ),
+        })?;
     let mut values = vec![T::ZERO; len];
     for i in 0..n {
         values[i * n + i] = T::ONE;
@@ -1176,9 +1178,13 @@ where
         .map_err(map_layout_err)?;
 
     let layout = Layout::c_contiguous([rows, rows]).map_err(map_layout_err)?;
-    let n_sq = rows.checked_mul(rows).ok_or_else(|| HephaestusError::DispatchFailed {
-        message: format!("matpow: matrix size {rows}\u{00d7}{rows} overflows usize ({rows}^2 > usize::MAX)"),
-    })?;
+    let n_sq = rows
+        .checked_mul(rows)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!(
+                "matpow: matrix size {rows}\u{00d7}{rows} overflows usize ({rows}^2 > usize::MAX)"
+            ),
+        })?;
     let mut result = device.upload(&identity_matrix::<T>(rows)?)?;
     if exponent == 0 {
         return Ok(result);

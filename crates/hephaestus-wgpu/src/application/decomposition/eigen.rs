@@ -1,7 +1,7 @@
 //! GPU-resident Eigendecomposition.
 
-use crate::application::strided::StridedOperand;
 use crate::application::decomposition::validate::validate_square;
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};

@@ -80,6 +80,7 @@ pub(crate) fn encode_elementwise(
 /// Compute the workgroup count and reject empty inputs.
 ///
 /// Returns `None` when `len == 0` (caller should return `Ok(())` immediately).
+#[allow(dead_code)]
 pub(crate) fn elementwise_groups(
     len: usize,
     width: hephaestus_core::BlockWidth,

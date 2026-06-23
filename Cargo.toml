@@ -42,6 +42,7 @@ themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941
 leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
 mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
 moirai-gpu = { path = "../moirai/moirai-gpu", default-features = false, features = [
     "std",
     "parallel",

@@ -104,11 +104,9 @@ impl GpuFullPivLuDecomposition {
             .inner
             .as_ref()
             .expect("invariant: non-empty FullPivLU decomposition stores host factors");
-        let inv = inner
-            .inv()
-            .map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("FullPivLU inverse failed: {e}"),
-            })?;
+        let inv = inner.inv().map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("FullPivLU inverse failed: {e}"),
+        })?;
         device.upload(leto::Storage::as_slice(inv.storage()))
     }
 }

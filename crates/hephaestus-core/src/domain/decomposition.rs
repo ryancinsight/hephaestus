@@ -13,12 +13,7 @@ use crate::domain::error::{HephaestusError, Result};
 /// Consolidates the identical non-finite-check pattern to a single SSOT.
 #[inline]
 fn validate_finite(a: &[f32], op: &str) -> Result<()> {
-    if let Some((idx, value)) = a
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, v)| !v.is_finite())
-    {
+    if let Some((idx, value)) = a.iter().copied().enumerate().find(|(_, v)| !v.is_finite()) {
         return Err(HephaestusError::DispatchFailed {
             message: format!("{op} failed: entry {idx} is non-finite ({value})"),
         });
@@ -228,7 +223,8 @@ mod tests {
     #[test]
     fn lu_identity_matrix_yields_identity_factors() {
         let mut a = vec![1.0f32, 0.0, 0.0, 1.0];
-        let pivots = panel_lu_packed(&mut a, 2).expect("invariant: well-formed 2x2 test input factorises without error");
+        let pivots = panel_lu_packed(&mut a, 2)
+            .expect("invariant: well-formed 2x2 test input factorises without error");
         // No swaps should have occurred.
         assert_eq!(pivots, vec![0, 1]);
         // L should be identity (no below-diagonal entries).
@@ -243,7 +239,8 @@ mod tests {
         // A = [[2, 1], [4, 3]]
         let original = vec![2.0f32, 1.0, 4.0, 3.0];
         let mut a = original.clone();
-        let pivots = panel_lu_packed(&mut a, 2).expect("invariant: well-formed 2x2 test input factorises without error");
+        let pivots = panel_lu_packed(&mut a, 2)
+            .expect("invariant: well-formed 2x2 test input factorises without error");
 
         // Reconstruct A from P·A = L·U and verify against original.
         let recovered = lu_reconstruct_original(&a, &pivots, 2);
@@ -263,7 +260,8 @@ mod tests {
         // This requires row swaps since a[0,0] = 0.
         let original = vec![0.0f32, 2.0, 1.0, 1.0, 0.0, 3.0, 4.0, 1.0, 0.0];
         let mut a = original.clone();
-        let pivots = panel_lu_packed(&mut a, 3).expect("invariant: well-formed 3x3 test input factorises without error");
+        let pivots = panel_lu_packed(&mut a, 3)
+            .expect("invariant: well-formed 3x3 test input factorises without error");
 
         // A swap must have occurred at step 0 (pivot column 0 is zero).
         assert_ne!(pivots[0], 0, "must pivot at step 0 since a[0,0]=0");
@@ -292,7 +290,8 @@ mod tests {
              0.1, 0.05, 0.1, 0.3, 2.0,
         ];
         let mut a = original.clone();
-        let pivots = panel_lu_packed(&mut a, 5).expect("invariant: well-formed 5x5 test input factorises without error");
+        let pivots = panel_lu_packed(&mut a, 5)
+            .expect("invariant: well-formed 5x5 test input factorises without error");
 
         let recovered = lu_reconstruct_original(&a, &pivots, 5);
         for i in 0..25 {
@@ -342,7 +341,8 @@ mod tests {
         // A = [[0, 0, 1], [1, 0, 0], [0, 1, 0]] — requires two swaps.
         let original = vec![0.0f32, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         let mut a = original.clone();
-        let pivots = panel_lu_packed(&mut a, 3).expect("invariant: well-formed 3x3 test input factorises without error");
+        let pivots = panel_lu_packed(&mut a, 3)
+            .expect("invariant: well-formed 3x3 test input factorises without error");
 
         // Since pivots is a sequence of transpositions, we construct the cumulative
         // permutation vector to verify it is a valid permutation of 0..n.
@@ -422,7 +422,8 @@ mod tests {
     fn qr_identity_2x2_yields_correct_r() {
         let original = vec![1.0f32, 0.0, 0.0, 1.0];
         let mut a = original.clone();
-        let (heads, betas) = panel_qr_packed(&mut a, 2, 2).expect("invariant: well-formed 2x2 test input factorises without error");
+        let (heads, betas) = panel_qr_packed(&mut a, 2, 2)
+            .expect("invariant: well-formed 2x2 test input factorises without error");
 
         // Panel QR stores α = −sign(a[k,k])·‖x‖ on the diagonal, so R
         // diagonal entries can be negative.  Check |R[i,i]| = ‖col i‖.
@@ -452,7 +453,8 @@ mod tests {
         // A = [[1, 0], [0, 1], [1, 1]]
         let original = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
         let mut a = original.clone();
-        let (heads, betas) = panel_qr_packed(&mut a, 3, 2).expect("invariant: well-formed 3x2 test input factorises without error");
+        let (heads, betas) = panel_qr_packed(&mut a, 3, 2)
+            .expect("invariant: well-formed 3x2 test input factorises without error");
 
         // R must be upper triangular: a[1,0] should be zero (below diagonal).
         assert!(a[2].abs() <= 1e-5, "R[1,0] should be zero, got {}", a[2]);
@@ -503,7 +505,8 @@ mod tests {
             0.1, 0.05, 0.1,
         ];
         let mut a = original.clone();
-        let (heads, betas) = panel_qr_packed(&mut a, 5, 3).expect("invariant: well-formed 5x3 test input factorises without error");
+        let (heads, betas) = panel_qr_packed(&mut a, 5, 3)
+            .expect("invariant: well-formed 5x3 test input factorises without error");
 
         // NOTE: In the packed format, strictly below-diagonal entries store
         // Householder vector tails, NOT zeros.  Only the upper triangle
@@ -548,7 +551,8 @@ mod tests {
         // Diagonal 3×3: R should equal ±the diagonal.
         let original = vec![2.0f32, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
         let mut a = original.clone();
-        let (heads, betas) = panel_qr_packed(&mut a, 3, 3).expect("invariant: well-formed 3x3 test input factorises without error");
+        let (heads, betas) = panel_qr_packed(&mut a, 3, 3)
+            .expect("invariant: well-formed 3x3 test input factorises without error");
 
         // |R[i,i]| should equal the column norms (diagonal entries).
         assert!((a[0].abs() - 2.0).abs() <= 1e-5);
@@ -627,7 +631,8 @@ mod tests {
     #[test]
     fn qr_betas_are_positive() {
         let mut a = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
-        let (_, betas) = panel_qr_packed(&mut a, 3, 2).expect("invariant: well-formed 3x2 test input factorises without error");
+        let (_, betas) = panel_qr_packed(&mut a, 3, 2)
+            .expect("invariant: well-formed 3x2 test input factorises without error");
         for (k, &beta) in betas.iter().enumerate() {
             // β = 2/(vᵀv) is always positive.  No upper bound is
             // guaranteed: β can exceed 2 when ‖v‖ < 1.

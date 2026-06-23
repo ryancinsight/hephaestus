@@ -1,5 +1,20 @@
 use core::ffi::c_void;
+use std::alloc::{GlobalAlloc, Layout};
 use std::sync::Arc;
+
+use mnemosyne::{
+    CudaDeviceBackend, CudaHostPinnedBackend, CudaUnifiedBackend, MnemosyneAllocator,
+    StandardPolicy,
+};
+
+pub(crate) static CUDA_DEVICE_ALLOCATOR: MnemosyneAllocator<StandardPolicy, CudaDeviceBackend> =
+    MnemosyneAllocator::new();
+pub(crate) static CUDA_HOST_PINNED_ALLOCATOR: MnemosyneAllocator<
+    StandardPolicy,
+    CudaHostPinnedBackend,
+> = MnemosyneAllocator::new();
+pub(crate) static CUDA_UNIFIED_ALLOCATOR: MnemosyneAllocator<StandardPolicy, CudaUnifiedBackend> =
+    MnemosyneAllocator::new();
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -91,11 +106,35 @@ impl CudaDevice {
                 message: format!("bind device {device_ordinal} to thread: {e:?}"),
             })?;
         let topology = Some(Arc::new(query_topology(&device)?));
-        Ok(Self {
+        let dev = Self {
             device,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             topology,
-        })
+        };
+        // Sanity check to confirm that dynamic memory mapping and copying is functional (fails closed on headless/stub drivers)
+        {
+            let buf =
+                dev.alloc_zeroed::<u32>(1)
+                    .map_err(|e| HephaestusError::AdapterUnavailable {
+                        message: format!("CUDA sanity check allocation failed: {e:?}"),
+                    })?;
+            let host_val = [42u32];
+            dev.write_buffer(&buf, &host_val)
+                .map_err(|e| HephaestusError::AdapterUnavailable {
+                    message: format!("CUDA sanity check write failed: {e:?}"),
+                })?;
+            let mut read_val = [0u32];
+            dev.download(&buf, &mut read_val)
+                .map_err(|e| HephaestusError::AdapterUnavailable {
+                    message: format!("CUDA sanity check download failed: {e:?}"),
+                })?;
+            if read_val[0] != 42 {
+                return Err(HephaestusError::AdapterUnavailable {
+                    message: "CUDA sanity check data mismatch".to_string(),
+                });
+            }
+        }
+        Ok(dev)
     }
 
     /// The device topology snapshot captured at acquisition, when available.
@@ -120,54 +159,26 @@ impl CudaDevice {
 
     /// Allocate `bytes` of device memory according to the tier.
     fn alloc_bytes_with_tier(&self, bytes: usize, tier: themis::MemoryTier) -> Result<DevicePtr> {
-        let mut ptr: DevicePtr = 0;
         self.bind()?;
 
-        match tier {
-            themis::MemoryTier::HostPinned => {
-                let mut host_ptr: *mut core::ffi::c_void = core::ptr::null_mut();
-                // SAFETY: `host_ptr` is a valid out-pointer for host allocations; the
-                // context is current. Flag 0x02 is CU_MEMHOSTALLOC_DEVICEMAP.
-                let res = unsafe {
-                    cuda_core::sys::cuMemHostAlloc(core::ptr::addr_of_mut!(host_ptr), bytes, 0x02)
-                };
-                if res != 0 {
-                    return Err(HephaestusError::AllocationFailed {
-                        message: format!("cuMemHostAlloc({bytes} bytes) -> {res}"),
-                    });
-                }
-                ptr = host_ptr as DevicePtr;
-            }
-            themis::MemoryTier::Dram => {
-                // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`;
-                // the context is current. Flag 0x01 is CU_MEMATTACH_GLOBAL.
-                let res = unsafe {
-                    cuda_core::sys::cuMemAllocManaged(
-                        core::ptr::addr_of_mut!(ptr).cast(),
-                        bytes,
-                        0x01,
-                    )
-                };
-                if res != 0 {
-                    return Err(HephaestusError::AllocationFailed {
-                        message: format!("cuMemAllocManaged({bytes} bytes) -> {res}"),
-                    });
-                }
-            }
-            _ => {
-                // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`; the
-                // context is current.
-                let res = unsafe {
-                    cuda_core::sys::cuMemAlloc_v2(core::ptr::addr_of_mut!(ptr).cast(), bytes)
-                };
-                if res != 0 {
-                    return Err(HephaestusError::AllocationFailed {
-                        message: format!("cuMemAlloc_v2({bytes} bytes) -> {res}"),
-                    });
-                }
-            }
+        let layout =
+            Layout::from_size_align(bytes, 4).map_err(|e| HephaestusError::AllocationFailed {
+                message: format!("invalid allocation layout (size {bytes}): {e:?}"),
+            })?;
+
+        let ptr_val = match tier {
+            themis::MemoryTier::HostPinned => unsafe { CUDA_HOST_PINNED_ALLOCATOR.alloc(layout) },
+            themis::MemoryTier::Dram => unsafe { CUDA_UNIFIED_ALLOCATOR.alloc(layout) },
+            _ => unsafe { CUDA_DEVICE_ALLOCATOR.alloc(layout) },
+        };
+
+        if ptr_val.is_null() {
+            return Err(HephaestusError::AllocationFailed {
+                message: format!("Mnemosyne failed to allocate {bytes} bytes for tier {tier:?}"),
+            });
         }
-        Ok(ptr)
+
+        Ok(ptr_val as DevicePtr)
     }
 
     /// Copy a subset of a device buffer's contents into a host slice (device→host).

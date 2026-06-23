@@ -23,7 +23,6 @@ struct SpmmMeta {
 
 struct SparseSpmmKernel<T>(PhantomData<T>);
 
-
 fn spmm_shader_source<T: MatmulZero>(width: BlockWidth) -> String {
     format!(
         r#"
@@ -90,9 +89,12 @@ pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a,
         });
     }
 
-    let expected_c_len = nrows.checked_mul(bcols).ok_or_else(|| HephaestusError::DispatchFailed {
-        message: format!("spmm output size {nrows}×{bcols} overflows usize"),
-    })?;
+    let expected_c_len =
+        nrows
+            .checked_mul(bcols)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("spmm output size {nrows}×{bcols} overflows usize"),
+            })?;
     if c.len() != expected_c_len {
         return Err(HephaestusError::LengthMismatch {
             host_len: expected_c_len,
@@ -200,9 +202,11 @@ pub fn spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     let b_op = b.as_operand();
     let [_, bcols] = b_op.layout.shape;
 
-    let c_len = nrows.checked_mul(bcols).ok_or_else(|| HephaestusError::DispatchFailed {
-        message: format!("spmm output size {nrows}×{bcols} overflows usize"),
-    })?;
+    let c_len = nrows
+        .checked_mul(bcols)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!("spmm output size {nrows}×{bcols} overflows usize"),
+        })?;
     let mut c = device.alloc_zeroed::<T>(c_len)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)

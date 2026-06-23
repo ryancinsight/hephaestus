@@ -22,6 +22,8 @@ leto = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }
+mnemosyne = { workspace = true }
+mnemosyne-backend = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 moirai = { workspace = true }

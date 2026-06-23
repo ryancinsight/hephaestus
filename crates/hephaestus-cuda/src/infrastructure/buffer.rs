@@ -1,4 +1,8 @@
+use crate::infrastructure::device::{
+    CUDA_DEVICE_ALLOCATOR, CUDA_HOST_PINNED_ALLOCATOR, CUDA_UNIFIED_ALLOCATOR,
+};
 use core::marker::PhantomData;
+use std::alloc::GlobalAlloc;
 
 use hephaestus_core::DeviceBuffer;
 
@@ -74,16 +78,20 @@ impl<T> DeviceBuffer<T> for CudaBuffer<T> {
 impl<T> Drop for CudaBuffer<T> {
     fn drop(&mut self) {
         if self.ptr != 0 {
-            // SAFETY: `ptr` is non-zero, so it was returned by allocation functions
-            // in `CudaDevice` and has not been freed (drop runs once, and no
-            // other `CudaBuffer` holds this address — ownership is unique). The
-            // free return code is intentionally ignored: there is no recovery
-            // action in a destructor, and a failed free cannot be propagated.
-            unsafe {
-                if self.tier == themis::MemoryTier::HostPinned {
-                    let _ = cuda_core::sys::cuMemFreeHost(self.ptr as *mut core::ffi::c_void);
-                } else {
-                    let _ = cuda_core::sys::cuMemFree_v2(self.ptr);
+            let bytes = self.len * core::mem::size_of::<T>();
+            if let Ok(layout) = std::alloc::Layout::from_size_align(bytes, 4) {
+                unsafe {
+                    match self.tier {
+                        themis::MemoryTier::HostPinned => {
+                            CUDA_HOST_PINNED_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
+                        }
+                        themis::MemoryTier::Dram => {
+                            CUDA_UNIFIED_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
+                        }
+                        _ => {
+                            CUDA_DEVICE_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
+                        }
+                    }
                 }
             }
         }

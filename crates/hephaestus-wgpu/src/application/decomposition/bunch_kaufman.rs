@@ -81,5 +81,10 @@ pub fn bunch_kaufman(
     // inner consumed; device buffers and permutation are the sole surviving representation.
     drop(inner);
 
-    Ok(GpuBunchKaufmanDecomposition { l, d, permutation, n })
+    Ok(GpuBunchKaufmanDecomposition {
+        l,
+        d,
+        permutation,
+        n,
+    })
 }

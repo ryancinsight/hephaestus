@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::alloc::GlobalAlloc;
 use std::sync::Arc;
 
 use bytemuck::Pod;
@@ -8,9 +9,109 @@ use hephaestus_core::{
 use std::any::TypeId;
 use wgpu::util::DeviceExt;
 
-use crate::infrastructure::buffer::WgpuBuffer;
+use crate::infrastructure::buffer::{StagingPointer, WgpuBuffer};
 use crate::infrastructure::pool::PoolBuffer;
 use moirai_sync::ShardedResourcePool;
+
+use mnemosyne::{MnemosyneAllocator, StandardPolicy, WgpuStagingBackend};
+
+pub(crate) static WGPU_STAGING_ALLOCATOR: MnemosyneAllocator<StandardPolicy, WgpuStagingBackend> =
+    MnemosyneAllocator::new();
+
+pub(crate) static ACTIVE_WGPU_DEVICE: std::sync::OnceLock<wgpu::Device> =
+    std::sync::OnceLock::new();
+pub(crate) static ACTIVE_WGPU_QUEUE: std::sync::OnceLock<wgpu::Queue> = std::sync::OnceLock::new();
+
+std::thread_local! {
+    pub(crate) static WGPU_ALLOCATION_USAGE: std::cell::Cell<wgpu::BufferUsages> = const { std::cell::Cell::new(wgpu::BufferUsages::STORAGE) };
+}
+
+/// Metadata for an active mapped wgpu buffer tracked by Mnemosyne.
+pub struct WgpuMappedBuffer {
+    /// The underlying raw wgpu buffer.
+    pub buffer: wgpu::Buffer,
+    /// The allocated size in bytes.
+    pub size: usize,
+    /// The buffer usages used during creation.
+    pub usage: wgpu::BufferUsages,
+}
+
+/// Thread-safe registry mapping mapped host pointers back to their underlying `WgpuMappedBuffer` descriptors.
+pub static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<usize, WgpuMappedBuffer>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
+    let device = match ACTIVE_WGPU_DEVICE.get() {
+        Some(d) => d,
+        None => return core::ptr::null_mut(),
+    };
+    let usage = WGPU_ALLOCATION_USAGE.with(|u| u.get());
+
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hephaestus-mnemosyne-staging"),
+        size: size as u64,
+        usage,
+        mapped_at_creation: false,
+    });
+
+    let slice = buffer.slice(..);
+    let ptr = if usage.contains(wgpu::BufferUsages::MAP_WRITE) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Write, move |res| {
+            let _ = tx.send(res);
+        });
+        if device.poll(wgpu::PollType::Wait).is_err() {
+            return core::ptr::null_mut();
+        }
+        if rx.recv().is_ok_and(|res| res.is_ok()) {
+            slice.get_mapped_range_mut().as_mut_ptr()
+        } else {
+            return core::ptr::null_mut();
+        }
+    } else if usage.contains(wgpu::BufferUsages::MAP_READ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        if device.poll(wgpu::PollType::Wait).is_err() {
+            return core::ptr::null_mut();
+        }
+        if rx.recv().is_ok_and(|res| res.is_ok()) {
+            slice.get_mapped_range().as_ptr() as *mut u8
+        } else {
+            return core::ptr::null_mut();
+        }
+    } else {
+        return core::ptr::null_mut();
+    };
+
+    if ptr.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let mut mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    mapped.insert(
+        ptr as usize,
+        WgpuMappedBuffer {
+            buffer,
+            size,
+            usage,
+        },
+    );
+
+    ptr
+}
+
+unsafe extern "C" fn wgpu_deallocate_callback(ptr: *mut u8, _size: usize) -> bool {
+    let mut mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    if let Some(mapped_buf) = mapped.remove(&(ptr as usize)) {
+        mapped_buf.buffer.unmap();
+        true
+    } else {
+        false
+    }
+}
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
@@ -49,6 +150,18 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        let _ = ACTIVE_WGPU_DEVICE.set((*device).clone());
+        let _ = ACTIVE_WGPU_QUEUE.set((*queue).clone());
+
+        mnemosyne_backend::WGPU_ALLOCATE_CALLBACK.store(
+            wgpu_allocate_callback as *mut core::ffi::c_void,
+            std::sync::atomic::Ordering::Release,
+        );
+        mnemosyne_backend::WGPU_DEALLOCATE_CALLBACK.store(
+            wgpu_deallocate_callback as *mut core::ffi::c_void,
+            std::sync::atomic::Ordering::Release,
+        );
+
         Self {
             device,
             queue,
@@ -428,7 +541,14 @@ impl WgpuDevice {
         let byte_offset = Self::byte_size::<T>(offset)?;
         let byte_len = Self::byte_size::<T>(out.len())?;
         let padded = Self::padded_size::<T>(out.len())?;
-        self.stage_and_read(&buffer.buffer, byte_offset, padded, byte_len, out, "hephaestus-download-sub")
+        self.stage_and_read(
+            &buffer.buffer,
+            byte_offset,
+            padded,
+            byte_len,
+            out,
+            "hephaestus-download-sub",
+        )
     }
 
     /// Overwrite a subset of a device buffer with host data (host→device).
@@ -492,29 +612,72 @@ impl ComputeDevice for WgpuDevice {
             themis::PlacementHint::Tier(t) => t,
             _ => themis::MemoryTier::Device,
         };
-        let usage = match tier {
-            themis::MemoryTier::HostPinned => {
-                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST
+        if tier == themis::MemoryTier::HostPinned {
+            let padded_len = Self::padded_size::<T>(len)?;
+            let padded_len_usize =
+                usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
+                    message: "padded length overflows usize".to_string(),
+                })?;
+            WGPU_ALLOCATION_USAGE.with(|u| {
+                u.set(wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST);
+            });
+            let layout = std::alloc::Layout::from_size_align(padded_len_usize, 8).map_err(|e| {
+                HephaestusError::AllocationFailed {
+                    message: format!("invalid layout: {e}"),
+                }
+            })?;
+            let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
+            if ptr.is_null() {
+                return Err(HephaestusError::AllocationFailed {
+                    message: "Mnemosyne WgpuStagingBackend allocation returned null".to_string(),
+                });
             }
-            _ => {
-                wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST
-            }
-        };
-        // WebGPU guarantees newly created buffers are zero-initialized.
-        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("hephaestus-storage"),
-            size: Self::padded_size::<T>(len)?,
-            usage,
-            mapped_at_creation: false,
-        });
-        Ok(WgpuBuffer {
-            buffer,
-            len,
-            tier,
-            marker: PhantomData,
-        })
+            let buffer = {
+                let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+                let block_addr = ptr as usize;
+                let found = mapped.iter().find(|(&base_addr, mapped_buf)| {
+                    block_addr >= base_addr && block_addr < base_addr + mapped_buf.size
+                });
+                if let Some((_, mapped_buf)) = found {
+                    mapped_buf.buffer.clone()
+                } else {
+                    return Err(HephaestusError::AllocationFailed {
+                        message: format!(
+                            "Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"
+                        ),
+                    });
+                }
+            };
+            let staging_ptr = Arc::new(StagingPointer {
+                ptr,
+                size: padded_len_usize,
+            });
+            Ok(WgpuBuffer {
+                buffer,
+                len,
+                tier,
+                staging_ptr: Some(staging_ptr),
+                marker: PhantomData,
+            })
+        } else {
+            let usage = wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST;
+            // WebGPU guarantees newly created buffers are zero-initialized.
+            let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hephaestus-storage"),
+                size: Self::padded_size::<T>(len)?,
+                usage,
+                mapped_at_creation: false,
+            });
+            Ok(WgpuBuffer {
+                buffer,
+                len,
+                tier,
+                staging_ptr: None,
+                marker: PhantomData,
+            })
+        }
     }
 
     fn upload_with_hint<T: Pod>(
@@ -529,44 +692,95 @@ impl ComputeDevice for WgpuDevice {
             themis::PlacementHint::Tier(t) => t,
             _ => themis::MemoryTier::Device,
         };
-        let usage = match tier {
-            themis::MemoryTier::HostPinned => {
-                wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC
+        if tier == themis::MemoryTier::HostPinned {
+            let padded_len_usize =
+                usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
+                    message: "padded length overflows usize".to_string(),
+                })?;
+            WGPU_ALLOCATION_USAGE.with(|u| {
+                u.set(wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC);
+            });
+            let layout = std::alloc::Layout::from_size_align(padded_len_usize, 8).map_err(|e| {
+                HephaestusError::AllocationFailed {
+                    message: format!("invalid layout: {e}"),
+                }
+            })?;
+            let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
+            if ptr.is_null() {
+                return Err(HephaestusError::AllocationFailed {
+                    message: "Mnemosyne WgpuStagingBackend allocation returned null".to_string(),
+                });
             }
-            _ => {
-                wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST
+            let byte_len_usize = usize::try_from(byte_len).expect("invariant: byte_len fits usize");
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    bytemuck::cast_slice(host).as_ptr(),
+                    ptr,
+                    byte_len_usize,
+                );
             }
-        };
-        let buffer = if padded_len == 0 {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("hephaestus-upload"),
-                size: 0,
-                usage,
-                mapped_at_creation: false,
+            let buffer = {
+                let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+                let block_addr = ptr as usize;
+                let found = mapped.iter().find(|(&base_addr, mapped_buf)| {
+                    block_addr >= base_addr && block_addr < base_addr + mapped_buf.size
+                });
+                if let Some((_, mapped_buf)) = found {
+                    mapped_buf.buffer.clone()
+                } else {
+                    return Err(HephaestusError::AllocationFailed {
+                        message: format!(
+                            "Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"
+                        ),
+                    });
+                }
+            };
+            let staging_ptr = Arc::new(StagingPointer {
+                ptr,
+                size: padded_len_usize,
+            });
+            Ok(WgpuBuffer {
+                buffer,
+                len: host.len(),
+                tier,
+                staging_ptr: Some(staging_ptr),
+                marker: PhantomData,
             })
         } else {
-            // Both byte_len and padded_len come from byte_size/padded_size which
-            // already ensure the value fits usize (they start from usize*size_of<T>).
-            let byte_len_usize = usize::try_from(byte_len)
-                .expect("invariant: byte_len <= usize::MAX (derived from host.len() * size_of::<T>())");
-            let padded_len_usize = usize::try_from(padded_len)
-                .expect("invariant: padded_len <= usize::MAX (padded_size rounds byte_len up by at most alignment-1)");
-            let mut padded = vec![0u8; padded_len_usize];
-            padded[..byte_len_usize].copy_from_slice(bytemuck::cast_slice(host));
-            (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("hephaestus-upload"),
-                contents: &padded,
-                usage,
+            let usage = wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST;
+            let buffer = if padded_len == 0 {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("hephaestus-upload"),
+                    size: 0,
+                    usage,
+                    mapped_at_creation: false,
+                })
+            } else {
+                // Both byte_len and padded_len come from byte_size/padded_size which
+                // already ensure the value fits usize (they start from usize*size_of<T>).
+                let byte_len_usize = usize::try_from(byte_len).expect(
+                    "invariant: byte_len <= usize::MAX (derived from host.len() * size_of::<T>())",
+                );
+                let padded_len_usize = usize::try_from(padded_len)
+                    .expect("invariant: padded_len <= usize::MAX (padded_size rounds byte_len up by at most alignment-1)");
+                let mut padded = vec![0u8; padded_len_usize];
+                padded[..byte_len_usize].copy_from_slice(bytemuck::cast_slice(host));
+                (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("hephaestus-upload"),
+                    contents: &padded,
+                    usage,
+                })
+            };
+            Ok(WgpuBuffer {
+                buffer,
+                len: host.len(),
+                tier,
+                staging_ptr: None,
+                marker: PhantomData,
             })
-        };
-        Ok(WgpuBuffer {
-            buffer,
-            len: host.len(),
-            tier,
-            marker: PhantomData,
-        })
+        }
     }
 
     fn download<T: Pod>(&self, buffer: &WgpuBuffer<T>, out: &mut [T]) -> Result<()> {
@@ -583,7 +797,14 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = Self::byte_size::<T>(buffer.len)?;
         let padded = Self::padded_size::<T>(buffer.len)?;
-        self.stage_and_read(&buffer.buffer, 0, padded, byte_len, out, "hephaestus-download")
+        self.stage_and_read(
+            &buffer.buffer,
+            0,
+            padded,
+            byte_len,
+            out,
+            "hephaestus-download",
+        )
     }
 
     fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
@@ -618,14 +839,11 @@ impl WgpuDevice {
     ) -> Result<()> {
         let raw_staging = self.get_staging_buffer(padded)?;
         let staging_size = raw_staging.size();
-        let staging =
-            crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
+        let staging = crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
 
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some(label),
-            });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
         encoder.copy_buffer_to_buffer(src_buf, byte_offset, &staging, 0, padded);
         self.queue.submit(Some(encoder.finish()));
 
@@ -661,7 +879,6 @@ impl WgpuDevice {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
