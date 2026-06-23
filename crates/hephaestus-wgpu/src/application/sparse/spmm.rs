@@ -8,7 +8,6 @@ use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
@@ -139,7 +138,7 @@ pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a,
         || spmm_shader_source::<T>(width),
     );
     let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmmMeta>(1)?)?;
-    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buffer);
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));

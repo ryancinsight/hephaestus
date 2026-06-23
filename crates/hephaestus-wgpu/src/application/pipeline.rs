@@ -65,8 +65,10 @@ mod tests {
     #[test]
     fn workgroups_accepts_exact_u32_group_limit() {
         let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
-        let len = u64::from(width.get()) * u64::from(u32::MAX);
-        match workgroups(len as usize, width) {
+        let len: usize = (u64::from(width.get()) * u64::from(u32::MAX))
+            .try_into()
+            .expect("invariant: max-workgroup test value fits usize on 64-bit");
+        match workgroups(len, width) {
             Ok(groups) => assert_eq!(groups, u32::MAX),
             Err(error) => panic!("expected max workgroup count, got {error:?}"),
         }
@@ -75,11 +77,14 @@ mod tests {
     #[test]
     fn workgroups_rejects_beyond_u32_group_limit() {
         let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
-        let len = u64::from(width.get()) * u64::from(u32::MAX) + 1;
-        match workgroups(len as usize, width) {
+        let len_u64 = u64::from(width.get()) * u64::from(u32::MAX) + 1;
+        let len: usize = len_u64
+            .try_into()
+            .expect("invariant: overflow test value fits usize on 64-bit");
+        match workgroups(len, width) {
             Err(HephaestusError::DispatchFailed { message }) => assert_eq!(
                 message,
-                format!("dispatch size {len} exceeds u32 workgroup range")
+                format!("dispatch size {len_u64} exceeds u32 workgroup range")
             ),
             other => panic!("expected dispatch-size rejection, got {other:?}"),
         }

@@ -23,7 +23,6 @@ use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::UniformBufferGuard;
 
 // ---------------------------------------------------------------------------
 // SYRK uniform
@@ -215,7 +214,7 @@ fn syrk_trailing_update(
     );
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
-    let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
+    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));

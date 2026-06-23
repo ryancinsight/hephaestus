@@ -7,6 +7,13 @@ use hephaestus_core::DeviceBuffer;
 /// buffers is a compile error; the raw `wgpu::Buffer` carries no type. The
 /// element count is stored explicitly because the underlying allocation is
 /// padded to wgpu's copy alignment and may exceed `len * size_of::<T>()`.
+///
+/// # Cloning
+///
+/// `Clone` is a GPU handle clone (similar to cloning an `Arc`): both the
+/// original and the clone refer to the **same** device allocation. Use
+/// [`aliases`](WgpuBuffer::aliases) to detect aliased pairs before
+/// dispatching kernels with output aliasing.
 #[derive(Clone, Debug)]
 pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,
@@ -16,10 +23,22 @@ pub struct WgpuBuffer<T> {
 }
 
 impl<T> WgpuBuffer<T> {
-    /// Construct a new `WgpuBuffer` wrapper from a raw buffer and element count.
+    /// Construct a `WgpuBuffer` wrapper from a raw buffer and element count.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure `len` equals the number of `T`-elements that fit
+    /// in the allocation (i.e. `len * size_of::<T>() <= buffer.size()`). This
+    /// function is `pub(crate)` because only the `ComputeDevice` impl provides
+    /// validated construction paths.
     #[must_use]
     #[inline]
-    pub fn new(buffer: wgpu::Buffer, len: usize, tier: themis::MemoryTier) -> Self {
+    pub(crate) fn new(buffer: wgpu::Buffer, len: usize, tier: themis::MemoryTier) -> Self {
+        debug_assert!(
+            len.checked_mul(core::mem::size_of::<T>())
+                .map_or(false, |bytes| bytes <= buffer.size() as usize),
+            "invariant: len * size_of::<T>() must fit within the wgpu buffer allocation"
+        );
         Self {
             buffer,
             len,

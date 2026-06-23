@@ -54,7 +54,6 @@ use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::UniformBufferGuard;
 
 use hephaestus_core::panel_qr_packed;
 
@@ -539,7 +538,7 @@ pub fn qr_decompose_blocked(
             };
 
             let raw_hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
-            let hh_meta_buf = UniformBufferGuard::new(device.clone(), raw_hh_meta_buf);
+            let hh_meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_hh_meta_buf);
             device
                 .queue()
                 .write_buffer(&hh_meta_buf, 0, bytemuck::bytes_of(&hh_meta));

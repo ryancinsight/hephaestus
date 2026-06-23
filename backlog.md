@@ -157,7 +157,7 @@ cuda-oxide + cutile).
 ## Phase 4: consumers [arch]
 - [x] [minor] apollo: `apollo-wgpu-helpers` delegates acquisition to
   `hephaestus-wgpu` with its public API preserved.
-- [/] [arch] coeus: re-base GPU backends onto `hephaestus` (coeus MS-60+ Stage D):
+- [x] [arch] coeus: re-base GPU backends onto `hephaestus` (coeus MS-60+ Stage D):
   - [x] Re-base `coeus-wgpu` onto `hephaestus-wgpu`.
-  - [ ] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
+  - [x] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
 - [ ] [minor] moirai: GPU co-scheduling adapter over hephaestus (moirai Stage D).

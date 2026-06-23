@@ -20,7 +20,6 @@ use crate::application::strided::{
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::UniformBufferGuard;
 
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
 pub trait MatmulZero: WgslScalar {
@@ -247,7 +246,7 @@ where
     );
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
-    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buf);
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
@@ -633,9 +632,9 @@ where
     let raw_a = device.get_uniform_buffer(size)?;
     let raw_b = device.get_uniform_buffer(size)?;
     let raw_out = device.get_uniform_buffer(size)?;
-    let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
-    let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
-    let out_layout_buf = UniformBufferGuard::new(device.clone(), raw_out);
+    let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
+    let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
+    let out_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_out);
 
     device
         .queue()
@@ -807,9 +806,9 @@ where
     let raw_a = device.get_uniform_buffer(size)?;
     let raw_b = device.get_uniform_buffer(size)?;
     let raw_c = device.get_uniform_buffer(size)?;
-    let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
-    let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
-    let c_layout_buf = UniformBufferGuard::new(device.clone(), raw_c);
+    let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
+    let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
+    let c_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_c);
 
     device
         .queue()
@@ -872,14 +871,8 @@ where
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let workgroups_x =
-            u32::try_from(cols.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("matmul workgroup_x {} exceeds u32", cols.div_ceil(16)),
-            })?;
-        let workgroups_y =
-            u32::try_from(rows.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("matmul workgroup_y {} exceeds u32", rows.div_ceil(16)),
-            })?;
+        let workgroups_x = to_u32(cols.div_ceil(16), "matmul workgroup_x")?;
+        let workgroups_y = to_u32(rows.div_ceil(16), "matmul workgroup_y")?;
         pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
     }
 
@@ -1042,9 +1035,9 @@ where
         let raw_a = device.get_uniform_buffer(size)?;
         let raw_b = device.get_uniform_buffer(size)?;
         let raw_c = device.get_uniform_buffer(size)?;
-        let a_layout_buf = UniformBufferGuard::new(device.clone(), raw_a);
-        let b_layout_buf = UniformBufferGuard::new(device.clone(), raw_b);
-        let c_layout_buf = UniformBufferGuard::new(device.clone(), raw_c);
+        let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
+        let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
+        let c_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_c);
 
         device
             .queue()
@@ -1096,14 +1089,8 @@ where
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups_x =
-                u32::try_from(n.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("batched_matmul workgroup_x {} exceeds u32", n.div_ceil(16)),
-                })?;
-            let workgroups_y =
-                u32::try_from(m.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("batched_matmul workgroup_y {} exceeds u32", m.div_ceil(16)),
-                })?;
+            let workgroups_x = to_u32(n.div_ceil(16), "batched_matmul workgroup_x")?;
+            let workgroups_y = to_u32(m.div_ceil(16), "batched_matmul workgroup_y")?;
             pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
@@ -1146,12 +1133,17 @@ where
     Ok(out)
 }
 
-fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Vec<T> {
-    let mut values = vec![T::ZERO; n * n];
+fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Result<Vec<T>> {
+    let len = n.checked_mul(n).ok_or_else(|| HephaestusError::DispatchFailed {
+        message: format!(
+            "identity matrix size {n}\u{00d7}{n} overflows usize ({n}^2 > usize::MAX)"
+        ),
+    })?;
+    let mut values = vec![T::ZERO; len];
     for i in 0..n {
         values[i * n + i] = T::ONE;
     }
-    values
+    Ok(values)
 }
 
 /// Raise a square matrix to a non-negative integer power on the GPU.
@@ -1184,12 +1176,15 @@ where
         .map_err(map_layout_err)?;
 
     let layout = Layout::c_contiguous([rows, rows]).map_err(map_layout_err)?;
-    let mut result = device.upload(&identity_matrix::<T>(rows))?;
+    let n_sq = rows.checked_mul(rows).ok_or_else(|| HephaestusError::DispatchFailed {
+        message: format!("matpow: matrix size {rows}\u{00d7}{rows} overflows usize ({rows}^2 > usize::MAX)"),
+    })?;
+    let mut result = device.upload(&identity_matrix::<T>(rows)?)?;
     if exponent == 0 {
         return Ok(result);
     }
 
-    let mut base = device.alloc_zeroed::<T>(rows * rows)?;
+    let mut base = device.alloc_zeroed::<T>(n_sq)?;
     unary_elementwise_strided_into::<crate::application::elementwise::IdentityOp, T, 2>(
         device,
         matrix,
@@ -1200,8 +1195,8 @@ where
         BlockWidth::DEFAULT,
     )?;
 
-    let mut result_scratch = device.alloc_zeroed::<T>(rows * rows)?;
-    let mut base_scratch = device.alloc_zeroed::<T>(rows * rows)?;
+    let mut result_scratch = device.alloc_zeroed::<T>(n_sq)?;
+    let mut base_scratch = device.alloc_zeroed::<T>(n_sq)?;
     let mut remaining = exponent;
 
     loop {
@@ -1379,7 +1374,7 @@ where
     );
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RankMeta>(1)?)?;
-    let meta_buffer = UniformBufferGuard::new(device.clone(), raw_meta_buf);
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));

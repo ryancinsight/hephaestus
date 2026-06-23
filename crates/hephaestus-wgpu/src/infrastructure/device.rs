@@ -424,52 +424,11 @@ impl WgpuDevice {
             return Ok(());
         }
 
-        let element_size = core::mem::size_of::<T>();
-        let byte_offset = (offset as u64)
-            .checked_mul(element_size as u64)
-            .ok_or_else(|| HephaestusError::AllocationFailed {
-                message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            })?;
+        // byte_size::<T>(offset) = offset * size_of::<T>() with checked overflow → u64.
+        let byte_offset = Self::byte_size::<T>(offset)?;
         let byte_len = Self::byte_size::<T>(out.len())?;
         let padded = Self::padded_size::<T>(out.len())?;
-        let raw_staging = self.get_staging_buffer(padded)?;
-        let staging_size = raw_staging.size();
-        let staging =
-            crate::infrastructure::pool::StagingBufferGuard::new(self.clone(), raw_staging);
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("hephaestus-download-sub"),
-            });
-        encoder.copy_buffer_to_buffer(&buffer.buffer, byte_offset, &staging, 0, padded);
-        self.queue.submit(Some(encoder.finish()));
-
-        let slice = staging.slice(..staging_size);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result);
-        });
-        self.device
-            .poll(wgpu::PollType::Wait)
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("device poll failed: {e:?}"),
-            })?;
-        receiver
-            .recv()
-            .map_err(|_| HephaestusError::TransferFailed {
-                message: "map_async callback dropped".to_string(),
-            })?
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("buffer mapping failed: {e:?}"),
-            })?;
-
-        let mapped = slice.get_mapped_range();
-        out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len as usize]));
-        drop(mapped);
-        staging.unmap();
-
-        Ok(())
+        self.stage_and_read(&buffer.buffer, byte_offset, padded, byte_len, out, "hephaestus-download-sub")
     }
 
     /// Overwrite a subset of a device buffer with host data (host→device).
@@ -507,12 +466,8 @@ impl WgpuDevice {
             return Ok(());
         }
 
-        let element_size = core::mem::size_of::<T>();
-        let byte_offset = (offset as u64)
-            .checked_mul(element_size as u64)
-            .ok_or_else(|| HephaestusError::AllocationFailed {
-                message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            })?;
+        // byte_size reuses the existing checked multiplication (offset * size_of::<T>()).
+        let byte_offset = Self::byte_size::<T>(offset)?;
         self.queue
             .write_buffer(buffer.raw(), byte_offset, bytemuck::cast_slice(host));
         Ok(())
@@ -592,8 +547,14 @@ impl ComputeDevice for WgpuDevice {
                 mapped_at_creation: false,
             })
         } else {
-            let mut padded = vec![0u8; padded_len as usize];
-            padded[..byte_len as usize].copy_from_slice(bytemuck::cast_slice(host));
+            // Both byte_len and padded_len come from byte_size/padded_size which
+            // already ensure the value fits usize (they start from usize*size_of<T>).
+            let byte_len_usize = usize::try_from(byte_len)
+                .expect("invariant: byte_len <= usize::MAX (derived from host.len() * size_of::<T>())");
+            let padded_len_usize = usize::try_from(padded_len)
+                .expect("invariant: padded_len <= usize::MAX (padded_size rounds byte_len up by at most alignment-1)");
+            let mut padded = vec![0u8; padded_len_usize];
+            padded[..byte_len_usize].copy_from_slice(bytemuck::cast_slice(host));
             (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("hephaestus-upload"),
                 contents: &padded,
@@ -622,22 +583,57 @@ impl ComputeDevice for WgpuDevice {
 
         let byte_len = Self::byte_size::<T>(buffer.len)?;
         let padded = Self::padded_size::<T>(buffer.len)?;
+        self.stage_and_read(&buffer.buffer, 0, padded, byte_len, out, "hephaestus-download")
+    }
+
+    fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
+        validate_slice_alignment(host)?;
+        if host.len() != buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: host.len(),
+                device_len: buffer.len,
+            });
+        }
+        self.queue
+            .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
+        Ok(())
+    }
+}
+
+impl WgpuDevice {
+    /// Core GPU→host transfer: copy `padded` bytes from `src_buf[byte_offset..]`
+    /// into a staging buffer, map it, and write exactly `byte_len` bytes into `out`.
+    ///
+    /// `byte_len` ≤ `padded` must hold; `padded` must fit the alignment required by
+    /// `wgpu::COPY_BUFFER_ALIGNMENT`. This is the SSOT for all synchronous
+    /// device→host readback paths.
+    fn stage_and_read<T: Pod>(
+        &self,
+        src_buf: &wgpu::Buffer,
+        byte_offset: u64,
+        padded: u64,
+        byte_len: u64,
+        out: &mut [T],
+        label: &str,
+    ) -> Result<()> {
         let raw_staging = self.get_staging_buffer(padded)?;
         let staging_size = raw_staging.size();
         let staging =
-            crate::infrastructure::pool::StagingBufferGuard::new(self.clone(), raw_staging);
+            crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
 
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("hephaestus-download"),
+                label: Some(label),
             });
-        encoder.copy_buffer_to_buffer(&buffer.buffer, 0, &staging, 0, padded);
+        encoder.copy_buffer_to_buffer(src_buf, byte_offset, &staging, 0, padded);
         self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..staging_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
+            // send() only fails if the receiver was dropped; the receiver is alive
+            // in the same synchronous frame until after poll() returns below.
             let _ = sender.send(result);
         });
         self.device
@@ -654,27 +650,18 @@ impl ComputeDevice for WgpuDevice {
                 message: format!("buffer mapping failed: {e:?}"),
             })?;
 
+        // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
+        let byte_len_usize = usize::try_from(byte_len)
+            .expect("invariant: byte_len fits usize (derived from element count * size_of::<T>())");
         let mapped = slice.get_mapped_range();
-        out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len as usize]));
+        out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len_usize]));
         drop(mapped);
         staging.unmap();
 
         Ok(())
     }
-
-    fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
-        validate_slice_alignment(host)?;
-        if host.len() != buffer.len {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: host.len(),
-                device_len: buffer.len,
-            });
-        }
-        self.queue
-            .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
-        Ok(())
-    }
 }
+
 
 #[cfg(test)]
 mod tests {

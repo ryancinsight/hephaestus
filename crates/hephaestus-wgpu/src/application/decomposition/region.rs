@@ -6,7 +6,6 @@ use std::any::TypeId;
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::UniformBufferGuard;
 
 fn matrix_region_len(rows: usize, cols: usize) -> Result<usize> {
     rows.checked_mul(cols)
@@ -188,10 +187,10 @@ pub(crate) fn download_matrix_region_compact_reusable(
 
     let raw_staging = device.get_staging_buffer(compact_bytes)?;
     let staging_size = raw_staging.size();
-    let staging = crate::infrastructure::pool::StagingBufferGuard::new(device.clone(), raw_staging);
+    let staging = crate::infrastructure::pool::staging_guard(device.clone(), raw_staging);
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-    let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
+    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
 
     let meta = region_meta(region)?;
     device
@@ -319,7 +318,7 @@ pub(crate) fn write_matrix_region_compact_reusable(
     device.write_sub_buffer(temp_compact_buf, 0, compact_host)?;
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-    let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
+    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
 
     let meta = region_meta(region)?;
     device

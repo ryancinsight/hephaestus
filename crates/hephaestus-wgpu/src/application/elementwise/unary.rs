@@ -138,40 +138,22 @@ where
         shader_source::<Op, T>(width)
     });
 
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-unary"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: a.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: out.buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-unary"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-unary"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(groups, 1, 1);
-    }
-    device.queue().submit(Some(encoder.finish()));
-
-    Ok(())
+    super::encode_elementwise(
+        device,
+        &pipeline,
+        "hephaestus-unary",
+        &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: a.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+        ],
+        groups,
+    )
 }
 
 /// Run `out[i] = op(a[i])` on the device, allocating the output buffer.
