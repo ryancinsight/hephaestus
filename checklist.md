@@ -1,5 +1,20 @@
 # Checklist — hephaestus
 
+2026-06-23 (WGPU staging-registry contention). Audited the staging-allocator
+integration in `infrastructure/{device,buffer,pool}.rs`. Found the global
+`WGPU_MAPPED_BUFFERS` registry resolved a sub-allocated staging pointer to its
+mapped block with an `O(n)` `.iter().find()` scan held inside the global lock at
+both HostPinned alloc/upload sites. Replaced the `HashMap` with a base-address
+`BTreeMap` and a single `resolve_mapped_buffer` helper doing an `O(log n)`
+`range(..=ptr).next_back()` containment query (DRY/SSOT). Tightened the registry
++ descriptor to `pub(crate)` (no external consumers; makes the type change
+non-breaking) and removed the dead `usage` field. Verified: `cargo fmt`, `cargo
+clippy -p hephaestus-wgpu -p hephaestus-core --all-targets -- -D warnings`,
+`cargo nextest run --workspace` (228 passed incl. `test_placement_aware_allocation`,
+upload/download round-trip), doctests. Remaining bounded characteristic recorded
+in gap_audit: the registry still uses one global `Mutex` (now `O(log n)`); a
+sharded registry is deferred until a workload measures the lock as hot.
+
 Target version: 0.10.0 (bumped; CHANGELOG synced). Sprint phase: Execution.
 Phase 1 COMPLETE. Phase 2 current increment: `hephaestus-wgpu` Leto parity
 linalg and comparative benchmarks. Next concrete increment: complete WGPU/Leto

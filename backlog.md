@@ -6,6 +6,14 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Make WGPU staging-pointer→mapped-block resolution `O(log n)`:
+  `WGPU_MAPPED_BUFFERS` is now a base-address-keyed `BTreeMap`; the two
+  HostPinned alloc/upload sites share one `resolve_mapped_buffer` helper doing a
+  `range(..=ptr).next_back()` containment query instead of an `O(n)` linear scan
+  under the global lock. Tightened the registry + descriptor to `pub(crate)`
+  (no external consumers) and removed the dead `WgpuMappedBuffer::usage` field.
+  Evidence: `test_placement_aware_allocation`, upload/download round-trip, and
+  write-buffer contract tests; full 228-test workspace gate; clippy `-D warnings`.
 - [x] [minor] Add checked `BlockWidth` grid-count arithmetic in core and route
   WGPU dispatch validation through it, keeping overflow detection in one
   type-level launch-policy API. Evidence: value-semantic launch and WGPU

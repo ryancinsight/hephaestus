@@ -27,19 +27,47 @@ std::thread_local! {
 }
 
 /// Metadata for an active mapped wgpu buffer tracked by Mnemosyne.
-pub struct WgpuMappedBuffer {
+///
+/// Internal to the staging-allocator integration (the `wgpu_allocate`/
+/// `wgpu_deallocate` callbacks and [`resolve_mapped_buffer`]); not part of the
+/// crate's public surface.
+pub(crate) struct WgpuMappedBuffer {
     /// The underlying raw wgpu buffer.
-    pub buffer: wgpu::Buffer,
+    pub(crate) buffer: wgpu::Buffer,
     /// The allocated size in bytes.
-    pub size: usize,
-    /// The buffer usages used during creation.
-    pub usage: wgpu::BufferUsages,
+    pub(crate) size: usize,
 }
 
-/// Thread-safe registry mapping mapped host pointers back to their underlying `WgpuMappedBuffer` descriptors.
-pub static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<usize, WgpuMappedBuffer>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+/// Thread-safe registry mapping each mapped block's base host address to its
+/// underlying `WgpuMappedBuffer` descriptor.
+///
+/// A `BTreeMap` (keyed by base address) is used rather than a `HashMap` so that
+/// resolving a sub-allocated pointer to its containing block is an `O(log n)`
+/// range query ([`resolve_mapped_buffer`]) instead of an `O(n)` linear scan
+/// while the global lock is held.
+pub(crate) static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::BTreeMap<usize, WgpuMappedBuffer>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::BTreeMap::new()));
+
+/// Resolves the `wgpu::Buffer` whose mapped host range contains `ptr`.
+///
+/// The Mnemosyne staging allocator may return a pointer offset into a larger
+/// mapped block, so the registry is queried for the greatest base address
+/// `<= ptr` and the result is range-checked for containment. The `BTreeMap`
+/// range query keeps the global-registry critical section `O(log n)`; the
+/// returned `wgpu::Buffer` is a cheap `Arc` handle clone.
+fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
+    let block_addr = ptr as usize;
+    let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    if let Some((&base_addr, mapped_buf)) = mapped.range(..=block_addr).next_back() {
+        if block_addr < base_addr + mapped_buf.size {
+            return Ok(mapped_buf.buffer.clone());
+        }
+    }
+    Err(HephaestusError::AllocationFailed {
+        message: format!("Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"),
+    })
+}
 
 unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
     let device = match ACTIVE_WGPU_DEVICE.get() {
@@ -91,14 +119,7 @@ unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
     }
 
     let mut mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
-    mapped.insert(
-        ptr as usize,
-        WgpuMappedBuffer {
-            buffer,
-            size,
-            usage,
-        },
-    );
+    mapped.insert(ptr as usize, WgpuMappedBuffer { buffer, size });
 
     ptr
 }
@@ -632,22 +653,7 @@ impl ComputeDevice for WgpuDevice {
                     message: "Mnemosyne WgpuStagingBackend allocation returned null".to_string(),
                 });
             }
-            let buffer = {
-                let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
-                let block_addr = ptr as usize;
-                let found = mapped.iter().find(|(&base_addr, mapped_buf)| {
-                    block_addr >= base_addr && block_addr < base_addr + mapped_buf.size
-                });
-                if let Some((_, mapped_buf)) = found {
-                    mapped_buf.buffer.clone()
-                } else {
-                    return Err(HephaestusError::AllocationFailed {
-                        message: format!(
-                            "Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"
-                        ),
-                    });
-                }
-            };
+            let buffer = resolve_mapped_buffer(ptr)?;
             let staging_ptr = Arc::new(StagingPointer {
                 ptr,
                 size: padded_len_usize,
@@ -719,22 +725,7 @@ impl ComputeDevice for WgpuDevice {
                     byte_len_usize,
                 );
             }
-            let buffer = {
-                let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
-                let block_addr = ptr as usize;
-                let found = mapped.iter().find(|(&base_addr, mapped_buf)| {
-                    block_addr >= base_addr && block_addr < base_addr + mapped_buf.size
-                });
-                if let Some((_, mapped_buf)) = found {
-                    mapped_buf.buffer.clone()
-                } else {
-                    return Err(HephaestusError::AllocationFailed {
-                        message: format!(
-                            "Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"
-                        ),
-                    });
-                }
-            };
+            let buffer = resolve_mapped_buffer(ptr)?;
             let staging_ptr = Arc::new(StagingPointer {
                 ptr,
                 size: padded_len_usize,

@@ -6,6 +6,17 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Changed
 
+- `hephaestus-wgpu` [patch]: resolve a sub-allocated staging pointer to its
+  containing mapped block in `O(log n)` instead of `O(n)`. The global
+  `WGPU_MAPPED_BUFFERS` registry is now a `BTreeMap` keyed by each block's base
+  address; the two HostPinned alloc/upload sites that previously held the global
+  lock across an `.iter().find()` linear scan now share one `resolve_mapped_buffer`
+  helper that does a `range(..=ptr).next_back()` range query plus a containment
+  check, shortening the lock-held critical section under concurrent staging
+  traffic. The registry and its `WgpuMappedBuffer` descriptor are tightened to
+  `pub(crate)` (they have no external consumers — pure allocator-callback
+  plumbing), which makes the container-type change non-breaking, and the unused
+  `WgpuMappedBuffer::usage` field is removed.
 - `hephaestus-wgpu` [patch]: narrowed blocked LU host/device transfers to the
   active diagonal-panel and trailing-submatrix regions, reducing full-buffer
   traffic in the hybrid GPU trailing-update path.

@@ -122,6 +122,24 @@
 - [patch] Full workspace all-features clippy remains blocked by
   `cuda-bindings` requiring `CUDA_TOOLKIT_PATH`; WGPU package-local gates are
   clean. Evidence tier: static diagnostics from the earlier attempted gate.
+- [patch] WGPU staging-allocator registry (`WGPU_MAPPED_BUFFERS`) contention
+  audit (2026-06-23). The HostPinned alloc/upload paths resolve a Mnemosyne
+  sub-allocated pointer to its containing wgpu mapped block. This previously held
+  the global registry lock across an `O(n)` `.iter().find()` linear scan over
+  every live mapping (`O(n²)` over a staging-heavy workload). Replaced the
+  `HashMap` with a base-address-keyed `BTreeMap` and consolidated both sites into
+  one `resolve_mapped_buffer` helper doing an `O(log n)`
+  `range(..=ptr).next_back()` containment query, shortening the lock-held section.
+  Remaining bounded characteristic (not a defect): a single global `Mutex` still
+  serializes the registry across threads; the lookup is now `O(log n)` and the
+  `wgpu::Buffer` return is an `Arc` handle clone, so the critical section is
+  minimal. The deeper lever, if a future staging-heavy multi-thread workload
+  measures the global lock as hot, is a sharded registry keyed by address range —
+  deferred until a workload demonstrates the need (no current consumer drives
+  concurrent HostPinned staging). The registry and its descriptor are now
+  `pub(crate)` (no external consumers) and the dead `usage` field is removed.
+  Evidence tier: value-semantic placement/transfer contract tests + full
+  workspace gate.
 
 ## Next Increment
 
