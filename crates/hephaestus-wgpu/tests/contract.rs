@@ -1366,6 +1366,105 @@ fn linalg_det_matches_leto_reference() {
     ));
 }
 
+/// Pins the GPU `matrix_rank` relative-threshold contract at the boundary that
+/// the residual register flagged as the ill-conditioned divergence risk: a pivot
+/// counts toward the rank iff its magnitude exceeds
+/// `relative_tolerance * max(abs(matrix))`. For `diag(1, 1, δ)` the max element
+/// is `1` and the singular values equal the diagonal magnitudes, so the
+/// threshold alone decides the rank and the GPU row-reduction result must agree
+/// with Leto's SVD-spectrum result for both tolerances.
+#[test]
+fn matrix_rank_relative_tolerance_is_the_discriminator() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    // diag(1, 1, 1e-4): max abs = 1, smallest singular value = 1e-4.
+    let host = vec![1.0f32, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0e-4];
+    let buffer = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], host).unwrap();
+
+    let tol_keep = 1.0e-6f32; // 1e-4 > 1e-6 * 1 -> small pivot retained
+    let tol_drop = 1.0e-2f32; // 1e-4 < 1e-2 * 1 -> small pivot dropped
+
+    let operand = |buffer| StridedOperand {
+        buffer,
+        layout: &layout,
+    };
+    let rank_keep = matrix_rank_with_tolerance(&device, operand(&buffer), tol_keep).unwrap();
+    let rank_drop = matrix_rank_with_tolerance(&device, operand(&buffer), tol_drop).unwrap();
+
+    assert_eq!(
+        rank_keep, 3,
+        "1e-4 > 1e-6 * max_abs must count the small pivot"
+    );
+    assert_eq!(
+        rank_drop, 2,
+        "1e-4 < 1e-2 * max_abs must drop the small pivot"
+    );
+
+    // The diagonal case has singular values == pivot magnitudes, so Leto's
+    // SVD-spectrum criterion agrees with the GPU row-reduction threshold.
+    let leto_keep = leto_ops::matrix_rank_with_tolerance(&leto_matrix.view(), tol_keep).unwrap();
+    let leto_drop = leto_ops::matrix_rank_with_tolerance(&leto_matrix.view(), tol_drop).unwrap();
+    assert_eq!(rank_keep, leto_keep);
+    assert_eq!(rank_drop, leto_drop);
+}
+
+/// Pins the GPU `det` contract on an ill-conditioned (tiny-pivot) matrix: the
+/// kernel returns the row-reduction pivot product with no determinant-tolerance
+/// zeroing (`det` passes `tolerance == 0`, so only exactly-zero pivots drop), so
+/// a near-singular matrix yields its small, nonzero determinant. The input is
+/// upper-triangular, so elimination performs no row operations and the result is
+/// the analytical pivot product `2 * 3 * δ`.
+#[test]
+fn det_of_near_singular_triangular_is_exact_pivot_product() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{det, StridedOperand};
+    use leto::Layout;
+
+    let delta = 1.0e-5f32;
+    let host = vec![2.0f32, 1.0, 5.0, 0.0, 3.0, 7.0, 0.0, 0.0, delta];
+    let buffer = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], host).unwrap();
+
+    let det_buf = det(
+        &device,
+        StridedOperand {
+            buffer: &buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(&det_buf, &mut got).unwrap();
+
+    // Triangular elimination performs no row operations, so the only error is
+    // the f32 rounding of `delta` and the pivot product; a few ulps bound it.
+    let analytical = 6.0f32 * delta;
+    let tol = analytical.abs() * 8.0 * f32::EPSILON;
+    assert!(
+        (got[0] - analytical).abs() <= tol,
+        "GPU det {} must match analytical pivot product {analytical} within {tol}",
+        got[0]
+    );
+    // The determinant must NOT be zeroed despite being tiny (no det tolerance).
+    assert!(
+        got[0] > 0.0,
+        "near-singular det must stay strictly positive, got {}",
+        got[0]
+    );
+    // Differential: Leto's determinant agrees on this triangular input.
+    let leto_det = leto_ops::det(&leto_matrix.view()).unwrap();
+    assert!((got[0] - leto_det).abs() <= tol);
+}
+
 #[test]
 fn cholesky_decomposition_matches_leto_reference() {
     let Some(device) = device_or_skip() else {

@@ -6,6 +6,15 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Close the `matrix_rank`/`det` ill-conditioned divergence residuals
+  with documentation + testing: documented the relative-threshold (`matrix_rank`)
+  and no-determinant-tolerance (`det`) contracts on the public APIs, added
+  threshold-boundary and near-singular contract tests
+  (`matrix_rank_relative_tolerance_is_the_discriminator`,
+  `det_of_near_singular_triangular_is_exact_pivot_product`), and restructured
+  `gap_audit.md` into an honest SSOT (Resolved / Accepted design / Open future
+  work / Environment). Evidence: analytically-derived value-semantic tests + Leto
+  differential; full workspace gate; clippy `-D warnings`.
 - [x] [patch] Make WGPU staging-pointer→mapped-block resolution `O(log n)`:
   `WGPU_MAPPED_BUFFERS` is now a base-address-keyed `BTreeMap`; the two
   HostPinned alloc/upload sites share one `resolve_mapped_buffer` helper doing a

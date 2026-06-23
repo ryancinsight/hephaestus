@@ -4,6 +4,30 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Documentation
+
+- `hephaestus-wgpu` [patch]: documented the ill-conditioned contracts of GPU
+  `matrix_rank` and `det` directly on their public APIs — `matrix_rank` counts
+  pivots above `relative_tolerance * max(abs(matrix))` (a pivot-magnitude
+  criterion that can diverge from Leto's SVD-spectrum criterion on
+  ill-conditioned inputs, agreeing when those coincide), and `det` applies no
+  determinant tolerance (`relative_tolerance == 0`, so a near-singular matrix
+  returns its small nonzero pivot product). Restructured `gap_audit.md` into an
+  honest SSOT (Resolved / Accepted design decisions / Open future work /
+  Environment) so accepted architecture and tracked future-work are no longer
+  listed alongside open defects.
+
+### Tests
+
+- `hephaestus-wgpu` [patch]: pinned the GPU `matrix_rank` relative-threshold
+  boundary (`matrix_rank_relative_tolerance_is_the_discriminator`: `diag(1,1,δ)`
+  is full-rank or rank-deficient depending purely on the relative threshold and
+  agrees with Leto) and the `det` near-singular contract
+  (`det_of_near_singular_triangular_is_exact_pivot_product`: an upper-triangular
+  input returns the exact analytical pivot product `2·3·δ`, not a
+  tolerance-zeroed `0`). Closes the previously-untested ill-conditioned
+  divergence residuals.
+
 ### Changed
 
 - `hephaestus-wgpu` [patch]: resolve a sub-allocated staging pointer to its

@@ -1444,6 +1444,16 @@ where
 /// pivots greater than `relative_tolerance * max(abs(matrix))`. This matches
 /// Leto's relative-threshold intent for exact finite test cases, but it is a
 /// row-reduction criterion rather than Leto's SVD-spectrum criterion.
+///
+/// # Ill-conditioned inputs
+///
+/// `relative_tolerance * max(abs(matrix))` is the sole rank discriminator: a
+/// pivot at or below it is treated as zero. Because this is a pivot-magnitude
+/// criterion while Leto's is an SVD-spectrum criterion, the two can disagree on
+/// ill-conditioned matrices where pivot magnitudes and singular values differ;
+/// they agree when those coincide (diagonal / orthogonally-scaled inputs). The
+/// threshold-boundary behaviour is pinned by the contract test
+/// `matrix_rank_relative_tolerance_is_the_discriminator`.
 pub fn matrix_rank_with_tolerance<T>(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, T, 2>,
@@ -1471,6 +1481,15 @@ where
 /// The kernel performs Gaussian row reduction in GPU storage memory and returns
 /// zero for singular matrices, matching Leto's determinant contract for exact
 /// finite cases.
+///
+/// # Ill-conditioned inputs
+///
+/// `det` applies no determinant tolerance (it passes `relative_tolerance == 0`):
+/// only an exactly-zero pivot collapses the determinant to zero, so a
+/// near-singular matrix returns its small but nonzero pivot product rather than
+/// a tolerance-zeroed `0`. This can diverge from an SVD- or tolerance-based
+/// determinant on ill-conditioned inputs. Pinned by the contract test
+/// `det_of_near_singular_triangular_is_exact_pivot_product`.
 pub fn det<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<WgpuBuffer<T>>
 where
     T: MatrixRankScalar,

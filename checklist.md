@@ -1,5 +1,19 @@
 # Checklist — hephaestus
 
+2026-06-23 (residual-gap review). Reviewed the residual register and resolved the
+two genuinely-actionable gaps: `matrix_rank`/`det` ill-conditioned divergence was
+previously documented-but-untested at the threshold boundary. Documented both
+contracts on the public APIs (`matrix_rank` relative-threshold pivot criterion;
+`det` no-determinant-tolerance pivot product) and added analytically-derived
+contract tests (`matrix_rank_relative_tolerance_is_the_discriminator`,
+`det_of_near_singular_triangular_is_exact_pivot_product`). Restructured
+`gap_audit.md` into an honest SSOT (Resolved / Accepted design / Open future work
+/ Environment) so the remaining residuals — host-delegated GPU-kernel/performance
+parity ([major], tracked) and CUDA hardware/toolchain blockers — are no longer
+conflated with open defects. Verified: `cargo fmt`, `cargo clippy
+-p hephaestus-wgpu -p hephaestus-core --all-targets -- -D warnings`, focused
+rank/det tests, doctests, full workspace nextest.
+
 2026-06-23 (WGPU staging-registry contention). Audited the staging-allocator
 integration in `infrastructure/{device,buffer,pool}.rs`. Found the global
 `WGPU_MAPPED_BUFFERS` registry resolved a sub-allocated staging pointer to its
