@@ -222,11 +222,7 @@ pub fn lu_decompose_blocked(
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
         let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoD_v2(
-                factors_buf.raw(),
-                matrix.buffer.raw(),
-                bytes,
-            )
+            cuda_core::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), bytes)
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {

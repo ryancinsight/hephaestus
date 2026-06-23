@@ -48,6 +48,7 @@ moirai-gpu = { path = "../moirai/moirai-gpu", default-features = false, features
     "mnemosyne-memory",
 ] }
 moirai-sync = { path = "../moirai/moirai-sync" }
+moirai = { path = "../moirai/moirai", default-features = false, features = ["async"] }
 ndarray = "0.16"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 

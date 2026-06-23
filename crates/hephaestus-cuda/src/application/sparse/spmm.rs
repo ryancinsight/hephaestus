@@ -155,7 +155,7 @@ pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOpera
                 grid,
                 1,
                 1,
-                width.get() as u32,
+                width.get(),
                 1,
                 1,
                 0,

@@ -320,7 +320,9 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<AddOp, f32>(&dev, &buf, &other_buf))
+                .allow_threads(move || {
+                    hephaestus_wgpu::binary_elementwise::<AddOp, f32>(&dev, &buf, &other_buf)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -331,7 +333,9 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &buf, val))
+                .allow_threads(move || {
+                    hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &buf, val)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -359,7 +363,9 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<SubOp, f32>(&dev, &buf, &other_buf))
+                .allow_threads(move || {
+                    hephaestus_wgpu::binary_elementwise::<SubOp, f32>(&dev, &buf, &other_buf)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -370,7 +376,9 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&dev, &buf, val))
+                .allow_threads(move || {
+                    hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&dev, &buf, val)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -414,7 +422,9 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<MulOp, f32>(&dev, &buf, &other_buf))
+                .allow_threads(move || {
+                    hephaestus_wgpu::binary_elementwise::<MulOp, f32>(&dev, &buf, &other_buf)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -425,7 +435,9 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, val))
+                .allow_threads(move || {
+                    hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, val)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -453,7 +465,9 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&dev, &buf, &other_buf))
+                .allow_threads(move || {
+                    hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&dev, &buf, &other_buf)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -464,7 +478,9 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&dev, &buf, val))
+                .allow_threads(move || {
+                    hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&dev, &buf, val)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -513,7 +529,9 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&dev, &buf, &other_buf))
+                .allow_threads(move || {
+                    hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&dev, &buf, &other_buf)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -524,7 +542,9 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&dev, &buf, val))
+                .allow_threads(move || {
+                    hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&dev, &buf, val)
+                })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
                 buffer: out_buf,
@@ -551,7 +571,8 @@ impl PyArray {
             let ln_val = val.ln();
             let out_buf = py
                 .allow_threads(move || {
-                    let scaled = hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, ln_val)?;
+                    let scaled =
+                        hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, ln_val)?;
                     hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&dev, &scaled)
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -1158,12 +1179,7 @@ fn svd(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
             let vt_shape = vec![vt_host.shape()[0], vt_host.shape()[1]];
 
             Ok::<_, hephaestus_core::HephaestusError>((
-                u_buf,
-                s_buf,
-                vt_buf,
-                u_shape,
-                s_shape,
-                vt_shape,
+                u_buf, s_buf, vt_buf, u_shape, s_shape, vt_shape,
             ))
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;

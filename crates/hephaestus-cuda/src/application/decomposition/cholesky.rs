@@ -186,13 +186,8 @@ pub fn cholesky_decompose_blocked(
         let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
-        let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoD_v2(
-                lower_buf.raw(),
-                matrix.buffer.raw(),
-                bytes,
-            )
-        };
+        let res =
+            unsafe { cuda_core::sys::cuMemcpyDtoD_v2(lower_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("cholesky startup cuMemcpyDtoD_v2 failed: {res}"),

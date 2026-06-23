@@ -78,7 +78,7 @@ fn test_placement_aware_allocation() {
     let Some(dev) = device("test_placement_aware_allocation") else {
         return;
     };
-    use themis::{PlacementHint, MemoryTier};
+    use themis::{MemoryTier, PlacementHint};
 
     // Test HostPinned
     let hint = PlacementHint::Tier(MemoryTier::HostPinned);

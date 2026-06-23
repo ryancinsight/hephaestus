@@ -147,7 +147,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features,
                     required_limits: required_limits.clone(),
@@ -158,7 +158,7 @@ impl WgpuDevice {
 
             // Try High Performance hardware adapter first
             if let Ok(adapter) =
-                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: None,
                     force_fallback_adapter: false,
@@ -174,7 +174,7 @@ impl WgpuDevice {
 
             // Fallback to software/fallback adapter
             if let Ok(fallback_adapter) =
-                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::LowPower,
                     compatible_surface: None,
                     force_fallback_adapter: true,
@@ -233,7 +233,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
@@ -243,7 +243,7 @@ impl WgpuDevice {
             };
 
             if let Ok(adapter) =
-                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: None,
                     force_fallback_adapter: false,
@@ -329,16 +329,18 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
-        Ok(if let Some(buffer) = self.staging_pool.take_at_least(staging_size) {
-            buffer.0
-        } else {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("hephaestus-recycled-staging"),
-                size: staging_size,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-        })
+        Ok(
+            if let Some(buffer) = self.staging_pool.take_at_least(staging_size) {
+                buffer.0
+            } else {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("hephaestus-recycled-staging"),
+                    size: staging_size,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                })
+            },
+        )
     }
 
     /// Return a staging buffer back to the bounded pool for reuse.
@@ -358,16 +360,18 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
-        Ok(if let Some(buffer) = self.uniform_pool.take_at_least(uniform_size) {
-            buffer.0
-        } else {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("hephaestus-recycled-uniform"),
-                size: uniform_size,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-        })
+        Ok(
+            if let Some(buffer) = self.uniform_pool.take_at_least(uniform_size) {
+                buffer.0
+            } else {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("hephaestus-recycled-uniform"),
+                    size: uniform_size,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                })
+            },
+        )
     }
 
     /// Return a uniform buffer back to the bounded pool for reuse.
@@ -404,11 +408,12 @@ impl WgpuDevice {
         out: &mut [T],
     ) -> Result<()> {
         validate_slice_alignment(out)?;
-        let end = offset.checked_add(out.len()).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
-                message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
-            }
-        })?;
+        let end =
+            offset
+                .checked_add(out.len())
+                .ok_or_else(|| HephaestusError::AllocationFailed {
+                    message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
+                })?;
         if end > buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: end,
@@ -420,11 +425,11 @@ impl WgpuDevice {
         }
 
         let element_size = core::mem::size_of::<T>();
-        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
+        let byte_offset = (offset as u64)
+            .checked_mul(element_size as u64)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            }
-        })?;
+            })?;
         let byte_len = Self::byte_size::<T>(out.len())?;
         let padded = Self::padded_size::<T>(out.len())?;
         let raw_staging = self.get_staging_buffer(padded)?;
@@ -483,11 +488,15 @@ impl WgpuDevice {
         host: &[T],
     ) -> Result<()> {
         validate_slice_alignment(host)?;
-        let end = offset.checked_add(host.len()).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
-                message: format!("offset {offset} + host.len() {} overflows usize", host.len()),
-            }
-        })?;
+        let end =
+            offset
+                .checked_add(host.len())
+                .ok_or_else(|| HephaestusError::AllocationFailed {
+                    message: format!(
+                        "offset {offset} + host.len() {} overflows usize",
+                        host.len()
+                    ),
+                })?;
         if end > buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: end,
@@ -499,11 +508,11 @@ impl WgpuDevice {
         }
 
         let element_size = core::mem::size_of::<T>();
-        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
+        let byte_offset = (offset as u64)
+            .checked_mul(element_size as u64)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            }
-        })?;
+            })?;
         self.queue
             .write_buffer(buffer.raw(), byte_offset, bytemuck::cast_slice(host));
         Ok(())

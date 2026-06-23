@@ -65,15 +65,15 @@ pub trait ComputeDevice {
 /// Validate that a buffer size is a multiple of 4 bytes.
 #[inline]
 pub fn validate_buffer_size<T>(len: usize) -> Result<()> {
-    let byte_len = len
-        .checked_mul(core::mem::size_of::<T>())
-        .ok_or_else(|| crate::domain::error::HephaestusError::AllocationFailed {
+    let byte_len = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
+        crate::domain::error::HephaestusError::AllocationFailed {
             message: format!(
                 "Buffer byte size calculation overflows (elements: {}, element size: {})",
                 len,
                 core::mem::size_of::<T>()
             ),
-        })?;
+        }
+    })?;
     if !byte_len.is_multiple_of(4) {
         return Err(crate::domain::error::HephaestusError::AllocationFailed {
             message: format!(

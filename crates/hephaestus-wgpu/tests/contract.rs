@@ -262,7 +262,7 @@ fn test_placement_aware_allocation() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use themis::{PlacementHint, MemoryTier};
+    use themis::{MemoryTier, PlacementHint};
 
     // Test HostPinned
     let hint = PlacementHint::Tier(MemoryTier::HostPinned);
@@ -277,7 +277,9 @@ fn test_placement_aware_allocation() {
 
     // Test Dram / Unified
     let hint_dram = PlacementHint::Tier(MemoryTier::Dram);
-    let buf3 = device.alloc_zeroed_with_hint::<f32>(128, hint_dram).unwrap();
+    let buf3 = device
+        .alloc_zeroed_with_hint::<f32>(128, hint_dram)
+        .unwrap();
     assert_eq!(buf3.tier(), MemoryTier::Dram);
 
     // Test default non-hinted delegates
@@ -2991,7 +2993,7 @@ fn blocked_lu_matches_leto_reference() {
         }
     }
     // Force a pivot swap at the start (row 0) and across the block boundary (row 64)
-    matrix_host[0 * n + 0] = 0.0;
+    matrix_host[0] = 0.0;
     matrix_host[64 * n + 64] = 0.0;
 
     let matrix = device.upload(&matrix_host).unwrap();

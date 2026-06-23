@@ -100,7 +100,7 @@ pub fn spmv_into<T: CudaScalar + leto_ops::Scalar + Pod>(
                 grid,
                 1,
                 1,
-                width.get() as u32,
+                width.get(),
                 1,
                 1,
                 0,

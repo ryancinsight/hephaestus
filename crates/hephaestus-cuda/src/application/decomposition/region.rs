@@ -15,8 +15,6 @@ pub(crate) struct MatrixRegion {
     pub(crate) cols: usize,
 }
 
-
-
 pub(crate) fn download_matrix_region_compact(
     device: &CudaDevice,
     buffer: &CudaBuffer<f32>,
@@ -31,13 +29,19 @@ pub(crate) fn download_matrix_region_compact(
 
     let mut compact = vec![0.0f32; region.rows * region.cols];
 
-    let device_start_index = region.row_start
+    let device_start_index = region
+        .row_start
         .checked_mul(region.stride)
         .and_then(|base| base.checked_add(region.col_start))
         .ok_or_else(|| HephaestusError::TransferFailed {
             message: "matrix region device offset overflows usize".to_string(),
         })?;
-    let device_offset = (device_start_index * size_of_f32) as u64;
+    let device_offset = device_start_index
+        .checked_mul(size_of_f32)
+        .and_then(|b| u64::try_from(b).ok())
+        .ok_or_else(|| HephaestusError::TransferFailed {
+            message: "matrix region device byte offset overflows u64".to_string(),
+        })?;
 
     let device_needed_len = device_start_index + (region.rows - 1) * region.stride + region.cols;
     if device_needed_len > buffer.len {
@@ -68,7 +72,8 @@ pub(crate) fn download_matrix_region_compact(
         Height: region.rows,
     };
 
-    let res = unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
+    let res =
+        unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
     if res != 0 {
         return Err(HephaestusError::TransferFailed {
             message: format!("download_matrix_region_compact cuMemcpy2D_v2 failed: {res}"),
@@ -100,13 +105,19 @@ pub(crate) fn write_matrix_region_compact(
     let size_of_f32 = std::mem::size_of::<f32>();
     let row_bytes = region.cols * size_of_f32;
 
-    let device_start_index = region.row_start
+    let device_start_index = region
+        .row_start
         .checked_mul(region.stride)
         .and_then(|base| base.checked_add(region.col_start))
         .ok_or_else(|| HephaestusError::TransferFailed {
             message: "matrix region device offset overflows usize".to_string(),
         })?;
-    let device_offset = (device_start_index * size_of_f32) as u64;
+    let device_offset = device_start_index
+        .checked_mul(size_of_f32)
+        .and_then(|b| u64::try_from(b).ok())
+        .ok_or_else(|| HephaestusError::TransferFailed {
+            message: "matrix region device byte offset overflows u64".to_string(),
+        })?;
 
     let device_needed_len = device_start_index + (region.rows - 1) * region.stride + region.cols;
     if device_needed_len > buffer.len {
@@ -137,7 +148,8 @@ pub(crate) fn write_matrix_region_compact(
         Height: region.rows,
     };
 
-    let res = unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
+    let res =
+        unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
     if res != 0 {
         return Err(HephaestusError::TransferFailed {
             message: format!("write_matrix_region_compact cuMemcpy2D_v2 failed: {res}"),
@@ -145,4 +157,3 @@ pub(crate) fn write_matrix_region_compact(
     }
     Ok(())
 }
-

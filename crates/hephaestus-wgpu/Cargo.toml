@@ -24,8 +24,8 @@ themis = { workspace = true }
 mnemosyne-core = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
+moirai = { workspace = true }
 wgpu = { workspace = true }
-pollster = { workspace = true }
 bytemuck = { workspace = true }
 num-complex = { workspace = true }
 

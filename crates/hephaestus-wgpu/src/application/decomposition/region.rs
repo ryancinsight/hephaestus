@@ -1,13 +1,12 @@
 //! Row-major matrix-region transfers for hybrid decomposition kernels.
 
-use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use std::any::TypeId;
 
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use crate::UniformBufferGuard;
-
 
 fn matrix_region_len(rows: usize, cols: usize) -> Result<usize> {
     rows.checked_mul(cols)
@@ -100,11 +99,75 @@ fn main(
     .to_string()
 }
 
+/// Convert a `usize` workgroup count to `u32`, returning `DispatchFailed` on overflow.
+fn checked_wg_x(wg_x: usize) -> Result<u32> {
+    u32::try_from(wg_x).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("region kernel workgroup count {wg_x} exceeds u32::MAX"),
+    })
+}
 
+/// Convert a region field to `u32`, returning `TransferFailed` on overflow.
+fn region_u32(value: usize, name: &str) -> Result<u32> {
+    u32::try_from(value).map_err(|_| HephaestusError::TransferFailed {
+        message: format!("region {name} {value} exceeds u32"),
+    })
+}
 
+/// Build a `RegionCopyMeta` from a `MatrixRegion`, checking all field widths.
+fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
+    Ok(RegionCopyMeta {
+        stride: region_u32(region.stride, "stride")?,
+        row_start: region_u32(region.row_start, "row_start")?,
+        col_start: region_u32(region.col_start, "col_start")?,
+        rows: region_u32(region.rows, "rows")?,
+        cols: region_u32(region.cols, "cols")?,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Core reusable implementation — callers supply the compact device buffer
+// ---------------------------------------------------------------------------
+
+/// Gather a matrix region from `buffer` into a freshly-allocated host `Vec<f32>`.
+#[allow(dead_code)]
 pub(crate) fn download_matrix_region_compact(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<f32>,
+    region: MatrixRegion,
+) -> Result<Vec<f32>> {
+    if region.rows == 0 || region.cols == 0 {
+        return Ok(vec![]);
+    }
+    let compact_len = matrix_region_len(region.rows, region.cols)?;
+    let temp = device.alloc_zeroed::<f32>(compact_len)?;
+    download_matrix_region_compact_reusable(device, buffer, &temp, region)
+}
+
+/// Scatter `compact_host` into a region of `buffer` using a fresh temporary
+/// device buffer.
+#[allow(dead_code)]
+pub(crate) fn write_matrix_region_compact(
+    device: &WgpuDevice,
+    buffer: &WgpuBuffer<f32>,
+    compact_host: &[f32],
+    region: MatrixRegion,
+) -> Result<()> {
+    if region.rows == 0 || region.cols == 0 {
+        return Ok(());
+    }
+    let compact_len = matrix_region_len(region.rows, region.cols)?;
+    let temp = device.alloc_zeroed::<f32>(compact_len)?;
+    write_matrix_region_compact_reusable(device, buffer, &temp, compact_host, region)
+}
+
+/// Gather a matrix region from `buffer` into caller-supplied `temp_compact_buf`
+/// and return the region as a host `Vec<f32>`.
+///
+/// `temp_compact_buf` must hold at least `region.rows * region.cols` elements.
+pub(crate) fn download_matrix_region_compact_reusable(
+    device: &WgpuDevice,
+    buffer: &WgpuBuffer<f32>,
+    temp_compact_buf: &WgpuBuffer<f32>,
     region: MatrixRegion,
 ) -> Result<Vec<f32>> {
     if region.rows == 0 || region.cols == 0 {
@@ -114,7 +177,14 @@ pub(crate) fn download_matrix_region_compact(
     let compact_len = matrix_region_len(region.rows, region.cols)?;
     let compact_bytes = WgpuDevice::byte_size::<f32>(compact_len)?;
 
-    let temp_compact_buf = device.alloc_zeroed::<f32>(compact_len)?;
+    if temp_compact_buf.len < compact_len {
+        return Err(HephaestusError::TransferFailed {
+            message: format!(
+                "reusable temp_compact_buf has insufficient capacity: {}, expected at least {}",
+                temp_compact_buf.len, compact_len
+            ),
+        });
+    }
 
     let raw_staging = device.get_staging_buffer(compact_bytes)?;
     let staging_size = raw_staging.size();
@@ -123,24 +193,10 @@ pub(crate) fn download_matrix_region_compact(
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
     let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
 
-    let meta = RegionCopyMeta {
-        stride: u32::try_from(region.stride).map_err(|_| HephaestusError::TransferFailed {
-            message: "region stride exceeds u32".to_string(),
-        })?,
-        row_start: u32::try_from(region.row_start).map_err(|_| HephaestusError::TransferFailed {
-            message: "region row_start exceeds u32".to_string(),
-        })?,
-        col_start: u32::try_from(region.col_start).map_err(|_| HephaestusError::TransferFailed {
-            message: "region col_start exceeds u32".to_string(),
-        })?,
-        rows: u32::try_from(region.rows).map_err(|_| HephaestusError::TransferFailed {
-            message: "region rows exceeds u32".to_string(),
-        })?,
-        cols: u32::try_from(region.cols).map_err(|_| HephaestusError::TransferFailed {
-            message: "region cols exceeds u32".to_string(),
-        })?,
-    };
-    device.queue().write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+    let meta = region_meta(region)?;
+    device
+        .queue()
+        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
 
     let pipeline = cached_pipeline(
         device,
@@ -149,28 +205,32 @@ pub(crate) fn download_matrix_region_compact(
         region_gather_shader_source,
     );
 
-    let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("hephaestus-region-gather-bind-group"),
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.raw().as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: temp_compact_buf.raw().as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: meta_buf.as_entire_binding(),
-            },
-        ],
-    });
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-region-gather-bind-group"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: temp_compact_buf.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: meta_buf.as_entire_binding(),
+                },
+            ],
+        });
 
-    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("hephaestus-matrix-region-download-compact"),
-    });
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-region-download-compact"),
+        });
 
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -179,17 +239,11 @@ pub(crate) fn download_matrix_region_compact(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let wg_x = compact_len.div_ceil(256);
-        pass.dispatch_workgroups(wg_x as u32, 1, 1);
+        let wg_x = checked_wg_x(compact_len.div_ceil(256))?;
+        pass.dispatch_workgroups(wg_x, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(
-        temp_compact_buf.raw(),
-        0,
-        &staging,
-        0,
-        compact_bytes,
-    );
+    encoder.copy_buffer_to_buffer(temp_compact_buf.raw(), 0, &staging, 0, compact_bytes);
 
     device.queue().submit(Some(encoder.finish()));
 
@@ -222,9 +276,14 @@ pub(crate) fn download_matrix_region_compact(
     Ok(compact)
 }
 
-pub(crate) fn write_matrix_region_compact(
+/// Scatter `compact_host` into a region of `buffer` via caller-supplied
+/// `temp_compact_buf`.
+///
+/// `temp_compact_buf` must hold at least `region.rows * region.cols` elements.
+pub(crate) fn write_matrix_region_compact_reusable(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<f32>,
+    temp_compact_buf: &WgpuBuffer<f32>,
     compact_host: &[f32],
     region: MatrixRegion,
 ) -> Result<()> {
@@ -243,29 +302,24 @@ pub(crate) fn write_matrix_region_compact(
         });
     }
 
-    let temp_compact_buf = device.upload(compact_host)?;
+    if temp_compact_buf.len < compact_len {
+        return Err(HephaestusError::TransferFailed {
+            message: format!(
+                "reusable temp_compact_buf has insufficient capacity: {}, expected at least {}",
+                temp_compact_buf.len, compact_len
+            ),
+        });
+    }
+
+    device.write_sub_buffer(temp_compact_buf, 0, compact_host)?;
 
     let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
     let meta_buf = UniformBufferGuard::new(device.clone(), raw_meta_buf);
 
-    let meta = RegionCopyMeta {
-        stride: u32::try_from(region.stride).map_err(|_| HephaestusError::TransferFailed {
-            message: "region stride exceeds u32".to_string(),
-        })?,
-        row_start: u32::try_from(region.row_start).map_err(|_| HephaestusError::TransferFailed {
-            message: "region row_start exceeds u32".to_string(),
-        })?,
-        col_start: u32::try_from(region.col_start).map_err(|_| HephaestusError::TransferFailed {
-            message: "region col_start exceeds u32".to_string(),
-        })?,
-        rows: u32::try_from(region.rows).map_err(|_| HephaestusError::TransferFailed {
-            message: "region rows exceeds u32".to_string(),
-        })?,
-        cols: u32::try_from(region.cols).map_err(|_| HephaestusError::TransferFailed {
-            message: "region cols exceeds u32".to_string(),
-        })?,
-    };
-    device.queue().write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+    let meta = region_meta(region)?;
+    device
+        .queue()
+        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
 
     let pipeline = cached_pipeline(
         device,
@@ -274,28 +328,32 @@ pub(crate) fn write_matrix_region_compact(
         region_scatter_shader_source,
     );
 
-    let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("hephaestus-region-scatter-bind-group"),
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.raw().as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: temp_compact_buf.raw().as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: meta_buf.as_entire_binding(),
-            },
-        ],
-    });
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-region-scatter-bind-group"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: temp_compact_buf.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: meta_buf.as_entire_binding(),
+                },
+            ],
+        });
 
-    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("hephaestus-matrix-region-upload-compact"),
-    });
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-region-upload-compact"),
+        });
 
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -304,8 +362,8 @@ pub(crate) fn write_matrix_region_compact(
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let wg_x = compact_len.div_ceil(256);
-        pass.dispatch_workgroups(wg_x as u32, 1, 1);
+        let wg_x = checked_wg_x(compact_len.div_ceil(256))?;
+        pass.dispatch_workgroups(wg_x, 1, 1);
     }
 
     device.queue().submit(Some(encoder.finish()));

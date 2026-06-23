@@ -23,7 +23,10 @@ pub struct CudaDevice {
             String,
             Arc<
                 std::sync::OnceLock<
-                    std::result::Result<Arc<crate::infrastructure::compiler::SafeCachedKernel>, String>,
+                    std::result::Result<
+                        Arc<crate::infrastructure::compiler::SafeCachedKernel>,
+                        String,
+                    >,
                 >,
             >,
         >,
@@ -54,7 +57,8 @@ impl CudaDevice {
         let mut device_ordinal = 0;
         if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
             if let Ok(thread_id) = thread_id_str.parse::<i32>() {
-                static STAGGERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                static STAGGERED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
                 if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
                     && STAGGERED
                         .compare_exchange(
@@ -75,12 +79,12 @@ impl CudaDevice {
             }
         }
 
-        let device =
-            cuda_async::device_context::with_device(device_ordinal as usize, |device| device.clone()).map_err(|e| {
-                HephaestusError::AdapterUnavailable {
-                    message: format!("CUDA device {device_ordinal} unavailable: {e:?}"),
-                }
-            })?;
+        let device = cuda_async::device_context::with_device(device_ordinal as usize, |device| {
+            device.clone()
+        })
+        .map_err(|e| HephaestusError::AdapterUnavailable {
+            message: format!("CUDA device {device_ordinal} unavailable: {e:?}"),
+        })?;
         device
             .bind_to_thread()
             .map_err(|e| HephaestusError::DeviceUnavailable {
@@ -118,18 +122,14 @@ impl CudaDevice {
     fn alloc_bytes_with_tier(&self, bytes: usize, tier: themis::MemoryTier) -> Result<DevicePtr> {
         let mut ptr: DevicePtr = 0;
         self.bind()?;
-        
+
         match tier {
             themis::MemoryTier::HostPinned => {
                 let mut host_ptr: *mut core::ffi::c_void = core::ptr::null_mut();
                 // SAFETY: `host_ptr` is a valid out-pointer for host allocations; the
                 // context is current. Flag 0x02 is CU_MEMHOSTALLOC_DEVICEMAP.
                 let res = unsafe {
-                    cuda_core::sys::cuMemHostAlloc(
-                        core::ptr::addr_of_mut!(host_ptr),
-                        bytes,
-                        0x02,
-                    )
+                    cuda_core::sys::cuMemHostAlloc(core::ptr::addr_of_mut!(host_ptr), bytes, 0x02)
                 };
                 if res != 0 {
                     return Err(HephaestusError::AllocationFailed {
@@ -158,10 +158,7 @@ impl CudaDevice {
                 // SAFETY: `ptr` is a valid out-pointer for a single `CUdeviceptr`; the
                 // context is current.
                 let res = unsafe {
-                    cuda_core::sys::cuMemAlloc_v2(
-                        core::ptr::addr_of_mut!(ptr).cast(),
-                        bytes,
-                    )
+                    cuda_core::sys::cuMemAlloc_v2(core::ptr::addr_of_mut!(ptr).cast(), bytes)
                 };
                 if res != 0 {
                     return Err(HephaestusError::AllocationFailed {
@@ -181,11 +178,12 @@ impl CudaDevice {
         out: &mut [T],
     ) -> Result<()> {
         validate_slice_alignment(out)?;
-        let end = offset.checked_add(out.len()).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
-                message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
-            }
-        })?;
+        let end =
+            offset
+                .checked_add(out.len())
+                .ok_or_else(|| HephaestusError::AllocationFailed {
+                    message: format!("offset {offset} + out.len() {} overflows usize", out.len()),
+                })?;
         if end > buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: end,
@@ -197,11 +195,11 @@ impl CudaDevice {
         }
         self.bind()?;
         let element_size = std::mem::size_of::<T>();
-        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
+        let byte_offset = (offset as u64)
+            .checked_mul(element_size as u64)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            }
-        })?;
+            })?;
         let bytes = std::mem::size_of_val(out);
         let src_ptr = buffer.raw() + byte_offset;
         // SAFETY: `src_ptr` is a valid device pointer offset from a pointer allocated by this device;
@@ -225,11 +223,15 @@ impl CudaDevice {
         host: &[T],
     ) -> Result<()> {
         validate_slice_alignment(host)?;
-        let end = offset.checked_add(host.len()).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
-                message: format!("offset {offset} + host.len() {} overflows usize", host.len()),
-            }
-        })?;
+        let end =
+            offset
+                .checked_add(host.len())
+                .ok_or_else(|| HephaestusError::AllocationFailed {
+                    message: format!(
+                        "offset {offset} + host.len() {} overflows usize",
+                        host.len()
+                    ),
+                })?;
         if end > buffer.len {
             return Err(HephaestusError::LengthMismatch {
                 host_len: end,
@@ -241,11 +243,11 @@ impl CudaDevice {
         }
         self.bind()?;
         let element_size = std::mem::size_of::<T>();
-        let byte_offset = (offset as u64).checked_mul(element_size as u64).ok_or_else(|| {
-            HephaestusError::AllocationFailed {
+        let byte_offset = (offset as u64)
+            .checked_mul(element_size as u64)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
-            }
-        })?;
+            })?;
         let bytes = std::mem::size_of_val(host);
         let dest_ptr = buffer.raw() + byte_offset;
         // SAFETY: `dest_ptr` is a valid device pointer offset from a pointer allocated by this device;
@@ -401,8 +403,9 @@ impl ComputeDevice for CudaDevice {
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated;
         // `host` is `bytes` of readable host memory (`T: Pod`). The buffer owns
         // `ptr`, so it is freed if the copy fails.
-        let res =
-            unsafe { cuda_core::sys::cuMemcpyHtoD_v2(ptr, host.as_ptr().cast::<core::ffi::c_void>(), bytes) };
+        let res = unsafe {
+            cuda_core::sys::cuMemcpyHtoD_v2(ptr, host.as_ptr().cast::<core::ffi::c_void>(), bytes)
+        };
         let buffer = CudaBuffer::<T>::new(ptr, len, tier);
         if res != 0 {
             return Err(HephaestusError::TransferFailed {

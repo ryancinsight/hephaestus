@@ -48,7 +48,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    download_matrix_region_compact, write_matrix_region_compact, MatrixRegion,
+    download_matrix_region_compact_reusable, write_matrix_region_compact_reusable, MatrixRegion,
 };
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
@@ -125,8 +125,6 @@ impl GpuQrDecomposition {
         device.upload(leto::Storage::as_slice(x.storage()))
     }
 }
-
-
 
 // Custom gather/scatter compute kernels removed in favor of generic MatrixRegion transfers.
 
@@ -246,8 +244,6 @@ fn main(
 }
 
 struct HhKernel;
-
-
 
 // ---------------------------------------------------------------------------
 // Inline panel Householder QR
@@ -390,9 +386,11 @@ pub fn qr_decompose_blocked(
 
     // Create a GPU working buffer that is a copy of the input matrix.
     let work_buf = device.alloc_zeroed::<f32>(m * n)?;
-    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("hephaestus-qr-copy"),
-    });
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-qr-copy"),
+        });
     encoder.copy_buffer_to_buffer(
         &matrix.buffer.buffer,
         0,
@@ -414,6 +412,9 @@ pub fn qr_decompose_blocked(
     // Pre-allocate reflector_dev of size block_size.
     let reflector_dev = device.alloc_zeroed::<HhReflectorMeta>(block_size)?;
 
+    // Pre-allocate a single temp_compact_buf to avoid repeated allocations in the loop.
+    let temp_compact_buf = device.alloc_zeroed::<f32>(m * block_size)?;
+
     let hh_pipeline = cached_pipeline(
         device,
         (TypeId::of::<HhKernel>(), TypeId::of::<f32>(), 256),
@@ -427,30 +428,38 @@ pub fn qr_decompose_blocked(
         let trail_cols = n - k - b;
 
         // ── Step 1 & 2: Gather panel from work_buf directly to host panel ──
+        // We gather all m rows to preserve and download previous updates for upper rows.
         let panel_region = MatrixRegion {
             stride: n,
-            row_start: k,
+            row_start: 0,
             col_start: k,
-            rows: panel_rows,
+            rows: m,
             cols: b,
         };
-        let mut panel = download_matrix_region_compact(device, &work_buf, panel_region)?;
+        let mut panel = download_matrix_region_compact_reusable(
+            device,
+            &work_buf,
+            &temp_compact_buf,
+            panel_region,
+        )?;
 
         // ── Step 3: Factor the active panel region on the CPU ──
-        let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
+        // Only factor the sub-slice starting at row k.
+        let (heads, betas) = panel_qr_packed(&mut panel[k * b..], panel_rows, b)?;
 
         cumulative_heads.extend_from_slice(&heads);
         cumulative_betas.extend_from_slice(&betas);
 
+        // Copy the complete final values of these columns into the host-side packed matrix.
         for j in 0..b {
             let col = k + j;
-            for r in (col + 1)..m {
-                let panel_row = r - k;
-                packed[r * n + col] = panel[panel_row * b + j];
+            for r in 0..m {
+                packed[r * n + col] = panel[r * b + j];
             }
         }
 
         // Extract packed vectors for Step 6 before zeroing sub-diagonal elements of panel
+        let factored_panel = &mut panel[k * b..];
         let mut packed_vectors = Vec::with_capacity(panel_rows * b);
         let mut vector_offsets = Vec::with_capacity(b);
         for j in 0..b {
@@ -458,7 +467,7 @@ pub fn qr_decompose_blocked(
             vector_offsets.push(packed_vectors.len());
             packed_vectors.push(heads[j]);
             for i in 1..vec_len {
-                packed_vectors.push(panel[(j + i) * b + j]);
+                packed_vectors.push(factored_panel[(j + i) * b + j]);
             }
         }
 
@@ -466,13 +475,26 @@ pub fn qr_decompose_blocked(
         for r in 0..panel_rows {
             for c in 0..b {
                 if c < r {
-                    panel[r * b + c] = 0.0;
+                    factored_panel[r * b + c] = 0.0;
                 }
             }
         }
 
         // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
-        write_matrix_region_compact(device, &work_buf, &panel, panel_region)?;
+        let panel_write_region = MatrixRegion {
+            stride: n,
+            row_start: k,
+            col_start: k,
+            rows: panel_rows,
+            cols: b,
+        };
+        write_matrix_region_compact_reusable(
+            device,
+            &work_buf,
+            &temp_compact_buf,
+            factored_panel,
+            panel_write_region,
+        )?;
 
         if trail_cols > 0 {
             device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
@@ -500,20 +522,16 @@ pub fn qr_decompose_blocked(
                         message: format!("HH panel_rows {panel_rows} exceeds u32"),
                     }
                 })?,
-                reflector_count: u32::try_from(b).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: format!("HH reflector_count {b} exceeds u32"),
-                    }
+                reflector_count: u32::try_from(b).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("HH reflector_count {b} exceeds u32"),
                 })?,
                 trail_cols: u32::try_from(trail_cols).map_err(|_| {
                     HephaestusError::DispatchFailed {
                         message: format!("HH trail_cols {trail_cols} exceeds u32"),
                     }
                 })?,
-                matrix_cols: u32::try_from(n).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: format!("HH matrix_cols {n} exceeds u32"),
-                    }
+                matrix_cols: u32::try_from(n).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("HH matrix_cols {n} exceeds u32"),
                 })?,
                 k: u32::try_from(k).map_err(|_| HephaestusError::DispatchFailed {
                     message: format!("HH k {k} exceeds u32"),
@@ -526,34 +544,37 @@ pub fn qr_decompose_blocked(
                 .queue()
                 .write_buffer(&hh_meta_buf, 0, bytemuck::bytes_of(&hh_meta));
 
-            let hh_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("hephaestus-hh-panel"),
-                layout: &hh_pipeline.get_bind_group_layout(0),
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: vectors_dev.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: work_buf.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: reflector_dev.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: hh_meta_buf.as_entire_binding(),
-                    },
-                ],
-            });
-
-            let mut hh_encoder = device
+            let hh_bind_group = device
                 .inner()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("hephaestus-qr-hh-update"),
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("hephaestus-hh-panel"),
+                    layout: &hh_pipeline.get_bind_group_layout(0),
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: vectors_dev.buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: work_buf.buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: reflector_dev.buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: hh_meta_buf.as_entire_binding(),
+                        },
+                    ],
                 });
+
+            let mut hh_encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("hephaestus-qr-hh-update"),
+                    });
 
             {
                 let mut pass = hh_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -562,24 +583,14 @@ pub fn qr_decompose_blocked(
                 });
                 pass.set_pipeline(&hh_pipeline);
                 pass.set_bind_group(0, &hh_bind_group, &[]);
-                let wg_x = u32::try_from(trail_cols).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("HH workgroup count {trail_cols} exceeds u32"),
-                })?;
+                let wg_x =
+                    u32::try_from(trail_cols).map_err(|_| HephaestusError::DispatchFailed {
+                        message: format!("HH workgroup count {trail_cols} exceeds u32"),
+                    })?;
                 pass.dispatch_workgroups(wg_x, 1, 1);
             }
 
             device.queue().submit(Some(hh_encoder.finish()));
-        }
-    }
-
-    // Download the final matrix to extract R.
-    let mut host = vec![0.0f32; m * n];
-    device.download(&work_buf, &mut host)?;
-
-    // Merge R (upper triangle of host) with the accumulated reflector tails.
-    for i in 0..m {
-        for j in i..n {
-            packed[i * n + j] = host[i * n + j];
         }
     }
 

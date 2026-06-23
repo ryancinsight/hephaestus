@@ -27,9 +27,7 @@ use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_core::panel_qr_packed;
 
 #[cfg(feature = "cuda")]
-use super::region::{
-    download_matrix_region_compact, write_matrix_region_compact, MatrixRegion,
-};
+use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
 
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
@@ -214,13 +212,8 @@ pub fn qr_decompose_blocked(
         let work_buf = device.alloc_zeroed::<f32>(m * n)?;
         device.bind()?;
         let bytes = m * n * std::mem::size_of::<f32>();
-        let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoD_v2(
-                work_buf.raw(),
-                matrix.buffer.raw(),
-                bytes,
-            )
-        };
+        let res =
+            unsafe { cuda_core::sys::cuMemcpyDtoD_v2(work_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("QR startup cuMemcpyDtoD_v2 failed: {res}"),

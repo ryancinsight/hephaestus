@@ -26,9 +26,10 @@ pub fn cached_kernel(
                 }
             })?;
 
-            let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("PTX is not a valid CString: {e}"),
-            })?;
+            let ptx_c =
+                std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
+                    message: format!("PTX is not a valid CString: {e}"),
+                })?;
 
             let func_name_c =
                 std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
@@ -58,7 +59,9 @@ pub fn cached_kernel(
                 if res != 0 {
                     let _ = cuda_core::sys::cuModuleUnload(module as *mut _);
                     return Err(HephaestusError::DispatchFailed {
-                        message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
+                        message: format!(
+                            "cuModuleGetFunction('{func_name}') failed with code: {res}"
+                        ),
                     });
                 }
 

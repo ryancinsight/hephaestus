@@ -15,7 +15,9 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
-use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::region::{
+    download_matrix_region_compact_reusable, write_matrix_region_compact_reusable, MatrixRegion,
+};
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -197,15 +199,11 @@ fn syrk_trailing_update(
         panel_cols: u32::try_from(panel_cols).map_err(|_| HephaestusError::DispatchFailed {
             message: format!("SYRK panel cols {panel_cols} exceeds u32"),
         })?,
-        panel_offset: u32::try_from(panel_offset).map_err(|_| {
-            HephaestusError::DispatchFailed {
-                message: format!("SYRK panel offset {panel_offset} exceeds u32"),
-            }
+        panel_offset: u32::try_from(panel_offset).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("SYRK panel offset {panel_offset} exceeds u32"),
         })?,
-        panel_stride: u32::try_from(panel_stride).map_err(|_| {
-            HephaestusError::DispatchFailed {
-                message: format!("SYRK panel stride {panel_stride} exceeds u32"),
-            }
+        panel_stride: u32::try_from(panel_stride).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("SYRK panel stride {panel_stride} exceeds u32"),
         })?,
     };
 
@@ -466,9 +464,11 @@ pub fn cholesky_decompose_blocked(
 
     // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
     let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
-    let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("hephaestus-cholesky-copy"),
-    });
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-cholesky-copy"),
+        });
     encoder.copy_buffer_to_buffer(
         &matrix.buffer.buffer,
         0,
@@ -479,6 +479,12 @@ pub fn cholesky_decompose_blocked(
     device.queue().submit(Some(encoder.finish()));
 
     let block_size = BLOCK_SIZE.min(n);
+
+    // Pre-allocate a reusable compact buffer for the maximum panel region:
+    // panel_rows = n - k <= n, cols = b <= block_size  =>  max n * block_size elements.
+    let panel_compact_buf = device.alloc_zeroed::<f32>(n * block_size)?;
+
+    let mut host = vec![0.0f32; n * n];
 
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);
@@ -492,7 +498,12 @@ pub fn cholesky_decompose_blocked(
             rows: panel_rows,
             cols: b,
         };
-        let mut panel = download_matrix_region_compact(device, &lower_buf, panel_region)?;
+        let mut panel = download_matrix_region_compact_reusable(
+            device,
+            &lower_buf,
+            &panel_compact_buf,
+            panel_region,
+        )?;
 
         // ── Step 1.5: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
         let (diag_part, rhs_part) = panel.split_at_mut(b * b);
@@ -511,8 +522,22 @@ pub fn cholesky_decompose_blocked(
 
         let trail_rows = n - k - b;
         if trail_rows == 0 {
+            // Copy the finalized columns to the host-side packed matrix
+            for j in 0..b {
+                let col = k + j;
+                for r in k..n {
+                    host[r * n + col] = panel[(r - k) * b + j];
+                }
+            }
+
             // Upload the final diagonal block back to device buffer
-            write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
+            write_matrix_region_compact_reusable(
+                device,
+                &lower_buf,
+                &panel_compact_buf,
+                &panel,
+                panel_region,
+            )?;
             continue;
         }
 
@@ -529,8 +554,22 @@ pub fn cholesky_decompose_blocked(
             }
         }
 
+        // Copy the finalized columns to the host-side packed matrix
+        for j in 0..b {
+            let col = k + j;
+            for r in k..n {
+                host[r * n + col] = panel[(r - k) * b + j];
+            }
+        }
+
         // Upload the entire updated active panel (diagonal + off-diagonal) back to device buffer
-        write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
+        write_matrix_region_compact_reusable(
+            device,
+            &lower_buf,
+            &panel_compact_buf,
+            &panel,
+            panel_region,
+        )?;
 
         // ── Step 3: trailing SYRK update on GPU ──
         let trail_layout = leto::Layout::new(
@@ -558,15 +597,7 @@ pub fn cholesky_decompose_blocked(
         device.queue().submit(Some(encoder.finish()));
     }
 
-    // Download the full factored matrix to host
-    let mut host = vec![0.0f32; n * n];
-    device.download(&lower_buf, &mut host)?;
-
-    for row in 0..n {
-        for col in (row + 1)..n {
-            host[row * n + col] = 0.0;
-        }
-    }
+    // Update the device buffer to zero out the strictly upper-triangular part asynchronously
     device.write_buffer(&lower_buf, &host)?;
 
     let inner = leto_ops::CholeskyDecomposition::from_raw_parts(

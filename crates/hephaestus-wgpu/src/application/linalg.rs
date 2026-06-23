@@ -886,9 +886,15 @@ where
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let workgroups_x = cols.div_ceil(16);
-        let workgroups_y = rows.div_ceil(16);
-        pass.dispatch_workgroups(workgroups_x as u32, workgroups_y as u32, 1);
+        let workgroups_x =
+            u32::try_from(cols.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("matmul workgroup_x {} exceeds u32", cols.div_ceil(16)),
+            })?;
+        let workgroups_y =
+            u32::try_from(rows.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("matmul workgroup_y {} exceeds u32", rows.div_ceil(16)),
+            })?;
+        pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
     }
 
     device.queue().submit(Some(encoder.finish()));
@@ -1104,9 +1110,15 @@ where
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups_x = n.div_ceil(16);
-            let workgroups_y = m.div_ceil(16);
-            pass.dispatch_workgroups(workgroups_x as u32, workgroups_y as u32, 1);
+            let workgroups_x =
+                u32::try_from(n.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("batched_matmul workgroup_x {} exceeds u32", n.div_ceil(16)),
+                })?;
+            let workgroups_y =
+                u32::try_from(m.div_ceil(16)).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("batched_matmul workgroup_y {} exceeds u32", m.div_ceil(16)),
+                })?;
+            pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
         uniform_guards.push(a_layout_buf);
