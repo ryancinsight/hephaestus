@@ -6,9 +6,11 @@
 //! broadcast to the output shape with leto's own broadcast rules, keeping
 //! device semantics identical to leto's CPU `binary_map`.
 //!
-//! One shared metadata/pipeline/encode core serves the binary and unary op
-//! families; the scalar-broadcast family is a zero-new-kernel wrapper that
-//! reuses the binary kernels with a one-element operand at all-zero strides.
+//! One shared metadata/pipeline/encode core serves the binary, unary, and
+//! scalar op families. The scalar family has a dedicated kernel that reads the
+//! broadcast scalar from a small pooled `uniform` (like the contiguous
+//! `scalar_elementwise_into` path) rather than uploading a one-element storage
+//! operand per call, so a strided scalar op allocates no per-call device buffer.
 
 use core::marker::PhantomData;
 use std::any::TypeId;
@@ -43,6 +45,7 @@ pub struct StridedOperand<'a, T, const N: usize> {
 /// contiguous kernels of the same `Op` in the `(TypeId, TypeId)` cache key.
 struct StridedBinaryKernel<Op>(PhantomData<Op>);
 struct StridedUnaryKernel<Op>(PhantomData<Op>);
+struct StridedScalarKernel<Op>(PhantomData<Op>);
 
 /// Packed layout metadata matching the WGSL `Meta` uniform: rank-4 padded
 /// shape, per-operand strides, and `[a_off, b_off, out_off, len]`. The unary
@@ -235,6 +238,38 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
         return;
     }}
 {decode}    let x = a[u32(a_off)];
+    out[u32(o_off)] = {expr};
+}}
+"#,
+        meta = WGSL_META,
+        ty = T::WGSL_TYPE,
+        wg = width.get(),
+        decode = WGSL_DECODE,
+        expr = Op::WGSL_EXPR,
+    )
+}
+
+/// Strided scalar kernel: one strided storage operand `a`, the broadcast scalar
+/// supplied through a small `uniform` (no per-call storage operand), strided
+/// output. Mirrors [`scalar_elementwise_into`](super::elementwise::scalar) but
+/// over leto strided layouts. The shared `WGSL_DECODE` computes an unused
+/// `b_off` here (identical to the unary kernel), which the WGSL compiler elides.
+fn scalar_shader<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+    format!(
+        r#"{meta}
+@group(0) @binding(0) var<uniform> lmeta: Meta;
+@group(0) @binding(1) var<storage, read> a: array<{ty}>;
+@group(0) @binding(2) var<uniform> scalar: {ty};
+@group(0) @binding(3) var<storage, read_write> out: array<{ty}>;
+
+@compute @workgroup_size({wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
+    let i = gid.x;
+    if (i >= lmeta.offsets.w) {{
+        return;
+    }}
+{decode}    let lhs = a[u32(a_off)];
+    let rhs = scalar;
     out[u32(o_off)] = {expr};
 }}
 "#,
@@ -454,13 +489,14 @@ where
     Ok(out)
 }
 
-/// Run `out[idx] = op(a[idx], scalar)` over logical indices of `out_layout`.
+/// Run `out[idx] = op(a[idx], scalar)` over logical indices of `out_layout`,
+/// with `a` broadcast to the output shape by leto's broadcast rules.
 ///
-/// Zero new kernels: the scalar is uploaded as a one-element buffer described
-/// by an all-singleton leto layout, which the binary kernel broadcasts to the
-/// output shape through zero strides — the same mechanism as any other
-/// broadcast operand, so scalar semantics can never drift from binary
-/// semantics.
+/// The scalar is supplied through a small pooled `uniform` (the same mechanism
+/// as the contiguous [`scalar_elementwise_into`](super::elementwise::scalar)
+/// path), so no per-call device storage buffer is allocated and uploaded for the
+/// one-element operand. Scalar semantics stay identical to `op(a, scalar)`; the
+/// dedicated kernel reuses the shared strided metadata/decode/encode core.
 pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
     device: &WgpuDevice,
     a: StridedOperand<'_, T, N>,
@@ -472,24 +508,71 @@ where
     Op: BinaryWgslOp,
     T: WgslScalar + Pod,
 {
-    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
-    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
-    binary_elementwise_strided_into::<Op, T, N>(
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(a.buffer.len)
+        .map_err(map_layout_err)?;
+    let len = validate_out(out.buffer, out_layout)?;
+    if len == 0 {
+        return Ok(());
+    }
+
+    let meta = StridedMeta {
+        shape: pad_shape(out_layout.shape)?,
+        a_strides: pad_strides(a_layout.strides)?,
+        // `b` operand is unused by the scalar kernel; zeroed for the shared decode.
+        b_strides: [0i32; 4],
+        out_strides: pad_strides(out_layout.strides)?,
+        offsets: [
+            to_u32(a_layout.offset, "input offset")?,
+            0,
+            to_u32(out_layout.offset, "output offset")?,
+            to_u32(len, "dispatch size")?,
+        ],
+    };
+
+    // Pooled uniform scalar (matches the contiguous scalar path): no per-call
+    // storage operand allocation. queue.write_buffer is queue-ordered, so the
+    // recycled uniform cannot race in-flight dispatches.
+    let raw_scalar_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar_buf);
+    device
+        .queue()
+        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
+
+    let pipeline = cached_pipeline(
         device,
-        a,
-        StridedOperand {
-            buffer: &scalar_buffer,
-            layout: &scalar_layout,
-        },
-        out,
+        (
+            TypeId::of::<StridedScalarKernel<Op>>(),
+            TypeId::of::<T>(),
+            width.get(),
+        ),
+        "hephaestus-strided-scalar",
+        || scalar_shader::<Op, T>(width),
+    );
+    encode_strided(
+        device,
+        &pipeline,
+        &meta,
+        &[&a.buffer.buffer, &scalar_buffer, &out.buffer.buffer],
+        len,
         width,
+        "hephaestus-strided-scalar",
     )
 }
 
 /// Run `out = op(a, scalar)` over `output_shape`, allocating a C-contiguous output buffer.
 ///
-/// The scalar path delegates through [`binary_elementwise_strided`] with a
-/// one-element broadcast operand, preserving scalar/binary semantic identity.
+/// Delegates to [`scalar_elementwise_strided_into`] over a freshly allocated
+/// dense output.
 pub fn scalar_elementwise_strided<Op, T, const N: usize>(
     device: &WgpuDevice,
     a: StridedOperand<'_, T, N>,
@@ -501,16 +584,18 @@ where
     Op: BinaryWgslOp,
     T: WgslScalar + Pod,
 {
-    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
-    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
-    binary_elementwise_strided::<Op, T, N>(
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    scalar_elementwise_strided_into::<Op, T, N>(
         device,
         a,
+        scalar,
         StridedOperand {
-            buffer: &scalar_buffer,
-            layout: &scalar_layout,
+            buffer: &out,
+            layout: &out_layout,
         },
-        output_shape,
         width,
-    )
+    )?;
+    Ok(out)
 }

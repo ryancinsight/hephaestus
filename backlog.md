@@ -6,6 +6,12 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Give strided scalar ops a dedicated pooled-uniform kernel
+  (`StridedScalarKernel`) so a strided scalar dispatch no longer allocates +
+  uploads a one-element device storage buffer per call (matches the contiguous
+  `scalar_elementwise_into` SSOT). Benefits `hephaestus-metal` via delegation.
+  Evidence: `strided_scalar_matches_binary_broadcast_semantics` (value-identity),
+  full workspace gate, clippy `-D warnings`.
 - [x] [patch] Eliminate per-panel host-buffer allocations in blocked
   Cholesky/LU/QR. Added the region-download SSOT
   `download_matrix_region_compact_into(out: &mut Vec)` (reuses host capacity),

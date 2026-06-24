@@ -78,6 +78,28 @@ architectural decision or a tracked future-work item:
   contract tests (blocked LU n=66, blocked Cholesky/QR across boundary) + full
   workspace gate.
 
+- [patch] Strided scalar per-call storage-buffer allocation (audit 2026-06-23).
+  `scalar_elementwise_strided`/`_into` uploaded the broadcast scalar to a fresh
+  one-element device **storage** buffer every call (`device.upload(from_ref)`)
+  and delegated to the binary kernel — a per-call device allocation + transfer,
+  inconsistent with the contiguous `scalar_elementwise_into` path which already
+  reads the scalar from a pooled `uniform`. Resolved with a dedicated
+  `StridedScalarKernel` reading the scalar from a pooled uniform (no per-call
+  storage operand), reusing the shared strided metadata/decode/encode core;
+  value-identity verified by `strided_scalar_matches_binary_broadcast_semantics`.
+- [info] Storage-buffer pooling examined and deferred (audit 2026-06-23). Unlike
+  the uniform/staging pools, `alloc_zeroed` always creates a fresh device buffer,
+  so multi-pass reductions allocate `O(log n)` intermediate buffers per call.
+  These are **not** trivially poolable: all passes of a reduction are encoded in
+  one command buffer and submitted once (no per-pass sync), so every intermediate
+  must stay alive until the single submit completes — they cannot be freed/reused
+  within a call. Cross-call recycling would require fence-based deferred return
+  (the readback path is fire-and-forget, no `poll(Wait)`), so a naive pool would
+  recycle buffers the GPU is still reading (UAF). A safe storage pool is a real
+  but non-trivial change with uncertain payoff (the blocked-decomposition
+  profile shows the host/device sync floor, not allocation, dominates); deferred
+  until a workload measures storage-allocation churn as material.
+
 ## Accepted Design Decisions
 
 - WGPU/Leto parity is complete for the current core array-operation slice:
@@ -184,6 +206,13 @@ before uploading device buffers.
   parity for the CUDA kernels. CUDA blocked Cholesky remains CUDA-feature gated and
   is not part of the default stub-mode claim. Evidence tier: static diagnostics and
   stub-mode contract tests. (Blocked on CUDA hardware availability.)
+- [patch] CUDA strided-scalar parity follow-on. `hephaestus-cuda`'s
+  `scalar_elementwise_strided`/`_into` still upload the scalar to a per-call
+  one-element device buffer (the pattern the WGPU backend just removed). The
+  CUDA-idiomatic fix is to pass the scalar as a kernel launch argument rather
+  than a buffer; it is deferred because it cannot be substantively verified
+  without CUDA hardware/toolchain (stub mode does not execute the launch).
+  Tracked alongside the standing CUDA hardware-verification item.
 - [patch] Full workspace `--all-features` clippy is blocked by `cuda-bindings`
   requiring `CUDA_TOOLKIT_PATH`. The canonical clean local gate is therefore
   default-feature scoped (`cargo clippy --workspace --all-targets -- -D warnings`

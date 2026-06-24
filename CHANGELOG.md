@@ -6,6 +6,18 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Changed
 
+- `hephaestus-wgpu` [patch]: strided scalar elementwise ops
+  (`scalar_elementwise_strided`/`_into`) now read the broadcast scalar from a
+  small pooled `uniform` via a dedicated `StridedScalarKernel`, instead of
+  allocating and uploading a one-element device **storage** buffer per call and
+  delegating to the binary kernel. This matches the contiguous
+  `scalar_elementwise_into` pattern (SSOT for "scalar lives in a pooled
+  uniform") and removes one device allocation + host→device transfer from every
+  strided scalar dispatch (`hephaestus-metal` benefits too — it delegates to
+  this path). Value-identical to the prior binary-broadcast lowering, verified
+  by `strided_scalar_matches_binary_broadcast_semantics`. The shared strided
+  metadata/decode/encode core is reused unchanged.
+
 - `hephaestus-wgpu` [patch]: eliminated per-panel host-buffer allocations in the
   blocked Cholesky/LU/QR decompositions. The region-download SSOT is now
   `download_matrix_region_compact_into(..., out: &mut Vec<f32>)`, which reuses the

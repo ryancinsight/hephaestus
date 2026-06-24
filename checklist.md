@@ -1,5 +1,21 @@
 # Checklist — hephaestus
 
+2026-06-23 (strided-scalar pooled-uniform kernel). Paranoid re-audit of the hot
+per-op kernels (reduction, scan, strided, sparse) via two skeptical agents.
+Verified clean: the multi-pass reduction correctly encodes all passes in one
+submit (the `temp_buffers` retention is *required*, not waste); scan/strided/
+sparse meta uniforms are pooled; no `poll(Wait)` over-sync; Pod casts are
+size-correct; SpMV/SpMM column-index bounds are guaranteed by Leto's CsrMatrix
+construction. Found and fixed one real inconsistency: the strided scalar path
+allocated a per-call device storage buffer for the broadcast scalar (the
+contiguous path already uses a pooled uniform). Added a dedicated
+`StridedScalarKernel` reading the scalar from a pooled uniform — no per-call
+storage operand, value-identical (verified). Recorded the storage-pool
+examination (deferred: within-call buffers are submit-pinned, cross-call needs
+fences) and the CUDA strided-scalar parity follow-on (hardware-blocked).
+Verified: `cargo fmt`, `cargo clippy -p hephaestus-wgpu --all-targets -- -D
+warnings`, strided/scalar contract tests, full workspace nextest, doctests.
+
 2026-06-23 (blocked-decomposition host-allocation reuse). Paranoid memory/safety
 re-audit of the WGPU decomposition modules. Verified the Pod meta structs
 (`SyrkMeta`/`GemmMeta`/`HhMeta`/`HhReflectorMeta`/`RegionCopyMeta`) are all
