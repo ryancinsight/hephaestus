@@ -63,6 +63,21 @@ architectural decision or a tracked future-work item:
   Evidence tier: value-semantic placement/transfer contract tests + full
   workspace gate.
 
+- [patch] Blocked-decomposition per-panel host-allocation churn (audit
+  2026-06-23). The blocked Cholesky/LU/QR panel loops allocated a fresh host
+  `Vec` every panel for each region download (`col_panel`/`row_panel`/`panel`,
+  up to `b·n` ≈ 128 KiB/panel at n=512) plus per-panel scratch (LU `diag`, QR
+  reflector-packing buffers) — `O(n/b)` host allocations per call on top of the
+  already-pooled device buffers. Resolved: the region-download SSOT is now
+  `download_matrix_region_compact_into(out: &mut Vec)` (reuses host capacity via
+  `resize`); the dead returning-`Vec` `_reusable` wrapper is removed; each
+  decomposition hoists its per-panel host scratch above the loop and refills it.
+  The remaining blocked-decomposition perf gap is the host/device
+  synchronization floor and native-kernel parity (tracked under Open future
+  work), not host allocation. Evidence tier: cross-block-boundary value-semantic
+  contract tests (blocked LU n=66, blocked Cholesky/QR across boundary) + full
+  workspace gate.
+
 ## Accepted Design Decisions
 
 - WGPU/Leto parity is complete for the current core array-operation slice:

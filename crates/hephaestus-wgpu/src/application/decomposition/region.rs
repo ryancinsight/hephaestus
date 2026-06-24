@@ -128,17 +128,24 @@ fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
 // ---------------------------------------------------------------------------
 
 /// Gather a matrix region from `buffer` into caller-supplied `temp_compact_buf`
-/// and return the region as a host `Vec<f32>`.
+/// and write the result into `out`, resized to `region.rows * region.cols`.
+///
+/// `out`'s existing allocation is reused (`resize` keeps capacity), so a caller
+/// looping over panels allocates the host buffer once and refills it each
+/// iteration rather than allocating a fresh `Vec` per call. This is the SSOT for
+/// region downloads.
 ///
 /// `temp_compact_buf` must hold at least `region.rows * region.cols` elements.
-pub(crate) fn download_matrix_region_compact_reusable(
+pub(crate) fn download_matrix_region_compact_into(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<f32>,
     temp_compact_buf: &WgpuBuffer<f32>,
     region: MatrixRegion,
-) -> Result<Vec<f32>> {
+    out: &mut Vec<f32>,
+) -> Result<()> {
     if region.rows == 0 || region.cols == 0 {
-        return Ok(vec![]);
+        out.clear();
+        return Ok(());
     }
 
     let compact_len = matrix_region_len(region.rows, region.cols)?;
@@ -235,17 +242,18 @@ pub(crate) fn download_matrix_region_compact_reusable(
         })?;
 
     let mapped = slice.get_mapped_range();
-    let mut compact = vec![0.0f32; compact_len];
+    // Reuse `out`'s existing capacity; `resize` only grows when needed.
+    out.resize(compact_len, 0.0);
     // compact_bytes == compact_len * size_of::<f32>(); compute in usize to avoid the
     // silent u64-as-usize truncation on 32-bit targets.
     let compact_bytes_usize = compact_len.checked_mul(core::mem::size_of::<f32>()).expect(
         "invariant: compact_len * 4 fits usize (compact_len is bounded by matrix_region_len)",
     );
-    compact.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes_usize]));
+    out.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes_usize]));
     drop(mapped);
     staging.unmap();
 
-    Ok(compact)
+    Ok(())
 }
 
 /// Scatter `compact_host` into a region of `buffer` via caller-supplied

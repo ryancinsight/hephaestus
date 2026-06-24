@@ -48,7 +48,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    download_matrix_region_compact_reusable, write_matrix_region_compact_reusable, MatrixRegion,
+    download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
 };
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
@@ -405,6 +405,13 @@ pub fn qr_decompose_blocked(
     let mut cumulative_heads = Vec::with_capacity(n.min(m));
     let mut cumulative_betas = Vec::with_capacity(n.min(m));
 
+    // Per-panel host scratch, allocated once and refilled each iteration: the
+    // panel download resizes `panel`, and the reflector-packing buffers are
+    // cleared (keeping capacity) before being repushed.
+    let mut panel: Vec<f32> = Vec::with_capacity(m * block_size);
+    let mut packed_vectors: Vec<f32> = Vec::with_capacity(m * block_size);
+    let mut vector_offsets: Vec<usize> = Vec::with_capacity(block_size);
+
     // Pre-allocate vectors_dev of maximum needed size: m * block_size.
     let vectors_dev = device.alloc_zeroed::<f32>(m * block_size)?;
 
@@ -435,11 +442,12 @@ pub fn qr_decompose_blocked(
             rows: m,
             cols: b,
         };
-        let mut panel = download_matrix_region_compact_reusable(
+        download_matrix_region_compact_into(
             device,
             &work_buf,
             &temp_compact_buf,
             panel_region,
+            &mut panel,
         )?;
 
         // ── Step 3: Factor the active panel region on the CPU ──
@@ -459,8 +467,8 @@ pub fn qr_decompose_blocked(
 
         // Extract packed vectors for Step 6 before zeroing sub-diagonal elements of panel
         let factored_panel = &mut panel[k * b..];
-        let mut packed_vectors = Vec::with_capacity(panel_rows * b);
-        let mut vector_offsets = Vec::with_capacity(b);
+        packed_vectors.clear();
+        vector_offsets.clear();
         for j in 0..b {
             let vec_len = panel_rows - j;
             vector_offsets.push(packed_vectors.len());

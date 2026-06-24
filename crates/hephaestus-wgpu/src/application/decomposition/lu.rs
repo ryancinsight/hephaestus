@@ -49,7 +49,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    download_matrix_region_compact_reusable, write_matrix_region_compact_reusable, MatrixRegion,
+    download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
 };
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
@@ -522,6 +522,14 @@ pub fn lu_decompose_blocked(
 
     let mut host = vec![0.0f32; n * n];
 
+    // Per-panel host scratch, allocated once and refilled each iteration instead
+    // of allocating a fresh `Vec` per panel: `col_panel`/`row_panel` are resized
+    // by the region download, and `diag` (max `block_size²`) is sliced to the
+    // active `b²` each panel.
+    let mut col_panel: Vec<f32> = Vec::with_capacity(n * block_size);
+    let mut row_panel: Vec<f32> = Vec::with_capacity(block_size * n);
+    let mut diag = vec![0.0f32; block_size * block_size];
+
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);
         let trail = n - k - b;
@@ -534,11 +542,12 @@ pub fn lu_decompose_blocked(
             rows: n - k,
             cols: b,
         };
-        let mut col_panel = download_matrix_region_compact_reusable(
+        download_matrix_region_compact_into(
             device,
             &factors_buf,
             &temp_compact_buf,
             col_region,
+            &mut col_panel,
         )?;
 
         // Download active row panel A[k..k+b, 0..n] (size: b * n)
@@ -549,21 +558,22 @@ pub fn lu_decompose_blocked(
             rows: b,
             cols: n,
         };
-        let mut row_panel = download_matrix_region_compact_reusable(
+        download_matrix_region_compact_into(
             device,
             &factors_buf,
             &temp_compact_buf,
             row_region,
+            &mut row_panel,
         )?;
 
         // ── Step 1: Factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-        let mut diag = vec![0.0f32; b * b];
+        // Reuse the hoisted `diag` buffer; index only the active `b²` prefix.
         for i in 0..b {
             for j in 0..b {
                 diag[i * b + j] = col_panel[i * b + j];
             }
         }
-        let pivots = panel_lu_packed(&mut diag, b)?;
+        let pivots = panel_lu_packed(&mut diag[..b * b], b)?;
 
         // Apply the panel's row swaps to the cumulative permutation vector,
         // and to the row panel.

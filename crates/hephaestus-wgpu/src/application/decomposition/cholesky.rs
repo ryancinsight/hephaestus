@@ -16,7 +16,7 @@ use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
 use super::region::{
-    download_matrix_region_compact_reusable, write_matrix_region_compact_reusable, MatrixRegion,
+    download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
 };
 use super::validate::validate_square;
 use crate::application::pipeline::cached_pipeline;
@@ -485,6 +485,10 @@ pub fn cholesky_decompose_blocked(
 
     let mut host = vec![0.0f32; n * n];
 
+    // Per-panel host scratch, allocated once and resized by the panel download
+    // each iteration instead of allocating a fresh `Vec` per panel.
+    let mut panel: Vec<f32> = Vec::with_capacity(n * block_size);
+
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);
         let panel_rows = n - k;
@@ -497,11 +501,12 @@ pub fn cholesky_decompose_blocked(
             rows: panel_rows,
             cols: b,
         };
-        let mut panel = download_matrix_region_compact_reusable(
+        download_matrix_region_compact_into(
             device,
             &lower_buf,
             &panel_compact_buf,
             panel_region,
+            &mut panel,
         )?;
 
         // ── Step 1.5: factor the diagonal block A[k..k+b, k..k+b] on CPU ──

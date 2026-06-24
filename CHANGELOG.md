@@ -4,6 +4,21 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Changed
+
+- `hephaestus-wgpu` [patch]: eliminated per-panel host-buffer allocations in the
+  blocked Cholesky/LU/QR decompositions. The region-download SSOT is now
+  `download_matrix_region_compact_into(..., out: &mut Vec<f32>)`, which reuses the
+  caller's host buffer (`resize` keeps capacity) instead of returning a freshly
+  allocated `Vec` each call; the old returning-`Vec` `_reusable` wrapper is
+  removed (dead once all consumers migrated). Each decomposition now hoists its
+  per-panel host scratch above the panel loop and refills it: LU reuses
+  `col_panel`/`row_panel` (region downloads) and `diag` (sliced to the active
+  `b²`), QR reuses `panel`, `packed_vectors`, and `vector_offsets`, and Cholesky
+  reuses `panel`. Removes `O(n/b)` host `Vec` allocations per decomposition
+  (e.g. a `b·n` row panel was ~128 KiB/panel at n=512). No behavioral change;
+  device-side buffers and the host result matrix were already pre-allocated.
+
 ### Documentation
 
 - `hephaestus-wgpu` [patch]: documented the ill-conditioned contracts of GPU

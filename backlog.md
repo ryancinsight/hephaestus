@@ -6,6 +6,15 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [patch] Eliminate per-panel host-buffer allocations in blocked
+  Cholesky/LU/QR. Added the region-download SSOT
+  `download_matrix_region_compact_into(out: &mut Vec)` (reuses host capacity),
+  removed the dead returning-`Vec` `_reusable` wrapper, and hoisted each
+  decomposition's per-panel host scratch above the loop (LU: `col_panel`,
+  `row_panel`, `diag`; QR: `panel`, `packed_vectors`, `vector_offsets`; Cholesky:
+  `panel`). Removes `O(n/b)` host allocations per call. Evidence: blocked
+  Cholesky/LU/QR cross-block-boundary contract tests + full 230-test workspace
+  gate; clippy `-D warnings`.
 - [x] [patch] Close the `matrix_rank`/`det` ill-conditioned divergence residuals
   with documentation + testing: documented the relative-threshold (`matrix_rank`)
   and no-determinant-tolerance (`det`) contracts on the public APIs, added

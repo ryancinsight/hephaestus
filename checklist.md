@@ -1,5 +1,18 @@
 # Checklist — hephaestus
 
+2026-06-23 (blocked-decomposition host-allocation reuse). Paranoid memory/safety
+re-audit of the WGPU decomposition modules. Verified the Pod meta structs
+(`SyrkMeta`/`GemmMeta`/`HhMeta`/`HhReflectorMeta`/`RegionCopyMeta`) are all
+`#[repr(C)]`, padding-free, with true SAFETY comments, and the transfer/pool core
+(`stage_and_read`, sub-buffer paths) is bounds/overflow-checked and RAII-pooled —
+clean. Found and fixed real memory churn: the blocked Cholesky/LU/QR panel loops
+allocated a fresh host `Vec` per panel for each region download plus per-panel
+scratch. Added the region-download SSOT `download_matrix_region_compact_into`
+(reuses host capacity), removed the dead returning-`Vec` wrapper, and hoisted each
+decomposition's per-panel host buffers above the loop. Verified: `cargo fmt`,
+`cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings`, blocked LU/QR/
+Cholesky cross-boundary contract tests, full workspace nextest, doctests.
+
 2026-06-23 (residual-gap review). Reviewed the residual register and resolved the
 two genuinely-actionable gaps: `matrix_rank`/`det` ill-conditioned divergence was
 previously documented-but-untested at the threshold boundary. Documented both
