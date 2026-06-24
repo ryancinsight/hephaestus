@@ -4,6 +4,17 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Tests
+
+- `hephaestus-wgpu` [patch]: strengthened `test_placement_aware_allocation` from
+  tier-field-only checks to value semantics — Dram and Device `upload_with_hint`
+  and `alloc_zeroed_with_hint` buffers are now downloaded and asserted to
+  round-trip data / zero-initialize, proving a placement hint changes memory
+  tier without altering values. HostPinned retains tier/length assertions: it is
+  a persistently host-mapped staging buffer (`MAP_*`, no usable `COPY_SRC` while
+  mapped), so it is read through its mapped pointer rather than `download`, which
+  the test now documents.
+
 ### Changed
 
 - `hephaestus-wgpu` [patch]: strided scalar elementwise ops

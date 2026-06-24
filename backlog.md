@@ -189,10 +189,16 @@ cuda-oxide + cutile).
   the wgpu backend and CPU references.
 
 ## Phase 2.5: heterogeneous topology integration (atlas ADR 0002) [arch]
-- [ ] [minor] Placement-aware allocation: thread themis `PlacementHint` /
+- [x] [minor] Placement-aware allocation: thread themis `PlacementHint` /
   `MemoryTier` (Hbm, Gddr, HostPinned, unified) through `ComputeDevice`
-  allocation so consumers select device-memory tiers explicitly; wgpu maps
-  hints to buffer usages, CUDA maps to cuMemAlloc/managed/pinned variants.
+  allocation so consumers select device-memory tiers explicitly. wgpu maps the
+  hint to buffer usages (HostPinned → mnemosyne-staged host-mapped MAP buffer;
+  device tiers → STORAGE); CUDA maps to the device / host-pinned / unified
+  mnemosyne backends. Value-semantic coverage closed the prior tier-field-only
+  gap: `test_placement_aware_allocation` now verifies Dram and Device uploads
+  and zeroed allocations round-trip data, while HostPinned asserts tier/length
+  (the persistently host-mapped staging buffer is read via its mapped pointer,
+  not `download` — a queue submit touching a mapped buffer is a wgpu error).
 - [x] [minor] (0.4.0) Topology reporting, wgpu half: `WgpuDevice::topology()`
   populates themis `GpuTopology` from adapter limits/info at acquisition —
   subgroup width + memory tier (integrated→Dram, discrete→Device); wgpu does

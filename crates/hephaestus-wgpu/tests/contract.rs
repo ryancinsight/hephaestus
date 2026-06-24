@@ -264,27 +264,50 @@ fn test_placement_aware_allocation() {
     };
     use themis::{MemoryTier, PlacementHint};
 
-    // Test HostPinned
-    let hint = PlacementHint::Tier(MemoryTier::HostPinned);
-    let buf1 = device.alloc_zeroed_with_hint::<f32>(128, hint).unwrap();
-    assert_eq!(buf1.len(), 128);
-    assert_eq!(buf1.tier(), MemoryTier::HostPinned);
+    let host: Vec<f32> = (0..128).map(|i| i as f32 * 0.25 - 7.0).collect();
 
-    let host = vec![1.5f32; 128];
-    let buf2 = device.upload_with_hint(&host, hint).unwrap();
-    assert_eq!(buf2.len(), 128);
-    assert_eq!(buf2.tier(), MemoryTier::HostPinned);
+    // HostPinned buffers are persistently host-mapped staging buffers
+    // (`hephaestus-mnemosyne-staging`): the upload variant is MAP_WRITE|COPY_SRC,
+    // the zeroed variant MAP_READ|COPY_DST. Because the buffer stays mapped, it
+    // cannot be a `copy_buffer_to_buffer` source/destination (wgpu rejects a
+    // queue submit touching a mapped buffer), so `download`/compute dispatch are
+    // not its access path — the host reads/writes through the mapped pointer.
+    // The publicly verifiable placement contract for this tier is therefore the
+    // recorded tier and element length on both constructors.
+    let pinned = PlacementHint::Tier(MemoryTier::HostPinned);
+    let buf_pinned = device.upload_with_hint(&host, pinned).unwrap();
+    assert_eq!(buf_pinned.len(), 128);
+    assert_eq!(buf_pinned.tier(), MemoryTier::HostPinned);
 
-    // Test Dram / Unified
-    let hint_dram = PlacementHint::Tier(MemoryTier::Dram);
-    let buf3 = device
-        .alloc_zeroed_with_hint::<f32>(128, hint_dram)
-        .unwrap();
-    assert_eq!(buf3.tier(), MemoryTier::Dram);
+    let zeroed_pinned = device.alloc_zeroed_with_hint::<f32>(128, pinned).unwrap();
+    assert_eq!(zeroed_pinned.len(), 128);
+    assert_eq!(zeroed_pinned.tier(), MemoryTier::HostPinned);
 
-    // Test default non-hinted delegates
-    let buf4 = device.alloc_zeroed::<f32>(128).unwrap();
-    assert_eq!(buf4.tier(), MemoryTier::Device);
+    // Dram tier: a device-local STORAGE buffer. The hint changes placement,
+    // never values, so an upload must round-trip identically to the default
+    // path and a zeroed allocation must be genuinely zero-initialized.
+    let dram = PlacementHint::Tier(MemoryTier::Dram);
+    let buf_dram = device.upload_with_hint(&host, dram).unwrap();
+    assert_eq!(buf_dram.tier(), MemoryTier::Dram);
+    let mut dram_out = vec![0.0f32; 128];
+    device.download(&buf_dram, &mut dram_out).unwrap();
+    assert_eq!(dram_out, host, "Dram upload must preserve data");
+
+    let zeroed_dram = device.alloc_zeroed_with_hint::<f32>(128, dram).unwrap();
+    let mut zeroed_out = vec![1.0f32; 128];
+    device.download(&zeroed_dram, &mut zeroed_out).unwrap();
+    assert_eq!(
+        zeroed_out,
+        vec![0.0f32; 128],
+        "Dram alloc_zeroed must zero-initialize"
+    );
+
+    // Default (non-hinted) allocation lands on Device and round-trips data.
+    let buf_default = device.upload(&host).unwrap();
+    assert_eq!(buf_default.tier(), MemoryTier::Device);
+    let mut default_out = vec![0.0f32; 128];
+    device.download(&buf_default, &mut default_out).unwrap();
+    assert_eq!(default_out, host, "Device upload must preserve data");
 }
 
 #[test]
