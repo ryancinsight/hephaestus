@@ -3,9 +3,10 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
 use hephaestus_cuda::{
-    binary_elementwise_strided_into, scalar_elementwise_strided_into,
+    binary_elementwise_strided_dyn_into, binary_elementwise_strided_into,
+    scalar_elementwise_strided_into, unary_elementwise_strided_dyn_into,
     unary_elementwise_strided_into, AddOp, CudaBuffer, CudaDevice, MulOp, NegOp, SqrtOp,
-    StridedOperand,
+    StridedLayout, StridedOperand, StridedOperandDyn,
 };
 use leto::Layout;
 
@@ -14,6 +15,22 @@ fn op<'a, T, const N: usize>(
     layout: &'a Layout<N>,
 ) -> StridedOperand<'a, T, N> {
     StridedOperand { buffer, layout }
+}
+
+fn dyn_op<'a, T>(
+    buffer: &'a CudaBuffer<T>,
+    shape: &'a [usize],
+    strides: &'a [usize],
+    offset: usize,
+) -> StridedOperandDyn<'a, T> {
+    StridedOperandDyn {
+        buffer,
+        layout: StridedLayout {
+            shape,
+            strides,
+            offset,
+        },
+    }
 }
 
 fn device(test: &str) -> Option<CudaDevice> {
@@ -139,6 +156,32 @@ fn strided_broadcast_inputs_match_cpu() {
     let mut got = vec![0.0f32; 6];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, expected);
+    assert_eq!(got, vec![11.0, 21.0, 31.0, 12.0, 22.0, 32.0]);
+}
+
+#[test]
+fn dynamic_strided_broadcast_inputs_match_cpu() {
+    let Some(dev) = device("dynamic_strided_broadcast_inputs_match_cpu") else {
+        return;
+    };
+    let a_host = vec![1.0f32, 2.0];
+    let b_host = vec![10.0f32, 20.0, 30.0];
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+    let out = dev.alloc_zeroed::<f32>(6).unwrap();
+
+    binary_elementwise_strided_dyn_into::<AddOp, f32>(
+        &dev,
+        dyn_op(&a, &[2, 1], &[1, 1], 0),
+        dyn_op(&b, &[1, 3], &[3, 1], 0),
+        dyn_op(&out, &[2, 3], &[3, 1], 0),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 6];
+    dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![11.0, 21.0, 31.0, 12.0, 22.0, 32.0]);
 }
 
@@ -278,6 +321,28 @@ fn strided_unary_broadcasts_input_to_output_shape() {
     let mut got = vec![0.0f32; 6];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![-1.0, 2.0, -3.0, -1.0, 2.0, -3.0]);
+}
+
+#[test]
+fn dynamic_strided_unary_transposed_matches_cpu() {
+    let Some(dev) = device("dynamic_strided_unary_transposed_matches_cpu") else {
+        return;
+    };
+    let a_host = vec![1.0f32, 9.0, 25.0, 4.0, 16.0, 36.0];
+
+    let a = dev.upload(&a_host).unwrap();
+    let out = dev.alloc_zeroed::<f32>(6).unwrap();
+    unary_elementwise_strided_dyn_into::<SqrtOp, f32>(
+        &dev,
+        dyn_op(&a, &[2, 3], &[1, 2], 0),
+        dyn_op(&out, &[2, 3], &[3, 1], 0),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 6];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, vec![1.0, 5.0, 4.0, 3.0, 2.0, 6.0]);
 }
 
 #[test]
