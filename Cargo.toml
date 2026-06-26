@@ -39,7 +39,7 @@ leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
-leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "simd", "parallel", "mnemosyne-memory", "topology"] }
+leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
 mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
@@ -88,5 +88,4 @@ hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
-
 
