@@ -61,9 +61,10 @@ pub use application::scan::{
     ScanIdentity,
 };
 pub use application::strided::{
-    binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
-    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
-    StridedOperand, MAX_STRIDED_RANK,
+    binary_elementwise_strided, binary_elementwise_strided_dyn_into,
+    binary_elementwise_strided_into, scalar_elementwise_strided, scalar_elementwise_strided_into,
+    unary_elementwise_strided, unary_elementwise_strided_dyn_into, unary_elementwise_strided_into,
+    StridedLayout, StridedOperand, StridedOperandDyn, MAX_STRIDED_RANK,
 };
 
 pub use application::random::{normal_with_seed, uniform_with_seed};
@@ -83,4 +84,4 @@ pub use application::decomposition::{
     GpuSymmetricEigenDecomposition, GpuUduDecomposition,
 };
 
-pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+pub use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};

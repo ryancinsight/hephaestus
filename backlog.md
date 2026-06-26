@@ -6,6 +6,12 @@ cuda-oxide + cutile).
 
 ## Delivered
 
+- [x] [minor] Add dynamic-rank `hephaestus-cuda` strided elementwise entry
+  points over borrowed shape/stride slices so runtime-shaped consumers such as
+  Coeus can delegate rank <= 4 strided CUDA primitive binary/unary kernels to
+  Hephaestus. Static-rank and dynamic-rank APIs now share the same private launch
+  helpers. Evidence: focused `hephaestus-cuda` strided nextest (11/11), clippy,
+  rustdoc, and downstream Coeus CUDA live parity (69/69).
 - [x] [patch] Give strided scalar ops a dedicated pooled-uniform kernel
   (`StridedScalarKernel`) so a strided scalar dispatch no longer allocates +
   uploads a one-element device storage buffer per call (matches the contiguous

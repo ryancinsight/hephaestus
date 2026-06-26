@@ -4,7 +4,22 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Added
+
+- `hephaestus-cuda` [minor]: dynamic-rank strided elementwise entry points
+  (`binary_elementwise_strided_dyn_into`, `unary_elementwise_strided_dyn_into`)
+  over borrowed shape/stride slices. Runtime-shaped consumers can now delegate
+  rank <= 4 strided CUDA primitive binary/unary kernels through Hephaestus
+  without materializing fixed-rank Leto layouts or retaining local PTX generator
+  copies. Static-rank and dynamic-rank APIs share the same private launch
+  helpers and cached PTX kernels.
+
 ### Tests
+
+- `hephaestus-cuda` [patch]: added dynamic strided CUDA value tests for
+  broadcasted binary add and transposed unary sqrt, plus downstream Coeus CUDA
+  live parity confirmation after routing Coeus strided primitive ops through
+  the new provider surface.
 
 - `hephaestus-wgpu` [patch]: strengthened `test_placement_aware_allocation` from
   tier-field-only checks to value semantics — Dram and Device `upload_with_hint`

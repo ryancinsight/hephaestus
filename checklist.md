@@ -1,5 +1,19 @@
 # Checklist — hephaestus
 
+2026-06-26 (CUDA dynamic-rank strided delegation). Added
+`hephaestus-cuda` dynamic-rank strided elementwise entry points over borrowed
+shape/stride slices so runtime-shaped consumers can delegate strided CUDA
+binary/unary kernels without materializing fixed-rank Leto layouts or carrying
+duplicate local PTX generators. Static-rank APIs now share the same private
+binary/unary launch helpers. Coeus routes rank <= 4 supported strided primitive
+ops through this provider surface and retains local kernels only for unsupported
+activations, write-aliasing, or wider-rank layouts. Verified:
+`cargo check -p hephaestus-cuda`, `cargo fmt -p hephaestus-cuda --check`,
+`cargo clippy -p hephaestus-cuda --all-targets -- -D warnings`, `cargo doc -p
+hephaestus-cuda --no-deps`, `cargo nextest run -p hephaestus-cuda --test
+strided` (11/11), and downstream `cargo nextest run -p coeus-cuda --features
+cuda` (69/69).
+
 2026-06-23 (strided-scalar pooled-uniform kernel). Paranoid re-audit of the hot
 per-op kernels (reduction, scan, strided, sparse) via two skeptical agents.
 Verified clean: the multi-pass reduction correctly encodes all passes in one

@@ -20,10 +20,7 @@ kernels are forged for accelerator hardware.
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
-
-Planned sibling backend: CUDA, **composing `cuda-oxide`** (driver/runtime/
-device-memory/streams) **with `cutile`** (tile/PTX kernel authoring),
-preserving the dynamic-load / no-toolkit-to-compile property.
+| `hephaestus-cuda` | CUDA backend: dynamic-loaded driver device acquisition, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile PTX authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
 
 ## Design
 
@@ -34,9 +31,9 @@ preserving the dynamic-load / no-toolkit-to-compile property.
   `PhantomData<T>` so dtype confusion is a compile error.
 - Elementwise kernels follow leto-ops' ZST operation-marker pattern on the
   device side: generic allocating APIs delegate to caller-owned `*_into`
-  entry points, and the op contributes only its WGSL combine expression. No
-  type names appear in API identifiers (`WgslScalar::WGSL_TYPE` substitutes
-  the shader type token).
+  entry points, and the op contributes only its shader combine expression. No
+  type names appear in API identifiers (`WgslScalar::WGSL_TYPE` /
+  `CudaScalar::CUDA_TYPE` substitutes the shader type token).
 - Contiguous and strided elementwise callers can supply output buffers, so
   allocation policy stays with the consumer. Contiguous outputs must not alias
   inputs; scalar dispatch reuses the same uniform-buffer pool as strided
