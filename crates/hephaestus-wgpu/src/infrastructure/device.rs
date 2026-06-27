@@ -44,21 +44,21 @@ pub(crate) struct WgpuMappedBuffer {
 /// A `BTreeMap` (keyed by base address) is used rather than a `HashMap` so that
 /// resolving a sub-allocated pointer to its containing block is an `O(log n)`
 /// range query ([`resolve_mapped_buffer`]) instead of an `O(n)` linear scan
-/// while the global lock is held.
+/// while holding only a shared read lock.
 pub(crate) static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::BTreeMap<usize, WgpuMappedBuffer>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::BTreeMap::new()));
+    std::sync::RwLock<std::collections::BTreeMap<usize, WgpuMappedBuffer>>,
+> = std::sync::LazyLock::new(|| std::sync::RwLock::new(std::collections::BTreeMap::new()));
 
 /// Resolves the `wgpu::Buffer` whose mapped host range contains `ptr`.
 ///
 /// The Mnemosyne staging allocator may return a pointer offset into a larger
 /// mapped block, so the registry is queried for the greatest base address
 /// `<= ptr` and the result is range-checked for containment. The `BTreeMap`
-/// range query keeps the global-registry critical section `O(log n)`; the
+/// range query keeps the shared-read critical section `O(log n)`; the
 /// returned `wgpu::Buffer` is a cheap `Arc` handle clone.
 fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
     let block_addr = ptr as usize;
-    let mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    let mapped = WGPU_MAPPED_BUFFERS.read().unwrap();
     if let Some((&base_addr, mapped_buf)) = mapped.range(..=block_addr).next_back() {
         if block_addr < base_addr + mapped_buf.size {
             return Ok(mapped_buf.buffer.clone());
@@ -118,14 +118,14 @@ unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
         return core::ptr::null_mut();
     }
 
-    let mut mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    let mut mapped = WGPU_MAPPED_BUFFERS.write().unwrap();
     mapped.insert(ptr as usize, WgpuMappedBuffer { buffer, size });
 
     ptr
 }
 
 unsafe extern "C" fn wgpu_deallocate_callback(ptr: *mut u8, _size: usize) -> bool {
-    let mut mapped = WGPU_MAPPED_BUFFERS.lock().unwrap();
+    let mut mapped = WGPU_MAPPED_BUFFERS.write().unwrap();
     if let Some(mapped_buf) = mapped.remove(&(ptr as usize)) {
         mapped_buf.buffer.unmap();
         true
