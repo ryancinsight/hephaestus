@@ -50,6 +50,25 @@ pub struct PyArray {
     pub shape: Vec<usize>,
 }
 
+impl PyArray {
+    /// Validate that this array is a square 2-D matrix, returning its dimension.
+    ///
+    /// Pure-Rust helper (not exposed to Python); shared by the square-matrix
+    /// linalg methods (`det`, `matexp`, `matpow`).
+    fn require_square(&self, op: &str) -> PyResult<usize> {
+        if self.shape.len() != 2 {
+            return Err(PyValueError::new_err(format!("{op} requires a 2D array")));
+        }
+        if self.shape[0] != self.shape[1] {
+            return Err(PyValueError::new_err(format!(
+                "{op} requires a square matrix, got shape {:?}",
+                self.shape
+            )));
+        }
+        Ok(self.shape[0])
+    }
+}
+
 #[pymethods]
 impl PyArray {
     /// Upload a python list/iterable of floats to the GPU.
@@ -699,6 +718,118 @@ impl PyArray {
             buffer: out_buf,
             device: self.device.clone(),
             shape: vec![1],
+        })
+    }
+
+    /// Determinant of a square matrix (returned as a length-1 array).
+    fn det(&self, py: Python<'_>) -> PyResult<Self> {
+        let n = self.require_square("det")?;
+        let layout =
+            Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::det(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![1],
+        })
+    }
+
+    /// Matrix exponential `expm(A)` of a square matrix.
+    fn matexp(&self, py: Python<'_>) -> PyResult<Self> {
+        let n = self.require_square("matexp")?;
+        let layout =
+            Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::matexp(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![n, n],
+        })
+    }
+
+    /// Integer matrix power `A**exponent` of a square matrix.
+    fn matpow(&self, py: Python<'_>, exponent: u32) -> PyResult<Self> {
+        let n = self.require_square("matpow")?;
+        let layout =
+            Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::matpow(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                    exponent,
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![n, n],
+        })
+    }
+
+    /// Kronecker product `kron(self, other)` of two 2-D arrays.
+    fn kron(&self, py: Python<'_>, other: &PyArray) -> PyResult<Self> {
+        if self.shape.len() != 2 || other.shape.len() != 2 {
+            return Err(PyValueError::new_err("kron requires 2D arrays"));
+        }
+        let (r1, c1) = (self.shape[0], self.shape[1]);
+        let (r2, c2) = (other.shape[0], other.shape[1]);
+        let layout_a =
+            Layout::c_contiguous([r1, c1]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b =
+            Layout::c_contiguous([r2, c2]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf_a = self.buffer.clone();
+        let buf_b = other.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::kron(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf_a,
+                        layout: &layout_a,
+                    },
+                    StridedOperand {
+                        buffer: &buf_b,
+                        layout: &layout_b,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![r1 * r2, c1 * c2],
         })
     }
 

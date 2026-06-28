@@ -165,3 +165,38 @@ def test_min_matches_cupy() -> None:
 
 def test_max_matches_cupy() -> None:
     _close("max", _scalar(_arr(_A).max()), float(cp.max(cp.asarray(_A))), atol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Linear-algebra extras: det / matpow / kron / matexp
+# ---------------------------------------------------------------------------
+
+# Well-conditioned, modest-magnitude square matrix so matexp/matpow stay in a
+# numerically comfortable f32 range.
+_LIN = np.array([[3.0, 1.0, 0.0], [1.0, 3.0, 1.0], [0.0, 1.0, 3.0]], dtype=np.float32)
+_LIN_B = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+
+
+def test_det_matches_cupy() -> None:
+    got = _scalar(_arr(_LIN).det())
+    expected = float(cp.linalg.det(cp.asarray(_LIN)))
+    _close("det", got, expected, atol=1e-3)
+
+
+def test_matpow_matches_cupy() -> None:
+    got = _to2d(_arr(_LIN).matpow(3), (3, 3))
+    expected = cp.asnumpy(cp.linalg.matrix_power(cp.asarray(_LIN), 3))
+    _close_arr("matpow", got, cp.asarray(expected), atol=1e-2)
+
+
+def test_kron_matches_cupy() -> None:
+    got = _to2d(_arr(_LIN).kron(_arr(_LIN_B)), (6, 6))
+    expected = cp.kron(cp.asarray(_LIN), cp.asarray(_LIN_B))
+    _close_arr("kron", got, expected, atol=1e-4)
+
+
+def test_matexp_matches_cupy() -> None:
+    cupyx_linalg = pytest.importorskip("cupyx.scipy.linalg")
+    got = _to2d(_arr(_LIN).matexp(), (3, 3))
+    expected = cupyx_linalg.expm(cp.asarray(_LIN))
+    _close_arr("matexp", got, expected, atol=1e-3)
