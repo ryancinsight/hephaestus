@@ -254,3 +254,44 @@ def test_cumsum_matches_cupy() -> None:
             cp.cumsum(cp_a, axis=axis),
             atol=1e-3,
         )
+
+
+# ---------------------------------------------------------------------------
+# Sparse (CSR) ops — Hephaestus GPU vs scipy.sparse reference
+# ---------------------------------------------------------------------------
+
+# Reference is scipy.sparse on CPU (mathematically identical to the GPU result);
+# cupy's sparse module is not required so the rest of the suite still runs when
+# only dense cupy is present.
+_sp = pytest.importorskip("scipy.sparse")
+
+# A small matrix with structural zeros (6 nonzeros).
+_SP_DENSE = np.array(
+    [[2.0, 0.0, 1.0, 0.0], [0.0, 3.0, 0.0, 0.0], [4.0, 0.0, 0.0, 5.0], [0.0, 0.0, 6.0, 0.0]],
+    dtype=np.float32,
+)
+
+
+def _csr():
+    return hp.SparseMatrix.from_dense(_arr(_SP_DENSE))
+
+
+def test_sparse_roundtrip_and_nnz_match_scipy() -> None:
+    csr = _csr()
+    nnz = csr.nnz() if callable(getattr(csr, "nnz", None)) else csr.nnz
+    assert nnz == _sp.csr_matrix(_SP_DENSE).nnz
+    _close_arr("csr_to_dense", _to2d(csr.to_dense(), (4, 4)), cp.asarray(_SP_DENSE), atol=1e-5)
+
+
+def test_spmv_matches_scipy() -> None:
+    x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+    got = np.asarray(hp.spmv(_csr(), hp.Array.from_numpy(x, _DEVICE)).to_numpy())
+    expected = _sp.csr_matrix(_SP_DENSE) @ x
+    _close_arr("spmv", got, cp.asarray(expected), atol=1e-4)
+
+
+def test_spmm_matches_scipy() -> None:
+    b = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, 0.0]], dtype=np.float32)
+    got = _to2d(hp.spmm(_csr(), _arr(b)), (4, 2))
+    expected = _sp.csr_matrix(_SP_DENSE) @ b
+    _close_arr("spmm", got, cp.asarray(expected), atol=1e-4)
