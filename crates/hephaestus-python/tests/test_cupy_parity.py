@@ -200,3 +200,47 @@ def test_matexp_matches_cupy() -> None:
     got = _to2d(_arr(_LIN).matexp(), (3, 3))
     expected = cupyx_linalg.expm(cp.asarray(_LIN))
     _close_arr("matexp", got, expected, atol=1e-3)
+
+
+def test_matrix_rank_matches_cupy() -> None:
+    # Full-rank and rank-deficient matrices.
+    rank_def = np.array([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0]], dtype=np.float32)  # rank 1
+    assert _arr(_A).matrix_rank() == int(cp.linalg.matrix_rank(cp.asarray(_A)))
+    assert _arr(rank_def).matrix_rank() == int(
+        cp.linalg.matrix_rank(cp.asarray(rank_def))
+    )
+
+
+def test_pinv_matches_cupy() -> None:
+    got = _to2d(_arr(_A).pinv(), (3, 3))
+    expected = cp.linalg.pinv(cp.asarray(_A))
+    _close_arr("pinv", got, expected, atol=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Axis reductions and cumulative sum
+# ---------------------------------------------------------------------------
+
+
+def _vec(pa):
+    return np.asarray(pa.to_numpy()).flatten()
+
+
+def test_axis_reductions_match_cupy() -> None:
+    cp_a = cp.asarray(_A)
+    for axis in (0, 1):
+        _close_arr(f"sum_axis{axis}", _vec(_arr(_A).sum_axis(axis)), cp.sum(cp_a, axis=axis), atol=1e-3)
+        _close_arr(f"mean_axis{axis}", _vec(_arr(_A).mean_axis(axis)), cp.mean(cp_a, axis=axis), atol=1e-4)
+        _close_arr(f"min_axis{axis}", _vec(_arr(_A).min_axis(axis)), cp.min(cp_a, axis=axis), atol=1e-5)
+        _close_arr(f"max_axis{axis}", _vec(_arr(_A).max_axis(axis)), cp.max(cp_a, axis=axis), atol=1e-5)
+
+
+def test_cumsum_matches_cupy() -> None:
+    cp_a = cp.asarray(_A)
+    for axis in (0, 1):
+        _close_arr(
+            f"cumsum_axis{axis}",
+            _to2d(_arr(_A).cumsum(axis), (3, 3)),
+            cp.cumsum(cp_a, axis=axis),
+            atol=1e-3,
+        )

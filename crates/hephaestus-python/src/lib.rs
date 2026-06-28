@@ -67,6 +67,62 @@ impl PyArray {
         }
         Ok(self.shape[0])
     }
+
+    /// Validate a 2-D array and an `axis` in `{0, 1}`, returning `(rows, cols)`.
+    ///
+    /// Pure-Rust helper shared by the axis reductions and `cumsum`.
+    fn require_axis_2d(&self, op: &str, axis: usize) -> PyResult<(usize, usize)> {
+        if self.shape.len() != 2 {
+            return Err(PyValueError::new_err(format!("{op} requires a 2D array")));
+        }
+        if axis > 1 {
+            return Err(PyValueError::new_err(format!(
+                "{op} axis must be 0 or 1, got {axis}"
+            )));
+        }
+        Ok((self.shape[0], self.shape[1]))
+    }
+
+    /// Run an axis reduction (`sum_axis`/`mean_axis`/`min_axis`/`max_axis`) and
+    /// wrap the 1-D result (the reduced axis is removed). Pure-Rust helper that
+    /// factors the shared layout/dispatch/shape logic out of the four methods.
+    fn axis_reduce<E, F>(&self, py: Python<'_>, axis: usize, op: &str, f: F) -> PyResult<Self>
+    where
+        E: std::fmt::Display + Send,
+        F: FnOnce(
+                &WgpuDevice,
+                StridedOperand<'_, f32, 2>,
+                usize,
+                hephaestus_core::BlockWidth,
+            ) -> Result<WgpuBuffer<f32>, E>
+            + Send,
+    {
+        let (rows, cols) = self.require_axis_2d(op, axis)?;
+        let layout =
+            Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                f(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                    axis,
+                    hephaestus_core::BlockWidth::DEFAULT,
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        // Reducing along `axis` removes it: axis 0 -> [cols], axis 1 -> [rows].
+        let out_len = if axis == 0 { cols } else { rows };
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![out_len],
+        })
+    }
 }
 
 #[pymethods]
@@ -831,6 +887,103 @@ impl PyArray {
             device: self.device.clone(),
             shape: vec![r1 * r2, c1 * c2],
         })
+    }
+
+    /// Numerical rank of a 2-D matrix (default tolerance), returned as an int.
+    fn matrix_rank(&self, py: Python<'_>) -> PyResult<usize> {
+        if self.shape.len() != 2 {
+            return Err(PyValueError::new_err("matrix_rank requires a 2D array"));
+        }
+        let (rows, cols) = (self.shape[0], self.shape[1]);
+        let layout =
+            Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        py.allow_threads(move || {
+            hephaestus_wgpu::matrix_rank(
+                &dev,
+                StridedOperand {
+                    buffer: &buf,
+                    layout: &layout,
+                },
+            )
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Moore-Penrose pseudo-inverse of a 2-D matrix (shape `[cols, rows]`).
+    fn pinv(&self, py: Python<'_>) -> PyResult<Self> {
+        if self.shape.len() != 2 {
+            return Err(PyValueError::new_err("pinv requires a 2D array"));
+        }
+        let (rows, cols) = (self.shape[0], self.shape[1]);
+        let layout =
+            Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::pinv(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![cols, rows],
+        })
+    }
+
+    /// Cumulative sum along `axis` (0 or 1); output keeps the input shape.
+    fn cumsum(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
+        let (rows, cols) = self.require_axis_2d("cumsum", axis)?;
+        let layout =
+            Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf = self.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::cumsum(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf,
+                        layout: &layout,
+                    },
+                    axis,
+                    hephaestus_core::BlockWidth::DEFAULT,
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![rows, cols],
+        })
+    }
+
+    /// Sum along `axis` (0 or 1); the reduced axis is removed (1-D result).
+    fn sum_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
+        self.axis_reduce(py, axis, "sum_axis", hephaestus_wgpu::sum_axis)
+    }
+
+    /// Mean along `axis` (0 or 1); the reduced axis is removed (1-D result).
+    fn mean_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
+        self.axis_reduce(py, axis, "mean_axis", hephaestus_wgpu::mean_axis)
+    }
+
+    /// Minimum along `axis` (0 or 1); the reduced axis is removed (1-D result).
+    fn min_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
+        self.axis_reduce(py, axis, "min_axis", hephaestus_wgpu::min_axis)
+    }
+
+    /// Maximum along `axis` (0 or 1); the reduced axis is removed (1-D result).
+    fn max_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
+        self.axis_reduce(py, axis, "max_axis", hephaestus_wgpu::max_axis)
     }
 
     fn norm_l1(&self, py: Python<'_>) -> PyResult<Self> {
