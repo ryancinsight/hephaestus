@@ -100,3 +100,68 @@ def test_norm_max_matches_cupy() -> None:
     got = _scalar(_arr(_A).norm_max())
     expected = float(cp.max(cp.abs(cp.asarray(_A))))
     _close("norm_max", got, expected, atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Elementwise binary operators
+# ---------------------------------------------------------------------------
+
+# Two same-shape operands; _Q is held strictly positive so the same fixtures
+# serve the log/sqrt unary tests below without domain issues.
+_P = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+_Q = np.array([[0.5, 1.0, 1.5], [2.0, 2.5, 3.0]], dtype=np.float32)
+
+
+def _close_arr(label, got, expected, atol):
+    got_a = np.asarray(got)
+    exp_a = cp.asnumpy(expected)
+    assert got_a.shape == exp_a.shape, f"{label}: shape {got_a.shape} != {exp_a.shape}"
+    diff = float(np.max(np.abs(got_a - exp_a))) if got_a.size else 0.0
+    assert diff <= atol, f"{label}: max|diff|={diff:.3e} > atol={atol:.3e}"
+
+
+def test_elementwise_operators_match_cupy() -> None:
+    hp_p, hp_q = _arr(_P), _arr(_Q)
+    cp_p, cp_q = cp.asarray(_P), cp.asarray(_Q)
+    _close_arr("add", _to2d(hp_p + hp_q, (2, 3)), cp_p + cp_q, atol=1e-4)
+    _close_arr("sub", _to2d(hp_p - hp_q, (2, 3)), cp_p - cp_q, atol=1e-4)
+    _close_arr("mul", _to2d(hp_p * hp_q, (2, 3)), cp_p * cp_q, atol=1e-4)
+    _close_arr("div", _to2d(hp_p / hp_q, (2, 3)), cp_p / cp_q, atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Unary elementwise math
+# ---------------------------------------------------------------------------
+
+
+def test_unary_math_matches_cupy() -> None:
+    hp_p = _arr(_P)
+    cp_p = cp.asarray(_P)
+    _close_arr("abs", _to2d(_arr(-_P).abs(), (2, 3)), cp.abs(-cp_p), atol=1e-4)
+    _close_arr("neg", _to2d(hp_p.neg(), (2, 3)), -cp_p, atol=1e-4)
+    _close_arr("exp", _to2d(hp_p.exp(), (2, 3)), cp.exp(cp_p), atol=1e-3)
+    _close_arr("log", _to2d(hp_p.log(), (2, 3)), cp.log(cp_p), atol=1e-4)
+    _close_arr("sqrt", _to2d(hp_p.sqrt(), (2, 3)), cp.sqrt(cp_p), atol=1e-4)
+    _close_arr("sin", _to2d(hp_p.sin(), (2, 3)), cp.sin(cp_p), atol=1e-4)
+    _close_arr("cos", _to2d(hp_p.cos(), (2, 3)), cp.cos(cp_p), atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Reductions (whole-array)
+# ---------------------------------------------------------------------------
+
+
+def test_sum_matches_cupy() -> None:
+    _close("sum", _scalar(_arr(_A).sum()), float(cp.sum(cp.asarray(_A))), atol=1e-3)
+
+
+def test_mean_matches_cupy() -> None:
+    _close("mean", _scalar(_arr(_A).mean()), float(cp.mean(cp.asarray(_A))), atol=1e-4)
+
+
+def test_min_matches_cupy() -> None:
+    _close("min", _scalar(_arr(_A).min()), float(cp.min(cp.asarray(_A))), atol=1e-5)
+
+
+def test_max_matches_cupy() -> None:
+    _close("max", _scalar(_arr(_A).max()), float(cp.max(cp.asarray(_A))), atol=1e-5)
