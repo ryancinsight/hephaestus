@@ -67,6 +67,16 @@ def test_matmul_matches_cupy() -> None:
     assert np.allclose(got, expected, atol=1e-4), f"matmul: max|diff|={np.max(np.abs(got - expected)):.3e}"
 
 
+def test_batched_matmul_matches_cupy() -> None:
+    # [batch, m, k] @ [batch, k, n] -> [batch, m, n].
+    batch, m, k, n = 4, 3, 5, 2
+    a = (np.arange(batch * m * k, dtype=np.float32).reshape(batch, m, k) * 0.1) - 1.0
+    b = (np.arange(batch * k * n, dtype=np.float32).reshape(batch, k, n) * 0.05) - 0.5
+    got = np.asarray(_arr(a).batched_matmul(_arr(b)).to_numpy()).reshape(batch, m, n)
+    expected = cp.asarray(a) @ cp.asarray(b)
+    _close_arr("batched_matmul", got, expected, atol=1e-3)
+
+
 def test_dot_matches_cupy() -> None:
     got = _scalar(_arr(_V).dot(_arr(_W)))
     expected = float(cp.dot(cp.asarray(_V), cp.asarray(_W)))

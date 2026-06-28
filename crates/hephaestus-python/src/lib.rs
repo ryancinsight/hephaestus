@@ -889,6 +889,50 @@ impl PyArray {
         })
     }
 
+    /// Batched matrix multiply: `[batch, m, k] @ [batch, k, n] -> [batch, m, n]`.
+    fn batched_matmul(&self, py: Python<'_>, other: &PyArray) -> PyResult<Self> {
+        if self.shape.len() != 3 || other.shape.len() != 3 {
+            return Err(PyValueError::new_err(
+                "batched_matmul requires 3D arrays [batch, m, k]",
+            ));
+        }
+        let (batch, m, k) = (self.shape[0], self.shape[1], self.shape[2]);
+        let (batch_b, k_b, n) = (other.shape[0], other.shape[1], other.shape[2]);
+        if batch != batch_b || k != k_b {
+            return Err(PyValueError::new_err(format!(
+                "batched_matmul shape mismatch: {:?} vs {:?}",
+                self.shape, other.shape
+            )));
+        }
+        let layout_a = Layout::c_contiguous([batch, m, k])
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let layout_b = Layout::c_contiguous([batch, k, n])
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dev = self.device.clone();
+        let buf_a = self.buffer.clone();
+        let buf_b = other.buffer.clone();
+        let out_buf = py
+            .allow_threads(move || {
+                hephaestus_wgpu::batched_matmul(
+                    &dev,
+                    StridedOperand {
+                        buffer: &buf_a,
+                        layout: &layout_a,
+                    },
+                    StridedOperand {
+                        buffer: &buf_b,
+                        layout: &layout_b,
+                    },
+                )
+            })
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            buffer: out_buf,
+            device: self.device.clone(),
+            shape: vec![batch, m, n],
+        })
+    }
+
     /// Numerical rank of a 2-D matrix (default tolerance), returned as an int.
     fn matrix_rank(&self, py: Python<'_>) -> PyResult<usize> {
         if self.shape.len() != 2 {
