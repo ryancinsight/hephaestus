@@ -295,3 +295,56 @@ def test_spmm_matches_scipy() -> None:
     got = _to2d(hp.spmm(_csr(), _arr(b)), (4, 2))
     expected = _sp.csr_matrix(_SP_DENSE) @ b
     _close_arr("spmm", got, cp.asarray(expected), atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# LU decomposition and eigenvalues (verified by invariants vs numpy)
+# ---------------------------------------------------------------------------
+
+# General nonsingular matrix for LU.
+_LU_M = np.array([[4.0, 3.0, 2.0], [1.0, 5.0, 1.0], [2.0, 1.0, 6.0]], dtype=np.float32)
+# Symmetric matrix (real spectrum) for the complex-eigenvalue path.
+_SYM_M = np.array([[4.0, 1.0, 2.0], [1.0, 5.0, 3.0], [2.0, 3.0, 6.0]], dtype=np.float32)
+
+
+def test_lu_matches_numpy() -> None:
+    # leto-style LU: (L, U, perm) with P-permuted A == L @ U, L unit-lower, U upper.
+    l, u, perm = hp.lu(_arr(_LU_M))
+    l_np = _to2d(l, (3, 3))
+    u_np = _to2d(u, (3, 3))
+    p = np.asarray(perm).astype(int)
+    _close_arr("lu_reconstruct", l_np @ u_np, cp.asarray(_LU_M[p]), atol=1e-4)
+    _close_arr("lu_l_unit_lower", np.triu(l_np, 1), cp.zeros((3, 3)), atol=1e-5)
+    _close_arr("lu_u_upper", np.tril(u_np, -1), cp.zeros((3, 3)), atol=1e-5)
+
+
+def test_eigenvalues_match_numpy() -> None:
+    # eigenvalues() returns Complex32; for a symmetric input the spectrum is real.
+    ev = np.asarray(hp.eigenvalues(_arr(_SYM_M)))
+    assert np.max(np.abs(ev.imag)) < 1e-3, f"symmetric eigenvalues should be real, got {ev.imag}"
+    expected = np.linalg.eigvalsh(_SYM_M.astype(np.float64))
+    _close_arr(
+        "eigenvalues", np.sort(ev.real.astype(np.float64)), cp.asarray(np.sort(expected)), atol=1e-3
+    )
+
+
+# ---------------------------------------------------------------------------
+# Seeded RNG — determinism + distribution (no value oracle; different RNG)
+# ---------------------------------------------------------------------------
+
+
+def test_normal_with_seed_deterministic_and_distributed() -> None:
+    a = np.asarray(hp.normal_with_seed([4096], 0.0, 1.0, 42, _DEVICE).to_numpy())
+    b = np.asarray(hp.normal_with_seed([4096], 0.0, 1.0, 42, _DEVICE).to_numpy())
+    c = np.asarray(hp.normal_with_seed([4096], 0.0, 1.0, 7, _DEVICE).to_numpy())
+    assert np.array_equal(a, b), "same seed must reproduce identical samples"
+    assert not np.array_equal(a, c), "different seed must differ"
+    assert abs(float(a.mean())) < 0.05 and abs(float(a.std()) - 1.0) < 0.06
+
+
+def test_uniform_with_seed_deterministic_and_bounded() -> None:
+    u = np.asarray(hp.uniform_with_seed([4096], -2.0, 3.0, 42, _DEVICE).to_numpy())
+    u2 = np.asarray(hp.uniform_with_seed([4096], -2.0, 3.0, 42, _DEVICE).to_numpy())
+    assert np.array_equal(u, u2), "same seed must reproduce identical samples"
+    assert float(u.min()) >= -2.0 and float(u.max()) <= 3.0, "samples must lie in [low, high]"
+    assert abs(float(u.mean()) - 0.5) < 0.06
