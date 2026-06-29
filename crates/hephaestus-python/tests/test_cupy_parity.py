@@ -318,6 +318,17 @@ def test_lu_matches_numpy() -> None:
     _close_arr("lu_u_upper", np.tril(u_np, -1), cp.zeros((3, 3)), atol=1e-5)
 
 
+def test_hessenberg_matches_numpy() -> None:
+    # hessenberg() -> (Q, H), A = Q H Qᵀ, H upper-Hessenberg, Q orthonormal.
+    # Hessenberg form is not unique, so verify invariants, not raw factors.
+    q, h = hp.hessenberg(_arr(_SYM_M))
+    q_np = _to2d(q, (3, 3))
+    h_np = _to2d(h, (3, 3))
+    _close_arr("hessenberg_reconstruct", q_np @ h_np @ q_np.T, cp.asarray(_SYM_M), atol=1e-3)
+    _close_arr("hessenberg_q_orthonormal", q_np.T @ q_np, cp.asarray(np.eye(3, dtype=np.float32)), atol=1e-4)
+    assert np.allclose(np.tril(h_np, -2), 0.0, atol=1e-4), "H must be upper-Hessenberg"
+
+
 def test_eigenvalues_match_numpy() -> None:
     # eigenvalues() returns Complex32; for a symmetric input the spectrum is real.
     ev = np.asarray(hp.eigenvalues(_arr(_SYM_M)))

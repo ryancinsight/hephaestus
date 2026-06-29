@@ -1365,6 +1365,54 @@ fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
     ))
 }
 
+/// Hessenberg reduction on the GPU: returns `(Q, H)` with `A = Q H Qᵀ`,
+/// `H` upper-Hessenberg, `Q` orthogonal. Mirrors `scipy.linalg.hessenberg`
+/// (which returns `(H, Q)`).
+#[pyfunction]
+fn hessenberg(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "hessenberg requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let (q_buf, h_buf) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::hessenberg(&dev, op)?;
+
+            let mut host_q = vec![0.0f32; n * n];
+            dev.download(decomp.q_buffer(), &mut host_q)?;
+            let mut host_h = vec![0.0f32; n * n];
+            dev.download(decomp.h_buffer(), &mut host_h)?;
+
+            let q_buf = dev.upload(&host_q)?;
+            let h_buf = dev.upload(&host_h)?;
+            Ok::<_, hephaestus_core::HephaestusError>((q_buf, h_buf))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: q_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+        PyArray {
+            buffer: h_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+    ))
+}
+
 #[pyfunction]
 fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     if a.shape.len() != 2 {
@@ -2024,6 +2072,7 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(cholesky, m)?)?;
     m.add_function(wrap_pyfunction!(lu, m)?)?;
+    m.add_function(wrap_pyfunction!(hessenberg, m)?)?;
     m.add_function(wrap_pyfunction!(qr, m)?)?;
     m.add_function(wrap_pyfunction!(col_piv_qr, m)?)?;
     m.add_function(wrap_pyfunction!(svd, m)?)?;
