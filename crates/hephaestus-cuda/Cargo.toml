@@ -30,7 +30,6 @@ mnemosyne-backend = { workspace = true }
 mnemosyne = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
-num-complex = { workspace = true }
 libloading = { version = "0.8", optional = true }
 # cutile-rs (NVlabs): same git source coeus-cuda composes. cuda-core supplies
 # the driver `sys` bindings; cuda-async supplies device/context/stream
@@ -40,6 +39,7 @@ cuda-core = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-core"
 cuda-async = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-async", optional = true }
 
 [dev-dependencies]
+num-complex = { workspace = true }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }
 nalgebra = { workspace = true }

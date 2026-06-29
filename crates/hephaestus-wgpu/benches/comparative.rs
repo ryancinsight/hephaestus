@@ -24,7 +24,7 @@ use leto::Storage;
 use nalgebra::DMatrix;
 use ndarray::Array2 as NdArray2;
 use ndarray::{Array1 as NdArray1, Axis};
-use num_complex::Complex;
+use leto::Complex;
 
 const LEN: usize = 1 << 20; // 1,048,576 elements for elementwise
 const LINALG_LEN: usize = 1 << 16; // 65,536 elements for dot/norms
@@ -2526,7 +2526,7 @@ fn main() {
         let leto_values = leto_out.eigenvalues();
         let na_m = DMatrix::from_row_slice(n, n, &host_m);
         let na_out: Vec<Complex<f32>> =
-            na_m.clone().complex_eigenvalues().iter().copied().collect();
+            na_m.clone().complex_eigenvalues().iter().map(|c| Complex::new(c.re, c.im)).collect();
 
         assert_close_complex_unordered(&leto_values, &closed_form, 1.0e-4, 1.0e-5);
         assert_close_complex_unordered(&na_out, &closed_form, 1.0e-4, 1.0e-5);
@@ -2937,7 +2937,7 @@ fn main() {
         let leto_out = leto_ops::eigenvalues(&leto_m.view()).unwrap();
         let na_m = DMatrix::from_row_slice(n, n, &host_m);
         let na_out: Vec<Complex<f32>> =
-            na_m.clone().complex_eigenvalues().iter().copied().collect();
+            na_m.clone().complex_eigenvalues().iter().map(|c| Complex::new(c.re, c.im)).collect();
 
         assert_close_complex_unordered(&leto_out, &closed_form, 1.0e-4, 1.0e-5);
         assert_close_complex_unordered(&na_out, &closed_form, 1.0e-4, 1.0e-5);

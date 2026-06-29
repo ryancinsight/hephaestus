@@ -223,7 +223,7 @@ pub fn symmetric_eigenvalues_jacobi(
 pub fn eigenvalues(
     device: &MetalDevice,
     matrix: crate::application::strided::StridedOperand<'_, f32, 2>,
-) -> Result<MetalBuffer<num_complex::Complex<f32>>> {
+) -> Result<MetalBuffer<leto::Complex<f32>>> {
     let inner = wgpu_backend::eigenvalues(
         &device.inner,
         crate::application::strided::to_wgpu_strided(matrix),
