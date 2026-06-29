@@ -29,9 +29,9 @@ moirai-sync = { workspace = true }
 moirai = { workspace = true }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
-num-complex = { workspace = true }
 
 [dev-dependencies]
+num-complex = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }

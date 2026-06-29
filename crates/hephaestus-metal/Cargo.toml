@@ -25,7 +25,6 @@ themis = { workspace = true }
 mnemosyne-core = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
-num-complex = { workspace = true }
 wgpu = { workspace = true }
 
 [dev-dependencies]

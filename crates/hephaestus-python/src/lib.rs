@@ -6,7 +6,7 @@ use hephaestus_wgpu::{
     StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
 };
 use leto::Layout;
-use num_complex::Complex;
+use leto::Complex;
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;

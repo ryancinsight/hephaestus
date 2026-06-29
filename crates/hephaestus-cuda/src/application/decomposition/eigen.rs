@@ -1,7 +1,7 @@
 //! GPU-resident Eigendecomposition.
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
-use num_complex::Complex;
+use leto::Complex;
 
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;

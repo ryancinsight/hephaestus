@@ -20,4 +20,3 @@ bytemuck = { workspace = true }
 wgpu = { workspace = true }
 leto = { workspace = true }
 leto-ops = { workspace = true }
-num-complex = { workspace = true }

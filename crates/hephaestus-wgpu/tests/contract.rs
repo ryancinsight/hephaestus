@@ -83,8 +83,8 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
 }
 
 fn assert_complex_spectra_close(
-    got: &[num_complex::Complex<f32>],
-    expected: &[num_complex::Complex<f32>],
+    got: &[leto::Complex<f32>],
+    expected: &[leto::Complex<f32>],
     abs_tol: f32,
     rel_tol: f32,
 ) {
@@ -176,7 +176,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     }
 }
 
-fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
+fn sort_complex(values: &mut [leto::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
             .total_cmp(&rhs.re)
@@ -185,8 +185,8 @@ fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
 }
 
 fn assert_complex_spectrum_close(
-    actual: &[num_complex::Complex<f32>],
-    expected: &[num_complex::Complex<f32>],
+    actual: &[leto::Complex<f32>],
+    expected: &[leto::Complex<f32>],
     tolerance: f32,
 ) {
     assert_eq!(actual.len(), expected.len());
@@ -198,7 +198,7 @@ fn assert_complex_spectrum_close(
         assert_close(actual.re, expected.re, tolerance);
         assert_close(actual.im, expected.im, tolerance);
         assert!(
-            (actual - expected).norm() <= tolerance,
+            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt() <= tolerance,
             "complex spectrum mismatch at {index}: got {actual:?}, expected {expected:?}, tolerance {tolerance}"
         );
     }
@@ -1814,13 +1814,13 @@ fn eigenvalues_match_closed_form_diagonal() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![leto::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
     got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
 
     let expected = [
-        num_complex::Complex::new(2.0f32, 0.0),
-        num_complex::Complex::new(3.0f32, 0.0),
+        leto::Complex::new(2.0f32, 0.0),
+        leto::Complex::new(3.0f32, 0.0),
     ];
     for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
         assert_eq!(
@@ -1850,7 +1850,7 @@ fn eigenvalues_matches_leto_reference() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![leto::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
 
     let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
@@ -1880,7 +1880,7 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
     use leto::Layout;
-    use num_complex::Complex;
+    use leto::Complex;
 
     let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
         (
@@ -1925,7 +1925,7 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
     use leto::Layout;
     use nalgebra::DMatrix;
-    use num_complex::Complex;
+    use leto::Complex;
 
     let cases: [(usize, Vec<f32>, f32); 4] = [
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
@@ -1963,7 +1963,7 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
         let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
             .complex_eigenvalues()
             .iter()
-            .copied()
+            .map(|c| Complex::new(c.re, c.im))
             .collect();
         assert_complex_spectra_close(&got, &expected, abs_tol, 1.0e-4);
     }
@@ -1977,7 +1977,7 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
     use leto::Layout;
     use nalgebra::DMatrix;
-    use num_complex::Complex;
+    use leto::Complex;
 
     let n = 3usize;
     let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
@@ -2003,7 +2003,7 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
     let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
         .complex_eigenvalues()
         .iter()
-        .copied()
+        .map(|c| Complex::new(c.re, c.im))
         .collect();
     assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
 }
@@ -2323,8 +2323,8 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         },
     )
     .unwrap();
-    let mut got_t = vec![num_complex::Complex::new(0.0f32, 0.0); n];
-    let mut got_a = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    let mut got_t = vec![leto::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![leto::Complex::new(0.0f32, 0.0); n];
     device.download(&t_values, &mut got_t).unwrap();
     device.download(&a_values, &mut got_a).unwrap();
     assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
