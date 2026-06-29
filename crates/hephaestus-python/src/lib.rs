@@ -1413,6 +1413,128 @@ fn hessenberg(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     ))
 }
 
+/// Full-pivoting LU on the GPU: returns `(L, U, row_perm, col_perm)` with
+/// `A[row_perm][:, col_perm] = L U`, `L` unit-lower, `U` upper.
+#[pyfunction]
+fn full_piv_lu(
+    py: Python<'_>,
+    a: &PyArray,
+) -> PyResult<(PyArray, PyArray, Vec<usize>, Vec<usize>)> {
+    if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
+        return Err(PyValueError::new_err(
+            "full_piv_lu requires a square 2D matrix",
+        ));
+    }
+    let n = a.shape[0];
+    let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let (l_buf, u_buf, row_perm, col_perm) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::full_piv_lu(&dev, op)?;
+
+            let mut host_factors = vec![0.0f32; n * n];
+            dev.download(decomp.lu_buffer(), &mut host_factors)?;
+            let mut host_l = vec![0.0f32; n * n];
+            let mut host_u = vec![0.0f32; n * n];
+            for r in 0..n {
+                for c in 0..n {
+                    let idx = r * n + c;
+                    let val = host_factors[idx];
+                    if r > c {
+                        host_l[idx] = val;
+                    } else if r == c {
+                        host_l[idx] = 1.0;
+                        host_u[idx] = val;
+                    } else {
+                        host_u[idx] = val;
+                    }
+                }
+            }
+            let l_buf = dev.upload(&host_l)?;
+            let u_buf = dev.upload(&host_u)?;
+            let row = decomp.row_permutation().to_vec();
+            let col = decomp.col_permutation().to_vec();
+            Ok::<_, hephaestus_core::HephaestusError>((l_buf, u_buf, row, col))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: l_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+        PyArray {
+            buffer: u_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+        row_perm,
+        col_perm,
+    ))
+}
+
+/// Bidiagonalization on the GPU: `A = U B Vᵀ` with `B` upper-bidiagonal,
+/// `U`/`V` orthogonal. Returns `(U, B, V)` for `A` of shape `[m, n]`
+/// (`U: [m, m]`, `B: [m, n]`, `V: [n, n]`).
+#[pyfunction]
+fn bidiagonalize(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
+    if a.shape.len() != 2 {
+        return Err(PyValueError::new_err("bidiagonalize requires a 2D matrix"));
+    }
+    let m = a.shape[0];
+    let n = a.shape[1];
+    let layout = Layout::c_contiguous([m, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let dev = a.device.clone();
+    let buf = a.buffer.clone();
+
+    let (u_buf, b_buf, v_buf) = py
+        .allow_threads(move || {
+            let op = StridedOperand {
+                buffer: &buf,
+                layout: &layout,
+            };
+            let decomp = hephaestus_wgpu::bidiagonalize(&dev, op)?;
+
+            let mut host_u = vec![0.0f32; m * m];
+            dev.download(decomp.u_buffer(), &mut host_u)?;
+            let mut host_b = vec![0.0f32; m * n];
+            dev.download(decomp.b_buffer(), &mut host_b)?;
+            let mut host_v = vec![0.0f32; n * n];
+            dev.download(decomp.v_buffer(), &mut host_v)?;
+
+            let u_buf = dev.upload(&host_u)?;
+            let b_buf = dev.upload(&host_b)?;
+            let v_buf = dev.upload(&host_v)?;
+            Ok::<_, hephaestus_core::HephaestusError>((u_buf, b_buf, v_buf))
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok((
+        PyArray {
+            buffer: u_buf,
+            device: a.device.clone(),
+            shape: vec![m, m],
+        },
+        PyArray {
+            buffer: b_buf,
+            device: a.device.clone(),
+            shape: vec![m, n],
+        },
+        PyArray {
+            buffer: v_buf,
+            device: a.device.clone(),
+            shape: vec![n, n],
+        },
+    ))
+}
+
 #[pyfunction]
 fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     if a.shape.len() != 2 {
@@ -2073,6 +2195,8 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cholesky, m)?)?;
     m.add_function(wrap_pyfunction!(lu, m)?)?;
     m.add_function(wrap_pyfunction!(hessenberg, m)?)?;
+    m.add_function(wrap_pyfunction!(full_piv_lu, m)?)?;
+    m.add_function(wrap_pyfunction!(bidiagonalize, m)?)?;
     m.add_function(wrap_pyfunction!(qr, m)?)?;
     m.add_function(wrap_pyfunction!(col_piv_qr, m)?)?;
     m.add_function(wrap_pyfunction!(svd, m)?)?;

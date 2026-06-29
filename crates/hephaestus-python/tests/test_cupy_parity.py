@@ -329,6 +329,39 @@ def test_hessenberg_matches_numpy() -> None:
     assert np.allclose(np.tril(h_np, -2), 0.0, atol=1e-4), "H must be upper-Hessenberg"
 
 
+def test_full_piv_lu_matches_numpy() -> None:
+    # full_piv_lu() -> (L, U, row_perm, col_perm): A[rp][:, cp] == L @ U.
+    l, u, rp, cp_perm = hp.full_piv_lu(_arr(_LU_M))
+    l_np = _to2d(l, (3, 3))
+    u_np = _to2d(u, (3, 3))
+    rp = np.asarray(rp).astype(int)
+    cp_perm = np.asarray(cp_perm).astype(int)
+    _close_arr(
+        "full_piv_lu_reconstruct", l_np @ u_np, cp.asarray(_LU_M[np.ix_(rp, cp_perm)]), atol=1e-4
+    )
+    _close_arr("full_piv_lu_l_unit_diag", np.diag(l_np), cp.ones(3), atol=1e-5)
+    _close_arr("full_piv_lu_l_lower", np.triu(l_np, 1), cp.zeros((3, 3)), atol=1e-5)
+    _close_arr("full_piv_lu_u_upper", np.tril(u_np, -1), cp.zeros((3, 3)), atol=1e-5)
+
+
+_RECT_M = np.array(
+    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 10.0], [1.0, 0.0, 2.0]], dtype=np.float32
+)
+
+
+def test_bidiagonalize_matches_numpy() -> None:
+    # bidiagonalize() -> (U, B, V): A = U B Vᵀ, B upper-bidiagonal, U/V orthonormal.
+    u, b, v = hp.bidiagonalize(_arr(_RECT_M))
+    u_np = _to2d(u, (4, 4))
+    b_np = _to2d(b, (4, 3))
+    v_np = _to2d(v, (3, 3))
+    _close_arr("bidiagonalize_reconstruct", u_np @ b_np @ v_np.T, cp.asarray(_RECT_M), atol=1e-2)
+    _close_arr("bidiagonalize_u_orthonormal", u_np.T @ u_np, cp.asarray(np.eye(4, dtype=np.float32)), atol=1e-3)
+    _close_arr("bidiagonalize_v_orthonormal", v_np.T @ v_np, cp.asarray(np.eye(3, dtype=np.float32)), atol=1e-3)
+    assert np.allclose(np.tril(b_np, -1), 0.0, atol=1e-3), "B must be upper-triangular"
+    assert np.allclose(np.triu(b_np, 2), 0.0, atol=1e-3), "B must be bidiagonal"
+
+
 def test_eigenvalues_match_numpy() -> None:
     # eigenvalues() returns Complex32; for a symmetric input the spectrum is real.
     ev = np.asarray(hp.eigenvalues(_arr(_SYM_M)))
