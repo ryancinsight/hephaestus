@@ -1879,8 +1879,8 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
-    use leto::Layout;
     use leto::Complex;
+    use leto::Layout;
 
     let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
         (
@@ -1923,9 +1923,9 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Complex;
     use leto::Layout;
     use nalgebra::DMatrix;
-    use leto::Complex;
 
     let cases: [(usize, Vec<f32>, f32); 4] = [
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
@@ -1975,9 +1975,9 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use leto::Complex;
     use leto::Layout;
     use nalgebra::DMatrix;
-    use leto::Complex;
 
     let n = 3usize;
     let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
