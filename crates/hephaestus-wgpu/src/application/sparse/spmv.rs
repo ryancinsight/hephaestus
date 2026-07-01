@@ -7,6 +7,7 @@ use crate::application::strided::to_u32;
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::pool::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
@@ -18,6 +19,52 @@ struct SpmvMeta {
 }
 
 struct SparseSpmvKernel<T>(PhantomData<T>);
+
+/// Prepared WGPU CSR matrix-vector product for repeated dispatch.
+pub struct PreparedSpmv<T> {
+    device: WgpuDevice,
+    pipeline: wgpu::ComputePipeline,
+    bind_group: wgpu::BindGroup,
+    groups: u32,
+    _meta_buffer: UniformBufferGuard,
+    marker: PhantomData<T>,
+}
+
+impl<T> PreparedSpmv<T> {
+    pub(crate) fn device(&self) -> &WgpuDevice {
+        &self.device
+    }
+
+    pub(crate) fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
+        if self.groups == 0 {
+            return;
+        }
+
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-spmv-prepared"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(self.groups, 1, 1);
+    }
+
+    /// Dispatch the prepared sparse matrix-vector product.
+    pub fn dispatch(&self) {
+        if self.groups == 0 {
+            return;
+        }
+
+        let mut encoder =
+            self.device
+                .inner()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("hephaestus-spmv-prepared"),
+                });
+        self.encode(&mut encoder);
+        self.device.queue().submit(Some(encoder.finish()));
+    }
+}
 
 fn spmv_shader_source<T: MatmulZero>(width: BlockWidth) -> String {
     format!(
@@ -55,13 +102,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
-/// Compute `y = A · x` into a pre-allocated output buffer `y` (length `nrows`).
-pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
+/// Prepare `y = A · x` for repeated dispatch into a fixed output buffer.
+pub fn prepare_spmv<T: WgslScalar + MatmulZero + Pod>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x: &WgpuBuffer<T>,
     y: &mut WgpuBuffer<T>,
-) -> Result<()> {
+) -> Result<PreparedSpmv<T>> {
     let (nrows, ncols) = a.shape();
     if x.len() != ncols {
         return Err(HephaestusError::LengthMismatch {
@@ -74,9 +121,6 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
             host_len: nrows,
             device_len: y.len(),
         });
-    }
-    if nrows == 0 {
-        return Ok(());
     }
 
     let width = BlockWidth::DEFAULT;
@@ -107,7 +151,7 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-spmv"),
+            label: Some("hephaestus-spmv-prepared"),
             layout: &pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -133,22 +177,41 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
             ],
         });
 
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-spmv"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-spmv"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(groups, 1, 1);
-    }
-    device.queue().submit(Some(encoder.finish()));
+    Ok(PreparedSpmv {
+        device: device.clone(),
+        pipeline,
+        bind_group,
+        groups,
+        _meta_buffer: meta_buffer,
+        marker: PhantomData,
+    })
+}
 
+/// Compute `y = A · x` into a pre-allocated output buffer `y` (length `nrows`).
+pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
+    device: &WgpuDevice,
+    a: &GpuCsrMatrix<T>,
+    x: &WgpuBuffer<T>,
+    y: &mut WgpuBuffer<T>,
+) -> Result<()> {
+    let (nrows, ncols) = a.shape();
+    if x.len() != ncols {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: ncols,
+            device_len: x.len(),
+        });
+    }
+    if y.len() != nrows {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: nrows,
+            device_len: y.len(),
+        });
+    }
+    if nrows == 0 {
+        return Ok(());
+    }
+
+    prepare_spmv(device, a, x, y)?.dispatch();
     Ok(())
 }
 

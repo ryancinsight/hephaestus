@@ -68,7 +68,9 @@ pub use application::strided::{
 };
 
 pub use application::random::{normal_with_seed, uniform_with_seed};
-pub use application::sparse::{spmm, spmm_into, spmv, spmv_into, GpuCsrMatrix};
+pub use application::sparse::{
+    spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into, GpuCsrMatrix,
+};
 pub use infrastructure::buffer::CudaBuffer;
 pub use infrastructure::device::CudaDevice;
 

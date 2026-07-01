@@ -3,7 +3,7 @@
 mod spmm;
 mod spmv;
 
-pub use spmm::{spmm, spmm_into};
+pub use spmm::{spmm, spmm_into, spmv_many, spmv_many_into};
 pub use spmv::{spmv, spmv_into};
 
 use crate::application::cuda_type::CudaScalar;

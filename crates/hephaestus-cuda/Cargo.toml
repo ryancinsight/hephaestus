@@ -22,6 +22,7 @@ decomposition = ["dep:leto-ops"]
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
+num-complex = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
@@ -39,7 +40,6 @@ cuda-core = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-core"
 cuda-async = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-async", optional = true }
 
 [dev-dependencies]
-num-complex = { workspace = true }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }
 nalgebra = { workspace = true }

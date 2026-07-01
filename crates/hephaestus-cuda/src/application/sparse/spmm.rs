@@ -179,6 +179,22 @@ pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOpera
     Ok(())
 }
 
+/// Compute multiple sparse matrix-vector products into a pre-allocated output
+/// batch.
+///
+/// Columns of `x_batch` are independent RHS vectors, and columns of `y_batch`
+/// are the corresponding `A · x_j` outputs. CUDA uses the same sparse-dense
+/// kernel as [`spmm_into`] so multi-RHS SpMV amortizes launch overhead without a
+/// duplicate kernel.
+pub fn spmv_many_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &CudaDevice,
+    a: &GpuCsrMatrix<T>,
+    x_batch: &B,
+    y_batch: &mut CudaBuffer<T>,
+) -> Result<()> {
+    spmm_into(device, a, x_batch, y_batch)
+}
+
 /// Compute `C = A · B`, allocating the result buffer.
 pub fn spmm<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &CudaDevice,
@@ -192,4 +208,13 @@ pub fn spmm<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a
     let mut c = device.alloc_zeroed::<T>(nrows * bcols)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)
+}
+
+/// Compute multiple sparse matrix-vector products, allocating the output batch.
+pub fn spmv_many<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &CudaDevice,
+    a: &GpuCsrMatrix<T>,
+    x_batch: &B,
+) -> Result<CudaBuffer<T>> {
+    spmm(device, a, x_batch)
 }

@@ -8,6 +8,7 @@ use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::pool::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
@@ -22,6 +23,54 @@ struct SpmmMeta {
 }
 
 struct SparseSpmmKernel<T>(PhantomData<T>);
+
+struct SparseSpmmDenseRhsKernel<T>(PhantomData<T>);
+
+/// Prepared WGPU CSR matrix-matrix product for repeated dispatch.
+pub struct PreparedSpmm<T> {
+    device: WgpuDevice,
+    pipeline: wgpu::ComputePipeline,
+    bind_group: wgpu::BindGroup,
+    groups: u32,
+    _meta_buffer: UniformBufferGuard,
+    marker: PhantomData<T>,
+}
+
+impl<T> PreparedSpmm<T> {
+    pub(crate) fn device(&self) -> &WgpuDevice {
+        &self.device
+    }
+
+    pub(crate) fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
+        if self.groups == 0 {
+            return;
+        }
+
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-spmm-prepared"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(self.groups, 1, 1);
+    }
+
+    /// Dispatch the prepared sparse matrix-matrix product.
+    pub fn dispatch(&self) {
+        if self.groups == 0 {
+            return;
+        }
+
+        let mut encoder =
+            self.device
+                .inner()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("hephaestus-spmm-prepared"),
+                });
+        self.encode(&mut encoder);
+        self.device.queue().submit(Some(encoder.finish()));
+    }
+}
 
 fn spmm_shader_source<T: MatmulZero>(width: BlockWidth) -> String {
     format!(
@@ -71,6 +120,191 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
+fn spmm_dense_rhs_shader_source<T: MatmulZero>(width: BlockWidth) -> String {
+    format!(
+        r#"
+struct SpmmMeta {{
+    matrix_shape: vec2<u32>,
+    b_shape: vec2<u32>,
+    b_strides: vec2<i32>,
+    offsets: vec2<u32>,
+}}
+
+@group(0) @binding(0) var<uniform> sparse_meta: SpmmMeta;
+@group(0) @binding(1) var<storage, read> values: array<{ty}>;
+@group(0) @binding(2) var<storage, read> indices: array<u32>;
+@group(0) @binding(3) var<storage, read> b: array<{ty}>;
+@group(0) @binding(4) var<storage, read_write> c: array<{ty}>;
+
+@compute @workgroup_size({wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
+    let flat = gid.x;
+    let rows = sparse_meta.matrix_shape.x;
+    let cols = sparse_meta.b_shape.y;
+    let len = rows * cols;
+    if (flat >= len) {{
+        return;
+    }}
+
+    let row = flat / cols;
+    let col = flat - row * cols;
+    let row_ptr = sparse_meta.offsets.y;
+    let begin = indices[row_ptr + row];
+    let end = indices[row_ptr + row + 1u];
+    var acc = {ty}({zero});
+    for (var idx = begin; idx < end; idx = idx + 1u) {{
+        let b_row = indices[idx];
+        let b_offset = sparse_meta.offsets.x + b_row * cols + col;
+        acc = acc + values[idx] * b[b_offset];
+    }}
+    c[flat] = acc;
+}}
+"#,
+        ty = T::WGSL_TYPE,
+        wg = width.get(),
+        zero = T::WGSL_ZERO,
+    )
+}
+
+/// Prepare `C = A · B` for repeated dispatch into a fixed output buffer.
+pub fn prepare_spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &WgpuDevice,
+    a: &GpuCsrMatrix<T>,
+    b: &B,
+    c: &mut WgpuBuffer<T>,
+) -> Result<PreparedSpmm<T>> {
+    let (nrows, ncols) = a.shape();
+    let b_op = b.as_operand();
+    let [b_rows, bcols] = b_op.layout.shape;
+
+    if b_rows != ncols {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: ncols,
+            device_len: b_rows,
+        });
+    }
+
+    let expected_c_len =
+        nrows
+            .checked_mul(bcols)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("spmm output size {nrows}×{bcols} overflows usize"),
+            })?;
+    if c.len() != expected_c_len {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: expected_c_len,
+            device_len: c.len(),
+        });
+    }
+
+    b_op.layout
+        .validate_storage_len(b_op.buffer.len())
+        .map_err(map_layout_err)?;
+    let meta = SpmmMeta {
+        matrix_shape: [
+            to_u32(nrows, "CSR row count")?,
+            to_u32(ncols, "CSR column count")?,
+        ],
+        b_shape: [
+            to_u32(b_rows, "dense rhs row count")?,
+            to_u32(bcols, "dense rhs column count")?,
+        ],
+        b_strides: [
+            to_i32(b_op.layout.strides[0], "dense rhs row stride")?,
+            to_i32(b_op.layout.strides[1], "dense rhs column stride")?,
+        ],
+        offsets: [
+            to_u32(b_op.layout.offset, "dense rhs offset")?,
+            to_u32(a.row_ptr_offset(), "CSR row pointer offset")?,
+        ],
+    };
+
+    let width = BlockWidth::DEFAULT;
+    let groups = workgroups(expected_c_len, width)?;
+    let pipeline = if b_op.layout.is_c_dense() {
+        cached_pipeline(
+            device,
+            (
+                std::any::TypeId::of::<SparseSpmmDenseRhsKernel<T>>(),
+                std::any::TypeId::of::<T>(),
+                width.get(),
+            ),
+            "hephaestus-spmm-dense-rhs",
+            || spmm_dense_rhs_shader_source::<T>(width),
+        )
+    } else {
+        cached_pipeline(
+            device,
+            (
+                std::any::TypeId::of::<SparseSpmmKernel<T>>(),
+                std::any::TypeId::of::<T>(),
+                width.get(),
+            ),
+            "hephaestus-spmm",
+            || spmm_shader_source::<T>(width),
+        )
+    };
+    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmmMeta>(1)?)?;
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    device
+        .queue()
+        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-spmm-prepared"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: meta_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: a.values().buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: a.indices().buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: b_op.buffer.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: c.buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+    Ok(PreparedSpmm {
+        device: device.clone(),
+        pipeline,
+        bind_group,
+        groups,
+        _meta_buffer: meta_buffer,
+        marker: PhantomData,
+    })
+}
+
+/// Prepare multiple sparse matrix-vector products as one CSR matrix times a
+/// dense RHS batch.
+///
+/// Columns of `x_batch` are independent RHS vectors. The output layout is the
+/// same row-major dense matrix produced by [`spmm_into`]: each column contains
+/// one `A · x_j` result. This is the GPU-preferred route when more than one RHS
+/// vector is available, because it amortizes WGPU submission overhead through
+/// one sparse-dense dispatch.
+pub fn prepare_spmv_many<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &WgpuDevice,
+    a: &GpuCsrMatrix<T>,
+    x_batch: &B,
+    y_batch: &mut WgpuBuffer<T>,
+) -> Result<PreparedSpmm<T>> {
+    prepare_spmm(device, a, x_batch, y_batch)
+}
+
 /// Compute `C = A · B` into a pre-allocated output buffer `c`.
 pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &WgpuDevice,
@@ -105,91 +339,23 @@ pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a,
         return Ok(());
     }
 
-    b_op.layout
-        .validate_storage_len(b_op.buffer.len())
-        .map_err(map_layout_err)?;
-    let meta = SpmmMeta {
-        matrix_shape: [
-            to_u32(nrows, "CSR row count")?,
-            to_u32(ncols, "CSR column count")?,
-        ],
-        b_shape: [
-            to_u32(b_rows, "dense rhs row count")?,
-            to_u32(bcols, "dense rhs column count")?,
-        ],
-        b_strides: [
-            to_i32(b_op.layout.strides[0], "dense rhs row stride")?,
-            to_i32(b_op.layout.strides[1], "dense rhs column stride")?,
-        ],
-        offsets: [
-            to_u32(b_op.layout.offset, "dense rhs offset")?,
-            to_u32(a.row_ptr_offset(), "CSR row pointer offset")?,
-        ],
-    };
-
-    let width = BlockWidth::DEFAULT;
-    let groups = workgroups(expected_c_len, width)?;
-    let pipeline = cached_pipeline(
-        device,
-        (
-            std::any::TypeId::of::<SparseSpmmKernel<T>>(),
-            std::any::TypeId::of::<T>(),
-            width.get(),
-        ),
-        "hephaestus-spmm",
-        || spmm_shader_source::<T>(width),
-    );
-    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmmMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
-    device
-        .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-spmm"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: meta_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: a.values().buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: a.indices().buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: b_op.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: c.buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-spmm"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-spmm"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(groups, 1, 1);
-    }
-    device.queue().submit(Some(encoder.finish()));
-
+    prepare_spmm(device, a, b, c)?.dispatch();
     Ok(())
+}
+
+/// Compute multiple sparse matrix-vector products into a pre-allocated output
+/// batch.
+///
+/// This is an alias over the sparse-dense kernel with an explicit contract:
+/// columns of `x_batch` are independent RHS vectors, and columns of `y_batch`
+/// are the corresponding `A · x_j` outputs.
+pub fn spmv_many_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &WgpuDevice,
+    a: &GpuCsrMatrix<T>,
+    x_batch: &B,
+    y_batch: &mut WgpuBuffer<T>,
+) -> Result<()> {
+    spmm_into(device, a, x_batch, y_batch)
 }
 
 /// Compute `C = A · B`, allocating the result buffer.
@@ -210,4 +376,18 @@ pub fn spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     let mut c = device.alloc_zeroed::<T>(c_len)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)
+}
+
+/// Compute multiple sparse matrix-vector products, allocating the output batch.
+///
+/// Use this when several RHS vectors are available at once. For a single RHS
+/// vector, [`spmv`](super::spmv::spmv) preserves the vector-shaped output; for
+/// multiple RHS vectors, this route uses the SpMM kernel to increase useful GPU
+/// work per dispatch.
+pub fn spmv_many<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+    device: &WgpuDevice,
+    a: &GpuCsrMatrix<T>,
+    x_batch: &B,
+) -> Result<WgpuBuffer<T>> {
+    spmm(device, a, x_batch)
 }

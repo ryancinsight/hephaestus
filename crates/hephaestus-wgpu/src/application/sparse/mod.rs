@@ -1,10 +1,14 @@
 //! GPU-resident Compressed Sparse Row (CSR) matrix representation.
 
+mod batch;
 mod spmm;
 mod spmv;
 
-pub use spmm::{spmm, spmm_into};
-pub use spmv::{spmv, spmv_into};
+pub use batch::{submit_prepared_sparse_batch, PreparedSparseDispatch};
+pub use spmm::{
+    prepare_spmm, prepare_spmv_many, spmm, spmm_into, spmv_many, spmv_many_into, PreparedSpmm,
+};
+pub use spmv::{prepare_spmv, spmv, spmv_into, PreparedSpmv};
 
 use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;

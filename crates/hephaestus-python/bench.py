@@ -1,4 +1,5 @@
 import time
+import os
 import numpy as np
 import pyhephaestus as ph
 
@@ -11,13 +12,22 @@ except ImportError:
 
 def run_bench():
     print("======================================================================")
-    print("      Hephaestus (WGPU) vs NumPy (CPU) vs CuPy (GPU) Benchmark        ")
+    print("       Hephaestus (WGPU/CUDA) vs NumPy (CPU) vs CuPy Benchmark        ")
     print("======================================================================")
     print(f"CuPy available: {CUPY_AVAILABLE}\n")
 
-    # Initialize device
-    dev = ph.Device()
-    print(f"Initialized Hephaestus Device (Backend: {dev.backend_name})")
+    devices = []
+    requested = os.environ.get("HEPHAESTUS_BACKENDS", "wgpu,cuda")
+    for backend in [name.strip() for name in requested.split(",") if name.strip()]:
+        try:
+            dev = ph.Device(backend)
+            devices.append((backend, dev))
+            print(f"Initialized Hephaestus Device (Backend: {dev.backend_name})")
+        except RuntimeError as exc:
+            print(f"Skipping Hephaestus backend {backend}: {exc}")
+
+    if not devices:
+        raise RuntimeError("no Hephaestus backend initialized")
 
     sizes = [1_000, 10_000, 100_000, 1_000_000, 5_000_000]
 
@@ -29,33 +39,31 @@ def run_bench():
         a_host = np.random.uniform(-1.0, 1.0, size).astype(np.float32)
         b_host = np.random.uniform(-1.0, 1.0, size).astype(np.float32)
 
-        # Upload to Hephaestus
-        a_ph = ph.Array(a_host.tolist(), dev)
-        b_ph = ph.Array(b_host.tolist(), dev)
-
-        # Add correctness
-        add_ph = a_ph + b_ph
-        add_ph_host = np.array(add_ph.tolist(), dtype=np.float32)
         add_np = a_host + b_host
-        np.testing.assert_allclose(add_ph_host, add_np, rtol=1e-5, atol=1e-5)
-
-        # Exp correctness
-        exp_ph = a_ph.exp()
-        exp_ph_host = np.array(exp_ph.tolist(), dtype=np.float32)
         exp_np = np.exp(a_host)
-        np.testing.assert_allclose(exp_ph_host, exp_np, rtol=1e-5, atol=1e-5)
-
-        # Scalar operations correctness
-        scalar_add_ph = a_ph + 5.0
-        scalar_add_ph_host = np.array(scalar_add_ph.tolist(), dtype=np.float32)
         scalar_add_np = a_host + 5.0
-        np.testing.assert_allclose(scalar_add_ph_host, scalar_add_np, rtol=1e-5, atol=1e-5)
-
-        # Reduction sum correctness
-        sum_ph = a_ph.sum()
-        sum_ph_val = sum_ph.tolist()[0]
         sum_np = np.sum(a_host)
-        np.testing.assert_allclose(sum_ph_val, sum_np, rtol=1e-3, atol=1e-3)
+
+        hephaestus_times = []
+        for backend, dev in devices:
+            a_ph = ph.Array(a_host.tolist(), dev)
+            b_ph = ph.Array(b_host.tolist(), dev)
+
+            add_ph = a_ph + b_ph
+            np.testing.assert_allclose(np.array(add_ph.tolist(), dtype=np.float32), add_np, rtol=1e-5, atol=1e-5)
+            np.testing.assert_allclose(np.array(a_ph.exp().tolist(), dtype=np.float32), exp_np, rtol=1e-5, atol=1e-5)
+            np.testing.assert_allclose(np.array((a_ph + 5.0).tolist(), dtype=np.float32), scalar_add_np, rtol=1e-5, atol=1e-5)
+            np.testing.assert_allclose(a_ph.sum().tolist()[0], sum_np, rtol=1e-3, atol=1e-3)
+
+            for _ in range(5):
+                res_ph = a_ph + b_ph
+                res_ph = res_ph.exp()
+            t0 = time.perf_counter()
+            for _ in range(50):
+                res_ph = a_ph + b_ph
+                res_ph = res_ph.exp()
+            res_ph.tolist()
+            hephaestus_times.append((backend, (time.perf_counter() - t0) / 50.0))
 
         print("-> Correctness validation PASSED!")
 
@@ -66,19 +74,6 @@ def run_bench():
             res_np = a_host + b_host
             res_np = np.exp(res_np)
         t_np = (time.perf_counter() - t0) / 50.0
-
-        # Hephaestus (WGPU)
-        # Warmup
-        for _ in range(5):
-            res_ph = a_ph + b_ph
-            res_ph = res_ph.exp()
-        t0 = time.perf_counter()
-        for _ in range(50):
-            res_ph = a_ph + b_ph
-            res_ph = res_ph.exp()
-        # Wait for device queue to finish by downloading final result
-        res_ph.tolist()
-        t_ph = (time.perf_counter() - t0) / 50.0
 
         # CuPy
         t_cp = None
@@ -99,7 +94,8 @@ def run_bench():
 
         # Output times
         print(f"  NumPy (CPU) time:        {t_np * 1000:.3f} ms")
-        print(f"  Hephaestus (WGPU) time:  {t_ph * 1000:.3f} ms (Speedup vs NumPy: {t_np / t_ph:.2f}x)")
+        for backend, elapsed in hephaestus_times:
+            print(f"  Hephaestus ({backend}) time: {elapsed * 1000:.3f} ms (Speedup vs NumPy: {t_np / elapsed:.2f}x)")
         if CUPY_AVAILABLE:
             print(f"  CuPy (CUDA GPU) time:    {t_cp * 1000:.3f} ms (Speedup vs NumPy: {t_np / t_cp:.2f}x)")
 

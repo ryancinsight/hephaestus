@@ -2,6 +2,7 @@
 
 Harness: `crates/hephaestus-wgpu/benches/comparative.rs` (`cargo bench --bench comparative -p hephaestus-wgpu`).
 Methodology: 50 iterations, wall-time divided by iteration count, including GPU synchronization (`poll(wgpu::PollType::Wait)`) on the host side.
+Reduction rows were refreshed with `HEPHAESTUS_BENCH_DISABLE_CUDA=1` because the CUDA-enabled comparative harness terminates after the first CUDA timing on this host before reaching the reduction section.
 Synchronization profile harness: `crates/hephaestus-wgpu/benches/decomposition_sync.rs` (`cargo bench --bench decomposition_sync -p hephaestus-wgpu`).
 Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (`cargo bench --bench sparse_comparative -p hephaestus-wgpu`).
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
@@ -13,11 +14,11 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Elementwise Add** ($N = 2^{20}$) | 60.97 µs | 1.02 ms | 1.04 ms | — | **16.73x** | **17.06x** | — |
 | **Elementwise Exp** ($N = 2^{20}$) | 70.18 µs | 1.90 ms | 1.88 ms | — | **27.07x** | **26.79x** | — |
-| **Sum Reduction** ($N = 2^{20}$) | 116.97 µs | 73.48 µs | 84.22 µs | — | **0.63x** | **0.72x** | — |
-| **Axis Sum** (256x256 over axis 0) | 110.33 µs | 44.84 µs | 3.34 µs | 15.80 µs | **0.41x** | **0.030x** | **0.14x** |
-| **Axis Min** (256x256 over axis 0) | 94.83 µs | 49.85 µs | 4.43 µs | 5.90 µs | **0.53x** | **0.047x** | **0.062x** |
-| **Axis Max** (256x256 over axis 0) | 75.13 µs | 49.06 µs | 4.28 µs | 5.49 µs | **0.65x** | **0.057x** | **0.078x** |
-| **Axis Mean** (256x256 over axis 0) | 73.25 µs | 44.45 µs | 4.57 µs | 15.59 µs | **0.61x** | **0.062x** | **0.21x** |
+| **Sum Reduction** ($N = 2^{20}$, prepared final pass) | 42.70 µs | 63.09 µs | 85.47 µs | — | **1.48x** | **2.00x** | — |
+| **Axis Sum** (256x256 over axis 0, axis-0 tiled prepared) | 22.14 µs | 10.45 µs | 6.53 µs | 36.13 µs | **0.47x** | **0.29x** | **1.63x** |
+| **Axis Min** (256x256 over axis 0, axis-0 tiled prepared) | 20.73 µs | 5.41 µs | 4.63 µs | 8.67 µs | **0.26x** | **0.22x** | **0.42x** |
+| **Axis Max** (256x256 over axis 0, axis-0 tiled prepared) | 11.78 µs | 5.36 µs | 4.42 µs | 5.17 µs | **0.46x** | **0.38x** | **0.44x** |
+| **Axis Mean** (256x256 over axis 0, axis-0 tiled prepared) | 18.05 µs | 7.17 µs | 5.88 µs | 18.24 µs | **0.40x** | **0.33x** | **1.01x** |
 | **Matmul 64x64** | 58.61 µs | 31.29 µs | 5.84 µs | 14.74 µs | **0.53x** | **0.10x** | **0.25x** |
 | **Matmul 256x256** | 47.47 µs | 929.51 µs | 251.41 µs | 1.10 ms | **19.58x** | **5.30x** | **23.17x** |
 | **Cumsum** (256x256 over axis 1) | 46.53 µs | 30.70 µs | 108.60 µs | 136.39 µs | **0.66x** | **2.33x** | **2.93x** |
@@ -49,18 +50,18 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 | **Matrix Exponential** (32x32) | 151.85 µs | 57.83 µs | — | — | **0.38x** | — | — |
 | **PRNG Uniform** ($N = 2^{20}$) | 4.02 ms | 1.79 ms | — | — | **0.45x** | — | — |
 | **PRNG Normal** ($N = 2^{20}$) | 17.12 ms | 14.13 ms | — | — | **0.83x** | — | — |
-| **SpMV** ($1000 \times 1000$ CSR) | 100.89 µs | 1.28 µs | — | — | **0.013x** | — | — |
-| **SpMM** ($1000 \times 1000 \times 128$) | 73.63 µs | 32.47 µs | — | — | **0.44x** | — | — |
+| **SpMV** ($1000 \times 1000$ CSR, prepared reusable output) | 61.15 µs | 1.23 µs | — | — | **0.020x** | — | — |
+| **Batched SpMV via `spmv_many`** ($1000 \times 1000$ CSR, 128 RHS vectors) | 62.76 µs | 150.41 µs | — | — | **2.40x** | — | — |
+| **SpMM** ($1000 \times 1000 \times 128$, warmed batched prepared outputs, dense RHS fast path) | 12.26 µs | 35.23 µs | — | — | **2.87x** | — | — |
 
 ## Synchronization Profile
 
 | Profile | Measured floor |
 | --- | --- |
-| **Blocked LU 66x66 transfer/synchronization floor** | 333.6 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 219.9 µs |
-| **Blocked QR 70x35 CPU panel lower bound** | 25.3 µs |
-| **Blocked QR 70x35 final Leto recompute** | 12.9 µs |
-| **Blocked QR one-pass panel timestamp total** | 8.3 µs |
+| **Blocked LU 66x66 transfer/synchronization floor** | 321.4 µs |
+| **Blocked QR 70x35 transfer/synchronization floor** | 213.2 µs |
+| **Blocked QR 70x35 CPU panel lower bound** | 26.4 µs |
+| **Blocked QR one-pass panel timestamp total** | 7.8 µs |
 | **Blocked QR one-pass panel timestamp median** | 192 ns |
 
 ## Analysis
@@ -68,6 +69,8 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 1. **Compute vs. Memory Bandwidth & GPU Scaling**:
    - For **Elementwise Add** (memory-bound, low arithmetic intensity), the GPU reaches $\approx 60.97 \text{ µs/iter}$, outperforming Leto by $\approx 16.73\times$ and `ndarray` by $\approx 17.06\times$.
    - For **Elementwise Exp** (compute-bound, high arithmetic intensity), the GPU reaches $\approx 70.18 \text{ µs/iter}$, outperforming Leto by $\approx 27.07\times$ and `ndarray` by $\approx 26.79\times$.
+   - For **Sum Reduction**, the scalar path now has a final reduction shader that lets one workgroup fold up to `BlockWidth * BlockWidth` partials, reducing the $2^{20}$ sum tree from three compute passes to two. The latest full comparative run measures WGPU at $\approx 42.70 \text{ µs/iter}$ against `ndarray` at $\approx 85.47 \text{ µs/iter}$.
+   - For **Axis Reductions**, the WGPU path now uses an axis-0 tiled shader for row-reducing rank-2 inputs: each workgroup reduces up to 16 output columns instead of launching one workgroup per output element. This removes the prior pathological max/mean rows, but the downstream Leto row-major CPU fast path remains faster than WGPU for this 65,536-element workload. WGPU is still overhead-bound for this small-axis shape, so the parity route is a measured CPU small-axis policy or tighter multi-axis GPU batching rather than more per-element shader arithmetic.
    - For **Matmul 256x256**, the GPU reaches $\approx 47.47 \text{ µs/iter}$ due to optimized parallel matrix contraction tiles, achieving **19.58x** speedup over Leto CPU and **23.17x** over nalgebra CPU.
 
 2. **Driver Overhead and Reflector Batching**:
@@ -75,15 +78,21 @@ Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
    - **Householder Reflector Batching**: In the blocked QR algorithm, we batched all compute passes for the panel inside a single command encoder and submitted it exactly once per panel instead of issuing separate submissions and waiting/polling. This reduced host-GPU queue submission traffic by **32x**, leading to a **2.6x** speedup on **Blocked QR Decomposition (70x35)**, dropping execution time from **2.90 ms** to **1.10 ms**.
    - CUDA blocked QR was similarly optimized by packing Householder vectors and uploading them once per panel, avoiding 32 separate allocations and uploads.
    - The blocked QR component profile measures the CPU panel lower bound at
-     **25.3 µs** and the final Leto recompute at **12.9 µs** for 70x35,
-     while the synthetic host/device synchronization floor remains
-     **219.9 µs**. At this shape, the next measured bottleneck is transfer
-     and synchronization, not CPU panel arithmetic.
+     **25.3 µs** for 70x35, while the synthetic host/device synchronization
+     floor remains **219.9 µs**. The production path constructs the host-side
+     `QrDecomposition` from the blocked factors with `from_raw_parts`, so the
+     obsolete final Leto recompute is no longer profiled. At this shape, the next
+     measured bottleneck is transfer and synchronization, not CPU panel
+     arithmetic.
    - Packing Householder vector offsets and beta coefficients into one
      reflector metadata buffer reduces per-panel metadata uploads and storage
-     bindings from two to one. The 70x35 blocked QR row still trails Leto and
-     `nalgebra` after this change, so this is static transfer-surface
-     reduction, not measured performance parity.
+     bindings from two to one. Reusing one Householder metadata uniform and bind
+     group across blocked-QR panels removes another per-panel CPU-side WGPU
+     resource construction. Delaying the full matrix copy until after the first
+     panel readback lets the first panel read from the original input buffer and
+     avoids placing the full copy on the critical path before the first CPU
+     panel factorization. The 70x35 synchronization profile improved to
+     **213.2 µs**, but remains transfer-bound.
 
 ---
 

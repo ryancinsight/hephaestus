@@ -1,5 +1,270 @@
 # Checklist — hephaestus
 
+2026-07-01 (WGPU tiled axis-0 reductions). Added a WGPU axis-0 tiled reduction
+kernel for rank-2 reductions so one workgroup reduces up to 16 output columns
+instead of launching one workgroup per output element. This preserves the
+existing generic axis API and fallback paths while reducing the 256x256 axis-0
+case from 256 workgroups to 16. Evidence tier: value-semantic contract tests and
+empirical benchmark: `cargo nextest run -p hephaestus-wgpu
+reduction_sum_matches_cpu_reference axis_reductions_match_leto_reference` (2/2);
+`HEPHAESTUS_BENCH_DISABLE_CUDA=1 cargo bench -p hephaestus-wgpu --bench
+comparative` (prepared final-pass scalar sum: WGPU 42.702 µs, Leto 63.090 µs,
+ndarray 85.468 µs; axis sum: WGPU 22.136 µs, Leto 10.446 µs, ndarray 6.528 µs;
+axis min: WGPU 20.726 µs, Leto 5.406 µs, ndarray 4.634 µs; axis max: WGPU
+11.778 µs, Leto 5.360 µs, ndarray 4.422 µs; axis mean: WGPU 18.048 µs, Leto
+7.172 µs, ndarray 5.876 µs). Residual parity gap: WGPU scalar sum beats ndarray,
+and the tiled axis kernel removes the previous max/mean outliers, but CPU still
+wins the 256x256 axis-0 shape. The next reduction slice should add measured
+small-axis routing or fuse multiple axis statistics into one GPU pass.
+
+2026-07-01 (Cross-layer reduction rerun with Leto axis fast path). Added a
+Leto `leto-ops` row-major rank-2 axis-0 fast path for contiguous CPU axis
+reductions, then reran the Hephaestus comparative harness against the local Leto
+provider. Evidence tier: value-semantic Leto axis tests plus empirical
+Hephaestus comparative benchmark: `cargo nextest run -p leto-ops reduction
+sum_mean_axis_match_ndarray` (16/16). The Leto CPU axis fast path is now at or
+near ndarray for the 256x256 axis-0 shape.
+
+2026-07-01 (WGPU final-pass and batched axis reductions). Added a final scalar
+reduction WGSL kernel that lets one workgroup fold up to `BlockWidth *
+BlockWidth` partials, reducing the $2^{20}$ scalar sum tree from three compute
+passes to two. Added `submit_prepared_reduction_batch` and
+`submit_prepared_axis_reduction_batch` over independent prepared outputs; the
+comparative axis rows now measure warmed batched prepared axis reductions.
+Evidence tier: value-semantic CPU/Leto differential contracts plus empirical
+comparative benchmark: `cargo fmt -p hephaestus-wgpu`; `cargo check -p
+hephaestus-wgpu --bench comparative`; `cargo nextest run -p hephaestus-wgpu
+reduction_sum_matches_cpu_reference axis_reductions_match_leto_reference` (2/2);
+`HEPHAESTUS_BENCH_DISABLE_CUDA=1 cargo bench -p hephaestus-wgpu --bench
+comparative` (prepared final-pass scalar sum: WGPU 112.584 µs, Leto 61.218 µs,
+ndarray 80.860 µs; warmed batched prepared axis sum: WGPU 11.596 µs, Leto
+43.756 µs, ndarray 3.802 µs; axis min: WGPU 11.770 µs, Leto 46.962 µs, ndarray
+4.452 µs; axis max: WGPU 14.456 µs, Leto 48.192 µs, ndarray 4.412 µs; axis
+mean: WGPU 8.826 µs, Leto 42.102 µs, ndarray 4.640 µs). Residual parity gap:
+axis reductions now beat Leto but not `ndarray`; scalar sum remains slower than
+`ndarray` on the latest full comparative run. Lower-level follow-up should
+target WGPU pass/submit planning in Hephaestus/Mnemosyne/Moirai before touching
+Hermes SIMD or Leto CPU arithmetic.
+
+2026-07-01 (WGPU prepared scalar reduction). Added `PreparedReduction` plus
+`prepare_reduction`/`prepare_reduction_with_width` so repeated scalar
+reductions over a fixed input can reuse the compiled pipeline, tree scratch
+buffers, and bind groups. The comparative sum-reduction row now times this
+prepared path. Evidence tier: value-semantic CPU-reference contract plus
+empirical comparative benchmark: `cargo fmt -p hephaestus-wgpu`; `cargo check
+-p hephaestus-wgpu --bench comparative`; `cargo nextest run -p hephaestus-wgpu
+reduction_sum_matches_cpu_reference axis_reductions_match_leto_reference` (2/2);
+`HEPHAESTUS_BENCH_DISABLE_CUDA=1 cargo bench -p hephaestus-wgpu --bench
+comparative` (prepared sum reduction: WGPU 123.488 µs, Leto 59.428 µs, ndarray
+84.580 µs; prepared axis sum: WGPU 41.190 µs, Leto 42.052 µs, ndarray 4.800
+µs; prepared axis min: WGPU 58.470 µs, Leto 47.432 µs, ndarray 4.598 µs;
+prepared axis max: WGPU 45.244 µs, Leto 47.148 µs, ndarray 4.676 µs; prepared
+axis mean: WGPU 68.860 µs, Leto 43.200 µs, ndarray 5.456 µs). Residual parity
+gap: the prepared scalar path removes allocation/setup churn but does not beat
+the old scalar comparative row on this run because repeated queued dispatches
+reuse the same scratch/output buffers; the next scalar lever is batched
+independent-output prepared reductions or a persistent scratch strategy measured
+under dispatch-and-wait semantics.
+
+2026-07-01 (WGPU prepared axis-reduction dispatch). Added
+`PreparedAxisReduction` and `prepare_{sum,min,max,mean}_axis_into` so repeated
+rank-2 axis reductions over fixed input/output buffers reuse the selected
+pipeline, metadata uniform, and bind group. The comparative axis-reduction rows
+now time the prepared WGPU path, while the one-shot APIs keep their existing
+surface and share the same pipeline-selection helper. Evidence tier:
+value-semantic Leto differential contract plus empirical comparative benchmark:
+`cargo fmt -p hephaestus-wgpu`; `cargo check -p hephaestus-wgpu --bench
+comparative`; `cargo nextest run -p hephaestus-wgpu
+axis_reductions_match_leto_reference` (1/1); `HEPHAESTUS_BENCH_DISABLE_CUDA=1
+cargo bench -p hephaestus-wgpu --bench comparative` (sum reduction: WGPU
+104.712 µs, Leto 69.016 µs, ndarray 80.004 µs; prepared axis sum: WGPU 42.302
+µs, Leto 42.508 µs, ndarray 5.136 µs; prepared axis min: WGPU 61.540 µs, Leto
+46.442 µs, ndarray 4.888 µs; prepared axis max: WGPU 29.742 µs, Leto 46.974 µs,
+ndarray 5.134 µs; prepared axis mean: WGPU 41.566 µs, Leto 40.030 µs, ndarray
+5.946 µs). Residual parity gap: prepared axis sum is at Leto parity, axis max
+beats Leto, and axis mean is near Leto, but all prepared axis rows still trail
+`ndarray` because one WGPU submit/poll remains dominant at 256x256. Scalar sum
+still trails `ndarray` on the latest run because it allocates multi-pass
+intermediate buffers and creates per-pass bind groups per call.
+
+2026-07-01 (WGPU axis-reduction workgroup path). Replaced the rank-2 axis
+sum/min/max/mean default path for reduced axes that fit the selected
+`BlockWidth` with one workgroup per output element and a workgroup-memory tree
+reduction, while preserving the existing one-thread-per-output shader as the
+long-axis fallback. The contract test now value-checks the default parallel path
+against Leto and forces the fallback with a narrow width. Evidence tier:
+value-semantic Leto differential contract plus empirical comparative benchmark:
+`cargo fmt -p hephaestus-wgpu`; `cargo check -p hephaestus-wgpu --bench
+comparative`; `cargo nextest run -p hephaestus-wgpu
+axis_reductions_match_leto_reference` (1/1); `HEPHAESTUS_BENCH_DISABLE_CUDA=1
+cargo bench -p hephaestus-wgpu --bench comparative` (sum reduction: WGPU
+83.526 µs, Leto 77.748 µs, ndarray 80.048 µs; axis sum: WGPU 77.384 µs, Leto
+42.458 µs, ndarray 5.556 µs; axis min: WGPU 66.898 µs, Leto 48.738 µs,
+ndarray 4.968 µs; axis max: WGPU 35.524 µs, Leto 46.774 µs, ndarray 4.802 µs;
+axis mean: WGPU 73.462 µs, Leto 42.220 µs, ndarray 6.654 µs). Residual parity
+gap: scalar sum is near ndarray on this run and axis max beats Leto, but axis
+sum/min/mean remain below Leto/ndarray for 256x256 because fixed WGPU
+submit/poll and per-call uniform/bind-group setup dominate the workload. Next
+concrete increment: add prepared/reused axis-reduction dispatch for fixed
+input/output/layouts before attempting multi-pass long-axis parallelization.
+
+2026-07-01 (Blocked QR delayed work-buffer copy). Moved the blocked-QR full
+matrix copy out of the pre-loop critical path. The first panel now downloads
+from the original input buffer; immediately after that readback, the full input
+copy to `work_buf` is queued so it can overlap the first CPU panel
+factorization before any panel write/update touches `work_buf`. Queue ordering
+preserves correctness for later panels. Evidence tier: value-semantic blocked
+QR contract tests plus empirical component benchmark: `cargo fmt -p
+hephaestus-wgpu --check`; `cargo check -p hephaestus-wgpu --bench
+decomposition_sync`; `cargo nextest run -p hephaestus-wgpu blocked_qr` (4/4);
+`cargo bench -p hephaestus-wgpu --bench decomposition_sync` (QR sync floor
+213.209 µs, CPU panel lower bound 26.369 µs, timestamp total 7.776 µs, median
+192 ns). Residual parity gap: blocked QR is still transfer/synchronization
+bound, but the first-panel dependency chain is reduced.
+
+2026-07-01 (Blocked QR Householder resource reuse). Hoisted the blocked-QR
+Householder metadata uniform buffer, bind group, and host reflector-metadata
+scratch out of the panel loop. Each panel now rewrites the invariant uniform and
+reflector buffers but does not recreate the bind group or allocate a fresh
+metadata vector. Evidence tier: value-semantic blocked-QR contract tests plus
+empirical component benchmark: `cargo fmt -p hephaestus-wgpu --check`; `cargo
+check -p hephaestus-wgpu --bench decomposition_sync`; `cargo nextest run -p
+hephaestus-wgpu blocked_qr` (4/4); `cargo bench -p hephaestus-wgpu --bench
+decomposition_sync` (QR sync floor 230.962 µs, CPU panel lower bound 28.438 µs,
+timestamp total 7.904 µs, median 192 ns). Residual parity gap: no measured QR
+speedup from bind-group/metadata hoisting; blocked QR is still dominated by
+host/device panel transfer and synchronization.
+
+2026-07-01 (Python/CUDA `spmv_many` surface). Wired the multi-RHS sparse route
+through CUDA and `hephaestus-python`: CUDA now exposes `spmv_many`/
+`spmv_many_into` as aliases over its sparse-dense kernel, and Python exposes
+`hp.spmv_many(...)` across WGPU and CUDA backends. The Rust-side Python sparse
+contract now checks `spmv_many` against the existing SpMM output, and the SciPy
+parity suite has an external `spmv_many` regression. Evidence tier:
+value-semantic in-crate binding test plus static diagnostics: `cargo check -p
+hephaestus-cuda`; `cargo check -p hephaestus-python`; `cargo fmt -p
+hephaestus-wgpu -p hephaestus-cuda -p hephaestus-python --check`; `cargo
+nextest run -p hephaestus-python test_py_sparse_matrix_roundtrip_spmv_spmm`
+(1/1). Residual validation gap: the external pytest/CuPy/SciPy suite was
+updated but not run in this slice; Python wheel-level parity remains an
+environment gate.
+
+2026-07-01 (WGPU `spmv_many` public surface). Added explicit multi-RHS SpMV
+APIs (`spmv_many`, `spmv_many_into`, `prepare_spmv_many`) as thin Rust-owned
+wrappers over the existing CSR×dense SpMM kernel, making the measured
+GPU-preferred route discoverable without duplicating kernels. Contract coverage
+checks allocating, caller-owned, and prepared `spmv_many` outputs against the
+SpMM reference. Evidence tier: value-semantic WGPU sparse contract plus
+empirical API-level benchmark: `cargo fmt -p hephaestus-wgpu --check`; `cargo
+check -p hephaestus-wgpu --bench sparse_comparative`; `cargo nextest run -p
+hephaestus-wgpu --test contract test_wgpu_sparse_matrix_spmv_spmm` (1/1);
+`cargo bench -p hephaestus-wgpu --bench sparse_comparative` (single prepared
+SpMV: WGPU 61.146 µs, Leto 1.232 µs; `spmv_many`, 128 RHS vectors: WGPU 62.758
+µs, repeated Leto SpMV 150.414 µs; warmed batched prepared SpMM: WGPU 12.258
+µs, Leto 35.232 µs). Residual parity gap: single-vector SpMV is still
+submit-bound; multi-RHS SpMV now has a named WGPU route above repeated Leto CPU
+on the focused benchmark.
+
+2026-07-01 (WGPU batched-SpMV policy evidence). Extended the focused sparse
+benchmark with an explicit multi-RHS SpMV regime: Leto CPU runs 128 individual
+`spmv` calls per iteration, while WGPU runs the equivalent CSR×dense-RHS
+product through prepared SpMM and validates against Leto sparse-dense output.
+Evidence tier: differential value check inside the benchmark plus empirical
+local timings: `cargo fmt -p hephaestus-wgpu --check`; `cargo check -p
+hephaestus-wgpu --bench sparse_comparative`; `cargo bench -p hephaestus-wgpu
+--bench sparse_comparative` (single prepared SpMV: WGPU 100.482 µs, Leto 1.232
+µs; batched SpMV via SpMM, 128 RHS vectors: WGPU 34.352 µs, repeated Leto SpMV
+143.132 µs; warmed batched prepared SpMM: WGPU 10.450 µs, Leto 41.638 µs).
+Residual parity gap: single-vector SpMV remains below CPU parity because the
+useful work per submit is too small; multi-vector SpMV has a documented GPU
+route that exceeds repeated Leto CPU SpMV.
+
+2026-07-01 (WGPU sparse batched-submit amortization). Added
+`PreparedSparseDispatch` and `submit_prepared_sparse_batch` so multiple
+prepared sparse products can be encoded into one WGPU command buffer and
+submitted once. The sparse contract now value-checks batched prepared SpMV and
+SpMM outputs against the allocating WGPU/Leto paths. The focused benchmark uses
+the fastest measured strategy per operation: prepared one-shot SpMV because the
+single-row-work tiny kernel remains submit-bound, and warmed independent-output
+batched SpMM because the larger RHS amortizes submission and exceeds Leto CPU
+on this local run. Evidence tier: value-semantic WGPU/Leto differential
+contract and empirical local benchmark: `cargo fmt -p hephaestus-wgpu
+--check`; `cargo check -p hephaestus-wgpu --bench sparse_comparative`; `cargo
+nextest run -p hephaestus-wgpu --test contract
+test_wgpu_sparse_matrix_spmv_spmm` (1/1); `cargo bench -p hephaestus-wgpu
+--bench sparse_comparative` (prepared SpMV: WGPU 65.954 µs, Leto 1.302 µs;
+warmed batched prepared SpMM with dense RHS fast path: WGPU 11.940 µs, Leto
+38.466 µs). Residual parity gap: SpMV remains below Leto CPU parity at this
+small 3-nnz/row shape; SpMM is now faster than Leto in the warmed batched
+repeated-dispatch regime.
+
+2026-07-01 (WGPU sparse prepared-dispatch API). Added `prepare_spmv` and
+`prepare_spmm` public APIs plus `PreparedSpmv::dispatch` and
+`PreparedSpmm::dispatch` so repeated sparse products with fixed buffers reuse
+the compiled pipeline, metadata uniform, and bind group instead of rebuilding
+them per iteration. Existing `spmv_into`/`spmm_into` remain source-compatible
+one-shot paths. The focused sparse comparative benchmark now measures the
+prepared path for repeated GPU use. Evidence tier: value-semantic WGPU/Leto
+differential contract and empirical local benchmark: `cargo fmt -p
+hephaestus-wgpu --check`; `cargo check -p hephaestus-wgpu --bench
+sparse_comparative`; `cargo nextest run -p hephaestus-wgpu --test contract
+test_wgpu_sparse_matrix_spmv_spmm` (1/1); `cargo bench -p hephaestus-wgpu
+--bench sparse_comparative` (prepared SpMV: WGPU 62.636 µs, Leto 1.222 µs;
+prepared SpMM with dense RHS fast path: WGPU 48.740 µs, Leto 35.498 µs).
+Residual parity gap: SpMM is closer to Leto CPU parity at 0.73x on this local
+run; SpMV remains dominated by WGPU submission/poll overhead for this tiny
+3-nnz/row workload.
+
+2026-07-01 (WGPU sparse dense-RHS SpMM fast path). Added a C-dense RHS WGPU
+SpMM kernel variant that preserves the existing generic strided path for views
+while removing signed stride arithmetic from the contiguous-RHS inner loop.
+Evidence tier: value-semantic WGPU/Leto differential contract and empirical
+local benchmark: `cargo fmt -p hephaestus-wgpu --check`; `cargo check -p
+hephaestus-wgpu --bench sparse_comparative`; `cargo nextest run -p
+hephaestus-wgpu --test contract test_wgpu_sparse_matrix_spmv_spmm` (1/1);
+`cargo bench -p hephaestus-wgpu --bench sparse_comparative` (SpMV reusable
+output: WGPU 158.024 µs, Leto 1.484 µs; SpMM reusable output with dense RHS
+fast path: WGPU 84.978 µs, Leto 40.752 µs). Residual parity gap: fixed WGPU
+submission/synchronization overhead still dominates SpMV and keeps SpMM below
+Leto CPU parity at this problem size.
+
+2026-06-30 (WGPU sparse reusable-output parity). Strengthened WGPU CSR sparse
+coverage so `spmv_into` and `spmm_into` are value-checked against allocating
+`spmv`/`spmm` outputs and prove pre-existing caller-owned output buffers are
+overwritten with Leto-matching values. Updated the focused sparse comparative
+benchmark timed loops to use reusable caller-owned outputs, so repeated GPU
+dispatch is measured without per-iteration output allocation noise. Evidence
+tier: value-semantic WGPU/Leto differential contract and static diagnostics:
+`cargo nextest run -p hephaestus-wgpu --test contract
+test_wgpu_sparse_matrix_spmv_spmm` (1/1); `cargo check -p hephaestus-wgpu
+--bench sparse_comparative`; `cargo fmt -p hephaestus-wgpu --check`; `cargo
+bench -p hephaestus-wgpu --bench sparse_comparative` (SpMV reusable output:
+WGPU 130.940 µs, Leto 1.320 µs; SpMM reusable output: WGPU 88.480 µs, Leto
+36.730 µs).
+
+2026-06-30 (CUDA strided-scalar scalar-argument kernel). Replaced
+`hephaestus-cuda` strided scalar elementwise lowering through a one-element
+device buffer with a dedicated scalar strided CUDA kernel that passes the scalar
+as a launch argument. The public scalar API still validates/broadcasts the input
+layout through the same strided metadata path and preserves scalar/binary
+broadcast semantics. Evidence tier: static diagnostics and value-semantic CUDA
+strided contracts on available CUDA runtime: `cargo check -p hephaestus-cuda`;
+`cargo fmt -p hephaestus-cuda --check`; `cargo nextest run -p hephaestus-cuda
+--test strided` (11/11).
+
+2026-06-30 (Python WGPU/CUDA linalg binding surface). Wired
+`hephaestus-python` `Device`, `Array`, and `SparseMatrix` through backend-aware
+Rust wrappers so existing Python linalg, sparse, RNG, and elementwise APIs run
+on WGPU by default or CUDA via `Device("cuda")` when available. Updated Python
+comparative benchmarks to label/select Hephaestus backend explicitly and added
+CUDA-backed Python parity coverage plus mixed-backend rejection coverage.
+Verified: `cargo check -p hephaestus-python`, `cargo fmt --check`,
+`cargo nextest run -p hephaestus-python` (3/3). The bidiagonal factor-contract
+blocker is resolved in local Leto by applying reflector-major panels
+sequentially when accumulating returned `U`/`V` factors. Verified provider gate:
+`cargo nextest run -p leto-ops bidiagonalize_tall` (1/1). Verified Hephaestus
+gate: `cargo nextest run -p hephaestus-wgpu --test contract` (94/94).
+
 2026-06-26 (CUDA dynamic-rank strided delegation). Added
 `hephaestus-cuda` dynamic-rank strided elementwise entry points over borrowed
 shape/stride slices so runtime-shaped consumers can delegate strided CUDA
@@ -26,7 +291,8 @@ contiguous path already uses a pooled uniform). Added a dedicated
 `StridedScalarKernel` reading the scalar from a pooled uniform — no per-call
 storage operand, value-identical (verified). Recorded the storage-pool
 examination (deferred: within-call buffers are submit-pinned, cross-call needs
-fences) and the CUDA strided-scalar parity follow-on (hardware-blocked).
+fences). The CUDA strided-scalar follow-on is closed by the 2026-06-30
+scalar-argument kernel entry above.
 Verified: `cargo fmt`, `cargo clippy -p hephaestus-wgpu --all-targets -- -D
 warnings`, strided/scalar contract tests, full workspace nextest, doctests.
 
@@ -336,14 +602,16 @@ and `cargo bench -p hephaestus-wgpu --bench sparse_comparative --locked`.
   and GPU-timeline timestamp-query measurement.
 - Additional blocked QR component-profile evidence: extended
   `decomposition_sync` to measure the 70x35 CPU panel-factorization lower
-  bound and the final Leto recompute paid by `qr_decompose_blocked`.
+  bound and removed the obsolete final-Leto-recompute profile row. The
+  production path builds the host-side `QrDecomposition` from computed blocked
+  factors with `from_raw_parts`.
   `rustfmt --edition 2021 --check
   crates/hephaestus-wgpu/benches/decomposition_sync.rs`; `cargo check -p
   hephaestus-wgpu --bench decomposition_sync`; `cargo clippy -p
   hephaestus-wgpu --bench decomposition_sync -- -D warnings`; `cargo bench -p
   hephaestus-wgpu --bench decomposition_sync` (LU sync floor 359.6 µs, QR sync
-  floor 222.6 µs, QR CPU panel lower bound 26.3 µs, QR final Leto recompute
-  11.5 µs, QR timestamp total 8.2 µs, median 160 ns). Evidence tier: static
+  floor 222.6 µs, QR CPU panel lower bound 26.3 µs, QR timestamp total 8.2 µs,
+  median 160 ns). Evidence tier: static
   diagnostics, empirical component benchmark, and GPU-timeline timestamp-query
   measurement.
 - Additional blocked QR metadata-transfer evidence: packed the panel
@@ -356,11 +624,30 @@ and `cargo bench -p hephaestus-wgpu --bench sparse_comparative --locked`.
   -D warnings`; `cargo nextest run -p hephaestus-wgpu blocked_qr -j 1
   --no-fail-fast` (4 passed); `cargo bench -p hephaestus-wgpu --bench
   decomposition_sync` (QR sync floor 219.9 µs, CPU panel lower bound 25.3 µs,
-  final Leto recompute 12.9 µs, timestamp total 8.3 µs, median 192 ns);
+  timestamp total 8.3 µs, median 192 ns);
   `cargo bench -p hephaestus-wgpu --bench comparative` (blocked QR 70x35
   480.8 µs, Leto 14.9 µs, nalgebra 10.0 µs). Evidence tier:
   value-semantic blocked QR tests, static diagnostics, empirical benchmark,
   and GPU-timeline timestamp-query measurement.
+- Additional blocked QR WGPU-resource reuse evidence: hoisted the Householder
+  metadata uniform and bind group out of the panel loop and reused host
+  reflector metadata scratch. `cargo fmt -p hephaestus-wgpu --check`; `cargo
+  check -p hephaestus-wgpu --bench decomposition_sync`; `cargo nextest run -p
+  hephaestus-wgpu blocked_qr` (4 passed); `cargo bench -p hephaestus-wgpu
+  --bench decomposition_sync` (QR sync floor 230.962 µs, CPU panel lower bound
+  28.438 µs, timestamp total 7.904 µs, median 192 ns). Evidence tier:
+  value-semantic blocked QR tests, static diagnostics, empirical component
+  benchmark, and GPU-timeline timestamp-query measurement.
+- Additional blocked QR delayed-copy evidence: first panel downloads from the
+  original input buffer before the full copy to `work_buf` is queued, allowing
+  the copy to overlap first-panel CPU factorization while queue ordering
+  preserves later `work_buf` writes. `cargo fmt -p hephaestus-wgpu --check`;
+  `cargo check -p hephaestus-wgpu --bench decomposition_sync`; `cargo nextest
+  run -p hephaestus-wgpu blocked_qr` (4 passed); `cargo bench -p
+  hephaestus-wgpu --bench decomposition_sync` (QR sync floor 213.209 µs, CPU
+  panel lower bound 26.369 µs, timestamp total 7.776 µs, median 192 ns).
+  Evidence tier: value-semantic blocked QR tests, static diagnostics, empirical
+  component benchmark, and GPU-timeline timestamp-query measurement.
 
 ## Unreleased CUDA Leto parity application surface [minor]
 - [x] CUDA exports mirror the current WGPU/Leto core operation and decomposition slice:
@@ -382,9 +669,11 @@ and `cargo bench -p hephaestus-wgpu --bench sparse_comparative --locked`.
   --check` over the WGPU sparse/module/export files; `cargo nextest run -p
   hephaestus-wgpu sparse -j 1 --no-fail-fast` (1 passed);
   `cargo check -p hephaestus-wgpu --bench sparse_comparative`;
-  `cargo bench -p hephaestus-wgpu --bench sparse_comparative` (SpMV
-  1000x1000 CSR: WGPU 122.216 µs, Leto 1.274 µs; SpMM 1000x1000x128:
-  WGPU 50.046 µs, Leto 38.346 µs). Evidence tier: static diagnostics,
+  `cargo bench -p hephaestus-wgpu --bench sparse_comparative` (latest prepared
+  SpMV 1000x1000 CSR reusable output: WGPU 61.146 µs, Leto 1.232 µs; latest
+  `spmv_many` with 128 RHS vectors: WGPU 62.758 µs, repeated Leto SpMV
+  150.414 µs; latest warmed batched prepared SpMM 1000x1000x128 reusable output
+  with dense RHS fast path: WGPU 12.258 µs, Leto 35.232 µs). Evidence tier: static diagnostics,
   value-semantic GPU sparse contract test, value-checked benchmark outputs,
   and empirical local benchmark.
 - Evidence: `cargo fmt -p hephaestus-wgpu -p hephaestus-cuda --check`; `cargo

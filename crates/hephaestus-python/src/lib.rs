@@ -1,26 +1,241 @@
 // ── Hephaestus Python Bindings (pyhephaestus) ──
 
-use hephaestus_wgpu::{
-    dot, matmul, norm_l1, norm_l2, norm_max, trace, AbsOp, AddOp, ComputeDevice, CosOp,
-    DeviceBuffer, DivOp, ExpOp, LnOp, MaxOp, MinOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp,
-    StridedOperand, SubOp, SumOp, WgpuBuffer, WgpuDevice,
-};
+use hephaestus_core::{ComputeDevice, DeviceBuffer};
+use hephaestus_cuda::{CudaBuffer, CudaDevice};
+use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 use leto::Layout;
-use leto::Complex;
+use num_complex::Complex;
 use numpy::{PyArray1, PyReadonlyArray1, ToPyArray};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
+use std::sync::Arc;
 
-/// Python wrapper around WgpuDevice.
+#[derive(Clone)]
+enum BackendDevice {
+    Wgpu(WgpuDevice),
+    Cuda(CudaDevice),
+}
+
+impl BackendDevice {
+    fn try_default(backend: Option<&str>) -> PyResult<Self> {
+        match backend.unwrap_or("wgpu").to_ascii_lowercase().as_str() {
+            "wgpu" => WgpuDevice::try_default("hephaestus-py-device")
+                .map(Self::Wgpu)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string())),
+            "cuda" => CudaDevice::try_default()
+                .map(Self::Cuda)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string())),
+            other => Err(PyValueError::new_err(format!(
+                "unsupported backend {other:?}; expected 'wgpu' or 'cuda'"
+            ))),
+        }
+    }
+
+    fn backend_name(&self) -> &'static str {
+        match self {
+            Self::Wgpu(device) => device.backend_name(),
+            Self::Cuda(device) => device.backend_name(),
+        }
+    }
+
+    fn alloc_zeroed_f32(&self, len: usize) -> hephaestus_core::Result<BackendBuffer> {
+        match self {
+            Self::Wgpu(device) => device.alloc_zeroed::<f32>(len).map(BackendBuffer::Wgpu),
+            Self::Cuda(device) => device
+                .alloc_zeroed::<f32>(len)
+                .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+        }
+    }
+
+    fn upload_f32(&self, data: &[f32]) -> hephaestus_core::Result<BackendBuffer> {
+        match self {
+            Self::Wgpu(device) => device.upload(data).map(BackendBuffer::Wgpu),
+            Self::Cuda(device) => device
+                .upload(data)
+                .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+        }
+    }
+
+    fn download_f32(&self, buffer: &BackendBuffer, out: &mut [f32]) -> hephaestus_core::Result<()> {
+        match (self, buffer) {
+            (Self::Wgpu(device), BackendBuffer::Wgpu(buffer)) => device.download(buffer, out),
+            (Self::Cuda(device), BackendBuffer::Cuda(buffer)) => device.download(buffer, out),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
+        }
+    }
+
+    fn download_complex(
+        &self,
+        buffer: &BackendComplexBuffer,
+        out: &mut [Complex<f32>],
+    ) -> hephaestus_core::Result<()> {
+        match (self, buffer) {
+            (Self::Wgpu(device), BackendComplexBuffer::Wgpu(buffer)) => {
+                device.download(buffer, out)
+            }
+            (Self::Cuda(device), BackendComplexBuffer::Cuda(buffer)) => {
+                device.download(buffer, out)
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
+        }
+    }
+}
+
+#[derive(Clone)]
+enum BackendBuffer {
+    Wgpu(WgpuBuffer<f32>),
+    Cuda(Arc<CudaBuffer<f32>>),
+}
+
+impl BackendBuffer {
+    fn len(&self) -> usize {
+        match self {
+            Self::Wgpu(buffer) => buffer.len(),
+            Self::Cuda(buffer) => buffer.len(),
+        }
+    }
+}
+
+enum BackendComplexBuffer {
+    Wgpu(WgpuBuffer<Complex<f32>>),
+    Cuda(CudaBuffer<Complex<f32>>),
+}
+
+#[derive(Clone)]
+enum BackendCsrMatrix {
+    Wgpu(hephaestus_wgpu::GpuCsrMatrix<f32>),
+    Cuda(Arc<hephaestus_cuda::GpuCsrMatrix<f32>>),
+}
+
+impl BackendCsrMatrix {
+    fn shape(&self) -> (usize, usize) {
+        match self {
+            Self::Wgpu(matrix) => matrix.shape(),
+            Self::Cuda(matrix) => matrix.shape(),
+        }
+    }
+
+    fn nnz(&self) -> usize {
+        match self {
+            Self::Wgpu(matrix) => matrix.nnz(),
+            Self::Cuda(matrix) => matrix.nnz(),
+        }
+    }
+}
+
+macro_rules! backend_unary {
+    ($device:expr, $buffer:expr, $wgpu_op:ty, $cuda_op:ty) => {
+        match ($device, $buffer) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                hephaestus_wgpu::unary_elementwise::<$wgpu_op, f32>(device, buffer)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                hephaestus_cuda::unary_elementwise::<$cuda_op, f32>(device, buffer)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array operands belong to different backends".to_string(),
+            }),
+        }
+    };
+}
+
+macro_rules! backend_binary {
+    ($device:expr, $lhs:expr, $rhs:expr, $wgpu_op:ty, $cuda_op:ty) => {
+        match ($device, $lhs, $rhs) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(lhs), BackendBuffer::Wgpu(rhs)) => {
+                hephaestus_wgpu::binary_elementwise::<$wgpu_op, f32>(device, lhs, rhs)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(lhs), BackendBuffer::Cuda(rhs)) => {
+                hephaestus_cuda::binary_elementwise::<$cuda_op, f32>(device, lhs, rhs)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array operands belong to different backends".to_string(),
+            }),
+        }
+    };
+}
+
+macro_rules! backend_scalar {
+    ($device:expr, $buffer:expr, $scalar:expr, $wgpu_op:ty, $cuda_op:ty) => {
+        match ($device, $buffer) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                hephaestus_wgpu::scalar_elementwise::<$wgpu_op, f32>(device, buffer, $scalar)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                hephaestus_cuda::scalar_elementwise::<$cuda_op, f32>(device, buffer, $scalar)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
+        }
+    };
+}
+
+macro_rules! backend_reduction {
+    ($device:expr, $buffer:expr, $wgpu_op:ty, $cuda_op:ty) => {
+        match ($device, $buffer) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                hephaestus_wgpu::reduction::<$wgpu_op, f32>(device, buffer).map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                hephaestus_cuda::reduction::<$cuda_op, f32>(device, buffer)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
+        }
+    };
+}
+
+macro_rules! backend_norm {
+    ($device:expr, $buffer:expr, $layout:expr, $wgpu_fn:path, $cuda_fn:path) => {
+        match ($device, $buffer) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => $wgpu_fn(
+                device,
+                hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &$layout,
+                },
+            )
+            .map(BackendBuffer::Wgpu),
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => $cuda_fn(
+                device,
+                hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &$layout,
+                },
+            )
+            .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
+        }
+    };
+}
+
+/// Python wrapper around a compute device.
 #[pyclass(name = "Device")]
 #[derive(Clone)]
 pub struct PyDevice {
-    pub inner: WgpuDevice,
+    inner: BackendDevice,
 }
 
 impl Drop for PyDevice {
     fn drop(&mut self) {
-        self.inner.clear_transient_pools();
+        if let BackendDevice::Wgpu(device) = &self.inner {
+            device.clear_transient_pools();
+        }
     }
 }
 
@@ -28,10 +243,11 @@ impl Drop for PyDevice {
 impl PyDevice {
     /// Create a new device context.
     #[new]
-    fn new() -> PyResult<Self> {
-        let device = WgpuDevice::try_default("hephaestus-py-device")
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self { inner: device })
+    #[pyo3(signature = (backend = None))]
+    fn new(backend: Option<&str>) -> PyResult<Self> {
+        Ok(Self {
+            inner: BackendDevice::try_default(backend)?,
+        })
     }
 
     /// Get the backend name.
@@ -44,8 +260,8 @@ impl PyDevice {
 /// Python wrapper around a GPU-resident WgpuBuffer<f32>.
 #[pyclass(name = "Array")]
 pub struct PyArray {
-    pub buffer: WgpuBuffer<f32>,
-    pub device: WgpuDevice,
+    buffer: BackendBuffer,
+    device: BackendDevice,
     #[pyo3(get)]
     pub shape: Vec<usize>,
 }
@@ -86,33 +302,85 @@ impl PyArray {
     /// Run an axis reduction (`sum_axis`/`mean_axis`/`min_axis`/`max_axis`) and
     /// wrap the 1-D result (the reduced axis is removed). Pure-Rust helper that
     /// factors the shared layout/dispatch/shape logic out of the four methods.
-    fn axis_reduce<E, F>(&self, py: Python<'_>, axis: usize, op: &str, f: F) -> PyResult<Self>
-    where
-        E: std::fmt::Display + Send,
-        F: FnOnce(
-                &WgpuDevice,
-                StridedOperand<'_, f32, 2>,
-                usize,
-                hephaestus_core::BlockWidth,
-            ) -> Result<WgpuBuffer<f32>, E>
-            + Send,
-    {
+    fn axis_reduce(&self, py: Python<'_>, axis: usize, op: &str) -> PyResult<Self> {
         let (rows, cols) = self.require_axis_2d(op, axis)?;
         let layout =
             Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                f(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    let operand = hephaestus_wgpu::StridedOperand {
+                        buffer,
                         layout: &layout,
-                    },
-                    axis,
-                    hephaestus_core::BlockWidth::DEFAULT,
-                )
+                    };
+                    match op {
+                        "sum_axis" => hephaestus_wgpu::sum_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "mean_axis" => hephaestus_wgpu::mean_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "min_axis" => hephaestus_wgpu::min_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "max_axis" => hephaestus_wgpu::max_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        _ => unreachable!("invariant: axis reducer is selected by wrapper"),
+                    }
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    let operand = hephaestus_cuda::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    };
+                    match op {
+                        "sum_axis" => hephaestus_cuda::sum_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "mean_axis" => hephaestus_cuda::mean_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "min_axis" => hephaestus_cuda::min_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        "max_axis" => hephaestus_cuda::max_axis(
+                            device,
+                            operand,
+                            axis,
+                            hephaestus_core::BlockWidth::DEFAULT,
+                        ),
+                        _ => unreachable!("invariant: axis reducer is selected by wrapper"),
+                    }
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         // Reducing along `axis` removes it: axis 0 -> [cols], axis 1 -> [rows].
@@ -134,7 +402,7 @@ impl PyArray {
         let len = data.len();
         let dev = device.inner.clone();
         let buffer = py
-            .allow_threads(move || dev.upload(&data))
+            .allow_threads(move || dev.upload_f32(&data))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -148,7 +416,7 @@ impl PyArray {
     fn zeros(len: usize, device: &PyDevice) -> PyResult<Self> {
         let buffer = device
             .inner
-            .alloc_zeroed::<f32>(len)
+            .alloc_zeroed_f32(len)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -170,7 +438,7 @@ impl PyArray {
         let len = slice.len();
         let dev = device.inner.clone();
         let buffer = py
-            .allow_threads(move || dev.upload(slice))
+            .allow_threads(move || dev.upload_f32(slice))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -204,7 +472,7 @@ impl PyArray {
         let host_data = py
             .allow_threads(move || {
                 let mut host_data = vec![0.0f32; len];
-                dev.download(&buf, &mut host_data).map(|_| host_data)
+                dev.download_f32(&buf, &mut host_data).map(|_| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data)
@@ -218,7 +486,7 @@ impl PyArray {
         let host_data = py
             .allow_threads(move || {
                 let mut host_data = vec![0.0f32; len];
-                dev.download(&buf, &mut host_data).map(|_| host_data)
+                dev.download_f32(&buf, &mut host_data).map(|_| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))
@@ -236,7 +504,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::ExpOp, hephaestus_cuda::ExpOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -249,7 +519,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<LnOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::LnOp, hephaestus_cuda::LnOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -262,7 +534,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<SinOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::SinOp, hephaestus_cuda::SinOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -275,7 +549,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<CosOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::CosOp, hephaestus_cuda::CosOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -288,7 +564,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<SqrtOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::SqrtOp, hephaestus_cuda::SqrtOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -301,7 +579,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<AbsOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::AbsOp, hephaestus_cuda::AbsOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -314,7 +594,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_unary!(&dev, &buf, hephaestus_wgpu::NegOp, hephaestus_cuda::NegOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -329,7 +611,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::reduction::<SumOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_reduction!(&dev, &buf, hephaestus_wgpu::SumOp, hephaestus_cuda::SumOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -342,7 +626,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::reduction::<MinOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_reduction!(&dev, &buf, hephaestus_wgpu::MinOp, hephaestus_cuda::MinOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -355,7 +641,9 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || hephaestus_wgpu::reduction::<MaxOp, f32>(&dev, &buf))
+            .allow_threads(move || {
+                backend_reduction!(&dev, &buf, hephaestus_wgpu::MaxOp, hephaestus_cuda::MaxOp)
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer: out_buf,
@@ -370,8 +658,15 @@ impl PyArray {
         let len = self.buffer.len();
         let out_buf = py
             .allow_threads(move || {
-                let summed = hephaestus_wgpu::reduction::<SumOp, f32>(&dev, &buf)?;
-                hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &summed, 1.0 / len as f32)
+                let summed =
+                    backend_reduction!(&dev, &buf, hephaestus_wgpu::SumOp, hephaestus_cuda::SumOp)?;
+                backend_scalar!(
+                    &dev,
+                    &summed,
+                    1.0 / len as f32,
+                    hephaestus_wgpu::MulOp,
+                    hephaestus_cuda::MulOp
+                )
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -396,7 +691,13 @@ impl PyArray {
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::binary_elementwise::<AddOp, f32>(&dev, &buf, &other_buf)
+                    backend_binary!(
+                        &dev,
+                        &buf,
+                        &other_buf,
+                        hephaestus_wgpu::AddOp,
+                        hephaestus_cuda::AddOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -409,7 +710,13 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &buf, val)
+                    backend_scalar!(
+                        &dev,
+                        &buf,
+                        val,
+                        hephaestus_wgpu::AddOp,
+                        hephaestus_cuda::AddOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -439,7 +746,13 @@ impl PyArray {
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::binary_elementwise::<SubOp, f32>(&dev, &buf, &other_buf)
+                    backend_binary!(
+                        &dev,
+                        &buf,
+                        &other_buf,
+                        hephaestus_wgpu::SubOp,
+                        hephaestus_cuda::SubOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -452,7 +765,13 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::scalar_elementwise::<SubOp, f32>(&dev, &buf, val)
+                    backend_scalar!(
+                        &dev,
+                        &buf,
+                        val,
+                        hephaestus_wgpu::SubOp,
+                        hephaestus_cuda::SubOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -471,8 +790,15 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    let negated = hephaestus_wgpu::unary_elementwise::<NegOp, f32>(&dev, &buf)?;
-                    hephaestus_wgpu::scalar_elementwise::<AddOp, f32>(&dev, &negated, val)
+                    let negated =
+                        backend_unary!(&dev, &buf, hephaestus_wgpu::NegOp, hephaestus_cuda::NegOp)?;
+                    backend_scalar!(
+                        &dev,
+                        &negated,
+                        val,
+                        hephaestus_wgpu::AddOp,
+                        hephaestus_cuda::AddOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -498,7 +824,13 @@ impl PyArray {
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::binary_elementwise::<MulOp, f32>(&dev, &buf, &other_buf)
+                    backend_binary!(
+                        &dev,
+                        &buf,
+                        &other_buf,
+                        hephaestus_wgpu::MulOp,
+                        hephaestus_cuda::MulOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -511,7 +843,13 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, val)
+                    backend_scalar!(
+                        &dev,
+                        &buf,
+                        val,
+                        hephaestus_wgpu::MulOp,
+                        hephaestus_cuda::MulOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -541,7 +879,13 @@ impl PyArray {
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::binary_elementwise::<DivOp, f32>(&dev, &buf, &other_buf)
+                    backend_binary!(
+                        &dev,
+                        &buf,
+                        &other_buf,
+                        hephaestus_wgpu::DivOp,
+                        hephaestus_cuda::DivOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -554,7 +898,13 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::scalar_elementwise::<DivOp, f32>(&dev, &buf, val)
+                    backend_scalar!(
+                        &dev,
+                        &buf,
+                        val,
+                        hephaestus_wgpu::DivOp,
+                        hephaestus_cuda::DivOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -573,8 +923,19 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    let recip = hephaestus_wgpu::unary_elementwise::<RecipOp, f32>(&dev, &buf)?;
-                    hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &recip, val)
+                    let recip = backend_unary!(
+                        &dev,
+                        &buf,
+                        hephaestus_wgpu::RecipOp,
+                        hephaestus_cuda::RecipOp
+                    )?;
+                    backend_scalar!(
+                        &dev,
+                        &recip,
+                        val,
+                        hephaestus_wgpu::MulOp,
+                        hephaestus_cuda::MulOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -605,7 +966,13 @@ impl PyArray {
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::binary_elementwise::<PowOp, f32>(&dev, &buf, &other_buf)
+                    backend_binary!(
+                        &dev,
+                        &buf,
+                        &other_buf,
+                        hephaestus_wgpu::PowOp,
+                        hephaestus_cuda::PowOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -618,7 +985,13 @@ impl PyArray {
             let buf = self.buffer.clone();
             let out_buf = py
                 .allow_threads(move || {
-                    hephaestus_wgpu::scalar_elementwise::<PowOp, f32>(&dev, &buf, val)
+                    backend_scalar!(
+                        &dev,
+                        &buf,
+                        val,
+                        hephaestus_wgpu::PowOp,
+                        hephaestus_cuda::PowOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -646,9 +1019,19 @@ impl PyArray {
             let ln_val = val.ln();
             let out_buf = py
                 .allow_threads(move || {
-                    let scaled =
-                        hephaestus_wgpu::scalar_elementwise::<MulOp, f32>(&dev, &buf, ln_val)?;
-                    hephaestus_wgpu::unary_elementwise::<ExpOp, f32>(&dev, &scaled)
+                    let scaled = backend_scalar!(
+                        &dev,
+                        &buf,
+                        ln_val,
+                        hephaestus_wgpu::MulOp,
+                        hephaestus_cuda::MulOp
+                    )?;
+                    backend_unary!(
+                        &dev,
+                        &scaled,
+                        hephaestus_wgpu::ExpOp,
+                        hephaestus_cuda::ExpOp
+                    )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self {
@@ -683,18 +1066,38 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                matmul(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf_a,
-                        layout: &layout_a,
-                    },
-                    StridedOperand {
-                        buffer: &buf_b,
-                        layout: &layout_b,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
+                    hephaestus_wgpu::matmul(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(a), BackendBuffer::Cuda(b)) => {
+                    hephaestus_cuda::matmul(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_cuda::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "matmul operands belong to different backends".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -724,18 +1127,38 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                dot(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf_a,
-                        layout: &layout_a,
-                    },
-                    StridedOperand {
-                        buffer: &buf_b,
-                        layout: &layout_b,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
+                    hephaestus_wgpu::dot(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(a), BackendBuffer::Cuda(b)) => {
+                    hephaestus_cuda::dot(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_cuda::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "dot operands belong to different backends".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -759,14 +1182,30 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                trace(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
-                        layout: &layout,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::trace(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::trace(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -785,14 +1224,26 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::det(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::det(
+                    device,
+                    hephaestus_wgpu::StridedOperand {
+                        buffer,
                         layout: &layout,
                     },
                 )
+                .map(BackendBuffer::Wgpu),
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => hephaestus_cuda::det(
+                    device,
+                    hephaestus_cuda::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    },
+                )
+                .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -810,14 +1261,30 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::matexp(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
-                        layout: &layout,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::matexp(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::matexp(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -835,15 +1302,32 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::matpow(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
-                        layout: &layout,
-                    },
-                    exponent,
-                )
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::matpow(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                        exponent,
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::matpow(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                        exponent,
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -868,18 +1352,38 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::kron(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf_a,
-                        layout: &layout_a,
-                    },
-                    StridedOperand {
-                        buffer: &buf_b,
-                        layout: &layout_b,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
+                    hephaestus_wgpu::kron(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(a), BackendBuffer::Cuda(b)) => {
+                    hephaestus_cuda::kron(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_cuda::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "kron operands belong to different backends".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -912,18 +1416,38 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::batched_matmul(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf_a,
-                        layout: &layout_a,
-                    },
-                    StridedOperand {
-                        buffer: &buf_b,
-                        layout: &layout_b,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
+                    hephaestus_wgpu::batched_matmul(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_wgpu::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(a), BackendBuffer::Cuda(b)) => {
+                    hephaestus_cuda::batched_matmul(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer: a,
+                            layout: &layout_a,
+                        },
+                        hephaestus_cuda::StridedOperand {
+                            buffer: b,
+                            layout: &layout_b,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "batched_matmul operands belong to different backends".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -943,14 +1467,28 @@ impl PyArray {
             Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let dev = self.device.clone();
         let buf = self.buffer.clone();
-        py.allow_threads(move || {
-            hephaestus_wgpu::matrix_rank(
-                &dev,
-                StridedOperand {
-                    buffer: &buf,
-                    layout: &layout,
-                },
-            )
+        py.allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                hephaestus_wgpu::matrix_rank(
+                    device,
+                    hephaestus_wgpu::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    },
+                )
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                hephaestus_cuda::matrix_rank(
+                    device,
+                    hephaestus_cuda::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    },
+                )
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
@@ -966,14 +1504,30 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::pinv(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
-                        layout: &layout,
-                    },
-                )
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::pinv(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::pinv(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -991,16 +1545,34 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
-                hephaestus_wgpu::cumsum(
-                    &dev,
-                    StridedOperand {
-                        buffer: &buf,
-                        layout: &layout,
-                    },
-                    axis,
-                    hephaestus_core::BlockWidth::DEFAULT,
-                )
+            .allow_threads(move || match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::cumsum(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                        axis,
+                        hephaestus_core::BlockWidth::DEFAULT,
+                    )
+                    .map(BackendBuffer::Wgpu)
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::cumsum(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                        axis,
+                        hephaestus_core::BlockWidth::DEFAULT,
+                    )
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "array buffer belongs to a different backend".to_string(),
+                }),
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
@@ -1012,22 +1584,22 @@ impl PyArray {
 
     /// Sum along `axis` (0 or 1); the reduced axis is removed (1-D result).
     fn sum_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
-        self.axis_reduce(py, axis, "sum_axis", hephaestus_wgpu::sum_axis)
+        self.axis_reduce(py, axis, "sum_axis")
     }
 
     /// Mean along `axis` (0 or 1); the reduced axis is removed (1-D result).
     fn mean_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
-        self.axis_reduce(py, axis, "mean_axis", hephaestus_wgpu::mean_axis)
+        self.axis_reduce(py, axis, "mean_axis")
     }
 
     /// Minimum along `axis` (0 or 1); the reduced axis is removed (1-D result).
     fn min_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
-        self.axis_reduce(py, axis, "min_axis", hephaestus_wgpu::min_axis)
+        self.axis_reduce(py, axis, "min_axis")
     }
 
     /// Maximum along `axis` (0 or 1); the reduced axis is removed (1-D result).
     fn max_axis(&self, py: Python<'_>, axis: usize) -> PyResult<Self> {
-        self.axis_reduce(py, axis, "max_axis", hephaestus_wgpu::max_axis)
+        self.axis_reduce(py, axis, "max_axis")
     }
 
     fn norm_l1(&self, py: Python<'_>) -> PyResult<Self> {
@@ -1038,12 +1610,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_l1(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_l1,
+                        hephaestus_cuda::norm_l1
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1054,12 +1626,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_l1(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_l1,
+                        hephaestus_cuda::norm_l1
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1081,12 +1653,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_l2(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_l2,
+                        hephaestus_cuda::norm_l2
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1097,12 +1669,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_l2(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_l2,
+                        hephaestus_cuda::norm_l2
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1124,12 +1696,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_max(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_max,
+                        hephaestus_cuda::norm_max
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1140,12 +1712,12 @@ impl PyArray {
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
                 py.allow_threads(move || {
-                    norm_max(
+                    backend_norm!(
                         &dev,
-                        StridedOperand {
-                            buffer: &buf,
-                            layout: &layout,
-                        },
+                        &buf,
+                        layout,
+                        hephaestus_wgpu::norm_max,
+                        hephaestus_cuda::norm_max
                     )
                 })
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
@@ -1158,6 +1730,114 @@ impl PyArray {
             shape: vec![1],
         })
     }
+}
+
+fn split_packed_lu(n: usize, packed: &[f32]) -> (Vec<f32>, Vec<f32>) {
+    let mut host_l = vec![0.0f32; n * n];
+    let mut host_u = vec![0.0f32; n * n];
+    for r in 0..n {
+        for c in 0..n {
+            let idx = r * n + c;
+            let val = packed[idx];
+            if r > c {
+                host_l[idx] = val;
+            } else if r == c {
+                host_l[idx] = 1.0;
+                host_u[idx] = val;
+            } else {
+                host_u[idx] = val;
+            }
+        }
+    }
+    (host_l, host_u)
+}
+
+fn svd_host_outputs(
+    inner: &leto_ops::SvdDecomposition<f32>,
+) -> hephaestus_core::Result<(
+    Vec<f32>,
+    Vec<f32>,
+    Vec<f32>,
+    Vec<usize>,
+    Vec<usize>,
+    Vec<usize>,
+)> {
+    let u_host = inner.left_singular_vectors.clone();
+    let s_host =
+        leto::Array1::from_shape_vec([inner.singular_values.len()], inner.singular_values.clone())
+            .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
+                message: e.to_string(),
+            })?;
+    let vt_transposed = inner
+        .right_singular_vectors
+        .transpose([1, 0])
+        .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
+            message: e.to_string(),
+        })?;
+    let vt_host = vt_transposed.to_contiguous();
+    Ok((
+        leto::Storage::as_slice(u_host.storage()).to_vec(),
+        leto::Storage::as_slice(s_host.storage()).to_vec(),
+        leto::Storage::as_slice(vt_host.storage()).to_vec(),
+        vec![u_host.shape()[0], u_host.shape()[1]],
+        vec![s_host.shape()[0]],
+        vec![vt_host.shape()[0], vt_host.shape()[1]],
+    ))
+}
+
+fn upload_svd_outputs_wgpu(
+    device: &WgpuDevice,
+    inner: &leto_ops::SvdDecomposition<f32>,
+) -> hephaestus_core::Result<(
+    BackendBuffer,
+    BackendBuffer,
+    BackendBuffer,
+    Vec<usize>,
+    Vec<usize>,
+    Vec<usize>,
+)> {
+    let (u, s, vt, u_shape, s_shape, vt_shape) = svd_host_outputs(inner)?;
+    Ok((
+        BackendBuffer::Wgpu(device.upload(&u)?),
+        BackendBuffer::Wgpu(device.upload(&s)?),
+        BackendBuffer::Wgpu(device.upload(&vt)?),
+        u_shape,
+        s_shape,
+        vt_shape,
+    ))
+}
+
+fn upload_svd_outputs_cuda(
+    device: &CudaDevice,
+    inner: &leto_ops::SvdDecomposition<f32>,
+) -> hephaestus_core::Result<(
+    BackendBuffer,
+    BackendBuffer,
+    BackendBuffer,
+    Vec<usize>,
+    Vec<usize>,
+    Vec<usize>,
+)> {
+    let (u, s, vt, u_shape, s_shape, vt_shape) = svd_host_outputs(inner)?;
+    Ok((
+        BackendBuffer::Cuda(Arc::new(device.upload(&u)?)),
+        BackendBuffer::Cuda(Arc::new(device.upload(&s)?)),
+        BackendBuffer::Cuda(Arc::new(device.upload(&vt)?)),
+        u_shape,
+        s_shape,
+        vt_shape,
+    ))
+}
+
+fn clone_cuda_buffer(
+    device: &CudaDevice,
+    buffer: &CudaBuffer<f32>,
+) -> hephaestus_core::Result<BackendBuffer> {
+    let mut host = vec![0.0f32; buffer.len()];
+    device.download(buffer, &mut host)?;
+    device
+        .upload(&host)
+        .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
 }
 
 // ── Top-level functions ──
@@ -1289,17 +1969,31 @@ fn cholesky(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let layout = Layout::c_contiguous([n, n]).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let dev = a.device.clone();
     let buf = a.buffer.clone();
-    let decomp = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            hephaestus_wgpu::cholesky_decompose_blocked(&dev, op)
+    let lower = py
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                hephaestus_wgpu::cholesky_decompose_blocked(device, op)
+                    .map(|decomp| BackendBuffer::Wgpu(decomp.into_lower()))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                hephaestus_cuda::cholesky_decompose_blocked(device, op)
+                    .map(|decomp| BackendBuffer::Cuda(Arc::new(decomp.into_lower())))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
     Ok(PyArray {
-        buffer: decomp.into_lower(),
+        buffer: lower,
         device: a.device.clone(),
         shape: vec![n, n],
     })
@@ -1316,37 +2010,36 @@ fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
     let buf = a.buffer.clone();
 
     let (decomp, l_buf, u_buf) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::lu_decompose_blocked(&dev, op)?;
-
-            let mut host_factors = vec![0.0f32; n * n];
-            dev.download(decomp.factors(), &mut host_factors)?;
-
-            let mut host_l = vec![0.0f32; n * n];
-            let mut host_u = vec![0.0f32; n * n];
-            for r in 0..n {
-                for c in 0..n {
-                    let idx = r * n + c;
-                    let val = host_factors[idx];
-                    if r > c {
-                        host_l[idx] = val;
-                    } else if r == c {
-                        host_l[idx] = 1.0;
-                        host_u[idx] = val;
-                    } else {
-                        host_u[idx] = val;
-                    }
-                }
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::lu_decompose_blocked(device, op)?;
+                let mut host_factors = vec![0.0f32; n * n];
+                device.download(decomp.factors(), &mut host_factors)?;
+                let (host_l, host_u) = split_packed_lu(n, &host_factors);
+                let l_buf = BackendBuffer::Wgpu(device.upload(&host_l)?);
+                let u_buf = BackendBuffer::Wgpu(device.upload(&host_u)?);
+                Ok((decomp.pivots().to_vec(), l_buf, u_buf))
             }
-
-            let l_buf = dev.upload(&host_l)?;
-            let u_buf = dev.upload(&host_u)?;
-
-            Ok::<_, hephaestus_core::HephaestusError>((decomp, l_buf, u_buf))
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::lu_decompose_blocked(device, op)?;
+                let mut host_factors = vec![0.0f32; n * n];
+                device.download(decomp.factors(), &mut host_factors)?;
+                let (host_l, host_u) = split_packed_lu(n, &host_factors);
+                let l_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?));
+                let u_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_u)?));
+                Ok((decomp.pivots().to_vec(), l_buf, u_buf))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1361,7 +2054,7 @@ fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
             device: a.device.clone(),
             shape: vec![n, n],
         },
-        decomp.pivots().to_vec(),
+        decomp,
     ))
 }
 
@@ -1381,21 +2074,32 @@ fn hessenberg(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     let buf = a.buffer.clone();
 
     let (q_buf, h_buf) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::hessenberg(&dev, op)?;
-
-            let mut host_q = vec![0.0f32; n * n];
-            dev.download(decomp.q_buffer(), &mut host_q)?;
-            let mut host_h = vec![0.0f32; n * n];
-            dev.download(decomp.h_buffer(), &mut host_h)?;
-
-            let q_buf = dev.upload(&host_q)?;
-            let h_buf = dev.upload(&host_h)?;
-            Ok::<_, hephaestus_core::HephaestusError>((q_buf, h_buf))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::hessenberg(device, op)?;
+                Ok((
+                    BackendBuffer::Wgpu(decomp.q_buffer().clone()),
+                    BackendBuffer::Wgpu(decomp.h_buffer().clone()),
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::hessenberg(device, op)?;
+                Ok((
+                    clone_cuda_buffer(device, decomp.q_buffer())?,
+                    clone_cuda_buffer(device, decomp.h_buffer())?,
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1431,36 +2135,42 @@ fn full_piv_lu(
     let buf = a.buffer.clone();
 
     let (l_buf, u_buf, row_perm, col_perm) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::full_piv_lu(&dev, op)?;
-
-            let mut host_factors = vec![0.0f32; n * n];
-            dev.download(decomp.lu_buffer(), &mut host_factors)?;
-            let mut host_l = vec![0.0f32; n * n];
-            let mut host_u = vec![0.0f32; n * n];
-            for r in 0..n {
-                for c in 0..n {
-                    let idx = r * n + c;
-                    let val = host_factors[idx];
-                    if r > c {
-                        host_l[idx] = val;
-                    } else if r == c {
-                        host_l[idx] = 1.0;
-                        host_u[idx] = val;
-                    } else {
-                        host_u[idx] = val;
-                    }
-                }
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::full_piv_lu(device, op)?;
+                let mut host_factors = vec![0.0f32; n * n];
+                device.download(decomp.lu_buffer(), &mut host_factors)?;
+                let (host_l, host_u) = split_packed_lu(n, &host_factors);
+                Ok((
+                    BackendBuffer::Wgpu(device.upload(&host_l)?),
+                    BackendBuffer::Wgpu(device.upload(&host_u)?),
+                    decomp.row_permutation().to_vec(),
+                    decomp.col_permutation().to_vec(),
+                ))
             }
-            let l_buf = dev.upload(&host_l)?;
-            let u_buf = dev.upload(&host_u)?;
-            let row = decomp.row_permutation().to_vec();
-            let col = decomp.col_permutation().to_vec();
-            Ok::<_, hephaestus_core::HephaestusError>((l_buf, u_buf, row, col))
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::full_piv_lu(device, op)?;
+                let mut host_factors = vec![0.0f32; n * n];
+                device.download(decomp.lu_buffer(), &mut host_factors)?;
+                let (host_l, host_u) = split_packed_lu(n, &host_factors);
+                Ok((
+                    BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?)),
+                    BackendBuffer::Cuda(Arc::new(device.upload(&host_u)?)),
+                    decomp.row_permutation().to_vec(),
+                    decomp.col_permutation().to_vec(),
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1495,24 +2205,34 @@ fn bidiagonalize(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, PyA
     let buf = a.buffer.clone();
 
     let (u_buf, b_buf, v_buf) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::bidiagonalize(&dev, op)?;
-
-            let mut host_u = vec![0.0f32; m * m];
-            dev.download(decomp.u_buffer(), &mut host_u)?;
-            let mut host_b = vec![0.0f32; m * n];
-            dev.download(decomp.b_buffer(), &mut host_b)?;
-            let mut host_v = vec![0.0f32; n * n];
-            dev.download(decomp.v_buffer(), &mut host_v)?;
-
-            let u_buf = dev.upload(&host_u)?;
-            let b_buf = dev.upload(&host_b)?;
-            let v_buf = dev.upload(&host_v)?;
-            Ok::<_, hephaestus_core::HephaestusError>((u_buf, b_buf, v_buf))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::bidiagonalize(device, op)?;
+                Ok((
+                    BackendBuffer::Wgpu(decomp.u_buffer().clone()),
+                    BackendBuffer::Wgpu(decomp.b_buffer().clone()),
+                    BackendBuffer::Wgpu(decomp.v_buffer().clone()),
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::bidiagonalize(device, op)?;
+                Ok((
+                    clone_cuda_buffer(device, decomp.u_buffer())?,
+                    clone_cuda_buffer(device, decomp.b_buffer())?,
+                    clone_cuda_buffer(device, decomp.v_buffer())?,
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1547,25 +2267,44 @@ fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     let buf = a.buffer.clone();
 
     let (q_buf, r_buf, q_shape, r_shape) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::qr_decompose_blocked(&dev, op)?;
-
-            let q_host = decomp.inner().q();
-            let r_host = decomp.inner().r();
-
-            let q_buf = dev.upload(leto::Storage::as_slice(q_host.storage()))?;
-            let r_buf = dev.upload(leto::Storage::as_slice(r_host.storage()))?;
-
-            Ok::<_, hephaestus_core::HephaestusError>((
-                q_buf,
-                r_buf,
-                vec![q_host.shape()[0], q_host.shape()[1]],
-                vec![r_host.shape()[0], r_host.shape()[1]],
-            ))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::qr_decompose_blocked(device, op)?;
+                let q_host = decomp.inner().q();
+                let r_host = decomp.inner().r();
+                Ok((
+                    BackendBuffer::Wgpu(device.upload(leto::Storage::as_slice(q_host.storage()))?),
+                    BackendBuffer::Wgpu(device.upload(leto::Storage::as_slice(r_host.storage()))?),
+                    vec![q_host.shape()[0], q_host.shape()[1]],
+                    vec![r_host.shape()[0], r_host.shape()[1]],
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::qr_decompose_blocked(device, op)?;
+                let q_host = decomp.inner().q();
+                let r_host = decomp.inner().r();
+                Ok((
+                    BackendBuffer::Cuda(Arc::new(
+                        device.upload(leto::Storage::as_slice(q_host.storage()))?,
+                    )),
+                    BackendBuffer::Cuda(Arc::new(
+                        device.upload(leto::Storage::as_slice(r_host.storage()))?,
+                    )),
+                    vec![q_host.shape()[0], q_host.shape()[1]],
+                    vec![r_host.shape()[0], r_host.shape()[1]],
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1595,24 +2334,48 @@ fn col_piv_qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u6
     let buf = a.buffer.clone();
 
     let (q_buf, r_buf, m, n, perm) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::col_piv_qr(&dev, op)?;
-
-            let q_buf = decomp.q().clone();
-            let r_buf = decomp.r().clone();
-            let m = (q_buf.len() as f64).sqrt() as usize;
-            let n = r_buf.len().checked_div(m).unwrap_or(0);
-            let perm = decomp
-                .permutation()
-                .iter()
-                .map(|&x| x as u64)
-                .collect::<Vec<_>>();
-
-            Ok::<_, hephaestus_core::HephaestusError>((q_buf, r_buf, m, n, perm))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::col_piv_qr(device, op)?;
+                let q_buf = decomp.q().clone();
+                let r_buf = decomp.r().clone();
+                let m = (q_buf.len() as f64).sqrt() as usize;
+                let n = r_buf.len().checked_div(m).unwrap_or(0);
+                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                Ok((
+                    BackendBuffer::Wgpu(q_buf),
+                    BackendBuffer::Wgpu(r_buf),
+                    m,
+                    n,
+                    perm,
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::col_piv_qr(device, op)?;
+                let q_len = decomp.q().len();
+                let r_len = decomp.r().len();
+                let m = (q_len as f64).sqrt() as usize;
+                let n = r_len.checked_div(m).unwrap_or(0);
+                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                Ok((
+                    clone_cuda_buffer(device, decomp.q())?,
+                    clone_cuda_buffer(device, decomp.r())?,
+                    m,
+                    n,
+                    perm,
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1643,42 +2406,26 @@ fn svd(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, PyArray)> {
     let buf = a.buffer.clone();
 
     let (u_buf, s_buf, vt_buf, u_shape, s_shape, vt_shape) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::svd_decompose(&dev, op)?;
-
-            let u_host = decomp.inner().left_singular_vectors.clone();
-            let s_host = leto::Array1::from_shape_vec(
-                [decomp.inner().singular_values.len()],
-                decomp.inner().singular_values.clone(),
-            )
-            .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
-                message: e.to_string(),
-            })?;
-
-            let vt_transposed = decomp
-                .inner()
-                .right_singular_vectors
-                .transpose([1, 0])
-                .map_err(|e| hephaestus_core::HephaestusError::DispatchFailed {
-                    message: e.to_string(),
-                })?;
-            let vt_host = vt_transposed.to_contiguous();
-
-            let u_buf = dev.upload(leto::Storage::as_slice(u_host.storage()))?;
-            let s_buf = dev.upload(leto::Storage::as_slice(s_host.storage()))?;
-            let vt_buf = dev.upload(leto::Storage::as_slice(vt_host.storage()))?;
-
-            let u_shape = vec![u_host.shape()[0], u_host.shape()[1]];
-            let s_shape = vec![s_host.shape()[0]];
-            let vt_shape = vec![vt_host.shape()[0], vt_host.shape()[1]];
-
-            Ok::<_, hephaestus_core::HephaestusError>((
-                u_buf, s_buf, vt_buf, u_shape, s_shape, vt_shape,
-            ))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::svd_decompose(device, op)?;
+                upload_svd_outputs_wgpu(device, decomp.inner())
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::svd_decompose(device, op)?;
+                upload_svd_outputs_cuda(device, decomp.inner())
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1714,23 +2461,42 @@ fn symmetric_eigen(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> 
     let buf = a.buffer.clone();
 
     let (w_buf, v_buf, w_shape, v_shape) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::symmetric_eigen_jacobi(&dev, op)?;
-
-            let w_host = &decomp.inner().eigenvalues;
-            let v_host = decomp.inner().eigenvectors.clone();
-
-            let w_buf = dev.upload(w_host)?;
-            let v_buf = dev.upload(leto::Storage::as_slice(v_host.storage()))?;
-
-            let w_shape = vec![w_host.len()];
-            let v_shape = vec![v_host.shape()[0], v_host.shape()[1]];
-
-            Ok::<_, hephaestus_core::HephaestusError>((w_buf, v_buf, w_shape, v_shape))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::symmetric_eigen_jacobi(device, op)?;
+                let w_host = &decomp.inner().eigenvalues;
+                let v_host = decomp.inner().eigenvectors.clone();
+                Ok((
+                    BackendBuffer::Wgpu(device.upload(w_host)?),
+                    BackendBuffer::Wgpu(device.upload(leto::Storage::as_slice(v_host.storage()))?),
+                    vec![w_host.len()],
+                    vec![v_host.shape()[0], v_host.shape()[1]],
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::symmetric_eigen_jacobi(device, op)?;
+                let w_host = &decomp.inner().eigenvalues;
+                let v_host = decomp.inner().eigenvectors.clone();
+                Ok((
+                    BackendBuffer::Cuda(Arc::new(device.upload(w_host)?)),
+                    BackendBuffer::Cuda(Arc::new(
+                        device.upload(leto::Storage::as_slice(v_host.storage()))?,
+                    )),
+                    vec![w_host.len()],
+                    vec![v_host.shape()[0], v_host.shape()[1]],
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1762,12 +2528,30 @@ fn singular_values(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let buf = a.buffer.clone();
 
     let s_buf = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            hephaestus_wgpu::singular_values(&dev, op)
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                hephaestus_wgpu::singular_values(
+                    device,
+                    hephaestus_wgpu::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    },
+                )
+                .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                hephaestus_cuda::singular_values(
+                    device,
+                    hephaestus_cuda::StridedOperand {
+                        buffer,
+                        layout: &layout,
+                    },
+                )
+                .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1789,18 +2573,34 @@ fn schur(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     let buf = a.buffer.clone();
 
     let (q_buf, t_buf, n_val) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::schur(&dev, op)?;
-
-            let q_buf = decomp.q_buffer().clone();
-            let t_buf = decomp.t_buffer().clone();
-            let n_val = decomp.n();
-
-            Ok::<_, hephaestus_core::HephaestusError>((q_buf, t_buf, n_val))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::schur(device, op)?;
+                Ok((
+                    BackendBuffer::Wgpu(decomp.q_buffer().clone()),
+                    BackendBuffer::Wgpu(decomp.t_buffer().clone()),
+                    decomp.n(),
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::schur(device, op)?;
+                Ok((
+                    clone_cuda_buffer(device, decomp.q_buffer())?,
+                    clone_cuda_buffer(device, decomp.t_buffer())?,
+                    decomp.n(),
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1831,23 +2631,38 @@ fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
     let buf = a.buffer.clone();
 
     let (l_buf, d_buf, perm, n_val) = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let decomp = hephaestus_wgpu::bunch_kaufman(&dev, op)?;
-
-            let l_buf = decomp.l_buffer().clone();
-            let d_buf = decomp.d_buffer().clone();
-            let perm = decomp
-                .permutation()
-                .iter()
-                .map(|&x| x as u64)
-                .collect::<Vec<_>>();
-            let n_val = decomp.n();
-
-            Ok::<_, hephaestus_core::HephaestusError>((l_buf, d_buf, perm, n_val))
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                let op = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_wgpu::bunch_kaufman(device, op)?;
+                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                Ok((
+                    BackendBuffer::Wgpu(decomp.l_buffer().clone()),
+                    BackendBuffer::Wgpu(decomp.d_buffer().clone()),
+                    perm,
+                    decomp.n(),
+                ))
+            }
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                let op = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                };
+                let decomp = hephaestus_cuda::bunch_kaufman(device, op)?;
+                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                Ok((
+                    clone_cuda_buffer(device, decomp.l_buffer())?,
+                    clone_cuda_buffer(device, decomp.d_buffer())?,
+                    perm,
+                    decomp.n(),
+                ))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1877,12 +2692,26 @@ fn matexp(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let buf = a.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            hephaestus_wgpu::matexp(&dev, op)
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::matexp(
+                device,
+                hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                },
+            )
+            .map(BackendBuffer::Wgpu),
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => hephaestus_cuda::matexp(
+                device,
+                hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                },
+            )
+            .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1905,12 +2734,26 @@ fn pinv(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let buf = a.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            hephaestus_wgpu::pinv(&dev, op)
+        .allow_threads(move || match (&dev, &buf) {
+            (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::pinv(
+                device,
+                hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                },
+            )
+            .map(BackendBuffer::Wgpu),
+            (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => hephaestus_cuda::pinv(
+                device,
+                hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout,
+                },
+            )
+            .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "array buffer belongs to a different backend".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -1938,14 +2781,35 @@ fn eigenvalues<'py>(
 
     let host_data = py
         .allow_threads(move || {
-            let op = StridedOperand {
-                buffer: &buf,
-                layout: &layout,
-            };
-            let e_buf = hephaestus_wgpu::eigenvalues(&dev, op)?;
-
             let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
-            dev.download(&e_buf, &mut host_data)?;
+            let e_buf = match (&dev, &buf) {
+                (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
+                    hephaestus_wgpu::eigenvalues(
+                        device,
+                        hephaestus_wgpu::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(BackendComplexBuffer::Wgpu)?
+                }
+                (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
+                    hephaestus_cuda::eigenvalues(
+                        device,
+                        hephaestus_cuda::StridedOperand {
+                            buffer,
+                            layout: &layout,
+                        },
+                    )
+                    .map(BackendComplexBuffer::Cuda)?
+                }
+                _ => {
+                    return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                        message: "array buffer belongs to a different backend".to_string(),
+                    })
+                }
+            };
+            dev.download_complex(&e_buf, &mut host_data)?;
             Ok::<_, hephaestus_core::HephaestusError>(host_data)
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -1958,12 +2822,11 @@ fn eigenvalues<'py>(
     Ok(PyArray1::from_vec(py, py_data))
 }
 
-/// Python wrapper around a GPU-resident GpuCsrMatrix<f32>.
+/// Python wrapper around a GPU-resident CSR matrix.
 #[pyclass(name = "SparseMatrix")]
-#[derive(Debug)]
 pub struct PyCsrMatrix {
-    pub inner: hephaestus_wgpu::GpuCsrMatrix<f32>,
-    pub device: WgpuDevice,
+    inner: BackendCsrMatrix,
+    device: BackendDevice,
 }
 
 #[pymethods]
@@ -1986,15 +2849,26 @@ impl PyCsrMatrix {
         let host_data = py
             .allow_threads(move || {
                 let mut host_data = vec![0.0f32; len];
-                device.download(&buffer, &mut host_data).map(|_| host_data)
+                device
+                    .download_f32(&buffer, &mut host_data)
+                    .map(|_| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let view = leto::ArrayView2::new(layout, &host_data);
         let cpu_csr = leto_ops::CsrMatrix::from_dense(&view);
 
-        let inner = hephaestus_wgpu::GpuCsrMatrix::from_cpu(&arr.device, &cpu_csr)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let inner = match &arr.device {
+            BackendDevice::Wgpu(device) => {
+                hephaestus_wgpu::GpuCsrMatrix::from_cpu(device, &cpu_csr)
+                    .map(BackendCsrMatrix::Wgpu)
+            }
+            BackendDevice::Cuda(device) => {
+                hephaestus_cuda::GpuCsrMatrix::from_cpu(device, &cpu_csr)
+                    .map(|matrix| BackendCsrMatrix::Cuda(Arc::new(matrix)))
+            }
+        }
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(Self {
             inner,
@@ -2009,13 +2883,23 @@ impl PyCsrMatrix {
         let (rows, cols) = inner.shape();
 
         let cpu_csr = py
-            .allow_threads(move || inner.to_cpu(&device))
+            .allow_threads(move || match (&device, &inner) {
+                (BackendDevice::Wgpu(device), BackendCsrMatrix::Wgpu(matrix)) => {
+                    matrix.to_cpu(device)
+                }
+                (BackendDevice::Cuda(device), BackendCsrMatrix::Cuda(matrix)) => {
+                    matrix.to_cpu(device)
+                }
+                _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                    message: "sparse matrix belongs to a different backend".to_string(),
+                }),
+            })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let cpu_dense = cpu_csr.to_dense();
         let dense_buf = self
             .device
-            .upload(leto::Storage::as_slice(cpu_dense.storage()))
+            .upload_f32(leto::Storage::as_slice(cpu_dense.storage()))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(PyArray {
@@ -2045,7 +2929,22 @@ fn spmv(py: Python<'_>, a: &PyCsrMatrix, x: &PyArray) -> PyResult<PyArray> {
     let buf_x = x.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || hephaestus_wgpu::spmv(&device, &inner_a, &buf_x))
+        .allow_threads(move || match (&device, &inner_a, &buf_x) {
+            (
+                BackendDevice::Wgpu(device),
+                BackendCsrMatrix::Wgpu(matrix),
+                BackendBuffer::Wgpu(x),
+            ) => hephaestus_wgpu::spmv(device, matrix, x).map(BackendBuffer::Wgpu),
+            (
+                BackendDevice::Cuda(device),
+                BackendCsrMatrix::Cuda(matrix),
+                BackendBuffer::Cuda(x),
+            ) => hephaestus_cuda::spmv(device, matrix, x)
+                .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer))),
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "spmv operands belong to different backends".to_string(),
+            }),
+        })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     let (rows, _) = a.inner.shape();
@@ -2071,12 +2970,33 @@ fn spmm(py: Python<'_>, a: &PyCsrMatrix, b: &PyArray) -> PyResult<PyArray> {
         Layout::c_contiguous([b_rows, bcols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let out_buf = py
-        .allow_threads(move || {
-            let op_b = StridedOperand {
-                buffer: &buf_b,
-                layout: &layout_b,
-            };
-            hephaestus_wgpu::spmm(&device, &inner_a, &op_b)
+        .allow_threads(move || match (&device, &inner_a, &buf_b) {
+            (
+                BackendDevice::Wgpu(device),
+                BackendCsrMatrix::Wgpu(matrix),
+                BackendBuffer::Wgpu(buffer),
+            ) => {
+                let op_b = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout_b,
+                };
+                hephaestus_wgpu::spmm(device, matrix, &op_b).map(BackendBuffer::Wgpu)
+            }
+            (
+                BackendDevice::Cuda(device),
+                BackendCsrMatrix::Cuda(matrix),
+                BackendBuffer::Cuda(buffer),
+            ) => {
+                let op_b = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout_b,
+                };
+                hephaestus_cuda::spmm(device, matrix, &op_b)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "spmm operands belong to different backends".to_string(),
+            }),
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
@@ -2085,6 +3005,59 @@ fn spmm(py: Python<'_>, a: &PyCsrMatrix, b: &PyArray) -> PyResult<PyArray> {
         buffer: out_buf,
         device: a.device.clone(),
         shape: vec![rows, bcols],
+    })
+}
+
+#[pyfunction]
+fn spmv_many(py: Python<'_>, a: &PyCsrMatrix, x_batch: &PyArray) -> PyResult<PyArray> {
+    if x_batch.shape.len() != 2 {
+        return Err(PyValueError::new_err(
+            "spmv_many requires a 2D dense matrix of RHS vectors",
+        ));
+    }
+    let device = a.device.clone();
+    let inner_a = a.inner.clone();
+    let buf_x = x_batch.buffer.clone();
+    let [x_rows, xcols] = [x_batch.shape[0], x_batch.shape[1]];
+    let layout_x =
+        Layout::c_contiguous([x_rows, xcols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+    let out_buf = py
+        .allow_threads(move || match (&device, &inner_a, &buf_x) {
+            (
+                BackendDevice::Wgpu(device),
+                BackendCsrMatrix::Wgpu(matrix),
+                BackendBuffer::Wgpu(buffer),
+            ) => {
+                let op_x = hephaestus_wgpu::StridedOperand {
+                    buffer,
+                    layout: &layout_x,
+                };
+                hephaestus_wgpu::spmv_many(device, matrix, &op_x).map(BackendBuffer::Wgpu)
+            }
+            (
+                BackendDevice::Cuda(device),
+                BackendCsrMatrix::Cuda(matrix),
+                BackendBuffer::Cuda(buffer),
+            ) => {
+                let op_x = hephaestus_cuda::StridedOperand {
+                    buffer,
+                    layout: &layout_x,
+                };
+                hephaestus_cuda::spmv_many(device, matrix, &op_x)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "spmv_many operands belong to different backends".to_string(),
+            }),
+        })
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    let (rows, _) = a.inner.shape();
+    Ok(PyArray {
+        buffer: out_buf,
+        device: a.device.clone(),
+        shape: vec![rows, xcols],
     })
 }
 
@@ -2100,19 +3073,27 @@ fn uniform_with_seed(
     let dev = device.inner.clone();
     let shape_cloned = shape.clone();
     let out_buf = py
-        .allow_threads(move || match shape_cloned.len() {
-            1 => hephaestus_wgpu::uniform_with_seed(&dev, [shape_cloned[0]], low, high, seed),
-            2 => hephaestus_wgpu::uniform_with_seed(
-                &dev,
-                [shape_cloned[0], shape_cloned[1]],
-                low,
-                high,
-                seed,
-            ),
-            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+        .allow_threads(move || match (&dev, shape_cloned.as_slice()) {
+            (BackendDevice::Wgpu(device), [n]) => {
+                hephaestus_wgpu::uniform_with_seed(device, [*n], low, high, seed)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Wgpu(device), [rows, cols]) => {
+                hephaestus_wgpu::uniform_with_seed(device, [*rows, *cols], low, high, seed)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), [n]) => {
+                hephaestus_cuda::uniform_with_seed(device, [*n], low, high, seed)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            (BackendDevice::Cuda(device), [rows, cols]) => {
+                hephaestus_cuda::uniform_with_seed(device, [*rows, *cols], low, high, seed)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            (_, shape) => Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!(
                     "RNG only supports 1D or 2D shapes, got rank {}",
-                    shape_cloned.len()
+                    shape.len()
                 ),
             }),
         })
@@ -2137,19 +3118,27 @@ fn normal_with_seed(
     let dev = device.inner.clone();
     let shape_cloned = shape.clone();
     let out_buf = py
-        .allow_threads(move || match shape_cloned.len() {
-            1 => hephaestus_wgpu::normal_with_seed(&dev, [shape_cloned[0]], mean, std_dev, seed),
-            2 => hephaestus_wgpu::normal_with_seed(
-                &dev,
-                [shape_cloned[0], shape_cloned[1]],
-                mean,
-                std_dev,
-                seed,
-            ),
-            _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
+        .allow_threads(move || match (&dev, shape_cloned.as_slice()) {
+            (BackendDevice::Wgpu(device), [n]) => {
+                hephaestus_wgpu::normal_with_seed(device, [*n], mean, std_dev, seed)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Wgpu(device), [rows, cols]) => {
+                hephaestus_wgpu::normal_with_seed(device, [*rows, *cols], mean, std_dev, seed)
+                    .map(BackendBuffer::Wgpu)
+            }
+            (BackendDevice::Cuda(device), [n]) => {
+                hephaestus_cuda::normal_with_seed(device, [*n], mean, std_dev, seed)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            (BackendDevice::Cuda(device), [rows, cols]) => {
+                hephaestus_cuda::normal_with_seed(device, [*rows, *cols], mean, std_dev, seed)
+                    .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+            }
+            (_, shape) => Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!(
                     "RNG only supports 1D or 2D shapes, got rank {}",
-                    shape_cloned.len()
+                    shape.len()
                 ),
             }),
         })
@@ -2208,6 +3197,7 @@ fn pyhephaestus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pinv, m)?)?;
     m.add_function(wrap_pyfunction!(eigenvalues, m)?)?;
     m.add_function(wrap_pyfunction!(spmv, m)?)?;
+    m.add_function(wrap_pyfunction!(spmv_many, m)?)?;
     m.add_function(wrap_pyfunction!(spmm, m)?)?;
     m.add_function(wrap_pyfunction!(uniform_with_seed, m)?)?;
     m.add_function(wrap_pyfunction!(normal_with_seed, m)?)?;
@@ -2231,7 +3221,7 @@ mod tests {
     fn test_py_array_tolist_and_numpy() {
         prepare_python();
         Python::with_gil(|py| {
-            let device = PyDevice::new().unwrap();
+            let device = PyDevice::new(None).unwrap();
             let data = vec![1.0f32, 2.0, 3.0, 4.0];
             let py_arr = PyArray::new(py, data.clone(), &device).unwrap();
             assert_eq!(py_arr.tolist(py).unwrap(), data);
@@ -2245,7 +3235,7 @@ mod tests {
     fn test_py_sparse_matrix_roundtrip_spmv_spmm() {
         prepare_python();
         Python::with_gil(|py| {
-            let device = PyDevice::new().unwrap();
+            let device = PyDevice::new(None).unwrap();
 
             // Create a 3x3 matrix:
             // [ 2.0  0.0 -1.0 ]
@@ -2282,6 +3272,12 @@ mod tests {
                 c.tolist(py).unwrap(),
                 vec![-3.0f32, -2.0, 9.0, 12.0, 20.0, 24.0]
             );
+
+            let many = spmv_many(py, &sparse, &b).unwrap();
+            assert_eq!(
+                many.tolist(py).unwrap(),
+                vec![-3.0f32, -2.0, 9.0, 12.0, 20.0, 24.0]
+            );
         });
     }
 
@@ -2289,7 +3285,7 @@ mod tests {
     fn test_py_rng_initializers() {
         prepare_python();
         Python::with_gil(|py| {
-            let device = PyDevice::new().unwrap();
+            let device = PyDevice::new(None).unwrap();
             let u = uniform_with_seed(py, vec![100], -1.0, 2.0, 13, &device).unwrap();
             assert_eq!(u.shape, vec![100]);
             let u_list = u.tolist(py).unwrap();

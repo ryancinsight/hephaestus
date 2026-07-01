@@ -15,16 +15,18 @@ use hephaestus_wgpu::{
     bidiagonalize, binary_elementwise_into, bunch_kaufman, cholesky_decompose_blocked, col_piv_qr,
     cumsum_into, det, dot, eigenvalues, full_piv_lu, hessenberg, kron_into, lu_decompose,
     lu_decompose_blocked, matexp, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into,
-    min_axis_into, norm_l1, norm_l2, norm_max, normal_with_seed, pinv, qr_decompose,
-    qr_decompose_blocked, reduction, schur, spmm, spmv, sum_axis_into, svd_decompose,
-    symmetric_eigen_jacobi, trace, udu_decompose, unary_elementwise_into, uniform_with_seed, AddOp,
-    ExpOp, GpuCsrMatrix, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    min_axis_into, norm_l1, norm_l2, norm_max, normal_with_seed, pinv, prepare_max_axis_into,
+    prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
+    qr_decompose, qr_decompose_blocked, schur, spmm, spmv, submit_prepared_axis_reduction_batch,
+    sum_axis_into, svd_decompose, symmetric_eigen_jacobi, trace, udu_decompose,
+    unary_elementwise_into, uniform_with_seed, AddOp, ExpOp, GpuCsrMatrix,
+    StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
 };
-use leto::Complex;
 use leto::Storage;
 use nalgebra::DMatrix;
 use ndarray::Array2 as NdArray2;
 use ndarray::{Array1 as NdArray1, Axis};
+use num_complex::Complex;
 
 const LEN: usize = 1 << 20; // 1,048,576 elements for elementwise
 const LINALG_LEN: usize = 1 << 16; // 65,536 elements for dot/norms
@@ -268,14 +270,19 @@ fn main() {
     println!("WGPU GPU Backend: {}", wgpu_dev.backend_name());
 
     // Setup CUDA second
-    let cuda_dev = match CudaDevice::try_default() {
-        Ok(d) => {
-            println!("CUDA GPU Backend acquired successfully.\n");
-            Some(d)
-        }
-        Err(e) => {
-            println!("CUDA GPU Backend not available (skipping CUDA benchmarks): {e}\n");
-            None
+    let cuda_dev = if std::env::var_os("HEPHAESTUS_BENCH_DISABLE_CUDA").is_some() {
+        println!("CUDA GPU Backend disabled by HEPHAESTUS_BENCH_DISABLE_CUDA.\n");
+        None
+    } else {
+        match CudaDevice::try_default() {
+            Ok(d) => {
+                println!("CUDA GPU Backend acquired successfully.\n");
+                Some(d)
+            }
+            Err(e) => {
+                println!("CUDA GPU Backend not available (skipping CUDA benchmarks): {e}\n");
+                None
+            }
         }
     };
 
@@ -487,15 +494,18 @@ fn main() {
 
         // WGPU
         let wg_a = wgpu_dev.upload(&host_a).unwrap();
-        let wg_out = reduction::<SumOp, f32>(&wgpu_dev, &wg_a).unwrap();
+        let prepared_sum = prepare_reduction::<SumOp, f32>(&wgpu_dev, &wg_a).unwrap();
+        prepared_sum.dispatch(&wgpu_dev).unwrap();
         wait_wgpu(&wgpu_dev);
         let mut got_wgpu = [0.0f32; 1];
-        wgpu_dev.download(&wg_out, &mut got_wgpu).unwrap();
+        wgpu_dev
+            .download(prepared_sum.output(), &mut got_wgpu)
+            .unwrap();
         assert!((got_wgpu[0] - leto_out).abs() < 1e-2 * leto_out.abs());
 
         let t_wgpu = Instant::now();
         for _ in 0..ITERS {
-            let _res = reduction::<SumOp, f32>(&wgpu_dev, &wg_a).unwrap();
+            prepared_sum.dispatch(&wgpu_dev).unwrap();
         }
         wait_wgpu(&wgpu_dev);
         println!(
@@ -606,19 +616,45 @@ fn main() {
             4.0 * f32::EPSILON,
         );
 
+        let prepared_axis_outputs: Vec<_> = (0..ITERS)
+            .map(|_| wgpu_dev.alloc_zeroed::<f32>(axis_n).unwrap())
+            .collect();
+        let prepared_axis_reductions: Vec<_> = prepared_axis_outputs
+            .iter()
+            .map(|out| {
+                let output = WgpuStridedOperand {
+                    buffer: out,
+                    layout: &axis_output_layout,
+                };
+                match op_idx {
+                    0 => {
+                        prepare_sum_axis_into(&wgpu_dev, axis_input, 0, output, BlockWidth::DEFAULT)
+                            .unwrap()
+                    }
+                    1 => {
+                        prepare_min_axis_into(&wgpu_dev, axis_input, 0, output, BlockWidth::DEFAULT)
+                            .unwrap()
+                    }
+                    2 => {
+                        prepare_max_axis_into(&wgpu_dev, axis_input, 0, output, BlockWidth::DEFAULT)
+                            .unwrap()
+                    }
+                    _ => prepare_mean_axis_into(
+                        &wgpu_dev,
+                        axis_input,
+                        0,
+                        output,
+                        BlockWidth::DEFAULT,
+                    )
+                    .unwrap(),
+                }
+            })
+            .collect();
+        let prepared_axis_refs: Vec<_> = prepared_axis_reductions.iter().collect();
+        submit_prepared_axis_reduction_batch(&wgpu_dev, &prepared_axis_refs).unwrap();
+        wait_wgpu(&wgpu_dev);
         let t_wgpu = Instant::now();
-        for _ in 0..ITERS {
-            match op_idx {
-                0 => sum_axis_into(&wgpu_dev, axis_input, 0, axis_output, BlockWidth::DEFAULT)
-                    .unwrap(),
-                1 => min_axis_into(&wgpu_dev, axis_input, 0, axis_output, BlockWidth::DEFAULT)
-                    .unwrap(),
-                2 => max_axis_into(&wgpu_dev, axis_input, 0, axis_output, BlockWidth::DEFAULT)
-                    .unwrap(),
-                _ => mean_axis_into(&wgpu_dev, axis_input, 0, axis_output, BlockWidth::DEFAULT)
-                    .unwrap(),
-            }
-        }
+        submit_prepared_axis_reduction_batch(&wgpu_dev, &prepared_axis_refs).unwrap();
         wait_wgpu(&wgpu_dev);
         println!(
             "GPU (WGPU):   {} ns/iter",

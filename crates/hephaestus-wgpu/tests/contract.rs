@@ -7,7 +7,9 @@ use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
     binary_elementwise, binary_elementwise_into, cumsum_into, matrix_rank,
     matrix_rank_with_tolerance, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
-    min_axis_into, reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
+    min_axis_into, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
+    prepare_reduction, prepare_sum_axis_into, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
     sum_axis, sum_axis_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
     ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
     SqrtOp, SubOp, SumOp, WgpuDevice,
@@ -83,8 +85,8 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
 }
 
 fn assert_complex_spectra_close(
-    got: &[leto::Complex<f32>],
-    expected: &[leto::Complex<f32>],
+    got: &[num_complex::Complex<f32>],
+    expected: &[num_complex::Complex<f32>],
     abs_tol: f32,
     rel_tol: f32,
 ) {
@@ -176,7 +178,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     }
 }
 
-fn sort_complex(values: &mut [leto::Complex<f32>]) {
+fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
             .total_cmp(&rhs.re)
@@ -185,8 +187,8 @@ fn sort_complex(values: &mut [leto::Complex<f32>]) {
 }
 
 fn assert_complex_spectrum_close(
-    actual: &[leto::Complex<f32>],
-    expected: &[leto::Complex<f32>],
+    actual: &[num_complex::Complex<f32>],
+    expected: &[num_complex::Complex<f32>],
     tolerance: f32,
 ) {
     assert_eq!(actual.len(), expected.len());
@@ -534,6 +536,17 @@ fn reduction_sum_matches_cpu_reference() {
             "f32 sum mismatch at size {}",
             size
         );
+        let prepared_f32 = prepare_reduction::<SumOp, f32>(&device, &buf_f32).unwrap();
+        prepared_f32.dispatch(&device).unwrap();
+        let mut got_prepared_f32 = vec![0.0f32; 1];
+        device
+            .download(prepared_f32.output(), &mut got_prepared_f32)
+            .unwrap();
+        assert_eq!(
+            got_prepared_f32[0], expected_f32,
+            "prepared f32 sum mismatch at size {}",
+            size
+        );
 
         // u32
         let host_u32: Vec<u32> = (0..size).map(|i| i as u32).collect();
@@ -547,6 +560,28 @@ fn reduction_sum_matches_cpu_reference() {
             "u32 sum mismatch at size {}",
             size
         );
+        let prepared_u32 = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+        prepared_u32.dispatch(&device).unwrap();
+        let mut got_prepared_u32 = vec![0u32; 1];
+        device
+            .download(prepared_u32.output(), &mut got_prepared_u32)
+            .unwrap();
+        assert_eq!(
+            got_prepared_u32[0], expected_u32,
+            "prepared u32 sum mismatch at size {}",
+            size
+        );
+        if size == 1027 {
+            let batch_a = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+            let batch_b = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+            submit_prepared_reduction_batch(&device, &[&batch_a, &batch_b]).unwrap();
+            let mut got_batch_a = vec![0u32; 1];
+            let mut got_batch_b = vec![0u32; 1];
+            device.download(batch_a.output(), &mut got_batch_a).unwrap();
+            device.download(batch_b.output(), &mut got_batch_b).unwrap();
+            assert_eq!(got_batch_a[0], expected_u32);
+            assert_eq!(got_batch_b[0], expected_u32);
+        }
 
         // i32
         let host_i32: Vec<i32> = (0..size).map(|i| if i % 2 == 0 { i } else { -i }).collect();
@@ -743,6 +778,13 @@ fn axis_reductions_match_leto_reference() {
     device.download(&out_axis1, &mut got_axis1).unwrap();
     assert_eq!(got_axis1, expected_axis1);
 
+    let narrow_axis1 = sum_axis(&device, input_operand, 1, BlockWidth::new(2).unwrap()).unwrap();
+    let mut got_narrow_axis1 = vec![0.0f32; 2];
+    device
+        .download(&narrow_axis1, &mut got_narrow_axis1)
+        .unwrap();
+    assert_eq!(got_narrow_axis1, expected_axis1);
+
     let min_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
     min_axis_into(
         &device,
@@ -820,6 +862,119 @@ fn axis_reductions_match_leto_reference() {
         .download(&allocated_mean_axis0, &mut got_allocated_mean_axis0)
         .unwrap();
     assert_eq!(got_allocated_mean_axis0, expected_mean_axis0);
+
+    let prepared_sum_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_sum_axis0 = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_sum_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_sum_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_sum_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_sum_axis0_out, &mut got_prepared_sum_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_sum_axis0, expected_axis0);
+
+    let batch_sum_axis0_out_a = device.alloc_zeroed::<f32>(3).unwrap();
+    let batch_sum_axis0_out_b = device.alloc_zeroed::<f32>(3).unwrap();
+    let batch_sum_axis0_a = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &batch_sum_axis0_out_a,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let batch_sum_axis0_b = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &batch_sum_axis0_out_b,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    submit_prepared_axis_reduction_batch(&device, &[&batch_sum_axis0_a, &batch_sum_axis0_b])
+        .unwrap();
+    let mut got_batch_sum_axis0_a = vec![0.0f32; 3];
+    let mut got_batch_sum_axis0_b = vec![0.0f32; 3];
+    device
+        .download(&batch_sum_axis0_out_a, &mut got_batch_sum_axis0_a)
+        .unwrap();
+    device
+        .download(&batch_sum_axis0_out_b, &mut got_batch_sum_axis0_b)
+        .unwrap();
+    assert_eq!(got_batch_sum_axis0_a, expected_axis0);
+    assert_eq!(got_batch_sum_axis0_b, expected_axis0);
+
+    let prepared_min_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_min_axis0 = prepare_min_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_min_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_min_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_min_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_min_axis0_out, &mut got_prepared_min_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_min_axis0, expected_min_axis0);
+
+    let prepared_max_axis1_out = device.alloc_zeroed::<f32>(2).unwrap();
+    let prepared_max_axis1 = prepare_max_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &prepared_max_axis1_out,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_max_axis1.dispatch(&device).unwrap();
+    let mut got_prepared_max_axis1 = vec![0.0f32; 2];
+    device
+        .download(&prepared_max_axis1_out, &mut got_prepared_max_axis1)
+        .unwrap();
+    assert_eq!(got_prepared_max_axis1, expected_max_axis1);
+
+    let prepared_mean_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_mean_axis0 = prepare_mean_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_mean_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_mean_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_mean_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_mean_axis0_out, &mut got_prepared_mean_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_mean_axis0, expected_mean_axis0);
 }
 
 #[test]
@@ -1814,13 +1969,13 @@ fn eigenvalues_match_closed_form_diagonal() {
     )
     .unwrap();
 
-    let mut got = vec![leto::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
     got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
 
     let expected = [
-        leto::Complex::new(2.0f32, 0.0),
-        leto::Complex::new(3.0f32, 0.0),
+        num_complex::Complex::new(2.0f32, 0.0),
+        num_complex::Complex::new(3.0f32, 0.0),
     ];
     for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
         assert_eq!(
@@ -1850,7 +2005,7 @@ fn eigenvalues_matches_leto_reference() {
     )
     .unwrap();
 
-    let mut got = vec![leto::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
 
     let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
@@ -1879,8 +2034,8 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
-    use leto::Complex;
     use leto::Layout;
+    use num_complex::Complex;
 
     let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
         (
@@ -1923,9 +2078,9 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
-    use leto::Complex;
     use leto::Layout;
     use nalgebra::DMatrix;
+    use num_complex::Complex;
 
     let cases: [(usize, Vec<f32>, f32); 4] = [
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
@@ -1975,9 +2130,9 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
         return;
     };
     use hephaestus_wgpu::{eigenvalues, StridedOperand};
-    use leto::Complex;
     use leto::Layout;
     use nalgebra::DMatrix;
+    use num_complex::Complex;
 
     let n = 3usize;
     let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
@@ -2323,8 +2478,8 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         },
     )
     .unwrap();
-    let mut got_t = vec![leto::Complex::new(0.0f32, 0.0); n];
-    let mut got_a = vec![leto::Complex::new(0.0f32, 0.0); n];
+    let mut got_t = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![num_complex::Complex::new(0.0f32, 0.0); n];
     device.download(&t_values, &mut got_t).unwrap();
     device.download(&a_values, &mut got_a).unwrap();
     assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
@@ -4256,7 +4411,11 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{spmm, spmv, GpuCsrMatrix, StridedOperand};
+    use hephaestus_wgpu::{
+        prepare_spmm, prepare_spmv, prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many,
+        spmv_many_into, submit_prepared_sparse_batch, GpuCsrMatrix, PreparedSparseDispatch,
+        StridedOperand,
+    };
     use leto::Layout;
 
     // Create a 3x3 diagonal-ish matrix:
@@ -4284,6 +4443,26 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     device.download(&y_buf, &mut got_y).unwrap();
     assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 1.0e-4);
 
+    let mut y_reused = device.upload(&[99.0f32, 99.0, 99.0]).unwrap();
+    spmv_into(&device, &gpu_csr, &x_buf, &mut y_reused).unwrap();
+    let mut got_y_reused = vec![0.0f32; 3];
+    device.download(&y_reused, &mut got_y_reused).unwrap();
+    assert_close_slice(&got_y_reused, &got_y, 1.0e-4, 1.0e-4);
+
+    let mut y_prepared = device.upload(&[77.0f32, 77.0, 77.0]).unwrap();
+    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &mut y_prepared).unwrap();
+    prepared_spmv.dispatch();
+    let mut got_y_prepared = vec![0.0f32; 3];
+    device.download(&y_prepared, &mut got_y_prepared).unwrap();
+    assert_close_slice(&got_y_prepared, &got_y, 1.0e-4, 1.0e-4);
+
+    let mut y_batched = device.upload(&[55.0f32, 55.0, 55.0]).unwrap();
+    let batched_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &mut y_batched).unwrap();
+    submit_prepared_sparse_batch(&[PreparedSparseDispatch::Spmv(&batched_spmv)]).unwrap();
+    let mut got_y_batched = vec![0.0f32; 3];
+    device.download(&y_batched, &mut got_y_batched).unwrap();
+    assert_close_slice(&got_y_batched, &got_y, 1.0e-4, 1.0e-4);
+
     // SpMM: C = A * B, B = [ 1.0  2.0 ]
     //                      [ 3.0  4.0 ]
     //                      [ 5.0  6.0 ]
@@ -4301,4 +4480,46 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     let mut got_c = vec![0.0f32; 6];
     device.download(&c_buf, &mut got_c).unwrap();
     assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 1.0e-4);
+
+    let many_c_buf = spmv_many(&device, &gpu_csr, &b_op).unwrap();
+    let mut got_many_c = vec![0.0f32; 6];
+    device.download(&many_c_buf, &mut got_many_c).unwrap();
+    assert_close_slice(&got_many_c, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_reused = device.upload(&[99.0f32; 6]).unwrap();
+    spmm_into(&device, &gpu_csr, &b_op, &mut c_reused).unwrap();
+    let mut got_c_reused = vec![0.0f32; 6];
+    device.download(&c_reused, &mut got_c_reused).unwrap();
+    assert_close_slice(&got_c_reused, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut many_c_reused = device.upload(&[88.0f32; 6]).unwrap();
+    spmv_many_into(&device, &gpu_csr, &b_op, &mut many_c_reused).unwrap();
+    let mut got_many_c_reused = vec![0.0f32; 6];
+    device
+        .download(&many_c_reused, &mut got_many_c_reused)
+        .unwrap();
+    assert_close_slice(&got_many_c_reused, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_prepared = device.upload(&[77.0f32; 6]).unwrap();
+    let prepared_spmm = prepare_spmm(&device, &gpu_csr, &b_op, &mut c_prepared).unwrap();
+    prepared_spmm.dispatch();
+    let mut got_c_prepared = vec![0.0f32; 6];
+    device.download(&c_prepared, &mut got_c_prepared).unwrap();
+    assert_close_slice(&got_c_prepared, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut many_c_prepared = device.upload(&[66.0f32; 6]).unwrap();
+    let prepared_many = prepare_spmv_many(&device, &gpu_csr, &b_op, &mut many_c_prepared).unwrap();
+    prepared_many.dispatch();
+    let mut got_many_c_prepared = vec![0.0f32; 6];
+    device
+        .download(&many_c_prepared, &mut got_many_c_prepared)
+        .unwrap();
+    assert_close_slice(&got_many_c_prepared, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_batched = device.upload(&[55.0f32; 6]).unwrap();
+    let batched_spmm = prepare_spmm(&device, &gpu_csr, &b_op, &mut c_batched).unwrap();
+    submit_prepared_sparse_batch(&[PreparedSparseDispatch::Spmm(&batched_spmm)]).unwrap();
+    let mut got_c_batched = vec![0.0f32; 6];
+    device.download(&c_batched, &mut got_c_batched).unwrap();
+    assert_close_slice(&got_c_batched, &got_c, 1.0e-4, 1.0e-4);
 }
