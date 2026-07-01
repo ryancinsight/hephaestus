@@ -19,6 +19,7 @@ sparse = ["dep:leto-ops"]
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
+num-complex = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }
@@ -31,7 +32,6 @@ wgpu = { workspace = true }
 bytemuck = { workspace = true }
 
 [dev-dependencies]
-num-complex = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }

@@ -6,6 +6,31 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Added
 
+- `hephaestus-cuda` / `hephaestus-python` [minor]: exposed multi-RHS sparse
+  SpMV as `spmv_many`/`spmv_many_into` on CUDA and `hp.spmv_many(...)` in
+  Python, both delegating to the existing sparse-dense kernel rather than a
+  duplicate sparse implementation.
+
+- `hephaestus-wgpu` [minor]: added `spmv_many`, `spmv_many_into`, and
+  `prepare_spmv_many` as the public multi-RHS SpMV surface over the existing
+  CSR×dense SpMM kernel. This exposes the measured GPU-preferred route for
+  batched RHS vectors without duplicating sparse kernels.
+
+- `hephaestus-wgpu` [minor]: added prepared sparse dispatch APIs,
+  `prepare_spmv`/`prepare_spmm`, with `PreparedSpmv::dispatch` and
+  `PreparedSpmm::dispatch` for repeated CSR products over fixed WGPU buffers.
+  The prepared path reuses the pipeline, metadata uniform, and bind group across
+  dispatches while preserving existing `spmv_into`/`spmm_into` one-shot APIs.
+- `hephaestus-wgpu` [minor]: added `PreparedSparseDispatch` and
+  `submit_prepared_sparse_batch` for one-submit batching of prepared sparse
+  operations over independent output buffers.
+
+- `hephaestus-python` [minor]: added backend-aware Python device selection via
+  `Device("wgpu")` / `Device("cuda")` and routed dense linalg, sparse
+  matrix-vector/matrix-matrix products, elementwise operations, reductions, and
+  seeded random initializers through the selected WGPU or CUDA backend. The
+  default remains WGPU for existing Python callers.
+
 - `hephaestus-cuda` [minor]: dynamic-rank strided elementwise entry points
   (`binary_elementwise_strided_dyn_into`, `unary_elementwise_strided_dyn_into`)
   over borrowed shape/stride slices. Runtime-shaped consumers can now delegate
@@ -15,6 +40,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   helpers and cached PTX kernels.
 
 ### Tests
+
+- `hephaestus-wgpu` [patch]: sparse CSR contract coverage now verifies
+  caller-owned `spmv_into` and `spmm_into` outputs against the allocating
+  `spmv`/`spmm` paths, including overwrite of pre-existing output values.
+
+- `hephaestus-python` [patch]: extended CuPy parity coverage with a CUDA-backed
+  dense-linalg path when CUDA is available and an explicit mixed-backend
+  rejection test so WGPU and CUDA arrays cannot be combined silently.
 
 - `hephaestus-cuda` [patch]: added dynamic strided CUDA value tests for
   broadcasted binary add and transposed unary sqrt, plus downstream Coeus CUDA
@@ -31,6 +64,92 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   the test now documents.
 
 ### Changed
+
+- `hephaestus-wgpu` / `-cuda` / `-metal` / `-python` [patch]: source `Complex`
+  from `num_complex` directly (the layout-compatible type `leto-ops` already
+  returns) after `leto` dropped its `Complex` re-export. Restores the general
+  eigenvalue upload path and Python complex bindings without a cross-boundary
+  type conversion; `num-complex` moved to `[dependencies]` on the crates whose
+  library code references it.
+
+- `hephaestus-wgpu` [patch]: rank-2 axis-0 reductions now use a tiled WGPU
+  kernel that reduces up to 16 output columns per workgroup, replacing the
+  previous one-workgroup-per-output geometry for that shape while preserving the
+  generic axis API and non-axis-0 fallback.
+
+- `hephaestus` [patch]: refreshed reduction comparative rows after the Leto
+  row-major rank-2 axis-0 CPU fast path. WGPU prepared final-pass scalar sum now
+  beats both Leto and `ndarray` on the local run; Leto CPU axis reductions are
+  now at or near `ndarray` for the 256x256 axis-0 benchmark, while WGPU axis
+  reductions remain launch/synchronization-bound at that small shape.
+
+- `hephaestus-wgpu` [minor]: scalar reductions now use a final-pass WGSL kernel
+  that lets one workgroup fold up to `BlockWidth * BlockWidth` partials,
+  reducing the $2^{20}$ sum tree from three compute passes to two. Prepared
+  reductions also support batch submission over independent output buffers via
+  `submit_prepared_reduction_batch` and
+  `submit_prepared_axis_reduction_batch`.
+
+- `hephaestus-wgpu` [minor]: added `PreparedReduction` plus
+  `prepare_reduction` and `prepare_reduction_with_width` for repeated scalar
+  reductions over fixed input buffers. The prepared path reuses the compiled
+  pipeline, tree scratch buffers, and bind groups; the latest comparative run
+  shows this removes setup churn but does not by itself close the `ndarray`
+  scalar-sum gap when repeated dispatches reuse the same scratch buffers.
+
+- `hephaestus-wgpu` [minor]: added `PreparedAxisReduction` plus
+  `prepare_sum_axis_into`, `prepare_min_axis_into`, `prepare_max_axis_into`, and
+  `prepare_mean_axis_into` for repeated fixed-buffer axis reductions. The
+  prepared path reuses the selected pipeline, metadata uniform, and bind group;
+  comparative axis-reduction rows now measure this repeated-dispatch surface.
+
+- `hephaestus-wgpu` [patch]: axis sum/min/max/mean now use a workgroup-memory
+  tree reduction when the reduced axis fits the selected `BlockWidth`, with the
+  previous scalar-per-output shader retained as the long-axis fallback. The
+  comparative benchmark also accepts `HEPHAESTUS_BENCH_DISABLE_CUDA` so WGPU vs
+  CPU reduction rows remain measurable on hosts where CUDA terminates the full
+  harness before later sections.
+
+- `hephaestus-wgpu` [patch]: blocked QR now downloads the first panel from the
+  original input buffer before queueing the full input copy to the work buffer,
+  reducing the first-panel dependency chain while preserving queue-ordered
+  correctness for later in-place updates. The decomposition sync profile
+  measured the QR sync floor at 213.209 µs.
+
+- `hephaestus-wgpu` [patch]: blocked QR now reuses the Householder metadata
+  uniform buffer, bind group, and host reflector-metadata scratch across panels.
+  The decomposition sync profile remains transfer-bound (QR sync floor
+  230.962 µs), so this removes CPU-side WGPU resource churn without claiming
+  blocked-QR performance parity.
+
+- `hephaestus-wgpu` [patch]: sparse comparative benchmarks now include the
+  multi-RHS SpMV policy: repeated Leto CPU `spmv` calls are compared with the
+  equivalent WGPU `spmv_many` path. On the local RTX 5080 workstation, 128 RHS
+  vectors measured 62.758 µs on WGPU versus 150.414 µs for repeated Leto SpMV.
+
+- `hephaestus-wgpu` [patch]: the focused sparse comparative benchmark now times
+  the fastest measured repeated-dispatch path per sparse operation. On the
+  local RTX 5080 workstation, prepared SpMV measured 61.146 µs versus Leto's
+  1.232 µs, while warmed independent-output batched SpMM with the dense-RHS fast
+  path measured 12.258 µs versus Leto's 35.232 µs.
+
+- `hephaestus-wgpu` [patch]: added a C-dense RHS fast path for WGPU SpMM while
+  preserving the existing generic strided kernel for non-contiguous dense views.
+  The focused sparse benchmark now records the dense-RHS path at 84.978 µs
+  versus Leto's 40.752 µs for the 1000x1000 CSR by 1000x128 case on the local
+  RTX 5080 workstation.
+
+- `hephaestus-wgpu` [patch]: sparse comparative benchmarks now time reusable
+  caller-owned output buffers through `spmv_into`/`spmm_into` instead of
+  allocating a fresh WGPU output buffer inside every timed iteration. This keeps
+  the benchmark aligned with the production GPU API expected for repeated sparse
+  dispatch.
+
+- `hephaestus-cuda` [patch]: `scalar_elementwise_strided` and
+  `scalar_elementwise_strided_into` now pass the scalar as a CUDA kernel argument
+  instead of uploading a one-element device buffer and lowering through the
+  binary strided kernel. This removes the per-call scalar storage-buffer
+  allocation while preserving scalar/binary broadcast semantics.
 
 - `hephaestus-wgpu` [patch]: strided scalar elementwise ops
   (`scalar_elementwise_strided`/`_into`) now read the broadcast scalar from a
@@ -81,6 +200,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   tolerance-zeroed `0`). Closes the previously-untested ill-conditioned
   divergence residuals.
 
+- `hephaestus-wgpu` [patch]: restored the bidiagonalization reconstruction
+  contract after fixing Leto's reflector-panel factor accumulation. The focused
+  WGPU contract suite now passes the documented `A = U B V^T` tall case.
+
 ### Changed
 
 - `hephaestus-wgpu` [patch]: resolve a sub-allocated staging pointer to its
@@ -110,8 +233,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   compute pass per panel, preserving reflector order within each column
   workgroup and removing per-reflector compute-pass launches.
 - `hephaestus-wgpu` [patch]: extended the blocked decomposition sync
-  benchmark with 70x35 blocked-QR CPU panel and final Leto recompute component
-  timings, isolating those costs from the host/device synchronization floor.
+  benchmark with the 70x35 blocked-QR CPU panel component and removed the
+  obsolete final-Leto-recompute row. The production blocked QR path constructs
+  the host-side `QrDecomposition` from computed blocked factors via
+  `from_raw_parts`, so profiling now targets the real synchronization floor.
 - `hephaestus-wgpu` [patch]: packed blocked QR Householder vector offsets and
   beta coefficients into one reflector metadata buffer, reducing per-panel
   metadata uploads and storage bindings in the WGPU trailing-update kernel.

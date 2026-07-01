@@ -335,6 +335,34 @@ extern "C" __global__ void unary_strided_kernel(
     )
 }
 
+fn scalar_shader<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+    format!(
+        r#"
+{meta}
+extern "C" __global__ void scalar_strided_kernel(
+    Meta lmeta,
+    const {ty}* input,
+    {ty} scalar,
+    {ty}* out
+) {{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= lmeta.offsets[3]) {{
+        return;
+    }}
+{decode}
+    {ty} a_value = input[a_off];
+    {ty} a = a_value;
+    {ty} b = scalar;
+    out[o_off] = {expr};
+}}
+"#,
+        meta = CUDA_META,
+        ty = T::CUDA_TYPE,
+        decode = CUDA_DECODE,
+        expr = Op::CUDA_EXPR,
+    )
+}
+
 fn launch_binary_strided<Op, T>(
     device: &CudaDevice,
     a: &CudaBuffer<T>,
@@ -469,6 +497,77 @@ where
     #[cfg(not(feature = "cuda"))]
     {
         let _ = (kernel, grid_size_val, meta);
+    }
+
+    Ok(())
+}
+
+fn launch_scalar_strided<Op, T>(
+    device: &CudaDevice,
+    a: &CudaBuffer<T>,
+    scalar: T,
+    out: &CudaBuffer<T>,
+    meta: StridedMeta,
+    width: BlockWidth,
+    len: usize,
+) -> Result<()>
+where
+    Op: BinaryCudaOp,
+    T: CudaScalar + Pod,
+{
+    let grid_size_val = grid_size(len, width)?;
+
+    let key = format!(
+        "strided_scalar_{}_{}_{}",
+        std::any::type_name::<Op>(),
+        std::any::type_name::<T>(),
+        width.get()
+    );
+
+    let kernel = cached_kernel(device, key, "scalar_strided_kernel", || {
+        scalar_shader::<Op, T>()
+    })?;
+
+    #[cfg(feature = "cuda")]
+    {
+        let mut meta_val = meta;
+        let mut a_ptr = a.raw();
+        let mut scalar_val = scalar;
+        let mut out_ptr = out.raw();
+
+        let mut args: [*mut std::ffi::c_void; 4] = [
+            &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
+            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+            &mut scalar_val as *mut T as *mut std::ffi::c_void,
+            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+        ];
+
+        // SAFETY: Buffers are valid, scalar is copied by value, dimensions match.
+        unsafe {
+            let res = cuda_core::sys::cuLaunchKernel(
+                kernel.func,
+                grid_size_val,
+                1,
+                1,
+                width.get(),
+                1,
+                1,
+                0,
+                std::ptr::null_mut(),
+                args.as_mut_ptr(),
+                std::ptr::null_mut(),
+            );
+            if res != 0 {
+                return Err(HephaestusError::DispatchFailed {
+                    message: format!("cuLaunchKernel failed with code: {res}"),
+                });
+            }
+        }
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (kernel, grid_size_val, meta, scalar);
     }
 
     Ok(())
@@ -721,24 +820,44 @@ where
     Op: BinaryCudaOp,
     T: CudaScalar + Pod,
 {
-    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
-    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
-    binary_elementwise_strided_into::<Op, T, N>(
-        device,
-        a,
-        StridedOperand {
-            buffer: &scalar_buffer,
-            layout: &scalar_layout,
-        },
-        out,
-        width,
-    )
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(a.buffer.len())
+        .map_err(map_layout_err)?;
+    let len = validate_out(out.buffer, out_layout)?;
+    if len == 0 {
+        return Ok(());
+    }
+
+    let meta = StridedMeta {
+        shape: pad_shape(out_layout.shape)?,
+        a_strides: pad_strides(a_layout.strides)?,
+        b_strides: [0; 4],
+        out_strides: pad_strides(out_layout.strides)?,
+        offsets: [
+            to_u32(a_layout.offset, "input offset")?,
+            0,
+            to_u32(out_layout.offset, "output offset")?,
+            to_u32(len, "dispatch size")?,
+        ],
+    };
+
+    launch_scalar_strided::<Op, T>(device, a.buffer, scalar, out.buffer, meta, width, len)
 }
 
 /// Run `out = op(a, scalar)` over `output_shape`, allocating a C-contiguous output buffer.
 ///
-/// The scalar path delegates through [`binary_elementwise_strided`] with a
-/// one-element broadcast operand, preserving scalar/binary semantic identity.
+/// The scalar path delegates through [`scalar_elementwise_strided_into`], passing
+/// the scalar as a kernel argument instead of allocating a one-element device
+/// buffer.
 pub fn scalar_elementwise_strided<Op, T, const N: usize>(
     device: &CudaDevice,
     a: StridedOperand<'_, T, N>,
@@ -750,16 +869,22 @@ where
     Op: BinaryCudaOp,
     T: CudaScalar + Pod,
 {
-    let scalar_buffer = device.upload(core::slice::from_ref(&scalar))?;
-    let scalar_layout = Layout::new([1usize; N], [0isize; N], 0);
-    binary_elementwise_strided::<Op, T, N>(
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    scalar_elementwise_strided_into::<Op, T, N>(
         device,
         a,
+        scalar,
         StridedOperand {
-            buffer: &scalar_buffer,
-            layout: &scalar_layout,
+            buffer: &out,
+            layout: &out_layout,
         },
-        output_shape,
         width,
-    )
+    )?;
+    Ok(out)
 }

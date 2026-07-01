@@ -190,33 +190,6 @@ fn profile_blocked_qr_cpu_panel_lower_bound() {
     );
 }
 
-fn profile_blocked_qr_final_leto_recompute() {
-    let mut source = vec![0.0f32; QR_ROWS * QR_COLS];
-    for row in 0..QR_ROWS {
-        for col in 0..QR_COLS {
-            source[row * QR_COLS + col] = if row == col {
-                5.0
-            } else {
-                0.01 / (1.0 + row.abs_diff(col) as f32)
-            };
-        }
-    }
-
-    let layout = leto::Layout::c_contiguous([QR_ROWS, QR_COLS])
-        .expect("invariant: QR profile shape has valid contiguous layout");
-    let start = Instant::now();
-    for _ in 0..ITERS {
-        let view = leto::ArrayView::<f32, 2>::new(layout, &source);
-        let qr = leto_ops::qr_decompose(&view).expect("factor QR profile matrix");
-        black_box(qr.r());
-    }
-
-    println!(
-        "Blocked QR 70x35 final Leto recompute: {} ns/iter",
-        elapsed_per_iter(start.elapsed()).as_nanos()
-    );
-}
-
 fn profile_blocked_qr_timestamp_queries() {
     let device = match WgpuDevice::try_default_with_features_and_limits(
         "hephaestus-qr-timestamp-profile",
@@ -376,6 +349,5 @@ fn main() {
     profile_blocked_lu_sync(&device);
     profile_blocked_qr_sync(&device);
     profile_blocked_qr_cpu_panel_lower_bound();
-    profile_blocked_qr_final_leto_recompute();
     profile_blocked_qr_timestamp_queries();
 }

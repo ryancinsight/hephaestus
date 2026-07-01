@@ -1,4 +1,5 @@
 import time
+import os
 import numpy as np
 import pyhephaestus as ph
 import leto_python as lp
@@ -16,8 +17,8 @@ def run_bench():
     print("======================================================================")
     print(f"CuPy available: {CUPY_AVAILABLE}")
     
-    # Initialize WGPU device
-    dev = ph.Device()
+    backend = os.environ.get("HEPHAESTUS_BACKEND", "wgpu")
+    dev = ph.Device(backend)
     print(f"Initialized Hephaestus Device (Backend: {dev.backend_name})\n")
 
     # Benchmarking parameters
@@ -153,7 +154,7 @@ def run_bench():
             out_lp = lp.add(a_np, b_np)
         t_lp_add = (time.perf_counter() - t0) / iters
 
-        # Hephaestus (WGPU)
+        # Hephaestus
         for _ in range(5):  # Warmup
             out_ph = a_ph + b_ph
             out_ph = out_ph.exp()
@@ -192,7 +193,7 @@ def run_bench():
             out_lp = lp.div(a_np + 1.0, b_np + 1.0)
         t_lp_div = (time.perf_counter() - t0) / iters
 
-        # Hephaestus (WGPU)
+        # Hephaestus
         for _ in range(5):
             out_ph = (a_ph + 1.0) / (b_ph + 1.0)
             out_ph = out_ph ** 2.0
@@ -231,7 +232,7 @@ def run_bench():
             out_sum = lp.sum(a_np)
         t_lp_red = (time.perf_counter() - t0) / iters
 
-        # Hephaestus (WGPU)
+        # Hephaestus
         for _ in range(5):
             out_sum = a_ph.sum()
             out_mean = a_ph.mean()
@@ -451,7 +452,7 @@ def run_bench():
     print("======================================================================")
     
     print("\n### 1. Elementwise Add + Exp (ms)")
-    print("| Array Size | NumPy (CPU) | Leto CPU (Add-only) | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Array Size | NumPy (CPU) | Leto CPU (Add-only) | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['add_exp']['lp_add']:.3f}"
@@ -461,7 +462,7 @@ def run_bench():
         print(f"| {r['size']:,} | {r['add_exp']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 2. Elementwise Div + Pow (ms)")
-    print("| Array Size | NumPy (CPU) | Leto CPU (Div-only) | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Array Size | NumPy (CPU) | Leto CPU (Div-only) | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['div_pow']['lp_div']:.3f}"
@@ -471,7 +472,7 @@ def run_bench():
         print(f"| {r['size']:,} | {r['div_pow']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 3. Reductions (ms)")
-    print("| Array Size | NumPy (CPU) | Leto CPU (Sum-only) | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Array Size | NumPy (CPU) | Leto CPU (Sum-only) | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['reduction']['lp_sum']:.3f}"
@@ -481,7 +482,7 @@ def run_bench():
         print(f"| {r['size']:,} | {r['reduction']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 4. Matrix Multiplication (ms)")
-    print("| Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Shape | NumPy (CPU) | Leto CPU | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['matmul']['lp']:.3f}"
@@ -491,7 +492,7 @@ def run_bench():
         print(f"| ({r['rows']}x{r['cols']}) x ({r['cols']}x{r['rows']}) | {r['matmul']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 5. Vector Dot Product (ms)")
-    print("| Vector Size | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Vector Size | NumPy (CPU) | Leto CPU | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['dot']['lp']:.3f}"
@@ -501,7 +502,7 @@ def run_bench():
         print(f"| {r['size']:,} | {r['dot']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 6. Matrix Trace (ms)")
-    print("| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['trace']['lp']:.3f}"
@@ -511,7 +512,7 @@ def run_bench():
         print(f"| {r['rows']}x{r['rows']} | {r['trace']['np']:.3f} | {lp_val} | {ph_val} | {cp_val} | {speedup} |")
 
     print("\n### 7. Matrix Frobenius Norm (L2) (ms)")
-    print("| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus (WGPU GPU) | CuPy (CUDA) | Speedup vs Leto |")
+    print(f"| Matrix Shape | NumPy (CPU) | Leto CPU | Hephaestus ({dev.backend_name}) | CuPy (CUDA) | Speedup vs Leto |")
     print("|---|---|---|---|---|---|")
     for r in results:
         lp_val = f"{r['norm_l2']['lp']:.3f}"

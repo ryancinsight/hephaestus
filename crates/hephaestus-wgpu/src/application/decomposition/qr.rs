@@ -383,21 +383,13 @@ pub fn qr_decompose_blocked(
         });
     }
 
-    // Create a GPU working buffer that is a copy of the input matrix.
+    // Create a GPU working buffer for in-place updates. The full input copy is
+    // queued after the first panel is downloaded from the original input buffer
+    // so the first panel readback does not wait behind an avoidable full-matrix
+    // device copy. Queue ordering still guarantees the copy completes before
+    // the first write/update touches `work_buf`.
     let work_buf = device.alloc_zeroed::<f32>(m * n)?;
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-qr-copy"),
-        });
-    encoder.copy_buffer_to_buffer(
-        &matrix.buffer.buffer,
-        0,
-        &work_buf.buffer,
-        0,
-        WgpuDevice::byte_size::<f32>(m * n)?,
-    );
-    device.queue().submit(Some(encoder.finish()));
+    let mut work_copy_queued = false;
 
     let block_size = QR_BLOCK_SIZE.min(n);
 
@@ -427,6 +419,33 @@ pub fn qr_decompose_blocked(
         "hephaestus-hh",
         hh_shader_source,
     );
+    let raw_hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
+    let hh_meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_hh_meta_buf);
+    let hh_bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-hh-panel"),
+            layout: &hh_pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: vectors_dev.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: work_buf.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: reflector_dev.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: hh_meta_buf.as_entire_binding(),
+                },
+            ],
+        });
+    let mut reflector_host: Vec<HhReflectorMeta> = Vec::with_capacity(block_size);
 
     for k in (0..n).step_by(block_size) {
         let b = block_size.min(n - k);
@@ -442,13 +461,36 @@ pub fn qr_decompose_blocked(
             rows: m,
             cols: b,
         };
+        let panel_source = if work_copy_queued {
+            &work_buf
+        } else {
+            matrix.buffer
+        };
         download_matrix_region_compact_into(
             device,
-            &work_buf,
+            panel_source,
             &temp_compact_buf,
             panel_region,
             &mut panel,
         )?;
+
+        if !work_copy_queued {
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("hephaestus-qr-copy"),
+                    });
+            encoder.copy_buffer_to_buffer(
+                &matrix.buffer.buffer,
+                0,
+                &work_buf.buffer,
+                0,
+                WgpuDevice::byte_size::<f32>(m * n)?,
+            );
+            device.queue().submit(Some(encoder.finish()));
+            work_copy_queued = true;
+        }
 
         // ── Step 3: Factor the active panel region on the CPU ──
         // Only factor the sub-slice starting at row k.
@@ -506,21 +548,17 @@ pub fn qr_decompose_blocked(
         if trail_cols > 0 {
             device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
 
-            let reflector_host: Vec<HhReflectorMeta> = vector_offsets
-                .iter()
-                .copied()
-                .zip(betas.iter().copied())
-                .map(|(offset, beta)| {
-                    let vector_offset =
-                        u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
-                            message: format!("HH vector offset {offset} exceeds u32"),
-                        })?;
-                    Ok(HhReflectorMeta {
-                        vector_offset,
-                        beta,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
+            reflector_host.clear();
+            for (offset, beta) in vector_offsets.iter().copied().zip(betas.iter().copied()) {
+                let vector_offset =
+                    u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
+                        message: format!("HH vector offset {offset} exceeds u32"),
+                    })?;
+                reflector_host.push(HhReflectorMeta {
+                    vector_offset,
+                    beta,
+                });
+            }
             device.write_sub_buffer(&reflector_dev, 0, &reflector_host)?;
 
             let hh_meta = HhMeta {
@@ -545,37 +583,9 @@ pub fn qr_decompose_blocked(
                 })?,
             };
 
-            let raw_hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
-            let hh_meta_buf =
-                crate::infrastructure::pool::uniform_guard(device.clone(), raw_hh_meta_buf);
             device
                 .queue()
                 .write_buffer(&hh_meta_buf, 0, bytemuck::bytes_of(&hh_meta));
-
-            let hh_bind_group = device
-                .inner()
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("hephaestus-hh-panel"),
-                    layout: &hh_pipeline.get_bind_group_layout(0),
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: vectors_dev.buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: work_buf.buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: reflector_dev.buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: hh_meta_buf.as_entire_binding(),
-                        },
-                    ],
-                });
 
             let mut hh_encoder =
                 device

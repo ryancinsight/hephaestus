@@ -5,7 +5,7 @@ use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
-use leto::Complex;
+use num_complex::Complex;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {

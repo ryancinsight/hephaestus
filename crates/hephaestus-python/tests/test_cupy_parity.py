@@ -1,10 +1,9 @@
 """CuPy (GPU) output-parity tests for the ``pyhephaestus`` bindings.
 
-Each test verifies that ``pyhephaestus`` (Hephaestus GPU compute, wgpu backend)
-produces numerically equivalent results to the reference CuPy (CUDA) operation
-on identical f32 inputs — GPU-vs-GPU array-op parity. The whole module skips
-automatically when ``pyhephaestus`` or ``cupy`` is unavailable, or when no CUDA
-device is present.
+The default suite verifies WGPU-backed ``pyhephaestus`` arrays against CuPy
+CUDA reference results on identical f32 inputs. Targeted tests also construct
+CUDA-backed ``pyhephaestus`` arrays when that backend is available, exercising
+the Python binding dispatch surface directly.
 
 Hephaestus norm conventions are entrywise (flatten then vector norm):
 - ``norm_l1`` = sum(|a|), ``norm_l2`` = Frobenius = sqrt(sum(a^2)),
@@ -28,7 +27,12 @@ try:
 except Exception as exc:  # pragma: no cover - environment-dependent
     pytest.skip(f"CuPy CUDA runtime unavailable: {exc}", allow_module_level=True)
 
-_DEVICE = hp.Device()
+_DEVICE = hp.Device("wgpu")
+
+try:
+    _CUDA_DEVICE = hp.Device("cuda")
+except RuntimeError:
+    _CUDA_DEVICE = None
 
 # Deterministic f32 fixtures.
 _A = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 10.0]], dtype=np.float32)
@@ -40,6 +44,12 @@ _W = np.array([2.0, 0.0, 1.0, 3.0], dtype=np.float32)
 def _arr(m):
     """Upload a numpy array to a Hephaestus device array, preserving 2-D shape."""
     flat = hp.Array.from_numpy(m.flatten(), _DEVICE)
+    return flat.reshape(list(m.shape)) if m.ndim > 1 else flat
+
+
+def _arr_on(m, device):
+    """Upload a numpy array to the selected Hephaestus backend."""
+    flat = hp.Array.from_numpy(m.flatten(), device)
     return flat.reshape(list(m.shape)) if m.ndim > 1 else flat
 
 
@@ -227,6 +237,26 @@ def test_pinv_matches_cupy() -> None:
     _close_arr("pinv", got, expected, atol=1e-3)
 
 
+def test_cuda_backend_dense_linalg_matches_cupy_when_available() -> None:
+    if _CUDA_DEVICE is None:
+        pytest.skip("pyhephaestus CUDA backend unavailable")
+
+    a = _arr_on(_A, _CUDA_DEVICE)
+    b = _arr_on(_B, _CUDA_DEVICE)
+    _close_arr("cuda_matmul", _to2d(a.matmul(b), (3, 3)), cp.asarray(_A) @ cp.asarray(_B), atol=1e-4)
+    _close("cuda_dot", _scalar(_arr_on(_V, _CUDA_DEVICE).dot(_arr_on(_W, _CUDA_DEVICE))), float(cp.dot(cp.asarray(_V), cp.asarray(_W))), atol=1e-4)
+    _close("cuda_trace", _scalar(a.trace()), float(cp.trace(cp.asarray(_A))), atol=1e-4)
+    _close_arr("cuda_pinv", _to2d(a.pinv(), (3, 3)), cp.linalg.pinv(cp.asarray(_A)), atol=1e-3)
+
+
+def test_mixed_backend_dense_operations_are_rejected() -> None:
+    if _CUDA_DEVICE is None:
+        pytest.skip("pyhephaestus CUDA backend unavailable")
+
+    with pytest.raises(RuntimeError, match="different backends"):
+        _arr(_V).dot(_arr_on(_V, _CUDA_DEVICE))
+
+
 # ---------------------------------------------------------------------------
 # Axis reductions and cumulative sum
 # ---------------------------------------------------------------------------
@@ -295,6 +325,13 @@ def test_spmm_matches_scipy() -> None:
     got = _to2d(hp.spmm(_csr(), _arr(b)), (4, 2))
     expected = _sp.csr_matrix(_SP_DENSE) @ b
     _close_arr("spmm", got, cp.asarray(expected), atol=1e-4)
+
+
+def test_spmv_many_matches_repeated_scipy_spmv() -> None:
+    b = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, 0.0]], dtype=np.float32)
+    got = _to2d(hp.spmv_many(_csr(), _arr(b)), (4, 2))
+    expected = np.stack([_sp.csr_matrix(_SP_DENSE) @ b[:, col] for col in range(b.shape[1])], axis=1)
+    _close_arr("spmv_many", got, cp.asarray(expected), atol=1e-4)
 
 
 # ---------------------------------------------------------------------------
