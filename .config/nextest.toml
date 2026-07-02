@@ -1,5 +1,12 @@
 # Nextest configuration for the hephaestus workspace.
 
+# Test-time budget: a test crossing 30s is flagged slow (a performance defect
+# in the components under test — profile and optimize the implementation, not
+# the test); a second 30s period terminates it as a hang/deadlock to
+# root-cause. Never raise these to make a slow test pass.
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 2 }
+
 # GPU device tests must run one at a time to prevent driver-level contention,
 # deadlocks, and access violations (0xc0000005) when multiple processes
 # concurrently request device contexts (DX12, Vulkan, CUDA) on the same GPU.

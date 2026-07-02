@@ -127,6 +127,11 @@ pub struct PreparedAxisReduction<T> {
     pipeline: Option<wgpu::ComputePipeline>,
     bind_group: Option<wgpu::BindGroup>,
     groups: u32,
+    /// Pooled metadata uniform held for the prepared reduction's lifetime so
+    /// it recycles back to the pool on drop (the bind group also keeps the
+    /// underlying buffer alive; without the guard the buffer would escape the
+    /// pool permanently).
+    _meta_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
     _marker: PhantomData<T>,
 }
 
@@ -864,7 +869,9 @@ fn prepared_axis_reduction<T>(
     dispatch: AxisReductionDispatch,
     label: &'static str,
 ) -> Result<PreparedAxisReduction<T>> {
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let raw_meta_buffer =
+        device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
@@ -892,6 +899,7 @@ fn prepared_axis_reduction<T>(
         pipeline: Some(pipeline),
         bind_group: Some(bind_group),
         groups: dispatch.groups,
+        _meta_buffer: Some(meta_buffer),
         _marker: PhantomData,
     })
 }
@@ -901,6 +909,7 @@ fn empty_prepared_axis_reduction<T>() -> PreparedAxisReduction<T> {
         pipeline: None,
         bind_group: None,
         groups: 0,
+        _meta_buffer: None,
         _marker: PhantomData,
     }
 }

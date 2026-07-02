@@ -1577,7 +1577,12 @@ where
     reduction::<MaxOp, T>(device, &temp_abs)
 }
 
-/// Compute the Moore-Penrose pseudoinverse A⁺ on the GPU.
+/// Compute the Moore-Penrose pseudoinverse A⁺ of a device-resident matrix.
+///
+/// Host-delegated: the matrix is downloaded, the pseudoinverse computed on
+/// the CPU via `leto_ops::pinv` (SVD-based), and the result uploaded. This
+/// provides API parity over device buffers, not a GPU kernel; the transfer
+/// is O(rows·cols) each way.
 pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     matrix
@@ -1600,7 +1605,12 @@ pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<W
     device.upload(leto::Storage::as_slice(out_arr.storage()))
 }
 
-/// Compute the matrix exponential e^A on the GPU.
+/// Compute the matrix exponential e^A of a device-resident matrix.
+///
+/// Host-delegated: the matrix is downloaded, e^A computed on the CPU via
+/// `leto_ops::matexp` (scaling-and-squaring), and the result uploaded. This
+/// provides API parity over device buffers, not a GPU kernel; the transfer
+/// is O(n²) each way.
 pub fn matexp(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {

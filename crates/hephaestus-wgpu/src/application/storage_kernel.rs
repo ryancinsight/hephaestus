@@ -5,8 +5,6 @@ use hephaestus_core::{
     BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageKernel, Result,
     UnaryStorageKernel,
 };
-use wgpu::util::DeviceExt;
-
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -377,13 +375,11 @@ where
             return Ok(());
         }
 
-        let params_buffer = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(self.label),
-                contents: bytemuck::bytes_of(params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+        let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
+        device
+            .queue()
+            .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
 
         let bind_group = device
             .inner()
@@ -506,13 +502,11 @@ where
             return Ok(());
         }
 
-        let params_buffer = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(self.label),
-                contents: bytemuck::bytes_of(params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+        let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
+        device
+            .queue()
+            .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
 
         let storage_bind_group = device
             .inner()

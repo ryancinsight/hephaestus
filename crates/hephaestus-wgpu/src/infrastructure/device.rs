@@ -18,9 +18,16 @@ use mnemosyne::{MnemosyneAllocator, StandardPolicy, WgpuStagingBackend};
 pub(crate) static WGPU_STAGING_ALLOCATOR: MnemosyneAllocator<StandardPolicy, WgpuStagingBackend> =
     MnemosyneAllocator::new();
 
-pub(crate) static ACTIVE_WGPU_DEVICE: std::sync::OnceLock<wgpu::Device> =
+/// The process's registered staging device: the first `WgpuDevice`
+/// constructed. The mnemosyne staging callbacks ([`wgpu_allocate_callback`]/
+/// [`wgpu_deallocate_callback`]) are process-global and create mapped buffers
+/// on THIS device only; `HostPinned` placement on any other device is
+/// rejected with a typed error (see `require_staging_device`) because a
+/// mapped buffer belongs to the device that created it. Stored as the `Arc`
+/// so identity is checkable via `Arc::ptr_eq` (wgpu resources expose no
+/// identity comparison).
+pub(crate) static ACTIVE_WGPU_DEVICE: std::sync::OnceLock<Arc<wgpu::Device>> =
     std::sync::OnceLock::new();
-pub(crate) static ACTIVE_WGPU_QUEUE: std::sync::OnceLock<wgpu::Queue> = std::sync::OnceLock::new();
 
 std::thread_local! {
     pub(crate) static WGPU_ALLOCATION_USAGE: std::cell::Cell<wgpu::BufferUsages> = const { std::cell::Cell::new(wgpu::BufferUsages::STORAGE) };
@@ -69,6 +76,18 @@ fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
     })
 }
 
+/// Mnemosyne staging-backend allocation callback.
+///
+/// # Pointer-validity invariant (mapped-range escape)
+///
+/// The returned pointer comes from `get_mapped_range{_mut}` on a buffer that
+/// STAYS MAPPED for the allocation's whole lifetime: it is unmapped only in
+/// [`wgpu_deallocate_callback`] after removal from the registry. wgpu pins the
+/// host allocation of a mapped buffer for as long as the mapping is active, so
+/// the pointer outliving the temporary `BufferView{Mut}` guard is sound under
+/// that documented mapping lifetime, not under the guard's lifetime. Unmapping
+/// while a Mnemosyne sub-allocation is live would invalidate this; the
+/// registry's remove-then-unmap ordering prevents it.
 unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
     let device = match ACTIVE_WGPU_DEVICE.get() {
         Some(d) => d,
@@ -143,8 +162,26 @@ pub(crate) type PipelineCache = Arc<
     >,
 >;
 
-const TRANSIENT_POOL_MAX_BUFFERS: usize = 8;
-const STAGING_POOL_MAX_BYTES: u64 = 64 * 1024 * 1024;
+// Pool budgets. `ShardedResourcePool` divides both caps by its 4 thread-
+// affine shards and recycles to the CALLER's shard only, so the effective
+// single-threaded retention is `max_buffers / 4` buffers and an item larger
+// than `max_bytes / 4` is never pooled. Budgets below are chosen against that
+// division, not the nominal totals.
+//
+// Staging: 8 buffers (2/shard — transfers use one at a time) with a 512 MiB
+// byte budget so a single staging buffer up to 128 MiB (/4) still pools;
+// 16 MiB (the previous /4 ceiling) is smaller than routine volumetric
+// readbacks (e.g. a 256³ f32 volume is 64 MiB), which made every large
+// download allocate-and-destroy. The budget is a retention CEILING, not a
+// preallocation: nothing is retained unless a transfer of that size happened,
+// and `clear_transient_pools` releases retained buffers on demand.
+const STAGING_POOL_MAX_BUFFERS: usize = 8;
+const STAGING_POOL_MAX_BYTES: u64 = 512 * 1024 * 1024;
+// Uniforms: metadata blocks of ≲256 B; ops acquire up to three per call
+// (`matmul_into`, `kron_into`), so 2/shard (the old 8/4) forced an
+// allocate-evict cycle on every 3-uniform call from one thread. 32 (8/shard)
+// retains at most ~8 KiB of uniforms per shard against the 1 MiB/4 budget.
+const UNIFORM_POOL_MAX_BUFFERS: usize = 32;
 const UNIFORM_POOL_MAX_BYTES: u64 = 1024 * 1024;
 
 /// An acquired wgpu device + queue pair.
@@ -173,8 +210,10 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        let _ = ACTIVE_WGPU_DEVICE.set((*device).clone());
-        let _ = ACTIVE_WGPU_QUEUE.set((*queue).clone());
+        // First-wins registration: the first constructed device becomes the
+        // process staging device; later devices still compute normally but
+        // `HostPinned` placement on them is rejected (require_staging_device).
+        let _ = ACTIVE_WGPU_DEVICE.set(device.clone());
 
         mnemosyne_backend::WGPU_ALLOCATE_CALLBACK.store(
             wgpu_allocate_callback as *mut core::ffi::c_void,
@@ -193,11 +232,11 @@ impl WgpuDevice {
             topology: None,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             staging_pool: Arc::new(ShardedResourcePool::new(
-                TRANSIENT_POOL_MAX_BUFFERS,
+                STAGING_POOL_MAX_BUFFERS,
                 STAGING_POOL_MAX_BYTES,
             )),
             uniform_pool: Arc::new(ShardedResourcePool::new(
-                TRANSIENT_POOL_MAX_BUFFERS,
+                UNIFORM_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
             )),
         }
@@ -231,6 +270,34 @@ impl WgpuDevice {
             memory_tier,
             memory_bytes: 0,
         })
+    }
+
+    /// Require that `self` is the process's registered staging device before
+    /// a `HostPinned` allocation.
+    ///
+    /// The mnemosyne staging callbacks are process-global and bound to the
+    /// FIRST constructed device; a mapped buffer they create belongs to that
+    /// `wgpu::Device`, and binding or copying it on another device is a wgpu
+    /// validation error surfaced far from the cause. Rejecting here names the
+    /// real constraint at the allocation site instead.
+    ///
+    /// Identity is `Arc` pointer identity: clones of the registered
+    /// `WgpuDevice` share the `Arc` and pass; a device wrapped separately via
+    /// [`new`](Self::new) around the same `wgpu::Device` is conservatively
+    /// rejected (wgpu resources expose no identity comparison).
+    fn require_staging_device(&self) -> Result<()> {
+        match ACTIVE_WGPU_DEVICE.get() {
+            Some(registered) if Arc::ptr_eq(registered, &self.device) => Ok(()),
+            Some(_) => Err(HephaestusError::AllocationFailed {
+                message: "HostPinned placement is only available on the process's registered \
+                          staging device (the first WgpuDevice constructed); allocate HostPinned \
+                          there or use the default Device tier on this device"
+                    .to_string(),
+            }),
+            None => Err(HephaestusError::AllocationFailed {
+                message: "no registered staging device for HostPinned placement".to_string(),
+            }),
+        }
     }
 
     fn with_adapter_metadata(mut self, adapter: &wgpu::Adapter) -> Self {
@@ -846,6 +913,7 @@ impl ComputeDevice for WgpuDevice {
             _ => themis::MemoryTier::Device,
         };
         if tier == themis::MemoryTier::HostPinned {
+            self.require_staging_device()?;
             let padded_len = Self::padded_size::<T>(len)?;
             let padded_len_usize =
                 usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
@@ -859,6 +927,11 @@ impl ComputeDevice for WgpuDevice {
                     message: format!("invalid layout: {e}"),
                 }
             })?;
+            // SAFETY: `layout` has non-zero-checked size and valid alignment
+            // (constructed just above); the allocator routes to
+            // `wgpu_allocate_callback`, whose returned pointer is valid for
+            // `layout.size()` bytes until deallocated (mapped-range invariant
+            // documented on the callback).
             let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
             if ptr.is_null() {
                 return Err(HephaestusError::AllocationFailed {
@@ -911,6 +984,7 @@ impl ComputeDevice for WgpuDevice {
             _ => themis::MemoryTier::Device,
         };
         if tier == themis::MemoryTier::HostPinned {
+            self.require_staging_device()?;
             let padded_len_usize =
                 usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
                     message: "padded length overflows usize".to_string(),
@@ -923,6 +997,11 @@ impl ComputeDevice for WgpuDevice {
                     message: format!("invalid layout: {e}"),
                 }
             })?;
+            // SAFETY: `layout` has non-zero-checked size and valid alignment
+            // (constructed just above); the allocator routes to
+            // `wgpu_allocate_callback`, whose returned pointer is valid for
+            // `layout.size()` bytes until deallocated (mapped-range invariant
+            // documented on the callback).
             let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
             if ptr.is_null() {
                 return Err(HephaestusError::AllocationFailed {
@@ -930,6 +1009,11 @@ impl ComputeDevice for WgpuDevice {
                 });
             }
             let byte_len_usize = usize::try_from(byte_len).expect("invariant: byte_len fits usize");
+            // SAFETY: `ptr` is valid for `padded_len_usize >= byte_len_usize`
+            // writes (allocated above, null-checked); the source is
+            // `byte_len_usize` readable bytes of `host` (`T: Pod`); the two
+            // ranges cannot overlap — one is a fresh mapped-GPU-buffer range,
+            // the other caller host memory.
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     bytemuck::cast_slice(host).as_ptr(),
