@@ -13,6 +13,43 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [minor] Backend-neutral device synchronization is available through
+  `ComputeDevice::synchronize`. WGPU maps it to `Device::poll`, CUDA maps it to
+  `cuCtxSynchronize`, Metal delegates to its wrapped WGPU device, and the
+  CUDA-unavailable stub preserves the existing typed unavailable error. Driver
+  verification: Kwavers visualization `DataPipeline<D>` now uses typed
+  provider buffers plus `write_buffer`/`synchronize` without raw WGPU device,
+  queue, or polling ownership. Evidence tier: compile-time validation plus
+  downstream value-semantic nextest and source audit. Checks: `cargo check -p
+  hephaestus-core -p hephaestus-wgpu -p hephaestus-metal`, `cargo check -p
+  hephaestus-cuda`, `cargo clippy -p hephaestus-core -p hephaestus-wgpu -p
+  hephaestus-cuda -p hephaestus-metal --all-targets -- -D warnings`, `cargo
+  nextest run -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda -p
+  hephaestus-metal storage_kernel` (2/2), and downstream `cargo nextest run -p
+  kwavers-analysis --features gpu-visualization visualization` (15/15).
+- [minor] Backend-neutral multi-storage kernel dispatch is available for
+  downstream consumers. `hephaestus_core::MultiStorageKernel<D, P, B>` carries
+  the generic provider contract, and `hephaestus_wgpu::WgslMultiStorageKernel`
+  plus `WgslStorageBinding` provide the concrete WGPU implementation for N
+  storage bindings plus one POD parameter block. Driver verification: Kwavers
+  3-D static DAS and dynamic-focus DAS now use this provider path instead of
+  local WGPU bind-group/compute-pass construction. Evidence tier: compile-time
+  validation plus value-semantic layout tests and downstream beamforming
+  nextest: `cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`,
+  `cargo clippy -p hephaestus-core -p hephaestus-wgpu --all-targets -- -D
+  warnings`, `cargo nextest run -p hephaestus-core -p hephaestus-wgpu
+  storage_kernel` (2/2), and `cargo nextest run -p kwavers-analysis --features
+  gpu three_dimensional` (52/52).
+- [minor] Backend-neutral storage-kernel dispatch is available for downstream
+  consumers. `hephaestus_core::DispatchGrid` covers domain extents with checked
+  tile arithmetic, `UnaryStorageKernel<D, T, P>` and
+  `BinaryStorageKernel<D, T, P>` dispatch over generic `ComputeDevice` buffers,
+  and `hephaestus_wgpu::WgslUnaryStorageKernel` /
+  `WgslBinaryStorageKernel` provide the concrete WGPU implementations for
+  one-input and two-input storage kernels with uniform parameter blocks.
+  Evidence tier: compile-time validation plus value-semantic grid tests: `cargo
+  nextest run -p hephaestus-core kernel` (2/2), `cargo check -p
+  hephaestus-core`, and `cargo check -p hephaestus-wgpu`.
 - [patch] WGPU rank-2 axis-reduction occupancy is improved for short reduced
   axes. Axis sum/min/max/mean now use one workgroup per output element when the
   reduced axis length is at most the selected `BlockWidth`, reducing each output
@@ -267,6 +304,11 @@ remaining gaps are native-GPU-kernel and/or performance parity (`[major]`
 effort), not correctness. Factorization/solve currently delegate to Leto on the
 host before uploading device buffers.
 
+- [arch] CUDA multi-storage beamforming dispatch is still a future concrete
+  provider implementation. The generic trait and WGPU implementation are
+  delivered; adding CUDA requires a real CUDA beamforming kernel and launch path,
+  then downstream Kwavers verification against that provider. No Kwavers helper
+  layer is required.
 - [patch] WGPU axis reductions still carry fixed dispatch/synchronization
   overhead against CPU backends on small workloads after the short-axis
   workgroup reduction path, axis-0 tiling, prepared dispatch, batched axis

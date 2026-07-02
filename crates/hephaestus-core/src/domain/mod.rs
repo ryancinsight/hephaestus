@@ -1,4 +1,4 @@
-//! Domain contracts: errors, typed device buffers, and the compute-device seam.
+//! Domain contracts: errors, typed device buffers, and accelerator seams.
 
 /// Typed device-buffer contract.
 pub mod buffer;
@@ -8,5 +8,7 @@ pub mod decomposition;
 pub mod device;
 /// Error contracts shared by all backends.
 pub mod error;
+/// Kernel-dispatch contracts shared by accelerator backends.
+pub mod kernel;
 /// Launch-shape vocabulary for occupancy-planned dispatch.
 pub mod launch;

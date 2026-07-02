@@ -4,8 +4,43 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## Open
+
+- [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
+  when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
+  implementation are delivered; remaining work is the CUDA kernel/launch
+  implementation and downstream Kwavers verification against that provider.
+
 ## Delivered
 
+- [x] [patch] Remove the stale `DeviceExt` import from `hephaestus-wgpu`
+  storage-kernel dispatch so downstream provider builds stay warning-clean.
+  Evidence: `cargo check -p hephaestus-wgpu`.
+- [x] [minor] Add backend-neutral device synchronization to `ComputeDevice`.
+  WGPU, CUDA, and Metal now expose explicit completion through the provider
+  trait (`Device::poll`, `cuCtxSynchronize`, and Metal's WGPU delegation),
+  allowing downstream crates to request blocking transfer semantics without
+  importing a concrete GPU API. Driver: Kwavers visualization `DataPipeline<D>`
+  uses this with generic provider buffers instead of raw WGPU queue/poll
+  ownership. Evidence: Hephaestus check/fmt/clippy/nextest plus downstream
+  Kwavers visualization check/clippy/nextest and data-pipeline source audit.
+- [x] [minor] Add backend-neutral multi-storage kernel dispatch for downstream
+  kernels wider than unary/binary storage layouts. `MultiStorageKernel<D, P, B>`
+  carries the generic provider contract; `WgslMultiStorageKernel` and
+  `WgslStorageBinding` own the real WGPU shader, bind-group layout, uniform
+  buffer, encoder, and submission path for N storage buffers plus one POD
+  parameter block. Driver: Kwavers 3-D static DAS (five bindings) and
+  dynamic-focus DAS (seven bindings) now bind through this provider path without
+  a Kwavers local helper. Evidence: Hephaestus check/clippy/nextest and
+  downstream Kwavers 3-D beamforming check/clippy/nextest.
+- [x] [minor] Add backend-neutral unary and binary storage-kernel dispatch
+  contracts for downstream WGPU/CUDA-generic consumers. `DispatchGrid`
+  centralizes checked workgroup coverage arithmetic,
+  `UnaryStorageKernel<D, T, P>` and `BinaryStorageKernel<D, T, P>` bind kernels
+  to `ComputeDevice` buffers without exposing a concrete GPU API, and
+  `WgslUnaryStorageKernel` / `WgslBinaryStorageKernel` supply the real WGPU
+  dispatch implementations. Evidence: focused core kernel nextest (2/2), fmt,
+  and core/wgpu compile checks.
 - [x] [minor] Add dynamic-rank `hephaestus-cuda` strided elementwise entry
   points over borrowed shape/stride slices so runtime-shaped consumers such as
   Coeus can delegate rank <= 4 strided CUDA primitive binary/unary kernels to

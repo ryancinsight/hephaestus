@@ -1,5 +1,59 @@
 # Checklist — hephaestus
 
+2026-07-02 (WGPU storage-kernel lint cleanup). Removed a stale
+`DeviceExt` import from `hephaestus-wgpu` storage-kernel dispatch so downstream
+provider builds no longer carry the unused-import warning. Evidence tier:
+compile-time validation. Check: `cargo check -p hephaestus-wgpu` passes.
+
+2026-07-02 (ComputeDevice synchronization seam). Added
+`ComputeDevice::synchronize` so downstream GPU consumers can request explicit
+blocking semantics without depending on WGPU polling or CUDA context calls.
+`hephaestus-wgpu` maps it to `Device::poll`, `hephaestus-cuda` maps it to
+`cuCtxSynchronize`, `hephaestus-metal` delegates to the wrapped WGPU device, and
+the CUDA-unavailable stub returns the existing typed unavailable error. Driver:
+Kwavers visualization `DataPipeline<D>` is now generic over `ComputeDevice` and
+uses provider buffers plus `write_buffer`/`synchronize` instead of raw WGPU
+device/queue ownership. Evidence tier: compile-time validation plus downstream
+value-semantic nextest. Checks: `cargo check -p hephaestus-core -p
+hephaestus-wgpu -p hephaestus-metal`, `cargo check -p hephaestus-cuda`, `cargo
+fmt --all --check`, `cargo clippy -p hephaestus-core -p hephaestus-wgpu -p
+hephaestus-cuda -p hephaestus-metal --all-targets -- -D warnings`, `cargo
+nextest run -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda -p
+hephaestus-metal storage_kernel` passes 2/2, and downstream
+`cargo nextest run -p kwavers-analysis --features gpu-visualization
+visualization` passes 15/15.
+
+2026-07-02 (Backend-neutral multi-storage kernel dispatch). Added
+`hephaestus_core::MultiStorageKernel<D, P, B>` for kernels whose storage layout
+is wider than unary/binary. `hephaestus-wgpu` now provides
+`WgslMultiStorageKernel`, `WgslStorageBindingLayout`, and `WgslStorageBinding`,
+owning the real WGPU shader module, bind-group layout, uniform-buffer pool
+usage, bind group, encoder, and workgroup submission for N storage buffers plus
+one POD parameter block. Downstream Kwavers 3-D static DAS and dynamic-focus
+DAS now consume this provider path instead of local bind-group/compute-pass
+construction. Evidence tier: compile-time validation plus value-semantic
+layout validation and downstream beamforming nextest. Checks: `cargo check -p
+hephaestus-core`, `cargo check -p hephaestus-wgpu`, `cargo clippy -p
+hephaestus-core -p hephaestus-wgpu --all-targets -- -D warnings`, `cargo
+nextest run -p hephaestus-core -p hephaestus-wgpu storage_kernel` passes 2/2,
+`cargo check -p kwavers-analysis --features gpu`, `cargo clippy -p
+kwavers-analysis --features gpu --all-targets --no-deps -- -D warnings`, and
+`cargo nextest run -p kwavers-analysis --features gpu three_dimensional` passes
+52/52. Residual: CUDA needs a concrete multi-storage beamforming kernel
+implementor when the CUDA kernel exists.
+
+2026-07-02 (Backend-neutral storage kernel dispatch). Added
+`hephaestus_core::DispatchGrid`, `UnaryStorageKernel<D, T, P>`, and
+`BinaryStorageKernel<D, T, P>` so downstream crates can dispatch one-input and
+two-input storage-buffer kernels generically over a `ComputeDevice`
+implementor. `hephaestus-wgpu` now provides `WgslUnaryStorageKernel` and
+`WgslBinaryStorageKernel`, which own the real WGPU shader module, pipeline,
+uniform buffer, bind groups, encoder, and workgroup submission for the current
+storage-kernel layouts. Evidence tier: compile-time validation plus
+value-semantic launch-grid tests. Checks: `cargo fmt -p hephaestus-core -p
+hephaestus-wgpu`, `cargo check -p hephaestus-core`, `cargo check -p
+hephaestus-wgpu`, and `cargo nextest run -p hephaestus-core kernel` passes 2/2.
+
 2026-07-01 (WGPU tiled axis-0 reductions). Added a WGPU axis-0 tiled reduction
 kernel for rank-2 reductions so one workgroup reduces up to 16 output columns
 instead of launching one workgroup per output element. This preserves the

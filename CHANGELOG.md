@@ -4,7 +4,39 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Changed
+
+- `hephaestus-wgpu` [patch]: removed a stale storage-kernel `DeviceExt` import
+  so downstream provider builds no longer report the unused-import warning.
+  Evidence: `cargo check -p hephaestus-wgpu` passes.
+
 ### Added
+
+- `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` /
+  `hephaestus-metal` [minor]: added `ComputeDevice::synchronize` as the
+  backend-neutral completion seam for explicit blocking semantics. WGPU maps it
+  to `Device::poll`, CUDA maps it to `cuCtxSynchronize`, Metal delegates to its
+  wrapped WGPU device, and the CUDA-unavailable stub returns the existing typed
+  unavailable error. Downstream Kwavers visualization transfer now uses this
+  provider trait instead of raw WGPU polling.
+
+- `hephaestus-core` / `hephaestus-wgpu` [minor]: added the backend-neutral
+  `DispatchGrid`, `UnaryStorageKernel<D, T, P>`, and
+  `BinaryStorageKernel<D, T, P>` kernel-dispatch contracts, plus
+  `WgslUnaryStorageKernel` and `WgslBinaryStorageKernel` as WGPU
+  implementations for one-input and two-input storage kernels with POD uniform
+  blocks. Downstream GPU consumers can now express storage kernels over
+  `ComputeDevice` implementors such as WGPU or future CUDA without owning WGPU
+  pipeline construction locally.
+- `hephaestus-core` / `hephaestus-wgpu` [minor]: added
+  `MultiStorageKernel<D, P, B>` and the WGPU `WgslMultiStorageKernel` /
+  `WgslStorageBinding` implementation for kernels with more than two storage
+  buffers and one POD uniform block. This closes the WGPU provider gap for
+  downstream multi-binding kernels such as Kwavers 3-D beamforming without a
+  downstream bind-group helper. Evidence: `cargo check -p hephaestus-core`,
+  `cargo check -p hephaestus-wgpu`, `cargo clippy -p hephaestus-core -p
+  hephaestus-wgpu --all-targets -- -D warnings`, and `cargo nextest run -p
+  hephaestus-core -p hephaestus-wgpu storage_kernel` pass.
 
 - `hephaestus-cuda` / `hephaestus-python` [minor]: exposed multi-RHS sparse
   SpMV as `spmv_many`/`spmv_many_into` on CUDA and `hp.spmv_many(...)` in

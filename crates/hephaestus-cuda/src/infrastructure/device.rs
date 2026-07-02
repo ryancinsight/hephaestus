@@ -477,4 +477,16 @@ impl ComputeDevice for CudaDevice {
         }
         Ok(())
     }
+
+    fn synchronize(&self) -> Result<()> {
+        self.bind()?;
+        // SAFETY: the CUDA context is current for this thread after `bind`.
+        let res = unsafe { cuda_core::sys::cuCtxSynchronize() };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("cuCtxSynchronize -> {res}"),
+            });
+        }
+        Ok(())
+    }
 }

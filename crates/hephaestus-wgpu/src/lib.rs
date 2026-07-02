@@ -45,7 +45,10 @@ pub use application::sparse::{
     spmv_many_into, submit_prepared_sparse_batch, GpuCsrMatrix, PreparedSparseDispatch,
     PreparedSpmm, PreparedSpmv,
 };
-pub use application::storage_kernel::{WgslBinaryStorageKernel, WgslUnaryStorageKernel};
+pub use application::storage_kernel::{
+    WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
+    WgslUnaryStorageKernel,
+};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
@@ -72,6 +75,6 @@ pub use application::decomposition::{
 };
 
 pub use hephaestus_core::{
-    BinaryStorageKernel, ComputeDevice, DeviceBuffer, DispatchGrid, HephaestusError, Result,
-    UnaryStorageKernel,
+    BinaryStorageKernel, ComputeDevice, DeviceBuffer, DispatchGrid, HephaestusError,
+    MultiStorageKernel, Result, UnaryStorageKernel,
 };

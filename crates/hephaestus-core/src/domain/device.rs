@@ -60,6 +60,14 @@ pub trait ComputeDevice {
     /// writes into an already-allocated buffer.  `host.len()` must equal the
     /// buffer's element count.
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()>;
+
+    /// Wait until previously submitted work and transfers visible to this
+    /// device context have completed.
+    ///
+    /// Backends map this to their real synchronization primitive (`Device::poll`
+    /// for WGPU, `cuCtxSynchronize` for CUDA). Consumers use this for explicit
+    /// blocking semantics without depending on a concrete GPU API.
+    fn synchronize(&self) -> Result<()>;
 }
 
 /// Validate that a buffer size is a multiple of 4 bytes.

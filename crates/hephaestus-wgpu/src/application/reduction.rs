@@ -101,7 +101,7 @@ struct MeanAxisKernel<T>(PhantomData<T>);
 struct MeanAxisParallelKernel<T>(PhantomData<T>);
 struct MeanAxis0TiledKernel<T>(PhantomData<T>);
 
-const AXIS0_TILE_COLUMNS: u32 = 16;
+const AXIS0_TILE_COLUMNS: u32 = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

@@ -156,6 +156,8 @@ const UNIFORM_POOL_MAX_BYTES: u64 = 1024 * 1024;
 pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    adapter_info: Option<wgpu::AdapterInfo>,
+    adapter_limits: Option<wgpu::Limits>,
     topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: PipelineCache,
     pub(crate) staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
@@ -186,6 +188,8 @@ impl WgpuDevice {
         Self {
             device,
             queue,
+            adapter_info: None,
+            adapter_limits: None,
             topology: None,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             staging_pool: Arc::new(ShardedResourcePool::new(
@@ -227,6 +231,33 @@ impl WgpuDevice {
             memory_tier,
             memory_bytes: 0,
         })
+    }
+
+    fn with_adapter_metadata(mut self, adapter: &wgpu::Adapter) -> Self {
+        self.topology = Some(Arc::new(Self::topology_from_adapter(adapter)));
+        self.adapter_info = Some(adapter.get_info());
+        self.adapter_limits = Some(adapter.limits());
+        self
+    }
+
+    /// The adapter metadata captured at acquisition, when available.
+    ///
+    /// `None` when the device was wrapped via [`new`](Self::new) (no adapter
+    /// to report from).
+    #[must_use]
+    #[inline]
+    pub fn adapter_info(&self) -> Option<&wgpu::AdapterInfo> {
+        self.adapter_info.as_ref()
+    }
+
+    /// The adapter limits captured at acquisition, when available.
+    ///
+    /// `None` when the device was wrapped via [`new`](Self::new) (no adapter
+    /// to report from).
+    #[must_use]
+    #[inline]
+    pub fn adapter_limits(&self) -> Option<&wgpu::Limits> {
+        self.adapter_limits.as_ref()
     }
 
     /// The device topology snapshot captured at acquisition, when available.
@@ -276,15 +307,196 @@ impl WgpuDevice {
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
+        Self::try_default_with_adapter_features_and_limits(
+            label,
+            required_limits,
+            wgpu::PowerPreference::HighPerformance,
+            |_| required_features,
+        )
+    }
+
+    /// Acquire a default adapter and device, enabling optional features only
+    /// when the selected adapter reports support for them.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_default_with_optional_features_and_limits(
+        label: &str,
+        optional_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
+        Self::try_default_with_adapter_features_and_limits(
+            label,
+            required_limits,
+            wgpu::PowerPreference::HighPerformance,
+            |adapter| adapter.features() & optional_features,
+        )
+    }
+
+    /// Acquire an adapter matching `power_preference`, enabling optional
+    /// features only when the selected adapter reports support for them.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_power_preference_and_optional_features_and_limits(
+        label: &str,
+        power_preference: wgpu::PowerPreference,
+        optional_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
+        Self::try_default_with_adapter_features_and_limits(
+            label,
+            required_limits,
+            power_preference,
+            |adapter| adapter.features() & optional_features,
+        )
+    }
+
+    /// Acquire an adapter matching `power_preference`, deriving both required
+    /// features and required limits from the selected adapter.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_power_preference_and_adapter_config(
+        label: &str,
+        power_preference: wgpu::PowerPreference,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
+    ) -> Result<Self> {
+        Self::try_default_with_adapter_config(
+            label,
+            power_preference,
+            select_features,
+            select_limits,
+        )
+    }
+
+    /// Enumerate adapters and create devices for those accepted by
+    /// `accept_adapter`, deriving each device descriptor from the selected
+    /// adapter.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::DeviceUnavailable`] when logical-device creation
+    /// fails for any accepted adapter.
+    pub fn try_enumerate_with_adapter_config(
+        label_prefix: &str,
+        max_devices: usize,
+        accept_adapter: impl Fn(&wgpu::AdapterInfo) -> bool,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
+    ) -> Result<Vec<Self>> {
+        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+        desc.backends = wgpu::Backends::all();
+        let instance = wgpu::Instance::new(&desc);
+        let mut devices = Vec::new();
+
+        for adapter in instance.enumerate_adapters(wgpu::Backends::all()) {
+            let info = adapter.get_info();
+            if !accept_adapter(&info) {
+                continue;
+            }
+
+            let label = format!("{label_prefix}: {}", info.name);
+            let required_features = select_features(&adapter);
+            let required_limits = select_limits(&adapter);
+            devices.push(Self::try_from_adapter_with_features_and_limits(
+                &label,
+                &adapter,
+                required_features,
+                required_limits,
+            )?);
+
+            if devices.len() >= max_devices {
+                break;
+            }
+        }
+
+        Ok(devices)
+    }
+
+    /// Create a device from a caller-selected adapter, enabling optional
+    /// features only when that adapter reports support for them.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::DeviceUnavailable`] when logical-device creation
+    /// fails for the supplied adapter.
+    pub fn try_from_adapter_with_optional_features_and_limits(
+        label: &str,
+        adapter: &wgpu::Adapter,
+        optional_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
+        let required_features = adapter.features() & optional_features;
+        Self::try_from_adapter_with_features_and_limits(
+            label,
+            adapter,
+            required_features,
+            required_limits,
+        )
+    }
+
+    /// Create a device from a caller-selected adapter with exact required
+    /// features.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::DeviceUnavailable`] when logical-device creation
+    /// fails for the supplied adapter.
+    pub fn try_from_adapter_with_features_and_limits(
+        label: &str,
+        adapter: &wgpu::Adapter,
+        required_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
+        let (device, queue) = moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some(label),
+            required_features,
+            required_limits,
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        }))
+        .map_err(|error| HephaestusError::DeviceUnavailable {
+            message: error.to_string(),
+        })?;
+        Ok(Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(adapter))
+    }
+
+    fn try_default_with_adapter_features_and_limits(
+        label: &str,
+        required_limits: wgpu::Limits,
+        power_preference: wgpu::PowerPreference,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+    ) -> Result<Self> {
+        Self::try_default_with_adapter_config(label, power_preference, select_features, move |_| {
+            required_limits.clone()
+        })
+    }
+
+    fn try_default_with_adapter_config(
+        label: &str,
+        power_preference: wgpu::PowerPreference,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
+    ) -> Result<Self> {
         let try_acquire = |instance: &wgpu::Instance| -> Option<Self> {
             let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
+                let required_features = select_features(adapter);
+                let required_limits = select_limits(adapter);
                 moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features,
-                    required_limits: required_limits.clone(),
+                    required_limits,
                     memory_hints: wgpu::MemoryHints::default(),
                     trace: wgpu::Trace::Off,
                 }))
@@ -293,16 +505,16 @@ impl WgpuDevice {
             // Try High Performance hardware adapter first
             if let Ok(adapter) =
                 moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    power_preference,
                     compatible_surface: None,
                     force_fallback_adapter: false,
                 }))
             {
-                let topology = Self::topology_from_adapter(&adapter);
                 if let Ok((device, queue)) = try_device(&adapter) {
-                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-                    acquired.topology = Some(Arc::new(topology));
-                    return Some(acquired);
+                    return Some(
+                        Self::new(Arc::new(device), Arc::new(queue))
+                            .with_adapter_metadata(&adapter),
+                    );
                 }
             }
 
@@ -314,11 +526,11 @@ impl WgpuDevice {
                     force_fallback_adapter: true,
                 }))
             {
-                let topology = Self::topology_from_adapter(&fallback_adapter);
                 if let Ok((device, queue)) = try_device(&fallback_adapter) {
-                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-                    acquired.topology = Some(Arc::new(topology));
-                    return Some(acquired);
+                    return Some(
+                        Self::new(Arc::new(device), Arc::new(queue))
+                            .with_adapter_metadata(&fallback_adapter),
+                    );
                 }
             }
             None
@@ -808,6 +1020,15 @@ impl ComputeDevice for WgpuDevice {
         }
         self.queue
             .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
+        Ok(())
+    }
+
+    fn synchronize(&self) -> Result<()> {
+        self.device
+            .poll(wgpu::PollType::Wait)
+            .map_err(|e| HephaestusError::TransferFailed {
+                message: format!("device poll failed: {e:?}"),
+            })?;
         Ok(())
     }
 }

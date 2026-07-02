@@ -100,4 +100,8 @@ impl ComputeDevice for CudaDevice {
     fn write_buffer<T: Pod>(&self, _buffer: &Self::Buffer<T>, _host: &[T]) -> Result<()> {
         Self::unavailable()
     }
+
+    fn synchronize(&self) -> Result<()> {
+        Self::unavailable()
+    }
 }
