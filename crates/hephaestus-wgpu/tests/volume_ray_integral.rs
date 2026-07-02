@@ -27,7 +27,7 @@ fn geometry() -> FieldGeometry {
     }
 }
 
-fn upload_field(device: &WgpuDevice, f: impl Fn(u32, u32, u32) -> f32) -> Vec<f32> {
+fn build_field(f: impl Fn(u32, u32, u32) -> f32) -> Vec<f32> {
     let g = geometry();
     let mut host = Vec::new();
     for ix in 0..g.dims[0] {
@@ -64,7 +64,7 @@ fn uniform_field_integrates_to_value_times_chord() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let host = upload_field(&device, |_, _, _| 0.25);
+    let host = build_field(|_, _, _| 0.25);
     // +x ray through the middle: chord = 16; a miss far outside in y.
     let rays = [
         -10.0, 4.0, 4.0, 1.0, 0.0, 0.0, // hit: expect 0.25 * 16 = 4.0
@@ -86,7 +86,7 @@ fn affine_field_is_integrated_exactly_by_midpoint() {
     };
     // field(ix) = 0.01*ix + 0.02 → along +x world x: f(x) = 0.005*x + 0.02.
     // ∫₀¹⁶ f dx = 0.005*128 + 0.02*16 = 0.96. Midpoint is exact for affine.
-    let host = upload_field(&device, |ix, _, _| 0.01 * ix as f32 + 0.02);
+    let host = build_field(|ix, _, _| 0.01 * ix as f32 + 0.02);
     let rays = [-10.0, 4.0, 4.0, 1.0, 0.0, 0.0];
     let got = run(&device, &host, &rays, 1.0);
     assert!(
@@ -101,7 +101,7 @@ fn step_size_does_not_change_a_uniform_integral() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let host = upload_field(&device, |_, _, _| 0.25);
+    let host = build_field(|_, _, _| 0.25);
     let rays = [-10.0, 4.0, 4.0, 1.0, 0.0, 0.0];
     let coarse = run(&device, &host, &rays, 8.0)[0];
     let fine = run(&device, &host, &rays, 0.125)[0];
@@ -117,9 +117,8 @@ fn oblique_ray_matches_cpu_reference() {
         return;
     };
     // Diagonal in-plane ray against a CPU replica of the same march.
-    let host = upload_field(&device, |ix, iy, iz| {
-        0.01 * ix as f32 + 0.007 * iy as f32 + 0.003 * iz as f32 + 0.05
-    });
+    let host =
+        build_field(|ix, iy, iz| 0.01 * ix as f32 + 0.007 * iy as f32 + 0.003 * iz as f32 + 0.05);
     let inv = 1.0 / (2.0f32).sqrt();
     let rays = [-10.0, -6.0, 4.0, inv, inv, 0.0];
     let step = 0.5f32;
