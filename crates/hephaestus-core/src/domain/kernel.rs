@@ -115,7 +115,7 @@ where
 /// This contract covers kernels whose storage interface is wider than the
 /// unary/binary forms. The binding bundle `B` is backend-defined so WGPU, CUDA,
 /// Metal, and future backends can expose the binding representation their launch
-/// API requires without leaking that representation into [`hephaestus-core`].
+/// API requires without leaking that representation into `hephaestus-core`.
 /// Consumers remain generic over the device, the POD parameter block, and the
 /// kernel trait; backend crates provide concrete binding-bundle types.
 pub trait MultiStorageKernel<D, P, B>

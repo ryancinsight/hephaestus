@@ -1,7 +1,8 @@
 //! Zero-sized operation markers with per-dialect shader expressions.
 //!
 //! One op vocabulary for every backend: each marker is a ZST whose dialect
-//! expression is an associated const on a [`KernelDialect`]-parameterized
+//! expression is an associated const on a
+//! [`KernelDialect`](crate::KernelDialect)-parameterized
 //! trait, so backend shader templates substitute `Op::EXPR` for their own
 //! dialect and dispatch stays fully monomorphized. Consumers add fused ops
 //! without touching this crate by implementing the expression trait for

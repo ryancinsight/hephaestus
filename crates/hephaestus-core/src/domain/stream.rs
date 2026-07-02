@@ -1,23 +1,23 @@
 //! Backend dispatch seam for authored kernels: prepared pipelines, typed
 //! bindings, and multi-pass command streams.
 //!
-//! [`KernelDevice`] extends [`ComputeDevice`] with the compile/dispatch
-//! surface for consumer-authored kernels ([`KernelInterface`] +
-//! [`KernelSource`]): `prepare` compiles-and-caches, [`CommandStream`]
+//! [`KernelDevice`](crate::KernelDevice) extends [`ComputeDevice`](crate::ComputeDevice) with the compile/dispatch
+//! surface for consumer-authored kernels ([`KernelInterface`](crate::KernelInterface) +
+//! [`KernelSource`](crate::KernelSource)): `prepare` compiles-and-caches, [`CommandStream`](crate::CommandStream)
 //! records ordered passes (inter-pass barrier semantics guaranteed by the
 //! backend — wgpu compute-pass boundaries, CUDA stream order), and `submit`
 //! queues the recorded work. Completion is observed through
-//! [`ComputeDevice::synchronize`] or a synchronizing transfer; no async
+//! [`ComputeDevice::synchronize`](crate::ComputeDevice::synchronize) or a synchronizing transfer; no async
 //! surface leaks into core (async-contagion rule).
 //!
-//! Bindings are typed at construction ([`Binding::read`] /
-//! [`Binding::read_write`] borrow a `D::Buffer<T>`) and erase to the
-//! backend's [`KernelDevice::BindingHandle`] plus element-size/length
+//! Bindings are typed at construction ([`Binding::read`](crate::Binding::read) /
+//! [`Binding::read_write`](crate::Binding::read_write) borrow a `D::Buffer<T>`) and erase to the
+//! backend's [`KernelDevice::BindingHandle`](crate::KernelDevice::BindingHandle) plus element-size/length
 //! metadata, so one homogeneous `&[Binding<'_, D>]` slice carries
 //! heterogeneous element types with no trait-object indirection. Arity,
 //! access, and element size are validated value-semantically against the
-//! kernel's [`KernelInterface::BINDINGS`] declaration at encode
-//! ([`validate_bindings`]).
+//! kernel's [`KernelInterface::BINDINGS`](crate::KernelInterface::BINDINGS) declaration at encode
+//! ([`validate_bindings`](crate::validate_bindings)).
 
 use super::device::ComputeDevice;
 use super::dialect::KernelDialect;

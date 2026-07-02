@@ -1,9 +1,9 @@
 //! Kernel-dialect vocabulary: sealed dialect markers and per-dialect scalar
 //! type tokens.
 //!
-//! A [`KernelDialect`] is the shading/kernel language a backend compiles —
+//! A [`KernelDialect`](crate::KernelDialect) is the shading/kernel language a backend compiles —
 //! WGSL for wgpu (native and Metal-pinned), CUDA C++ for the NVRTC-compiled
-//! CUDA backend. Operation markers ([`crate::domain::ops`]) and scalar types
+//! CUDA backend. Operation markers ([`ops`](crate::domain::ops)) and scalar types
 //! carry their shader tokens per dialect through these traits, so one op
 //! vocabulary serves every backend and a kernel authored for one dialect
 //! simply does not implement the others — dispatching it on the wrong

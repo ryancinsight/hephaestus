@@ -1,12 +1,12 @@
 //! Backend-neutral kernel authoring: interface and source declarations.
 //!
-//! A custom kernel is authored as a type implementing [`KernelInterface`]
+//! A custom kernel is authored as a type implementing [`KernelInterface`](crate::KernelInterface)
 //! (its binding layout and POD parameter block — dialect-free, declared once)
-//! plus [`KernelSource<L>`] for each [`KernelDialect`] it targets (entry
+//! plus [`KernelSource<L>`](crate::KernelSource) for each [`KernelDialect`](crate::KernelDialect) it targets (entry
 //! point and source text). A backend accepts only kernels implementing its
 //! own dialect, so dispatching a WGSL-only kernel on the CUDA backend is a
 //! compile error rather than a runtime failure. Dispatch mechanics live in
-//! [`super::stream`].
+//! [`stream`](crate::domain::stream).
 
 use super::dialect::KernelDialect;
 use bytemuck::Pod;
