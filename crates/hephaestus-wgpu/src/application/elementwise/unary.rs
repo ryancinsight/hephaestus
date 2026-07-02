@@ -17,6 +17,14 @@ pub trait UnaryWgslOp: Copy + Send + Sync + 'static {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ExpOp;
 
+/// Fused negated-exponential `exp(−x)` marker.
+///
+/// The Beer–Lambert attenuation/transmission kernel (`exp(−τ)`), fused so a
+/// consumer dispatches once instead of chaining [`NegOp`] → [`ExpOp`] (which
+/// costs a second pipeline dispatch plus an intermediate device buffer).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExpNegOp;
+
 /// Natural logarithm operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LnOp;
@@ -47,6 +55,10 @@ pub struct RecipOp;
 
 impl UnaryWgslOp for ExpOp {
     const WGSL_EXPR: &'static str = "exp(x)";
+}
+
+impl UnaryWgslOp for ExpNegOp {
+    const WGSL_EXPR: &'static str = "exp(-x)";
 }
 
 impl UnaryWgslOp for LnOp {

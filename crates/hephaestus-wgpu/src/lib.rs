@@ -15,8 +15,8 @@ pub mod infrastructure;
 
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
-    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, DivOp, ExpOp,
-    IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
+    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, DivOp, ExpNegOp,
+    ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
 };
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;

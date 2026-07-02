@@ -18,8 +18,8 @@ pub use binary::{
 };
 pub use scalar::{scalar_elementwise, scalar_elementwise_into};
 pub use unary::{
-    unary_elementwise, unary_elementwise_into, AbsOp, CosOp, ExpOp, IdentityOp, LnOp, NegOp,
-    RecipOp, SinOp, SqrtOp, UnaryWgslOp,
+    unary_elementwise, unary_elementwise_into, AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp,
+    NegOp, RecipOp, SinOp, SqrtOp, UnaryWgslOp,
 };
 
 fn reject_output_alias<T, U>(

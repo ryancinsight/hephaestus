@@ -11,8 +11,8 @@ use hephaestus_wgpu::{
     prepare_reduction, prepare_sum_axis_into, reduction, reduction_with_width, scalar_elementwise,
     scalar_elementwise_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
     sum_axis, sum_axis_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
-    ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
-    SqrtOp, SubOp, SumOp, WgpuDevice,
+    ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp,
+    RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -479,6 +479,26 @@ fn elementwise_unary_matches_cpu_reference() {
             "Exp mismatch at index {}: got {}, expected {}, diff {}, tol {}",
             i,
             got_exp[i],
+            expected,
+            diff,
+            tolerance
+        );
+    }
+
+    // ExpNegOp — fused exp(−x); must equal the NegOp → ExpOp chain (differential
+    // oracle) and the CPU (-x).exp() reference.
+    let out_expneg = unary_elementwise::<ExpNegOp, f32>(&device, &a).unwrap();
+    let mut got_expneg = vec![0.0f32; host.len()];
+    device.download(&out_expneg, &mut got_expneg).unwrap();
+    for (i, &x) in host.iter().enumerate() {
+        let expected = (-x).exp();
+        let diff = (got_expneg[i] - expected).abs();
+        let tolerance = 1e-5 * expected.abs().max(1.0);
+        assert!(
+            diff < tolerance,
+            "ExpNeg mismatch at index {}: got {}, expected {}, diff {}, tol {}",
+            i,
+            got_expneg[i],
             expected,
             diff,
             tolerance
