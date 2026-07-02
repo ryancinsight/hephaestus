@@ -302,7 +302,7 @@ pub fn cholesky_decompose_blocked(
 mod syrk_impl {
     use super::*;
     use crate::application::linalg::{to_i32, to_u32};
-    use crate::application::pipeline::cached_kernel;
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -420,35 +420,19 @@ mod syrk_impl {
         let mut trail_ptr = trail.raw();
         let mut meta_val = meta;
 
+        // Argument list mirrors `syrk_kernel(const float*, float*, SyrkMeta)`.
         let mut args: [*mut std::ffi::c_void; 3] = [
             &mut panel_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut trail_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut meta_val as *mut SyrkMeta as *mut std::ffi::c_void,
         ];
 
-        // SAFETY: Buffers are valid, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                workgroups_x as u32,
-                workgroups_y as u32,
-                1,
-                16,
-                16,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-
-        Ok(())
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+            &mut args,
+        )
     }
 }
 

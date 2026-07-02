@@ -10,6 +10,13 @@ use crate::infrastructure::compiler::SafeCachedKernel;
 pub struct SafeCachedKernel;
 
 /// Retrieve a cached kernel, compiling the source if it is not present in the cache.
+///
+/// Only successful compilations are cached: a failed NVRTC compile or module
+/// load returns the error and leaves the cache slot empty, so a transient
+/// driver failure (out-of-memory, TDR reset) does not poison the key for the
+/// device's lifetime. Two threads racing on a cold key may both compile and
+/// one module is dropped — bounded first-use-only waste, preferred over
+/// caching failures or holding a lock across a 10–100 ms NVRTC compile.
 pub fn cached_kernel(
     device: &CudaDevice,
     key: String,
@@ -18,69 +25,74 @@ pub fn cached_kernel(
 ) -> Result<Arc<SafeCachedKernel>> {
     #[cfg(feature = "cuda")]
     {
-        let compile = || -> Result<Arc<SafeCachedKernel>> {
-            let src = source();
-            let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
-                HephaestusError::DispatchFailed {
-                    message: format!("CUDA compilation failed for {func_name}: {e}"),
-                }
-            })?;
-
-            let ptx_c =
-                std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
-                    message: format!("PTX is not a valid CString: {e}"),
-                })?;
-
-            let func_name_c =
-                std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
-                    message: format!("kernel name is not a valid CString: {e}"),
-                })?;
-
-            let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
-            // SAFETY: The driver and context must be initialized. CudaDevice::try_default() has bound the context.
-            // `module` is a valid out-pointer.
-            unsafe {
-                let res = cuda_core::sys::cuModuleLoadData(
-                    &mut module as *mut cuda_core::sys::CUmodule,
-                    ptx_c.as_ptr() as *const std::ffi::c_void,
-                );
-                if res != 0 {
-                    return Err(HephaestusError::DispatchFailed {
-                        message: format!("cuModuleLoadData failed with code: {res}"),
-                    });
-                }
-
-                let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
-                let res = cuda_core::sys::cuModuleGetFunction(
-                    &mut func as *mut cuda_core::sys::CUfunction,
-                    module as *mut _,
-                    func_name_c.as_ptr(),
-                );
-                if res != 0 {
-                    let _ = cuda_core::sys::cuModuleUnload(module as *mut _);
-                    return Err(HephaestusError::DispatchFailed {
-                        message: format!(
-                            "cuModuleGetFunction('{func_name}') failed with code: {res}"
-                        ),
-                    });
-                }
-
-                Ok(Arc::new(SafeCachedKernel { module, func }))
-            }
-        };
-
         let cell = device
             .pipeline_cache
             .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
-            .expect("invariant: pipeline cache is not poisoned");
-
-        match cell
-            .get_or_init(|| compile().map_err(|e| e.to_string()))
-            .clone()
-        {
-            Ok(k) => Ok(k),
-            Err(e) => Err(HephaestusError::DispatchFailed { message: e }),
+            .map_err(|e| HephaestusError::DispatchFailed {
+                message: format!("pipeline cache segment poisoned: {e}"),
+            })?;
+        if let Some(kernel) = cell.get() {
+            return Ok(kernel.clone());
         }
+
+        // Compile outside any cache lock. Module loading requires this
+        // device's context current on the calling thread.
+        device.bind()?;
+        let src = source();
+        let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
+            HephaestusError::DispatchFailed {
+                message: format!("CUDA compilation failed for {func_name}: {e}"),
+            }
+        })?;
+
+        let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("PTX is not a valid CString: {e}"),
+        })?;
+
+        let func_name_c =
+            std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
+                message: format!("kernel name is not a valid CString: {e}"),
+            })?;
+
+        let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
+        // SAFETY: this device's context is current on this thread (`bind`
+        // above); `ptx_c` is a NUL-terminated PTX image kept alive across the
+        // call; `module` is a valid out-pointer for one `CUmodule`.
+        let compiled = unsafe {
+            let res = cuda_core::sys::cuModuleLoadData(
+                &mut module as *mut cuda_core::sys::CUmodule,
+                ptx_c.as_ptr() as *const std::ffi::c_void,
+            );
+            if res != 0 {
+                return Err(HephaestusError::DispatchFailed {
+                    message: format!("cuModuleLoadData failed with code: {res}"),
+                });
+            }
+
+            let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
+            let res = cuda_core::sys::cuModuleGetFunction(
+                &mut func as *mut cuda_core::sys::CUfunction,
+                module as *mut _,
+                func_name_c.as_ptr(),
+            );
+            if res != 0 {
+                let unload = cuda_core::sys::cuModuleUnload(module as *mut _);
+                debug_assert_eq!(unload, 0, "cuModuleUnload during error cleanup");
+                return Err(HephaestusError::DispatchFailed {
+                    message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
+                });
+            }
+
+            Arc::new(SafeCachedKernel::new(
+                module,
+                func,
+                device.cu_device().clone(),
+            ))
+        };
+
+        // Another thread may have won the race; its kernel is kept and ours
+        // drops (module unload via SafeCachedKernel::drop).
+        Ok(cell.get_or_init(|| compiled).clone())
     }
 
     #[cfg(not(feature = "cuda"))]
@@ -90,6 +102,112 @@ pub fn cached_kernel(
             message: "hephaestus-cuda built without the `cuda` feature".to_string(),
         })
     }
+}
+
+/// Grid/block launch configuration for [`launch_kernel`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LaunchConfig {
+    /// Grid dimensions in blocks (x, y, z).
+    pub grid: (u32, u32, u32),
+    /// Block dimensions in threads (x, y, z).
+    pub block: (u32, u32, u32),
+    /// Dynamic shared memory bytes per block.
+    pub shared_bytes: u32,
+}
+
+impl LaunchConfig {
+    /// One-dimensional launch: `grid_x` blocks of `width` threads.
+    #[must_use]
+    pub(crate) const fn linear(grid_x: u32, width: BlockWidth) -> Self {
+        Self {
+            grid: (grid_x, 1, 1),
+            block: (width.get(), 1, 1),
+            shared_bytes: 0,
+        }
+    }
+
+    /// Two-dimensional launch: `grid_x` × `grid_y` blocks of
+    /// `block_x` × `block_y` threads.
+    #[must_use]
+    pub(crate) const fn planar(grid_x: u32, grid_y: u32, block_x: u32, block_y: u32) -> Self {
+        Self {
+            grid: (grid_x, grid_y, 1),
+            block: (block_x, block_y, 1),
+            shared_bytes: 0,
+        }
+    }
+}
+
+/// Launch a cached kernel on this device (single source of truth for
+/// `cuLaunchKernel`).
+///
+/// Binds the device's context to the calling thread first: CUDA contexts are
+/// thread-affine and `CudaDevice` is `Clone + Send`, so the caller's thread
+/// may not be the acquiring thread. Launches on the legacy null stream; the
+/// launch is asynchronous and errors from kernel *execution* surface at the
+/// next synchronizing operation, not here.
+///
+/// # Errors
+/// Returns [`HephaestusError::DispatchFailed`] when the driver rejects the
+/// launch (bad handle, invalid configuration, resource exhaustion).
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_kernel(
+    device: &CudaDevice,
+    kernel: &SafeCachedKernel,
+    config: LaunchConfig,
+    args: &mut [*mut core::ffi::c_void],
+) -> Result<()> {
+    device.bind()?;
+    // SAFETY: this device's context is current on this thread (`bind` above);
+    // `kernel.func` is a live function handle whose module the caller keeps
+    // alive (Arc) for at least the duration of this call; `args` mirrors the
+    // kernel's `extern "C"` parameter list in order and type, each entry
+    // pointing to a live caller local that outlives this call (the driver
+    // copies argument VALUES at launch). Device pointers passed as arguments
+    // stay valid until the asynchronous kernel completes: buffer deallocation
+    // routes through `cuMemFree`-family calls, which the driver orders after
+    // in-flight work on the default stream (implicit synchronization on free).
+    let res = unsafe {
+        cuda_core::sys::cuLaunchKernel(
+            kernel.func,
+            config.grid.0,
+            config.grid.1,
+            config.grid.2,
+            config.block.0,
+            config.block.1,
+            config.block.2,
+            config.shared_bytes,
+            std::ptr::null_mut(),
+            args.as_mut_ptr(),
+            std::ptr::null_mut(),
+        )
+    };
+    if res != 0 {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "cuLaunchKernel failed with code {res} (grid {:?}, block {:?}, shared {} B)",
+                config.grid, config.block, config.shared_bytes
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Stub launch for builds without the `cuda` feature: reports the backend
+/// unavailable instead of silently succeeding. Unreachable in practice — the
+/// stub device cannot be constructed and [`cached_kernel`] errors first — but
+/// kept honest so no call path fabricates success.
+#[cfg(not(feature = "cuda"))]
+pub(crate) fn launch_kernel(
+    device: &CudaDevice,
+    _kernel: &SafeCachedKernel,
+    _config: LaunchConfig,
+    _args: &mut [*mut core::ffi::c_void],
+) -> Result<()> {
+    let _ = device;
+    Err(HephaestusError::AdapterUnavailable {
+        message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+    })
 }
 
 /// Convert a logical work-item count into CUDA grid size (block count).

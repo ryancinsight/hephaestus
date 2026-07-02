@@ -5,7 +5,7 @@ use leto::Layout;
 use crate::application::cuda_type::CudaScalar;
 use crate::application::elementwise::binary::BinaryCudaOp;
 use crate::application::elementwise::unary::UnaryCudaOp;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
@@ -389,49 +389,25 @@ where
         binary_shader::<Op, T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = meta;
-        let mut a_ptr = a.raw();
-        let mut b_ptr = b.raw();
-        let mut out_ptr = out.raw();
+    let mut meta_val = meta;
+    let mut a_ptr = a.raw();
+    let mut b_ptr = b.raw();
+    let mut out_ptr = out.raw();
 
-        let mut args: [*mut std::ffi::c_void; 4] = [
-            &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `binary_strided_kernel(Meta, const T*, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 4] = [
+        &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid_size_val,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid_size_val, meta);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid_size_val, width),
+        &mut args,
+    )
 }
 
 fn launch_unary_strided<Op, T>(
@@ -459,47 +435,23 @@ where
         unary_shader::<Op, T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = meta;
-        let mut a_ptr = a.raw();
-        let mut out_ptr = out.raw();
+    let mut meta_val = meta;
+    let mut a_ptr = a.raw();
+    let mut out_ptr = out.raw();
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `unary_strided_kernel(Meta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid_size_val,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid_size_val, meta);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid_size_val, width),
+        &mut args,
+    )
 }
 
 fn launch_scalar_strided<Op, T>(
@@ -528,49 +480,25 @@ where
         scalar_shader::<Op, T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = meta;
-        let mut a_ptr = a.raw();
-        let mut scalar_val = scalar;
-        let mut out_ptr = out.raw();
+    let mut meta_val = meta;
+    let mut a_ptr = a.raw();
+    let mut scalar_val = scalar;
+    let mut out_ptr = out.raw();
 
-        let mut args: [*mut std::ffi::c_void; 4] = [
-            &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut scalar_val as *mut T as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `scalar_strided_kernel(Meta, const T*, T, T*)`.
+    let mut args: [*mut std::ffi::c_void; 4] = [
+        &mut meta_val as *mut StridedMeta as *mut std::ffi::c_void,
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut scalar_val as *mut T as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, scalar is copied by value, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid_size_val,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid_size_val, meta, scalar);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid_size_val, width),
+        &mut args,
+    )
 }
 
 /// Run `out[idx] = op(a[idx], b[idx])` over dynamic-rank logical output indices.

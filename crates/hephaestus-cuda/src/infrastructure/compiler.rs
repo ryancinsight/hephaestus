@@ -33,20 +33,58 @@ pub struct NvrtcDriver {
     pub nvrtcDestroyProgram: unsafe extern "C" fn(prog: *mut nvrtcProgram) -> nvrtcResult,
 }
 
+/// A loaded CUDA module and one resolved kernel function handle.
+///
+/// The owning device is retained so `Drop` can make the module's context
+/// current before unloading — modules are context-owned, and the last `Arc`
+/// may be released on any thread.
 pub struct SafeCachedKernel {
     pub module: cuda_core::sys::CUmodule,
     pub func: cuda_core::sys::CUfunction,
+    device: std::sync::Arc<cuda_core::Device>,
 }
 
+impl SafeCachedKernel {
+    pub(crate) fn new(
+        module: cuda_core::sys::CUmodule,
+        func: cuda_core::sys::CUfunction,
+        device: std::sync::Arc<cuda_core::Device>,
+    ) -> Self {
+        Self {
+            module,
+            func,
+            device,
+        }
+    }
+}
+
+// SAFETY: `CUmodule`/`CUfunction` are opaque context-owned driver handles,
+// not thread-affine pointers; the CUDA driver API is thread-safe and any
+// thread may use a handle after making the owning context current (every
+// launch/unload site binds first). The handles are never dereferenced on the
+// host. `cuda_core::Device` is itself Send + Sync.
 unsafe impl Send for SafeCachedKernel {}
+// SAFETY: shared use is read-only handle passing into driver calls that
+// perform their own internal synchronization; see the Send justification.
 unsafe impl Sync for SafeCachedKernel {}
 
 impl Drop for SafeCachedKernel {
     fn drop(&mut self) {
-        if !self.module.is_null() {
-            unsafe {
-                let _ = cuda_core::sys::cuModuleUnload(self.module);
-            }
+        if self.module.is_null() {
+            return;
+        }
+        // Unloading requires the owning context current on this thread. Drop
+        // cannot surface errors; a failed bind or unload leaks the module
+        // (bounded: at most one per cache key per device lifetime) and trips
+        // the debug assertion in dev/test builds.
+        if self.device.bind_to_thread().is_ok() {
+            // SAFETY: `module` is a live handle owned by this value, the
+            // owning context is current (bind above), and no other user
+            // exists — Drop runs at the last Arc release.
+            let res = unsafe { cuda_core::sys::cuModuleUnload(self.module) };
+            debug_assert_eq!(res, 0, "cuModuleUnload failed with code {res}");
+        } else {
+            debug_assert!(false, "SafeCachedKernel drop: context bind failed");
         }
     }
 }
@@ -143,6 +181,19 @@ fn find_nvrtc_library() -> Option<Library> {
     None
 }
 
+/// Destroy an NVRTC program, checking the result (cleanup-path SSOT).
+///
+/// A failed destroy leaks the program object; it cannot be surfaced from
+/// cleanup paths that are already returning a primary error, so it trips the
+/// debug assertion in dev/test builds instead of being silently discarded.
+fn destroy_program(nvrtc: &NvrtcDriver, prog: &mut nvrtcProgram) {
+    // SAFETY (caller-upheld, all call sites in this module): `prog` was
+    // created by `nvrtcCreateProgram` on this same dynamically-loaded NVRTC
+    // instance and has not been destroyed yet.
+    let res = unsafe { (nvrtc.nvrtcDestroyProgram)(prog) };
+    debug_assert_eq!(res, 0, "nvrtcDestroyProgram failed with code {res}");
+}
+
 /// Compile a CUDA C++ source code string to PTX at runtime using NVRTC.
 pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
     let nvrtc = NvrtcDriver::get().ok_or_else(|| "NVRTC driver not available".to_string())?;
@@ -175,16 +226,28 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
         );
 
         if compile_res != 0 {
+            // Best-effort log retrieval: a failed size/log query yields an
+            // empty log rather than reading uninitialized bytes.
             let mut log_size: usize = 0;
-            (nvrtc.nvrtcGetProgramLogSize)(prog, &mut log_size);
-            let mut log_bytes = vec![0u8; log_size];
-            (nvrtc.nvrtcGetProgramLog)(prog, log_bytes.as_mut_ptr() as *mut std::ffi::c_char);
-            while log_bytes.last() == Some(&0) {
-                log_bytes.pop();
-            }
-            let log_str = String::from_utf8_lossy(&log_bytes).into_owned();
+            let log_str = if (nvrtc.nvrtcGetProgramLogSize)(prog, &mut log_size) == 0
+                && log_size > 0
+            {
+                let mut log_bytes = vec![0u8; log_size];
+                if (nvrtc.nvrtcGetProgramLog)(prog, log_bytes.as_mut_ptr() as *mut std::ffi::c_char)
+                    == 0
+                {
+                    while log_bytes.last() == Some(&0) {
+                        log_bytes.pop();
+                    }
+                    String::from_utf8_lossy(&log_bytes).into_owned()
+                } else {
+                    "<nvrtcGetProgramLog failed>".to_string()
+                }
+            } else {
+                "<no compile log available>".to_string()
+            };
 
-            (nvrtc.nvrtcDestroyProgram)(&mut prog);
+            destroy_program(nvrtc, &mut prog);
             return Err(format!(
                 "nvrtcCompileProgram failed (code {}). Log:\n{}",
                 compile_res, log_str
@@ -194,7 +257,7 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
         let mut ptx_size: usize = 0;
         let ptx_res = (nvrtc.nvrtcGetPTXSize)(prog, &mut ptx_size);
         if ptx_res != 0 {
-            (nvrtc.nvrtcDestroyProgram)(&mut prog);
+            destroy_program(nvrtc, &mut prog);
             return Err(format!("nvrtcGetPTXSize failed: {}", ptx_res));
         }
 
@@ -202,11 +265,11 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
         let ptx_get_res =
             (nvrtc.nvrtcGetPTX)(prog, ptx_bytes.as_mut_ptr() as *mut std::ffi::c_char);
         if ptx_get_res != 0 {
-            (nvrtc.nvrtcDestroyProgram)(&mut prog);
+            destroy_program(nvrtc, &mut prog);
             return Err(format!("nvrtcGetPTX failed: {}", ptx_get_res));
         }
 
-        (nvrtc.nvrtcDestroyProgram)(&mut prog);
+        destroy_program(nvrtc, &mut prog);
 
         while ptx_bytes.last() == Some(&0) {
             ptx_bytes.pop();

@@ -2,7 +2,7 @@
 
 use super::GpuCsrMatrix;
 use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::Pod;
@@ -75,53 +75,30 @@ pub fn spmv_into<T: CudaScalar + leto_ops::Scalar + Pod>(
 
     let kernel = cached_kernel(device, key, "spmv_kernel", || spmv_shader_source::<T>())?;
 
-    #[cfg(feature = "cuda")]
-    {
-        device.bind()?;
-        let mut values_ptr = a.values().raw();
-        let mut col_indices_ptr = a.col_indices().raw();
-        let mut row_ptr_ptr = a.row_ptr().raw();
-        let mut x_ptr = x.raw();
-        let mut y_ptr = y.raw();
-        let mut nrows_val = nrows as u32;
+    let mut values_ptr = a.values().raw();
+    let mut col_indices_ptr = a.col_indices().raw();
+    let mut row_ptr_ptr = a.row_ptr().raw();
+    let mut x_ptr = x.raw();
+    let mut y_ptr = y.raw();
+    let mut nrows_val = nrows as u32;
 
-        let mut args: [*mut std::ffi::c_void; 6] = [
-            &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut x_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut y_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut nrows_val as *mut u32 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `spmv_kernel(const T*, const unsigned int*,
+    // const unsigned int*, const T*, T*, unsigned int)`.
+    let mut args: [*mut std::ffi::c_void; 6] = [
+        &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut x_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut y_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut nrows_val as *mut u32 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid, width);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid, width),
+        &mut args,
+    )
 }
 
 /// Compute `y = A · x`, allocating the result buffer.

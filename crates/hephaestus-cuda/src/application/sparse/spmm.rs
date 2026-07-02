@@ -3,7 +3,7 @@
 use super::GpuCsrMatrix;
 use crate::application::cuda_type::CudaScalar;
 use crate::application::linalg::AsGpuMatrixOperand;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -130,53 +130,30 @@ pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOpera
 
     let kernel = cached_kernel(device, key, "spmm_kernel", || spmm_shader_source::<T>())?;
 
-    #[cfg(feature = "cuda")]
-    {
-        device.bind()?;
-        let mut meta_val = meta;
-        let mut values_ptr = a.values().raw();
-        let mut col_indices_ptr = a.col_indices().raw();
-        let mut row_ptr_ptr = a.row_ptr().raw();
-        let mut b_ptr = b_op.buffer.raw();
-        let mut c_ptr = c.raw();
+    let mut meta_val = meta;
+    let mut values_ptr = a.values().raw();
+    let mut col_indices_ptr = a.col_indices().raw();
+    let mut row_ptr_ptr = a.row_ptr().raw();
+    let mut b_ptr = b_op.buffer.raw();
+    let mut c_ptr = c.raw();
 
-        let mut args: [*mut std::ffi::c_void; 6] = [
-            &mut meta_val as *mut SpmmMeta as *mut std::ffi::c_void,
-            &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `spmm_kernel(SpmmMeta, const T*, const unsigned int*,
+    // const unsigned int*, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 6] = [
+        &mut meta_val as *mut SpmmMeta as *mut std::ffi::c_void,
+        &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid, width);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid, width),
+        &mut args,
+    )
 }
 
 /// Compute multiple sparse matrix-vector products into a pre-allocated output

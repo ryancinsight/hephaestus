@@ -30,20 +30,15 @@ use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 /// driver: the CUDA driver is dynamically loaded, so constructing this never
 /// requires a CUDA toolkit at build time, only `nvcuda`/`libcuda` at runtime.
 #[derive(Clone)]
-#[allow(clippy::type_complexity)]
 pub struct CudaDevice {
     device: Arc<cuda_core::Device>,
+    /// Compiled-kernel cache. Slots hold only successful compilations;
+    /// failures leave the `OnceLock` empty so the key can retry (see
+    /// [`crate::application::pipeline::cached_kernel`]).
     pub(crate) pipeline_cache: Arc<
         moirai_sync::sync::ConcurrentHashMap<
             String,
-            Arc<
-                std::sync::OnceLock<
-                    std::result::Result<
-                        Arc<crate::infrastructure::compiler::SafeCachedKernel>,
-                        String,
-                    >,
-                >,
-            >,
+            Arc<std::sync::OnceLock<Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
         >,
     >,
     topology: Option<Arc<themis::GpuTopology>>,
@@ -144,11 +139,18 @@ impl CudaDevice {
         self.topology.as_deref()
     }
 
+    /// The underlying cutile-rs device handle (module lifetime management).
+    #[inline]
+    pub(crate) fn cu_device(&self) -> &Arc<cuda_core::Device> {
+        &self.device
+    }
+
     /// Bind the device context to the current thread before a driver call.
     ///
-    /// Transfers and allocations execute against the thread's current context;
-    /// binding makes this device's context current (CUDA contexts are
-    /// thread-affine), so calls from any thread target the right device.
+    /// Transfers, allocations, module loads, and kernel launches execute
+    /// against the thread's current context; binding makes this device's
+    /// context current (CUDA contexts are thread-affine), so calls from any
+    /// thread target the right device.
     pub fn bind(&self) -> Result<()> {
         self.device
             .bind_to_thread()

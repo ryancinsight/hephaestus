@@ -348,7 +348,7 @@ pub fn qr_decompose_blocked(
 mod hh_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::cached_kernel;
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -500,6 +500,8 @@ mod hh_impl {
         let mut ref_ptr = reflector_buf.raw();
         let mut meta_val = meta;
 
+        // Argument list mirrors `householder_kernel(const float*, float*,
+        // const ReflectorMeta*, HhMeta)`.
         let mut args: [*mut std::ffi::c_void; 4] = [
             &mut v_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
@@ -507,27 +509,12 @@ mod hh_impl {
             &mut meta_val as *mut HhMeta as *mut std::ffi::c_void,
         ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                trail_cols as u32,
-                1,
-                1,
-                256,
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel HH failed with code: {res}"),
-                });
-            }
-        }
-
-        Ok(())
+        // 256-thread blocks match the kernel's fixed `sdata[256]` reduction tile.
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::planar(trail_cols as u32, 1, 256, 1),
+            &mut args,
+        )
     }
 }

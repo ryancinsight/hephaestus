@@ -387,7 +387,7 @@ pub fn lu_decompose_blocked(
 mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::cached_kernel;
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -524,6 +524,8 @@ mod gemm_impl {
         let mut c_ptr = c_buf.raw();
         let mut meta_val = meta;
 
+        // Argument list mirrors `gemm_kernel(const float*, const float*, float*,
+        // GemmMeta)`.
         let mut args: [*mut std::ffi::c_void; 4] = [
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
@@ -531,27 +533,11 @@ mod gemm_impl {
             &mut meta_val as *mut GemmMeta as *mut std::ffi::c_void,
         ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                workgroups_x as u32,
-                workgroups_y as u32,
-                1,
-                16,
-                16,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel GEMM failed with code: {res}"),
-                });
-            }
-        }
-
-        Ok(())
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+            &mut args,
+        )
     }
 }

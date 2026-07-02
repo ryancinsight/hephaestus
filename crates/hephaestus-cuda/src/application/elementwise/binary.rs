@@ -1,6 +1,6 @@
 use super::reject_output_alias;
 use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
@@ -115,49 +115,25 @@ where
 
     let kernel = cached_kernel(device, key, "binary_kernel", || shader_source::<Op, T>())?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut lhs_ptr = lhs.raw();
-        let mut rhs_ptr = rhs.raw();
-        let mut out_ptr = out.raw();
-        let mut n_val = out.len() as u32;
+    let mut lhs_ptr = lhs.raw();
+    let mut rhs_ptr = rhs.raw();
+    let mut out_ptr = out.raw();
+    let mut n_val = out.len() as u32;
 
-        let mut args: [*mut std::ffi::c_void; 4] = [
-            &mut lhs_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut rhs_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut n_val as *mut u32 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `binary_kernel(const T*, const T*, T*, unsigned int)`.
+    let mut args: [*mut std::ffi::c_void; 4] = [
+        &mut lhs_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut rhs_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut n_val as *mut u32 as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, size matches.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid_size_val,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid_size_val);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid_size_val, width),
+        &mut args,
+    )
 }
 
 /// Run `out[i] = op(lhs[i], rhs[i])` on the CUDA device, allocating the output buffer.

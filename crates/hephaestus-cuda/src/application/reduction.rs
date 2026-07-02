@@ -1,5 +1,5 @@
 use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
@@ -223,45 +223,23 @@ where
                 .raw()
         };
 
-        #[cfg(feature = "cuda")]
-        {
-            let mut src_val = source_ptr;
-            let mut out_val = out_buffer.raw();
-            let mut n_val = current_len as u32;
+        let mut src_val = source_ptr;
+        let mut out_val = out_buffer.raw();
+        let mut n_val = current_len as u32;
 
-            let mut args: [*mut std::ffi::c_void; 3] = [
-                &mut src_val as *mut u64 as *mut std::ffi::c_void,
-                &mut out_val as *mut u64 as *mut std::ffi::c_void,
-                &mut n_val as *mut u32 as *mut std::ffi::c_void,
-            ];
+        // Argument list mirrors `reduction_kernel(const T*, T*, unsigned int)`.
+        let mut args: [*mut std::ffi::c_void; 3] = [
+            &mut src_val as *mut u64 as *mut std::ffi::c_void,
+            &mut out_val as *mut u64 as *mut std::ffi::c_void,
+            &mut n_val as *mut u32 as *mut std::ffi::c_void,
+        ];
 
-            // SAFETY: Buffers are valid, dimensions match.
-            unsafe {
-                let res = cuda_core::sys::cuLaunchKernel(
-                    kernel.func,
-                    grid_size_val,
-                    1,
-                    1,
-                    width.get(),
-                    1,
-                    1,
-                    0,
-                    std::ptr::null_mut(),
-                    args.as_mut_ptr(),
-                    std::ptr::null_mut(),
-                );
-                if res != 0 {
-                    return Err(HephaestusError::DispatchFailed {
-                        message: format!("cuLaunchKernel failed with code: {res}"),
-                    });
-                }
-            }
-        }
-
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (kernel, grid_size_val, source_ptr);
-        }
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::linear(grid_size_val, width),
+            &mut args,
+        )?;
 
         temp_buffers.push(out_buffer);
         current_len = out_len;
@@ -520,46 +498,23 @@ where
         axis_reduction_shader_source::<Op, T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = dispatch.meta;
-        let mut in_ptr = input.buffer.raw();
-        let mut out_ptr = output.buffer.raw();
+    let mut meta_val = dispatch.meta;
+    let mut in_ptr = input.buffer.raw();
+    let mut out_ptr = output.buffer.raw();
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-            &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `axis_reduction_kernel(AxisReductionMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                dispatch.grid_size,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, dispatch.meta, dispatch.grid_size);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(dispatch.grid_size, width),
+        &mut args,
+    )
 }
 
 /// Reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
@@ -623,46 +578,23 @@ where
         mean_axis_shader_source::<T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = dispatch.meta;
-        let mut in_ptr = input.buffer.raw();
-        let mut out_ptr = output.buffer.raw();
+    let mut meta_val = dispatch.meta;
+    let mut in_ptr = input.buffer.raw();
+    let mut out_ptr = output.buffer.raw();
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-            &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `mean_axis_kernel(AxisReductionMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                dispatch.grid_size,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, dispatch.meta, dispatch.grid_size);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(dispatch.grid_size, width),
+        &mut args,
+    )
 }
 
 /// Mean-reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.

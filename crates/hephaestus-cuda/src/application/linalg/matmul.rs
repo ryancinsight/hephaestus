@@ -12,7 +12,7 @@ use leto::Layout;
 
 use super::{map_layout, map_layout_err};
 use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::cached_kernel;
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
 
@@ -160,53 +160,30 @@ where
     let workgroups_x = cols.div_ceil(16);
     let workgroups_y = rows.div_ceil(16);
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut a_ptr = lhs.buffer.raw();
-        let mut b_ptr = rhs.buffer.raw();
-        let mut c_ptr = out.buffer.raw();
-        let mut a_meta_val = a_meta;
-        let mut b_meta_val = b_meta;
-        let mut c_meta_val = c_meta;
+    let mut a_ptr = lhs.buffer.raw();
+    let mut b_ptr = rhs.buffer.raw();
+    let mut c_ptr = out.buffer.raw();
+    let mut a_meta_val = a_meta;
+    let mut b_meta_val = b_meta;
+    let mut c_meta_val = c_meta;
 
-        let mut args: [*mut std::ffi::c_void; 6] = [
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut c_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `matmul_kernel(const T*, const T*, T*, MatrixLayout,
+    // MatrixLayout, MatrixLayout)`.
+    let mut args: [*mut std::ffi::c_void; 6] = [
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+        &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+        &mut c_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                workgroups_x as u32,
-                workgroups_y as u32,
-                1,
-                16,
-                16,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, workgroups_x, workgroups_y, a_meta, b_meta, c_meta);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+        &mut args,
+    )
 }
 
 /// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` on the CUDA device.
