@@ -10,9 +10,13 @@ pub mod device;
 pub mod dialect;
 /// Error contracts shared by all backends.
 pub mod error;
+/// Backend-neutral kernel authoring: interface and source declarations.
+pub mod interface;
 /// Kernel-dispatch contracts shared by accelerator backends.
 pub mod kernel;
 /// Launch-shape vocabulary for occupancy-planned dispatch.
 pub mod launch;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
+/// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
+pub mod stream;

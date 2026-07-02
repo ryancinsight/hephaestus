@@ -21,6 +21,7 @@ pub use domain::decomposition::{panel_lu_packed, panel_qr_packed};
 pub use domain::device::{validate_buffer_size, validate_slice_alignment, ComputeDevice};
 pub use domain::dialect::{CudaC, DialectScalar, KernelDialect, Wgsl};
 pub use domain::error::{HephaestusError, Result};
+pub use domain::interface::{Access, BindingDecl, KernelInterface, KernelSource};
 pub use domain::kernel::{
     BinaryStorageKernel, DispatchGrid, MultiStorageKernel, UnaryStorageKernel,
 };
@@ -30,3 +31,4 @@ pub use domain::ops::{
     IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, RecipOp, SinOp,
     SqrtOp, SubOp, SumOp, UnaryExpr,
 };
+pub use domain::stream::{validate_bindings, Binding, CommandStream, KernelDevice};
