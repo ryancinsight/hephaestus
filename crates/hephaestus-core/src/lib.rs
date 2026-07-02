@@ -19,8 +19,14 @@ pub mod domain;
 pub use domain::buffer::DeviceBuffer;
 pub use domain::decomposition::{panel_lu_packed, panel_qr_packed};
 pub use domain::device::{validate_buffer_size, validate_slice_alignment, ComputeDevice};
+pub use domain::dialect::{CudaC, DialectScalar, KernelDialect, Wgsl};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::kernel::{
     BinaryStorageKernel, DispatchGrid, MultiStorageKernel, UnaryStorageKernel,
 };
 pub use domain::launch::BlockWidth;
+pub use domain::ops::{
+    AbsOp, AddOp, BinaryExpr, CombineExpr, CosOp, CumProdOp, CumSumOp, DivOp, ExpNegOp, ExpOp,
+    IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, RecipOp, SinOp,
+    SqrtOp, SubOp, SumOp, UnaryExpr,
+};
