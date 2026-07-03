@@ -57,3 +57,7 @@ harness = false
 [[bench]]
 name = "decomposition_sync"
 harness = false
+
+[[bench]]
+name = "scan_throughput"
+harness = false

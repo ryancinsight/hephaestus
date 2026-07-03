@@ -80,13 +80,24 @@ __device__ unsigned int source_offset(AxisScanMeta meta, unsigned int row, unsig
     return (unsigned int)off;
 }}
 
+__device__ unsigned int dest_offset(AxisScanMeta meta, unsigned int row, unsigned int col) {{
+    int off = (int)meta.offsets[1]
+        + (int)row * meta.output_strides[0]
+        + (int)col * meta.output_strides[1];
+    return (unsigned int)off;
+}}
+
+// One thread owns one full scan line and walks it sequentially, writing every
+// prefix: O(L) work per length-L line. The combine order is strictly
+// left-to-right (right-to-left when reversed), matching the sequential
+// reference exactly (bitwise-identical floating-point results).
 extern "C" __global__ void scan_kernel(
     AxisScanMeta meta,
     const {ty}* input,
     {ty}* output
 ) {{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= meta.offsets[3]) {{
+    unsigned int line = blockIdx.x * blockDim.x + threadIdx.x;
+    if (line >= meta.offsets[3]) {{
         return;
     }}
 
@@ -94,48 +105,20 @@ extern "C" __global__ void scan_kernel(
     unsigned int cols = meta.input_shape[1];
     unsigned int axis = meta.offsets[2] & 1u;
     bool reverse = (meta.offsets[2] & 2u) != 0u;
-    unsigned int out_row = i / cols;
-    unsigned int out_col = i % cols;
+    unsigned int len = (axis == 0u) ? rows : cols;
     {ty} acc = {identity};
 
-    if (axis == 0u) {{
-        if (reverse) {{
-            unsigned int count = rows - out_row;
-            for (unsigned int s = 0u; s < count; s++) {{
-                unsigned int scan_row = rows - 1u - s;
-                {ty} lhs = acc;
-                {ty} rhs = input[source_offset(meta, scan_row, out_col)];
-                acc = {expr};
-            }}
-        }} else {{
-            for (unsigned int scan_row = 0u; scan_row <= out_row; scan_row++) {{
-                {ty} lhs = acc;
-                {ty} rhs = input[source_offset(meta, scan_row, out_col)];
-                acc = {expr};
-            }}
-        }}
-    }} else {{
-        if (reverse) {{
-            unsigned int count = cols - out_col;
-            for (unsigned int s = 0u; s < count; s++) {{
-                unsigned int scan_col = cols - 1u - s;
-                {ty} lhs = acc;
-                {ty} rhs = input[source_offset(meta, out_row, scan_col)];
-                acc = {expr};
-            }}
-        }} else {{
-            for (unsigned int scan_col = 0u; scan_col <= out_col; scan_col++) {{
-                {ty} lhs = acc;
-                {ty} rhs = input[source_offset(meta, out_row, scan_col)];
-                acc = {expr};
-            }}
-        }}
+    // `axis` and `reverse` are uniform across the launch, so these selects
+    // never diverge within a warp.
+    for (unsigned int s = 0u; s < len; s++) {{
+        unsigned int idx = reverse ? (len - 1u - s) : s;
+        unsigned int row = (axis == 0u) ? idx : line;
+        unsigned int col = (axis == 0u) ? line : idx;
+        {ty} lhs = acc;
+        {ty} rhs = input[source_offset(meta, row, col)];
+        acc = {expr};
+        output[dest_offset(meta, row, col)] = acc;
     }}
-
-    int out_off = (int)meta.offsets[1]
-        + (int)out_row * meta.output_strides[0]
-        + (int)out_col * meta.output_strides[1];
-    output[out_off] = acc;
 }}
 "#,
         ty = T::TYPE_TOKEN,
@@ -197,6 +180,9 @@ fn validate_axis_scan<T>(
         ScanDirection::Forward => 0usize,
         ScanDirection::Reverse => 2usize,
     };
+    // One thread per scan line: lines run along `axis`, so their count is the
+    // orthogonal extent. Non-zero here because output_len > 0.
+    let line_count = input.layout.shape[1 - axis];
     let meta = AxisScanMeta {
         input_shape: [
             to_u32(input.layout.shape[0], "input rows")?,
@@ -215,11 +201,11 @@ fn validate_axis_scan<T>(
             to_u32(input.layout.offset, "input offset")?,
             to_u32(output.layout.offset, "output offset")?,
             to_u32(axis | direction_bit, "axis and direction")?,
-            to_u32(output_len, "output length")?,
+            to_u32(line_count, "scan line count")?,
         ],
     };
 
-    let grid_size_val = grid_size(output_len, width)?;
+    let grid_size_val = grid_size(line_count, width)?;
 
     Ok(Some(AxisScanDispatch {
         meta,

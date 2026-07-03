@@ -68,10 +68,21 @@ fn source_offset(row: u32, col: u32) -> u32 {{
     return u32(off);
 }}
 
+fn dest_offset(row: u32, col: u32) -> u32 {{
+    let off = i32(scan_meta.offsets.y)
+        + i32(row) * scan_meta.output_strides.x
+        + i32(col) * scan_meta.output_strides.y;
+    return u32(off);
+}}
+
+// One thread owns one full scan line and walks it sequentially, writing every
+// prefix: O(L) work per length-L line. The combine order is strictly
+// left-to-right (right-to-left when reversed), matching the sequential
+// reference exactly (bitwise-identical floating-point results).
 @compute @workgroup_size({wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
-    let i = gid.x;
-    if (i >= scan_meta.offsets.w) {{
+    let line = gid.x;
+    if (line >= scan_meta.offsets.w) {{
         return;
     }}
 
@@ -79,48 +90,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     let cols = scan_meta.input_shape.y;
     let axis = scan_meta.offsets.z & 1u;
     let reverse = (scan_meta.offsets.z & 2u) != 0u;
-    let out_row = i / cols;
-    let out_col = i % cols;
+    let len = select(cols, rows, axis == 0u);
     var acc: {ty} = {identity};
 
-    if (axis == 0u) {{
-        if (reverse) {{
-            let count = rows - out_row;
-            for (var s = 0u; s < count; s = s + 1u) {{
-                let scan_row = rows - 1u - s;
-                let lhs = acc;
-                let rhs = input[source_offset(scan_row, out_col)];
-                acc = {expr};
-            }}
-        }} else {{
-            for (var scan_row = 0u; scan_row <= out_row; scan_row = scan_row + 1u) {{
-                let lhs = acc;
-                let rhs = input[source_offset(scan_row, out_col)];
-                acc = {expr};
-            }}
-        }}
-    }} else {{
-        if (reverse) {{
-            let count = cols - out_col;
-            for (var s = 0u; s < count; s = s + 1u) {{
-                let scan_col = cols - 1u - s;
-                let lhs = acc;
-                let rhs = input[source_offset(out_row, scan_col)];
-                acc = {expr};
-            }}
-        }} else {{
-            for (var scan_col = 0u; scan_col <= out_col; scan_col = scan_col + 1u) {{
-                let lhs = acc;
-                let rhs = input[source_offset(out_row, scan_col)];
-                acc = {expr};
-            }}
-        }}
+    // `axis` and `reverse` are uniform across the dispatch, so these selects
+    // never diverge within a subgroup.
+    for (var s = 0u; s < len; s = s + 1u) {{
+        let idx = select(s, len - 1u - s, reverse);
+        let row = select(line, idx, axis == 0u);
+        let col = select(idx, line, axis == 0u);
+        let lhs = acc;
+        let rhs = input[source_offset(row, col)];
+        acc = {expr};
+        output[dest_offset(row, col)] = acc;
     }}
-
-    let out_off = i32(scan_meta.offsets.y)
-        + i32(out_row) * scan_meta.output_strides.x
-        + i32(out_col) * scan_meta.output_strides.y;
-    output[u32(out_off)] = acc;
 }}
 "#,
         ty = T::TYPE_TOKEN,
@@ -183,6 +166,9 @@ fn validate_axis_scan<T>(
         ScanDirection::Forward => 0usize,
         ScanDirection::Reverse => 2usize,
     };
+    // One thread per scan line: lines run along `axis`, so their count is the
+    // orthogonal extent. Non-zero here because output_len > 0.
+    let line_count = input.layout.shape[1 - axis];
     let meta = AxisScanMeta {
         input_shape: [
             to_u32(input.layout.shape[0], "input rows")?,
@@ -201,13 +187,13 @@ fn validate_axis_scan<T>(
             to_u32(input.layout.offset, "input offset")?,
             to_u32(output.layout.offset, "output offset")?,
             to_u32(axis | direction_bit, "axis and direction")?,
-            to_u32(output_len, "output length")?,
+            to_u32(line_count, "scan line count")?,
         ],
     };
 
     Ok(Some(AxisScanDispatch {
         meta,
-        groups: workgroups(output_len, width)?,
+        groups: workgroups(line_count, width)?,
     }))
 }
 

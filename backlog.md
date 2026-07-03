@@ -65,9 +65,18 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   `wgpu::Features` and `wgpu::Limits` from public `GpuDevice` capability APIs
   and made its backend contexts generic over `D: ComputeDeviceCapabilities`.
 - [KS-5] [major] Per-family host-orchestration consolidation into core generic
-  over the seam — scan first (also replaces the O(L²) axis-scan algorithm in
-  BOTH backends with a workgroup/block scan + block-sums pass), then blocked
-  decompositions, then wrappers. Status: todo.
+  over the seam — scan first, then blocked decompositions, then wrappers.
+  Status: todo (orchestration hoist). The O(L²) axis-scan ALGORITHM defect is
+  fixed in both backends (2026-07-02): one-thread-per-line sequential scan,
+  O(N) total work, combine order preserved so results are bitwise-identical
+  to the reference (no test changes); bench 512x4096 f32 axis-1 cumsum
+  6.07 ms -> 2.29 ms (2.65x, scan_throughput bench, empirical tier).
+- [KS-5b] [minor] Tiled shared-memory scan (Hillis-Steele/Blelloch single-tile
+  fast path + block-sums/uniform-add multi-pass) to restore full-width
+  parallelism on long lines. Reorders FP addition: needs the derived
+  per-element bound ~O(log2(L)*eps*sum|x|) (tree depth log2 L vs sequential
+  depth L) encoded in the differential tests as a DERIVED tolerance for the
+  reordered kernel — never a widened exact-equality contract. Status: todo.
 - [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
   (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
   Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).
