@@ -15,7 +15,7 @@ use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
 use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
-use super::validate::validate_square;
+use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -163,6 +163,16 @@ pub fn cholesky_decompose(
 
 /// Blocked Cholesky factorization **A** = **L** **L**ᵀ with GPU-accelerated
 /// trailing-matrix SYRK updates.
+///
+/// The operand must be dense C-contiguous at offset 0 (the blocked path
+/// bulk-copies the matrix storage on the device); transposed, offset, or
+/// broadcast views are rejected with a typed error — materialize them
+/// first.
+///
+/// # Errors
+///
+/// - Non-square or non-dense (non-C-contiguous / offset / broadcast) operand.
+/// - Non-finite values in the input; matrix not positive-definite.
 pub fn cholesky_decompose_blocked(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
@@ -170,6 +180,7 @@ pub fn cholesky_decompose_blocked(
     #[cfg(feature = "cuda")]
     {
         let n = validate_square(&matrix)?;
+        validate_dense_operand("cholesky", &matrix)?;
         if n == 0 {
             let lower = device.alloc_zeroed::<f32>(0)?;
             let inner = leto_ops::cholesky_decompose(&leto::ArrayView::<f32, 2>::new(
@@ -188,12 +199,13 @@ pub fn cholesky_decompose_blocked(
         let bytes = n * n * std::mem::size_of::<f32>();
         // SAFETY: this device's context is current (`bind` above). `lower_buf`
         // is a live, freshly allocated `n * n`-element device allocation, and
-        // `matrix.buffer` holds at least the layout's validated storage extent
-        // (`validate_square`), which covers the `bytes` read for the dense
-        // zero-offset `[n, n]` operands this blocked entry point operates on.
-        // The copy is asynchronous on the null stream; both allocations
-        // outlive it because frees route through synchronizing
-        // `cuMemFree`-family calls.
+        // `matrix.buffer` holds at least `n * n` elements: the operand is
+        // enforced dense C-contiguous at offset 0 (`validate_dense_operand`
+        // above), so the layout's validated storage extent
+        // (`validate_square`) equals the `bytes` read here. The copy is
+        // asynchronous on the null stream; both allocations outlive it
+        // because frees route through synchronizing `cuMemFree`-family
+        // calls.
         let res =
             unsafe { cuda_core::sys::cuMemcpyDtoD_v2(lower_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {

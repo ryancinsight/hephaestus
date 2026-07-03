@@ -18,7 +18,7 @@ use leto::Layout;
 use super::region::{
     download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
 };
-use super::validate::validate_square;
+use super::validate::{validate_dense_operand, validate_square};
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -442,6 +442,8 @@ const BLOCK_SIZE: usize = 64;
 /// # Errors
 ///
 /// - Non-square matrix.
+/// - Non-dense (non-C-contiguous / offset / broadcast) operand: the
+///   blocked path bulk-copies the matrix storage on the device.
 /// - Non-finite values in the input.
 /// - Matrix is not positive-definite.
 pub fn cholesky_decompose_blocked(
@@ -449,6 +451,7 @@ pub fn cholesky_decompose_blocked(
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuCholesky> {
     let n = validate_square(&matrix)?;
+    validate_dense_operand("cholesky", &matrix)?;
     if n == 0 {
         let lower = device.alloc_zeroed::<f32>(0)?;
         let inner = leto_ops::cholesky_decompose(&leto::ArrayView::<f32, 2>::new(
@@ -468,6 +471,10 @@ pub fn cholesky_decompose_blocked(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("hephaestus-cholesky-copy"),
         });
+    // Raw whole-matrix copy: sound only for dense C-contiguous
+    // zero-offset operands, enforced by `validate_dense_operand` at the
+    // entry point (a strided/offset/broadcast view would copy the wrong
+    // elements or exceed the operand's storage extent).
     encoder.copy_buffer_to_buffer(
         &matrix.buffer.buffer,
         0,

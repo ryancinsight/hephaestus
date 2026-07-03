@@ -19,3 +19,27 @@ pub(crate) fn validate_square<T: Pod>(matrix: &StridedOperand<'_, T, 2>) -> Resu
         .map_err(map_layout_err)?;
     Ok(rows)
 }
+
+/// Require a dense C-contiguous zero-offset operand.
+///
+/// The blocked decomposition entry points bulk-copy `rows·cols` elements
+/// straight from the operand's raw buffer (`copy_buffer_to_buffer`). A
+/// transposed, offset, or broadcast (zero-stride) layout would make that raw
+/// copy compute from the wrong elements — and for layouts whose validated
+/// storage extent is smaller than `rows·cols` (broadcast), request a copy
+/// past the allocation. `validate_storage_len` only bounds the layout's own
+/// extent, so density is checked explicitly here before any raw copy.
+pub(crate) fn validate_dense_operand<T: Pod>(
+    label: &str,
+    matrix: &StridedOperand<'_, T, 2>,
+) -> Result<()> {
+    if matrix.layout.is_c_contiguous() {
+        return Ok(());
+    }
+    Err(HephaestusError::DispatchFailed {
+        message: format!(
+            "{label} blocked decomposition requires a dense C-contiguous zero-offset operand;              got shape {:?}, strides {:?}, offset {} — materialize the view first (e.g. an              identity strided copy into a fresh buffer)",
+            matrix.layout.shape, matrix.layout.strides, matrix.layout.offset
+        ),
+    })
+}

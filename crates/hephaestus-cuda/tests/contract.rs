@@ -3011,3 +3011,75 @@ fn test_cuda_sparse_matrix_spmv_spmm() {
     dev.download(&c_buf, &mut got_c).unwrap();
     assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 0.0);
 }
+
+/// Shared adversarial-layout driver: every non-dense view (transposed,
+/// offset, broadcast/zero-stride) must be rejected by the blocked entry
+/// points with the typed dense-operand error BEFORE any device copy. The
+/// broadcast case is the memory-safety case: its validated storage extent
+/// (4 elements here) is smaller than rows*cols, so the former raw
+/// whole-matrix copy would have read past the allocation.
+#[cfg(feature = "decomposition")]
+fn assert_blocked_rejects_non_dense<F, O>(dev: &CudaDevice, entry: F, label: &str)
+where
+    F: Fn(&CudaDevice, StridedOperand<'_, f32, 2>) -> hephaestus_core::Result<O>,
+{
+    // 16 elements backing dense 4x4 views; 4 elements backing the broadcast.
+    let dense_host: Vec<f32> = (0..16).map(|i| 1.0 + i as f32).collect();
+    let dense_buf = dev.upload(&dense_host).unwrap();
+    let small_host = [1.0f32, 2.0, 3.0, 4.0];
+    let small_buf = dev.upload(&small_host).unwrap();
+
+    let transposed = Layout::new([4, 4], [1, 4], 0);
+    let offset = Layout::new([3, 3], [4, 1], 5);
+    let broadcast = Layout::new([4, 4], [0, 1], 0);
+
+    for (name, layout, buffer) in [
+        ("transposed", &transposed, &dense_buf),
+        ("offset", &offset, &dense_buf),
+        ("broadcast", &broadcast, &small_buf),
+    ] {
+        let result = entry(dev, StridedOperand { buffer, layout });
+        match result {
+            Err(HephaestusError::DispatchFailed { message }) => {
+                assert!(
+                    message.contains("dense C-contiguous"),
+                    "{label}/{name}: rejection must name the dense-operand                      contract, got: {message}"
+                );
+            }
+            Err(other) => {
+                panic!("{label}/{name}: expected DispatchFailed dense-operand error, got {other:?}")
+            }
+            Ok(_) => panic!("{label}/{name}: non-dense operand must be rejected"),
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_cholesky_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::cholesky_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, cholesky_decompose_blocked, "cholesky");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_lu_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::lu_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, lu_decompose_blocked, "LU");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_qr_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::qr_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, qr_decompose_blocked, "QR");
+}

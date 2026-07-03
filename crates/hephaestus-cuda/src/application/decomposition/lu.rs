@@ -40,7 +40,7 @@ use super::region::{download_matrix_region_compact, write_matrix_region_compact,
 #[cfg(feature = "cuda")]
 use hephaestus_core::panel_lu_packed;
 
-use super::validate::validate_square;
+use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -190,9 +190,14 @@ const LU_BLOCK_SIZE: usize = 64;
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
 ///
+/// The operand must be dense C-contiguous at offset 0 (the blocked path
+/// bulk-copies the matrix storage on the device); transposed, offset, or
+/// broadcast views are rejected with a typed error — materialize them
+/// first.
+///
 /// # Errors
 ///
-/// - Non-square matrix.
+/// - Non-square or non-dense (non-C-contiguous / offset / broadcast) operand.
 /// - Non-finite values in the input.
 /// - Singular matrix (exact zero pivot).
 pub fn lu_decompose_blocked(
@@ -202,6 +207,7 @@ pub fn lu_decompose_blocked(
     #[cfg(feature = "cuda")]
     {
         let n = validate_square(&matrix)?;
+        validate_dense_operand("LU", &matrix)?;
         if n == 0 {
             let factors = device.alloc_zeroed::<f32>(0)?;
             let inner = leto_ops::lu_decompose(&leto::ArrayView::<f32, 2>::new(
@@ -223,12 +229,13 @@ pub fn lu_decompose_blocked(
         let bytes = n * n * std::mem::size_of::<f32>();
         // SAFETY: this device's context is current (`bind` above).
         // `factors_buf` is a live, freshly allocated `n * n`-element device
-        // allocation, and `matrix.buffer` holds at least the layout's
-        // validated storage extent (`validate_square`), which covers the
-        // `bytes` read for the dense zero-offset `[n, n]` operands this
-        // blocked entry point operates on. The copy is asynchronous on the
-        // null stream; both allocations outlive it because frees route
-        // through synchronizing `cuMemFree`-family calls.
+        // allocation, and `matrix.buffer` holds at least `n * n` elements:
+        // the operand is enforced dense C-contiguous at offset 0
+        // (`validate_dense_operand` above), so the layout's validated
+        // storage extent (`validate_square`) equals the `bytes` read here.
+        // The copy is asynchronous on the null stream; both allocations
+        // outlive it because frees route through synchronizing
+        // `cuMemFree`-family calls.
         let res = unsafe {
             cuda_core::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), bytes)
         };

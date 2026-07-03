@@ -2,6 +2,22 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## Unreleased
+
+### Fixed
+
+- `hephaestus-wgpu` / `hephaestus-cuda` [patch]: the blocked decomposition
+  entry points (`cholesky_decompose_blocked`, `lu_decompose_blocked`,
+  `qr_decompose_blocked`) now enforce a dense C-contiguous zero-offset
+  operand (`validate_dense_operand`, typed `DispatchFailed`) before their
+  raw whole-matrix startup copies. Previously a transposed/offset view
+  computed from the wrong elements, and a broadcast (zero-stride) layout —
+  whose validated storage extent is smaller than rows·cols — made the CUDA
+  `cuMemcpyDtoD_v2` read past the allocation. SAFETY/inline comments at the
+  copy sites now cite the check. Evidence: six new adversarial layout tests
+  (transposed/offset/broadcast × both backends) pass on live hardware; full
+  suites regression-free.
+
 ## [0.11.0] - 2026-07-02
 
 ADR-0004 kernel-seam release (atlas `docs/adr/0004-hephaestus-kernel-seam.md`;
@@ -226,6 +242,20 @@ breaking minor per the versioning policy.
   check -p hephaestus-wgpu`, `cargo clippy -p hephaestus-wgpu --all-targets
   --no-deps -- -D warnings`, and `cargo nextest run -p hephaestus-wgpu stream`
   pass (5/5). CUDA now implements the same seam through `KernelSource<CudaC>`.
+
+- `hephaestus-core` / `hephaestus-wgpu` [minor]: added
+  `MultiStorageDevice`, a backend-neutral constructor for multi-storage
+  binding handles from provider-owned `D::Buffer<T>` values. `WgpuDevice`
+  implements it with `WgslStorageBinding`, allowing downstream consumers to
+  build multi-storage binding arrays without naming WGPU in their algorithm
+  structs. Evidence: `cargo fmt -p hephaestus-core -p hephaestus-wgpu
+  --check`, `cargo check -p hephaestus-core -p hephaestus-wgpu`, `cargo clippy
+  -p hephaestus-core -p hephaestus-wgpu --all-targets --no-deps -- -D
+  warnings`, `cargo nextest run -p hephaestus-core -p hephaestus-wgpu
+  storage_kernel` (2/2), and downstream `cargo check -p kwavers-analysis
+  --features gpu`, `cargo clippy -p kwavers-analysis --features gpu
+  --all-targets --no-deps -- -D warnings`, `cargo nextest run -p
+  kwavers-analysis --features gpu three_dimensional` (52/52) pass.
 
 - `hephaestus-cuda` [minor]: implemented the backend-neutral
   `KernelDevice`/`CommandStream` authored-kernel seam for `CudaDevice`. CUDA now

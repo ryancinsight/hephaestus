@@ -28,6 +28,7 @@ use hephaestus_core::panel_qr_packed;
 
 #[cfg(feature = "cuda")]
 use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::validate::validate_dense_operand;
 
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
@@ -169,9 +170,15 @@ const QR_BLOCK_SIZE: usize = 32;
 /// Blocked QR factorization **A = Q R** with GPU-accelerated trailing
 /// Householder application.
 ///
+/// The operand must be dense C-contiguous at offset 0 (the blocked path
+/// bulk-copies the matrix storage on the device); transposed, offset, or
+/// broadcast views are rejected with a typed error — materialize them
+/// first.
+///
 /// # Errors
 ///
 /// - Underdetermined shape (*m* < *n*).
+/// - Non-dense (non-C-contiguous / offset / broadcast) operand.
 /// - Non-finite values in the input.
 /// - Rank-deficient input (zero column norm).
 pub fn qr_decompose_blocked(
@@ -190,6 +197,7 @@ pub fn qr_decompose_blocked(
             .layout
             .validate_storage_len(matrix.buffer.len())
             .map_err(map_layout_err)?;
+        validate_dense_operand("QR", &matrix)?;
 
         if m == 0 || n == 0 {
             let r_buf = device.alloc_zeroed::<f32>(0)?;
@@ -214,12 +222,13 @@ pub fn qr_decompose_blocked(
         let bytes = m * n * std::mem::size_of::<f32>();
         // SAFETY: this device's context is current (`bind` above). `work_buf`
         // is a live, freshly allocated `m * n`-element device allocation, and
-        // `matrix.buffer` holds at least the layout's validated storage extent
-        // (`validate_storage_len` above), which covers the `bytes` read for
-        // the dense zero-offset `[m, n]` operands this blocked entry point
-        // operates on. The copy is asynchronous on the null stream; both
-        // allocations outlive it because frees route through synchronizing
-        // `cuMemFree`-family calls.
+        // `matrix.buffer` holds at least `m * n` elements: the operand is
+        // enforced dense C-contiguous at offset 0 (`validate_dense_operand`
+        // above), so the layout's validated storage extent
+        // (`validate_storage_len`) equals the `bytes` read here. The copy is
+        // asynchronous on the null stream; both allocations outlive it
+        // because frees route through synchronizing `cuMemFree`-family
+        // calls.
         let res =
             unsafe { cuda_core::sys::cuMemcpyDtoD_v2(work_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
