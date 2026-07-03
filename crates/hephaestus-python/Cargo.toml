@@ -15,7 +15,9 @@ doctest = false
 hephaestus-core = { workspace = true }
 hephaestus-cuda = { workspace = true }
 hephaestus-wgpu = { workspace = true }
-pyo3 = { workspace = true }
+# `multiple-pymethods` lets each operation-family module extend `PyArray`
+# with its own `#[pymethods]` block (one leaf module per family).
+pyo3 = { workspace = true, features = ["multiple-pymethods"] }
 numpy = { workspace = true }
 bytemuck = { workspace = true }
 wgpu = { workspace = true }
