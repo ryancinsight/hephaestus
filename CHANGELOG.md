@@ -6,6 +6,23 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Fixed
 
+- `hephaestus-cuda` [patch]: resolve 8 of 9 WDDM `STATUS_IN_PAGE_ERROR`
+  (`0xc0000006`) test aborts on Windows. Root-caused by experiment (correcting
+  the earlier placement-advice hypothesis): WDDM does not support concurrent
+  host/device access to `cuMemAllocManaged` ranges, so a host allocation
+  issued while a kernel is in flight on the null stream — the next
+  intermediate buffer in multi-pass reductions and map-then-reduce
+  (dot/norm/trace) — faults. A Windows-gated `cuCtxSynchronize` after each
+  `cuLaunchKernel` drains the context before the next host managed-memory
+  access. The backend is already null-stream-serial, so throughput is
+  unchanged and this also attributes async kernel faults to the launching
+  operation; Linux/UVM keeps launches asynchronous. Suite 102/103; the lone
+  residual (`concurrent_device_acquisition_is_safe`, 16 threads sharing the
+  null stream with no launches) needs the non-managed device tier tracked in
+  the backlog. Evidence: the eight formerly-aborting compute tests
+  (reduction ×3, dot, norms, trace, hessenberg, strided block-width) pass on
+  live hardware.
+
 - `hephaestus-wgpu` / `hephaestus-cuda` [patch]: the blocked decomposition
   entry points (`cholesky_decompose_blocked`, `lu_decompose_blocked`,
   `qr_decompose_blocked`) now enforce a dense C-contiguous zero-offset

@@ -190,6 +190,30 @@ pub(crate) fn launch_kernel(
             ),
         });
     }
+
+    // WDDM managed-memory safety: on Windows the default driver model (WDDM)
+    // does not support concurrent host/device access to `cuMemAllocManaged`
+    // ranges. A subsequent host touchpoint — allocating the next intermediate
+    // buffer, or the driver's own managed-heap bookkeeping — issued while this
+    // kernel is still in flight on the null stream faults with
+    // STATUS_IN_PAGE_ERROR (0xc0000006). Draining the context after the launch
+    // makes the completion explicit before any such host access. The backend
+    // is already null-stream-serial, so on Windows this only surfaces the
+    // existing serialization; Linux/UVM handles async managed access natively
+    // and keeps the launch asynchronous. This also converts an
+    // asynchronously-reported kernel-execution fault into an error attributed
+    // to the launching operation rather than the next unrelated transfer.
+    #[cfg(target_os = "windows")]
+    {
+        // SAFETY: this device's context is current on this thread (`bind`
+        // above); draining reports this kernel's execution status.
+        let sync = unsafe { cuda_core::sys::cuCtxSynchronize() };
+        if sync != 0 {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!("cuCtxSynchronize after launch -> {sync}"),
+            });
+        }
+    }
     Ok(())
 }
 
