@@ -2,10 +2,11 @@ use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, Laun
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
-use bytemuck::{Pod, Zeroable};
+use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    IdentityToken, OpIdentity, Result,
+    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
+    ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, IdentityToken, OpIdentity,
+    Result,
 };
 use leto::Layout;
 
@@ -181,21 +182,6 @@ where
         .expect("invariant: multi-element reduction allocates a final buffer"))
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct AxisReductionMeta {
-    input_shape: [u32; 2],
-    input_strides: [i32; 2],
-    output_strides: [i32; 2],
-    _pre_offsets_pad: [u32; 2],
-    offsets: [u32; 4],
-}
-
-struct AxisReductionDispatch {
-    meta: AxisReductionMeta,
-    grid_size: u32,
-}
-
 fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
     input
         .layout
@@ -207,18 +193,6 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
-
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
 fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Result<()> {
     if axis_len == 0 {
         return Err(HephaestusError::DispatchFailed {
@@ -228,80 +202,21 @@ fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Res
     Ok(())
 }
 
-fn validate_axis_reduction<T>(
+fn plan_axis_reduction_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
 ) -> Result<Option<AxisReductionDispatch>> {
-    validate_reduction_width(width)?;
-    if axis >= 2 {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("axis {axis} is out of bounds for rank-2 reduction"),
-        });
-    }
-
-    let mut expected_shape = input.layout.shape;
-    expected_shape[axis] = 1;
-    if output.layout.shape != expected_shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "axis reduction output shape mismatch: input {:?}, axis {axis}, out {:?}",
-                input.layout.shape, output.layout.shape
-            ),
-        });
-    }
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output buffer must not alias input buffer".to_string(),
-        });
-    }
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output layout must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
-
-    input
-        .layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    output
-        .layout
-        .validate_storage_len(output.buffer.len())
-        .map_err(map_layout_err)?;
-    let output_len = output.layout.checked_size().map_err(map_layout_err)?;
-    if output_len == 0 {
-        return Ok(None);
-    }
-
-    let grid_size_val = grid_size(output_len, width)?;
-    let meta = AxisReductionMeta {
-        input_shape: [
-            to_u32(input.layout.shape[0], "input rows")?,
-            to_u32(input.layout.shape[1], "input columns")?,
-        ],
-        input_strides: [
-            to_i32(input.layout.strides[0], "input row stride")?,
-            to_i32(input.layout.strides[1], "input column stride")?,
-        ],
-        output_strides: [
-            to_i32(output.layout.strides[0], "output row stride")?,
-            to_i32(output.layout.strides[1], "output column stride")?,
-        ],
-        _pre_offsets_pad: [0; 2],
-        offsets: [
-            to_u32(input.layout.offset, "input offset")?,
-            to_u32(output.layout.offset, "output offset")?,
-            to_u32(axis, "axis")?,
-            to_u32(output_len, "output length")?,
-        ],
-    };
-    Ok(Some(AxisReductionDispatch {
-        meta,
-        grid_size: grid_size_val,
-    }))
+    plan_axis_reduction(
+        input.layout,
+        input.buffer.len(),
+        output.layout,
+        output.buffer.len(),
+        axis,
+        width,
+        input.buffer.aliases(output.buffer),
+    )
 }
 
 fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
@@ -413,7 +328,7 @@ where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
-    let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
 
@@ -443,7 +358,7 @@ where
     launch_kernel(
         device,
         &kernel,
-        LaunchConfig::linear(dispatch.grid_size, width),
+        LaunchConfig::linear(dispatch.groups, width),
         &mut args,
     )
 }
@@ -494,7 +409,7 @@ where
     T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
-    let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
 
@@ -523,7 +438,7 @@ where
     launch_kernel(
         device,
         &kernel,
-        LaunchConfig::linear(dispatch.grid_size, width),
+        LaunchConfig::linear(dispatch.groups, width),
         &mut args,
     )
 }

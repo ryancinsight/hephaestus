@@ -18,6 +18,10 @@ pub mod kernel;
 pub mod launch;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
+/// Shared narrowing/error helpers for dispatch planning.
+pub(crate) mod planning;
+/// Backend-neutral axis-reduction validation and dispatch planning.
+pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.

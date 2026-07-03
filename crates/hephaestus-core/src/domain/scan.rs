@@ -13,6 +13,7 @@
 
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::launch::BlockWidth;
+use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use bytemuck::{Pod, Zeroable};
 use leto::Layout;
 
@@ -53,26 +54,6 @@ pub struct AxisScanDispatch {
     pub meta: AxisScanMeta,
     /// Workgroup (block) count covering one thread per scan line.
     pub groups: u32,
-}
-
-fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
-
-/// Narrow a signed stride to `i32` with a typed error.
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
-
-/// Narrow an unsigned extent to `u32` with a typed error.
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
 }
 
 /// Validate a rank-2 axis scan and build its dispatch plan.

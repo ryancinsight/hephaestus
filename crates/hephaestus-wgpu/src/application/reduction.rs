@@ -1,15 +1,15 @@
 use std::any::TypeId;
 use std::marker::PhantomData;
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError, IdentityToken,
-    OpIdentity, Result, Wgsl,
+    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
+    ComputeDevice, DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result, Wgsl,
 };
 use leto::Layout;
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::strided::{map_layout_err, to_i32, to_u32, StridedOperand};
+use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -26,21 +26,6 @@ struct MeanAxisParallelKernel<T>(PhantomData<T>);
 struct MeanAxis0TiledKernel<T>(PhantomData<T>);
 
 const AXIS0_TILE_COLUMNS: u32 = 32;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct AxisReductionMeta {
-    input_shape: [u32; 2],
-    input_strides: [i32; 2],
-    output_strides: [i32; 2],
-    _pre_offsets_pad: [u32; 2],
-    offsets: [u32; 4],
-}
-
-struct AxisReductionDispatch {
-    meta: AxisReductionMeta,
-    groups: u32,
-}
 
 /// Prepared rank-2 axis reduction over fixed input/output buffers and layouts.
 ///
@@ -661,77 +646,21 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn validate_axis_reduction<T>(
+fn plan_axis_reduction_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
 ) -> Result<Option<AxisReductionDispatch>> {
-    validate_reduction_width(width)?;
-    if axis >= 2 {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("axis {axis} is out of bounds for rank-2 reduction"),
-        });
-    }
-
-    let mut expected_shape = input.layout.shape;
-    expected_shape[axis] = 1;
-    if output.layout.shape != expected_shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "axis reduction output shape mismatch: input {:?}, axis {axis}, out {:?}",
-                input.layout.shape, output.layout.shape
-            ),
-        });
-    }
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output buffer must not alias input buffer".to_string(),
-        });
-    }
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output layout must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
-
-    input
-        .layout
-        .validate_storage_len(input.buffer.len)
-        .map_err(map_layout_err)?;
-    output
-        .layout
-        .validate_storage_len(output.buffer.len)
-        .map_err(map_layout_err)?;
-    let output_len = output.layout.checked_size().map_err(map_layout_err)?;
-    if output_len == 0 {
-        return Ok(None);
-    }
-
-    let groups = workgroups(output_len, width)?;
-    let meta = AxisReductionMeta {
-        input_shape: [
-            to_u32(input.layout.shape[0], "input rows")?,
-            to_u32(input.layout.shape[1], "input columns")?,
-        ],
-        input_strides: [
-            to_i32(input.layout.strides[0], "input row stride")?,
-            to_i32(input.layout.strides[1], "input column stride")?,
-        ],
-        output_strides: [
-            to_i32(output.layout.strides[0], "output row stride")?,
-            to_i32(output.layout.strides[1], "output column stride")?,
-        ],
-        _pre_offsets_pad: [0; 2],
-        offsets: [
-            to_u32(input.layout.offset, "input offset")?,
-            to_u32(output.layout.offset, "output offset")?,
-            to_u32(axis, "axis")?,
-            to_u32(output_len, "output length")?,
-        ],
-    };
-    Ok(Some(AxisReductionDispatch { meta, groups }))
+    plan_axis_reduction(
+        input.layout,
+        input.buffer.len,
+        output.layout,
+        output.buffer.len,
+        axis,
+        width,
+        input.buffer.aliases(output.buffer),
+    )
 }
 
 fn dispatch_axis_reduction<T>(
@@ -952,7 +881,7 @@ where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
     let reduced_axis_len = axis_len(input, axis)?;
@@ -1032,7 +961,7 @@ where
 {
     let reduced_axis_len = axis_len(input, axis)?;
     reject_empty_axis(reduced_axis_len, "mean_axis", axis)?;
-    let Some(mut dispatch) = validate_axis_reduction::<T>(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
     let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
@@ -1062,7 +991,7 @@ where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
     let reduced_axis_len = axis_len(input, axis)?;
@@ -1222,7 +1151,7 @@ where
 {
     let reduced_axis_len = axis_len(input, axis)?;
     reject_empty_axis(reduced_axis_len, "mean_axis", axis)?;
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
     let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
