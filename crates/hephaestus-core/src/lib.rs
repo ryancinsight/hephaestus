@@ -29,7 +29,7 @@ pub use domain::interface::{
     KernelInterface, KernelSource,
 };
 pub use domain::kernel::{
-    BinaryStorageKernel, DispatchGrid, MultiStorageKernel, UnaryStorageKernel,
+    BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, UnaryStorageKernel,
 };
 pub use domain::launch::BlockWidth;
 pub use domain::ops::{

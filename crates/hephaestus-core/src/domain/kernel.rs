@@ -131,6 +131,23 @@ where
     fn dispatch(&self, device: &D, bindings: B, params: &P, grid: DispatchGrid) -> Result<()>;
 }
 
+/// Compute device support for backend-defined multi-storage binding bundles.
+///
+/// [`MultiStorageKernel`] keeps the binding representation backend-defined so
+/// WGPU can use bind-group storage entries while CUDA can use flat launch
+/// arguments. This trait gives generic consumers one constructor for that
+/// representation from typed provider buffers.
+pub trait MultiStorageDevice: ComputeDevice {
+    /// Backend-specific storage binding handle.
+    type StorageBinding<'a>: Copy
+    where
+        Self: 'a;
+
+    /// Bind a typed device buffer to a storage slot.
+    #[must_use]
+    fn storage_binding<T: Pod>(binding: u32, buffer: &Self::Buffer<T>) -> Self::StorageBinding<'_>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

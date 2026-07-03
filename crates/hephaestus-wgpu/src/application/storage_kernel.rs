@@ -4,8 +4,8 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
-    BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageKernel, Result,
-    UnaryStorageKernel,
+    BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageDevice,
+    MultiStorageKernel, Result, UnaryStorageKernel,
 };
 
 /// Storage-buffer access declared in a WGSL bind-group layout.
@@ -72,6 +72,14 @@ impl<'a> WgslStorageBinding<'a> {
             binding,
             buffer: buffer.raw(),
         }
+    }
+}
+
+impl MultiStorageDevice for WgpuDevice {
+    type StorageBinding<'a> = WgslStorageBinding<'a>;
+
+    fn storage_binding<T: Pod>(binding: u32, buffer: &Self::Buffer<T>) -> Self::StorageBinding<'_> {
+        WgslStorageBinding::new(binding, buffer)
     }
 }
 
