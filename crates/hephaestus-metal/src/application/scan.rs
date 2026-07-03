@@ -2,7 +2,9 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BlockWidth, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, DialectScalar, IdentityToken, OpIdentity, Result, Wgsl,
+};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::{CumProdOp, CumSumOp, ScanDirection};
@@ -17,8 +19,8 @@ pub fn scan_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::ScanWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ScanIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner = wgpu_backend::scan_axis::<Op, T>(
         &device.inner,
@@ -41,8 +43,8 @@ pub fn scan_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::ScanWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ScanIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     wgpu_backend::scan_axis_into::<Op, T>(
         &device.inner,
@@ -63,7 +65,7 @@ pub fn cumsum<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ScanIdentity<CumSumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     let inner = wgpu_backend::cumsum::<T>(
         &device.inner,
@@ -84,7 +86,7 @@ pub fn cumsum_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ScanIdentity<CumSumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     wgpu_backend::cumsum_into::<T>(
         &device.inner,

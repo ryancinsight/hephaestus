@@ -2,7 +2,7 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BlockWidth, Result};
+use hephaestus_core::{BinaryExpr, BlockWidth, DialectScalar, Result, UnaryExpr, Wgsl};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::MAX_STRIDED_RANK;
@@ -36,8 +36,8 @@ pub fn binary_elementwise_strided<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::binary_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -59,8 +59,8 @@ pub fn binary_elementwise_strided_into<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::binary_elementwise_strided_into::<Op, T, N>(
         &device.inner,
@@ -81,8 +81,8 @@ pub fn scalar_elementwise_strided<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::scalar_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -104,8 +104,8 @@ pub fn scalar_elementwise_strided_into<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::scalar_elementwise_strided_into::<Op, T, N>(
         &device.inner,
@@ -125,8 +125,8 @@ pub fn unary_elementwise_strided<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::UnaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::unary_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -146,8 +146,8 @@ pub fn unary_elementwise_strided_into<'a, Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::UnaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::unary_elementwise_strided_into::<Op, T, N>(
         &device.inner,

@@ -6,13 +6,15 @@
 //! and stay correct for any strided/broadcast layout.
 
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, CudaC, DialectScalar, HephaestusError, IdentityToken, OpIdentity,
+    Result,
+};
 use leto::Layout;
 
 use super::map_layout_err;
-use crate::application::cuda_type::CudaScalar;
 use crate::application::elementwise::{unary_elementwise_into, AbsOp, IdentityOp, MulOp, SqrtOp};
-use crate::application::reduction::{reduction, MaxOp, ReductionIdentity, SumOp};
+use crate::application::reduction::{reduction, MaxOp, SumOp};
 use crate::application::strided::{
     binary_elementwise_strided_into, unary_elementwise_strided_into, StridedOperand,
 };
@@ -26,7 +28,7 @@ pub fn dot<T>(
     b: StridedOperand<'_, T, 1>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     if a.layout.shape != b.layout.shape {
         return Err(HephaestusError::DispatchFailed {
@@ -63,7 +65,7 @@ where
 /// Compute the trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix on the CUDA device.
 pub fn trace<T>(device: &CudaDevice, matrix: StridedOperand<'_, T, 2>) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
@@ -110,7 +112,7 @@ pub fn norm_l1<T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     let len = view.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
@@ -140,7 +142,7 @@ pub fn norm_l2<T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     let len = view.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
@@ -174,7 +176,7 @@ pub fn norm_max<T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
 {
     let len = view.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {

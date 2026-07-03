@@ -1,15 +1,14 @@
 //! Seeded host-delegated PRNG initializers.
 
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, Result};
+use hephaestus_core::{ComputeDevice, DialectScalar, Result, Wgsl};
 use leto_ops::RealScalar;
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. uniform samples in
 /// `[low, high)`, derived deterministically from `seed`.
-pub fn uniform_with_seed<T: WgslScalar + RealScalar + Pod, const N: usize>(
+pub fn uniform_with_seed<T: DialectScalar<Wgsl> + RealScalar + Pod, const N: usize>(
     device: &WgpuDevice,
     shape: [usize; N],
     low: T,
@@ -26,7 +25,7 @@ pub fn uniform_with_seed<T: WgslScalar + RealScalar + Pod, const N: usize>(
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
-pub fn normal_with_seed<T: WgslScalar + RealScalar + Pod, const N: usize>(
+pub fn normal_with_seed<T: DialectScalar<Wgsl> + RealScalar + Pod, const N: usize>(
     device: &WgpuDevice,
     shape: [usize; N],
     mean: T,

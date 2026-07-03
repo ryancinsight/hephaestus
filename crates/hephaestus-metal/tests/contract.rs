@@ -82,6 +82,41 @@ fn write_buffer_rejects_length_mismatch() {
 }
 
 #[test]
+fn write_sub_buffer_overwrites_only_requested_range() {
+    let Some(d) = device("write_sub_buffer_overwrites_only_requested_range") else {
+        return;
+    };
+    let buf = d.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    d.write_sub_buffer(&buf, 1, &[20.0f32, 30.0]).unwrap();
+
+    let mut out = [0.0f32; 4];
+    d.download(&buf, &mut out).unwrap();
+    assert_eq!(out, [1.0, 20.0, 30.0, 4.0]);
+}
+
+#[test]
+fn write_sub_buffer_rejects_out_of_range_write() {
+    let Some(d) = device("write_sub_buffer_rejects_out_of_range_write") else {
+        return;
+    };
+    let buf = d.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(d.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
+}
+
+#[test]
+fn write_sub_buffer_empty_tail_write_is_noop() {
+    let Some(d) = device("write_sub_buffer_empty_tail_write_is_noop") else {
+        return;
+    };
+    let buf = d.upload(&[9i32, 8, 7]).unwrap();
+    d.write_sub_buffer(&buf, 3, &[] as &[i32]).unwrap();
+
+    let mut out = [0i32; 3];
+    d.download(&buf, &mut out).unwrap();
+    assert_eq!(out, [9, 8, 7]);
+}
+
+#[test]
 fn elementwise_add_matches_cpu_reference() {
     let Some(d) = device("elementwise_add_matches_cpu_reference") else {
         return;

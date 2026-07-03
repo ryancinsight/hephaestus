@@ -20,9 +20,9 @@ pub mod scan;
 pub mod sparse;
 /// Generic WGSL storage-kernel dispatch.
 pub mod storage_kernel;
+/// Backend-neutral command stream implementation for authored WGSL kernels.
+pub mod stream;
 /// Strided-layout-aware dispatch over leto layout metadata.
 pub mod strided;
 /// Volume ray-integral kernels (CT/dose ray-trace primitive).
 pub mod volume;
-/// WGSL scalar-type mapping.
-pub mod wgsl;

@@ -2837,6 +2837,44 @@ fn write_buffer_integer_types() {
     assert_eq!(got, data);
 }
 
+#[test]
+fn write_sub_buffer_overwrites_only_requested_range() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    device.write_sub_buffer(&buf, 1, &[20.0f32, 30.0]).unwrap();
+
+    let mut got = [0.0f32; 4];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [1.0, 20.0, 30.0, 4.0]);
+}
+
+#[test]
+fn write_sub_buffer_rejects_out_of_range_write() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(device.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
+}
+
+#[test]
+fn write_sub_buffer_empty_tail_write_is_noop() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[9i32, 8, 7]).unwrap();
+    device.write_sub_buffer(&buf, 3, &[] as &[i32]).unwrap();
+
+    let mut got = [0i32; 3];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [9, 8, 7]);
+}
+
 // ── Extended differential decomposition tests ─────────────────────────────
 
 #[test]

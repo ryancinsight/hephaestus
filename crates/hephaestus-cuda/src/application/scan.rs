@@ -2,14 +2,18 @@
 
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    IdentityToken, Result,
+};
 use leto::Layout;
 
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
+
+pub use hephaestus_core::{CumProdOp, CumSumOp};
 
 /// Direction of a scan along an axis.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,64 +22,6 @@ pub enum ScanDirection {
     Forward,
     /// Accumulate from the last index downward.
     Reverse,
-}
-
-/// Zero-sized scan operation marker selecting the CUDA combine expression.
-pub trait ScanCudaOp: Copy + Send + Sync + 'static {
-    /// CUDA expression combining `lhs` and `rhs`.
-    const CUDA_EXPR: &'static str;
-}
-
-/// Associates a scalar type and scan operation with the identity value.
-pub trait ScanIdentity<Op>: CudaScalar {
-    /// The identity value on the host side.
-    const IDENTITY: Self;
-    /// The CUDA C++ literal for the identity value.
-    const CUDA_IDENTITY: &'static str;
-}
-
-/// Cumulative sum marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CumSumOp;
-
-/// Cumulative product marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CumProdOp;
-
-impl ScanCudaOp for CumSumOp {
-    const CUDA_EXPR: &'static str = "lhs + rhs";
-}
-
-impl ScanCudaOp for CumProdOp {
-    const CUDA_EXPR: &'static str = "lhs * rhs";
-}
-
-// ── CumSumOp Identity implementations ──
-impl ScanIdentity<CumSumOp> for f32 {
-    const IDENTITY: Self = 0.0;
-    const CUDA_IDENTITY: &'static str = "0.0f";
-}
-impl ScanIdentity<CumSumOp> for u32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0u";
-}
-impl ScanIdentity<CumSumOp> for i32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0";
-}
-
-// ── CumProdOp Identity implementations ──
-impl ScanIdentity<CumProdOp> for f32 {
-    const IDENTITY: Self = 1.0;
-    const CUDA_IDENTITY: &'static str = "1.0f";
-}
-impl ScanIdentity<CumProdOp> for u32 {
-    const IDENTITY: Self = 1;
-    const CUDA_IDENTITY: &'static str = "1u";
-}
-impl ScanIdentity<CumProdOp> for i32 {
-    const IDENTITY: Self = 1;
-    const CUDA_IDENTITY: &'static str = "1";
 }
 
 struct AxisScanKernel<Op>(PhantomData<Op>);
@@ -116,7 +62,7 @@ fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     }
 }
 
-fn scan_shader_source<Op: ScanCudaOp, T: ScanIdentity<Op>>() -> String {
+fn scan_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
     format!(
         r#"
 struct AxisScanMeta {{
@@ -192,9 +138,9 @@ extern "C" __global__ void scan_kernel(
     output[out_off] = acc;
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        identity = T::CUDA_IDENTITY,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        identity = T::TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -291,8 +237,8 @@ pub fn scan_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: ScanCudaOp,
-    T: CudaScalar + Pod + ScanIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + IdentityToken<Op, CudaC>,
 {
     let Some(dispatch) = validate_axis_scan(input, axis, direction, output, width)? else {
         return Ok(());
@@ -337,8 +283,8 @@ pub fn scan_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: ScanCudaOp,
-    T: CudaScalar + Pod + ScanIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + IdentityToken<Op, CudaC>,
 {
     let len = input.layout.checked_size().map_err(map_layout_err)?;
     let output = device.alloc_zeroed::<T>(len)?;
@@ -367,7 +313,7 @@ pub fn cumsum_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ScanIdentity<CumSumOp>,
+    T: DialectScalar<CudaC> + Pod + IdentityToken<CumSumOp, CudaC>,
 {
     scan_axis_into::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, output, width)
 }
@@ -381,7 +327,7 @@ pub fn cumsum<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ScanIdentity<CumSumOp>,
+    T: DialectScalar<CudaC> + Pod + IdentityToken<CumSumOp, CudaC>,
 {
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
 }

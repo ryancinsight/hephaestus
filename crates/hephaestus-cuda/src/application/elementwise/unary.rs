@@ -1,90 +1,18 @@
 use super::reject_output_alias;
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
+    UnaryExpr,
+};
 
-/// Zero-sized unary operation marker selecting the CUDA expression.
-pub trait UnaryCudaOp: Copy + Send + Sync + 'static {
-    /// CUDA expression mapping `x` (e.g. `"exp(x)"`).
-    const CUDA_EXPR: &'static str;
-}
+pub use hephaestus_core::{
+    AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp,
+};
 
-/// Exponential operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ExpOp;
-
-/// Natural logarithm operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct LnOp;
-
-/// Sine operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SinOp;
-
-/// Cosine operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CosOp;
-
-/// Square-root operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SqrtOp;
-
-/// Absolute value operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AbsOp;
-
-/// Negation operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct NegOp;
-
-/// Reciprocal operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RecipOp;
-
-/// Identity/copy operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct IdentityOp;
-
-impl UnaryCudaOp for ExpOp {
-    const CUDA_EXPR: &'static str = "exp(x)";
-}
-
-impl UnaryCudaOp for LnOp {
-    const CUDA_EXPR: &'static str = "log(x)";
-}
-
-impl UnaryCudaOp for SinOp {
-    const CUDA_EXPR: &'static str = "sin(x)";
-}
-
-impl UnaryCudaOp for CosOp {
-    const CUDA_EXPR: &'static str = "cos(x)";
-}
-
-impl UnaryCudaOp for SqrtOp {
-    const CUDA_EXPR: &'static str = "sqrt(x)";
-}
-
-impl UnaryCudaOp for AbsOp {
-    const CUDA_EXPR: &'static str = "abs(x)";
-}
-
-impl UnaryCudaOp for NegOp {
-    const CUDA_EXPR: &'static str = "-x";
-}
-
-impl UnaryCudaOp for RecipOp {
-    const CUDA_EXPR: &'static str = "1.0 / x";
-}
-
-impl UnaryCudaOp for IdentityOp {
-    const CUDA_EXPR: &'static str = "x";
-}
-
-fn shader_source<Op: UnaryCudaOp, T: CudaScalar>() -> String {
+fn shader_source<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void unary_kernel(
@@ -99,8 +27,8 @@ extern "C" __global__ void unary_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -112,8 +40,8 @@ pub fn unary_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     if out.len() != a.len() {
         return Err(HephaestusError::LengthMismatch {
@@ -159,8 +87,8 @@ where
 /// Run `out[i] = op(a[i])` on the CUDA device, allocating the output buffer.
 pub fn unary_elementwise<Op, T>(device: &CudaDevice, a: &CudaBuffer<T>) -> Result<CudaBuffer<T>>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let out = device.alloc_zeroed::<T>(a.len())?;
     unary_elementwise_into::<Op, T>(device, a, &out, BlockWidth::DEFAULT)?;

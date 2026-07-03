@@ -1,12 +1,12 @@
 //! Generic WGSL storage-kernel dispatch.
 
+use crate::infrastructure::buffer::WgpuBuffer;
+use crate::infrastructure::device::WgpuDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
     BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageKernel, Result,
     UnaryStorageKernel,
 };
-use crate::infrastructure::buffer::WgpuBuffer;
-use crate::infrastructure::device::WgpuDevice;
 
 /// Storage-buffer access declared in a WGSL bind-group layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

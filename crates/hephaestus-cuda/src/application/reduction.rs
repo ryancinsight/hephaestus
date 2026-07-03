@@ -1,93 +1,17 @@
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    IdentityToken, OpIdentity, Result,
+};
 use leto::Layout;
 
-/// Zero-sized reduction operation marker selecting the CUDA combine expression.
-pub trait ReductionCudaOp: Copy + Send + Sync + 'static {
-    /// CUDA expression combining `lhs` and `rhs` (e.g. `"lhs + rhs"` or `"min(lhs, rhs)"`).
-    const CUDA_EXPR: &'static str;
-}
+pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
-/// Associates a scalar type and reduction operation with the identity value.
-pub trait ReductionIdentity<Op>: CudaScalar {
-    /// The identity value on the host side.
-    const IDENTITY: Self;
-    /// The CUDA C++ literal for the identity value.
-    const CUDA_IDENTITY: &'static str;
-}
-
-/// Sum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SumOp;
-
-/// Minimum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MinOp;
-
-/// Maximum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MaxOp;
-
-impl ReductionCudaOp for SumOp {
-    const CUDA_EXPR: &'static str = "lhs + rhs";
-}
-
-impl ReductionCudaOp for MinOp {
-    const CUDA_EXPR: &'static str = "min(lhs, rhs)";
-}
-
-impl ReductionCudaOp for MaxOp {
-    const CUDA_EXPR: &'static str = "max(lhs, rhs)";
-}
-
-// ── SumOp Identity implementations ──
-impl ReductionIdentity<SumOp> for f32 {
-    const IDENTITY: Self = 0.0;
-    const CUDA_IDENTITY: &'static str = "0.0f";
-}
-impl ReductionIdentity<SumOp> for u32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<SumOp> for i32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0";
-}
-
-// ── MinOp Identity implementations ──
-impl ReductionIdentity<MinOp> for f32 {
-    const IDENTITY: Self = f32::MAX;
-    const CUDA_IDENTITY: &'static str = "3.402823466e+38f";
-}
-impl ReductionIdentity<MinOp> for u32 {
-    const IDENTITY: Self = u32::MAX;
-    const CUDA_IDENTITY: &'static str = "4294967295u";
-}
-impl ReductionIdentity<MinOp> for i32 {
-    const IDENTITY: Self = i32::MAX;
-    const CUDA_IDENTITY: &'static str = "2147483647";
-}
-
-// ── MaxOp Identity implementations ──
-impl ReductionIdentity<MaxOp> for f32 {
-    const IDENTITY: Self = f32::MIN;
-    const CUDA_IDENTITY: &'static str = "-3.402823466e+38f";
-}
-impl ReductionIdentity<MaxOp> for u32 {
-    const IDENTITY: Self = u32::MIN;
-    const CUDA_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<MaxOp> for i32 {
-    const IDENTITY: Self = i32::MIN;
-    const CUDA_IDENTITY: &'static str = "-2147483648";
-}
-
-fn shader_source<Op: ReductionCudaOp, T: ReductionIdentity<Op>>(width: BlockWidth) -> String {
+fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(width: BlockWidth) -> String {
     format!(
         r#"
 #define max(a,b) ((a) > (b) ? (a) : (b))
@@ -125,10 +49,10 @@ extern "C" __global__ void reduction_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::CUDA_IDENTITY,
-        expr = Op::CUDA_EXPR,
+        identity = T::TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -157,8 +81,8 @@ fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
 /// Run reduction on the CUDA device, returning a 1-element buffer holding the result.
 pub fn reduction<Op, T>(device: &CudaDevice, input: &CudaBuffer<T>) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     reduction_with_width::<Op, T>(device, input, BlockWidth::DEFAULT)
 }
@@ -170,8 +94,8 @@ pub fn reduction_with_width<Op, T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     validate_reduction_width(width)?;
 
@@ -373,7 +297,7 @@ fn validate_axis_reduction<T>(
     }))
 }
 
-fn axis_reduction_shader_source<Op: ReductionCudaOp, T: ReductionIdentity<Op>>() -> String {
+fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -417,13 +341,13 @@ extern "C" __global__ void axis_reduction_kernel(
     output[out_off] = acc;
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        identity = T::CUDA_IDENTITY,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        identity = T::TOKEN,
+        expr = Op::EXPR,
     )
 }
 
-fn mean_axis_shader_source<T: ReductionIdentity<SumOp>>() -> String {
+fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -465,8 +389,8 @@ extern "C" __global__ void mean_axis_kernel(
     output[out_off] = acc / ({ty})axis_len;
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        identity = T::CUDA_IDENTITY,
+        ty = T::TYPE_TOKEN,
+        identity = T::TOKEN,
     )
 }
 
@@ -479,8 +403,8 @@ pub fn reduce_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
         return Ok(());
@@ -525,8 +449,8 @@ pub fn reduce_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     if axis >= 2 {
         return Err(HephaestusError::DispatchFailed {
@@ -560,7 +484,7 @@ pub fn mean_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
     let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
@@ -605,7 +529,7 @@ pub fn mean_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
     let mut output_shape = input.layout.shape;
@@ -636,7 +560,7 @@ pub fn sum_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reduce_axis_into::<SumOp, T>(device, input, axis, output, width)
 }
@@ -650,7 +574,7 @@ pub fn sum_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
 }
@@ -665,7 +589,7 @@ pub fn min_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis_into::<MinOp, T>(device, input, axis, output, width)
@@ -680,7 +604,7 @@ pub fn min_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis::<MinOp, T>(device, input, axis, width)
@@ -696,7 +620,7 @@ pub fn max_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis_into::<MaxOp, T>(device, input, axis, output, width)
@@ -711,7 +635,7 @@ pub fn max_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)

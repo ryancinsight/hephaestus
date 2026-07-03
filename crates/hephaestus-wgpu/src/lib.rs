@@ -15,8 +15,8 @@ pub mod infrastructure;
 
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
-    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryWgslOp, CosOp, DivOp, ExpNegOp,
-    ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryWgslOp,
+    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp,
+    IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp,
 };
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
@@ -33,11 +33,10 @@ pub use application::reduction::{
     prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduce_axis,
     reduce_axis_into, reduction, reduction_with_width, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, sum_axis, sum_axis_into, MaxOp, MinOp, PreparedAxisReduction,
-    PreparedReduction, ReductionIdentity, ReductionWgslOp, SumOp,
+    PreparedReduction, SumOp,
 };
 pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
-    ScanIdentity, ScanWgslOp,
 };
 #[cfg(feature = "sparse")]
 pub use application::sparse::{
@@ -49,6 +48,7 @@ pub use application::storage_kernel::{
     WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
     WgslUnaryStorageKernel,
 };
+pub use application::stream::{WgpuCommandStream, WgpuGroupedPrepared, WgpuPrepared};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
@@ -57,7 +57,6 @@ pub use application::strided::{
 pub use application::volume::{
     ray_line_integrals, ray_line_integrals_into, FieldGeometry, RAY_STRIDE,
 };
-pub use application::wgsl::WgslScalar;
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;
 pub use infrastructure::{StagingBufferGuard, UniformBufferGuard};
@@ -75,6 +74,9 @@ pub use application::decomposition::{
 };
 
 pub use hephaestus_core::{
-    BinaryStorageKernel, ComputeDevice, DeviceBuffer, DispatchGrid, HephaestusError,
-    MultiStorageKernel, Result, UnaryStorageKernel,
+    BinaryExpr, BinaryStorageKernel, CombineExpr, ComputeDevice, ComputeDeviceAcquisition,
+    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DeviceLimits, DevicePreference,
+    DialectScalar, DispatchGrid, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
+    GroupedKernelInterface, GroupedKernelSource, HephaestusError, IdentityToken, KernelDialect,
+    MultiStorageKernel, OpIdentity, Result, UnaryExpr, UnaryStorageKernel, Wgsl,
 };

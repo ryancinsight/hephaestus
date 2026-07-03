@@ -1,17 +1,18 @@
 //! Matrix power operation on the CUDA device.
 
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
+};
 use leto::Layout;
 
 use super::{map_layout_err, matmul_into};
-use crate::application::cuda_type::CudaScalar;
 use crate::application::strided::{unary_elementwise_strided_into, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
 /// CUDA scalar whose host identity values support matrix-power initialization.
-pub trait MatrixIdentityScalar: CudaScalar + Pod {
+pub trait MatrixIdentityScalar: DialectScalar<CudaC> + Pod {
     /// Additive identity.
     const ZERO: Self;
     /// Multiplicative identity.

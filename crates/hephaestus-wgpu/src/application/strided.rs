@@ -16,12 +16,12 @@ use core::marker::PhantomData;
 use std::any::TypeId;
 
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
+};
 use leto::Layout;
 
-use crate::application::elementwise::{BinaryWgslOp, UnaryWgslOp};
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -197,7 +197,7 @@ fn encode_strided(
     Ok(())
 }
 
-fn binary_shader<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+fn binary_shader<Op: BinaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -217,14 +217,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         meta = WGSL_META,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         decode = WGSL_DECODE,
-        expr = Op::WGSL_EXPR,
+        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
 
-fn unary_shader<Op: UnaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+fn unary_shader<Op: UnaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -242,10 +242,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         meta = WGSL_META,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         decode = WGSL_DECODE,
-        expr = Op::WGSL_EXPR,
+        expr = <Op as UnaryExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -254,7 +254,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// output. Mirrors [`scalar_elementwise_into`](super::elementwise::scalar) but
 /// over leto strided layouts. The shared `WGSL_DECODE` computes an unused
 /// `b_off` here (identical to the unary kernel), which the WGSL compiler elides.
-fn scalar_shader<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+fn scalar_shader<Op: BinaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -274,10 +274,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         meta = WGSL_META,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         decode = WGSL_DECODE,
-        expr = Op::WGSL_EXPR,
+        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -298,8 +298,8 @@ pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -370,8 +370,8 @@ pub fn binary_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -403,8 +403,8 @@ pub fn unary_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: UnaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -467,8 +467,8 @@ pub fn unary_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: UnaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -505,8 +505,8 @@ pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -581,8 +581,8 @@ pub fn scalar_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;

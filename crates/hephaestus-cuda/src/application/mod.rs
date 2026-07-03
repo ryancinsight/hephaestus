@@ -1,7 +1,5 @@
 //! Monomorphized compute dispatch over the CUDA device.
 
-/// CUDA primitive type mappings.
-pub mod cuda_type;
 /// Contiguous elementwise operations.
 pub mod elementwise;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
@@ -12,6 +10,8 @@ pub mod pipeline;
 pub mod reduction;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Backend-neutral command stream implementation for authored CUDA C kernels.
+pub mod stream;
 /// Layout-aware strided elementwise operations.
 pub mod strided;
 

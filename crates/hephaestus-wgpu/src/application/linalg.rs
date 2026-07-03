@@ -6,23 +6,25 @@
 
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError, IdentityToken,
+    OpIdentity, Result, Wgsl,
+};
 use leto::Layout;
 use std::any::TypeId;
 
 use crate::application::elementwise::{unary_elementwise_into, AbsOp, MulOp, SqrtOp};
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::reduction::{reduction, MaxOp, ReductionIdentity, ReductionWgslOp, SumOp};
+use crate::application::reduction::{reduction, MaxOp, SumOp};
 use crate::application::strided::{
     binary_elementwise_strided_into, map_layout_err, pad_shape, pad_strides, to_i32, to_u32,
     unary_elementwise_strided_into, StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META,
 };
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
-pub trait MatmulZero: WgslScalar {
+pub trait MatmulZero: DialectScalar<Wgsl> {
     /// The WGSL zero literal (e.g. `"0.0"`, `"0u"`, `"0"`).
     const WGSL_ZERO: &'static str;
 }
@@ -68,13 +70,16 @@ impl MatrixIdentityScalar for i32 {
 /// WGPU's portable scalar surface here exposes `f32`, `u32`, and `i32`.
 /// Leto's `norm_l2` contract is real-valued, so Hephaestus only implements
 /// this marker for the real WGSL scalar currently available through
-/// [`WgslScalar`].
-pub trait L2NormScalar: WgslScalar + Pod + ReductionIdentity<SumOp> {}
+/// [`DialectScalar<Wgsl>`](DialectScalar).
+pub trait L2NormScalar:
+    DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>
+{
+}
 
 impl L2NormScalar for f32 {}
 
 /// WGPU scalar whose shader type supports row-reduction rank estimation.
-pub trait MatrixRankScalar: WgslScalar + Pod {}
+pub trait MatrixRankScalar: DialectScalar<Wgsl> + Pod {}
 
 impl MatrixRankScalar for f32 {}
 
@@ -104,8 +109,8 @@ struct KronKernel<T>(PhantomData<T>);
 struct MapReductionKernel<Op>(PhantomData<Op>);
 struct MatrixPropertiesKernel<T>(PhantomData<T>);
 
-trait MapReductionWgslOp: Copy + Send + Sync + 'static {
-    type ReduceOp: ReductionWgslOp;
+trait MapReductionOp: Copy + Send + Sync + 'static {
+    type ReduceOp: CombineExpr<Wgsl>;
     const WGSL_MAP_EXPR: &'static str;
 }
 
@@ -115,12 +120,12 @@ struct TraceOp;
 #[derive(Clone, Copy, Debug, Default)]
 struct NormL1Op;
 
-impl MapReductionWgslOp for TraceOp {
+impl MapReductionOp for TraceOp {
     type ReduceOp = SumOp;
     const WGSL_MAP_EXPR: &'static str = "lhs";
 }
 
-impl MapReductionWgslOp for NormL1Op {
+impl MapReductionOp for NormL1Op {
     type ReduceOp = SumOp;
     const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
 }
@@ -142,8 +147,8 @@ fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
 
 fn map_reduction_shader_source<Op, T>(width: BlockWidth) -> String
 where
-    Op: MapReductionWgslOp,
-    T: WgslScalar + ReductionIdentity<Op::ReduceOp>,
+    Op: MapReductionOp,
+    T: IdentityToken<Op::ReduceOp, Wgsl>,
 {
     format!(
         r#"{meta}
@@ -186,12 +191,12 @@ fn main(
 }}
 "#,
         meta = WGSL_META,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         decode = WGSL_DECODE,
-        identity = T::WGSL_IDENTITY,
+        identity = <T as IdentityToken<Op::ReduceOp, Wgsl>>::TOKEN,
         map_expr = Op::WGSL_MAP_EXPR,
-        reduce_expr = <Op::ReduceOp as ReductionWgslOp>::WGSL_EXPR,
+        reduce_expr = <Op::ReduceOp as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -202,8 +207,8 @@ fn map_reduction_first_pass<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: MapReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op::ReduceOp>,
+    Op: MapReductionOp,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, Wgsl>,
 {
     let len = a.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
@@ -300,8 +305,8 @@ fn unary_map_reduction<Op, T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: MapReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op::ReduceOp>,
+    Op: MapReductionOp,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, Wgsl>,
 {
     let partial = map_reduction_first_pass::<Op, T, N>(device, view, view, BlockWidth::DEFAULT)?;
     if partial.len == 1 {
@@ -390,12 +395,12 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         zero = T::WGSL_ZERO
     )
 }
 
-fn kron_shader_source<T: WgslScalar>() -> String {
+fn kron_shader_source<T: DialectScalar<Wgsl>>() -> String {
     format!(
         r#"
 struct MatrixLayout {{
@@ -442,7 +447,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[u32(out_offset)] = a[u32(a_offset)] * b[u32(b_offset)];
 }}
 "#,
-        ty = T::WGSL_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 
@@ -554,7 +559,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
     )
 }
 
@@ -585,7 +590,7 @@ pub fn kron_into<T>(
     out: StridedOperand<'_, T, 2>,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod,
+    T: DialectScalar<Wgsl> + Pod,
 {
     let [expected_rows, expected_cols] = kron_output_shape(lhs.layout, rhs.layout)?;
 
@@ -715,7 +720,7 @@ pub fn kron<T>(
     rhs: StridedOperand<'_, T, 2>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod,
+    T: DialectScalar<Wgsl> + Pod,
 {
     let shape = kron_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
@@ -757,7 +762,7 @@ pub fn matmul_into<T>(
     out: StridedOperand<'_, T, 2>,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + MatmulZero,
+    T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let [rows, cols] = matmul_output_shape(lhs.layout, rhs.layout)?;
     let lhs_shared = lhs.layout.shape[1];
@@ -890,7 +895,7 @@ pub fn matmul<T>(
     rhs: StridedOperand<'_, T, 2>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + MatmulZero,
+    T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let shape = matmul_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
@@ -932,7 +937,7 @@ pub fn batched_matmul_into<T>(
     out: StridedOperand<'_, T, 3>,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + MatmulZero,
+    T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let expected_shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
     let [lhs_batch, m, lhs_k] = lhs.layout.shape;
@@ -1116,7 +1121,7 @@ pub fn batched_matmul<T>(
     rhs: StridedOperand<'_, T, 3>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + MatmulZero,
+    T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
@@ -1160,7 +1165,7 @@ pub fn matpow<T>(
     exponent: u32,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + MatrixIdentityScalar,
+    T: DialectScalar<Wgsl> + MatrixIdentityScalar,
 {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
@@ -1258,7 +1263,7 @@ pub fn dot<T>(
     b: StridedOperand<'_, T, 1>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     if a.layout.shape != b.layout.shape {
         return Err(HephaestusError::DispatchFailed {
@@ -1293,7 +1298,7 @@ where
 /// Compute the trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix on the GPU.
 pub fn trace<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
@@ -1512,7 +1517,7 @@ pub fn norm_l1<T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     unary_map_reduction::<NormL1Op, T, N>(device, view)
 }
@@ -1555,7 +1560,7 @@ pub fn norm_max<T, const N: usize>(
     view: StridedOperand<'_, T, N>,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     let len = view.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {

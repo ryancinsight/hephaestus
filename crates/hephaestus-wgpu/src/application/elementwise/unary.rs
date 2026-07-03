@@ -1,103 +1,18 @@
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
+};
 
 use super::reject_output_alias;
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Zero-sized unary operation marker selecting the WGSL expression.
-pub trait UnaryWgslOp: Copy + Send + Sync + 'static {
-    /// WGSL expression mapping `x` (e.g. `"exp(x)"`).
-    const WGSL_EXPR: &'static str;
-}
+pub use hephaestus_core::{
+    AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp,
+};
 
-/// Exponential operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ExpOp;
-
-/// Fused negated-exponential `exp(−x)` marker.
-///
-/// The Beer–Lambert attenuation/transmission kernel (`exp(−τ)`), fused so a
-/// consumer dispatches once instead of chaining [`NegOp`] → [`ExpOp`] (which
-/// costs a second pipeline dispatch plus an intermediate device buffer).
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ExpNegOp;
-
-/// Natural logarithm operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct LnOp;
-
-/// Sine operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SinOp;
-
-/// Cosine operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CosOp;
-
-/// Square-root operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SqrtOp;
-
-/// Absolute value operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AbsOp;
-
-/// Negation operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct NegOp;
-
-/// Reciprocal operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RecipOp;
-
-impl UnaryWgslOp for ExpOp {
-    const WGSL_EXPR: &'static str = "exp(x)";
-}
-
-impl UnaryWgslOp for ExpNegOp {
-    const WGSL_EXPR: &'static str = "exp(-x)";
-}
-
-impl UnaryWgslOp for LnOp {
-    const WGSL_EXPR: &'static str = "log(x)";
-}
-
-impl UnaryWgslOp for SinOp {
-    const WGSL_EXPR: &'static str = "sin(x)";
-}
-
-impl UnaryWgslOp for CosOp {
-    const WGSL_EXPR: &'static str = "cos(x)";
-}
-
-impl UnaryWgslOp for SqrtOp {
-    const WGSL_EXPR: &'static str = "sqrt(x)";
-}
-
-impl UnaryWgslOp for AbsOp {
-    const WGSL_EXPR: &'static str = "abs(x)";
-}
-
-impl UnaryWgslOp for NegOp {
-    const WGSL_EXPR: &'static str = "-x";
-}
-
-impl UnaryWgslOp for RecipOp {
-    const WGSL_EXPR: &'static str = "1.0 / x";
-}
-
-/// Identity/copy operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct IdentityOp;
-
-impl UnaryWgslOp for IdentityOp {
-    const WGSL_EXPR: &'static str = "x";
-}
-
-fn shader_source<Op: UnaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+fn shader_source<Op: UnaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> out: array<{ty}>;
@@ -112,9 +27,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[i] = {expr};
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        expr = Op::WGSL_EXPR,
+        expr = <Op as UnaryExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -126,8 +41,8 @@ pub fn unary_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: UnaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
@@ -171,8 +86,8 @@ where
 /// Run `out[i] = op(a[i])` on the device, allocating the output buffer.
 pub fn unary_elementwise<Op, T>(device: &WgpuDevice, a: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
 where
-    Op: UnaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     let out = device.alloc_zeroed::<T>(a.len)?;
     unary_elementwise_into::<Op, T>(device, a, &out, BlockWidth::DEFAULT)?;

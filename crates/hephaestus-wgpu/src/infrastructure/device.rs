@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    validate_buffer_size, validate_slice_alignment, ComputeDevice, HephaestusError, Result,
+    validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
+    ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError,
+    Result,
 };
 use std::any::TypeId;
 use wgpu::util::DeviceExt;
@@ -202,6 +204,70 @@ pub struct WgpuDevice {
 }
 
 impl WgpuDevice {
+    #[inline]
+    const fn wgpu_power_preference(preference: DevicePreference) -> wgpu::PowerPreference {
+        match preference {
+            DevicePreference::HighPerformance => wgpu::PowerPreference::HighPerformance,
+            DevicePreference::LowPower => wgpu::PowerPreference::LowPower,
+        }
+    }
+
+    #[inline]
+    const fn wgpu_feature(feature: DeviceFeature) -> wgpu::Features {
+        match feature {
+            DeviceFeature::TimestampQuery => wgpu::Features::TIMESTAMP_QUERY,
+            DeviceFeature::ShaderF64 => wgpu::Features::SHADER_F64,
+            DeviceFeature::ShaderF16 => wgpu::Features::SHADER_F16,
+            DeviceFeature::MappablePrimaryBuffers => wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+            DeviceFeature::PushConstants => wgpu::Features::PUSH_CONSTANTS,
+        }
+    }
+
+    fn wgpu_features(features: &[DeviceFeature]) -> wgpu::Features {
+        features
+            .iter()
+            .copied()
+            .fold(wgpu::Features::empty(), |acc, feature| {
+                acc | Self::wgpu_feature(feature)
+            })
+    }
+
+    #[inline]
+    const fn device_limits_from_wgpu(limits: &wgpu::Limits) -> DeviceLimits {
+        DeviceLimits {
+            max_buffer_size: limits.max_buffer_size,
+            max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x,
+            max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y,
+            max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z,
+            max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup,
+            max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size,
+            max_storage_buffers_per_shader_stage: Some(limits.max_storage_buffers_per_shader_stage),
+            max_push_constant_size: limits.max_push_constant_size,
+        }
+    }
+
+    fn wgpu_limits_from_device_limits(required: DeviceLimits) -> wgpu::Limits {
+        wgpu::Limits {
+            max_buffer_size: required.max_buffer_size,
+            max_compute_workgroup_size_x: required.max_compute_workgroup_size_x,
+            max_compute_workgroup_size_y: required.max_compute_workgroup_size_y,
+            max_compute_workgroup_size_z: required.max_compute_workgroup_size_z,
+            max_compute_invocations_per_workgroup: required.max_compute_invocations_per_workgroup,
+            max_compute_workgroup_storage_size: required.max_compute_workgroup_storage_size,
+            max_storage_buffers_per_shader_stage: required
+                .max_storage_buffers_per_shader_stage
+                .unwrap_or_else(|| wgpu::Limits::default().max_storage_buffers_per_shader_stage),
+            max_push_constant_size: required.max_push_constant_size,
+            ..wgpu::Limits::default()
+        }
+    }
+
+    /// WGPU backend default limits mapped into the backend-neutral Hephaestus vocabulary.
+    #[must_use]
+    pub fn default_device_limits() -> DeviceLimits {
+        Self::device_limits_from_wgpu(&wgpu::Limits::default())
+    }
+
     /// Wrap an existing device and queue.
     ///
     /// No adapter is available on this path, so no topology snapshot is
@@ -402,6 +468,70 @@ impl WgpuDevice {
         )
     }
 
+    /// Acquire an adapter matching `device_preference`, enabling optional
+    /// features only when the selected adapter reports support for them.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_device_preference_and_optional_features_and_limits(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> Result<Self> {
+        Self::try_with_power_preference_and_optional_features_and_limits(
+            label,
+            Self::wgpu_power_preference(device_preference),
+            optional_features,
+            required_limits,
+        )
+    }
+
+    /// Acquire an adapter matching `device_preference`, enabling optional
+    /// Hephaestus features only when the selected adapter reports support for
+    /// them. Uses the backend's default WGPU limits.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_device_preference_and_optional_device_features(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+    ) -> Result<Self> {
+        Self::try_with_device_preference_and_optional_features_and_limits(
+            label,
+            device_preference,
+            Self::wgpu_features(optional_features),
+            wgpu::Limits::default(),
+        )
+    }
+
+    /// Acquire an adapter matching `device_preference`, enabling optional
+    /// Hephaestus features when supported and applying backend-neutral required
+    /// compute limits.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_device_preference_and_optional_device_features_and_limits(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        Self::try_with_device_preference_and_optional_features_and_limits(
+            label,
+            device_preference,
+            Self::wgpu_features(optional_features),
+            Self::wgpu_limits_from_device_limits(required_limits),
+        )
+    }
+
     /// Acquire an adapter matching `power_preference`, enabling optional
     /// features only when the selected adapter reports support for them.
     ///
@@ -420,6 +550,27 @@ impl WgpuDevice {
             required_limits,
             power_preference,
             |adapter| adapter.features() & optional_features,
+        )
+    }
+
+    /// Acquire an adapter matching `device_preference`, deriving both required
+    /// features and required limits from the selected adapter.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter exists on this
+    /// host; [`HephaestusError::DeviceUnavailable`] when device creation fails.
+    pub fn try_with_device_preference_and_adapter_config(
+        label: &str,
+        device_preference: DevicePreference,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
+    ) -> Result<Self> {
+        Self::try_with_power_preference_and_adapter_config(
+            label,
+            Self::wgpu_power_preference(device_preference),
+            select_features,
+            select_limits,
         )
     }
 
@@ -703,6 +854,34 @@ impl WgpuDevice {
     #[inline]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
         &self.queue
+    }
+
+    /// Return the enabled WGPU feature set for this provider.
+    #[must_use]
+    #[inline]
+    pub fn features(&self) -> wgpu::Features {
+        self.device.features()
+    }
+
+    /// Return the WGPU limits for this provider.
+    #[must_use]
+    #[inline]
+    pub fn limits(&self) -> wgpu::Limits {
+        self.device.limits()
+    }
+
+    /// The enabled device limits mapped into the backend-neutral Hephaestus vocabulary.
+    #[must_use]
+    #[inline]
+    pub fn device_limits(&self) -> DeviceLimits {
+        Self::device_limits_from_wgpu(&self.device.limits())
+    }
+
+    /// Return true when the acquired device has `feature` enabled.
+    #[must_use]
+    #[inline]
+    pub fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
+        self.device.features().contains(Self::wgpu_feature(feature))
     }
 
     /// Exact byte size of `len` elements of `T`.
@@ -1107,6 +1286,16 @@ impl ComputeDevice for WgpuDevice {
         Ok(())
     }
 
+    #[inline]
+    fn write_sub_buffer<T: Pod>(
+        &self,
+        buffer: &WgpuBuffer<T>,
+        offset: usize,
+        host: &[T],
+    ) -> Result<()> {
+        WgpuDevice::write_sub_buffer(self, buffer, offset, host)
+    }
+
     fn synchronize(&self) -> Result<()> {
         self.device
             .poll(wgpu::PollType::Wait)
@@ -1114,6 +1303,50 @@ impl ComputeDevice for WgpuDevice {
                 message: format!("device poll failed: {e:?}"),
             })?;
         Ok(())
+    }
+}
+
+impl ComputeDeviceCapabilities for WgpuDevice {
+    #[inline]
+    fn device_limits(&self) -> DeviceLimits {
+        WgpuDevice::device_limits(self)
+    }
+
+    #[inline]
+    fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
+        WgpuDevice::supports_device_feature(self, feature)
+    }
+}
+
+impl ComputeDeviceAcquisition for WgpuDevice {
+    fn try_acquire_device(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        Self::try_with_device_preference_and_optional_device_features_and_limits(
+            label,
+            device_preference,
+            optional_features,
+            required_limits,
+        )
+    }
+
+    fn try_acquire_devices(
+        label_prefix: &str,
+        max_devices: usize,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Vec<Self>> {
+        Self::try_enumerate_with_adapter_config(
+            label_prefix,
+            max_devices,
+            |info| !matches!(info.backend, wgpu::Backend::BrowserWebGpu),
+            |adapter| adapter.features() & Self::wgpu_features(optional_features),
+            |_| Self::wgpu_limits_from_device_limits(required_limits),
+        )
     }
 }
 

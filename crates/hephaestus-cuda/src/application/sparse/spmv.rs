@@ -1,17 +1,18 @@
 //! GPU-resident sparse matrix–vector product `y = A · x` on CUDA CSR buffers.
 
 use super::GpuCsrMatrix;
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::Pod;
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
+};
 
 struct SparseSpmvKernel<T>(PhantomData<T>);
 
-fn spmv_shader_source<T: CudaScalar>() -> String {
+fn spmv_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void spmv_kernel(
@@ -36,12 +37,12 @@ extern "C" __global__ void spmv_kernel(
     y[row] = acc;
 }}
 "#,
-        ty = T::CUDA_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 
 /// Compute `y = A · x` into a pre-allocated output buffer `y` (length `nrows`).
-pub fn spmv_into<T: CudaScalar + leto_ops::Scalar + Pod>(
+pub fn spmv_into<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     x: &CudaBuffer<T>,
@@ -102,7 +103,7 @@ pub fn spmv_into<T: CudaScalar + leto_ops::Scalar + Pod>(
 }
 
 /// Compute `y = A · x`, allocating the result buffer.
-pub fn spmv<T: CudaScalar + leto_ops::Scalar + Pod>(
+pub fn spmv<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     x: &CudaBuffer<T>,

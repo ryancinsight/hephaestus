@@ -6,11 +6,10 @@ mod spmv;
 pub use spmm::{spmm, spmm_into, spmv_many, spmv_many_into};
 pub use spmv::{spmv, spmv_into};
 
-use crate::application::cuda_type::CudaScalar;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, Result};
 
 /// Compressed Sparse Row matrix on the GPU (CUDA): stores only the non-zero elements
 /// in device-resident buffers.
@@ -23,7 +22,7 @@ pub struct GpuCsrMatrix<T> {
     ncols: usize,
 }
 
-impl<T: CudaScalar + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
+impl<T: DialectScalar<CudaC> + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
     /// Upload a CPU-side Leto `CsrMatrix` to the GPU.
     pub fn from_cpu(device: &CudaDevice, cpu_matrix: &leto_ops::CsrMatrix<T>) -> Result<Self> {
         let (values, col_indices, row_ptr) = cpu_matrix.as_parts();

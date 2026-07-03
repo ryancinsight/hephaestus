@@ -1,13 +1,14 @@
 use super::reject_output_alias;
-use crate::application::cuda_type::CudaScalar;
-use crate::application::elementwise::binary::BinaryCudaOp;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    Result,
+};
 
-fn shader_source<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void scalar_kernel(
@@ -18,14 +19,14 @@ extern "C" __global__ void scalar_kernel(
 ) {{
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {{
-        {ty} a = input_ptr[i];
-        {ty} b = scalar;
+        {ty} lhs = input_ptr[i];
+        {ty} rhs = scalar;
         out[i] = {expr};
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -38,8 +39,8 @@ pub fn scalar_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     if out.len() != a.len() {
         return Err(HephaestusError::LengthMismatch {
@@ -91,8 +92,8 @@ pub fn scalar_elementwise<Op, T>(
     scalar: T,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let out = device.alloc_zeroed::<T>(a.len())?;
     scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;

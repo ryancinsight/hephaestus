@@ -4,14 +4,18 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError, IdentityToken,
+    OpIdentity, Result, Wgsl,
+};
 use leto::Layout;
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::strided::{map_layout_err, to_i32, to_u32, StridedOperand};
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+
+pub use hephaestus_core::{CumProdOp, CumSumOp};
 
 /// Direction of a scan along an axis.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,58 +24,6 @@ pub enum ScanDirection {
     Forward,
     /// Accumulate from the last index downward.
     Reverse,
-}
-
-/// Zero-sized scan operation marker selecting the WGSL combine expression.
-pub trait ScanWgslOp: Copy + Send + Sync + 'static {
-    /// WGSL expression combining `lhs` and `rhs`.
-    const WGSL_EXPR: &'static str;
-}
-
-/// Associates a scalar type and scan operation with the identity value.
-pub trait ScanIdentity<Op>: WgslScalar {
-    /// The WGSL literal for the identity value.
-    const WGSL_IDENTITY: &'static str;
-}
-
-/// Cumulative sum marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CumSumOp;
-
-/// Cumulative product marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CumProdOp;
-
-impl ScanWgslOp for CumSumOp {
-    const WGSL_EXPR: &'static str = "lhs + rhs";
-}
-
-impl ScanWgslOp for CumProdOp {
-    const WGSL_EXPR: &'static str = "lhs * rhs";
-}
-
-impl ScanIdentity<CumSumOp> for f32 {
-    const WGSL_IDENTITY: &'static str = "0.0";
-}
-
-impl ScanIdentity<CumSumOp> for u32 {
-    const WGSL_IDENTITY: &'static str = "0u";
-}
-
-impl ScanIdentity<CumSumOp> for i32 {
-    const WGSL_IDENTITY: &'static str = "0";
-}
-
-impl ScanIdentity<CumProdOp> for f32 {
-    const WGSL_IDENTITY: &'static str = "1.0";
-}
-
-impl ScanIdentity<CumProdOp> for u32 {
-    const WGSL_IDENTITY: &'static str = "1u";
-}
-
-impl ScanIdentity<CumProdOp> for i32 {
-    const WGSL_IDENTITY: &'static str = "1";
 }
 
 struct AxisScanKernel<Op>(PhantomData<Op>);
@@ -93,8 +45,8 @@ struct AxisScanDispatch {
 
 fn scan_shader_source<Op, T>(width: BlockWidth) -> String
 where
-    Op: ScanWgslOp,
-    T: ScanIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: IdentityToken<Op, Wgsl>,
 {
     format!(
         r#"
@@ -171,10 +123,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     output[u32(out_off)] = acc;
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -269,8 +221,8 @@ pub fn scan_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: ScanWgslOp,
-    T: WgslScalar + Pod + ScanIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let Some(dispatch) = validate_axis_scan(input, axis, direction, output, width)? else {
         return Ok(());
@@ -338,8 +290,8 @@ pub fn scan_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: ScanWgslOp,
-    T: WgslScalar + Pod + ScanIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let len = input.layout.checked_size().map_err(map_layout_err)?;
     // Guard before device allocation: an empty layout has no elements to scan.
@@ -374,7 +326,7 @@ pub fn cumsum_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + ScanIdentity<CumSumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     scan_axis_into::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, output, width)
 }
@@ -388,7 +340,7 @@ pub fn cumsum<T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ScanIdentity<CumSumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
 }

@@ -1,15 +1,14 @@
 //! Seeded host-delegated PRNG initializers.
 
-use crate::application::cuda_type::CudaScalar;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DialectScalar, Result};
 use leto_ops::RealScalar;
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. uniform samples in
 /// `[low, high)`, derived deterministically from `seed`.
-pub fn uniform_with_seed<T: CudaScalar + RealScalar + Pod, const N: usize>(
+pub fn uniform_with_seed<T: DialectScalar<CudaC> + RealScalar + Pod, const N: usize>(
     device: &CudaDevice,
     shape: [usize; N],
     low: T,
@@ -26,7 +25,7 @@ pub fn uniform_with_seed<T: CudaScalar + RealScalar + Pod, const N: usize>(
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
-pub fn normal_with_seed<T: CudaScalar + RealScalar + Pod, const N: usize>(
+pub fn normal_with_seed<T: DialectScalar<CudaC> + RealScalar + Pod, const N: usize>(
     device: &CudaDevice,
     shape: [usize; N],
     mean: T,

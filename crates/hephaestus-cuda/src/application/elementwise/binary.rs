@@ -1,76 +1,34 @@
 use super::reject_output_alias;
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    Result,
+};
 
-/// Zero-sized binary operation marker selecting the CUDA expression.
-pub trait BinaryCudaOp: Copy + Send + Sync + 'static {
-    /// CUDA expression mapping `a` and `b` (e.g. `"a + b"`).
-    const CUDA_EXPR: &'static str;
-}
+pub use hephaestus_core::{AddOp, DivOp, MulOp, PowOp, SubOp};
 
-/// Addition operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AddOp;
-
-/// Subtraction operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SubOp;
-
-/// Multiplication operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MulOp;
-
-/// Division operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DivOp;
-
-/// Power operation marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PowOp;
-
-impl BinaryCudaOp for AddOp {
-    const CUDA_EXPR: &'static str = "a + b";
-}
-
-impl BinaryCudaOp for SubOp {
-    const CUDA_EXPR: &'static str = "a - b";
-}
-
-impl BinaryCudaOp for MulOp {
-    const CUDA_EXPR: &'static str = "a * b";
-}
-
-impl BinaryCudaOp for DivOp {
-    const CUDA_EXPR: &'static str = "a / b";
-}
-
-impl BinaryCudaOp for PowOp {
-    const CUDA_EXPR: &'static str = "pow(a, b)";
-}
-
-fn shader_source<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void binary_kernel(
-    const {ty}* lhs,
-    const {ty}* rhs,
+    const {ty}* lhs_in,
+    const {ty}* rhs_in,
     {ty}* out,
     unsigned int n
 ) {{
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {{
-        {ty} a = lhs[i];
-        {ty} b = rhs[i];
+        {ty} lhs = lhs_in[i];
+        {ty} rhs = rhs_in[i];
         out[i] = {expr};
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -83,8 +41,8 @@ pub fn binary_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     if lhs.len() != rhs.len() {
         return Err(HephaestusError::LengthMismatch {
@@ -143,8 +101,8 @@ pub fn binary_elementwise<Op, T>(
     rhs: &CudaBuffer<T>,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     if lhs.len() != rhs.len() {
         return Err(HephaestusError::LengthMismatch {

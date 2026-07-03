@@ -1,17 +1,17 @@
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl,
+};
 
 use super::reject_output_alias;
-use crate::application::elementwise::binary::BinaryWgslOp;
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for scalar operations.
 struct ScalarOpWrapper<Op>(core::marker::PhantomData<Op>);
 
-fn shader_source<Op: BinaryWgslOp, T: WgslScalar>(width: BlockWidth) -> String {
+fn shader_source<Op: BinaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
 @group(0) @binding(1) var<uniform> scalar: {ty};
@@ -28,9 +28,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[i] = {expr};
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        expr = Op::WGSL_EXPR,
+        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -43,8 +43,8 @@ pub fn scalar_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
@@ -102,8 +102,8 @@ pub fn scalar_elementwise<Op, T>(
     scalar: T,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: BinaryWgslOp,
-    T: WgslScalar + Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
 {
     let out = device.alloc_zeroed::<T>(a.len)?;
     scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;

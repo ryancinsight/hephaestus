@@ -2,18 +2,17 @@
 
 use bytemuck::Pod;
 use core::marker::PhantomData;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 use leto::Layout;
 
 use super::{map_layout, map_layout_err};
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
 
 struct KronKernel<T>(PhantomData<T>);
 
-fn kron_shader_source<T: CudaScalar>() -> String {
+fn kron_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 struct MatrixLayout {{
@@ -60,7 +59,7 @@ extern "C" __global__ void kron_kernel(
     out[out_offset] = a[a_offset] * b[b_offset];
 }}
 "#,
-        ty = T::CUDA_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 
@@ -75,7 +74,7 @@ pub fn kron_into<T>(
     out: StridedOperand<'_, T, 2>,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [lhs_rows, lhs_cols] = lhs.layout.shape;
     let [rhs_rows, rhs_cols] = rhs.layout.shape;
@@ -178,7 +177,7 @@ pub fn kron<T>(
     rhs: StridedOperand<'_, T, 2>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [lhs_rows, lhs_cols] = lhs.layout.shape;
     let [rhs_rows, rhs_cols] = rhs.layout.shape;

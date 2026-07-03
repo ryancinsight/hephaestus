@@ -1,5 +1,8 @@
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
+    DeviceLimits, DevicePreference, HephaestusError, Result,
+};
 
 use crate::infrastructure::buffer::CudaBuffer;
 
@@ -13,7 +16,7 @@ use crate::infrastructure::buffer::CudaBuffer;
 /// constructed) but defined so the [`ComputeDevice`] contract is satisfied.
 #[derive(Clone, Debug)]
 pub struct CudaDevice {
-    _private: (),
+    _private: core::convert::Infallible,
     #[allow(dead_code)]
     pub(crate) pipeline_cache: std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<String, ()>>,
     #[allow(dead_code)]
@@ -69,6 +72,37 @@ impl CudaDevice {
     }
 }
 
+impl ComputeDeviceCapabilities for CudaDevice {
+    fn device_limits(&self) -> DeviceLimits {
+        match self._private {}
+    }
+
+    fn supports_device_feature(&self, _feature: DeviceFeature) -> bool {
+        match self._private {}
+    }
+}
+
+impl ComputeDeviceAcquisition for CudaDevice {
+    fn try_acquire_device(
+        _label: &str,
+        _device_preference: DevicePreference,
+        _optional_features: &[DeviceFeature],
+        _required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        Self::try_default()
+    }
+
+    fn try_acquire_devices(
+        _label_prefix: &str,
+        _max_devices: usize,
+        _device_preference: DevicePreference,
+        _optional_features: &[DeviceFeature],
+        _required_limits: DeviceLimits,
+    ) -> Result<Vec<Self>> {
+        Self::try_default().map(|device| vec![device])
+    }
+}
+
 impl ComputeDevice for CudaDevice {
     type Buffer<T: Pod> = CudaBuffer<T>;
 
@@ -98,6 +132,15 @@ impl ComputeDevice for CudaDevice {
     }
 
     fn write_buffer<T: Pod>(&self, _buffer: &Self::Buffer<T>, _host: &[T]) -> Result<()> {
+        Self::unavailable()
+    }
+
+    fn write_sub_buffer<T: Pod>(
+        &self,
+        _buffer: &Self::Buffer<T>,
+        _offset: usize,
+        _host: &[T],
+    ) -> Result<()> {
         Self::unavailable()
     }
 

@@ -2,17 +2,16 @@
 
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::{map_layout_err, to_i32, to_u32};
-use crate::application::cuda_type::CudaScalar;
 use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
 /// CUDA scalar supporting matrix-rank and determinant estimation.
-pub trait MatrixRankScalar: CudaScalar + Pod {}
+pub trait MatrixRankScalar: DialectScalar<CudaC> + Pod {}
 
 impl MatrixRankScalar for f32 {}
 
@@ -145,7 +144,7 @@ extern "C" __global__ void matrix_properties_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 

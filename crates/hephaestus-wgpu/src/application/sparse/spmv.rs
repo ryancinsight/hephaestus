@@ -4,13 +4,14 @@ use super::GpuCsrMatrix;
 use crate::application::linalg::MatmulZero;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::strided::to_u32;
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use crate::infrastructure::pool::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, Result, Wgsl,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -96,14 +97,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     y[row] = acc;
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         zero = T::WGSL_ZERO,
     )
 }
 
 /// Prepare `y = A · x` for repeated dispatch into a fixed output buffer.
-pub fn prepare_spmv<T: WgslScalar + MatmulZero + Pod>(
+pub fn prepare_spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x: &WgpuBuffer<T>,
@@ -188,7 +189,7 @@ pub fn prepare_spmv<T: WgslScalar + MatmulZero + Pod>(
 }
 
 /// Compute `y = A · x` into a pre-allocated output buffer `y` (length `nrows`).
-pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
+pub fn spmv_into<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x: &WgpuBuffer<T>,
@@ -216,7 +217,7 @@ pub fn spmv_into<T: WgslScalar + MatmulZero + Pod>(
 }
 
 /// Compute `y = A · x`, allocating the result buffer.
-pub fn spmv<T: WgslScalar + MatmulZero + Pod>(
+pub fn spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x: &WgpuBuffer<T>,

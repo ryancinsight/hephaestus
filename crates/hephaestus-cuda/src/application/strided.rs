@@ -1,10 +1,10 @@
 use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    Result, UnaryExpr,
+};
 use leto::Layout;
 
-use crate::application::cuda_type::CudaScalar;
-use crate::application::elementwise::binary::BinaryCudaOp;
-use crate::application::elementwise::unary::UnaryCudaOp;
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
@@ -283,7 +283,7 @@ fn broadcast_dyn_layout(layout: StridedLayout<'_>, out_shape: &[usize]) -> Resul
     })
 }
 
-fn binary_shader<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+fn binary_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 {meta}
@@ -298,19 +298,19 @@ extern "C" __global__ void binary_strided_kernel(
         return;
     }}
 {decode}
-    {ty} a = lhs_ptr[a_off];
-    {ty} b = rhs_ptr[b_off];
+    {ty} lhs = lhs_ptr[a_off];
+    {ty} rhs = rhs_ptr[b_off];
     out[o_off] = {expr};
 }}
 "#,
         meta = CUDA_META,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
-        expr = Op::CUDA_EXPR,
+        expr = Op::EXPR,
     )
 }
 
-fn unary_shader<Op: UnaryCudaOp, T: CudaScalar>() -> String {
+fn unary_shader<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 {meta}
@@ -329,13 +329,13 @@ extern "C" __global__ void unary_strided_kernel(
 }}
 "#,
         meta = CUDA_META,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
-        expr = Op::CUDA_EXPR,
+        expr = Op::EXPR,
     )
 }
 
-fn scalar_shader<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+fn scalar_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 {meta}
@@ -350,16 +350,15 @@ extern "C" __global__ void scalar_strided_kernel(
         return;
     }}
 {decode}
-    {ty} a_value = input[a_off];
-    {ty} a = a_value;
-    {ty} b = scalar;
+    {ty} lhs = input[a_off];
+    {ty} rhs = scalar;
     out[o_off] = {expr};
 }}
 "#,
         meta = CUDA_META,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
-        expr = Op::CUDA_EXPR,
+        expr = Op::EXPR,
     )
 }
 
@@ -373,8 +372,8 @@ fn launch_binary_strided<Op, T>(
     len: usize,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let grid_size_val = grid_size(len, width)?;
 
@@ -419,8 +418,8 @@ fn launch_unary_strided<Op, T>(
     len: usize,
 ) -> Result<()>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let grid_size_val = grid_size(len, width)?;
 
@@ -464,8 +463,8 @@ fn launch_scalar_strided<Op, T>(
     len: usize,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let grid_size_val = grid_size(len, width)?;
 
@@ -510,8 +509,8 @@ pub fn binary_elementwise_strided_dyn_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     validate_dyn_layout("binary left", a.buffer, a.layout)?;
     validate_dyn_layout("binary right", b.buffer, b.layout)?;
@@ -546,8 +545,8 @@ pub fn unary_elementwise_strided_dyn_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     validate_dyn_layout("unary input", a.buffer, a.layout)?;
     let len = validate_dyn_out(out.buffer, out.layout)?;
@@ -581,8 +580,8 @@ pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -636,8 +635,8 @@ pub fn binary_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -667,8 +666,8 @@ pub fn unary_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -714,8 +713,8 @@ pub fn unary_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: UnaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: UnaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -745,8 +744,8 @@ pub fn scalar_elementwise_strided_into<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -794,8 +793,8 @@ pub fn scalar_elementwise_strided<Op, T, const N: usize>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
