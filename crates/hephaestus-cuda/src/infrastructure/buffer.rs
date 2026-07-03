@@ -80,6 +80,14 @@ impl<T> Drop for CudaBuffer<T> {
         if self.ptr != 0 {
             let bytes = self.len * core::mem::size_of::<T>();
             if let Ok(layout) = std::alloc::Layout::from_size_align(bytes, 4) {
+                // SAFETY: `self.ptr` is non-null (guarded above) and was
+                // returned by the same tier-selected Mnemosyne allocator in
+                // `CudaDevice::alloc_bytes_with_tier` with an identical
+                // layout (`len * size_of::<T>()` bytes, align 4); the buffer
+                // uniquely owns the pointer, so this dealloc runs exactly
+                // once. The backing `cuMemFree`/`cuMemFreeHost` calls are
+                // synchronous, ordering the release after any in-flight
+                // async null-stream work still referencing the pointer.
                 unsafe {
                     match self.tier {
                         themis::MemoryTier::HostPinned => {

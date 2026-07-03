@@ -1336,7 +1336,7 @@ impl ComputeDeviceAcquisition for WgpuDevice {
     fn try_acquire_devices(
         label_prefix: &str,
         max_devices: usize,
-        device_preference: DevicePreference,
+        _device_preference: DevicePreference,
         optional_features: &[DeviceFeature],
         required_limits: DeviceLimits,
     ) -> Result<Vec<Self>> {

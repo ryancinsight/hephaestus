@@ -72,6 +72,16 @@ pub(crate) fn download_matrix_region_compact(
         Height: region.rows,
     };
 
+    // SAFETY: this device's context is current (`bind` above). 2D copy
+    // geometry: the source reads `rows` rows of `WidthInBytes = cols * 4`
+    // at `srcPitch = stride * 4`; the farthest device element touched,
+    // `device_start_index + (rows - 1) * stride + cols`, is bounds-checked
+    // against `buffer.len` above (every earlier row ends no later, strides
+    // are unsigned). The destination covers exactly `rows * cols` elements
+    // of the live `compact` Vec (`dstPitch == WidthInBytes`, `Height ==
+    // rows`). The driver rejects `pitch < WidthInBytes` with an error code
+    // surfaced below, and a pageable-host-memory `cuMemcpy2D_v2` is
+    // synchronous, so `compact` is not referenced after this call returns.
     let res =
         unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
     if res != 0 {
@@ -148,6 +158,16 @@ pub(crate) fn write_matrix_region_compact(
         Height: region.rows,
     };
 
+    // SAFETY: this device's context is current (`bind` above). 2D copy
+    // geometry: the source reads exactly `rows * cols` elements of the live
+    // `compact_host` slice (length validated above, `srcPitch ==
+    // WidthInBytes = cols * 4`, `Height == rows`); the farthest device
+    // element written, `device_start_index + (rows - 1) * stride + cols`, is
+    // bounds-checked against `buffer.len` above (every earlier row ends no
+    // later, strides are unsigned). The driver rejects `pitch <
+    // WidthInBytes` with an error code surfaced below, and a
+    // pageable-host-memory `cuMemcpy2D_v2` is synchronous, so `compact_host`
+    // is not referenced after this call returns.
     let res =
         unsafe { cuda_core::sys::cuMemcpy2D_v2(&mut copy as *mut cuda_core::sys::CUDA_MEMCPY2D) };
     if res != 0 {

@@ -212,6 +212,14 @@ pub fn qr_decompose_blocked(
         let work_buf = device.alloc_zeroed::<f32>(m * n)?;
         device.bind()?;
         let bytes = m * n * std::mem::size_of::<f32>();
+        // SAFETY: this device's context is current (`bind` above). `work_buf`
+        // is a live, freshly allocated `m * n`-element device allocation, and
+        // `matrix.buffer` holds at least the layout's validated storage extent
+        // (`validate_storage_len` above), which covers the `bytes` read for
+        // the dense zero-offset `[m, n]` operands this blocked entry point
+        // operates on. The copy is asynchronous on the null stream; both
+        // allocations outlive it because frees route through synchronizing
+        // `cuMemFree`-family calls.
         let res =
             unsafe { cuda_core::sys::cuMemcpyDtoD_v2(work_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
@@ -357,6 +365,9 @@ mod hh_impl {
         pub(super) beta: f32,
     }
 
+    // SAFETY: `HhReflectorMeta` is `#[repr(C)]` and contains one `u32` and
+    // one `f32` field of identical size and alignment, so it has no padding
+    // bytes, and every bit pattern is valid for both types.
     unsafe impl bytemuck::Pod for HhReflectorMeta {}
 
     #[repr(C)]
@@ -370,6 +381,10 @@ mod hh_impl {
         _pad: [u32; 3],
     }
 
+    // SAFETY: `HhMeta` is `#[repr(C)]` and contains only `u32` fields of
+    // identical size and alignment (the trailing `[u32; 3]` pads the struct
+    // to 32 bytes explicitly), so it has no implicit padding bytes, and
+    // every bit pattern is a valid value.
     unsafe impl bytemuck::Pod for HhMeta {}
 
     fn hh_shader_source() -> String {

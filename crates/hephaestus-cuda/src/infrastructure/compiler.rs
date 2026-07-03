@@ -97,6 +97,12 @@ impl NvrtcDriver {
         NVRTC_DRIVER
             .get_or_init(|| {
                 let lib = find_nvrtc_library()?;
+                // SAFETY: each symbol is resolved from the loaded NVRTC
+                // library by its documented exported name, and the function
+                // pointer types recorded in `NvrtcDriver` match the NVRTC C
+                // ABI signatures. The raw function pointers copied out of
+                // the `Symbol` guards remain valid because `_lib` keeps the
+                // library loaded for the driver's `'static` lifetime.
                 unsafe {
                     let nvrtcCreateProgram = *lib.get(b"nvrtcCreateProgram\0").ok()?;
                     let nvrtcCompileProgram = *lib.get(b"nvrtcCompileProgram\0").ok()?;
@@ -123,9 +129,16 @@ impl NvrtcDriver {
 }
 
 fn find_nvrtc_library() -> Option<Library> {
+    // SAFETY (all `Library::new` calls in this fn): loading a shared library
+    // runs its platform initialization code; the probed names and paths all
+    // resolve the NVRTC redistributable shipped with the CUDA toolkit, whose
+    // initializers uphold the platform loader contract. No other invariant
+    // is required at load time — symbol typing is justified at the `get`
+    // sites in `NvrtcDriver::get`.
     if let Ok(lib) = unsafe { Library::new("nvrtc") } {
         return Some(lib);
     }
+    // SAFETY: as above.
     if let Ok(lib) = unsafe { Library::new("nvrtc64") } {
         return Some(lib);
     }
@@ -153,6 +166,8 @@ fn find_nvrtc_library() -> Option<Library> {
                                     && (filename.ends_with(".so") || filename.contains(".so."))
                             };
                             if matches {
+                                // SAFETY: as above (NVRTC library under
+                                // `CUDA_PATH`).
                                 if let Ok(lib) = unsafe { Library::new(&path) } {
                                     return Some(lib);
                                 }
@@ -174,6 +189,7 @@ fn find_nvrtc_library() -> Option<Library> {
         vec!["libnvrtc.so"]
     };
     for name in fallback_names {
+        // SAFETY: as above (versioned NVRTC fallback names).
         if let Ok(lib) = unsafe { Library::new(name) } {
             return Some(lib);
         }
@@ -202,6 +218,15 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
     let name_c = std::ffi::CString::new("kernel.cu").map_err(|e| e.to_string())?;
 
     let mut prog: nvrtcProgram = std::ptr::null_mut();
+    // SAFETY: every call in this block goes through a function pointer
+    // resolved from the live NVRTC library (`NvrtcDriver::get`), typed to
+    // match the NVRTC C ABI. `src_c`/`name_c`/`options` are NUL-terminated
+    // CStrings kept alive across the calls; `prog` is a valid out-pointer,
+    // and after a successful create every subsequent call passes the same
+    // live program handle, which is destroyed exactly once on every exit
+    // path via `destroy_program`. The log and PTX buffers are heap
+    // allocations sized by the immediately preceding NVRTC size queries
+    // before the driver writes into them.
     unsafe {
         let res = (nvrtc.nvrtcCreateProgram)(
             &mut prog,

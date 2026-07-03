@@ -221,6 +221,14 @@ pub fn lu_decompose_blocked(
         let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
+        // SAFETY: this device's context is current (`bind` above).
+        // `factors_buf` is a live, freshly allocated `n * n`-element device
+        // allocation, and `matrix.buffer` holds at least the layout's
+        // validated storage extent (`validate_square`), which covers the
+        // `bytes` read for the dense zero-offset `[n, n]` operands this
+        // blocked entry point operates on. The copy is asynchronous on the
+        // null stream; both allocations outlive it because frees route
+        // through synchronizing `cuMemFree`-family calls.
         let res = unsafe {
             cuda_core::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), bytes)
         };
@@ -400,6 +408,9 @@ mod gemm_impl {
         offsets: [u32; 3],
     }
 
+    // SAFETY: `GemmMeta` is `#[repr(C)]` and contains only `u32` fields of
+    // identical size and alignment, so it has no padding bytes, and every
+    // bit pattern is a valid value.
     unsafe impl bytemuck::Pod for GemmMeta {}
 
     fn gemm_shader_source() -> String {

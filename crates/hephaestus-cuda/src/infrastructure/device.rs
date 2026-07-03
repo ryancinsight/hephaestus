@@ -87,11 +87,10 @@ impl CudaDevice {
             });
         }
 
-        let device_ordinal = i32::try_from(device_ordinal).map_err(|_| {
-            HephaestusError::AdapterUnavailable {
+        let device_ordinal =
+            i32::try_from(device_ordinal).map_err(|_| HephaestusError::AdapterUnavailable {
                 message: format!("CUDA device ordinal {device_ordinal} exceeds i32 range"),
-            }
-        })?;
+            })?;
 
         let device = cuda_async::device_context::with_device(device_ordinal as usize, |device| {
             device.clone()
@@ -291,8 +290,14 @@ impl CudaDevice {
             })?;
 
         let ptr_val = match tier {
+            // SAFETY: `layout` is a valid `Layout` (constructed above) with
+            // non-zero size — both callers return an empty buffer before
+            // reaching this point when `len == 0` — satisfying the
+            // `GlobalAlloc::alloc` contract; a null return is handled below.
             themis::MemoryTier::HostPinned => unsafe { CUDA_HOST_PINNED_ALLOCATOR.alloc(layout) },
+            // SAFETY: as above.
             themis::MemoryTier::Dram => unsafe { CUDA_UNIFIED_ALLOCATOR.alloc(layout) },
+            // SAFETY: as above.
             _ => unsafe { CUDA_DEVICE_ALLOCATOR.alloc(layout) },
         };
 

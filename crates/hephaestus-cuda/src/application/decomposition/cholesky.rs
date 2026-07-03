@@ -186,6 +186,14 @@ pub fn cholesky_decompose_blocked(
         let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
+        // SAFETY: this device's context is current (`bind` above). `lower_buf`
+        // is a live, freshly allocated `n * n`-element device allocation, and
+        // `matrix.buffer` holds at least the layout's validated storage extent
+        // (`validate_square`), which covers the `bytes` read for the dense
+        // zero-offset `[n, n]` operands this blocked entry point operates on.
+        // The copy is asynchronous on the null stream; both allocations
+        // outlive it because frees route through synchronizing
+        // `cuMemFree`-family calls.
         let res =
             unsafe { cuda_core::sys::cuMemcpyDtoD_v2(lower_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {

@@ -13,12 +13,12 @@ use hephaestus_core::{
 use leto::Layout;
 use std::any::TypeId;
 
-use crate::application::elementwise::{unary_elementwise_into, AbsOp, MulOp, SqrtOp};
+use crate::application::elementwise::{unary_elementwise_into, SqrtOp};
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::reduction::{reduction, MaxOp, SumOp};
 use crate::application::strided::{
-    binary_elementwise_strided_into, map_layout_err, pad_shape, pad_strides, to_i32, to_u32,
-    unary_elementwise_strided_into, StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META,
+    map_layout_err, pad_shape, pad_strides, to_i32, to_u32, unary_elementwise_strided_into,
+    StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META,
 };
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -120,6 +120,15 @@ struct TraceOp;
 #[derive(Clone, Copy, Debug, Default)]
 struct NormL1Op;
 
+/// Fused multiply map + sum reduction: serves `dot` (over two operands) and
+/// the squared-sum first pass of `norm_l2` (over `(view, view)`).
+#[derive(Clone, Copy, Debug, Default)]
+struct DotOp;
+
+/// Fused absolute-value map + max reduction backing `norm_max`.
+#[derive(Clone, Copy, Debug, Default)]
+struct NormMaxOp;
+
 impl MapReductionOp for TraceOp {
     type ReduceOp = SumOp;
     const WGSL_MAP_EXPR: &'static str = "lhs";
@@ -127,6 +136,16 @@ impl MapReductionOp for TraceOp {
 
 impl MapReductionOp for NormL1Op {
     type ReduceOp = SumOp;
+    const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
+}
+
+impl MapReductionOp for DotOp {
+    type ReduceOp = SumOp;
+    const WGSL_MAP_EXPR: &'static str = "lhs * rhs";
+}
+
+impl MapReductionOp for NormMaxOp {
+    type ReduceOp = MaxOp;
     const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
 }
 
@@ -300,15 +319,19 @@ where
     Ok(out)
 }
 
-fn unary_map_reduction<Op, T, const N: usize>(
+/// Fully reduce `Op`'s map expression over two strided operands: one fused
+/// map+reduce first pass, then contiguous reduction passes on the partials.
+/// Unary maps pass the same operand twice (the map expression ignores `rhs`).
+fn map_reduction<Op, T, const N: usize>(
     device: &WgpuDevice,
-    view: StridedOperand<'_, T, N>,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
 ) -> Result<WgpuBuffer<T>>
 where
     Op: MapReductionOp,
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, Wgsl>,
 {
-    let partial = map_reduction_first_pass::<Op, T, N>(device, view, view, BlockWidth::DEFAULT)?;
+    let partial = map_reduction_first_pass::<Op, T, N>(device, a, b, BlockWidth::DEFAULT)?;
     if partial.len == 1 {
         return Ok(partial);
     }
@@ -1274,25 +1297,7 @@ where
         });
     }
 
-    let len = a.layout.shape[0];
-    if len == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let temp_prod = device.alloc_zeroed::<T>(len)?;
-    let temp_prod_layout = Layout::c_contiguous([len]).map_err(map_layout_err)?;
-    let temp_prod_operand = StridedOperand {
-        buffer: &temp_prod,
-        layout: &temp_prod_layout,
-    };
-    binary_elementwise_strided_into::<MulOp, T, 1>(
-        device,
-        a,
-        b,
-        temp_prod_operand,
-        BlockWidth::DEFAULT,
-    )?;
-    reduction::<SumOp, T>(device, &temp_prod)
+    map_reduction::<DotOp, T, 1>(device, a, b)
 }
 
 /// Compute the trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix on the GPU.
@@ -1322,7 +1327,7 @@ where
         layout: &diag_layout,
     };
 
-    unary_map_reduction::<TraceOp, T, 1>(device, diag_operand)
+    map_reduction::<TraceOp, T, 1>(device, diag_operand, diag_operand)
 }
 
 fn matrix_properties_with_tolerance<T>(
@@ -1519,7 +1524,7 @@ pub fn norm_l1<T, const N: usize>(
 where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
-    unary_map_reduction::<NormL1Op, T, N>(device, view)
+    map_reduction::<NormL1Op, T, N>(device, view, view)
 }
 
 /// Compute the L2 / Frobenius norm `sqrt(Σ x²)` on the GPU.
@@ -1530,25 +1535,7 @@ pub fn norm_l2<T, const N: usize>(
 where
     T: L2NormScalar,
 {
-    let len = view.layout.checked_size().map_err(map_layout_err)?;
-    if len == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let temp_sq = device.alloc_zeroed::<T>(len)?;
-    let temp_sq_layout = Layout::c_contiguous(view.layout.shape).map_err(map_layout_err)?;
-    let temp_sq_operand = StridedOperand {
-        buffer: &temp_sq,
-        layout: &temp_sq_layout,
-    };
-    binary_elementwise_strided_into::<MulOp, T, N>(
-        device,
-        view,
-        view,
-        temp_sq_operand,
-        BlockWidth::DEFAULT,
-    )?;
-    let squared_sum = reduction::<SumOp, T>(device, &temp_sq)?;
+    let squared_sum = map_reduction::<DotOp, T, N>(device, view, view)?;
     let out = device.alloc_zeroed::<T>(1)?;
     unary_elementwise_into::<SqrtOp, T>(device, &squared_sum, &out, BlockWidth::DEFAULT)?;
     Ok(out)
@@ -1562,24 +1549,7 @@ pub fn norm_max<T, const N: usize>(
 where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
-    let len = view.layout.checked_size().map_err(map_layout_err)?;
-    if len == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let temp_abs = device.alloc_zeroed::<T>(len)?;
-    let temp_abs_layout = Layout::c_contiguous(view.layout.shape).map_err(map_layout_err)?;
-    let temp_abs_operand = StridedOperand {
-        buffer: &temp_abs,
-        layout: &temp_abs_layout,
-    };
-    unary_elementwise_strided_into::<AbsOp, T, N>(
-        device,
-        view,
-        temp_abs_operand,
-        BlockWidth::DEFAULT,
-    )?;
-    reduction::<MaxOp, T>(device, &temp_abs)
+    map_reduction::<NormMaxOp, T, N>(device, view, view)
 }
 
 /// Compute the Moore-Penrose pseudoinverse A⁺ of a device-resident matrix.

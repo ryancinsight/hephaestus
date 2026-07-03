@@ -106,6 +106,13 @@ where
     if input.len() == 1 {
         let out = device.alloc_zeroed::<T>(1)?;
         #[cfg(feature = "cuda")]
+        // SAFETY: this device's context is current on this thread
+        // (`alloc_zeroed` above binds it); `input` and `out` are live
+        // one-element device allocations (`input.len() == 1` checked above,
+        // `out` freshly allocated with len 1), so the `size_of::<T>()`-byte
+        // copy stays within both extents. The copy is asynchronous on the
+        // null stream; both allocations outlive it because frees route
+        // through synchronizing `cuMemFree`-family calls.
         unsafe {
             let res =
                 cuda_core::sys::cuMemcpyDtoD_v2(out.raw(), input.raw(), core::mem::size_of::<T>());

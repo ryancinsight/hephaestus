@@ -1,6 +1,10 @@
 // The stub substrate (no `cuda` feature) performs no FFI and forbids unsafe.
-// The real backend requires unsafe for the dynamic-loaded driver FFI; it is
-// isolated to `infrastructure::{device, buffer}` with per-block SAFETY notes.
+// The real backend requires unsafe for the dynamically loaded driver/NVRTC
+// FFI: it occurs in `infrastructure::{device, buffer, compiler}` and at the
+// application-layer kernel-launch and device-copy sites (`pipeline`,
+// `reduction`, and the `decomposition` modules, including their
+// `bytemuck::Pod` metadata impls). Every unsafe block and impl carries a
+// `// SAFETY:` note stating the invariants relied on.
 #![cfg_attr(not(feature = "cuda"), forbid(unsafe_code))]
 #![deny(missing_docs)]
 //! # hephaestus-cuda
