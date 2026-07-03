@@ -17,7 +17,10 @@
 pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
-pub use domain::decomposition::{panel_lu_packed, panel_qr_packed, split_packed_lu};
+pub use domain::decomposition::{
+    panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
+    validate_square_operand,
+};
 pub use domain::device::{
     validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
     ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference,

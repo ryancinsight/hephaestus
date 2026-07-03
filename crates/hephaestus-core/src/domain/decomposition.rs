@@ -1,11 +1,62 @@
-//! Shared CPU-side panel factorisation routines for blocked decomposition.
+//! Shared CPU-side panel factorisation routines for blocked decomposition,
+//! plus backend-neutral operand validation.
 //!
-//! These pure-arithmetic helpers are used by both the wgpu and CUDA
-//! backends.  They operate on packed row-major `f32` slices and return
-//! the bookkeeping data the blocked loop needs (permutation vectors,
-//! Householder heads, β coefficients).
+//! The panel routines operate on packed row-major `f32` slices and return the
+//! bookkeeping data the blocked loop needs (permutation vectors, Householder
+//! heads, β coefficients). The [`validate_square_operand`] and
+//! [`require_dense_operand`] validators check a rank-2 [`leto::Layout`] once so
+//! both backends share the same dispatch preconditions. All are used by both
+//! the wgpu and CUDA backends.
 
 use crate::domain::error::{HephaestusError, Result};
+use crate::domain::planning::map_layout_err;
+use leto::Layout;
+
+/// Validate that a rank-2 operand is square and fits its buffer, returning its
+/// dimension `n`.
+///
+/// # Errors
+/// Returns [`HephaestusError::DispatchFailed`] when the shape is not square or
+/// the layout does not fit `buf_len` elements.
+pub fn validate_square_operand(layout: &Layout<2>, buf_len: usize) -> Result<usize> {
+    let [rows, cols] = layout.shape;
+    if rows != cols {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("Decomposition requires a square matrix, got shape [{rows}, {cols}]"),
+        });
+    }
+    layout
+        .validate_storage_len(buf_len)
+        .map_err(map_layout_err)?;
+    Ok(rows)
+}
+
+/// Require a dense C-contiguous zero-offset operand for a blocked decomposition.
+///
+/// The blocked entry points bulk-copy `rows·cols` elements straight from the
+/// operand's raw buffer. A transposed, offset, or broadcast (zero-stride)
+/// layout would make that raw copy compute from the wrong elements — and for
+/// layouts whose validated storage extent is smaller than `rows·cols`
+/// (broadcast), read past the allocation. `validate_storage_len` only bounds
+/// the layout's own extent, so density is checked explicitly here before any
+/// raw copy.
+///
+/// # Errors
+/// Returns [`HephaestusError::DispatchFailed`] naming the shape, strides, and
+/// offset when the operand is not dense C-contiguous at offset 0.
+pub fn require_dense_operand(label: &str, layout: &Layout<2>) -> Result<()> {
+    if layout.is_c_contiguous() {
+        return Ok(());
+    }
+    Err(HephaestusError::DispatchFailed {
+        message: format!(
+            "{label} blocked decomposition requires a dense C-contiguous zero-offset operand; \
+             got shape {:?}, strides {:?}, offset {} — materialize the view first (e.g. an \
+             identity strided copy into a fresh buffer)",
+            layout.shape, layout.strides, layout.offset
+        ),
+    })
+}
 
 /// Validate that every element of `a` is finite.
 ///
@@ -218,6 +269,38 @@ pub fn split_packed_lu(packed: &[f32], n: usize) -> Result<(Vec<f32>, Vec<f32>)>
 mod tests {
     use super::*;
     use crate::domain::error::HephaestusError;
+
+    // ── operand validators ───────────────────────────────────────────
+
+    #[test]
+    fn validate_square_operand_accepts_square_and_rejects_rectangular() {
+        let square = Layout::c_contiguous([3, 3]).expect("contiguous");
+        assert_eq!(validate_square_operand(&square, 9).expect("square"), 3);
+
+        let rect = Layout::c_contiguous([2, 3]).expect("contiguous");
+        assert!(matches!(
+            validate_square_operand(&rect, 6).unwrap_err(),
+            HephaestusError::DispatchFailed { .. }
+        ));
+
+        // Layout larger than its buffer is rejected.
+        assert!(validate_square_operand(&square, 8).is_err());
+    }
+
+    #[test]
+    fn require_dense_operand_rejects_non_contiguous_views() {
+        let dense = Layout::c_contiguous([4, 4]).expect("contiguous");
+        assert!(require_dense_operand("lu", &dense).is_ok());
+
+        let transposed = Layout::new([4, 4], [1, 4], 0);
+        assert!(require_dense_operand("lu", &transposed).is_err());
+
+        let offset = Layout::new([2, 2], [2, 1], 3);
+        assert!(require_dense_operand("qr", &offset).is_err());
+
+        let broadcast = Layout::new([4, 4], [0, 1], 0);
+        assert!(require_dense_operand("cholesky", &broadcast).is_err());
+    }
 
     // ── panel_lu_packed ──────────────────────────────────────────────
 
