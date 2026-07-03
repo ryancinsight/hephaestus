@@ -1,6 +1,10 @@
 // The stub substrate (no `cuda` feature) performs no FFI and forbids unsafe.
-// The real backend requires unsafe for the dynamic-loaded driver FFI; it is
-// isolated to `infrastructure::{device, buffer}` with per-block SAFETY notes.
+// The real backend requires unsafe for the dynamically loaded driver/NVRTC
+// FFI: it occurs in `infrastructure::{device, buffer, compiler}` and at the
+// application-layer kernel-launch and device-copy sites (`pipeline`,
+// `reduction`, and the `decomposition` modules, including their
+// `bytemuck::Pod` metadata impls). Every unsafe block and impl carries a
+// `// SAFETY:` note stating the invariants relied on.
 #![cfg_attr(not(feature = "cuda"), forbid(unsafe_code))]
 #![deny(missing_docs)]
 //! # hephaestus-cuda
@@ -37,11 +41,10 @@ mod infrastructure;
 /// Monomorphized CUDA compute dispatch.
 pub mod application;
 
-pub use application::cuda_type::CudaScalar;
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
-    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, BinaryCudaOp, CosOp, DivOp, ExpOp,
-    IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp, UnaryCudaOp,
+    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp,
+    IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp, SqrtOp, SubOp,
 };
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
@@ -54,12 +57,12 @@ pub use application::linalg::{
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
     reduce_axis_into, reduction, reduction_with_width, sum_axis, sum_axis_into, MaxOp, MinOp,
-    ReductionCudaOp, ReductionIdentity, SumOp,
+    SumOp,
 };
 pub use application::scan::{
-    cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanCudaOp, ScanDirection,
-    ScanIdentity,
+    cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
 };
+pub use application::stream::{CudaCommandStream, CudaGroupedPrepared, CudaPrepared};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_dyn_into,
     binary_elementwise_strided_into, scalar_elementwise_strided, scalar_elementwise_strided_into,
@@ -86,4 +89,10 @@ pub use application::decomposition::{
     GpuSymmetricEigenDecomposition, GpuUduDecomposition,
 };
 
-pub use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+pub use hephaestus_core::{
+    BinaryExpr, BlockWidth, CombineExpr, ComputeDevice, ComputeDeviceAcquisition,
+    ComputeDeviceCapabilities, CudaC, DeviceBuffer, DeviceFeature, DeviceLimits, DialectScalar,
+    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
+    GroupedKernelSource, HephaestusError, IdentityToken, KernelDevice, OpIdentity, Result,
+    UnaryExpr,
+};

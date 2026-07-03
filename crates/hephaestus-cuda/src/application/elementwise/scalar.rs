@@ -1,13 +1,14 @@
 use super::reject_output_alias;
-use crate::application::cuda_type::CudaScalar;
-use crate::application::elementwise::binary::BinaryCudaOp;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    Result,
+};
 
-fn shader_source<Op: BinaryCudaOp, T: CudaScalar>() -> String {
+fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void scalar_kernel(
@@ -18,14 +19,14 @@ extern "C" __global__ void scalar_kernel(
 ) {{
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {{
-        {ty} a = input_ptr[i];
-        {ty} b = scalar;
+        {ty} lhs = input_ptr[i];
+        {ty} rhs = scalar;
         out[i] = {expr};
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -38,8 +39,8 @@ pub fn scalar_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     if out.len() != a.len() {
         return Err(HephaestusError::LengthMismatch {
@@ -63,49 +64,25 @@ where
 
     let kernel = cached_kernel(device, key, "scalar_kernel", || shader_source::<Op, T>())?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut a_ptr = a.raw();
-        let mut val = scalar;
-        let mut out_ptr = out.raw();
-        let mut n_val = out.len() as u32;
+    let mut a_ptr = a.raw();
+    let mut val = scalar;
+    let mut out_ptr = out.raw();
+    let mut n_val = out.len() as u32;
 
-        let mut args: [*mut std::ffi::c_void; 4] = [
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut val as *mut T as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut n_val as *mut u32 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `scalar_kernel(const T*, T, T*, unsigned int)`.
+    let mut args: [*mut std::ffi::c_void; 4] = [
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut val as *mut T as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut n_val as *mut u32 as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, size matches.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid_size_val,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid_size_val, scalar);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid_size_val, width),
+        &mut args,
+    )
 }
 
 /// Run `out[i] = op(a[i], scalar)` on the CUDA device, allocating the output buffer.
@@ -115,8 +92,8 @@ pub fn scalar_elementwise<Op, T>(
     scalar: T,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: BinaryCudaOp,
-    T: CudaScalar + Pod,
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
 {
     let out = device.alloc_zeroed::<T>(a.len())?;
     scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;

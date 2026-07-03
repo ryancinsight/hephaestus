@@ -5,13 +5,14 @@ use crate::application::linalg::AsGpuMatrixOperand;
 use crate::application::linalg::MatmulZero;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::strided::{map_layout_err, to_i32, to_u32};
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use crate::infrastructure::pool::UniformBufferGuard;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, Result, Wgsl,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -114,7 +115,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     c[flat] = acc;
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         zero = T::WGSL_ZERO,
     )
@@ -160,14 +161,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     c[flat] = acc;
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         zero = T::WGSL_ZERO,
     )
 }
 
 /// Prepare `C = A · B` for repeated dispatch into a fixed output buffer.
-pub fn prepare_spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn prepare_spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     b: &B,
@@ -296,7 +297,11 @@ pub fn prepare_spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<
 /// one `A · x_j` result. This is the GPU-preferred route when more than one RHS
 /// vector is available, because it amortizes WGPU submission overhead through
 /// one sparse-dense dispatch.
-pub fn prepare_spmv_many<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn prepare_spmv_many<
+    'a,
+    T: DialectScalar<Wgsl> + MatmulZero + Pod,
+    B: AsGpuMatrixOperand<'a, T>,
+>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x_batch: &B,
@@ -306,7 +311,7 @@ pub fn prepare_spmv_many<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOpe
 }
 
 /// Compute `C = A · B` into a pre-allocated output buffer `c`.
-pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmm_into<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     b: &B,
@@ -349,7 +354,11 @@ pub fn spmm_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a,
 /// This is an alias over the sparse-dense kernel with an explicit contract:
 /// columns of `x_batch` are independent RHS vectors, and columns of `y_batch`
 /// are the corresponding `A · x_j` outputs.
-pub fn spmv_many_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmv_many_into<
+    'a,
+    T: DialectScalar<Wgsl> + MatmulZero + Pod,
+    B: AsGpuMatrixOperand<'a, T>,
+>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x_batch: &B,
@@ -359,7 +368,7 @@ pub fn spmv_many_into<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperan
 }
 
 /// Compute `C = A · B`, allocating the result buffer.
-pub fn spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     b: &B,
@@ -384,7 +393,7 @@ pub fn spmm<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
 /// vector, [`spmv`](super::spmv::spmv) preserves the vector-shaped output; for
 /// multiple RHS vectors, this route uses the SpMM kernel to increase useful GPU
 /// work per dispatch.
-pub fn spmv_many<'a, T: WgslScalar + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmv_many<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x_batch: &B,

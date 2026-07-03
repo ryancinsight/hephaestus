@@ -2,7 +2,9 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BlockWidth, Result};
+use hephaestus_core::{
+    BlockWidth, CombineExpr, DialectScalar, IdentityToken, OpIdentity, Result, Wgsl,
+};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::{MaxOp, MinOp, SumOp};
@@ -11,8 +13,8 @@ pub use wgpu_backend::{MaxOp, MinOp, SumOp};
 #[inline]
 pub fn reduction<Op, T>(device: &MetalDevice, buffer: &MetalBuffer<T>) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::ReductionWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner = wgpu_backend::reduction::<Op, T>(&device.inner, &buffer.inner)?;
     Ok(MetalBuffer { inner })
@@ -26,8 +28,8 @@ pub fn reduction_with_width<Op, T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::ReductionWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner = wgpu_backend::reduction_with_width::<Op, T>(&device.inner, &buffer.inner, width)?;
     Ok(MetalBuffer { inner })
@@ -42,8 +44,8 @@ pub fn reduce_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::ReductionWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner = wgpu_backend::reduce_axis::<Op, T>(
         &device.inner,
@@ -64,8 +66,8 @@ pub fn reduce_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::ReductionWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     hephaestus_wgpu::reduce_axis_into::<Op, T>(
         &device.inner,
@@ -85,7 +87,7 @@ pub fn sum_axis<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     let inner = wgpu_backend::sum_axis::<T>(
         &device.inner,
@@ -106,7 +108,7 @@ pub fn sum_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     wgpu_backend::sum_axis_into::<T>(
         &device.inner,
@@ -126,7 +128,7 @@ pub fn min_axis<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<MinOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<MinOp> + IdentityToken<MinOp, Wgsl>,
 {
     let inner = wgpu_backend::min_axis::<T>(
         &device.inner,
@@ -147,7 +149,7 @@ pub fn min_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<MinOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<MinOp> + IdentityToken<MinOp, Wgsl>,
 {
     wgpu_backend::min_axis_into::<T>(
         &device.inner,
@@ -167,7 +169,7 @@ pub fn max_axis<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     let inner = wgpu_backend::max_axis::<T>(
         &device.inner,
@@ -188,7 +190,7 @@ pub fn max_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     wgpu_backend::max_axis_into::<T>(
         &device.inner,
@@ -208,7 +210,7 @@ pub fn mean_axis<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     let inner = wgpu_backend::mean_axis::<T>(
         &device.inner,
@@ -229,7 +231,7 @@ pub fn mean_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: wgpu_backend::WgslScalar + bytemuck::Pod + wgpu_backend::ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     wgpu_backend::mean_axis_into::<T>(
         &device.inner,

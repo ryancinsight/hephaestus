@@ -18,17 +18,6 @@ pub struct CudaBuffer<T> {
 }
 
 impl<T> CudaBuffer<T> {
-    /// Construct a new stub buffer.
-    #[must_use]
-    #[inline]
-    pub(crate) fn new(len: usize, tier: themis::MemoryTier) -> Self {
-        Self {
-            len,
-            tier,
-            marker: PhantomData,
-        }
-    }
-
     /// Borrow the raw device pointer (stub returns 0).
     #[must_use]
     #[inline]

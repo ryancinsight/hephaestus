@@ -10,11 +10,10 @@ pub use spmm::{
 };
 pub use spmv::{prepare_spmv, spmv, spmv_into, PreparedSpmv};
 
-use crate::application::wgsl::WgslScalar;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, Result, Wgsl};
 
 /// Compressed Sparse Row matrix on the GPU: stores only the non-zero elements
 /// in device-resident buffers.
@@ -27,7 +26,7 @@ pub struct GpuCsrMatrix<T> {
     ncols: usize,
 }
 
-impl<T: WgslScalar + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
+impl<T: DialectScalar<Wgsl> + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
     /// Upload a CPU-side Leto `CsrMatrix` to the GPU.
     pub fn from_cpu(device: &WgpuDevice, cpu_matrix: &leto_ops::CsrMatrix<T>) -> Result<Self> {
         let (values, col_indices, row_ptr) = cpu_matrix.as_parts();

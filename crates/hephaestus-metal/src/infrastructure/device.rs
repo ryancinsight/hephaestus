@@ -75,4 +75,19 @@ impl ComputeDevice for MetalDevice {
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
         self.inner.write_buffer(&buffer.inner, host)
     }
+
+    #[inline]
+    fn write_sub_buffer<T: Pod>(
+        &self,
+        buffer: &Self::Buffer<T>,
+        offset: usize,
+        host: &[T],
+    ) -> Result<()> {
+        self.inner.write_sub_buffer(&buffer.inner, offset, host)
+    }
+
+    #[inline]
+    fn synchronize(&self) -> Result<()> {
+        self.inner.synchronize()
+    }
 }

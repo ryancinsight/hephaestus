@@ -2,7 +2,7 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BlockWidth, Result};
+use hephaestus_core::{BinaryExpr, BlockWidth, DialectScalar, Result, UnaryExpr, Wgsl};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::{
@@ -18,8 +18,8 @@ pub fn binary_elementwise<Op, T>(
     rhs: &MetalBuffer<T>,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::binary_elementwise::<Op, T>(&device.inner, &lhs.inner, &rhs.inner)?;
     Ok(MetalBuffer { inner })
@@ -35,8 +35,8 @@ pub fn binary_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::binary_elementwise_into::<Op, T>(
         &device.inner,
@@ -55,8 +55,8 @@ pub fn scalar_elementwise<Op, T>(
     scalar: T,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::scalar_elementwise::<Op, T>(&device.inner, &lhs.inner, scalar)?;
     Ok(MetalBuffer { inner })
@@ -72,8 +72,8 @@ pub fn scalar_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::BinaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::scalar_elementwise_into::<Op, T>(
         &device.inner,
@@ -91,8 +91,8 @@ pub fn unary_elementwise<Op, T>(
     lhs: &MetalBuffer<T>,
 ) -> Result<MetalBuffer<T>>
 where
-    Op: wgpu_backend::UnaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     let inner = wgpu_backend::unary_elementwise::<Op, T>(&device.inner, &lhs.inner)?;
     Ok(MetalBuffer { inner })
@@ -107,8 +107,8 @@ pub fn unary_elementwise_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: wgpu_backend::UnaryWgslOp,
-    T: wgpu_backend::WgslScalar + bytemuck::Pod,
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::unary_elementwise_into::<Op, T>(&device.inner, &lhs.inner, &out.inner, width)
 }

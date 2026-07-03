@@ -11,8 +11,8 @@ use hephaestus_wgpu::{
     prepare_reduction, prepare_sum_axis_into, reduction, reduction_with_width, scalar_elementwise,
     scalar_elementwise_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
     sum_axis, sum_axis_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
-    ComputeDevice, DeviceBuffer, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp, RecipOp,
-    SqrtOp, SubOp, SumOp, WgpuDevice,
+    ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp,
+    RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -479,6 +479,26 @@ fn elementwise_unary_matches_cpu_reference() {
             "Exp mismatch at index {}: got {}, expected {}, diff {}, tol {}",
             i,
             got_exp[i],
+            expected,
+            diff,
+            tolerance
+        );
+    }
+
+    // ExpNegOp — fused exp(−x); must equal the NegOp → ExpOp chain (differential
+    // oracle) and the CPU (-x).exp() reference.
+    let out_expneg = unary_elementwise::<ExpNegOp, f32>(&device, &a).unwrap();
+    let mut got_expneg = vec![0.0f32; host.len()];
+    device.download(&out_expneg, &mut got_expneg).unwrap();
+    for (i, &x) in host.iter().enumerate() {
+        let expected = (-x).exp();
+        let diff = (got_expneg[i] - expected).abs();
+        let tolerance = 1e-5 * expected.abs().max(1.0);
+        assert!(
+            diff < tolerance,
+            "ExpNeg mismatch at index {}: got {}, expected {}, diff {}, tol {}",
+            i,
+            got_expneg[i],
             expected,
             diff,
             tolerance
@@ -2817,6 +2837,44 @@ fn write_buffer_integer_types() {
     assert_eq!(got, data);
 }
 
+#[test]
+fn write_sub_buffer_overwrites_only_requested_range() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    device.write_sub_buffer(&buf, 1, &[20.0f32, 30.0]).unwrap();
+
+    let mut got = [0.0f32; 4];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [1.0, 20.0, 30.0, 4.0]);
+}
+
+#[test]
+fn write_sub_buffer_rejects_out_of_range_write() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(device.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
+}
+
+#[test]
+fn write_sub_buffer_empty_tail_write_is_noop() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[9i32, 8, 7]).unwrap();
+    device.write_sub_buffer(&buf, 3, &[] as &[i32]).unwrap();
+
+    let mut got = [0i32; 3];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [9, 8, 7]);
+}
+
 // ── Extended differential decomposition tests ─────────────────────────────
 
 #[test]
@@ -4522,4 +4580,74 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     let mut got_c_batched = vec![0.0f32; 6];
     device.download(&c_batched, &mut got_c_batched).unwrap();
     assert_close_slice(&got_c_batched, &got_c, 1.0e-4, 1.0e-4);
+}
+
+/// Shared adversarial-layout driver: every non-dense view (transposed,
+/// offset, broadcast/zero-stride) must be rejected by the blocked entry
+/// points with the typed dense-operand error BEFORE any raw device copy.
+/// The broadcast case is the wrong-extent case: its validated storage
+/// extent (4 elements here) is smaller than rows*cols, so the former raw
+/// whole-matrix copy exceeded the operand's storage.
+fn assert_blocked_rejects_non_dense<F, O>(device: &WgpuDevice, entry: F, label: &str)
+where
+    F: Fn(&WgpuDevice, hephaestus_wgpu::StridedOperand<'_, f32, 2>) -> hephaestus_core::Result<O>,
+{
+    use leto::Layout;
+
+    let dense_host: Vec<f32> = (0..16).map(|i| 1.0 + i as f32).collect();
+    let dense_buf = device.upload(&dense_host).unwrap();
+    let small_host = [1.0f32, 2.0, 3.0, 4.0];
+    let small_buf = device.upload(&small_host).unwrap();
+
+    let transposed = Layout::new([4, 4], [1, 4], 0);
+    let offset = Layout::new([3, 3], [4, 1], 5);
+    let broadcast = Layout::new([4, 4], [0, 1], 0);
+
+    for (name, layout, buffer) in [
+        ("transposed", &transposed, &dense_buf),
+        ("offset", &offset, &dense_buf),
+        ("broadcast", &broadcast, &small_buf),
+    ] {
+        let result = entry(device, hephaestus_wgpu::StridedOperand { buffer, layout });
+        match result {
+            Err(HephaestusError::DispatchFailed { message }) => {
+                assert!(
+                    message.contains("dense C-contiguous"),
+                    "{label}/{name}: rejection must name the dense-operand                      contract, got: {message}"
+                );
+            }
+            Err(other) => {
+                panic!("{label}/{name}: expected DispatchFailed dense-operand error, got {other:?}")
+            }
+            Ok(_) => panic!("{label}/{name}: non-dense operand must be rejected"),
+        }
+    }
+}
+
+#[test]
+fn blocked_cholesky_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(
+        &device,
+        hephaestus_wgpu::cholesky_decompose_blocked,
+        "cholesky",
+    );
+}
+
+#[test]
+fn blocked_lu_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::lu_decompose_blocked, "LU");
+}
+
+#[test]
+fn blocked_qr_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::qr_decompose_blocked, "QR");
 }

@@ -1,21 +1,20 @@
-//! Shared validation utilities for decompositions.
+//! Decomposition operand validation — thin adapters over the backend-neutral
+//! `hephaestus_core` validators.
 
 use bytemuck::Pod;
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{require_dense_operand, validate_square_operand, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::StridedOperand;
 
 /// Validate that the input is a square matrix and return its dimension.
 pub(crate) fn validate_square<T: Pod>(matrix: &StridedOperand<'_, T, 2>) -> Result<usize> {
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("Decomposition requires a square matrix, got shape [{rows}, {cols}]"),
-        });
-    }
-    matrix
-        .layout
-        .validate_storage_len(matrix.buffer.len)
-        .map_err(map_layout_err)?;
-    Ok(rows)
+    validate_square_operand(matrix.layout, matrix.buffer.len)
+}
+
+/// Require a dense C-contiguous zero-offset operand for a blocked decomposition.
+pub(crate) fn validate_dense_operand<T: Pod>(
+    label: &str,
+    matrix: &StridedOperand<'_, T, 2>,
+) -> Result<()> {
+    require_dense_operand(label, matrix.layout)
 }

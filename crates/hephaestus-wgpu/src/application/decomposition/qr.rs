@@ -50,6 +50,7 @@ use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use super::region::{
     download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
 };
+use super::validate::validate_dense_operand;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -348,6 +349,8 @@ const QR_BLOCK_SIZE: usize = 32;
 /// # Errors
 ///
 /// - Underdetermined shape (*m* < *n*).
+/// - Non-dense (non-C-contiguous / offset / broadcast) operand: the
+///   blocked path bulk-copies the matrix storage on the device.
 /// - Non-finite values in the input.
 /// - Rank-deficient input (zero column norm).
 pub fn qr_decompose_blocked(
@@ -364,6 +367,7 @@ pub fn qr_decompose_blocked(
         .layout
         .validate_storage_len(matrix.buffer.len)
         .map_err(map_layout_err)?;
+    validate_dense_operand("QR", &matrix)?;
 
     if m == 0 || n == 0 {
         let r_buf = device.alloc_zeroed::<f32>(0)?;
@@ -481,6 +485,10 @@ pub fn qr_decompose_blocked(
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                         label: Some("hephaestus-qr-copy"),
                     });
+            // Raw whole-matrix copy: sound only for dense C-contiguous
+            // zero-offset operands, enforced by `validate_dense_operand` at the
+            // entry point (a strided/offset/broadcast view would copy the wrong
+            // elements or exceed the operand's storage extent).
             encoder.copy_buffer_to_buffer(
                 &matrix.buffer.buffer,
                 0,

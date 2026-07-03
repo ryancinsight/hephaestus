@@ -2,17 +2,16 @@
 
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::{map_layout_err, to_i32, to_u32};
-use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::cached_kernel;
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
 /// CUDA scalar supporting matrix-rank and determinant estimation.
-pub trait MatrixRankScalar: CudaScalar + Pod {}
+pub trait MatrixRankScalar: DialectScalar<CudaC> + Pod {}
 
 impl MatrixRankScalar for f32 {}
 
@@ -145,7 +144,7 @@ extern "C" __global__ void matrix_properties_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 
@@ -207,48 +206,24 @@ where
         matrix_properties_source::<T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = meta;
-        let mut in_ptr = matrix.buffer.raw();
-        let mut scratch_ptr = scratch.raw();
-        let mut rank_ptr = rank_out.raw();
-        let mut det_ptr = det_out.raw();
+    let mut meta_val = meta;
+    let mut in_ptr = matrix.buffer.raw();
+    let mut scratch_ptr = scratch.raw();
+    let mut rank_ptr = rank_out.raw();
+    let mut det_ptr = det_out.raw();
 
-        let mut args: [*mut std::ffi::c_void; 5] = [
-            &mut meta_val as *mut RankMeta as *mut std::ffi::c_void,
-            &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut scratch_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut rank_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut det_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `matrix_properties_kernel(RankMeta, const T*, T*,
+    // unsigned int*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 5] = [
+        &mut meta_val as *mut RankMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut scratch_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut rank_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut det_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, meta, scratch);
-    }
+    // Sequential Gaussian elimination: a single-thread launch by design.
+    launch_kernel(device, &kernel, LaunchConfig::planar(1, 1, 1, 1), &mut args)?;
 
     let mut rank = [0u32; 1];
     device.download(&rank_out, &mut rank)?;

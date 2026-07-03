@@ -28,6 +28,7 @@ use hephaestus_core::panel_qr_packed;
 
 #[cfg(feature = "cuda")]
 use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::validate::validate_dense_operand;
 
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
@@ -169,9 +170,15 @@ const QR_BLOCK_SIZE: usize = 32;
 /// Blocked QR factorization **A = Q R** with GPU-accelerated trailing
 /// Householder application.
 ///
+/// The operand must be dense C-contiguous at offset 0 (the blocked path
+/// bulk-copies the matrix storage on the device); transposed, offset, or
+/// broadcast views are rejected with a typed error — materialize them
+/// first.
+///
 /// # Errors
 ///
 /// - Underdetermined shape (*m* < *n*).
+/// - Non-dense (non-C-contiguous / offset / broadcast) operand.
 /// - Non-finite values in the input.
 /// - Rank-deficient input (zero column norm).
 pub fn qr_decompose_blocked(
@@ -190,6 +197,7 @@ pub fn qr_decompose_blocked(
             .layout
             .validate_storage_len(matrix.buffer.len())
             .map_err(map_layout_err)?;
+        validate_dense_operand("QR", &matrix)?;
 
         if m == 0 || n == 0 {
             let r_buf = device.alloc_zeroed::<f32>(0)?;
@@ -212,6 +220,15 @@ pub fn qr_decompose_blocked(
         let work_buf = device.alloc_zeroed::<f32>(m * n)?;
         device.bind()?;
         let bytes = m * n * std::mem::size_of::<f32>();
+        // SAFETY: this device's context is current (`bind` above). `work_buf`
+        // is a live, freshly allocated `m * n`-element device allocation, and
+        // `matrix.buffer` holds at least `m * n` elements: the operand is
+        // enforced dense C-contiguous at offset 0 (`validate_dense_operand`
+        // above), so the layout's validated storage extent
+        // (`validate_storage_len`) equals the `bytes` read here. The copy is
+        // asynchronous on the null stream; both allocations outlive it
+        // because frees route through synchronizing `cuMemFree`-family
+        // calls.
         let res =
             unsafe { cuda_core::sys::cuMemcpyDtoD_v2(work_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
@@ -348,7 +365,7 @@ pub fn qr_decompose_blocked(
 mod hh_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::cached_kernel;
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -357,6 +374,9 @@ mod hh_impl {
         pub(super) beta: f32,
     }
 
+    // SAFETY: `HhReflectorMeta` is `#[repr(C)]` and contains one `u32` and
+    // one `f32` field of identical size and alignment, so it has no padding
+    // bytes, and every bit pattern is valid for both types.
     unsafe impl bytemuck::Pod for HhReflectorMeta {}
 
     #[repr(C)]
@@ -370,6 +390,10 @@ mod hh_impl {
         _pad: [u32; 3],
     }
 
+    // SAFETY: `HhMeta` is `#[repr(C)]` and contains only `u32` fields of
+    // identical size and alignment (the trailing `[u32; 3]` pads the struct
+    // to 32 bytes explicitly), so it has no implicit padding bytes, and
+    // every bit pattern is a valid value.
     unsafe impl bytemuck::Pod for HhMeta {}
 
     fn hh_shader_source() -> String {
@@ -500,6 +524,8 @@ mod hh_impl {
         let mut ref_ptr = reflector_buf.raw();
         let mut meta_val = meta;
 
+        // Argument list mirrors `householder_kernel(const float*, float*,
+        // const ReflectorMeta*, HhMeta)`.
         let mut args: [*mut std::ffi::c_void; 4] = [
             &mut v_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
@@ -507,27 +533,12 @@ mod hh_impl {
             &mut meta_val as *mut HhMeta as *mut std::ffi::c_void,
         ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                trail_cols as u32,
-                1,
-                1,
-                256,
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel HH failed with code: {res}"),
-                });
-            }
-        }
-
-        Ok(())
+        // 256-thread blocks match the kernel's fixed `sdata[256]` reduction tile.
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::planar(trail_cols as u32, 1, 256, 1),
+            &mut args,
+        )
     }
 }

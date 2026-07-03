@@ -8,6 +8,7 @@ pub mod elementwise;
 /// Linear algebra compute operations.
 pub mod linalg;
 pub(crate) mod pipeline;
+
 /// Seeded host-delegated PRNG initializers.
 pub mod random;
 /// Reduction compute operations.
@@ -17,7 +18,11 @@ pub mod scan;
 #[cfg(feature = "sparse")]
 /// GPU Compressed Sparse Row (CSR) sparse matrix operations.
 pub mod sparse;
+/// Generic WGSL storage-kernel dispatch.
+pub mod storage_kernel;
+/// Backend-neutral command stream implementation for authored WGSL kernels.
+pub mod stream;
 /// Strided-layout-aware dispatch over leto layout metadata.
 pub mod strided;
-/// WGSL scalar-type mapping.
-pub mod wgsl;
+/// Volume ray-integral kernels (CT/dose ray-trace primitive).
+pub mod volume;

@@ -4,7 +4,10 @@
 //! On a host without the `cuda` feature or without a CUDA device,
 //! [`CudaDevice::try_default`] returns `Err` and each test skips.
 
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
+    HephaestusError, Result,
+};
 use hephaestus_cuda::{
     binary_elementwise, binary_elementwise_into, det, dot, kron, matexp, matmul, matmul_into,
     matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, reduce_axis,
@@ -57,6 +60,27 @@ fn assert_dispatch_message<T>(result: Result<T>, expected: &str) {
         Err(error) => panic!("expected dispatch failure {expected:?}, got {error:?}"),
         Ok(_) => panic!("expected dispatch failure {expected:?}, got success"),
     }
+}
+
+#[test]
+fn device_capabilities_are_driver_backed() {
+    let Some(dev) = device("device_capabilities_are_driver_backed") else {
+        return;
+    };
+
+    let limits = dev.device_limits();
+    assert!(limits.max_buffer_size > 0);
+    assert!(limits.max_compute_workgroup_size_x > 0);
+    assert!(limits.max_compute_workgroup_size_y > 0);
+    assert!(limits.max_compute_workgroup_size_z > 0);
+    assert!(limits.max_compute_invocations_per_workgroup > 0);
+    assert!(limits.max_compute_workgroup_storage_size > 0);
+    assert_eq!(limits.max_storage_buffers_per_shader_stage, None);
+    assert_eq!(limits.max_push_constant_size, 0);
+
+    assert!(dev.supports_device_feature(DeviceFeature::PushConstants));
+    assert!(!dev.supports_device_feature(DeviceFeature::TimestampQuery));
+    assert!(!dev.supports_device_feature(DeviceFeature::ShaderF16));
 }
 
 #[test]
@@ -1109,6 +1133,44 @@ fn write_buffer_integer_types() {
     assert_eq!(got, data);
 }
 
+#[test]
+fn write_sub_buffer_overwrites_only_requested_range() {
+    let Some(dev) = device("write_sub_buffer_overwrites_only_requested_range") else {
+        return;
+    };
+
+    let buf = dev.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    dev.write_sub_buffer(&buf, 1, &[20.0f32, 30.0]).unwrap();
+
+    let mut got = [0.0f32; 4];
+    dev.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [1.0, 20.0, 30.0, 4.0]);
+}
+
+#[test]
+fn write_sub_buffer_rejects_out_of_range_write() {
+    let Some(dev) = device("write_sub_buffer_rejects_out_of_range_write") else {
+        return;
+    };
+
+    let buf = dev.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(dev.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
+}
+
+#[test]
+fn write_sub_buffer_empty_tail_write_is_noop() {
+    let Some(dev) = device("write_sub_buffer_empty_tail_write_is_noop") else {
+        return;
+    };
+
+    let buf = dev.upload(&[9i32, 8, 7]).unwrap();
+    dev.write_sub_buffer(&buf, 3, &[] as &[i32]).unwrap();
+
+    let mut got = [0i32; 3];
+    dev.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [9, 8, 7]);
+}
+
 // ── Extended differential decomposition tests ─────────────────────────────
 
 #[cfg(feature = "decomposition")]
@@ -1958,6 +2020,7 @@ fn blocked_cholesky_rejects_singular_matrix() {
 // Telemetry and Decomposition Contract Helper Functions
 // ────────────────────────────────────────────────────────────────────────
 
+#[cfg(feature = "decomposition")]
 fn assert_close(actual: f32, expected: f32, tolerance: f32) {
     assert!(
         (actual - expected).abs() <= tolerance,
@@ -1976,6 +2039,7 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn reconstruct_svd(
     u: &[f32],
     singular_values: &[f32],
@@ -1999,6 +2063,7 @@ fn reconstruct_svd(
     reconstructed
 }
 
+#[cfg(feature = "decomposition")]
 fn matmul_host(
     lhs: &[f32],
     lhs_rows: usize,
@@ -2019,6 +2084,7 @@ fn matmul_host(
     out
 }
 
+#[cfg(feature = "decomposition")]
 fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut out = vec![0.0f32; rows * cols];
     for row in 0..rows {
@@ -2029,6 +2095,7 @@ fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     out
 }
 
+#[cfg(feature = "decomposition")]
 fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     let transposed = transpose_host(matrix, n, n);
     let gram = matmul_host(&transposed, n, n, matrix, n);
@@ -2043,6 +2110,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
@@ -2051,6 +2119,7 @@ fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
     });
 }
 
+#[cfg(feature = "decomposition")]
 fn assert_complex_spectrum_close(
     actual: &[num_complex::Complex<f32>],
     expected: &[num_complex::Complex<f32>],
@@ -2941,4 +3010,76 @@ fn test_cuda_sparse_matrix_spmv_spmm() {
     let mut got_c = vec![0.0f32; 6];
     dev.download(&c_buf, &mut got_c).unwrap();
     assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 0.0);
+}
+
+/// Shared adversarial-layout driver: every non-dense view (transposed,
+/// offset, broadcast/zero-stride) must be rejected by the blocked entry
+/// points with the typed dense-operand error BEFORE any device copy. The
+/// broadcast case is the memory-safety case: its validated storage extent
+/// (4 elements here) is smaller than rows*cols, so the former raw
+/// whole-matrix copy would have read past the allocation.
+#[cfg(feature = "decomposition")]
+fn assert_blocked_rejects_non_dense<F, O>(dev: &CudaDevice, entry: F, label: &str)
+where
+    F: Fn(&CudaDevice, StridedOperand<'_, f32, 2>) -> hephaestus_core::Result<O>,
+{
+    // 16 elements backing dense 4x4 views; 4 elements backing the broadcast.
+    let dense_host: Vec<f32> = (0..16).map(|i| 1.0 + i as f32).collect();
+    let dense_buf = dev.upload(&dense_host).unwrap();
+    let small_host = [1.0f32, 2.0, 3.0, 4.0];
+    let small_buf = dev.upload(&small_host).unwrap();
+
+    let transposed = Layout::new([4, 4], [1, 4], 0);
+    let offset = Layout::new([3, 3], [4, 1], 5);
+    let broadcast = Layout::new([4, 4], [0, 1], 0);
+
+    for (name, layout, buffer) in [
+        ("transposed", &transposed, &dense_buf),
+        ("offset", &offset, &dense_buf),
+        ("broadcast", &broadcast, &small_buf),
+    ] {
+        let result = entry(dev, StridedOperand { buffer, layout });
+        match result {
+            Err(HephaestusError::DispatchFailed { message }) => {
+                assert!(
+                    message.contains("dense C-contiguous"),
+                    "{label}/{name}: rejection must name the dense-operand                      contract, got: {message}"
+                );
+            }
+            Err(other) => {
+                panic!("{label}/{name}: expected DispatchFailed dense-operand error, got {other:?}")
+            }
+            Ok(_) => panic!("{label}/{name}: non-dense operand must be rejected"),
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_cholesky_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_cholesky_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::cholesky_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, cholesky_decompose_blocked, "cholesky");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_lu_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_lu_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::lu_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, lu_decompose_blocked, "LU");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_qr_rejects_non_dense_operands() {
+    let Some(dev) = device("blocked_qr_rejects_non_dense_operands") else {
+        return;
+    };
+    use hephaestus_cuda::qr_decompose_blocked;
+    assert_blocked_rejects_non_dense(&dev, qr_decompose_blocked, "QR");
 }

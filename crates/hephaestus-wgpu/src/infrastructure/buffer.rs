@@ -10,12 +10,24 @@ pub(crate) struct StagingPointer {
     pub size: usize,
 }
 
+// SAFETY: `ptr` is the exclusive owner-handle of one staging allocation from
+// `WGPU_STAGING_ALLOCATOR`; the pointee is only accessed through wgpu
+// mapped-buffer APIs carrying their own synchronization, and deallocation
+// (Drop) routes through the thread-safe global allocator. Moving the handle
+// across threads moves that exclusive ownership.
 unsafe impl Send for StagingPointer {}
+// SAFETY: no `&self` method touches the pointee; shared references read only
+// the pointer value and size, so cross-thread sharing cannot race.
 unsafe impl Sync for StagingPointer {}
 
 impl Drop for StagingPointer {
     fn drop(&mut self) {
-        let layout = std::alloc::Layout::from_size_align(self.size, 8).unwrap();
+        // Mirrors the allocation site's `Layout::from_size_align(padded, 8)`
+        // in device.rs; the same (size, align) pair was valid there.
+        let layout = std::alloc::Layout::from_size_align(self.size, 8)
+            .expect("invariant: staging layout (size, align 8) was valid at allocation");
+        // SAFETY: `ptr` was returned by `WGPU_STAGING_ALLOCATOR.alloc` with
+        // this exact layout and is deallocated exactly once (Drop).
         unsafe {
             use std::alloc::GlobalAlloc;
             WGPU_STAGING_ALLOCATOR.dealloc(self.ptr, layout);
@@ -33,9 +45,10 @@ impl Drop for StagingPointer {
 /// # Cloning
 ///
 /// `Clone` is a GPU handle clone (similar to cloning an `Arc`): both the
-/// original and the clone refer to the **same** device allocation. Use
-/// [`aliases`](WgpuBuffer::aliases) to detect aliased pairs before
-/// dispatching kernels with output aliasing.
+/// original and the clone refer to the **same** device allocation. The
+/// crate-internal `aliases` check detects aliased pairs before dispatching
+/// kernels with output aliasing; `_into` entry points reject aliased
+/// outputs with a typed error.
 #[derive(Clone, Debug)]
 pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,

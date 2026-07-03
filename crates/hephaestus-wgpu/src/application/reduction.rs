@@ -1,95 +1,19 @@
 use std::any::TypeId;
 use std::marker::PhantomData;
 
-use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use bytemuck::Pod;
+use hephaestus_core::{
+    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
+    ComputeDevice, DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result, Wgsl,
+};
 use leto::Layout;
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::strided::{map_layout_err, to_i32, to_u32, StridedOperand};
-use crate::application::wgsl::WgslScalar;
+use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Zero-sized reduction operation marker selecting the WGSL combine expression.
-pub trait ReductionWgslOp: Copy + Send + Sync + 'static {
-    /// WGSL expression combining `lhs` and `rhs` (e.g. `"lhs + rhs"` or `"min(lhs, rhs)"`).
-    const WGSL_EXPR: &'static str;
-}
-
-/// Associates a scalar type and reduction operation with the identity value.
-pub trait ReductionIdentity<Op>: WgslScalar {
-    /// The identity value on the host side.
-    const IDENTITY: Self;
-    /// The WGSL literal for the identity value.
-    const WGSL_IDENTITY: &'static str;
-}
-
-/// Sum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SumOp;
-
-/// Minimum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MinOp;
-
-/// Maximum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MaxOp;
-
-impl ReductionWgslOp for SumOp {
-    const WGSL_EXPR: &'static str = "lhs + rhs";
-}
-
-impl ReductionWgslOp for MinOp {
-    const WGSL_EXPR: &'static str = "min(lhs, rhs)";
-}
-
-impl ReductionWgslOp for MaxOp {
-    const WGSL_EXPR: &'static str = "max(lhs, rhs)";
-}
-
-// ── SumOp Identity implementations ──
-impl ReductionIdentity<SumOp> for f32 {
-    const IDENTITY: Self = 0.0;
-    const WGSL_IDENTITY: &'static str = "0.0";
-}
-impl ReductionIdentity<SumOp> for u32 {
-    const IDENTITY: Self = 0;
-    const WGSL_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<SumOp> for i32 {
-    const IDENTITY: Self = 0;
-    const WGSL_IDENTITY: &'static str = "0";
-}
-
-// ── MinOp Identity implementations ──
-impl ReductionIdentity<MinOp> for f32 {
-    const IDENTITY: Self = f32::MAX;
-    const WGSL_IDENTITY: &'static str = "3.402823466e+38";
-}
-impl ReductionIdentity<MinOp> for u32 {
-    const IDENTITY: Self = u32::MAX;
-    const WGSL_IDENTITY: &'static str = "4294967295u";
-}
-impl ReductionIdentity<MinOp> for i32 {
-    const IDENTITY: Self = i32::MAX;
-    const WGSL_IDENTITY: &'static str = "2147483647";
-}
-
-// ── MaxOp Identity implementations ──
-impl ReductionIdentity<MaxOp> for f32 {
-    const IDENTITY: Self = f32::MIN;
-    const WGSL_IDENTITY: &'static str = "-3.402823466e+38";
-}
-impl ReductionIdentity<MaxOp> for u32 {
-    const IDENTITY: Self = u32::MIN;
-    const WGSL_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<MaxOp> for i32 {
-    const IDENTITY: Self = i32::MIN;
-    const WGSL_IDENTITY: &'static str = "-2147483648";
-}
+pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for reduction operations.
 struct ReductionOpWrapper<Op>(PhantomData<Op>);
@@ -101,22 +25,7 @@ struct MeanAxisKernel<T>(PhantomData<T>);
 struct MeanAxisParallelKernel<T>(PhantomData<T>);
 struct MeanAxis0TiledKernel<T>(PhantomData<T>);
 
-const AXIS0_TILE_COLUMNS: u32 = 16;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct AxisReductionMeta {
-    input_shape: [u32; 2],
-    input_strides: [i32; 2],
-    output_strides: [i32; 2],
-    _pre_offsets_pad: [u32; 2],
-    offsets: [u32; 4],
-}
-
-struct AxisReductionDispatch {
-    meta: AxisReductionMeta,
-    groups: u32,
-}
+const AXIS0_TILE_COLUMNS: u32 = 32;
 
 /// Prepared rank-2 axis reduction over fixed input/output buffers and layouts.
 ///
@@ -127,6 +36,11 @@ pub struct PreparedAxisReduction<T> {
     pipeline: Option<wgpu::ComputePipeline>,
     bind_group: Option<wgpu::BindGroup>,
     groups: u32,
+    /// Pooled metadata uniform held for the prepared reduction's lifetime so
+    /// it recycles back to the pool on drop (the bind group also keeps the
+    /// underlying buffer alive; without the guard the buffer would escape the
+    /// pool permanently).
+    _meta_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
     _marker: PhantomData<T>,
 }
 
@@ -202,7 +116,7 @@ pub fn submit_prepared_axis_reduction_batch<T>(
     Ok(())
 }
 
-fn shader_source<Op: ReductionWgslOp, T: ReductionIdentity<Op>>(width: BlockWidth) -> String {
+fn shader_source<Op: CombineExpr<Wgsl>, T: IdentityToken<Op, Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> input: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> output: array<{ty}>;
@@ -240,14 +154,14 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
-fn final_reduction_shader_source<Op: ReductionWgslOp, T: ReductionIdentity<Op>>(
+fn final_reduction_shader_source<Op: CombineExpr<Wgsl>, T: IdentityToken<Op, Wgsl>>(
     width: BlockWidth,
 ) -> String {
     format!(
@@ -288,10 +202,10 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {{
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
@@ -309,8 +223,8 @@ fn validate_reduction_width(width: BlockWidth) -> Result<()> {
 
 fn axis_reduction_shader_source<Op, T>(width: BlockWidth) -> String
 where
-    Op: ReductionWgslOp,
-    T: ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: IdentityToken<Op, Wgsl>,
 {
     format!(
         r#"
@@ -355,17 +269,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     output[u32(out_off)] = acc;
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
 fn axis_reduction_parallel_shader_source<Op, T>(width: BlockWidth) -> String
 where
-    Op: ReductionWgslOp,
-    T: ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: IdentityToken<Op, Wgsl>,
 {
     format!(
         r#"
@@ -432,16 +346,16 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
 fn mean_axis_shader_source<T>(width: BlockWidth) -> String
 where
-    T: ReductionIdentity<SumOp>,
+    T: IdentityToken<SumOp, Wgsl>,
 {
     format!(
         r#"
@@ -484,15 +398,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     output[u32(out_off)] = acc / {ty}(axis_len);
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
+        identity = <T as IdentityToken<SumOp, Wgsl>>::TOKEN,
     )
 }
 
 fn mean_axis_parallel_shader_source<T>(width: BlockWidth) -> String
 where
-    T: ReductionIdentity<SumOp>,
+    T: IdentityToken<SumOp, Wgsl>,
 {
     format!(
         r#"
@@ -557,9 +471,9 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::WGSL_IDENTITY,
+        identity = <T as IdentityToken<SumOp, Wgsl>>::TOKEN,
     )
 }
 
@@ -570,8 +484,8 @@ fn axis0_tile_shape(width: BlockWidth) -> (u32, u32) {
 
 fn axis_reduction_axis0_tiled_shader_source<Op, T>(width: BlockWidth) -> String
 where
-    Op: ReductionWgslOp,
-    T: ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: IdentityToken<Op, Wgsl>,
 {
     let (tile_cols, tile_rows) = axis0_tile_shape(width);
     format!(
@@ -638,18 +552,18 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         tile_cols = tile_cols,
         tile_rows = tile_rows,
-        identity = T::WGSL_IDENTITY,
-        expr = Op::WGSL_EXPR,
+        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
+        expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
 }
 
 fn mean_axis0_tiled_shader_source<T>(width: BlockWidth) -> String
 where
-    T: ReductionIdentity<SumOp>,
+    T: IdentityToken<SumOp, Wgsl>,
 {
     let (tile_cols, tile_rows) = axis0_tile_shape(width);
     format!(
@@ -713,11 +627,11 @@ fn main(
     }}
 }}
 "#,
-        ty = T::WGSL_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
         tile_cols = tile_cols,
         tile_rows = tile_rows,
-        identity = T::WGSL_IDENTITY,
+        identity = <T as IdentityToken<SumOp, Wgsl>>::TOKEN,
     )
 }
 
@@ -732,77 +646,21 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn validate_axis_reduction<T>(
+fn plan_axis_reduction_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
 ) -> Result<Option<AxisReductionDispatch>> {
-    validate_reduction_width(width)?;
-    if axis >= 2 {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("axis {axis} is out of bounds for rank-2 reduction"),
-        });
-    }
-
-    let mut expected_shape = input.layout.shape;
-    expected_shape[axis] = 1;
-    if output.layout.shape != expected_shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "axis reduction output shape mismatch: input {:?}, axis {axis}, out {:?}",
-                input.layout.shape, output.layout.shape
-            ),
-        });
-    }
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output buffer must not alias input buffer".to_string(),
-        });
-    }
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output layout must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
-
-    input
-        .layout
-        .validate_storage_len(input.buffer.len)
-        .map_err(map_layout_err)?;
-    output
-        .layout
-        .validate_storage_len(output.buffer.len)
-        .map_err(map_layout_err)?;
-    let output_len = output.layout.checked_size().map_err(map_layout_err)?;
-    if output_len == 0 {
-        return Ok(None);
-    }
-
-    let groups = workgroups(output_len, width)?;
-    let meta = AxisReductionMeta {
-        input_shape: [
-            to_u32(input.layout.shape[0], "input rows")?,
-            to_u32(input.layout.shape[1], "input columns")?,
-        ],
-        input_strides: [
-            to_i32(input.layout.strides[0], "input row stride")?,
-            to_i32(input.layout.strides[1], "input column stride")?,
-        ],
-        output_strides: [
-            to_i32(output.layout.strides[0], "output row stride")?,
-            to_i32(output.layout.strides[1], "output column stride")?,
-        ],
-        _pre_offsets_pad: [0; 2],
-        offsets: [
-            to_u32(input.layout.offset, "input offset")?,
-            to_u32(output.layout.offset, "output offset")?,
-            to_u32(axis, "axis")?,
-            to_u32(output_len, "output length")?,
-        ],
-    };
-    Ok(Some(AxisReductionDispatch { meta, groups }))
+    plan_axis_reduction(
+        input.layout,
+        input.buffer.len,
+        output.layout,
+        output.buffer.len,
+        axis,
+        width,
+        input.buffer.aliases(output.buffer),
+    )
 }
 
 fn dispatch_axis_reduction<T>(
@@ -864,7 +722,9 @@ fn prepared_axis_reduction<T>(
     dispatch: AxisReductionDispatch,
     label: &'static str,
 ) -> Result<PreparedAxisReduction<T>> {
-    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let raw_meta_buffer =
+        device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
@@ -892,6 +752,7 @@ fn prepared_axis_reduction<T>(
         pipeline: Some(pipeline),
         bind_group: Some(bind_group),
         groups: dispatch.groups,
+        _meta_buffer: Some(meta_buffer),
         _marker: PhantomData,
     })
 }
@@ -901,6 +762,7 @@ fn empty_prepared_axis_reduction<T>() -> PreparedAxisReduction<T> {
         pipeline: None,
         bind_group: None,
         groups: 0,
+        _meta_buffer: None,
         _marker: PhantomData,
     }
 }
@@ -912,8 +774,8 @@ fn axis_reduction_pipeline<Op, T>(
     dispatch: &mut AxisReductionDispatch,
 ) -> wgpu::ComputePipeline
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     if dispatch.meta.offsets[2] == 0 {
         let (tile_cols, _) = axis0_tile_shape(width);
@@ -961,7 +823,7 @@ fn mean_axis_pipeline<T>(
     dispatch: &mut AxisReductionDispatch,
 ) -> wgpu::ComputePipeline
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     if dispatch.meta.offsets[2] == 0 {
         let (tile_cols, _) = axis0_tile_shape(width);
@@ -1016,10 +878,10 @@ pub fn prepare_reduce_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<PreparedAxisReduction<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
     let reduced_axis_len = axis_len(input, axis)?;
@@ -1044,7 +906,7 @@ pub fn prepare_sum_axis_into<T>(
     width: BlockWidth,
 ) -> Result<PreparedAxisReduction<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     prepare_reduce_axis_into::<SumOp, T>(device, input, axis, output, width)
 }
@@ -1059,7 +921,7 @@ pub fn prepare_min_axis_into<T>(
     width: BlockWidth,
 ) -> Result<PreparedAxisReduction<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     prepare_reduce_axis_into::<MinOp, T>(device, input, axis, output, width)
@@ -1075,7 +937,7 @@ pub fn prepare_max_axis_into<T>(
     width: BlockWidth,
 ) -> Result<PreparedAxisReduction<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     prepare_reduce_axis_into::<MaxOp, T>(device, input, axis, output, width)
@@ -1095,11 +957,11 @@ pub fn prepare_mean_axis_into<T>(
     width: BlockWidth,
 ) -> Result<PreparedAxisReduction<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     let reduced_axis_len = axis_len(input, axis)?;
     reject_empty_axis(reduced_axis_len, "mean_axis", axis)?;
-    let Some(mut dispatch) = validate_axis_reduction::<T>(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
     let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
@@ -1126,10 +988,10 @@ pub fn reduce_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
     let reduced_axis_len = axis_len(input, axis)?;
@@ -1148,8 +1010,8 @@ pub fn reduce_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     if axis >= 2 {
         return Err(HephaestusError::DispatchFailed {
@@ -1184,7 +1046,7 @@ pub fn sum_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     reduce_axis_into::<SumOp, T>(device, input, axis, output, width)
 }
@@ -1198,7 +1060,7 @@ pub fn sum_axis<T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
 }
@@ -1222,7 +1084,7 @@ pub fn min_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis_into::<MinOp, T>(device, input, axis, output, width)
@@ -1237,7 +1099,7 @@ pub fn min_axis<T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis::<MinOp, T>(device, input, axis, width)
@@ -1253,7 +1115,7 @@ pub fn max_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis_into::<MaxOp, T>(device, input, axis, output, width)
@@ -1268,7 +1130,7 @@ pub fn max_axis<T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)
@@ -1285,11 +1147,11 @@ pub fn mean_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     let reduced_axis_len = axis_len(input, axis)?;
     reject_empty_axis(reduced_axis_len, "mean_axis", axis)?;
-    let Some(mut dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
     let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
@@ -1305,7 +1167,7 @@ pub fn mean_axis<T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    T: WgslScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
     let mut output_shape = input.layout.shape;
@@ -1471,8 +1333,8 @@ pub fn prepare_reduction_with_width<Op, T>(
     width: BlockWidth,
 ) -> Result<PreparedReduction<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     validate_reduction_width(width)?;
 
@@ -1588,8 +1450,8 @@ pub fn prepare_reduction<Op, T>(
     input: &WgpuBuffer<T>,
 ) -> Result<PreparedReduction<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     prepare_reduction_with_width::<Op, T>(device, input, BlockWidth::DEFAULT)
 }
@@ -1599,8 +1461,8 @@ where
 /// If the input buffer is empty, it returns a 1-element buffer containing the operation's identity value.
 pub fn reduction<Op, T>(device: &WgpuDevice, input: &WgpuBuffer<T>) -> Result<WgpuBuffer<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     reduction_with_width::<Op, T>(device, input, BlockWidth::DEFAULT)
 }
@@ -1617,8 +1479,8 @@ pub fn reduction_with_width<Op, T>(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<T>>
 where
-    Op: ReductionWgslOp,
-    T: WgslScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     validate_reduction_width(width)?;
 

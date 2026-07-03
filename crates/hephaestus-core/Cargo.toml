@@ -16,3 +16,8 @@ mnemosyne-memory = []
 bytemuck = { workspace = true }
 thiserror = { workspace = true }
 themis = { workspace = true }
+# leto host-side layout metadata (shape/strides/offset) is ADR-0001's
+# backend-agnostic indexing vocabulary; core hosts the shared layout-based
+# dispatch planning (axis scan) so backends do not each duplicate it. Layout
+# and error types only — no GPU dependency, keeping core GPU-free.
+leto = { path = "../../../leto/crates/leto", default-features = false, features = ["std"] }

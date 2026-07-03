@@ -1,9 +1,8 @@
 //! Batched dispatch for prepared sparse WGPU operations.
 
 use super::{PreparedSpmm, PreparedSpmv};
-use crate::application::wgsl::WgslScalar;
 use bytemuck::Pod;
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{DialectScalar, HephaestusError, Result, Wgsl};
 
 /// A prepared sparse operation that can be recorded into a shared command
 /// encoder.
@@ -42,7 +41,7 @@ impl<T> PreparedSparseDispatch<'_, T> {
 ///
 /// Returns [`HephaestusError::DispatchFailed`] when the batch contains prepared
 /// operations from different WGPU devices.
-pub fn submit_prepared_sparse_batch<T: WgslScalar + Pod>(
+pub fn submit_prepared_sparse_batch<T: DialectScalar<Wgsl> + Pod>(
     operations: &[PreparedSparseDispatch<'_, T>],
 ) -> Result<()> {
     let Some((first, rest)) = operations.split_first() else {

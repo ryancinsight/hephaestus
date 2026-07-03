@@ -40,7 +40,7 @@ use super::region::{download_matrix_region_compact, write_matrix_region_compact,
 #[cfg(feature = "cuda")]
 use hephaestus_core::panel_lu_packed;
 
-use super::validate::validate_square;
+use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -190,9 +190,14 @@ const LU_BLOCK_SIZE: usize = 64;
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
 ///
+/// The operand must be dense C-contiguous at offset 0 (the blocked path
+/// bulk-copies the matrix storage on the device); transposed, offset, or
+/// broadcast views are rejected with a typed error — materialize them
+/// first.
+///
 /// # Errors
 ///
-/// - Non-square matrix.
+/// - Non-square or non-dense (non-C-contiguous / offset / broadcast) operand.
 /// - Non-finite values in the input.
 /// - Singular matrix (exact zero pivot).
 pub fn lu_decompose_blocked(
@@ -202,6 +207,7 @@ pub fn lu_decompose_blocked(
     #[cfg(feature = "cuda")]
     {
         let n = validate_square(&matrix)?;
+        validate_dense_operand("LU", &matrix)?;
         if n == 0 {
             let factors = device.alloc_zeroed::<f32>(0)?;
             let inner = leto_ops::lu_decompose(&leto::ArrayView::<f32, 2>::new(
@@ -221,6 +227,15 @@ pub fn lu_decompose_blocked(
         let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
+        // SAFETY: this device's context is current (`bind` above).
+        // `factors_buf` is a live, freshly allocated `n * n`-element device
+        // allocation, and `matrix.buffer` holds at least `n * n` elements:
+        // the operand is enforced dense C-contiguous at offset 0
+        // (`validate_dense_operand` above), so the layout's validated
+        // storage extent (`validate_square`) equals the `bytes` read here.
+        // The copy is asynchronous on the null stream; both allocations
+        // outlive it because frees route through synchronizing
+        // `cuMemFree`-family calls.
         let res = unsafe {
             cuda_core::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), bytes)
         };
@@ -387,7 +402,7 @@ pub fn lu_decompose_blocked(
 mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::cached_kernel;
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -400,6 +415,9 @@ mod gemm_impl {
         offsets: [u32; 3],
     }
 
+    // SAFETY: `GemmMeta` is `#[repr(C)]` and contains only `u32` fields of
+    // identical size and alignment, so it has no padding bytes, and every
+    // bit pattern is a valid value.
     unsafe impl bytemuck::Pod for GemmMeta {}
 
     fn gemm_shader_source() -> String {
@@ -524,6 +542,8 @@ mod gemm_impl {
         let mut c_ptr = c_buf.raw();
         let mut meta_val = meta;
 
+        // Argument list mirrors `gemm_kernel(const float*, const float*, float*,
+        // GemmMeta)`.
         let mut args: [*mut std::ffi::c_void; 4] = [
             &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
             &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
@@ -531,27 +551,11 @@ mod gemm_impl {
             &mut meta_val as *mut GemmMeta as *mut std::ffi::c_void,
         ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                workgroups_x as u32,
-                workgroups_y as u32,
-                1,
-                16,
-                16,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel GEMM failed with code: {res}"),
-                });
-            }
-        }
-
-        Ok(())
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+            &mut args,
+        )
     }
 }

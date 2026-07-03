@@ -1,93 +1,18 @@
-use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
-use bytemuck::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use bytemuck::Pod;
+use hephaestus_core::{
+    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
+    ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, IdentityToken, OpIdentity,
+    Result,
+};
 use leto::Layout;
 
-/// Zero-sized reduction operation marker selecting the CUDA combine expression.
-pub trait ReductionCudaOp: Copy + Send + Sync + 'static {
-    /// CUDA expression combining `lhs` and `rhs` (e.g. `"lhs + rhs"` or `"min(lhs, rhs)"`).
-    const CUDA_EXPR: &'static str;
-}
+pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
-/// Associates a scalar type and reduction operation with the identity value.
-pub trait ReductionIdentity<Op>: CudaScalar {
-    /// The identity value on the host side.
-    const IDENTITY: Self;
-    /// The CUDA C++ literal for the identity value.
-    const CUDA_IDENTITY: &'static str;
-}
-
-/// Sum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SumOp;
-
-/// Minimum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MinOp;
-
-/// Maximum reduction marker.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MaxOp;
-
-impl ReductionCudaOp for SumOp {
-    const CUDA_EXPR: &'static str = "lhs + rhs";
-}
-
-impl ReductionCudaOp for MinOp {
-    const CUDA_EXPR: &'static str = "min(lhs, rhs)";
-}
-
-impl ReductionCudaOp for MaxOp {
-    const CUDA_EXPR: &'static str = "max(lhs, rhs)";
-}
-
-// ── SumOp Identity implementations ──
-impl ReductionIdentity<SumOp> for f32 {
-    const IDENTITY: Self = 0.0;
-    const CUDA_IDENTITY: &'static str = "0.0f";
-}
-impl ReductionIdentity<SumOp> for u32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<SumOp> for i32 {
-    const IDENTITY: Self = 0;
-    const CUDA_IDENTITY: &'static str = "0";
-}
-
-// ── MinOp Identity implementations ──
-impl ReductionIdentity<MinOp> for f32 {
-    const IDENTITY: Self = f32::MAX;
-    const CUDA_IDENTITY: &'static str = "3.402823466e+38f";
-}
-impl ReductionIdentity<MinOp> for u32 {
-    const IDENTITY: Self = u32::MAX;
-    const CUDA_IDENTITY: &'static str = "4294967295u";
-}
-impl ReductionIdentity<MinOp> for i32 {
-    const IDENTITY: Self = i32::MAX;
-    const CUDA_IDENTITY: &'static str = "2147483647";
-}
-
-// ── MaxOp Identity implementations ──
-impl ReductionIdentity<MaxOp> for f32 {
-    const IDENTITY: Self = f32::MIN;
-    const CUDA_IDENTITY: &'static str = "-3.402823466e+38f";
-}
-impl ReductionIdentity<MaxOp> for u32 {
-    const IDENTITY: Self = u32::MIN;
-    const CUDA_IDENTITY: &'static str = "0u";
-}
-impl ReductionIdentity<MaxOp> for i32 {
-    const IDENTITY: Self = i32::MIN;
-    const CUDA_IDENTITY: &'static str = "-2147483648";
-}
-
-fn shader_source<Op: ReductionCudaOp, T: ReductionIdentity<Op>>(width: BlockWidth) -> String {
+fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(width: BlockWidth) -> String {
     format!(
         r#"
 #define max(a,b) ((a) > (b) ? (a) : (b))
@@ -125,10 +50,10 @@ extern "C" __global__ void reduction_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
         wg = width.get(),
-        identity = T::CUDA_IDENTITY,
-        expr = Op::CUDA_EXPR,
+        identity = T::TOKEN,
+        expr = Op::EXPR,
     )
 }
 
@@ -157,8 +82,8 @@ fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
 /// Run reduction on the CUDA device, returning a 1-element buffer holding the result.
 pub fn reduction<Op, T>(device: &CudaDevice, input: &CudaBuffer<T>) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     reduction_with_width::<Op, T>(device, input, BlockWidth::DEFAULT)
 }
@@ -170,8 +95,8 @@ pub fn reduction_with_width<Op, T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     validate_reduction_width(width)?;
 
@@ -182,6 +107,13 @@ where
     if input.len() == 1 {
         let out = device.alloc_zeroed::<T>(1)?;
         #[cfg(feature = "cuda")]
+        // SAFETY: this device's context is current on this thread
+        // (`alloc_zeroed` above binds it); `input` and `out` are live
+        // one-element device allocations (`input.len() == 1` checked above,
+        // `out` freshly allocated with len 1), so the `size_of::<T>()`-byte
+        // copy stays within both extents. The copy is asynchronous on the
+        // null stream; both allocations outlive it because frees route
+        // through synchronizing `cuMemFree`-family calls.
         unsafe {
             let res =
                 cuda_core::sys::cuMemcpyDtoD_v2(out.raw(), input.raw(), core::mem::size_of::<T>());
@@ -223,45 +155,23 @@ where
                 .raw()
         };
 
-        #[cfg(feature = "cuda")]
-        {
-            let mut src_val = source_ptr;
-            let mut out_val = out_buffer.raw();
-            let mut n_val = current_len as u32;
+        let mut src_val = source_ptr;
+        let mut out_val = out_buffer.raw();
+        let mut n_val = current_len as u32;
 
-            let mut args: [*mut std::ffi::c_void; 3] = [
-                &mut src_val as *mut u64 as *mut std::ffi::c_void,
-                &mut out_val as *mut u64 as *mut std::ffi::c_void,
-                &mut n_val as *mut u32 as *mut std::ffi::c_void,
-            ];
+        // Argument list mirrors `reduction_kernel(const T*, T*, unsigned int)`.
+        let mut args: [*mut std::ffi::c_void; 3] = [
+            &mut src_val as *mut u64 as *mut std::ffi::c_void,
+            &mut out_val as *mut u64 as *mut std::ffi::c_void,
+            &mut n_val as *mut u32 as *mut std::ffi::c_void,
+        ];
 
-            // SAFETY: Buffers are valid, dimensions match.
-            unsafe {
-                let res = cuda_core::sys::cuLaunchKernel(
-                    kernel.func,
-                    grid_size_val,
-                    1,
-                    1,
-                    width.get(),
-                    1,
-                    1,
-                    0,
-                    std::ptr::null_mut(),
-                    args.as_mut_ptr(),
-                    std::ptr::null_mut(),
-                );
-                if res != 0 {
-                    return Err(HephaestusError::DispatchFailed {
-                        message: format!("cuLaunchKernel failed with code: {res}"),
-                    });
-                }
-            }
-        }
-
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (kernel, grid_size_val, source_ptr);
-        }
+        launch_kernel(
+            device,
+            &kernel,
+            LaunchConfig::linear(grid_size_val, width),
+            &mut args,
+        )?;
 
         temp_buffers.push(out_buffer);
         current_len = out_len;
@@ -270,21 +180,6 @@ where
     Ok(temp_buffers
         .pop()
         .expect("invariant: multi-element reduction allocates a final buffer"))
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct AxisReductionMeta {
-    input_shape: [u32; 2],
-    input_strides: [i32; 2],
-    output_strides: [i32; 2],
-    _pre_offsets_pad: [u32; 2],
-    offsets: [u32; 4],
-}
-
-struct AxisReductionDispatch {
-    meta: AxisReductionMeta,
-    grid_size: u32,
 }
 
 fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
@@ -298,18 +193,6 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
-
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
 fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Result<()> {
     if axis_len == 0 {
         return Err(HephaestusError::DispatchFailed {
@@ -319,83 +202,24 @@ fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Res
     Ok(())
 }
 
-fn validate_axis_reduction<T>(
+fn plan_axis_reduction_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
 ) -> Result<Option<AxisReductionDispatch>> {
-    validate_reduction_width(width)?;
-    if axis >= 2 {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("axis {axis} is out of bounds for rank-2 reduction"),
-        });
-    }
-
-    let mut expected_shape = input.layout.shape;
-    expected_shape[axis] = 1;
-    if output.layout.shape != expected_shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "axis reduction output shape mismatch: input {:?}, axis {axis}, out {:?}",
-                input.layout.shape, output.layout.shape
-            ),
-        });
-    }
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output buffer must not alias input buffer".to_string(),
-        });
-    }
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "axis reduction output layout must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
-
-    input
-        .layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    output
-        .layout
-        .validate_storage_len(output.buffer.len())
-        .map_err(map_layout_err)?;
-    let output_len = output.layout.checked_size().map_err(map_layout_err)?;
-    if output_len == 0 {
-        return Ok(None);
-    }
-
-    let grid_size_val = grid_size(output_len, width)?;
-    let meta = AxisReductionMeta {
-        input_shape: [
-            to_u32(input.layout.shape[0], "input rows")?,
-            to_u32(input.layout.shape[1], "input columns")?,
-        ],
-        input_strides: [
-            to_i32(input.layout.strides[0], "input row stride")?,
-            to_i32(input.layout.strides[1], "input column stride")?,
-        ],
-        output_strides: [
-            to_i32(output.layout.strides[0], "output row stride")?,
-            to_i32(output.layout.strides[1], "output column stride")?,
-        ],
-        _pre_offsets_pad: [0; 2],
-        offsets: [
-            to_u32(input.layout.offset, "input offset")?,
-            to_u32(output.layout.offset, "output offset")?,
-            to_u32(axis, "axis")?,
-            to_u32(output_len, "output length")?,
-        ],
-    };
-    Ok(Some(AxisReductionDispatch {
-        meta,
-        grid_size: grid_size_val,
-    }))
+    plan_axis_reduction(
+        input.layout,
+        input.buffer.len(),
+        output.layout,
+        output.buffer.len(),
+        axis,
+        width,
+        input.buffer.aliases(output.buffer),
+    )
 }
 
-fn axis_reduction_shader_source<Op: ReductionCudaOp, T: ReductionIdentity<Op>>() -> String {
+fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -439,13 +263,13 @@ extern "C" __global__ void axis_reduction_kernel(
     output[out_off] = acc;
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        identity = T::CUDA_IDENTITY,
-        expr = Op::CUDA_EXPR,
+        ty = T::TYPE_TOKEN,
+        identity = T::TOKEN,
+        expr = Op::EXPR,
     )
 }
 
-fn mean_axis_shader_source<T: ReductionIdentity<SumOp>>() -> String {
+fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -487,8 +311,8 @@ extern "C" __global__ void mean_axis_kernel(
     output[out_off] = acc / ({ty})axis_len;
 }}
 "#,
-        ty = T::CUDA_TYPE,
-        identity = T::CUDA_IDENTITY,
+        ty = T::TYPE_TOKEN,
+        identity = T::TOKEN,
     )
 }
 
@@ -501,10 +325,10 @@ pub fn reduce_axis_into<Op, T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
-    let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
 
@@ -520,46 +344,23 @@ where
         axis_reduction_shader_source::<Op, T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = dispatch.meta;
-        let mut in_ptr = input.buffer.raw();
-        let mut out_ptr = output.buffer.raw();
+    let mut meta_val = dispatch.meta;
+    let mut in_ptr = input.buffer.raw();
+    let mut out_ptr = output.buffer.raw();
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-            &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `axis_reduction_kernel(AxisReductionMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                dispatch.grid_size,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, dispatch.meta, dispatch.grid_size);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(dispatch.groups, width),
+        &mut args,
+    )
 }
 
 /// Reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
@@ -570,8 +371,8 @@ pub fn reduce_axis<Op, T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    Op: ReductionCudaOp,
-    T: CudaScalar + Pod + ReductionIdentity<Op>,
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
     if axis >= 2 {
         return Err(HephaestusError::DispatchFailed {
@@ -605,10 +406,10 @@ pub fn mean_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
-    let Some(dispatch) = validate_axis_reduction(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
 
@@ -623,46 +424,23 @@ where
         mean_axis_shader_source::<T>()
     })?;
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut meta_val = dispatch.meta;
-        let mut in_ptr = input.buffer.raw();
-        let mut out_ptr = output.buffer.raw();
+    let mut meta_val = dispatch.meta;
+    let mut in_ptr = input.buffer.raw();
+    let mut out_ptr = output.buffer.raw();
 
-        let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-            &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `mean_axis_kernel(AxisReductionMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                dispatch.grid_size,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, dispatch.meta, dispatch.grid_size);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(dispatch.groups, width),
+        &mut args,
+    )
 }
 
 /// Mean-reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
@@ -673,7 +451,7 @@ pub fn mean_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
     let mut output_shape = input.layout.shape;
@@ -704,7 +482,7 @@ pub fn sum_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reduce_axis_into::<SumOp, T>(device, input, axis, output, width)
 }
@@ -718,7 +496,7 @@ pub fn sum_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<SumOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
 }
@@ -733,7 +511,7 @@ pub fn min_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis_into::<MinOp, T>(device, input, axis, output, width)
@@ -748,7 +526,7 @@ pub fn min_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MinOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MinOp> + IdentityToken<MinOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "min_axis", axis)?;
     reduce_axis::<MinOp, T>(device, input, axis, width)
@@ -764,7 +542,7 @@ pub fn max_axis_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis_into::<MaxOp, T>(device, input, axis, output, width)
@@ -779,7 +557,7 @@ pub fn max_axis<T>(
     width: BlockWidth,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod + ReductionIdentity<MaxOp>,
+    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)

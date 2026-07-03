@@ -1,15 +1,16 @@
 //! GPU-resident sparse–dense matrix product `C = A · B` on CUDA CSR buffers.
 
 use super::GpuCsrMatrix;
-use crate::application::cuda_type::CudaScalar;
 use crate::application::linalg::AsGpuMatrixOperand;
-use crate::application::pipeline::{cached_kernel, grid_size};
+use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -35,7 +36,7 @@ fn to_i32(value: isize, what: &str) -> Result<i32> {
     })
 }
 
-fn spmm_shader_source<T: CudaScalar>() -> String {
+fn spmm_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 struct SpmmMeta {{
@@ -74,12 +75,16 @@ extern "C" __global__ void spmm_kernel(
     c[flat] = acc;
 }}
 "#,
-        ty = T::CUDA_TYPE
+        ty = T::TYPE_TOKEN
     )
 }
 
 /// Compute `C = A · B` into a pre-allocated output buffer `c`.
-pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmm_into<
+    'a,
+    T: DialectScalar<CudaC> + leto_ops::Scalar + Pod,
+    B: AsGpuMatrixOperand<'a, T>,
+>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     b: &B,
@@ -130,53 +135,30 @@ pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOpera
 
     let kernel = cached_kernel(device, key, "spmm_kernel", || spmm_shader_source::<T>())?;
 
-    #[cfg(feature = "cuda")]
-    {
-        device.bind()?;
-        let mut meta_val = meta;
-        let mut values_ptr = a.values().raw();
-        let mut col_indices_ptr = a.col_indices().raw();
-        let mut row_ptr_ptr = a.row_ptr().raw();
-        let mut b_ptr = b_op.buffer.raw();
-        let mut c_ptr = c.raw();
+    let mut meta_val = meta;
+    let mut values_ptr = a.values().raw();
+    let mut col_indices_ptr = a.col_indices().raw();
+    let mut row_ptr_ptr = a.row_ptr().raw();
+    let mut b_ptr = b_op.buffer.raw();
+    let mut c_ptr = c.raw();
 
-        let mut args: [*mut std::ffi::c_void; 6] = [
-            &mut meta_val as *mut SpmmMeta as *mut std::ffi::c_void,
-            &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `spmm_kernel(SpmmMeta, const T*, const unsigned int*,
+    // const unsigned int*, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 6] = [
+        &mut meta_val as *mut SpmmMeta as *mut std::ffi::c_void,
+        &mut values_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut col_indices_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut row_ptr_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
 
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                grid,
-                1,
-                1,
-                width.get(),
-                1,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, grid, width);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::linear(grid, width),
+        &mut args,
+    )
 }
 
 /// Compute multiple sparse matrix-vector products into a pre-allocated output
@@ -186,7 +168,11 @@ pub fn spmm_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOpera
 /// are the corresponding `A · x_j` outputs. CUDA uses the same sparse-dense
 /// kernel as [`spmm_into`] so multi-RHS SpMV amortizes launch overhead without a
 /// duplicate kernel.
-pub fn spmv_many_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmv_many_into<
+    'a,
+    T: DialectScalar<CudaC> + leto_ops::Scalar + Pod,
+    B: AsGpuMatrixOperand<'a, T>,
+>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     x_batch: &B,
@@ -196,7 +182,7 @@ pub fn spmv_many_into<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrix
 }
 
 /// Compute `C = A · B`, allocating the result buffer.
-pub fn spmm<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmm<'a, T: DialectScalar<CudaC> + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     b: &B,
@@ -211,7 +197,11 @@ pub fn spmm<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a
 }
 
 /// Compute multiple sparse matrix-vector products, allocating the output batch.
-pub fn spmv_many<'a, T: CudaScalar + leto_ops::Scalar + Pod, B: AsGpuMatrixOperand<'a, T>>(
+pub fn spmv_many<
+    'a,
+    T: DialectScalar<CudaC> + leto_ops::Scalar + Pod,
+    B: AsGpuMatrixOperand<'a, T>,
+>(
     device: &CudaDevice,
     a: &GpuCsrMatrix<T>,
     x_batch: &B,

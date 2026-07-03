@@ -18,7 +18,9 @@ pub(crate) static CUDA_UNIFIED_ALLOCATOR: MnemosyneAllocator<StandardPolicy, Cud
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    validate_buffer_size, validate_slice_alignment, ComputeDevice, HephaestusError, Result,
+    validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
+    ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError,
+    Result,
 };
 
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
@@ -30,23 +32,27 @@ use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 /// driver: the CUDA driver is dynamically loaded, so constructing this never
 /// requires a CUDA toolkit at build time, only `nvcuda`/`libcuda` at runtime.
 #[derive(Clone)]
-#[allow(clippy::type_complexity)]
 pub struct CudaDevice {
     device: Arc<cuda_core::Device>,
+    limits: DeviceLimits,
+    features: CudaDeviceFeatures,
+    /// Compiled-kernel cache. Slots hold only successful compilations;
+    /// failures leave the `OnceLock` empty so the key can retry (see
+    /// [`crate::application::pipeline::cached_kernel`]).
     pub(crate) pipeline_cache: Arc<
         moirai_sync::sync::ConcurrentHashMap<
             String,
-            Arc<
-                std::sync::OnceLock<
-                    std::result::Result<
-                        Arc<crate::infrastructure::compiler::SafeCachedKernel>,
-                        String,
-                    >,
-                >,
-            >,
+            Arc<std::sync::OnceLock<Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
         >,
     >,
     topology: Option<Arc<themis::GpuTopology>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CudaDeviceFeatures {
+    shader_f64: bool,
+    mappable_primary_buffers: bool,
+    push_constants: bool,
 }
 
 impl core::fmt::Debug for CudaDevice {
@@ -62,6 +68,18 @@ impl CudaDevice {
     /// device is present, rather than fabricating a device. The acquired
     /// device is bound to the calling thread.
     pub fn try_default() -> Result<Self> {
+        let device_ordinal = Self::default_device_ordinal()?;
+        Self::try_with_ordinal(device_ordinal)
+    }
+
+    /// Acquire a CUDA device by ordinal.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::AdapterUnavailable`] when the CUDA driver or
+    /// requested ordinal is unavailable. Returns
+    /// [`HephaestusError::DeviceUnavailable`] when the context cannot be bound.
+    pub fn try_with_ordinal(device_ordinal: usize) -> Result<Self> {
         if !mnemosyne_backend::is_cuda_available() {
             return Err(HephaestusError::AdapterUnavailable {
                 message: "CUDA unified memory driver not available or initialization failed"
@@ -69,30 +87,10 @@ impl CudaDevice {
             });
         }
 
-        let mut device_ordinal = 0;
-        if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
-            if let Ok(thread_id) = thread_id_str.parse::<i32>() {
-                static STAGGERED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
-                    && STAGGERED
-                        .compare_exchange(
-                            false,
-                            true,
-                            std::sync::atomic::Ordering::AcqRel,
-                            std::sync::atomic::Ordering::Acquire,
-                        )
-                        .is_ok()
-                {
-                    std::thread::sleep(std::time::Duration::from_millis(thread_id as u64 * 100));
-                }
-
-                let mut count: core::ffi::c_int = 0;
-                if unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
-                    device_ordinal = thread_id % count;
-                }
-            }
-        }
+        let device_ordinal =
+            i32::try_from(device_ordinal).map_err(|_| HephaestusError::AdapterUnavailable {
+                message: format!("CUDA device ordinal {device_ordinal} exceeds i32 range"),
+            })?;
 
         let device = cuda_async::device_context::with_device(device_ordinal as usize, |device| {
             device.clone()
@@ -105,9 +103,13 @@ impl CudaDevice {
             .map_err(|e| HephaestusError::DeviceUnavailable {
                 message: format!("bind device {device_ordinal} to thread: {e:?}"),
             })?;
+        let limits = query_device_limits(&device)?;
+        let features = query_device_features(&device)?;
         let topology = Some(Arc::new(query_topology(&device)?));
         let dev = Self {
             device,
+            limits,
+            features,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             topology,
         };
@@ -137,6 +139,120 @@ impl CudaDevice {
         Ok(dev)
     }
 
+    fn default_device_ordinal() -> Result<usize> {
+        let mut device_ordinal = 0usize;
+        if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
+            if let Ok(thread_id) = thread_id_str.parse::<i32>() {
+                static STAGGERED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
+                    && STAGGERED
+                        .compare_exchange(
+                            false,
+                            true,
+                            std::sync::atomic::Ordering::AcqRel,
+                            std::sync::atomic::Ordering::Acquire,
+                        )
+                        .is_ok()
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(thread_id as u64 * 100));
+                }
+
+                let mut count: core::ffi::c_int = 0;
+                // SAFETY: `count` is a valid out-pointer for one `c_int`; the
+                // CUDA driver has been initialized by `is_cuda_available`.
+                if unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
+                    device_ordinal = usize::try_from(thread_id % count).unwrap_or(0);
+                }
+            }
+        }
+
+        Ok(device_ordinal)
+    }
+
+    fn device_count() -> Result<usize> {
+        if !mnemosyne_backend::is_cuda_available() {
+            return Err(HephaestusError::AdapterUnavailable {
+                message: "CUDA unified memory driver not available or initialization failed"
+                    .to_string(),
+            });
+        }
+        let mut count: core::ffi::c_int = 0;
+        // SAFETY: `count` is a valid out-pointer for one `c_int`; the CUDA
+        // driver has been initialized by `is_cuda_available`.
+        let status = unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) };
+        if status != 0 {
+            return Err(HephaestusError::AdapterUnavailable {
+                message: format!("CUDA device count query failed with status {status}"),
+            });
+        }
+        usize::try_from(count).map_err(|_| HephaestusError::AdapterUnavailable {
+            message: format!("CUDA device count {count} is negative"),
+        })
+    }
+
+    fn require_limits(actual: DeviceLimits, required: DeviceLimits) -> Result<()> {
+        let comparable = [
+            (
+                "max_buffer_size",
+                actual.max_buffer_size,
+                required.max_buffer_size,
+            ),
+            (
+                "max_compute_workgroup_size_x",
+                u64::from(actual.max_compute_workgroup_size_x),
+                u64::from(required.max_compute_workgroup_size_x),
+            ),
+            (
+                "max_compute_workgroup_size_y",
+                u64::from(actual.max_compute_workgroup_size_y),
+                u64::from(required.max_compute_workgroup_size_y),
+            ),
+            (
+                "max_compute_workgroup_size_z",
+                u64::from(actual.max_compute_workgroup_size_z),
+                u64::from(required.max_compute_workgroup_size_z),
+            ),
+            (
+                "max_compute_invocations_per_workgroup",
+                u64::from(actual.max_compute_invocations_per_workgroup),
+                u64::from(required.max_compute_invocations_per_workgroup),
+            ),
+            (
+                "max_compute_workgroup_storage_size",
+                u64::from(actual.max_compute_workgroup_storage_size),
+                u64::from(required.max_compute_workgroup_storage_size),
+            ),
+            (
+                "max_push_constant_size",
+                u64::from(actual.max_push_constant_size),
+                u64::from(required.max_push_constant_size),
+            ),
+        ];
+        for (name, available, needed) in comparable {
+            if available < needed {
+                return Err(HephaestusError::DeviceUnavailable {
+                    message: format!(
+                        "CUDA device limit {name} {available} is below required {needed}"
+                    ),
+                });
+            }
+        }
+        if let (Some(available), Some(needed)) = (
+            actual.max_storage_buffers_per_shader_stage,
+            required.max_storage_buffers_per_shader_stage,
+        ) {
+            if available < needed {
+                return Err(HephaestusError::DeviceUnavailable {
+                    message: format!(
+                        "CUDA shader-stage storage-buffer limit {available} is below required {needed}"
+                    ),
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// The device topology snapshot captured at acquisition, when available.
     #[must_use]
     #[inline]
@@ -144,11 +260,18 @@ impl CudaDevice {
         self.topology.as_deref()
     }
 
+    /// The underlying cutile-rs device handle (module lifetime management).
+    #[inline]
+    pub(crate) fn cu_device(&self) -> &Arc<cuda_core::Device> {
+        &self.device
+    }
+
     /// Bind the device context to the current thread before a driver call.
     ///
-    /// Transfers and allocations execute against the thread's current context;
-    /// binding makes this device's context current (CUDA contexts are
-    /// thread-affine), so calls from any thread target the right device.
+    /// Transfers, allocations, module loads, and kernel launches execute
+    /// against the thread's current context; binding makes this device's
+    /// context current (CUDA contexts are thread-affine), so calls from any
+    /// thread target the right device.
     pub fn bind(&self) -> Result<()> {
         self.device
             .bind_to_thread()
@@ -167,8 +290,14 @@ impl CudaDevice {
             })?;
 
         let ptr_val = match tier {
+            // SAFETY: `layout` is a valid `Layout` (constructed above) with
+            // non-zero size — both callers return an empty buffer before
+            // reaching this point when `len == 0` — satisfying the
+            // `GlobalAlloc::alloc` contract; a null return is handled below.
             themis::MemoryTier::HostPinned => unsafe { CUDA_HOST_PINNED_ALLOCATOR.alloc(layout) },
+            // SAFETY: as above.
             themis::MemoryTier::Dram => unsafe { CUDA_UNIFIED_ALLOCATOR.alloc(layout) },
+            // SAFETY: as above.
             _ => unsafe { CUDA_DEVICE_ALLOCATOR.alloc(layout) },
         };
 
@@ -275,6 +404,111 @@ impl CudaDevice {
     }
 }
 
+fn device_attribute(
+    device: &cuda_core::Device,
+    attribute: cuda_core::sys::CUdevice_attribute,
+    name: &str,
+) -> Result<i32> {
+    let mut value: core::ffi::c_int = 0;
+    // SAFETY: `device.cu_device()` is a valid `CUdevice` handle returned by
+    // cuda_core for an acquired CUDA device; `value` is a valid out-pointer for
+    // one `c_int`.
+    let result =
+        unsafe { cuda_core::sys::cuDeviceGetAttribute(&mut value, attribute, device.cu_device()) };
+    if result != 0 {
+        return Err(HephaestusError::DeviceUnavailable {
+            message: format!("cuDeviceGetAttribute({name}) -> {result}"),
+        });
+    }
+    Ok(value)
+}
+
+fn current_memory_info() -> Result<(usize, usize)> {
+    let mut free_bytes: usize = 0;
+    let mut total_bytes: usize = 0;
+    // SAFETY: the CUDA context is current for the calling thread at each call
+    // site; both pointers address one writable `usize`.
+    let result = unsafe { cuda_core::sys::cuMemGetInfo_v2(&mut free_bytes, &mut total_bytes) };
+    if result != 0 {
+        return Err(HephaestusError::DeviceUnavailable {
+            message: format!("cuMemGetInfo_v2 -> {result}"),
+        });
+    }
+    Ok((free_bytes, total_bytes))
+}
+
+fn nonnegative_u32(value: i32) -> u32 {
+    u32::try_from(value).unwrap_or(0)
+}
+
+fn query_device_limits(device: &cuda_core::Device) -> Result<DeviceLimits> {
+    use cuda_core::sys;
+
+    let (free_bytes, _) = current_memory_info()?;
+    Ok(DeviceLimits {
+        max_buffer_size: free_bytes as u64,
+        max_compute_workgroup_size_x: nonnegative_u32(device_attribute(
+            device,
+            sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
+            "max_block_dim_x",
+        )?),
+        max_compute_workgroup_size_y: nonnegative_u32(device_attribute(
+            device,
+            sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
+            "max_block_dim_y",
+        )?),
+        max_compute_workgroup_size_z: nonnegative_u32(device_attribute(
+            device,
+            sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
+            "max_block_dim_z",
+        )?),
+        max_compute_invocations_per_workgroup: nonnegative_u32(device_attribute(
+            device,
+            sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
+            "max_threads_per_block",
+        )?),
+        max_compute_workgroup_storage_size: nonnegative_u32(device_attribute(
+            device,
+            sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
+            "max_shared_memory_per_block",
+        )?),
+        max_storage_buffers_per_shader_stage: None,
+        max_push_constant_size: 0,
+    })
+}
+
+fn query_device_features(device: &cuda_core::Device) -> Result<CudaDeviceFeatures> {
+    use cuda_core::sys;
+
+    let major = device_attribute(
+        device,
+        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+        "compute_capability_major",
+    )?;
+    let minor = device_attribute(
+        device,
+        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+        "compute_capability_minor",
+    )?;
+    let mappable = device_attribute(
+        device,
+        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
+        "can_map_host_memory",
+    )? != 0;
+    let unified_addressing = device_attribute(
+        device,
+        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
+        "unified_addressing",
+    )? != 0;
+    let compute_capability = major * 10 + minor;
+
+    Ok(CudaDeviceFeatures {
+        shader_f64: compute_capability >= 13,
+        mappable_primary_buffers: mappable || unified_addressing,
+        push_constants: true,
+    })
+}
+
 /// Query real device properties for the themis topology snapshot.
 ///
 /// hephaestus is the stack's provider of GPU device properties into themis
@@ -286,43 +520,33 @@ impl CudaDevice {
 fn query_topology(device: &cuda_core::Device) -> Result<themis::GpuTopology> {
     use cuda_core::sys;
 
-    let cu = device.cu_device();
-    let attr = |a: sys::CUdevice_attribute, what: &str| -> Result<i32> {
-        let mut value: core::ffi::c_int = 0;
-        // SAFETY: `cu` is a valid `CUdevice` handle returned by cuda_core for a
-        // device acquired and bound above; `value` is a valid out-pointer for
-        // one `c_int`.
-        let res = unsafe { sys::cuDeviceGetAttribute(&mut value, a, cu) };
-        if res != 0 {
-            return Err(HephaestusError::DeviceUnavailable {
-                message: format!("cuDeviceGetAttribute({what}) -> {res}"),
-            });
-        }
-        Ok(value)
-    };
-    let nonneg = |v: i32| u32::try_from(v).unwrap_or(0);
-
-    let compute_units = nonneg(attr(
+    let compute_units = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
         "multiprocessor_count",
     )?);
-    let warp_width = nonneg(attr(
+    let warp_width = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_WARP_SIZE,
         "warp_size",
     )?);
-    let max_threads_per_unit = nonneg(attr(
+    let max_threads_per_unit = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
         "max_threads_per_multiprocessor",
     )?);
-    let registers_per_unit = nonneg(attr(
+    let registers_per_unit = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR,
         "max_registers_per_multiprocessor",
     )?);
-    let shared_mem_per_unit_bytes = nonneg(attr(
+    let shared_mem_per_unit_bytes = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
         "max_shared_memory_per_multiprocessor",
     )?) as usize;
-    let l2_bytes = nonneg(attr(
+    let l2_bytes = nonnegative_u32(device_attribute(
+        device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE,
         "l2_cache_size",
     )?) as usize;
@@ -332,16 +556,7 @@ fn query_topology(device: &cuda_core::Device) -> Result<themis::GpuTopology> {
     // dynamic symbol is unresolved in this cutile-rs binding and faults when
     // called, whereas the memory-family entry points (e.g. `cuMemAlloc_v2`)
     // resolve correctly. The context was made current by `bind_to_thread`.
-    let mut free_bytes: usize = 0;
-    let mut total_bytes: usize = 0;
-    // SAFETY: the device context is current (bound above); `free_bytes` and
-    // `total_bytes` are valid out-pointers for one `usize` each.
-    let res = unsafe { sys::cuMemGetInfo_v2(&mut free_bytes, &mut total_bytes) };
-    if res != 0 {
-        return Err(HephaestusError::DeviceUnavailable {
-            message: format!("cuMemGetInfo_v2 -> {res}"),
-        });
-    }
+    let (_, total_bytes) = current_memory_info()?;
 
     Ok(themis::GpuTopology::from_provider(
         themis::GpuDeviceProperties {
@@ -355,6 +570,54 @@ fn query_topology(device: &cuda_core::Device) -> Result<themis::GpuTopology> {
             memory_bytes: total_bytes as u64,
         },
     ))
+}
+
+impl ComputeDeviceCapabilities for CudaDevice {
+    #[inline]
+    fn device_limits(&self) -> DeviceLimits {
+        self.limits
+    }
+
+    #[inline]
+    fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
+        match feature {
+            DeviceFeature::TimestampQuery => false,
+            DeviceFeature::ShaderF64 => self.features.shader_f64,
+            DeviceFeature::ShaderF16 => false,
+            DeviceFeature::MappablePrimaryBuffers => self.features.mappable_primary_buffers,
+            DeviceFeature::PushConstants => self.features.push_constants,
+        }
+    }
+}
+
+impl ComputeDeviceAcquisition for CudaDevice {
+    fn try_acquire_device(
+        _label: &str,
+        _device_preference: DevicePreference,
+        _optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        let device = Self::try_default()?;
+        Self::require_limits(device.device_limits(), required_limits)?;
+        Ok(device)
+    }
+
+    fn try_acquire_devices(
+        _label_prefix: &str,
+        max_devices: usize,
+        _device_preference: DevicePreference,
+        _optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Vec<Self>> {
+        let count = Self::device_count()?;
+        let mut devices = Vec::with_capacity(count.min(max_devices));
+        for ordinal in 0..count.min(max_devices) {
+            let device = Self::try_with_ordinal(ordinal)?;
+            Self::require_limits(device.device_limits(), required_limits)?;
+            devices.push(device);
+        }
+        Ok(devices)
+    }
 }
 
 impl ComputeDevice for CudaDevice {
@@ -473,6 +736,28 @@ impl ComputeDevice for CudaDevice {
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("write_buffer cuMemcpyHtoD_v2({bytes} bytes) -> {res}"),
+            });
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn write_sub_buffer<T: Pod>(
+        &self,
+        buffer: &Self::Buffer<T>,
+        offset: usize,
+        host: &[T],
+    ) -> Result<()> {
+        CudaDevice::write_sub_buffer(self, buffer, offset, host)
+    }
+
+    fn synchronize(&self) -> Result<()> {
+        self.bind()?;
+        // SAFETY: the CUDA context is current for this thread after `bind`.
+        let res = unsafe { cuda_core::sys::cuCtxSynchronize() };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("cuCtxSynchronize -> {res}"),
             });
         }
         Ok(())

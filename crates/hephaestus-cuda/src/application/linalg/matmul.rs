@@ -1,24 +1,23 @@
 //! Matrix multiplication on the CUDA device.
 //!
 //! A bespoke 16×16 shared-memory tiled kernel, authored as CUDA C generic over
-//! the scalar (`T::CUDA_TYPE` substitutes the device type token) and launched
+//! the scalar (`T::TYPE_TOKEN` substitutes the device type token) and launched
 //! directly through `cuLaunchKernel`. [`batched_matmul`] iterates the batch
 //! dimension over [`matmul`], honoring batch broadcasting.
 
 use bytemuck::Pod;
 use core::marker::PhantomData;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 use leto::Layout;
 
 use super::{map_layout, map_layout_err};
-use crate::application::cuda_type::CudaScalar;
-use crate::application::pipeline::cached_kernel;
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
 
 struct MatmulKernel<T>(PhantomData<T>);
 
-fn matmul_shader_source<T: CudaScalar>() -> String {
+fn matmul_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 struct MatrixLayout {{
@@ -92,7 +91,7 @@ extern "C" __global__ void matmul_kernel(
     }}
 }}
 "#,
-        ty = T::CUDA_TYPE,
+        ty = T::TYPE_TOKEN,
     )
 }
 
@@ -104,7 +103,7 @@ pub fn matmul_into<T>(
     out: StridedOperand<'_, T, 2>,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [rows, lhs_shared] = lhs.layout.shape;
     let [rhs_shared, cols] = rhs.layout.shape;
@@ -160,53 +159,30 @@ where
     let workgroups_x = cols.div_ceil(16);
     let workgroups_y = rows.div_ceil(16);
 
-    #[cfg(feature = "cuda")]
-    {
-        let mut a_ptr = lhs.buffer.raw();
-        let mut b_ptr = rhs.buffer.raw();
-        let mut c_ptr = out.buffer.raw();
-        let mut a_meta_val = a_meta;
-        let mut b_meta_val = b_meta;
-        let mut c_meta_val = c_meta;
+    let mut a_ptr = lhs.buffer.raw();
+    let mut b_ptr = rhs.buffer.raw();
+    let mut c_ptr = out.buffer.raw();
+    let mut a_meta_val = a_meta;
+    let mut b_meta_val = b_meta;
+    let mut c_meta_val = c_meta;
 
-        let mut args: [*mut std::ffi::c_void; 6] = [
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-            &mut c_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
-        ];
+    // Argument list mirrors `matmul_kernel(const T*, const T*, T*, MatrixLayout,
+    // MatrixLayout, MatrixLayout)`.
+    let mut args: [*mut std::ffi::c_void; 6] = [
+        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut a_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+        &mut b_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+        &mut c_meta_val as *mut super::GpuMatrixLayout as *mut std::ffi::c_void,
+    ];
 
-        // SAFETY: Buffers are valid, dimensions match.
-        unsafe {
-            let res = cuda_core::sys::cuLaunchKernel(
-                kernel.func,
-                workgroups_x as u32,
-                workgroups_y as u32,
-                1,
-                16,
-                16,
-                1,
-                0,
-                std::ptr::null_mut(),
-                args.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuLaunchKernel failed with code: {res}"),
-                });
-            }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (kernel, workgroups_x, workgroups_y, a_meta, b_meta, c_meta);
-    }
-
-    Ok(())
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+        &mut args,
+    )
 }
 
 /// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` on the CUDA device.
@@ -217,7 +193,7 @@ pub fn batched_matmul_into<T>(
     out: StridedOperand<'_, T, 3>,
 ) -> Result<()>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [lhs_batch, m, lhs_k] = lhs.layout.shape;
     let [rhs_batch, rhs_k, n] = rhs.layout.shape;
@@ -302,7 +278,7 @@ pub fn matmul<T>(
     rhs: StridedOperand<'_, T, 2>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [rows, lhs_shared] = lhs.layout.shape;
     let [rhs_shared, cols] = rhs.layout.shape;
@@ -338,7 +314,7 @@ pub fn batched_matmul<T>(
     rhs: StridedOperand<'_, T, 3>,
 ) -> Result<CudaBuffer<T>>
 where
-    T: CudaScalar + Pod,
+    T: DialectScalar<CudaC> + Pod,
 {
     let [lhs_batch, m, lhs_k] = lhs.layout.shape;
     let [rhs_batch, rhs_k, n] = rhs.layout.shape;
