@@ -559,6 +559,22 @@ host before uploading device buffers.
 
 ## Environment / Toolchain Limitations
 
+- [patch] `cargo-semver-checks` cannot verify `hephaestus-wgpu`/`hephaestus-cuda`
+  against a git baseline: its isolated `cargo update` cannot resolve the
+  `themis ^0.8` git dependency through the workspace `[patch]` table
+  (`hephaestus-core` verifies clean — 196/196 checks vs master). 0.11.0's
+  compatibility classification therefore rests on the CHANGELOG
+  Breaking/Migration section and the pre-1.0 breaking-minor policy, not on a
+  semver-checks run. Re-verify when the stack publishes to a registry or
+  semver-checks grows patch-table support. Evidence tier: tool output
+  (2026-07-02).
+- [patch] Nine CUDA tests abort deterministically with OS 0xc0000006
+  (STATUS_IN_PAGE_ERROR) on this machine's real hardware — first
+  real-hardware run of the suite; A/B verified pre-existing on unmodified
+  baseline; all on the managed-memory pathway (KS-8; suspect in-band
+  host-written allocator metadata on `cuMemAllocManaged` pages, audit CU-P7).
+  81-91/90-100 remaining tests pass on hardware across runs. Blocks the CUDA
+  full-green claim until the mnemosyne device-tier fix lands.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification is
   still required on CUDA hardware/toolchain before claiming device-execution

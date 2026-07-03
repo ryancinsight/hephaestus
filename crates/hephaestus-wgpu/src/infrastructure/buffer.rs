@@ -45,9 +45,10 @@ impl Drop for StagingPointer {
 /// # Cloning
 ///
 /// `Clone` is a GPU handle clone (similar to cloning an `Arc`): both the
-/// original and the clone refer to the **same** device allocation. Use
-/// [`aliases`](WgpuBuffer::aliases) to detect aliased pairs before
-/// dispatching kernels with output aliasing.
+/// original and the clone refer to the **same** device allocation. The
+/// crate-internal `aliases` check detects aliased pairs before dispatching
+/// kernels with output aliasing; `_into` entry points reject aliased
+/// outputs with a typed error.
 #[derive(Clone, Debug)]
 pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,

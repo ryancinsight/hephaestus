@@ -82,7 +82,7 @@ impl<K> Clone for CudaPrepared<K> {
 /// CUDA launches and driver copies are issued to the legacy default stream. The
 /// stream ordering contract is therefore enforced by CUDA's default-stream
 /// sequencing: operations issued by one `CudaCommandStream` execute in call
-/// order, while completion is observed through [`CudaDevice::synchronize`].
+/// order, while completion is observed through [`ComputeDevice::synchronize`](hephaestus_core::ComputeDevice::synchronize).
 pub struct CudaCommandStream<'d> {
     device: &'d CudaDevice,
 }

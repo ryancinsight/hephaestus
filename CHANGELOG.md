@@ -2,7 +2,67 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
-## Unreleased
+## [0.11.0] - 2026-07-02
+
+ADR-0004 kernel-seam release (atlas `docs/adr/0004-hephaestus-kernel-seam.md`;
+audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`). Pre-1.0
+breaking minor per the versioning policy.
+
+### Breaking
+
+- Per-backend shader-op and scalar traits are removed: `WgslScalar`,
+  `CudaScalar`, `UnaryWgslOp`/`UnaryCudaOp`, `BinaryWgslOp`/`BinaryCudaOp`,
+  `ReductionWgslOp`/`ReductionCudaOp`, `ScanWgslOp`/`ScanCudaOp`,
+  `ReductionIdentity`, `ScanIdentity`. One dialect-parameterized vocabulary
+  in `hephaestus-core` replaces them.
+- `ComputeDevice` gained required methods (`synchronize`, capability
+  surface); external implementors must add them.
+
+### Migration
+
+- Bounds: `T: WgslScalar` → `T: DialectScalar<Wgsl>`; `T: CudaScalar` →
+  `T: DialectScalar<CudaC>`; `Op: UnaryWgslOp`/`UnaryCudaOp` →
+  `Op: UnaryExpr<Wgsl>`/`UnaryExpr<CudaC>` (same for Binary); reduction/scan
+  ops bind `CombineExpr<L>`, identities bind `OpIdentity<Op> +
+  IdentityToken<Op, L>`.
+- Consts: `WGSL_TYPE`/`CUDA_TYPE` → `TYPE_TOKEN`; `WGSL_EXPR`/`CUDA_EXPR` →
+  `EXPR`; `WGSL_IDENTITY`/`CUDA_IDENTITY` → `TOKEN` (literals unchanged).
+- Op marker ZST import paths are unchanged (re-exported from the same
+  backend modules); CUDA gains `ExpNegOp`.
+- Consumer-authored kernels: implement `KernelInterface` +
+  `KernelSource<L>` and dispatch via `KernelDevice::prepare`/`dispatch` or
+  a `CommandStream` — see helios `GpuAttenuationMapper` for the canonical
+  consumer example.
+
+### Fixed
+
+- `hephaestus-cuda` [patch]: kernel launches and module loads now bind the
+  device context first (single `launch_kernel` SSOT) — launches from
+  non-acquiring threads previously ran against the wrong or no CUDA
+  context. Failed NVRTC compiles are no longer cached (transient driver
+  failures no longer poison a kernel key); `SafeCachedKernel::drop` binds
+  the owning context before `cuModuleUnload`; NVRTC log/PTX/destroy return
+  codes are checked; stub-mode launch paths surface a typed
+  `AdapterUnavailable` instead of silently succeeding.
+- `hephaestus-wgpu` [patch]: `HostPinned` placement is rejected with a
+  typed error on any device other than the registered staging device
+  (mapped buffers belong to the creating `wgpu::Device`); uniform pool
+  count raised 8→32 (2/shard starved three-uniform ops into perpetual
+  reallocation); staging pool byte ceiling raised 64→512 MiB so volumetric
+  readbacks pool; `prepared_axis_reduction` no longer leaks its pooled
+  uniform; unary/binary storage-kernel dispatch uses pooled uniforms;
+  `pinv`/`matexp` docs state their host-delegated contract.
+
+### Performance
+
+- `hephaestus-wgpu`/`hephaestus-cuda` [patch]: axis scan rewritten from
+  O(N·L) to O(N) (one thread per scan line, combine order preserved —
+  bitwise-identical results). Bench: 512x4096 f32 axis-1 cumsum
+  6.07 ms → 2.29 ms (2.65x). Follow-up KS-5b files the tiled
+  shared-memory variant with its derived reordering tolerance.
+- `hephaestus-wgpu` [patch]: `dot`/`norm_l2`/`norm_max` fused into the
+  map-reduction first pass (temp-buffer paths deleted; one less N-element
+  allocation, 2N·4 B less bandwidth, one less dispatch per call).
 
 ### Changed
 

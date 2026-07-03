@@ -1,5 +1,36 @@
 # Checklist — hephaestus
 
+Sprint target: 0.11.0 (ADR-0004 kernel-seam release). Phase: Closure.
+
+2026-07-02 (ADR-0004 kernel-seam programme, claude-seam session, branch
+arch/kernel-seam). Delivered this session: [KS-1] core dialect + op
+vocabulary; [KS-2] authored-kernel seam (KernelInterface/KernelSource/
+KernelDevice/CommandStream/Binding); [KS-3] both backends consume the core
+vocabulary (per-backend trait pairs and ZSTs deleted, CUDA templates on
+canonical lhs/rhs, net −800 lines); [KS-4] KernelDevice/CommandStream impls
+both backends incl. grouped variant (concurrent kwavers stream) + device
+capabilities; [KS-6] python monolith split into 12 leaf modules,
+split_packed_lu evicted to core; CUDA correctness batch (bind-per-launch
+SSOT, success-only compile cache, NVRTC codes, context-aware unload, honest
+stub launches); wgpu safety/memory batch (HostPinned staging-device gate,
+pool budgets, uniform leak, SAFETY pass); O(N) axis scan both backends
+(2.65x bench); wgpu dot/norm_l2/norm_max fusion; CUDA SAFETY closure;
+version 0.11.0 + CHANGELOG with Breaking/Migration. External acceptance:
+helios GpuAttenuationMapper authored over the seam with zero substrate
+changes (atlas repos/helios, 9/9 differential tests).
+
+Next increment: [KS-5] hoist per-family host orchestration into core
+generic over the seam (scan first — its host layers are now the only
+remaining duplication), then [KS-5b] tiled scan with derived tolerance,
+then KS-7 remainder (CUDA streams + pinned staging, typed cache keys,
+rank/det, encoder batching) with criterion baselines.
+
+Residual risk: [KS-8] nine deterministic 0xc0000006 aborts on this
+machine's CUDA hardware (managed-memory pathway, pre-existing, A/B
+verified) — blocks the CUDA full-green claim; fix direction is a real
+cuMemAlloc device tier in mnemosyne. Unpushed commits on arch/kernel-seam
+until the final gate of this session passes.
+
 2026-07-03 (CUDA ComputeDeviceCapabilities). Implemented
 `ComputeDeviceCapabilities` for `CudaDevice` with driver-backed limits and
 explicit backend semantics. Block dimensions, threads per block, shared memory
