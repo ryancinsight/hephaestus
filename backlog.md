@@ -65,8 +65,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   `wgpu::Features` and `wgpu::Limits` from public `GpuDevice` capability APIs
   and made its backend contexts generic over `D: ComputeDeviceCapabilities`.
 - [KS-5] [major] Per-family host-orchestration consolidation into core generic
-  over the seam — scan first, then blocked decompositions, then wrappers.
-  Status: todo (orchestration hoist). The O(L²) axis-scan ALGORITHM defect is
+  over the seam. **Scan orchestration hoisted** (2026-07-03, commit): the
+  duplicated ScanDirection/AxisScanMeta/validation now lives once in
+  `hephaestus_core::scan::plan_axis_scan`; backends keep only dialect shader +
+  launch (net -212 lines; core gained a std-only leto dep as ADR-0001's shared
+  layout vocabulary). Next: reduction (AxisReductionMeta + validate_axis_reduction
+  mirror the same pattern), then blocked-decomposition host loops, then wrappers.
+  Status: scan done; reduction/decomposition todo. The O(L²) axis-scan ALGORITHM defect is
   fixed in both backends (2026-07-02): one-thread-per-line sequential scan,
   O(N) total work, combine order preserved so results are bitwise-identical
   to the reference (no test changes); bench 512x4096 f32 axis-1 cumsum

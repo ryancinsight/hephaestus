@@ -4,6 +4,18 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+### Changed
+
+- `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: hoisted the
+  duplicated axis-scan host orchestration (`ScanDirection`, `AxisScanMeta`,
+  validation, metadata packing, workgroup count) into
+  `hephaestus_core::scan::plan_axis_scan`, a backend-neutral SSOT. Both backends
+  call it and keep only their dialect shader and raw dispatch (net -212 lines
+  across the two scan modules). Adds a std-only `leto` dependency to
+  `hephaestus-core` (ADR-0001's backend-agnostic layout vocabulary; core stays
+  GPU-free). Behavior preserved — the differential-vs-leto scan tests pass
+  unchanged (wgpu 129/129, cuda 102/103).
+
 ### Fixed
 
 - `hephaestus-cuda` [patch]: resolve 8 of 9 WDDM `STATUS_IN_PAGE_ERROR`
