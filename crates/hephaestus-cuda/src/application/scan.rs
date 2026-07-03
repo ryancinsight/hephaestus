@@ -1,59 +1,21 @@
 //! Rank-2 prefix/suffix scan kernels over strided matrix operands on the CUDA device.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::Pod;
 use core::marker::PhantomData;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    IdentityToken, Result,
+    plan_axis_scan, AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer,
+    DialectScalar, HephaestusError, IdentityToken, Result,
 };
 use leto::Layout;
 
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
-pub use hephaestus_core::{CumProdOp, CumSumOp};
-
-/// Direction of a scan along an axis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScanDirection {
-    /// Accumulate from index 0 upward.
-    Forward,
-    /// Accumulate from the last index downward.
-    Reverse,
-}
+pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 
 struct AxisScanKernel<Op>(PhantomData<Op>);
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct AxisScanMeta {
-    input_shape: [u32; 2],
-    input_strides: [i32; 2],
-    output_strides: [i32; 2],
-    _pre_offsets_pad: [u32; 2],
-    offsets: [u32; 4],
-}
-
-struct AxisScanDispatch {
-    meta: AxisScanMeta,
-    grid_size: u32,
-}
-
-#[inline]
-fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
-
-#[inline]
-fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
 
 #[inline]
 fn map_layout_err(e: leto::LetoError) -> HephaestusError {
@@ -127,92 +89,6 @@ extern "C" __global__ void scan_kernel(
     )
 }
 
-fn validate_axis_scan<T>(
-    input: StridedOperand<'_, T, 2>,
-    axis: usize,
-    direction: ScanDirection,
-    output: StridedOperand<'_, T, 2>,
-    width: BlockWidth,
-) -> Result<Option<AxisScanDispatch>> {
-    if !width.get().is_power_of_two() {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("scan block width {} must be a power of two", width.get()),
-        });
-    }
-    if axis >= 2 {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("scan axis {axis} is out of bounds for rank-2 scan"),
-        });
-    }
-    if input.layout.shape != output.layout.shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "scan output shape mismatch: input {:?}, out {:?}",
-                input.layout.shape, output.layout.shape
-            ),
-        });
-    }
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "scan output buffer must not alias input buffer".to_string(),
-        });
-    }
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "scan output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-
-    input
-        .layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    output
-        .layout
-        .validate_storage_len(output.buffer.len())
-        .map_err(map_layout_err)?;
-    let output_len = output.layout.checked_size().map_err(map_layout_err)?;
-    if output_len == 0 {
-        return Ok(None);
-    }
-
-    let direction_bit = match direction {
-        ScanDirection::Forward => 0usize,
-        ScanDirection::Reverse => 2usize,
-    };
-    // One thread per scan line: lines run along `axis`, so their count is the
-    // orthogonal extent. Non-zero here because output_len > 0.
-    let line_count = input.layout.shape[1 - axis];
-    let meta = AxisScanMeta {
-        input_shape: [
-            to_u32(input.layout.shape[0], "input rows")?,
-            to_u32(input.layout.shape[1], "input columns")?,
-        ],
-        input_strides: [
-            to_i32(input.layout.strides[0], "input row stride")?,
-            to_i32(input.layout.strides[1], "input column stride")?,
-        ],
-        output_strides: [
-            to_i32(output.layout.strides[0], "output row stride")?,
-            to_i32(output.layout.strides[1], "output column stride")?,
-        ],
-        _pre_offsets_pad: [0; 2],
-        offsets: [
-            to_u32(input.layout.offset, "input offset")?,
-            to_u32(output.layout.offset, "output offset")?,
-            to_u32(axis | direction_bit, "axis and direction")?,
-            to_u32(line_count, "scan line count")?,
-        ],
-    };
-
-    let grid_size_val = grid_size(line_count, width)?;
-
-    Ok(Some(AxisScanDispatch {
-        meta,
-        grid_size: grid_size_val,
-    }))
-}
-
 /// Scan a rank-2 strided matrix along `axis`, preserving the input shape.
 pub fn scan_axis_into<Op, T>(
     device: &CudaDevice,
@@ -226,7 +102,17 @@ where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + IdentityToken<Op, CudaC>,
 {
-    let Some(dispatch) = validate_axis_scan(input, axis, direction, output, width)? else {
+    let Some(dispatch) = plan_axis_scan(
+        input.layout,
+        input.buffer.len(),
+        output.layout,
+        output.buffer.len(),
+        axis,
+        direction,
+        width,
+        input.buffer.aliases(output.buffer),
+    )?
+    else {
         return Ok(());
     };
 
@@ -255,7 +141,7 @@ where
     launch_kernel(
         device,
         &kernel,
-        LaunchConfig::linear(dispatch.grid_size, width),
+        LaunchConfig::linear(dispatch.groups, width),
         &mut args,
     )
 }

@@ -37,6 +37,7 @@ pub use domain::ops::{
     IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, RecipOp, SinOp,
     SqrtOp, SubOp, SumOp, UnaryExpr,
 };
+pub use domain::scan::{plan_axis_scan, AxisScanDispatch, AxisScanMeta, ScanDirection};
 pub use domain::stream::{
     validate_bindings, validate_grouped_bindings, Binding, CommandStream, GroupedBinding,
     GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence, KernelDevice,

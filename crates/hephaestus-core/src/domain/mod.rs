@@ -18,5 +18,7 @@ pub mod kernel;
 pub mod launch;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
+/// Backend-neutral axis-scan validation and dispatch planning.
+pub mod scan;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;
