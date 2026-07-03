@@ -6,16 +6,148 @@ cuda-oxide + cutile).
 
 ## Open
 
+ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
+audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
+`arch/kernel-seam`, owner claude-seam session 2026-07-02):
+
+- [KS-1] [minor] Core dialect + op vocabulary (`KernelDialect`, `DialectScalar`,
+  `UnaryExpr`/`BinaryExpr`/`CombineExpr`, `OpIdentity`/`IdentityToken`, ZST
+  markers). Status: **done** (commit `2c01d36`).
+- [KS-2] [minor] Authored-kernel seam in core (`KernelInterface`,
+  `KernelSource<L>`, `KernelDevice` with `BindingHandle`/`Prepared`/`Stream`
+  GATs, `CommandStream`, `Binding`, `validate_bindings`). Status: **done**
+  (commit `f18bb72`).
+- [KS-3] [major] Backends consume the core op vocabulary; per-backend trait
+  pairs and duplicated ZSTs deleted; CUDA binary/scalar templates renamed to
+  canonical `lhs`/`rhs` operands. Status: in-progress (owner claude-seam;
+  scope `hephaestus-wgpu/**` + `hephaestus-cuda/**`).
+- [KS-4] [minor] `KernelDevice`/`CommandStream` impls for `WgpuDevice` and
+  `CudaDevice` + shared generic contract tests. Supersedes the standing "CUDA
+  implementor for multi-storage kernels" item below for NEW consumers; the
+  existing storage-kernel trio stays until kwavers/apollo migrate to the
+  authored seam (removal then is [major]). Status: **done for WGPU and CUDA**.
+  WGPU evidence: `cargo fmt -p hephaestus-wgpu --check`, `cargo check -p
+  hephaestus-wgpu`, `cargo clippy -p hephaestus-wgpu --all-targets --no-deps --
+  -D warnings`, and `cargo nextest run -p hephaestus-wgpu stream` pass 5/5.
+  CUDA evidence: `cargo fmt -p hephaestus-cuda --check`, `cargo check -p
+  hephaestus-cuda`, `cargo clippy -p hephaestus-cuda --all-targets --no-deps --
+  -D warnings`, `cargo clippy -p hephaestus-cuda --no-default-features
+  --all-targets --no-deps -- -D warnings`, `cargo nextest run -p
+  hephaestus-cuda stream` pass 3/3, and `cargo nextest run -p hephaestus-cuda
+  --no-default-features stream` pass 3/3.
+- [KS-4G] [minor] Grouped authored-kernel seam for consumers with multiple WGPU
+  bind groups, flat CUDA argument lists, and same-region ordered sequences.
+  Status: **done for WGPU and CUDA**.
+  Evidence: `cargo fmt -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda
+  --check`, `cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`,
+  `cargo check -p hephaestus-cuda --no-default-features`, `cargo check -p
+  hephaestus-cuda`, `cargo clippy -p hephaestus-core -p hephaestus-cuda
+  --all-targets --no-default-features --no-deps -- -D warnings`, `cargo clippy
+  -p hephaestus-wgpu --all-targets --no-deps -- -D warnings`, `cargo nextest
+  run -p hephaestus-wgpu stream` pass 8/8, and `cargo nextest run -p
+  hephaestus-cuda --no-default-features stream` pass 6/6. Driver: Kwavers PSTD
+  no longer needs a missing provider seam for multi-group WGPU/CUDA authored
+  kernels or same-pass WGPU timestep sequencing; remaining PSTD work is
+  consumer shader/ABI migration and CUDA C source authoring.
+- [KS-4D] [minor] Device acquisition policy vocabulary. Status: **done**.
+  `hephaestus-core::DevicePreference` now carries backend-neutral
+  high-performance vs low-power selection, and `hephaestus-wgpu` maps it to
+  WGPU only inside provider constructors. Driver: Kwavers removed
+  `wgpu::PowerPreference` from public GPU device creation and PSTD/beamforming
+  acquisition call sites.
+- [KS-4C] [minor] Device capability vocabulary. Status: **done**.
+  `hephaestus-core::DeviceFeature` and `DeviceLimits` now carry backend-neutral
+  optional capability and compute-limit reporting. `ComputeDeviceCapabilities`
+  is the trait-level seam for querying those values generically.
+  `hephaestus-wgpu` maps the vocabulary at the WGPU provider boundary, and
+  `hephaestus-cuda` now maps real CUDA driver attributes into the same contract
+  without fabricating WGPU-only storage-binding limits. Driver: Kwavers removed
+  `wgpu::Features` and `wgpu::Limits` from public `GpuDevice` capability APIs
+  and made its backend contexts generic over `D: ComputeDeviceCapabilities`.
+- [KS-5] [major] Per-family host-orchestration consolidation into core generic
+  over the seam — scan first (also replaces the O(L²) axis-scan algorithm in
+  BOTH backends with a workgroup/block scan + block-sums pass), then blocked
+  decompositions, then wrappers. Status: todo.
+- [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
+  (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
+  Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).
+- [KS-7] [minor] Perf batch from the audit: CUDA streams + pinned staging
+  (CU-P1/P6/M3), batched-matmul `blockIdx.z` (CU-P5), typed CUDA cache keys
+  (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
+  (WG-P3), rank/det serial-kernel fix (WG-P1), axis-1 grid-stride reduction
+  (WG-P5). Status: todo; criterion baselines before/after each.
+- [KS-8] [patch] CUDA managed-memory root cause: 9 tests abort deterministically
+  with OS 0xc0000006 (STATUS_IN_PAGE_ERROR) on this machine's real hardware
+  (concurrency, trace, dot, norms, hessenberg, 3× reduction, strided
+  block-width) — A/B-verified pre-existing on unmodified baseline; all share
+  the reduction-kernel/managed-memory pathway. Suspect: in-band host-written
+  allocator metadata on `cuMemAllocManaged` pages + `cuMemAdvise` hardcoding
+  ordinal 0 (audit CU-P7). Fix direction: real `cuMemAlloc` device tier in
+  mnemosyne + advise the actual ordinal. Status: todo; blocks the CUDA
+  full-green claim.
+- [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
+  over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
+  break) or record the alias-crate justification. Status: todo (user decision
+  useful on the break).
+
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
   implementation are delivered; remaining work is the CUDA kernel/launch
   implementation and downstream Kwavers verification against that provider.
+  (For new consumers this is subsumed by KS-4's authored-kernel seam.)
 
 ## Delivered
 
+- [x] [patch] Add provider-owned WGPU capability accessors. `WgpuDevice` now
+  exposes `features()` and `limits()` so consumers can report capabilities
+  without borrowing raw `wgpu::Device` handles. Driver: Kwavers backend contexts
+  removed public raw device/queue accessors and use these accessors for
+  capability reporting. Evidence: Hephaestus fmt/check/clippy plus downstream
+  Kwavers check/clippy/nextest backend-device-multi_gpu filter passing 34/34.
+- [x] [minor] Add backend-neutral partial device-buffer writes to
+  `ComputeDevice`. WGPU, CUDA, Metal, and the CUDA-unavailable stub now satisfy
+  `write_sub_buffer` through the provider trait, with contract tests covering
+  partial overwrite preservation, out-of-range rejection, and empty tail writes.
+  Evidence: focused fmt/check/clippy and `cargo nextest run -p hephaestus-wgpu
+  -p hephaestus-cuda -p hephaestus-metal --no-default-features
+  write_sub_buffer` passing 9/9.
+- [x] [patch] Complete the remaining `hephaestus-wgpu` consumer migration from
+  deleted backend-local shader traits to shared `hephaestus_core` dialect
+  traits. Linalg, random, sparse, scan exports, and crate exports now use
+  `DialectScalar`, expression traits, and typed identity traits; no
+  compatibility aliases were reintroduced. Evidence: stale-name source audit
+  clean, `cargo check -p hephaestus-wgpu`, and `cargo clippy -p
+  hephaestus-wgpu --all-targets --no-deps -- -D warnings`.
 - [x] [patch] Remove the stale `DeviceExt` import from `hephaestus-wgpu`
   storage-kernel dispatch so downstream provider builds stay warning-clean.
   Evidence: `cargo check -p hephaestus-wgpu`.
+- [x] [minor] Implement `KernelDevice`/`CommandStream` for `WgpuDevice`.
+  Authored WGSL kernels now prepare through the shared `KernelInterface` /
+  `KernelSource<Wgsl>` contract, encode ordered dispatch/copy/zero-fill streams,
+  validate typed binding layouts, and submit via the provider boundary. Evidence:
+  `cargo fmt -p hephaestus-wgpu --check`, `cargo check -p hephaestus-wgpu`,
+  `cargo clippy -p hephaestus-wgpu --all-targets --no-deps -- -D warnings`, and
+  `cargo nextest run -p hephaestus-wgpu stream` pass 5/5.
+- [x] [minor] Implement `KernelDevice`/`CommandStream` for `CudaDevice`.
+  Authored CUDA C kernels now prepare through the shared `KernelInterface` /
+  `KernelSource<CudaC>` contract, encode ordered dispatch/copy/zero-fill
+  streams, validate typed binding layouts, and submit through the CUDA provider
+  boundary. Evidence: `cargo fmt -p hephaestus-cuda --check`, `cargo check -p
+  hephaestus-cuda`, `cargo clippy -p hephaestus-cuda --all-targets --no-deps --
+  -D warnings`, `cargo clippy -p hephaestus-cuda --no-default-features
+  --all-targets --no-deps -- -D warnings`, `cargo nextest run -p
+  hephaestus-cuda stream` pass 3/3, and `cargo nextest run -p hephaestus-cuda
+  --no-default-features stream` pass 3/3.
+- [x] [minor] Add grouped authored-kernel dispatch for WGPU/CUDA consumers that
+  require multiple WGPU bind groups and same-region sequencing. Core now exposes
+  `GroupedKernelInterface`, `GroupedKernelSource`, `GroupedKernelDevice`,
+  `GroupedCommandStream`, `GroupedKernelSequence`, `GroupedBindingDecl`, and
+  `GroupedBinding`; WGPU builds one bind group per declared group and can encode
+  an ordered grouped sequence inside one compute pass, while CUDA launches the
+  same contract as a flat ordered argument list on the bound stream. Driver:
+  Kwavers PSTD field/kspace/sensor/absorption kernels can migrate to a
+  Hephaestus provider trait rather than a local raw-WGPU helper. Evidence:
+  focused fmt/check/clippy plus WGPU and CUDA stream nextest filters.
 - [x] [minor] Add backend-neutral device synchronization to `ComputeDevice`.
   WGPU, CUDA, and Metal now expose explicit completion through the provider
   trait (`Device::poll`, `cuCtxSynchronize`, and Metal's WGPU delegation),

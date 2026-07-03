@@ -1,5 +1,172 @@
 # Checklist — hephaestus
 
+2026-07-03 (CUDA ComputeDeviceCapabilities). Implemented
+`ComputeDeviceCapabilities` for `CudaDevice` with driver-backed limits and
+explicit backend semantics. Block dimensions, threads per block, shared memory
+per block, compute capability, host-mapping support, unified addressing, and
+current memory are read through CUDA driver APIs. `DeviceLimits` now represents
+per-shader-stage storage-buffer slots as `Option<u32>`: WGPU reports `Some`,
+CUDA reports `None` because authored CUDA kernels receive flat arguments. The
+no-CUDA stub is uninhabited for capability queries, so stub mode compiles
+without returning fabricated limits. Evidence tier: compile-time validation,
+clippy, focused value-semantic nextest, and downstream integration checks.
+Checks: `cargo fmt -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda
+--check`, `cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`,
+`cargo check -p hephaestus-cuda`, `cargo check -p hephaestus-cuda
+--no-default-features`, `cargo clippy -p hephaestus-core -p hephaestus-wgpu -p
+hephaestus-cuda --all-targets --no-deps -- -D warnings`, `cargo clippy -p
+hephaestus-cuda --no-default-features --all-targets --no-deps -- -D warnings`,
+`cargo nextest run -p hephaestus-cuda device_capabilities_are_driver_backed`
+passes 1/1, `cargo nextest run -p hephaestus-cuda --no-default-features
+device_capabilities_are_driver_backed` passes 1/1, downstream `cargo check -p
+kwavers-gpu --features gpu`, `cargo clippy -p kwavers-gpu --features gpu
+--all-targets --no-deps -- -D warnings`, `cargo nextest run -p kwavers-gpu
+--features gpu backend` passes 31/31, `cargo nextest run -p kwavers-gpu
+--features gpu multi_gpu` passes 3/3, and `cargo nextest run -p kwavers
+--features gpu --test gpu_device_tests` passes 9/9.
+
+2026-07-02 (ComputeDevice capability trait). Added
+`ComputeDeviceCapabilities` as the backend-neutral trait seam for provider
+feature checks and enabled device limits. WGPU implements the trait and adds a
+`DeviceFeature`/`DeviceLimits` constructor so downstream contexts can request
+capabilities without building WGPU descriptors. Driver: Kwavers `WGPUContext`
+and `CoreGpuContext` now store a generic `D: ComputeDeviceCapabilities`, with
+WGPU only as the default acquisition specialization. Evidence tier:
+compile-time validation, clippy, focused downstream value-semantic nextest, and
+source audit. Checks: `cargo fmt -p hephaestus-core -p hephaestus-wgpu
+--check`, `cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`,
+`cargo clippy -p hephaestus-core -p hephaestus-wgpu --all-targets --no-deps --
+-D warnings`, downstream `cargo fmt -p kwavers-gpu --check`, `cargo check -p
+kwavers-gpu --features gpu`, `cargo clippy -p kwavers-gpu --features gpu
+--all-targets --no-deps -- -D warnings`, `cargo nextest run -p kwavers-gpu
+--features gpu backend` passes 31/31, and `cargo nextest run -p kwavers-gpu
+--features gpu multi_gpu` passes 3/3. Follow-up on 2026-07-03 implemented the
+CUDA capability trait with driver-backed limits and `None` for WGPU-only
+storage-binding slots.
+
+2026-07-02 (WGPU provider capability accessors). Added provider-owned
+`WgpuDevice::features()` and `WgpuDevice::limits()` so downstream crates can
+query capability metadata without borrowing raw WGPU device handles. Driver:
+Kwavers backend contexts removed public raw `wgpu::Device`/`wgpu::Queue`
+accessors while preserving capability reporting, synchronization, and typed
+transfer behavior. Evidence tier: compile-time validation, clippy, focused
+downstream value-semantic nextest, and source audit. Checks: `cargo fmt -p
+hephaestus-wgpu --check`, `cargo check -p hephaestus-wgpu`, `cargo clippy -p
+hephaestus-wgpu --all-targets --no-deps -- -D warnings`, downstream `cargo
+check -p kwavers-gpu --features gpu`, `cargo clippy -p kwavers-gpu --features
+gpu --all-targets --no-deps -- -D warnings`, and `cargo nextest run -p
+kwavers-gpu --features gpu backend device multi_gpu` passes 34/34. Residual:
+Hephaestus still exposes raw handles for backend internals and migration-only
+consumers; new downstream capability reporting should use these provider
+accessors.
+
+2026-07-02 (ComputeDevice sub-buffer transfer seam). Added
+`ComputeDevice::write_sub_buffer` so consumers can refresh typed device-buffer
+subranges through the backend-neutral trait instead of concrete WGPU/CUDA
+handles. WGPU and CUDA delegate to their checked concrete subrange transfer
+paths, Metal delegates to its wrapped WGPU provider, and the CUDA-unavailable
+stub returns the existing typed unavailable error. Driver: Kwavers PSTD
+source/velocity run-cache signal tails now call the provider trait and remain
+substitutable by CUDA/Metal provider buffers when those kernels are authored.
+Evidence tier: compile-time validation, clippy, and value-semantic backend
+nextest. Checks: `cargo fmt -p hephaestus-core -p hephaestus-wgpu -p
+hephaestus-cuda -p hephaestus-metal --check`, `cargo check -p hephaestus-core
+-p hephaestus-wgpu -p hephaestus-cuda -p hephaestus-metal --all-targets
+--no-default-features`, `cargo check -p hephaestus-cuda`, `cargo clippy -p
+hephaestus-cuda --all-targets --no-deps -- -D warnings`, `cargo clippy -p
+hephaestus-core -p hephaestus-wgpu -p
+hephaestus-cuda -p hephaestus-metal --all-targets --no-default-features
+--no-deps -- -D warnings`, and `cargo nextest run -p hephaestus-wgpu -p
+hephaestus-cuda -p hephaestus-metal --no-default-features write_sub_buffer`
+passes 9/9. Residual: consumer command encoders and shader bindings still need
+their own grouped-kernel migration where they remain WGPU-specific.
+
+2026-07-02 (Grouped authored-kernel provider seam). Added the
+backend-neutral grouped authored-kernel API for consumer kernels that require
+multiple WGPU bind groups while staying CUDA-flat. `GroupedKernelInterface` /
+`GroupedKernelSource<L>` declare grouped storage bindings, parameter
+group/binding, and launch shape; `GroupedKernelDevice` /
+`GroupedCommandStream` prepare and encode grouped kernels. WGPU now builds one
+bind group per declared group and injects the POD parameter block as a uniform
+at the declared group/binding; CUDA validates the same grouped contract and
+launches storage buffers as device-pointer arguments in declaration order plus
+the POD parameter block by value. Driver: Kwavers PSTD can now move its
+multi-group field/kspace/sensor/absorption kernels onto a Hephaestus WGPU/CUDA
+provider trait instead of a Kwavers raw-WGPU command helper. Evidence tier:
+compile-time validation, clippy, and value-semantic WGPU/CUDA nextest. Checks:
+`cargo fmt -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda --check`,
+`cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`, `cargo check
+-p hephaestus-cuda --no-default-features`, `cargo clippy -p hephaestus-core -p
+hephaestus-wgpu -p hephaestus-cuda --all-targets --no-deps -- -D warnings`,
+`cargo nextest run -p hephaestus-wgpu grouped_command_stream` passes 2/2, and
+`cargo nextest run -p hephaestus-cuda --no-default-features
+cuda_grouped_command_stream` passes 2/2. Residual: consumer kernels such as
+Kwavers PSTD still need their WGSL parameter ABI migrated from push constants
+to the grouped uniform contract and corresponding CUDA C sources authored.
+
+2026-07-02 (Grouped same-region sequence seam). Added
+`GroupedKernelSequence` and `GroupedCommandStream::encode_grouped_sequence`
+for ordered grouped dispatches that must stay inside one backend-defined
+region. WGPU implements the sequence as one compute pass; CUDA implements it
+as ordered launches on the bound CUDA stream. Driver: Kwavers PSTD can migrate
+FFT/source/density/pressure/record/absorption timestep kernels without
+splitting its current same-pass WGPU dispatch order or adding a downstream
+helper. Evidence tier: compile-time validation, clippy, and value-semantic
+WGPU/CUDA nextest. Checks: `cargo fmt -p hephaestus-core -p hephaestus-wgpu
+-p hephaestus-cuda --check`, `cargo check -p hephaestus-core`, `cargo check
+-p hephaestus-wgpu`, `cargo check -p hephaestus-cuda --no-default-features`,
+`cargo check -p hephaestus-cuda`, `cargo clippy -p hephaestus-core -p
+hephaestus-cuda --all-targets --no-default-features --no-deps --
+-D warnings`, `cargo clippy -p hephaestus-wgpu --all-targets --no-deps --
+-D warnings`, `cargo nextest run -p hephaestus-wgpu stream` passes 8/8, and
+`cargo nextest run -p hephaestus-cuda --no-default-features stream` passes
+6/6. Residual: each consumer grouped timestep kernel still needs a
+`GroupedKernelSource<CudaC>` implementation before it can execute on CUDA.
+
+2026-07-02 (CUDA authored-kernel command stream). Implemented
+`KernelDevice`/`CommandStream` for `CudaDevice`, closing KS-4 for both WGPU and
+CUDA provider backends. The CUDA implementation prepares NVRTC-compiled
+`KernelSource<CudaC>` kernels from the shared `KernelInterface` contract,
+launches typed storage bindings as device-pointer arguments, passes the POD
+parameter block by value, and uses CUDA default-stream ordering for
+dispatch/copy/fill. `hephaestus-cuda --no-default-features` now compiles
+honestly by making `leto-ops` a real dependency of modules that already use it,
+marking the comparative bench as `decomposition`-required, and gating
+decomposition-only test helpers. Evidence tier: compile-time validation,
+clippy, and value-semantic CUDA nextest. Checks: `cargo fmt -p hephaestus-cuda
+--check`, `cargo check -p hephaestus-cuda`, `cargo check -p hephaestus-cuda
+--no-default-features`, `cargo clippy -p hephaestus-cuda --all-targets
+--no-deps -- -D warnings`, `cargo clippy -p hephaestus-cuda
+--no-default-features --all-targets --no-deps -- -D warnings`, `cargo nextest
+run -p hephaestus-cuda stream` passes 3/3, and `cargo nextest run -p
+hephaestus-cuda --no-default-features stream` passes 3/3. Residual: concrete
+consumer CUDA kernels still need to be authored where consumers only have WGSL
+sources.
+
+2026-07-02 (WGPU authored-kernel command stream). Implemented
+`KernelDevice`/`CommandStream` for `WgpuDevice`, giving downstream consumers a
+backend-neutral authored-kernel seam for WGSL `KernelSource<Wgsl>` kernels.
+The WGPU implementation prepares pipelines from the shared `KernelInterface`
+binding contract, records ordered dispatch/copy/zero-fill passes, validates
+typed storage bindings, submits through the provider stream boundary, and
+reuses the existing uniform-buffer pool. Evidence tier: compile-time validation,
+clippy, and value-semantic WGPU nextest. Checks: `cargo fmt -p
+hephaestus-wgpu --check`, `cargo check -p hephaestus-wgpu`, `cargo clippy -p
+hephaestus-wgpu --all-targets --no-deps -- -D warnings`, and `cargo nextest run
+-p hephaestus-wgpu stream` pass 5/5. CUDA now implements the same seam through
+`KernelSource<CudaC>`.
+
+2026-07-02 (WGPU dialect trait migration repair). Completed the remaining
+`hephaestus-wgpu` migration away from deleted backend-local shader traits.
+Linalg, random, sparse, scan exports, and crate exports now consume shared
+`hephaestus_core` dialect traits (`DialectScalar`, `UnaryExpr`, `BinaryExpr`,
+`CombineExpr`, `IdentityToken`, `OpIdentity`) instead of stale
+`WgslScalar`/operation-specific aliases. Evidence tier: compile-time
+validation plus static source audit. Checks: stale-name source audit clean,
+`cargo check -p hephaestus-wgpu`, and `cargo clippy -p hephaestus-wgpu
+--all-targets --no-deps -- -D warnings` pass. Driver: Kwavers `GpuDevice`
+provider-surface migration compiles and passes focused GPU device nextest.
+
 2026-07-02 (WGPU storage-kernel lint cleanup). Removed a stale
 `DeviceExt` import from `hephaestus-wgpu` storage-kernel dispatch so downstream
 provider builds no longer carry the unused-import warning. Evidence tier:
