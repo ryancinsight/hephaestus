@@ -31,6 +31,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   the two reduction modules. Behavior preserved — the differential-vs-leto axis
   reduction tests pass unchanged.
 
+- `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: hoisted the
+  decomposition operand validators (`validate_square`, dense-C-contiguous
+  operand check) into `hephaestus_core::domain::decomposition`
+  (`validate_square_operand`, `require_dense_operand`); each backend's
+  `decomposition/validate.rs` becomes a thin adapter. Removes the last
+  duplicated copy of the dense-operand OOB guard body. All 88 decomposition
+  tests (incl. the adversarial dense-operand cases) pass unchanged.
+
 ### Fixed
 
 - `hephaestus-cuda` [patch]: resolve 8 of 9 WDDM `STATUS_IN_PAGE_ERROR`
