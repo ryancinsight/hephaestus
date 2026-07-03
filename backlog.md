@@ -170,7 +170,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   carries the generic provider contract; `WgslMultiStorageKernel` and
   `WgslStorageBinding` own the real WGPU shader, bind-group layout, uniform
   buffer, encoder, and submission path for N storage buffers plus one POD
-  parameter block. Driver: Kwavers 3-D static DAS (five bindings) and
+  parameter block. Follow-up `MultiStorageDevice` provides the backend-owned
+  `storage_binding(binding, &D::Buffer<T>)` constructor, so downstream structs
+  can stay generic over the device while each backend keeps its native binding
+  representation. Driver: Kwavers 3-D static DAS (five bindings) and
   dynamic-focus DAS (seven bindings) now bind through this provider path without
   a Kwavers local helper. Evidence: Hephaestus check/clippy/nextest and
   downstream Kwavers 3-D beamforming check/clippy/nextest.

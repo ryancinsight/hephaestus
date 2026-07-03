@@ -194,15 +194,18 @@ architectural decision or a tracked future-work item:
   downstream consumers. `hephaestus_core::MultiStorageKernel<D, P, B>` carries
   the generic provider contract, and `hephaestus_wgpu::WgslMultiStorageKernel`
   plus `WgslStorageBinding` provide the concrete WGPU implementation for N
-  storage bindings plus one POD parameter block. Driver verification: Kwavers
-  3-D static DAS and dynamic-focus DAS now use this provider path instead of
-  local WGPU bind-group/compute-pass construction. Evidence tier: compile-time
-  validation plus value-semantic layout tests and downstream beamforming
-  nextest: `cargo check -p hephaestus-core`, `cargo check -p hephaestus-wgpu`,
-  `cargo clippy -p hephaestus-core -p hephaestus-wgpu --all-targets -- -D
-  warnings`, `cargo nextest run -p hephaestus-core -p hephaestus-wgpu
-  storage_kernel` (2/2), and `cargo nextest run -p kwavers-analysis --features
-  gpu three_dimensional` (52/52).
+  storage bindings plus one POD parameter block. `MultiStorageDevice` now gives
+  consumers a backend-owned storage-binding constructor from `D::Buffer<T>`,
+  removing the need to name WGPU binding types in generic downstream processor
+  structs. Driver verification: Kwavers 3-D static DAS and dynamic-focus DAS now
+  use this provider path instead of local WGPU bind-group/compute-pass
+  construction. Evidence tier: compile-time validation plus value-semantic
+  layout tests and downstream beamforming nextest: `cargo check -p
+  hephaestus-core`, `cargo check -p hephaestus-wgpu`, `cargo clippy -p
+  hephaestus-core -p hephaestus-wgpu --all-targets -- -D warnings`, `cargo
+  nextest run -p hephaestus-core -p hephaestus-wgpu storage_kernel` (2/2), and
+  `cargo nextest run -p kwavers-analysis --features gpu three_dimensional`
+  (52/52).
 - [minor] Backend-neutral storage-kernel dispatch is available for downstream
   consumers. `hephaestus_core::DispatchGrid` covers domain extents with checked
   tile arithmetic, `UnaryStorageKernel<D, T, P>` and

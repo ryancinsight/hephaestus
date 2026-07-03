@@ -16,8 +16,12 @@ stub launches); wgpu safety/memory batch (HostPinned staging-device gate,
 pool budgets, uniform leak, SAFETY pass); O(N) axis scan both backends
 (2.65x bench); wgpu dot/norm_l2/norm_max fusion; CUDA SAFETY closure;
 version 0.11.0 + CHANGELOG with Breaking/Migration. External acceptance:
-helios GpuAttenuationMapper authored over the seam with zero substrate
-changes (atlas repos/helios, 9/9 differential tests).
+helios `GpuAttenuationMapper` authored the H-010b HU→μ fused affine-clamp kernel
+over the seam with zero type-specific substrate helper. Evidence tier:
+differential/empirical validation: `rustup run nightly cargo nextest run -p
+helios-gpu attenuation` passes 5/5 in atlas `repos/helios`, and `rustup run
+nightly cargo nextest run -p hephaestus-core -p hephaestus-wgpu stream` passes
+8/8 for the supporting WGSL authored-kernel seam.
 
 Next increment: [KS-5] hoist per-family host orchestration into core
 generic over the seam (scan first — its host layers are now the only
@@ -239,6 +243,22 @@ kwavers-analysis --features gpu --all-targets --no-deps -- -D warnings`, and
 `cargo nextest run -p kwavers-analysis --features gpu three_dimensional` passes
 52/52. Residual: CUDA needs a concrete multi-storage beamforming kernel
 implementor when the CUDA kernel exists.
+
+2026-07-03 (Multi-storage binding constructor). Added
+`hephaestus_core::MultiStorageDevice`, giving generic consumers a backend-owned
+`storage_binding(binding, &D::Buffer<T>)` constructor for the binding bundle
+used by `MultiStorageKernel`. `WgpuDevice` implements it with
+`WgslStorageBinding`, so downstream structs can stay generic over the provider
+while WGPU keeps its concrete bind-group representation. Evidence tier:
+type-level provider boundary plus compile-time validation, clippy, downstream
+value-semantic nextest, and source audit. Checks: `cargo fmt -p
+hephaestus-core -p hephaestus-wgpu --check`, `cargo check -p hephaestus-core -p
+hephaestus-wgpu`, `cargo clippy -p hephaestus-core -p hephaestus-wgpu
+--all-targets --no-deps -- -D warnings`, `cargo nextest run -p hephaestus-core
+-p hephaestus-wgpu storage_kernel` passes 2/2, downstream `cargo check -p
+kwavers-analysis --features gpu`, `cargo clippy -p kwavers-analysis --features
+gpu --all-targets --no-deps -- -D warnings`, and `cargo nextest run -p
+kwavers-analysis --features gpu three_dimensional` pass 52/52.
 
 2026-07-02 (Backend-neutral storage kernel dispatch). Added
 `hephaestus_core::DispatchGrid`, `UnaryStorageKernel<D, T, P>`, and
