@@ -69,9 +69,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   duplicated ScanDirection/AxisScanMeta/validation now lives once in
   `hephaestus_core::scan::plan_axis_scan`; backends keep only dialect shader +
   launch (net -212 lines; core gained a std-only leto dep as ADR-0001's shared
-  layout vocabulary). Next: reduction (AxisReductionMeta + validate_axis_reduction
-  mirror the same pattern), then blocked-decomposition host loops, then wrappers.
-  Status: scan done; reduction/decomposition todo. The O(L²) axis-scan ALGORITHM defect is
+  layout vocabulary). **Reduction orchestration hoisted** (2026-07-03, local
+  WIP): `AxisReductionMeta` and axis-reduction validation now live in
+  `hephaestus_core::reduction::plan_axis_reduction`; WGPU uses a thin
+  `plan_axis_reduction_dispatch` adapter that preserves device-buffer alias
+  checks. Next: CUDA reduction parity, blocked-decomposition host loops, then
+  wrappers. Status: scan done; WGPU reduction compiles; CUDA
+  reduction/decomposition todo. The O(L²) axis-scan ALGORITHM defect is
   fixed in both backends (2026-07-02): one-thread-per-line sequential scan,
   O(N) total work, combine order preserved so results are bitwise-identical
   to the reference (no test changes); bench 512x4096 f32 axis-1 cumsum
