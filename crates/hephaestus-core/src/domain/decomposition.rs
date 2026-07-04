@@ -85,6 +85,89 @@ fn validate_finite(a: &[f32], op: &str) -> Result<()> {
 ///
 /// # Errors
 ///
+/// Factor one blocked-LU panel entirely on the host (backend-neutral).
+///
+/// This is the shared per-panel computation of the blocked LU loop, identical
+/// across the wgpu and CUDA backends: factor the `b × b` diagonal block, apply
+/// its row swaps to the cumulative permutation and the row panel, solve
+/// `L₂₁ = A₂₁ · U₁₁⁻¹` and `U₁₂ = L₁₁⁻¹ · A₁₂` for the `trail` trailing
+/// rows/columns, and write the factored diagonal back into the row panel. All
+/// device I/O (region gather/scatter, the trailing GEMM) stays in the backend
+/// loop around this call.
+///
+/// Buffers are compact row-major: `col_panel` is `(n-k) × b` (the diagonal
+/// block occupies its first `b × b`, the `trail` trailing rows follow),
+/// `row_panel` is `b × n`, and `diag` is scratch of at least `b²` elements.
+/// `k` is the panel's starting index in the full `n × n` matrix; `trail`
+/// is `n - k - b` (zero on the final panel, which runs the solves zero times).
+///
+/// # Errors
+/// Propagates [`panel_lu_packed`]'s failure (non-finite entry or zero pivot).
+#[allow(clippy::too_many_arguments)]
+pub fn factor_lu_panel(
+    col_panel: &mut [f32],
+    row_panel: &mut [f32],
+    diag: &mut [f32],
+    k: usize,
+    b: usize,
+    n: usize,
+    trail: usize,
+    perm: &mut [usize],
+    sign: &mut i8,
+) -> Result<()> {
+    // Factor the diagonal block A[k..k+b, k..k+b] (its compact copy is the
+    // leading b×b of col_panel).
+    for i in 0..b {
+        for j in 0..b {
+            diag[i * b + j] = col_panel[i * b + j];
+        }
+    }
+    let pivots = panel_lu_packed(&mut diag[..b * b], b)?;
+
+    // Apply the panel's row swaps to the cumulative permutation and the row
+    // panel (each row has n elements).
+    for (i, &pivot) in pivots.iter().enumerate().take(b) {
+        if pivot != i {
+            perm.swap(k + i, k + pivot);
+            *sign = -*sign;
+            for j in 0..n {
+                row_panel.swap(i * n + j, pivot * n + j);
+            }
+        }
+    }
+
+    // L₂₁ = A₂₁ · U₁₁⁻¹ (forward substitution over the trailing rows).
+    for i in 0..trail {
+        for j in 0..b {
+            let mut s = col_panel[(b + i) * b + j];
+            for p in 0..j {
+                s -= col_panel[(b + i) * b + p] * diag[p * b + j];
+            }
+            col_panel[(b + i) * b + j] = s / diag[j * b + j];
+        }
+    }
+
+    // U₁₂ = L₁₁⁻¹ · A₁₂ (forward substitution over the trailing columns).
+    for j in 0..trail {
+        for i in 0..b {
+            let mut s = row_panel[i * n + (k + b + j)];
+            for p in 0..i {
+                s -= diag[i * b + p] * row_panel[p * n + (k + b + j)];
+            }
+            row_panel[i * n + (k + b + j)] = s;
+        }
+    }
+
+    // Copy the factored diagonal back into the row panel so it is uploaded.
+    for i in 0..b {
+        for j in 0..b {
+            row_panel[i * n + (k + j)] = diag[i * b + j];
+        }
+    }
+
+    Ok(())
+}
+
 /// - `LengthMismatch` when `a.len() != n * n`.
 /// - `DispatchFailed` on non-finite entries or an exact-zero pivot.
 pub fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
@@ -285,6 +368,53 @@ mod tests {
 
         // Layout larger than its buffer is rejected.
         assert!(validate_square_operand(&square, 8).is_err());
+    }
+
+    #[test]
+    fn factor_lu_panel_single_panel_matches_panel_lu() {
+        // One panel covering the whole 3×3 matrix (trail = 0): factor_lu_panel
+        // must produce the same packed factors (with pivot rows applied) as a
+        // direct panel_lu_packed, and the same cumulative permutation.
+        let a = [4.0f32, 3.0, 2.0, 2.0, 1.0, 3.0, 1.0, 5.0, 1.0];
+        let n = 3;
+        let b = 3;
+
+        // Reference: direct packed LU + its pivot vector applied to a fresh perm.
+        let mut ref_packed = a;
+        let ref_pivots = panel_lu_packed(&mut ref_packed, n).expect("ref lu");
+        let mut ref_perm: Vec<usize> = (0..n).collect();
+        for (i, &p) in ref_pivots.iter().enumerate() {
+            if p != i {
+                ref_perm.swap(i, p);
+            }
+        }
+
+        // factor_lu_panel: col_panel = row_panel = the full matrix (n×n).
+        let mut col_panel = a.to_vec();
+        let mut row_panel = a.to_vec();
+        let mut diag = vec![0.0f32; b * b];
+        let mut perm: Vec<usize> = (0..n).collect();
+        let mut sign = 1i8;
+        factor_lu_panel(
+            &mut col_panel,
+            &mut row_panel,
+            &mut diag,
+            0,
+            b,
+            n,
+            0,
+            &mut perm,
+            &mut sign,
+        )
+        .expect("panel");
+
+        // row_panel now holds the pivot-applied packed factors == ref_packed
+        // reordered by the same pivots (panel_lu_packed already applied them in
+        // ref_packed), so row_panel equals ref_packed exactly.
+        for (got, want) in row_panel.iter().zip(ref_packed.iter()) {
+            assert!((got - want).abs() <= 1e-6, "got {got} want {want}");
+        }
+        assert_eq!(perm, ref_perm);
     }
 
     #[test]

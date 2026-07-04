@@ -18,7 +18,7 @@ pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
 pub use domain::decomposition::{
-    panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
+    factor_lu_panel, panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
     validate_square_operand,
 };
 pub use domain::device::{

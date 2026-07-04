@@ -6,6 +6,10 @@
 //! wgpu device/queue pair: adapter acquisition, typed device buffers, and
 //! monomorphized elementwise compute dispatch.
 //!
+//! The crate re-exports the exact [`wgpu`] crate version it builds against so
+//! downstream migration code can author provider-owned WGPU bindings without
+//! adding a second direct `wgpu` dependency.
+//!
 //! [`ComputeDevice`]: hephaestus_core::ComputeDevice
 
 /// Elementwise compute dispatch.
@@ -57,6 +61,8 @@ pub use application::strided::{
 pub use application::volume::{
     ray_line_integrals, ray_line_integrals_into, FieldGeometry, RAY_STRIDE,
 };
+pub use wgpu;
+
 pub use infrastructure::buffer::WgpuBuffer;
 pub use infrastructure::device::WgpuDevice;
 pub use infrastructure::{StagingBufferGuard, UniformBufferGuard};
