@@ -123,6 +123,28 @@ math or loop logic remains duplicated.
 4. Record the net line delta; expected ≈ −300 to −450 lines across the two backends once all
    three land.
 
+## QR / Cholesky prerequisites (found during LU implementation, 2026-07-03)
+
+Unlike LU — whose per-panel compute was verbatim-identical and reused the shared
+`panel_lu_packed`, so `factor_lu_panel` was a direct extraction — QR and Cholesky
+each need a preparatory step before their per-panel compute can hoist:
+
+- **QR**: the two backends' panel buffers have diverged. wgpu keeps a full `m × b`
+  panel (`panel[r*b+j]` over `r in 0..m`); CUDA keeps a compact `panel_rows × b`
+  panel (`panel[panel_row*b+j]`). The shared `factor_qr_panel` must first normalize
+  both to one compact panel layout (a behavior change, differentially re-verified)
+  before the reflector-vector extraction and sub-diagonal zeroing can be shared.
+- **Cholesky**: the diagonal-block factor calls `leto_ops::cholesky_decompose`
+  inline (not a `core::panel_*` routine). Hoisting `factor_cholesky_panel` needs
+  either a new core `panel_cholesky_packed` (a b×b Cholesky matching the leto-ops
+  numerics within the reconstruction tolerance — core has no `leto_ops` dep and
+  should not gain one for this) or, minimally, extracting just the pure
+  off-diagonal triangular solve (verbatim in both backends) while leaving the diag
+  factor per-backend.
+
+Both are their own commits with differential re-verification, per the sequencing
+below; neither is a mechanical mirror of the LU extraction.
+
 ## Sequencing
 
 LU first (cleanest trailing update), then QR (reflector buffers add a spec field), then Cholesky
