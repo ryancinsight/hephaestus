@@ -1,6 +1,6 @@
 # ADR 0003 — Blocked-decomposition host-loop consolidation
 
-- Status: **Proposed** (design note gating the KS-5 `[major]` implementation)
+- Status: **Accepted; in progress** — LU per-panel compute extracted (`factor_lu_panel`, 2026-07-03); loop-structure trait hoist pending
 - Date: 2026-07-03
 - Scope: `hephaestus-core`, `hephaestus-wgpu`, `hephaestus-cuda`
 - Refs: KS-5 (backlog), audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md` §5.1

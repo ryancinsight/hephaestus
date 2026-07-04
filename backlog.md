@@ -128,6 +128,12 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
 
 ## Delivered
 
+- [x] [minor] Re-export the provider-owned WGPU ABI module from
+  `hephaestus-wgpu` as `hephaestus_wgpu::wgpu`. Driver: CFDrs currently
+  resolves both direct `wgpu 0.19` and Hephaestus-owned `wgpu 26`; this surface
+  lets CFDrs transition raw-kernel boundaries to the provider ABI without
+  keeping a separate direct WGPU dependency. Evidence: compile-time re-export
+  contract test plus focused WGPU package gate.
 - [x] [patch] Add provider-owned WGPU capability accessors. `WgpuDevice` now
   exposes `features()` and `limits()` so consumers can report capabilities
   without borrowing raw `wgpu::Device` handles. Driver: Kwavers backend contexts
