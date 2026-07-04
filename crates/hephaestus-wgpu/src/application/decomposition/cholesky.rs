@@ -12,7 +12,7 @@
 use bytemuck::Pod;
 use std::any::TypeId;
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{factor_cholesky_panel, ComputeDevice, HephaestusError, Result};
 use leto::Layout;
 
 use super::region::{
@@ -516,22 +516,11 @@ pub fn cholesky_decompose_blocked(
             &mut panel,
         )?;
 
-        // ── Step 1.5: factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-        let (diag_part, rhs_part) = panel.split_at_mut(b * b);
-        let diag_view =
-            leto::ArrayView::<f32, 2>::new(leto::Layout::c_contiguous([b, b]).unwrap(), diag_part);
-        let diag_chol = leto_ops::cholesky_decompose(&diag_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("Cholesky panel factorisation failed: {e}"),
-            }
-        })?;
-        let diag_lower = diag_chol.lower();
-        let diag_slice = leto::Storage::as_slice(diag_lower.storage());
-
-        // Write the factored diagonal block back to panel
-        diag_part.copy_from_slice(diag_slice);
-
         let trail_rows = n - k - b;
+        // Factor this panel on the host (diagonal-block Cholesky + off-diagonal
+        // triangular solve) — the backend-neutral shared computation.
+        factor_cholesky_panel(&mut panel, b, trail_rows)?;
+
         if trail_rows == 0 {
             // Copy the finalized columns to the host-side packed matrix
             for j in 0..b {
@@ -550,19 +539,6 @@ pub fn cholesky_decompose_blocked(
                 panel_region,
             )?;
             continue;
-        }
-
-        // ── Step 2: panel solve  L₂₁ = A₂₁ · L₁₁⁻ᵀ  on CPU ──
-        // Triangular solve: each column of L₂₁ via back-substitution with L₁₁ᵀ.
-        for col in 0..b {
-            // Back-substitute against L₁₁ᵀ (i.e. forward-substitute against L₁₁).
-            for i in 0..trail_rows {
-                let mut s = rhs_part[i * b + col];
-                for p in 0..col {
-                    s -= rhs_part[i * b + p] * diag_slice[col * b + p];
-                }
-                rhs_part[i * b + col] = s / diag_slice[col * b + col];
-            }
         }
 
         // Copy the finalized columns to the host-side packed matrix
