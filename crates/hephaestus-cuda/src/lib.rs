@@ -62,6 +62,7 @@ pub use application::reduction::{
 pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection,
 };
+pub use application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
 pub use application::stream::{CudaCommandStream, CudaGroupedPrepared, CudaPrepared};
 pub use application::strided::{
     binary_elementwise_strided, binary_elementwise_strided_dyn_into,
@@ -90,9 +91,9 @@ pub use application::decomposition::{
 };
 
 pub use hephaestus_core::{
-    BinaryExpr, BlockWidth, CombineExpr, ComputeDevice, ComputeDeviceAcquisition,
-    ComputeDeviceCapabilities, CudaC, DeviceBuffer, DeviceFeature, DeviceLimits, DialectScalar,
-    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
-    GroupedKernelSource, HephaestusError, IdentityToken, KernelDevice, OpIdentity, Result,
-    UnaryExpr,
+    BinaryExpr, BinaryStorageKernel, BlockWidth, CombineExpr, ComputeDevice,
+    ComputeDeviceAcquisition, ComputeDeviceCapabilities, CudaC, DeviceBuffer, DeviceFeature,
+    DeviceLimits, DialectScalar, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
+    GroupedKernelInterface, GroupedKernelSource, HephaestusError, IdentityToken, KernelDevice,
+    MultiStorageDevice, MultiStorageKernel, OpIdentity, Result, UnaryExpr, UnaryStorageKernel,
 };
