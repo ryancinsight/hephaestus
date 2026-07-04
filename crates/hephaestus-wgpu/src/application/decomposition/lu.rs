@@ -449,7 +449,7 @@ pub fn lu_decompose(
 /// launch overhead.
 const LU_BLOCK_SIZE: usize = 64;
 
-use hephaestus_core::panel_lu_packed;
+use hephaestus_core::factor_lu_panel;
 
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
@@ -573,45 +573,29 @@ pub fn lu_decompose_blocked(
             &mut row_panel,
         )?;
 
-        // ── Step 1: Factor the diagonal block A[k..k+b, k..k+b] on CPU ──
-        // Reuse the hoisted `diag` buffer; index only the active `b²` prefix.
+        // Factor this panel on the host (diagonal block, pivots, L₂₁/U₁₂
+        // triangular solves) — the backend-neutral shared computation.
+        factor_lu_panel(
+            &mut col_panel,
+            &mut row_panel,
+            &mut diag,
+            k,
+            b,
+            n,
+            trail,
+            &mut perm,
+            &mut sign,
+        )?;
+
+        // Copy the finalized rows to the host-side packed matrix.
         for i in 0..b {
-            for j in 0..b {
-                diag[i * b + j] = col_panel[i * b + j];
-            }
-        }
-        let pivots = panel_lu_packed(&mut diag[..b * b], b)?;
-
-        // Apply the panel's row swaps to the cumulative permutation vector,
-        // and to the row panel.
-        for (i, &pivot) in pivots.iter().enumerate().take(b) {
-            if pivot != i {
-                let row_a = k + i;
-                let row_b = k + pivot;
-                perm.swap(row_a, row_b);
-                sign = -sign;
-
-                // Swap row i and row pivot in row_panel (each row has n elements)
-                for j in 0..n {
-                    row_panel.swap(i * n + j, pivot * n + j);
-                }
+            let row = k + i;
+            for j in 0..n {
+                host[row * n + j] = row_panel[i * n + j];
             }
         }
 
         if trail == 0 {
-            // Update row_panel with factored diag
-            for i in 0..b {
-                for j in 0..b {
-                    row_panel[i * n + (k + j)] = diag[i * b + j];
-                }
-            }
-            // Copy the finalized rows to the host-side packed matrix
-            for i in 0..b {
-                let row = k + i;
-                for j in 0..n {
-                    host[row * n + j] = row_panel[i * n + j];
-                }
-            }
             write_matrix_region_compact_reusable(
                 device,
                 &factors_buf,
@@ -620,43 +604,6 @@ pub fn lu_decompose_blocked(
                 row_region,
             )?;
             continue;
-        }
-
-        // ── Step 2: Solve L₂₁ = A₂₁ · U₁₁⁻¹ on CPU ──
-        for i in 0..trail {
-            for j in 0..b {
-                let mut s = col_panel[(b + i) * b + j];
-                for p in 0..j {
-                    s -= col_panel[(b + i) * b + p] * diag[p * b + j];
-                }
-                col_panel[(b + i) * b + j] = s / diag[j * b + j];
-            }
-        }
-
-        // ── Step 3: Solve U₁₂ = L₁₁⁻¹ · A₁₂ on CPU ──
-        for j in 0..trail {
-            for i in 0..b {
-                let mut s = row_panel[i * n + (k + b + j)];
-                for p in 0..i {
-                    s -= diag[i * b + p] * row_panel[p * n + (k + b + j)];
-                }
-                row_panel[i * n + (k + b + j)] = s;
-            }
-        }
-
-        // Copy factored diag back to row_panel so it is uploaded
-        for i in 0..b {
-            for j in 0..b {
-                row_panel[i * n + (k + j)] = diag[i * b + j];
-            }
-        }
-
-        // Copy the finalized rows to the host-side packed matrix
-        for i in 0..b {
-            let row = k + i;
-            for j in 0..n {
-                host[row * n + j] = row_panel[i * n + j];
-            }
         }
 
         // Upload updated panels

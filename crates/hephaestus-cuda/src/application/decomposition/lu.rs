@@ -38,7 +38,7 @@ use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 #[cfg(feature = "cuda")]
 use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
 #[cfg(feature = "cuda")]
-use hephaestus_core::panel_lu_packed;
+use hephaestus_core::factor_lu_panel;
 
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
@@ -274,69 +274,24 @@ pub fn lu_decompose_blocked(
             };
             let mut row_panel = download_matrix_region_compact(device, &factors_buf, row_region)?;
 
-            // ── Step 1: Factor the diagonal block on CPU ──
+            // Factor this panel on the host (diagonal block, pivots, L₂₁/U₁₂
+            // triangular solves) — the backend-neutral shared computation.
             let mut diag = vec![0.0f32; b * b];
-            for i in 0..b {
-                for j in 0..b {
-                    diag[i * b + j] = col_panel[i * b + j];
-                }
-            }
-            let pivots = panel_lu_packed(&mut diag, b)?;
-
-            // Apply the panel's row swaps to the cumulative permutation vector,
-            // and to the row panel.
-            for (i, &pivot) in pivots.iter().enumerate().take(b) {
-                if pivot != i {
-                    let row_a = k + i;
-                    let row_b = k + pivot;
-                    perm.swap(row_a, row_b);
-                    sign = -sign;
-
-                    // Swap row i and row pivot in row_panel (each row has n elements)
-                    for j in 0..n {
-                        row_panel.swap(i * n + j, pivot * n + j);
-                    }
-                }
-            }
+            factor_lu_panel(
+                &mut col_panel,
+                &mut row_panel,
+                &mut diag,
+                k,
+                b,
+                n,
+                trail,
+                &mut perm,
+                &mut sign,
+            )?;
 
             if trail == 0 {
-                // Update row_panel with factored diag
-                for i in 0..b {
-                    for j in 0..b {
-                        row_panel[i * n + (k + j)] = diag[i * b + j];
-                    }
-                }
                 write_matrix_region_compact(device, &factors_buf, &row_panel, row_region)?;
                 continue;
-            }
-
-            // ── Step 2: Solve L₂₁ = A₂₁ · U₁₁⁻¹ on CPU ──
-            for i in 0..trail {
-                for j in 0..b {
-                    let mut s = col_panel[(b + i) * b + j];
-                    for p in 0..j {
-                        s -= col_panel[(b + i) * b + p] * diag[p * b + j];
-                    }
-                    col_panel[(b + i) * b + j] = s / diag[j * b + j];
-                }
-            }
-
-            // ── Step 3: Solve U₁₂ = L₁₁⁻¹ · A₁₂ on CPU ──
-            for j in 0..trail {
-                for i in 0..b {
-                    let mut s = row_panel[i * n + (k + b + j)];
-                    for p in 0..i {
-                        s -= diag[i * b + p] * row_panel[p * n + (k + b + j)];
-                    }
-                    row_panel[i * n + (k + b + j)] = s;
-                }
-            }
-
-            // Copy factored diag back to row_panel so it is uploaded
-            for i in 0..b {
-                for j in 0..b {
-                    row_panel[i * n + (k + j)] = diag[i * b + j];
-                }
             }
 
             // Upload updated panels
