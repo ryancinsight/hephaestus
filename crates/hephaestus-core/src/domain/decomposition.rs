@@ -168,6 +168,96 @@ pub fn factor_lu_panel(
     Ok(())
 }
 
+/// In-place lower-triangular Cholesky factorisation of a packed `n × n`
+/// row-major symmetric positive-definite matrix.
+///
+/// Reads the lower triangle of `a` and overwrites it with the lower factor
+/// **L** such that `A = L Lᵀ`; the strictly-upper triangle is zeroed. Column
+/// Cholesky (the same left-looking order as `leto_ops`), so the blocked
+/// backends' differential-vs-leto reconstruction stays within tolerance.
+///
+/// # Errors
+/// - `LengthMismatch` when `a.len() != n * n`.
+/// - `DispatchFailed` on a non-finite entry or a non-positive pivot (the
+///   matrix is not positive-definite).
+pub fn panel_cholesky_packed(a: &mut [f32], n: usize) -> Result<()> {
+    if a.len() != n * n {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: n * n,
+            device_len: a.len(),
+        });
+    }
+    validate_finite(a, "Cholesky panel factorisation")?;
+
+    for j in 0..n {
+        // Diagonal: L[j,j] = sqrt(A[j,j] - Σ_{p<j} L[j,p]²).
+        let mut d = a[j * n + j];
+        for p in 0..j {
+            d -= a[j * n + p] * a[j * n + p];
+        }
+        // Inputs are validated finite above, so `d` is finite; a non-positive
+        // pivot means the matrix is not positive-definite.
+        if d <= 0.0 {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!(
+                    "Cholesky panel factorisation failed: pivot {j} is not positive ({d}); \
+                     matrix is not positive-definite"
+                ),
+            });
+        }
+        let ljj = d.sqrt();
+        a[j * n + j] = ljj;
+
+        // Below the diagonal: L[i,j] = (A[i,j] - Σ_{p<j} L[i,p]·L[j,p]) / L[j,j].
+        for i in (j + 1)..n {
+            let mut s = a[i * n + j];
+            for p in 0..j {
+                s -= a[i * n + p] * a[j * n + p];
+            }
+            a[i * n + j] = s / ljj;
+        }
+
+        // Zero the strictly-upper triangle of this row.
+        for c in (j + 1)..n {
+            a[j * n + c] = 0.0;
+        }
+    }
+
+    Ok(())
+}
+
+/// Factor one blocked-Cholesky panel entirely on the host (backend-neutral).
+///
+/// The shared per-panel computation of the blocked Cholesky loop, identical
+/// across both backends: factor the `b × b` diagonal block via
+/// [`panel_cholesky_packed`] and solve `L₂₁ = A₂₁ · L₁₁⁻ᵀ` for the `trail_rows`
+/// trailing rows. `panel` is the compact row-major active panel, its leading
+/// `b × b` the diagonal block and the following `trail_rows × b` the
+/// off-diagonal rows; both are overwritten with their factored values. Device
+/// I/O (region gather/scatter, the SYRK trailing update) stays in the backend
+/// loop. On the final panel `trail_rows` is zero and the solve runs zero times.
+///
+/// # Errors
+/// Propagates [`panel_cholesky_packed`]'s failure (non-finite entry or
+/// non-positive-definite diagonal block).
+pub fn factor_cholesky_panel(panel: &mut [f32], b: usize, trail_rows: usize) -> Result<()> {
+    let (diag_part, rhs_part) = panel.split_at_mut(b * b);
+    panel_cholesky_packed(diag_part, b)?;
+
+    // L₂₁ = A₂₁ · L₁₁⁻ᵀ: forward-substitute each column against L₁₁.
+    for col in 0..b {
+        for i in 0..trail_rows {
+            let mut s = rhs_part[i * b + col];
+            for p in 0..col {
+                s -= rhs_part[i * b + p] * diag_part[col * b + p];
+            }
+            rhs_part[i * b + col] = s / diag_part[col * b + col];
+        }
+    }
+
+    Ok(())
+}
+
 /// - `LengthMismatch` when `a.len() != n * n`.
 /// - `DispatchFailed` on non-finite entries or an exact-zero pivot.
 pub fn panel_lu_packed(a: &mut [f32], n: usize) -> Result<Vec<usize>> {
@@ -368,6 +458,44 @@ mod tests {
 
         // Layout larger than its buffer is rejected.
         assert!(validate_square_operand(&square, 8).is_err());
+    }
+
+    #[test]
+    fn panel_cholesky_packed_reconstructs_spd_matrix() {
+        // SPD matrix A = MᵀM for a well-conditioned M; factor and check LLᵀ = A.
+        let n = 3;
+        let a = [4.0f32, 12.0, -16.0, 12.0, 37.0, -43.0, -16.0, -43.0, 98.0];
+        let mut l = a;
+        panel_cholesky_packed(&mut l, n).expect("spd");
+        // Expected L (classic textbook result): [[2,0,0],[6,1,0],[-8,5,3]].
+        let expected_l = [2.0f32, 0.0, 0.0, 6.0, 1.0, 0.0, -8.0, 5.0, 3.0];
+        for (got, want) in l.iter().zip(expected_l.iter()) {
+            assert!((got - want).abs() <= 1e-4, "L: got {got} want {want}");
+        }
+        // Reconstruct A = L Lᵀ and compare.
+        for i in 0..n {
+            for j in 0..n {
+                let mut s = 0.0f32;
+                for p in 0..n {
+                    s += l[i * n + p] * l[j * n + p];
+                }
+                assert!(
+                    (s - a[i * n + j]).abs() <= 1e-3,
+                    "A[{i},{j}]: {s} vs {}",
+                    a[i * n + j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn panel_cholesky_packed_rejects_non_positive_definite() {
+        // Indefinite matrix (negative eigenvalue) must be rejected.
+        let mut a = [1.0f32, 2.0, 2.0, 1.0];
+        assert!(matches!(
+            panel_cholesky_packed(&mut a, 2).unwrap_err(),
+            HephaestusError::DispatchFailed { .. }
+        ));
     }
 
     #[test]
