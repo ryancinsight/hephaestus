@@ -40,7 +40,10 @@ pub use domain::ops::{
     IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, RecipOp, SinOp,
     SqrtOp, SubOp, SumOp, UnaryExpr,
 };
-pub use domain::reduction::{plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta};
+pub use domain::reduction::{
+    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
+    AxisReductionMeta,
+};
 pub use domain::scan::{plan_axis_scan, AxisScanDispatch, AxisScanMeta, ScanDirection};
 pub use domain::stream::{
     validate_bindings, validate_grouped_bindings, Binding, CommandStream, GroupedBinding,

@@ -6,9 +6,9 @@ use crate::infrastructure::device::cuda_byte_count;
 use crate::CudaDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
-    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
-    ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, IdentityToken, OpIdentity,
-    Result,
+    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
+    AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar,
+    HephaestusError, IdentityToken, OpIdentity, Result,
 };
 use leto::Layout;
 
@@ -57,28 +57,6 @@ extern "C" __global__ void reduction_kernel(
         identity = T::TOKEN,
         expr = Op::EXPR,
     )
-}
-
-fn validate_reduction_width(width: BlockWidth) -> Result<()> {
-    if !width.get().is_power_of_two() {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "reduction block width {} must be a power of two",
-                width.get()
-            ),
-        });
-    }
-    Ok(())
-}
-
-fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
-    let width = width.get() as usize;
-    let mut passes = 0;
-    while len > 1 {
-        len = len.div_ceil(width);
-        passes += 1;
-    }
-    passes
 }
 
 /// Run reduction on the CUDA device, returning a 1-element buffer holding the result.
@@ -564,23 +542,4 @@ where
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pass_count_matches_tree_depth() {
-        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
-        assert_eq!(reduction_pass_count(0, width), 0);
-        assert_eq!(reduction_pass_count(1, width), 0);
-        assert_eq!(reduction_pass_count(2, width), 1);
-        assert_eq!(reduction_pass_count(256, width), 1);
-        assert_eq!(reduction_pass_count(257, width), 2);
-        assert_eq!(reduction_pass_count(65_536, width), 2);
-
-        let narrow = BlockWidth::new(128).expect("invariant: test width is non-zero");
-        assert_eq!(reduction_pass_count(16_385, narrow), 3);
-    }
 }

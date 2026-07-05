@@ -16,6 +16,44 @@ use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use bytemuck::{Pod, Zeroable};
 use leto::Layout;
 
+/// Validate that a reduction block width can be halved into a workgroup tree.
+///
+/// Both WGSL and CUDA scalar reductions reduce by repeatedly halving active
+/// lanes. A non-power-of-two width would drop lanes, so it is rejected before
+/// backend dispatch.
+///
+/// # Errors
+/// Returns [`HephaestusError::DispatchFailed`] when `width` is not a power of
+/// two.
+pub fn validate_reduction_width(width: BlockWidth) -> Result<()> {
+    if !width.get().is_power_of_two() {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "reduction block width {} must be a power of two",
+                width.get()
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Return the number of tree-reduction passes needed to reduce `len` elements.
+///
+/// The value is backend-neutral host planning: each pass emits
+/// `ceil(current_len / width)` partials until one element remains.
+#[must_use]
+pub fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
+    // `width.get()` is `u32`; this is a lossless widening on all supported
+    // Rust targets (`usize >= 32` bits).
+    let width = width.get() as usize;
+    let mut passes = 0;
+    while len > 1 {
+        len = len.div_ceil(width);
+        passes += 1;
+    }
+    passes
+}
+
 /// Launch metadata for the axis-reduction kernel.
 ///
 /// `#[repr(C)]` so it is bitwise-compatible with the WGSL/CUDA uniform struct
@@ -192,5 +230,29 @@ mod tests {
         let output = Layout::c_contiguous([0, 1]).expect("contiguous");
         let plan = plan_axis_reduction(&input, 0, &output, 0, 1, width(), false).expect("valid");
         assert!(plan.is_none());
+    }
+
+    #[test]
+    fn scalar_pass_count_matches_tree_depth() {
+        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
+        assert_eq!(reduction_pass_count(0, width), 0);
+        assert_eq!(reduction_pass_count(1, width), 0);
+        assert_eq!(reduction_pass_count(2, width), 1);
+        assert_eq!(reduction_pass_count(256, width), 1);
+        assert_eq!(reduction_pass_count(257, width), 2);
+        assert_eq!(reduction_pass_count(65_536, width), 2);
+
+        let narrow = BlockWidth::new(128).expect("invariant: test width is non-zero");
+        assert_eq!(reduction_pass_count(16_385, narrow), 3);
+    }
+
+    #[test]
+    fn scalar_width_must_be_power_of_two() {
+        let valid = BlockWidth::new(128).expect("non-zero width");
+        assert!(validate_reduction_width(valid).is_ok());
+
+        let invalid = BlockWidth::new(192).expect("non-zero width");
+        let err = validate_reduction_width(invalid).unwrap_err();
+        assert!(matches!(err, HephaestusError::DispatchFailed { .. }));
     }
 }

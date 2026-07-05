@@ -6,13 +6,20 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Changed
 
-- `hephaestus-core` / `hephaestus-wgpu` [minor]: hoisted WGPU axis-reduction
-  host planning onto `hephaestus_core::reduction::plan_axis_reduction`.
-  `AxisReductionMeta` and shape/stride/output/alias validation now have a core
-  SSOT; WGPU keeps only shader/pipeline/dispatch ownership and passes its
-  device-buffer alias check into the planner. Evidence in this integration
-  slice: `cargo check -p cfd-3d` compiles the patched local
-  `hephaestus-wgpu` dependency warning-clean.
+- `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: completed
+  KS-5 reduction planner parity. Axis-reduction metadata packing,
+  shape/stride/output/alias validation, scalar reduction width validation, and
+  scalar pass-depth planning now live in `hephaestus_core::reduction`; WGPU and
+  CUDA keep only dialect shader generation, buffer ownership, and launch
+  mechanics. Evidence: `cargo fmt -p hephaestus-core -p hephaestus-wgpu -p
+  hephaestus-cuda --check`, `cargo check -p hephaestus-core`, `cargo check -p
+  hephaestus-cuda --no-default-features`, `cargo check -p hephaestus-wgpu`,
+  `cargo check -p hephaestus-cuda`, `cargo nextest run -p hephaestus-core
+  reduction` (6/6), `cargo nextest run -p hephaestus-cuda --no-default-features
+  reduction` (4/4), `cargo nextest run -p hephaestus-cuda reduction` (4/4),
+  `cargo nextest run -p hephaestus-wgpu reduction` (5/5), and `cargo clippy -p
+  hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda --all-targets
+  --no-deps -- -D warnings`.
 - `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: hoisted the
   duplicated axis-scan host orchestration (`ScanDirection`, `AxisScanMeta`,
   validation, metadata packing, workgroup count) into
@@ -24,14 +31,6 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   unchanged (wgpu 129/129, cuda 102/103).
 
 - `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: hoisted the
-  axis-reduction host orchestration (`AxisReductionMeta`, validation, metadata
-  packing, workgroup count) into `hephaestus_core::reduction::plan_axis_reduction`,
-  mirroring the scan SSOT; shared narrowing/error helpers extracted to a
-  `core::domain::planning` module (used by both planners). Net -156 lines across
-  the two reduction modules. Behavior preserved — the differential-vs-leto axis
-  reduction tests pass unchanged.
-
-- `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: hoisted the
   decomposition operand validators (`validate_square`, dense-C-contiguous
   operand check) into `hephaestus_core::domain::decomposition`
   (`validate_square_operand`, `require_dense_operand`); each backend's
@@ -40,6 +39,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   tests (incl. the adversarial dense-operand cases) pass unchanged.
 
 ### Fixed
+
+- `hephaestus-cuda` / `hephaestus-wgpu` [patch]: restored all-targets
+  compilation after Leto general-eigenvalue APIs returned `leto::Complex<f32>`
+  while Hephaestus device buffers and comparative benchmarks use
+  `num_complex::Complex<f32>`. CUDA eigenvalue upload and WGPU comparative
+  reference checks now convert through explicit value-semantic real/imaginary
+  field mapping.
 
 - `hephaestus-cuda` [patch]: reconciled the Stage 1 CUDA substrate with ADR
   0001. Device acquisition, context binding, device allocation, typed

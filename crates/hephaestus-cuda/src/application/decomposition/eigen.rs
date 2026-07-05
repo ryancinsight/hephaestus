@@ -166,9 +166,13 @@ pub fn eigenvalues(
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
-    let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
-        message: format!("General eigenvalues failed: {e}"),
-    })?;
+    let e_host = leto_ops::eigenvalues(&view)
+        .map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("General eigenvalues failed: {e}"),
+        })?
+        .into_iter()
+        .map(|z| Complex::new(z.re, z.im))
+        .collect::<Vec<_>>();
 
     device.upload(&e_host)
 }

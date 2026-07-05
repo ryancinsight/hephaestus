@@ -3,8 +3,9 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    plan_axis_reduction, AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr,
-    ComputeDevice, DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result, Wgsl,
+    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
+    AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError,
+    IdentityToken, OpIdentity, Result, Wgsl,
 };
 use leto::Layout;
 
@@ -207,18 +208,6 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {{
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
         expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
-}
-
-fn validate_reduction_width(width: BlockWidth) -> Result<()> {
-    if !width.get().is_power_of_two() {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "reduction block width {} must be a power of two",
-                width.get()
-            ),
-        });
-    }
-    Ok(())
 }
 
 fn axis_reduction_shader_source<Op, T>(width: BlockWidth) -> String
@@ -1188,19 +1177,6 @@ where
     Ok(output)
 }
 
-fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
-    // width.get() is u32; `as usize` is a lossless widening on all supported targets
-    // (usize >= 32 bits). std does not implement From<u32> for usize because it
-    // would be narrowing on hypothetical 16-bit targets.
-    let width = width.get() as usize;
-    let mut passes = 0;
-    while len > 1 {
-        len = len.div_ceil(width);
-        passes += 1;
-    }
-    passes
-}
-
 /// Prepared scalar reduction over a fixed input buffer.
 ///
 /// This preallocates the reduction tree scratch buffers and bind groups once so
@@ -1605,23 +1581,4 @@ where
     Ok(temp_buffers
         .pop()
         .expect("invariant: multi-element reduction allocates a final buffer"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pass_count_matches_tree_depth() {
-        let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
-        assert_eq!(reduction_pass_count(0, width), 0);
-        assert_eq!(reduction_pass_count(1, width), 0);
-        assert_eq!(reduction_pass_count(2, width), 1);
-        assert_eq!(reduction_pass_count(256, width), 1);
-        assert_eq!(reduction_pass_count(257, width), 2);
-        assert_eq!(reduction_pass_count(65_536, width), 2);
-
-        let narrow = BlockWidth::new(128).expect("invariant: test width is non-zero");
-        assert_eq!(reduction_pass_count(16_385, narrow), 3);
-    }
 }

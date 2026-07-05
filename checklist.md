@@ -2,6 +2,29 @@
 
 Sprint target: 0.11.0 (ADR-0004 kernel-seam release). Phase: Closure.
 
+2026-07-05 (KS-5 reduction parity increment). Delivered this session:
+`hephaestus_core::reduction` is now the SSOT for CUDA/WGPU axis-reduction
+planning and scalar reduction host planning. `validate_reduction_width` and
+`reduction_pass_count` moved out of both backend reduction modules, and both
+backends import the core helpers while retaining only shader/source, buffer,
+and launch ownership. CUDA default reduction checks required a same-contract
+`leto::Complex<f32>` -> `num_complex::Complex<f32>` eigenvalue upload fix; the
+comparative benchmark now uses one local conversion helper for the same Leto
+complex type drift. Evidence tier: compile-time validation, clippy, and
+value-semantic nextest. Checks: `cargo fmt -p hephaestus-core -p
+hephaestus-wgpu -p hephaestus-cuda --check`, `cargo check -p hephaestus-core`,
+`cargo check -p hephaestus-cuda --no-default-features`, `cargo check -p
+hephaestus-wgpu`, `cargo check -p hephaestus-cuda`, `cargo nextest run -p
+hephaestus-core reduction` (6/6), `cargo nextest run -p hephaestus-cuda
+--no-default-features reduction` (4/4), `cargo nextest run -p hephaestus-cuda
+reduction` (4/4), `cargo nextest run -p hephaestus-wgpu reduction` (5/5), and
+`cargo clippy -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda
+--all-targets --no-deps -- -D warnings`.
+
+Next increment: [KS-5] continue host-orchestration consolidation with the
+blocked-decomposition host-loop planners, then wrapper match-arm collapse where
+the core planner contracts make backend branching redundant.
+
 2026-07-02 (ADR-0004 kernel-seam programme, claude-seam session, branch
 arch/kernel-seam). Delivered this session: [KS-1] core dialect + op
 vocabulary; [KS-2] authored-kernel seam (KernelInterface/KernelSource/
@@ -23,11 +46,9 @@ helios-gpu attenuation` passes 5/5 in atlas `repos/helios`, and `rustup run
 nightly cargo nextest run -p hephaestus-core -p hephaestus-wgpu stream` passes
 8/8 for the supporting WGSL authored-kernel seam.
 
-Next increment: [KS-5] hoist per-family host orchestration into core
-generic over the seam (scan first — its host layers are now the only
-remaining duplication), then [KS-5b] tiled scan with derived tolerance,
-then KS-7 remainder (CUDA streams + pinned staging, typed cache keys,
-rank/det, encoder batching) with criterion baselines.
+Previous next increment: [KS-5] hoist per-family host orchestration into core
+generic over the seam; scan and reduction planner parity are now delivered,
+with blocked-decomposition host loops and wrappers still remaining.
 
 2026-07-05 (CUDA Stage 1 substrate reconciliation). Replaced the Stage 1
 cutile/Mnemosyne managed-memory substrate with ADR-0001's cuda-oxide-owned

@@ -13,6 +13,22 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [major] KS-5 reduction host planning is shared for WGPU and CUDA. Axis
+  reduction metadata packing, shape/stride/output/alias validation, scalar
+  reduction width validation, and scalar pass-depth planning now live in
+  `hephaestus_core::reduction`; `hephaestus-wgpu` and `hephaestus-cuda` retain
+  only dialect shader generation, buffer ownership, and launch mechanics.
+  Evidence tier: compile-time validation, clippy, and value-semantic backend
+  nextest. Checks: `cargo fmt -p hephaestus-core -p hephaestus-wgpu -p
+  hephaestus-cuda --check`, `cargo check -p hephaestus-core`, `cargo check -p
+  hephaestus-cuda --no-default-features`, `cargo check -p hephaestus-wgpu`,
+  `cargo check -p hephaestus-cuda`, `cargo nextest run -p hephaestus-core
+  reduction` (6/6), `cargo nextest run -p hephaestus-cuda
+  --no-default-features reduction` (4/4), `cargo nextest run -p hephaestus-cuda
+  reduction` (4/4), `cargo nextest run -p hephaestus-wgpu reduction` (5/5), and
+  `cargo clippy -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda
+  --all-targets --no-deps -- -D warnings`.
+
 - [patch] CUDA Stage 1 now uses ADR-0001's cuda-oxide substrate instead of the
   previous managed-memory allocation path. `CudaDevice` initializes the driver,
   creates and binds a cuda-oxide context, allocates with `cuMemAlloc_v2`, copies

@@ -66,6 +66,13 @@ fn sort_complex(values: &mut [Complex<f32>]) {
     });
 }
 
+fn complex_from_leto(values: impl IntoIterator<Item = leto::Complex<f32>>) -> Vec<Complex<f32>> {
+    values
+        .into_iter()
+        .map(|z| Complex::new(z.re, z.im))
+        .collect()
+}
+
 fn assert_close_complex_unordered(
     got: &[Complex<f32>],
     expected: &[Complex<f32>],
@@ -2559,7 +2566,7 @@ fn main() {
         let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
         let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
         let leto_out = leto_ops::schur(&leto_m.view()).unwrap();
-        let leto_values = leto_out.eigenvalues();
+        let leto_values = complex_from_leto(leto_out.eigenvalues());
         let na_m = DMatrix::from_row_slice(n, n, &host_m);
         let na_out: Vec<Complex<f32>> = na_m
             .clone()
@@ -2974,7 +2981,7 @@ fn main() {
 
         let layout2d = leto::Layout::c_contiguous([n, n]).unwrap();
         let leto_m = leto::Array::from_shape_vec([n, n], host_m.clone()).unwrap();
-        let leto_out = leto_ops::eigenvalues(&leto_m.view()).unwrap();
+        let leto_out = complex_from_leto(leto_ops::eigenvalues(&leto_m.view()).unwrap());
         let na_m = DMatrix::from_row_slice(n, n, &host_m);
         let na_out: Vec<Complex<f32>> = na_m
             .clone()
