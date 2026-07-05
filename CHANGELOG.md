@@ -53,8 +53,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   unload, and buffer release now route through cuda-oxide driver bindings.
   Buffers use `CUdeviceptr` with `PhantomData<T>` and retain their cuda-oxide
   context so destruction binds the owning context before `cuMemFree_v2`. This
-  replaces the previous managed-memory allocation path and resolves the former
-  WDDM `STATUS_IN_PAGE_ERROR` residual in
+  replaces the previous managed-memory allocation path. CUDA allocation hints
+  now resolve to one explicit non-managed primary-buffer tier: allocatable
+  hints record `MemoryTier::Device`, budget-only tiers are rejected, and
+  `MappablePrimaryBuffers` is false. This resolves the former WDDM
+  `STATUS_IN_PAGE_ERROR` residual in
   `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
   helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
   Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: `cargo fmt -p
@@ -66,7 +69,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   skip-without-driver contracts, `cargo test --doc -p hephaestus-cuda` passes
   0 doctests, and `cargo doc -p hephaestus-cuda --no-deps` passes. Build note:
   cuda-oxide 0.4.0's build script links `cuda.lib`, so the repo config supplies
-  `CUDA_LIB_PATH` for the default CUDA feature.
+  `CUDA_LIB_PATH` for the default CUDA feature. Current focused closure checks:
+  `cargo nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe`
+  (1/1), `cargo nextest run -p hephaestus-cuda
+  device_capabilities_are_driver_backed` (1/1), and `cargo nextest run -p
+  hephaestus-cuda test_placement_aware_allocation` (1/1).
 
 - `hephaestus-cuda` [patch]: resolved the WDDM `STATUS_IN_PAGE_ERROR`
   (`0xc0000006`) managed-memory kernel-launch aborts on Windows.

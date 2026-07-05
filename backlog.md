@@ -98,7 +98,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (2026-07-05). The Stage 1 substrate now follows ADR-0001 directly:
   cuda-oxide initializes the driver, creates/binds the context, allocates
   device memory with `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte
-  counts, and frees with context-bound `cuMemFree_v2`. This removes the
+  counts, and frees with context-bound `cuMemFree_v2`. CUDA allocation hints
+  now resolve through one non-managed primary-buffer tier: all allocatable
+  placement hints are recorded as `MemoryTier::Device`, budget-only tiers are
+  rejected, and `MappablePrimaryBuffers` is false. This removes the
   managed-memory path that triggered WDDM `STATUS_IN_PAGE_ERROR` faults,
   including the former `concurrent_device_acquisition_is_safe` residual.
   The blocked-decomposition region helper uses row-wise 1D copies instead of
@@ -106,7 +109,11 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   full live-CUDA `cargo nextest run -p hephaestus-cuda` passes 105/105,
   including `concurrent_device_acquisition_is_safe`; full `cargo nextest run -p
   hephaestus-cuda --no-default-features` passes 60/60 through
-  skip-without-driver contracts.
+  skip-without-driver contracts. Current focused closure checks:
+  `cargo nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe`
+  (1/1), `cargo nextest run -p hephaestus-cuda
+  device_capabilities_are_driver_backed` (1/1), and `cargo nextest run -p
+  hephaestus-cuda test_placement_aware_allocation` (1/1).
 - [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
   over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
   break) or record the alias-crate justification. Status: todo (user decision

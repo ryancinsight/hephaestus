@@ -34,7 +34,10 @@ architectural decision or a tracked future-work item:
   creates and binds a cuda-oxide context, allocates with `cuMemAlloc_v2`, copies
   with checked `cuMemcpy*` byte counts, and frees with context-bound
   `cuMemFree_v2`; `CudaBuffer<T>` keeps `PhantomData<T>` and the owning context
-  for typed, context-correct destruction. This resolves the former KS-8 WDDM
+  for typed, context-correct destruction. CUDA allocation hints resolve through
+  one non-managed primary-buffer tier: allocatable hints record
+  `MemoryTier::Device`, budget-only tiers are rejected, and
+  `MappablePrimaryBuffers` is false. This resolves the former KS-8 WDDM
   `STATUS_IN_PAGE_ERROR` residual, including
   `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
   helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
@@ -47,7 +50,11 @@ architectural decision or a tracked future-work item:
   --no-deps -- -D warnings`, `cargo nextest run -p hephaestus-cuda` (105/105),
   `cargo nextest run -p hephaestus-cuda --no-default-features` (60/60),
   `cargo test --doc -p hephaestus-cuda` (0 doctests), and `cargo doc -p
-  hephaestus-cuda --no-deps`.
+  hephaestus-cuda --no-deps`. Current focused closure checks: `cargo nextest
+  run -p hephaestus-cuda concurrent_device_acquisition_is_safe` (1/1), `cargo
+  nextest run -p hephaestus-cuda device_capabilities_are_driver_backed` (1/1),
+  and `cargo nextest run -p hephaestus-cuda test_placement_aware_allocation`
+  (1/1).
 
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real

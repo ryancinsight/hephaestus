@@ -81,6 +81,7 @@ fn device_capabilities_are_driver_backed() {
     assert!(dev.supports_device_feature(DeviceFeature::PushConstants));
     assert!(!dev.supports_device_feature(DeviceFeature::TimestampQuery));
     assert!(!dev.supports_device_feature(DeviceFeature::ShaderF16));
+    assert!(!dev.supports_device_feature(DeviceFeature::MappablePrimaryBuffers));
 }
 
 #[test]
@@ -104,21 +105,33 @@ fn test_placement_aware_allocation() {
     };
     use themis::{MemoryTier, PlacementHint};
 
-    // Test HostPinned
+    // CUDA primary buffers use non-managed `cuMemAlloc_v2` device memory even
+    // when a host-visible placement hint is supplied.
     let hint = PlacementHint::Tier(MemoryTier::HostPinned);
     let buf1 = dev.alloc_zeroed_with_hint::<f32>(128, hint).unwrap();
     assert_eq!(buf1.len(), 128);
-    assert_eq!(buf1.tier(), MemoryTier::HostPinned);
+    assert_eq!(buf1.tier(), MemoryTier::Device);
 
     let host = vec![1.5f32; 128];
     let buf2 = dev.upload_with_hint(&host, hint).unwrap();
     assert_eq!(buf2.len(), 128);
-    assert_eq!(buf2.tier(), MemoryTier::HostPinned);
+    assert_eq!(buf2.tier(), MemoryTier::Device);
 
-    // Test Dram / Unified
+    // Test Dram / unified host memory hints normalize to the implemented
+    // non-managed device tier.
     let hint_dram = PlacementHint::Tier(MemoryTier::Dram);
     let buf3 = dev.alloc_zeroed_with_hint::<f32>(128, hint_dram).unwrap();
-    assert_eq!(buf3.tier(), MemoryTier::Dram);
+    assert_eq!(buf3.tier(), MemoryTier::Device);
+
+    let registers =
+        dev.alloc_zeroed_with_hint::<f32>(128, PlacementHint::Tier(MemoryTier::Registers));
+    match registers {
+        Err(HephaestusError::AllocationFailed { message }) => assert_eq!(
+            message,
+            "CUDA primary buffers cannot be allocated from budget-only tier Registers"
+        ),
+        other => panic!("expected budget-only tier rejection, got {other:?}"),
+    }
 
     // Test default non-hinted delegates
     let buf4 = dev.alloc_zeroed::<f32>(128).unwrap();

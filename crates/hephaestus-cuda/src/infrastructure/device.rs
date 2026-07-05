@@ -105,7 +105,6 @@ pub struct CudaDevice {
 #[derive(Clone, Copy, Debug)]
 struct CudaDeviceFeatures {
     shader_f64: bool,
-    mappable_primary_buffers: bool,
     push_constants: bool,
 }
 
@@ -160,7 +159,8 @@ impl CudaDevice {
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             topology,
         };
-        // Sanity check to confirm that dynamic memory mapping and copying is functional (fails closed on headless/stub drivers)
+        // Sanity check to confirm that device allocation and copying are
+        // functional (fails closed on headless/stub drivers).
         {
             let buf =
                 dev.alloc_zeroed::<u32>(1)
@@ -294,6 +294,31 @@ impl CudaDevice {
             }
         }
         Ok(())
+    }
+
+    /// Resolve caller placement hints to CUDA's implemented allocation tier.
+    ///
+    /// This backend deliberately allocates primary buffers with `cuMemAlloc_v2`.
+    /// That is non-managed device memory: host access happens only through
+    /// explicit copies. Host-visible hints are therefore normalized to
+    /// [`themis::MemoryTier::Device`] instead of being recorded as mappable or
+    /// managed storage.
+    fn allocation_tier(hint: themis::PlacementHint) -> Result<themis::MemoryTier> {
+        match hint {
+            themis::PlacementHint::Tier(tier) if !tier.is_host_allocatable() => {
+                Err(HephaestusError::AllocationFailed {
+                    message: format!(
+                        "CUDA primary buffers cannot be allocated from budget-only tier {tier:?}"
+                    ),
+                })
+            }
+            themis::PlacementHint::Tier(_) | themis::PlacementHint::Current => {
+                Ok(themis::MemoryTier::Device)
+            }
+            themis::PlacementHint::Numa(_)
+            | themis::PlacementHint::Domain(_)
+            | themis::PlacementHint::Any => Ok(themis::MemoryTier::Device),
+        }
     }
 
     /// The device topology snapshot captured at acquisition, when available.
@@ -534,21 +559,10 @@ fn query_device_features(device: &cuda_oxide::sys::CUdevice) -> Result<CudaDevic
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
         "compute_capability_minor",
     )?;
-    let mappable = device_attribute(
-        *device,
-        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
-        "can_map_host_memory",
-    )? != 0;
-    let unified_addressing = device_attribute(
-        *device,
-        sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
-        "unified_addressing",
-    )? != 0;
     let compute_capability = major * 10 + minor;
 
     Ok(CudaDeviceFeatures {
         shader_f64: compute_capability >= 13,
-        mappable_primary_buffers: mappable || unified_addressing,
         push_constants: true,
     })
 }
@@ -625,7 +639,7 @@ impl ComputeDeviceCapabilities for CudaDevice {
             DeviceFeature::TimestampQuery => false,
             DeviceFeature::ShaderF64 => self.features.shader_f64,
             DeviceFeature::ShaderF16 => false,
-            DeviceFeature::MappablePrimaryBuffers => self.features.mappable_primary_buffers,
+            DeviceFeature::MappablePrimaryBuffers => false,
             DeviceFeature::PushConstants => self.features.push_constants,
         }
     }
@@ -675,10 +689,7 @@ impl ComputeDevice for CudaDevice {
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>> {
         validate_buffer_size::<T>(len)?;
-        let tier = match hint {
-            themis::PlacementHint::Tier(t) => t,
-            _ => themis::MemoryTier::Device,
-        };
+        let tier = Self::allocation_tier(hint)?;
         if len == 0 {
             return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
         }
@@ -707,10 +718,7 @@ impl ComputeDevice for CudaDevice {
     ) -> Result<Self::Buffer<T>> {
         validate_slice_alignment(host)?;
         let len = host.len();
-        let tier = match hint {
-            themis::PlacementHint::Tier(t) => t,
-            _ => themis::MemoryTier::Device,
-        };
+        let tier = Self::allocation_tier(hint)?;
         if len == 0 {
             return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
         }
