@@ -43,7 +43,7 @@ use hephaestus_core::factor_lu_panel;
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::CudaDevice;
+use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
 
 /// LU decomposition result: device-resident packed factors with host-side
 /// decomposition for solve/inv/det.
@@ -227,6 +227,7 @@ pub fn lu_decompose_blocked(
         let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
+        let byte_count = cuda_byte_count(bytes, "blocked LU startup copy byte count")?;
         // SAFETY: this device's context is current (`bind` above).
         // `factors_buf` is a live, freshly allocated `n * n`-element device
         // allocation, and `matrix.buffer` holds at least `n * n` elements:
@@ -237,7 +238,7 @@ pub fn lu_decompose_blocked(
         // outlive it because frees route through synchronizing
         // `cuMemFree`-family calls.
         let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), bytes)
+            cuda_oxide::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), byte_count)
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {

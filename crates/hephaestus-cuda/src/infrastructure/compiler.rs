@@ -1,6 +1,8 @@
 use libloading::Library;
 use std::sync::OnceLock;
 
+use crate::infrastructure::device::CudaContext;
+
 #[allow(non_camel_case_types)]
 pub type nvrtcProgram = *mut std::ffi::c_void;
 #[allow(non_camel_case_types)]
@@ -39,21 +41,21 @@ pub struct NvrtcDriver {
 /// current before unloading — modules are context-owned, and the last `Arc`
 /// may be released on any thread.
 pub struct SafeCachedKernel {
-    pub module: cuda_core::sys::CUmodule,
-    pub func: cuda_core::sys::CUfunction,
-    device: std::sync::Arc<cuda_core::Device>,
+    pub module: cuda_oxide::sys::CUmodule,
+    pub func: cuda_oxide::sys::CUfunction,
+    context: std::sync::Arc<CudaContext>,
 }
 
 impl SafeCachedKernel {
     pub(crate) fn new(
-        module: cuda_core::sys::CUmodule,
-        func: cuda_core::sys::CUfunction,
-        device: std::sync::Arc<cuda_core::Device>,
+        module: cuda_oxide::sys::CUmodule,
+        func: cuda_oxide::sys::CUfunction,
+        context: std::sync::Arc<CudaContext>,
     ) -> Self {
         Self {
             module,
             func,
-            device,
+            context,
         }
     }
 }
@@ -62,7 +64,7 @@ impl SafeCachedKernel {
 // not thread-affine pointers; the CUDA driver API is thread-safe and any
 // thread may use a handle after making the owning context current (every
 // launch/unload site binds first). The handles are never dereferenced on the
-// host. `cuda_core::Device` is itself Send + Sync.
+// host. The retained `CudaContext` binds the owning context before unload.
 unsafe impl Send for SafeCachedKernel {}
 // SAFETY: shared use is read-only handle passing into driver calls that
 // perform their own internal synchronization; see the Send justification.
@@ -77,11 +79,11 @@ impl Drop for SafeCachedKernel {
         // cannot surface errors; a failed bind or unload leaks the module
         // (bounded: at most one per cache key per device lifetime) and trips
         // the debug assertion in dev/test builds.
-        if self.device.bind_to_thread().is_ok() {
+        if self.context.bind().is_ok() {
             // SAFETY: `module` is a live handle owned by this value, the
             // owning context is current (bind above), and no other user
             // exists — Drop runs at the last Arc release.
-            let res = unsafe { cuda_core::sys::cuModuleUnload(self.module) };
+            let res = unsafe { cuda_oxide::sys::cuModuleUnload(self.module) };
             debug_assert_eq!(res, 0, "cuModuleUnload failed with code {res}");
         } else {
             debug_assert!(false, "SafeCachedKernel drop: context bind failed");

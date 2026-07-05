@@ -13,6 +13,9 @@ use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
+#[cfg(feature = "cuda")]
+type DevicePtr = cuda_oxide::sys::CUdeviceptr;
+#[cfg(not(feature = "cuda"))]
 type DevicePtr = u64;
 
 /// One typed CUDA storage-buffer binding for a multi-storage CUDA C kernel.

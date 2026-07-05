@@ -20,7 +20,7 @@ use super::region::{download_matrix_region_compact, write_matrix_region_compact,
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::CudaDevice;
+use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
 
 /// Lower-triangular Cholesky factor on the device, with host-side
 /// decomposition for solve/inv/det without re-factorization.
@@ -199,6 +199,7 @@ pub fn cholesky_decompose_blocked(
         let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
+        let byte_count = cuda_byte_count(bytes, "blocked Cholesky startup copy byte count")?;
         // SAFETY: this device's context is current (`bind` above). `lower_buf`
         // is a live, freshly allocated `n * n`-element device allocation, and
         // `matrix.buffer` holds at least `n * n` elements: the operand is
@@ -208,8 +209,9 @@ pub fn cholesky_decompose_blocked(
         // asynchronous on the null stream; both allocations outlive it
         // because frees route through synchronizing `cuMemFree`-family
         // calls.
-        let res =
-            unsafe { cuda_core::sys::cuMemcpyDtoD_v2(lower_buf.raw(), matrix.buffer.raw(), bytes) };
+        let res = unsafe {
+            cuda_oxide::sys::cuMemcpyDtoD_v2(lower_buf.raw(), matrix.buffer.raw(), byte_count)
+        };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("cholesky startup cuMemcpyDtoD_v2 failed: {res}"),

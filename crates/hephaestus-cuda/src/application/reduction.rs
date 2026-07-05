@@ -1,6 +1,8 @@
 use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
+#[cfg(feature = "cuda")]
+use crate::infrastructure::device::cuda_byte_count;
 use crate::CudaDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -115,8 +117,9 @@ where
         // null stream; both allocations outlive it because frees route
         // through synchronizing `cuMemFree`-family calls.
         unsafe {
-            let res =
-                cuda_core::sys::cuMemcpyDtoD_v2(out.raw(), input.raw(), core::mem::size_of::<T>());
+            let bytes = core::mem::size_of::<T>();
+            let byte_count = cuda_byte_count(bytes, "singleton reduction copy byte count")?;
+            let res = cuda_oxide::sys::cuMemcpyDtoD_v2(out.raw(), input.raw(), byte_count);
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!("cuMemcpyDtoD_v2 failed with code: {res}"),

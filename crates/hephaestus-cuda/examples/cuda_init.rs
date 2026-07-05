@@ -1,22 +1,18 @@
 fn main() {
-    println!("Loading nvcuda.dll dynamically...");
-    // Let's try to load the cuda-async library
-    println!("Initializing cuda_async...");
-    let dev_res = cuda_async::device_context::with_device(0, |device| {
-        println!("Successfully acquired device inside closure!");
-        device.clone()
-    });
-    match dev_res {
-        Ok(dev) => {
-            println!("Acquired device: {:?}", dev);
-            println!("Binding to thread...");
-            match dev.bind_to_thread() {
-                Ok(_) => println!("Successfully bound to thread!"),
-                Err(e) => println!("Error binding: {:?}", e),
+    println!("Initializing cuda-oxide driver substrate...");
+    if let Err(error) = cuda_oxide::Cuda::init() {
+        println!("Failed to initialize CUDA driver: {error}");
+        return;
+    }
+
+    match cuda_oxide::Cuda::list_devices() {
+        Ok(devices) => {
+            println!("CUDA devices: {}", devices.len());
+            for (ordinal, device) in devices.iter().enumerate() {
+                let name = device.name().unwrap_or_else(|error| format!("{error}"));
+                println!("{ordinal}: {name}");
             }
         }
-        Err(e) => {
-            println!("Failed to acquire device: {:?}", e);
-        }
+        Err(error) => println!("Failed to enumerate CUDA devices: {error}"),
     }
 }

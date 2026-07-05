@@ -17,13 +17,11 @@
 //! without source changes. Hephaestus is to the GPU what `leto` is to the CPU;
 //! this crate adds the CUDA pathway alongside the portable wgpu one.
 //!
-//! The CUDA toolchain is composed from cutile-rs (`cuda-core` driver `sys`
-//! bindings + `cuda-async` device/context acquisition), the same source
-//! `coeus-cuda` uses. It is gated behind the `cuda` feature and loaded
-//! dynamically at runtime (`nvcuda.dll` / `libcuda.so`), so building does not
-//! require a CUDA toolkit. Without the feature, the crate compiles as a stub
-//! whose [`CudaDevice::try_default`] reports the backend unavailable rather
-//! than fabricating a device.
+//! The CUDA toolchain composes cuda-oxide for device acquisition, context
+//! management, `CUdeviceptr` allocation, and host/device transfer with cutile
+//! for kernel authoring above that substrate. Without the `cuda` feature, the
+//! crate compiles as a stub whose [`CudaDevice::try_default`] reports the
+//! backend unavailable rather than fabricating a device.
 //!
 //! [`hephaestus-wgpu`]: https://docs.rs/hephaestus-wgpu
 //! [`CudaBuffer<T>`]: crate::CudaBuffer

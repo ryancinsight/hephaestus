@@ -29,11 +29,27 @@ remaining duplication), then [KS-5b] tiled scan with derived tolerance,
 then KS-7 remainder (CUDA streams + pinned staging, typed cache keys,
 rank/det, encoder batching) with criterion baselines.
 
-Residual risk: [KS-8] nine deterministic 0xc0000006 aborts on this
-machine's CUDA hardware (managed-memory pathway, pre-existing, A/B
-verified) — blocks the CUDA full-green claim; fix direction is a real
-cuMemAlloc device tier in mnemosyne. Unpushed commits on arch/kernel-seam
-until the final gate of this session passes.
+2026-07-05 (CUDA Stage 1 substrate reconciliation). Replaced the Stage 1
+cutile/Mnemosyne managed-memory substrate with ADR-0001's cuda-oxide-owned
+driver initialization, context creation/binding, `cuMemAlloc_v2` allocation,
+checked `cuMemcpy*` upload/download/subrange transfer, and context-bound
+`cuMemFree_v2` release. `CudaBuffer<T>` remains typed by `PhantomData<T>` and
+retains its cuda-oxide context so frees and module unloads bind the owning
+context before driver calls. The blocked-decomposition region helper uses
+row-wise 1D copies because cuda-oxide 0.4.0's `CUDA_MEMCPY2D` layout is not
+ABI-correct on Windows/MSVC. Evidence tier: compile-time validation, clippy,
+rustdoc, and value-semantic live-CUDA/no-driver contract tests. Checks: `cargo fmt -p
+hephaestus-cuda --check`, `cargo check -p hephaestus-cuda`, `cargo check -p
+hephaestus-cuda --no-default-features`, `cargo clippy -p hephaestus-cuda
+--all-targets --no-deps -- -D warnings`, `cargo clippy -p hephaestus-cuda
+--no-default-features --all-targets --no-deps -- -D warnings`, `cargo nextest
+run -p hephaestus-cuda` passes 105/105 on live CUDA, `cargo nextest run -p
+hephaestus-cuda --no-default-features` passes 60/60 via skip-without-driver
+contracts, `cargo test --doc -p hephaestus-cuda` passes 0 doctests, and `cargo
+doc -p hephaestus-cuda --no-deps` passes. Residual: `cuda-oxide` 0.4.0's build
+script links `cuda.lib`, so this repository now sets `CUDA_LIB_PATH` for the
+default CUDA feature even though no-default stub verification still compiles
+without a CUDA driver/device.
 
 2026-07-03 (CUDA ComputeDeviceCapabilities). Implemented
 `ComputeDeviceCapabilities` for `CudaDevice` with driver-backed limits and

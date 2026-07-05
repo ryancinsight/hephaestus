@@ -41,20 +41,40 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Fixed
 
-- `hephaestus-cuda` [patch]: resolve 8 of 9 WDDM `STATUS_IN_PAGE_ERROR`
-  (`0xc0000006`) test aborts on Windows. Root-caused by experiment (correcting
-  the earlier placement-advice hypothesis): WDDM does not support concurrent
-  host/device access to `cuMemAllocManaged` ranges, so a host allocation
-  issued while a kernel is in flight on the null stream — the next
-  intermediate buffer in multi-pass reductions and map-then-reduce
-  (dot/norm/trace) — faults. A Windows-gated `cuCtxSynchronize` after each
-  `cuLaunchKernel` drains the context before the next host managed-memory
-  access. The backend is already null-stream-serial, so throughput is
-  unchanged and this also attributes async kernel faults to the launching
-  operation; Linux/UVM keeps launches asynchronous. Suite 102/103; the lone
-  residual (`concurrent_device_acquisition_is_safe`, 16 threads sharing the
-  null stream with no launches) needs the non-managed device tier tracked in
-  the backlog. Evidence: the eight formerly-aborting compute tests
+- `hephaestus-cuda` [patch]: reconciled the Stage 1 CUDA substrate with ADR
+  0001. Device acquisition, context binding, device allocation, typed
+  `CudaBuffer<T>` ownership, upload/download/subrange transfers, kernel module
+  unload, and buffer release now route through cuda-oxide driver bindings.
+  Buffers use `CUdeviceptr` with `PhantomData<T>` and retain their cuda-oxide
+  context so destruction binds the owning context before `cuMemFree_v2`. This
+  replaces the previous managed-memory allocation path and resolves the former
+  WDDM `STATUS_IN_PAGE_ERROR` residual in
+  `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
+  helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
+  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: `cargo fmt -p
+  hephaestus-cuda --check`, `cargo check -p hephaestus-cuda`, `cargo check -p
+  hephaestus-cuda --no-default-features`, both default and no-default
+  `cargo clippy -p hephaestus-cuda --all-targets --no-deps -- -D warnings`,
+  `cargo nextest run -p hephaestus-cuda` passes 105/105 on live CUDA, `cargo
+  nextest run -p hephaestus-cuda --no-default-features` passes 60/60 via
+  skip-without-driver contracts, `cargo test --doc -p hephaestus-cuda` passes
+  0 doctests, and `cargo doc -p hephaestus-cuda --no-deps` passes. Build note:
+  cuda-oxide 0.4.0's build script links `cuda.lib`, so the repo config supplies
+  `CUDA_LIB_PATH` for the default CUDA feature.
+
+- `hephaestus-cuda` [patch]: resolved the WDDM `STATUS_IN_PAGE_ERROR`
+  (`0xc0000006`) managed-memory kernel-launch aborts on Windows.
+  Root-caused by experiment (correcting the earlier placement-advice
+  hypothesis): WDDM does not support concurrent host/device access to
+  `cuMemAllocManaged` ranges, so a host allocation issued while a kernel is in
+  flight on the null stream — the next intermediate buffer in multi-pass
+  reductions and map-then-reduce (dot/norm/trace) — faults. A Windows-gated
+  `cuCtxSynchronize` after each `cuLaunchKernel` drains the context before the
+  next host managed-memory access. The backend is already null-stream-serial,
+  so throughput is unchanged and this also attributes async kernel faults to
+  the launching operation; Linux/UVM keeps launches asynchronous. The remaining
+  managed-path residual was closed by the cuda-oxide `cuMemAlloc_v2` Stage 1
+  substrate reconciliation above. Evidence: the formerly-aborting compute tests
   (reduction ×3, dot, norms, trace, hessenberg, strided block-width) pass on
   live hardware.
 
@@ -734,11 +754,12 @@ breaking minor per the versioning policy.
   `hephaestus-core::ComputeDevice` seam (`CudaDevice` acquisition + typed
   `CudaBuffer<T>` device buffer + `alloc_zeroed`/`upload`/`download` transfer),
   so consumers binding `<D: ComputeDevice>` substitute CUDA for wgpu without
-  source changes. The CUDA toolchain is composed from cutile-rs
-  (`cuda-core` driver `sys` + `cuda-async` device acquisition), the same source
-  coeus-cuda uses, gated behind the `cuda` feature and dynamically loaded at
-  runtime; the default build compiles a stub that reports the backend
-  unavailable rather than fabricating a device. Five contract tests verify
+  source changes. The CUDA substrate is cuda-oxide-owned for driver
+  initialization, context binding, `CUdeviceptr` allocation, and transfer;
+  cutile remains the kernel-authoring dependency above that substrate. The
+  `cuda` feature enables the real backend; the no-default build compiles a stub
+  that reports the backend unavailable rather than fabricating a device. Five
+  contract tests verify
   upload/download identity (f32, i32), zeroed allocation, empty round-trip, and
   length-mismatch rejection — value-semantic, passing on real CUDA hardware
   (toolkit v13.2) and skipping when no device is present. Monomorphized kernel

@@ -13,6 +13,26 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [patch] CUDA Stage 1 now uses ADR-0001's cuda-oxide substrate instead of the
+  previous managed-memory allocation path. `CudaDevice` initializes the driver,
+  creates and binds a cuda-oxide context, allocates with `cuMemAlloc_v2`, copies
+  with checked `cuMemcpy*` byte counts, and frees with context-bound
+  `cuMemFree_v2`; `CudaBuffer<T>` keeps `PhantomData<T>` and the owning context
+  for typed, context-correct destruction. This resolves the former KS-8 WDDM
+  `STATUS_IN_PAGE_ERROR` residual, including
+  `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
+  helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
+  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence tier: compile-time
+  validation, clippy, rustdoc, and value-semantic live-CUDA/no-driver contract tests.
+  Checks: `cargo fmt -p hephaestus-cuda --check`, `cargo check -p
+  hephaestus-cuda`, `cargo check -p hephaestus-cuda --no-default-features`,
+  `cargo clippy -p hephaestus-cuda --all-targets --no-deps -- -D warnings`,
+  `cargo clippy -p hephaestus-cuda --no-default-features --all-targets
+  --no-deps -- -D warnings`, `cargo nextest run -p hephaestus-cuda` (105/105),
+  `cargo nextest run -p hephaestus-cuda --no-default-features` (60/60),
+  `cargo test --doc -p hephaestus-cuda` (0 doctests), and `cargo doc -p
+  hephaestus-cuda --no-deps`.
+
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real
   CUDA driver attributes and current memory info, reports `None` for
@@ -571,13 +591,6 @@ host before uploading device buffers.
   semver-checks run. Re-verify when the stack publishes to a registry or
   semver-checks grows patch-table support. Evidence tier: tool output
   (2026-07-02).
-- [patch] Nine CUDA tests abort deterministically with OS 0xc0000006
-  (STATUS_IN_PAGE_ERROR) on this machine's real hardware — first
-  real-hardware run of the suite; A/B verified pre-existing on unmodified
-  baseline; all on the managed-memory pathway (KS-8; suspect in-band
-  host-written allocator metadata on `cuMemAllocManaged` pages, audit CU-P7).
-  81-91/90-100 remaining tests pass on hardware across runs. Blocks the CUDA
-  full-green claim until the mnemosyne device-tier fix lands.
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification is
   still required on CUDA hardware/toolchain before claiming device-execution
@@ -591,6 +604,11 @@ host before uploading device buffers.
   the `--all-features` variant runs on CUDA-equipped CI. Evidence tier: static
   diagnostics from the attempted all-features gate; default-feature gates are
   clean.
+- [patch] `cuda-oxide` 0.4.0's build script links `cuda.lib`, so the default
+  `hephaestus-cuda` feature needs `CUDA_LIB_PATH` pointing at a CUDA import
+  library even though adapterless runtime tests skip and the
+  `--no-default-features` stub compiles without a CUDA driver/device. This is an
+  upstream build-script constraint, not a Hephaestus runtime-device contract.
 
 ## Next Increment
 

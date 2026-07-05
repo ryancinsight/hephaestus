@@ -20,7 +20,7 @@ kernels are forged for accelerator hardware.
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
-| `hephaestus-cuda` | CUDA backend: dynamic-loaded driver device acquisition, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile PTX authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
+| `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
 
 ## Design
 

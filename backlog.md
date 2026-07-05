@@ -94,27 +94,19 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
   (WG-P3), rank/det serial-kernel fix (WG-P1), axis-1 grid-stride reduction
   (WG-P5). Status: todo; criterion baselines before/after each.
-- [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. **8 of 9 fixed**
-  (2026-07-03). Root cause identified by experiment, correcting the audit's
-  CU-P7 hypothesis: NOT the `cuMemAdvise` placement advice (disabling it left
-  all 9 aborting) and NOT in-band allocator metadata (the mnemosyne registry
-  is out-of-band `AtomicPtr`s). The trigger is WDDM's lack of concurrent
-  host/device access to `cuMemAllocManaged` ranges: a host touchpoint issued
-  while a kernel is in flight on the null stream (the next intermediate
-  allocation in multi-pass reductions and map-then-reduce dot/norm/trace, or
-  the driver's managed-heap bookkeeping) faults with STATUS_IN_PAGE_ERROR.
-  Confirmed: `CUDA_LAUNCH_BLOCKING=1` makes all 9 pass. Fix (commit pending):
-  Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel` in
-  `application/pipeline.rs::launch_kernel`, draining the context before any
-  host managed-memory access. Backend is already null-stream-serial so
-  throughput is unaffected; Linux/UVM stays async. Suite: 102/103.
-  **Residual (1):** `concurrent_device_acquisition_is_safe` — 16 threads share
-  the context's null stream and do concurrent managed alloc/copy with no
-  launches, so the launch-drain doesn't cover it; this is WDDM concurrent
-  host managed access. Needs the real `cuMemAlloc` device tier in mnemosyne
-  (out-of-band, non-managed device memory) or per-thread streams (KS-7); a
-  global managed-op mutex would fix it but at a contention cost not worth a
-  stress test. Status: 8/9 done; residual carried into KS-7/mnemosyne.
+- [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
+  (2026-07-05). The Stage 1 substrate now follows ADR-0001 directly:
+  cuda-oxide initializes the driver, creates/binds the context, allocates
+  device memory with `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte
+  counts, and frees with context-bound `cuMemFree_v2`. This removes the
+  managed-memory path that triggered WDDM `STATUS_IN_PAGE_ERROR` faults,
+  including the former `concurrent_device_acquisition_is_safe` residual.
+  The blocked-decomposition region helper uses row-wise 1D copies instead of
+  cuda-oxide 0.4.0's Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence:
+  full live-CUDA `cargo nextest run -p hephaestus-cuda` passes 105/105,
+  including `concurrent_device_acquisition_is_safe`; full `cargo nextest run -p
+  hephaestus-cuda --no-default-features` passes 60/60 through
+  skip-without-driver contracts.
 - [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
   over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
   break) or record the alias-crate justification. Status: todo (user decision

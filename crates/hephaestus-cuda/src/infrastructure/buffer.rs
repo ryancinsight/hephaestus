@@ -1,17 +1,14 @@
-use crate::infrastructure::device::{
-    CUDA_DEVICE_ALLOCATOR, CUDA_HOST_PINNED_ALLOCATOR, CUDA_UNIFIED_ALLOCATOR,
-};
+use crate::infrastructure::device::CudaContext;
 use core::marker::PhantomData;
-use std::alloc::GlobalAlloc;
+use std::sync::Arc;
 
 use hephaestus_core::DeviceBuffer;
 
 /// A raw CUDA device pointer (`CUdeviceptr`), an opaque device address.
 ///
-/// Kept as a `u64` (the driver ABI type) so this crate carries no public
-/// dependency on cutile-rs types; the `cuda-core` `sys` calls accept it
-/// directly, matching coeus-cuda's driver convention.
-pub type DevicePtr = u64;
+/// Kept as cuda-oxide's driver ABI type without exposing cuda-oxide in public
+/// APIs; consumers see an opaque integer address for custom kernel launches.
+pub type DevicePtr = cuda_oxide::sys::CUdeviceptr;
 
 /// A typed, device-resident linear buffer of `len` elements of `T`.
 ///
@@ -26,6 +23,7 @@ pub struct CudaBuffer<T> {
     pub(crate) ptr: DevicePtr,
     pub(crate) len: usize,
     pub(crate) tier: themis::MemoryTier,
+    pub(crate) context: Option<Arc<CudaContext>>,
     pub(crate) marker: PhantomData<T>,
 }
 
@@ -37,11 +35,17 @@ impl<T> CudaBuffer<T> {
     /// and frees it on drop.
     #[must_use]
     #[inline]
-    pub(crate) fn new(ptr: DevicePtr, len: usize, tier: themis::MemoryTier) -> Self {
+    pub(crate) fn new(
+        ptr: DevicePtr,
+        len: usize,
+        tier: themis::MemoryTier,
+        context: Arc<CudaContext>,
+    ) -> Self {
         Self {
             ptr,
             len,
             tier,
+            context: Some(context),
             marker: PhantomData,
         }
     }
@@ -78,28 +82,15 @@ impl<T> DeviceBuffer<T> for CudaBuffer<T> {
 impl<T> Drop for CudaBuffer<T> {
     fn drop(&mut self) {
         if self.ptr != 0 {
-            let bytes = self.len * core::mem::size_of::<T>();
-            if let Ok(layout) = std::alloc::Layout::from_size_align(bytes, 4) {
-                // SAFETY: `self.ptr` is non-null (guarded above) and was
-                // returned by the same tier-selected Mnemosyne allocator in
-                // `CudaDevice::alloc_bytes_with_tier` with an identical
-                // layout (`len * size_of::<T>()` bytes, align 4); the buffer
-                // uniquely owns the pointer, so this dealloc runs exactly
-                // once. The backing `cuMemFree`/`cuMemFreeHost` calls are
-                // synchronous, ordering the release after any in-flight
-                // async null-stream work still referencing the pointer.
-                unsafe {
-                    match self.tier {
-                        themis::MemoryTier::HostPinned => {
-                            CUDA_HOST_PINNED_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
-                        }
-                        themis::MemoryTier::Dram => {
-                            CUDA_UNIFIED_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
-                        }
-                        _ => {
-                            CUDA_DEVICE_ALLOCATOR.dealloc(self.ptr as *mut u8, layout);
-                        }
-                    }
+            if let Some(context) = self.context.take() {
+                if context.bind().is_ok() {
+                    // SAFETY: `self.ptr` is non-null (guarded above), was
+                    // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
+                    // and this buffer owns that allocation exactly once.
+                    let res = unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) };
+                    debug_assert_eq!(res, 0, "cuMemFree_v2 failed with code {res}");
+                } else {
+                    debug_assert!(false, "CudaBuffer drop: context bind failed");
                 }
             }
         }

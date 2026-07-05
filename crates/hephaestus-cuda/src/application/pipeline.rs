@@ -54,13 +54,13 @@ pub fn cached_kernel(
                 message: format!("kernel name is not a valid CString: {e}"),
             })?;
 
-        let mut module: cuda_core::sys::CUmodule = std::ptr::null_mut();
+        let mut module: cuda_oxide::sys::CUmodule = std::ptr::null_mut();
         // SAFETY: this device's context is current on this thread (`bind`
         // above); `ptx_c` is a NUL-terminated PTX image kept alive across the
         // call; `module` is a valid out-pointer for one `CUmodule`.
         let compiled = unsafe {
-            let res = cuda_core::sys::cuModuleLoadData(
-                &mut module as *mut cuda_core::sys::CUmodule,
+            let res = cuda_oxide::sys::cuModuleLoadData(
+                &mut module as *mut cuda_oxide::sys::CUmodule,
                 ptx_c.as_ptr() as *const std::ffi::c_void,
             );
             if res != 0 {
@@ -69,14 +69,14 @@ pub fn cached_kernel(
                 });
             }
 
-            let mut func: cuda_core::sys::CUfunction = std::ptr::null_mut();
-            let res = cuda_core::sys::cuModuleGetFunction(
-                &mut func as *mut cuda_core::sys::CUfunction,
+            let mut func: cuda_oxide::sys::CUfunction = std::ptr::null_mut();
+            let res = cuda_oxide::sys::cuModuleGetFunction(
+                &mut func as *mut cuda_oxide::sys::CUfunction,
                 module as *mut _,
                 func_name_c.as_ptr(),
             );
             if res != 0 {
-                let unload = cuda_core::sys::cuModuleUnload(module as *mut _);
+                let unload = cuda_oxide::sys::cuModuleUnload(module as *mut _);
                 debug_assert_eq!(unload, 0, "cuModuleUnload during error cleanup");
                 return Err(HephaestusError::DispatchFailed {
                     message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
@@ -86,7 +86,7 @@ pub fn cached_kernel(
             Arc::new(SafeCachedKernel::new(
                 module,
                 func,
-                device.cu_device().clone(),
+                device.cuda_context().clone(),
             ))
         };
 
@@ -168,7 +168,7 @@ pub(crate) fn launch_kernel(
     // routes through `cuMemFree`-family calls, which the driver orders after
     // in-flight work on the default stream (implicit synchronization on free).
     let res = unsafe {
-        cuda_core::sys::cuLaunchKernel(
+        cuda_oxide::sys::cuLaunchKernel(
             kernel.func,
             config.grid.0,
             config.grid.1,
@@ -207,7 +207,7 @@ pub(crate) fn launch_kernel(
     {
         // SAFETY: this device's context is current on this thread (`bind`
         // above); draining reports this kernel's execution status.
-        let sync = unsafe { cuda_core::sys::cuCtxSynchronize() };
+        let sync = unsafe { cuda_oxide::sys::cuCtxSynchronize() };
         if sync != 0 {
             return Err(HephaestusError::DispatchFailed {
                 message: format!("cuCtxSynchronize after launch -> {sync}"),

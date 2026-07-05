@@ -15,7 +15,7 @@ description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded 
 default = ["parallel", "mnemosyne-memory", "decomposition", "cuda"]
 parallel = []
 mnemosyne-memory = []
-cuda = ["dep:cutile", "dep:cuda-core", "dep:cuda-async", "dep:libloading"]
+cuda = ["dep:cutile", "dep:cuda-oxide", "dep:libloading"]
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
 decomposition = []
 
@@ -32,12 +32,10 @@ mnemosyne = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 libloading = { version = "0.8", optional = true }
-# cutile-rs (NVlabs): same git source coeus-cuda composes. cuda-core supplies
-# the driver `sys` bindings; cuda-async supplies device/context/stream
-# acquisition. Optional + feature-gated; absent from the default build.
+# cuda-oxide owns the device substrate per ADR 0001; cutile remains the
+# kernel-authoring dependency above that substrate.
+cuda-oxide = { version = "0.4.0", optional = true }
 cutile = { git = "https://github.com/NVlabs/cutile-rs", optional = true }
-cuda-core = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-core", optional = true }
-cuda-async = { git = "https://github.com/NVlabs/cutile-rs", package = "cuda-async", optional = true }
 
 [dev-dependencies]
 ndarray = { workspace = true }

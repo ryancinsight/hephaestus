@@ -1,22 +1,8 @@
 use core::ffi::c_void;
-use std::alloc::{GlobalAlloc, Layout};
 use std::sync::Arc;
 
-use mnemosyne::{
-    CudaDeviceBackend, CudaHostPinnedBackend, CudaUnifiedBackend, MnemosyneAllocator,
-    StandardPolicy,
-};
-
-pub(crate) static CUDA_DEVICE_ALLOCATOR: MnemosyneAllocator<StandardPolicy, CudaDeviceBackend> =
-    MnemosyneAllocator::new();
-pub(crate) static CUDA_HOST_PINNED_ALLOCATOR: MnemosyneAllocator<
-    StandardPolicy,
-    CudaHostPinnedBackend,
-> = MnemosyneAllocator::new();
-pub(crate) static CUDA_UNIFIED_ALLOCATOR: MnemosyneAllocator<StandardPolicy, CudaUnifiedBackend> =
-    MnemosyneAllocator::new();
-
 use bytemuck::Pod;
+use cuda_oxide::Cuda;
 use hephaestus_core::{
     validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
     ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError,
@@ -25,15 +11,83 @@ use hephaestus_core::{
 
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 
+/// CUDA context handle acquired through cuda-oxide's driver bindings.
+///
+/// The raw context is intentionally crate-private: cuda-oxide owns device
+/// substrate state, while application/kernel modules receive only raw
+/// `CUdeviceptr` values through `CudaBuffer::raw`.
+#[derive(Debug)]
+pub(crate) struct CudaContext {
+    raw: cuda_oxide::sys::CUcontext,
+}
+
+impl CudaContext {
+    fn create(device: cuda_oxide::sys::CUdevice) -> Result<Self> {
+        let mut raw = std::ptr::null_mut();
+        // SAFETY: `device` was returned by `cuDeviceGet`; `raw` is a valid
+        // out-pointer for one CUDA context handle.
+        let status = unsafe {
+            cuda_oxide::sys::cuCtxCreate_v2(
+                &mut raw,
+                cuda_oxide::sys::CUctx_flags_enum_CU_CTX_SCHED_BLOCKING_SYNC,
+                device,
+            )
+        };
+        if status != 0 {
+            return Err(HephaestusError::DeviceUnavailable {
+                message: format!("cuCtxCreate_v2 for CUDA device {device} -> {status}"),
+            });
+        }
+        Ok(Self { raw })
+    }
+
+    pub(crate) fn bind(&self) -> Result<()> {
+        // SAFETY: `self.raw` is a live CUDA context owned by this value; CUDA
+        // contexts are current per host thread, and setting it current does
+        // not transfer ownership.
+        let status = unsafe { cuda_oxide::sys::cuCtxSetCurrent(self.raw) };
+        if status != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("cuCtxSetCurrent -> {status}"),
+            });
+        }
+        Ok(())
+    }
+}
+
+// SAFETY: `CUcontext` is an opaque driver handle. The CUDA driver permits a
+// context to be made current on any host thread; all use sites bind before
+// issuing driver calls and never dereference the handle in Rust.
+unsafe impl Send for CudaContext {}
+// SAFETY: shared references only copy the opaque handle into driver calls;
+// the driver owns synchronization for context operations.
+unsafe impl Sync for CudaContext {}
+
+impl Drop for CudaContext {
+    fn drop(&mut self) {
+        if self.raw.is_null() {
+            return;
+        }
+        if self.bind().is_ok() {
+            // SAFETY: `self.raw` is the live context owned by this value and
+            // is current on this thread after `bind`.
+            let status = unsafe { cuda_oxide::sys::cuCtxDestroy_v2(self.raw) };
+            debug_assert_eq!(status, 0, "cuCtxDestroy_v2 failed with code {status}");
+        } else {
+            debug_assert!(false, "CudaContext drop: context bind failed");
+        }
+    }
+}
+
 /// An acquired CUDA device.
 ///
-/// Holds the cutile-rs (`cuda-core`) device handle for the default ordinal.
+/// Holds a cuda-oxide-created context for the selected device ordinal.
 /// `Clone` is cheap (an `Arc` clone). Device acquisition mirrors coeus-cuda's
 /// driver: the CUDA driver is dynamically loaded, so constructing this never
 /// requires a CUDA toolkit at build time, only `nvcuda`/`libcuda` at runtime.
 #[derive(Clone)]
 pub struct CudaDevice {
-    device: Arc<cuda_core::Device>,
+    context: Arc<CudaContext>,
     limits: DeviceLimits,
     features: CudaDeviceFeatures,
     /// Compiled-kernel cache. Slots hold only successful compilations;
@@ -80,34 +134,27 @@ impl CudaDevice {
     /// requested ordinal is unavailable. Returns
     /// [`HephaestusError::DeviceUnavailable`] when the context cannot be bound.
     pub fn try_with_ordinal(device_ordinal: usize) -> Result<Self> {
-        if !mnemosyne_backend::is_cuda_available() {
-            return Err(HephaestusError::AdapterUnavailable {
-                message: "CUDA unified memory driver not available or initialization failed"
-                    .to_string(),
-            });
-        }
-
         let device_ordinal =
             i32::try_from(device_ordinal).map_err(|_| HephaestusError::AdapterUnavailable {
                 message: format!("CUDA device ordinal {device_ordinal} exceeds i32 range"),
             })?;
-
-        let device = cuda_async::device_context::with_device(device_ordinal as usize, |device| {
-            device.clone()
-        })
-        .map_err(|e| HephaestusError::AdapterUnavailable {
-            message: format!("CUDA device {device_ordinal} unavailable: {e:?}"),
-        })?;
-        device
-            .bind_to_thread()
-            .map_err(|e| HephaestusError::DeviceUnavailable {
-                message: format!("bind device {device_ordinal} to thread: {e:?}"),
-            })?;
+        init_driver()?;
+        let mut device = 0;
+        // SAFETY: CUDA is initialized by `init_driver`; `device` is a valid
+        // out-pointer for one driver device handle.
+        let status = unsafe { cuda_oxide::sys::cuDeviceGet(&mut device, device_ordinal) };
+        if status != 0 {
+            return Err(HephaestusError::AdapterUnavailable {
+                message: format!("CUDA device {device_ordinal} unavailable: {status}"),
+            });
+        }
+        let context = Arc::new(CudaContext::create(device)?);
+        context.bind()?;
         let limits = query_device_limits(&device)?;
         let features = query_device_features(&device)?;
         let topology = Some(Arc::new(query_topology(&device)?));
         let dev = Self {
-            device,
+            context,
             limits,
             features,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
@@ -143,6 +190,7 @@ impl CudaDevice {
         let mut device_ordinal = 0usize;
         if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
             if let Ok(thread_id) = thread_id_str.parse::<i32>() {
+                init_driver()?;
                 static STAGGERED: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
                 if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
@@ -160,8 +208,8 @@ impl CudaDevice {
 
                 let mut count: core::ffi::c_int = 0;
                 // SAFETY: `count` is a valid out-pointer for one `c_int`; the
-                // CUDA driver has been initialized by `is_cuda_available`.
-                if unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
+                // CUDA driver has been initialized by `try_with_ordinal`.
+                if unsafe { cuda_oxide::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
                     device_ordinal = usize::try_from(thread_id % count).unwrap_or(0);
                 }
             }
@@ -171,16 +219,11 @@ impl CudaDevice {
     }
 
     fn device_count() -> Result<usize> {
-        if !mnemosyne_backend::is_cuda_available() {
-            return Err(HephaestusError::AdapterUnavailable {
-                message: "CUDA unified memory driver not available or initialization failed"
-                    .to_string(),
-            });
-        }
+        init_driver()?;
         let mut count: core::ffi::c_int = 0;
         // SAFETY: `count` is a valid out-pointer for one `c_int`; the CUDA
-        // driver has been initialized by `is_cuda_available`.
-        let status = unsafe { cuda_core::sys::cuDeviceGetCount(&mut count) };
+        // driver has been initialized by `init_driver`.
+        let status = unsafe { cuda_oxide::sys::cuDeviceGetCount(&mut count) };
         if status != 0 {
             return Err(HephaestusError::AdapterUnavailable {
                 message: format!("CUDA device count query failed with status {status}"),
@@ -260,10 +303,10 @@ impl CudaDevice {
         self.topology.as_deref()
     }
 
-    /// The underlying cutile-rs device handle (module lifetime management).
+    /// The underlying cuda-oxide context handle (module lifetime management).
     #[inline]
-    pub(crate) fn cu_device(&self) -> &Arc<cuda_core::Device> {
-        &self.device
+    pub(crate) fn cuda_context(&self) -> &Arc<CudaContext> {
+        &self.context
     }
 
     /// Bind the device context to the current thread before a driver call.
@@ -273,41 +316,24 @@ impl CudaDevice {
     /// context current (CUDA contexts are thread-affine), so calls from any
     /// thread target the right device.
     pub fn bind(&self) -> Result<()> {
-        self.device
-            .bind_to_thread()
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("bind device to thread: {e:?}"),
-            })
+        self.context.bind()
     }
 
     /// Allocate `bytes` of device memory according to the tier.
-    fn alloc_bytes_with_tier(&self, bytes: usize, tier: themis::MemoryTier) -> Result<DevicePtr> {
+    fn alloc_bytes(&self, bytes: usize) -> Result<DevicePtr> {
         self.bind()?;
-
-        let layout =
-            Layout::from_size_align(bytes, 4).map_err(|e| HephaestusError::AllocationFailed {
-                message: format!("invalid allocation layout (size {bytes}): {e:?}"),
-            })?;
-
-        let ptr_val = match tier {
-            // SAFETY: `layout` is a valid `Layout` (constructed above) with
-            // non-zero size — both callers return an empty buffer before
-            // reaching this point when `len == 0` — satisfying the
-            // `GlobalAlloc::alloc` contract; a null return is handled below.
-            themis::MemoryTier::HostPinned => unsafe { CUDA_HOST_PINNED_ALLOCATOR.alloc(layout) },
-            // SAFETY: as above.
-            themis::MemoryTier::Dram => unsafe { CUDA_UNIFIED_ALLOCATOR.alloc(layout) },
-            // SAFETY: as above.
-            _ => unsafe { CUDA_DEVICE_ALLOCATOR.alloc(layout) },
-        };
-
-        if ptr_val.is_null() {
+        let byte_count = cuda_byte_count(bytes, "device allocation")?;
+        let mut ptr = 0;
+        // SAFETY: this device's context is current after `bind`; `ptr` is a
+        // valid out-pointer for one `CUdeviceptr`, and `bytes > 0` at call
+        // sites.
+        let status = unsafe { cuda_oxide::sys::cuMemAlloc_v2(&mut ptr, byte_count) };
+        if status != 0 {
             return Err(HephaestusError::AllocationFailed {
-                message: format!("Mnemosyne failed to allocate {bytes} bytes for tier {tier:?}"),
+                message: format!("cuda-oxide cuMemAlloc_v2({bytes} bytes) -> {status}"),
             });
         }
-
-        Ok(ptr_val as DevicePtr)
+        Ok(ptr)
     }
 
     /// Copy a subset of a device buffer's contents into a host slice (device→host).
@@ -341,11 +367,12 @@ impl CudaDevice {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
             })?;
         let bytes = std::mem::size_of_val(out);
+        let byte_count = cuda_byte_count(bytes, "download_sub_buffer byte count")?;
         let src_ptr = buffer.raw() + byte_offset;
         // SAFETY: `src_ptr` is a valid device pointer offset from a pointer allocated by this device;
         // `out` is `bytes` of writable host memory (`T: Pod`).
         let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoH_v2(out.as_mut_ptr() as *mut c_void, src_ptr, bytes)
+            cuda_oxide::sys::cuMemcpyDtoH_v2(out.as_mut_ptr() as *mut c_void, src_ptr, byte_count)
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
@@ -389,11 +416,12 @@ impl CudaDevice {
                 message: format!("byte offset calculation overflows u64 for offset {offset}"),
             })?;
         let bytes = std::mem::size_of_val(host);
+        let byte_count = cuda_byte_count(bytes, "write_sub_buffer byte count")?;
         let dest_ptr = buffer.raw() + byte_offset;
         // SAFETY: `dest_ptr` is a valid device pointer offset from a pointer allocated by this device;
         // `host` is `bytes` of readable host memory (`T: Pod`).
         let res = unsafe {
-            cuda_core::sys::cuMemcpyHtoD_v2(dest_ptr, host.as_ptr() as *const c_void, bytes)
+            cuda_oxide::sys::cuMemcpyHtoD_v2(dest_ptr, host.as_ptr() as *const c_void, byte_count)
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
@@ -404,17 +432,21 @@ impl CudaDevice {
     }
 }
 
+fn init_driver() -> Result<()> {
+    Cuda::init().map_err(|e| HephaestusError::AdapterUnavailable {
+        message: format!("cuda-oxide driver initialization failed: {e}"),
+    })
+}
+
 fn device_attribute(
-    device: &cuda_core::Device,
-    attribute: cuda_core::sys::CUdevice_attribute,
+    device: cuda_oxide::sys::CUdevice,
+    attribute: cuda_oxide::sys::CUdevice_attribute,
     name: &str,
 ) -> Result<i32> {
     let mut value: core::ffi::c_int = 0;
-    // SAFETY: `device.cu_device()` is a valid `CUdevice` handle returned by
-    // cuda_core for an acquired CUDA device; `value` is a valid out-pointer for
-    // one `c_int`.
-    let result =
-        unsafe { cuda_core::sys::cuDeviceGetAttribute(&mut value, attribute, device.cu_device()) };
+    // SAFETY: `device` is a valid `CUdevice` handle returned by cuda-oxide's
+    // driver bindings; `value` is a valid out-pointer for one `c_int`.
+    let result = unsafe { cuda_oxide::sys::cuDeviceGetAttribute(&mut value, attribute, device) };
     if result != 0 {
         return Err(HephaestusError::DeviceUnavailable {
             message: format!("cuDeviceGetAttribute({name}) -> {result}"),
@@ -424,51 +456,63 @@ fn device_attribute(
 }
 
 fn current_memory_info() -> Result<(usize, usize)> {
-    let mut free_bytes: usize = 0;
-    let mut total_bytes: usize = 0;
+    let mut free_bytes: cuda_oxide::sys::size_t = 0;
+    let mut total_bytes: cuda_oxide::sys::size_t = 0;
     // SAFETY: the CUDA context is current for the calling thread at each call
     // site; both pointers address one writable `usize`.
-    let result = unsafe { cuda_core::sys::cuMemGetInfo_v2(&mut free_bytes, &mut total_bytes) };
+    let result = unsafe { cuda_oxide::sys::cuMemGetInfo_v2(&mut free_bytes, &mut total_bytes) };
     if result != 0 {
         return Err(HephaestusError::DeviceUnavailable {
             message: format!("cuMemGetInfo_v2 -> {result}"),
         });
     }
-    Ok((free_bytes, total_bytes))
+    let free = usize::try_from(free_bytes).map_err(|_| HephaestusError::DeviceUnavailable {
+        message: "CUDA free memory byte count exceeds usize".to_string(),
+    })?;
+    let total = usize::try_from(total_bytes).map_err(|_| HephaestusError::DeviceUnavailable {
+        message: "CUDA total memory byte count exceeds usize".to_string(),
+    })?;
+    Ok((free, total))
+}
+
+pub(crate) fn cuda_byte_count(bytes: usize, what: &str) -> Result<cuda_oxide::sys::size_t> {
+    cuda_oxide::sys::size_t::try_from(bytes).map_err(|_| HephaestusError::AllocationFailed {
+        message: format!("{what} {bytes} exceeds cuda-oxide size_t range"),
+    })
 }
 
 fn nonnegative_u32(value: i32) -> u32 {
     u32::try_from(value).unwrap_or(0)
 }
 
-fn query_device_limits(device: &cuda_core::Device) -> Result<DeviceLimits> {
-    use cuda_core::sys;
+fn query_device_limits(device: &cuda_oxide::sys::CUdevice) -> Result<DeviceLimits> {
+    use cuda_oxide::sys;
 
     let (free_bytes, _) = current_memory_info()?;
     Ok(DeviceLimits {
         max_buffer_size: free_bytes as u64,
         max_compute_workgroup_size_x: nonnegative_u32(device_attribute(
-            device,
+            *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
             "max_block_dim_x",
         )?),
         max_compute_workgroup_size_y: nonnegative_u32(device_attribute(
-            device,
+            *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
             "max_block_dim_y",
         )?),
         max_compute_workgroup_size_z: nonnegative_u32(device_attribute(
-            device,
+            *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
             "max_block_dim_z",
         )?),
         max_compute_invocations_per_workgroup: nonnegative_u32(device_attribute(
-            device,
+            *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
             "max_threads_per_block",
         )?),
         max_compute_workgroup_storage_size: nonnegative_u32(device_attribute(
-            device,
+            *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
             "max_shared_memory_per_block",
         )?),
@@ -477,26 +521,26 @@ fn query_device_limits(device: &cuda_core::Device) -> Result<DeviceLimits> {
     })
 }
 
-fn query_device_features(device: &cuda_core::Device) -> Result<CudaDeviceFeatures> {
-    use cuda_core::sys;
+fn query_device_features(device: &cuda_oxide::sys::CUdevice) -> Result<CudaDeviceFeatures> {
+    use cuda_oxide::sys;
 
     let major = device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
         "compute_capability_major",
     )?;
     let minor = device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
         "compute_capability_minor",
     )?;
     let mappable = device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
         "can_map_host_memory",
     )? != 0;
     let unified_addressing = device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
         "unified_addressing",
     )? != 0;
@@ -517,45 +561,42 @@ fn query_device_features(device: &cuda_core::Device) -> Result<CudaDeviceFeature
 /// `cuDeviceTotalMem` rather than assumed. A failed attribute read on a device
 /// that was just acquired and bound indicates a broken device, surfaced as
 /// [`HephaestusError::DeviceUnavailable`].
-fn query_topology(device: &cuda_core::Device) -> Result<themis::GpuTopology> {
-    use cuda_core::sys;
+fn query_topology(device: &cuda_oxide::sys::CUdevice) -> Result<themis::GpuTopology> {
+    use cuda_oxide::sys;
 
     let compute_units = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
         "multiprocessor_count",
     )?);
     let warp_width = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_WARP_SIZE,
         "warp_size",
     )?);
     let max_threads_per_unit = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
         "max_threads_per_multiprocessor",
     )?);
     let registers_per_unit = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR,
         "max_registers_per_multiprocessor",
     )?);
     let shared_mem_per_unit_bytes = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
         "max_shared_memory_per_multiprocessor",
     )?) as usize;
     let l2_bytes = nonnegative_u32(device_attribute(
-        device,
+        *device,
         sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE,
         "l2_cache_size",
     )?) as usize;
 
-    // Total device memory via `cuMemGetInfo_v2` (memory-management family,
-    // current-context query) rather than `cuDeviceTotalMem_v2`: the latter's
-    // dynamic symbol is unresolved in this cutile-rs binding and faults when
-    // called, whereas the memory-family entry points (e.g. `cuMemAlloc_v2`)
-    // resolve correctly. The context was made current by `bind_to_thread`.
+    // Total device memory uses cuda-oxide's memory-management binding and the
+    // context made current during acquisition.
     let (_, total_bytes) = current_memory_info()?;
 
     Ok(themis::GpuTopology::from_provider(
@@ -639,17 +680,18 @@ impl ComputeDevice for CudaDevice {
             _ => themis::MemoryTier::Device,
         };
         if len == 0 {
-            return Ok(CudaBuffer::new(0, 0, tier));
+            return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
         }
         let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
             HephaestusError::AllocationFailed {
                 message: format!("byte count overflow for {len} elements"),
             }
         })?;
-        let ptr = self.alloc_bytes_with_tier(bytes, tier)?;
+        let ptr = self.alloc_bytes(bytes)?;
+        let byte_count = cuda_byte_count(bytes, "zero-init byte count")?;
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated.
-        let res = unsafe { cuda_core::sys::cuMemsetD8_v2(ptr, 0, bytes) };
-        let buffer = CudaBuffer::<T>::new(ptr, len, tier);
+        let res = unsafe { cuda_oxide::sys::cuMemsetD8_v2(ptr, 0, byte_count) };
+        let buffer = CudaBuffer::<T>::new(ptr, len, tier, self.context.clone());
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("zero-init cuMemsetD8_v2 -> {res}"),
@@ -670,17 +712,22 @@ impl ComputeDevice for CudaDevice {
             _ => themis::MemoryTier::Device,
         };
         if len == 0 {
-            return Ok(CudaBuffer::new(0, 0, tier));
+            return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
         }
         let bytes = core::mem::size_of_val(host);
-        let ptr = self.alloc_bytes_with_tier(bytes, tier)?;
+        let ptr = self.alloc_bytes(bytes)?;
+        let byte_count = cuda_byte_count(bytes, "upload byte count")?;
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated;
         // `host` is `bytes` of readable host memory (`T: Pod`). The buffer owns
         // `ptr`, so it is freed if the copy fails.
         let res = unsafe {
-            cuda_core::sys::cuMemcpyHtoD_v2(ptr, host.as_ptr().cast::<core::ffi::c_void>(), bytes)
+            cuda_oxide::sys::cuMemcpyHtoD_v2(
+                ptr,
+                host.as_ptr().cast::<core::ffi::c_void>(),
+                byte_count,
+            )
         };
-        let buffer = CudaBuffer::<T>::new(ptr, len, tier);
+        let buffer = CudaBuffer::<T>::new(ptr, len, tier, self.context.clone());
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("upload cuMemcpyHtoD_v2({bytes} bytes) -> {res}"),
@@ -701,11 +748,16 @@ impl ComputeDevice for CudaDevice {
             return Ok(());
         }
         let bytes = core::mem::size_of_val(out);
+        let byte_count = cuda_byte_count(bytes, "download byte count")?;
         self.bind()?;
         // SAFETY: `buffer.ptr` addresses `bytes` of device memory (len matches,
         // checked above); `out` is `bytes` of writable host memory (`T: Pod`).
         let res = unsafe {
-            cuda_core::sys::cuMemcpyDtoH_v2(out.as_mut_ptr().cast::<c_void>(), buffer.ptr, bytes)
+            cuda_oxide::sys::cuMemcpyDtoH_v2(
+                out.as_mut_ptr().cast::<c_void>(),
+                buffer.ptr,
+                byte_count,
+            )
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
@@ -728,10 +780,15 @@ impl ComputeDevice for CudaDevice {
         }
         self.bind()?;
         let bytes = std::mem::size_of_val(host);
+        let byte_count = cuda_byte_count(bytes, "write_buffer byte count")?;
         // SAFETY: `buffer.ptr` is a valid device pointer allocated by this
         // device; `host` is `bytes` of readable host memory (`T: Pod`).
         let res = unsafe {
-            cuda_core::sys::cuMemcpyHtoD_v2(buffer.raw(), host.as_ptr() as *const c_void, bytes)
+            cuda_oxide::sys::cuMemcpyHtoD_v2(
+                buffer.raw(),
+                host.as_ptr() as *const c_void,
+                byte_count,
+            )
         };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
@@ -754,7 +811,7 @@ impl ComputeDevice for CudaDevice {
     fn synchronize(&self) -> Result<()> {
         self.bind()?;
         // SAFETY: the CUDA context is current for this thread after `bind`.
-        let res = unsafe { cuda_core::sys::cuCtxSynchronize() };
+        let res = unsafe { cuda_oxide::sys::cuCtxSynchronize() };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("cuCtxSynchronize -> {res}"),

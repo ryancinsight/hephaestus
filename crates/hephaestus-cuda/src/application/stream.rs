@@ -17,8 +17,13 @@ use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::compiler::SafeCachedKernel;
+#[cfg(feature = "cuda")]
+use crate::infrastructure::device::cuda_byte_count;
 use crate::infrastructure::device::CudaDevice;
 
+#[cfg(feature = "cuda")]
+type DevicePtr = cuda_oxide::sys::CUdeviceptr;
+#[cfg(not(feature = "cuda"))]
 type DevicePtr = u64;
 
 /// Prepared CUDA kernel for a source type `K`.
@@ -205,10 +210,11 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         self.device.bind()?;
         #[cfg(feature = "cuda")]
         {
+            let byte_count = cuda_byte_count(byte_len, "command stream copy byte count")?;
             // SAFETY: `src` and `dst` are device pointers allocated by this
             // device, lengths are equal, and `byte_len` was derived from that
             // checked element count.
-            let res = unsafe { cuda_core::sys::cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_len) };
+            let res = unsafe { cuda_oxide::sys::cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_count) };
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!(
@@ -235,9 +241,10 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         self.device.bind()?;
         #[cfg(feature = "cuda")]
         {
+            let byte_count = cuda_byte_count(byte_len, "command stream fill byte count")?;
             // SAFETY: `dst` is a device pointer allocated by this device and
             // `byte_len` is the valid allocation byte length for the buffer.
-            let res = unsafe { cuda_core::sys::cuMemsetD8_v2(dst.raw(), 0, byte_len) };
+            let res = unsafe { cuda_oxide::sys::cuMemsetD8_v2(dst.raw(), 0, byte_count) };
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!(
