@@ -143,9 +143,11 @@ impl LaunchConfig {
 ///
 /// Binds the device's context to the calling thread first: CUDA contexts are
 /// thread-affine and `CudaDevice` is `Clone + Send`, so the caller's thread
-/// may not be the acquiring thread. Launches on the legacy null stream; the
-/// launch is asynchronous and errors from kernel *execution* surface at the
-/// next synchronizing operation, not here.
+/// may not be the acquiring thread. Launches on the legacy null stream. On
+/// non-Windows targets, the launch remains asynchronous and errors from kernel
+/// *execution* surface at the next synchronizing operation. On Windows, the
+/// WDDM managed-memory drain below makes kernel completion and execution
+/// errors observable before returning.
 ///
 /// # Errors
 /// Returns [`HephaestusError::DispatchFailed`] when the driver rejects the

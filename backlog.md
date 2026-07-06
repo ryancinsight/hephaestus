@@ -95,25 +95,29 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (WG-P3), rank/det serial-kernel fix (WG-P1), axis-1 grid-stride reduction
   (WG-P5). Status: todo; criterion baselines before/after each.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
-  (2026-07-05). The Stage 1 substrate now follows ADR-0001 directly:
-  cuda-oxide initializes the driver, creates/binds the context, allocates
-  device memory with `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte
-  counts, and frees with context-bound `cuMemFree_v2`. CUDA allocation hints
-  now resolve through one non-managed primary-buffer tier: all allocatable
-  placement hints are recorded as `MemoryTier::Device`, budget-only tiers are
-  rejected, and `MappablePrimaryBuffers` is false. This removes the
-  managed-memory path that triggered WDDM `STATUS_IN_PAGE_ERROR` faults,
-  including the former `concurrent_device_acquisition_is_safe` residual.
-  The blocked-decomposition region helper uses row-wise 1D copies instead of
-  cuda-oxide 0.4.0's Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence:
-  full live-CUDA `cargo nextest run -p hephaestus-cuda` passes 105/105,
-  including `concurrent_device_acquisition_is_safe`; full `cargo nextest run -p
-  hephaestus-cuda --no-default-features` passes 60/60 through
-  skip-without-driver contracts. Current focused closure checks:
-  `cargo nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe`
-  (1/1), `cargo nextest run -p hephaestus-cuda
-  device_capabilities_are_driver_backed` (1/1), and `cargo nextest run -p
-  hephaestus-cuda test_placement_aware_allocation` (1/1).
+  (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
+  with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
+  null-stream kernel completion explicit before later host touchpoints. The
+  Stage 1 substrate also follows ADR-0001 directly: cuda-oxide initializes the
+  driver, creates/binds the context, allocates device memory with
+  `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte counts, and frees
+  with context-bound `cuMemFree_v2`. CUDA allocation hints resolve through one
+  non-managed primary-buffer tier: all allocatable placement hints are recorded
+  as `MemoryTier::Device`, budget-only tiers are rejected, and
+  `MappablePrimaryBuffers` is false. This removes the managed-memory path that
+  triggered WDDM `STATUS_IN_PAGE_ERROR` faults. The blocked-decomposition
+  region helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
+  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: focused live-CUDA
+  `cargo nextest run -p hephaestus-cuda
+  reduction_sum_matches_cpu_reference reduction_min_max_matches_cpu_reference
+  reduction_width_is_part_of_dispatch_contract
+  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
+  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
+  hessenberg_reconstructs_and_preserves_similarity_invariants
+  non_default_block_width_produces_identical_results` passes 9/9. Residual
+  tracking is limited to the documented concurrent-device-acquisition case;
+  current focused evidence is `cargo nextest run -p hephaestus-cuda
+  concurrent_device_acquisition_is_safe` (1/1).
 - [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
   over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
   break) or record the alias-crate justification. Status: todo (user decision

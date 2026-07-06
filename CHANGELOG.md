@@ -56,11 +56,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   replaces the previous managed-memory allocation path. CUDA allocation hints
   now resolve to one explicit non-managed primary-buffer tier: allocatable
   hints record `MemoryTier::Device`, budget-only tiers are rejected, and
-  `MappablePrimaryBuffers` is false. This resolves the former WDDM
-  `STATUS_IN_PAGE_ERROR` residual in
-  `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
-  helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
-  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: `cargo fmt -p
+  `MappablePrimaryBuffers` is false. This removes the managed-memory path
+  behind the former WDDM `STATUS_IN_PAGE_ERROR` compute aborts. The
+  blocked-decomposition region helper uses row-wise 1D copies instead of
+  cuda-oxide 0.4.0's Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence:
+  `cargo fmt -p
   hephaestus-cuda --check`, `cargo check -p hephaestus-cuda`, `cargo check -p
   hephaestus-cuda --no-default-features`, both default and no-default
   `cargo clippy -p hephaestus-cuda --all-targets --no-deps -- -D warnings`,
@@ -69,11 +69,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   skip-without-driver contracts, `cargo test --doc -p hephaestus-cuda` passes
   0 doctests, and `cargo doc -p hephaestus-cuda --no-deps` passes. Build note:
   cuda-oxide 0.4.0's build script links `cuda.lib`, so the repo config supplies
-  `CUDA_LIB_PATH` for the default CUDA feature. Current focused closure checks:
-  `cargo nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe`
-  (1/1), `cargo nextest run -p hephaestus-cuda
-  device_capabilities_are_driver_backed` (1/1), and `cargo nextest run -p
-  hephaestus-cuda test_placement_aware_allocation` (1/1).
+  `CUDA_LIB_PATH` for the default CUDA feature. Current residual tracking is
+  limited to the documented concurrent-device-acquisition case; `cargo nextest
+  run -p hephaestus-cuda concurrent_device_acquisition_is_safe` passes 1/1 on
+  the current live-CUDA host.
 
 - `hephaestus-cuda` [patch]: resolved the WDDM `STATUS_IN_PAGE_ERROR`
   (`0xc0000006`) managed-memory kernel-launch aborts on Windows.
@@ -85,11 +84,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `cuCtxSynchronize` after each `cuLaunchKernel` drains the context before the
   next host managed-memory access. The backend is already null-stream-serial,
   so throughput is unchanged and this also attributes async kernel faults to
-  the launching operation; Linux/UVM keeps launches asynchronous. The remaining
-  managed-path residual was closed by the cuda-oxide `cuMemAlloc_v2` Stage 1
-  substrate reconciliation above. Evidence: the formerly-aborting compute tests
-  (reduction ×3, dot, norms, trace, hessenberg, strided block-width) pass on
-  live hardware.
+  the launching operation; Linux/UVM keeps launches asynchronous. Evidence:
+  `cargo nextest run -p hephaestus-cuda reduction_sum_matches_cpu_reference
+  reduction_min_max_matches_cpu_reference reduction_width_is_part_of_dispatch_contract
+  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
+  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
+  hessenberg_reconstructs_and_preserves_similarity_invariants
+  non_default_block_width_produces_identical_results` passes 9/9 on live
+  hardware.
 
 - `hephaestus-wgpu` / `hephaestus-cuda` [patch]: the blocked decomposition
   entry points (`cholesky_decompose_blocked`, `lu_decompose_blocked`,

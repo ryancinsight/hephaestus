@@ -2,6 +2,21 @@
 
 Sprint target: 0.11.0 (ADR-0004 kernel-seam release). Phase: Closure.
 
+2026-07-06 (KS-8 WDDM launch-drain recheck). Verified the CUDA launch SSOT in
+`crates/hephaestus-cuda/src/application/pipeline.rs` carries the Windows-gated
+post-launch `cuCtxSynchronize` drain after `cuLaunchKernel`, and updated the
+launch Rustdoc so Windows completion/error behavior is no longer described as
+asynchronous. Evidence tier: value-semantic live-CUDA nextest. Checks: `cargo
+nextest run -p hephaestus-cuda reduction_sum_matches_cpu_reference
+reduction_min_max_matches_cpu_reference reduction_width_is_part_of_dispatch_contract
+reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
+linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
+hessenberg_reconstructs_and_preserves_similarity_invariants
+non_default_block_width_produces_identical_results` passes 9/9, and `cargo
+nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe` passes
+1/1. Residual tracking is limited to the documented concurrent-device-acquisition
+case; current local evidence shows it passing rather than aborting.
+
 2026-07-05 (KS-5 reduction parity increment). Delivered this session:
 `hephaestus_core::reduction` is now the SSOT for CUDA/WGPU axis-reduction
 planning and scalar reduction host planning. `validate_reduction_width` and
@@ -70,13 +85,10 @@ hephaestus-cuda --no-default-features`, `cargo clippy -p hephaestus-cuda
 run -p hephaestus-cuda` passes 105/105 on live CUDA, `cargo nextest run -p
 hephaestus-cuda --no-default-features` passes 60/60 via skip-without-driver
 contracts, `cargo test --doc -p hephaestus-cuda` passes 0 doctests, and `cargo
-doc -p hephaestus-cuda --no-deps` passes. Current focused closure checks:
-`cargo nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe`
-passes 1/1, `cargo nextest run -p hephaestus-cuda
-device_capabilities_are_driver_backed` passes 1/1, and `cargo nextest run -p
-hephaestus-cuda test_placement_aware_allocation` passes 1/1. Residual:
-`cuda-oxide` 0.4.0's build
-script links `cuda.lib`, so this repository now sets `CUDA_LIB_PATH` for the
+doc -p hephaestus-cuda --no-deps` passes. Residual tracking is limited to the
+documented concurrent-device-acquisition case, rechecked in the 2026-07-06
+KS-8 WDDM launch-drain entry above. Build note: `cuda-oxide` 0.4.0's build
+script links `cuda.lib`, so this repository sets `CUDA_LIB_PATH` for the
 default CUDA feature even though no-default stub verification still compiles
 without a CUDA driver/device.
 

@@ -30,31 +30,30 @@ architectural decision or a tracked future-work item:
   --all-targets --no-deps -- -D warnings`.
 
 - [patch] CUDA Stage 1 now uses ADR-0001's cuda-oxide substrate instead of the
-  previous managed-memory allocation path. `CudaDevice` initializes the driver,
-  creates and binds a cuda-oxide context, allocates with `cuMemAlloc_v2`, copies
-  with checked `cuMemcpy*` byte counts, and frees with context-bound
-  `cuMemFree_v2`; `CudaBuffer<T>` keeps `PhantomData<T>` and the owning context
-  for typed, context-correct destruction. CUDA allocation hints resolve through
-  one non-managed primary-buffer tier: allocatable hints record
+  previous managed-memory allocation path, and the CUDA launch SSOT drains the
+  current context with a Windows-gated `cuCtxSynchronize` after every
+  `cuLaunchKernel`. `CudaDevice` initializes the driver, creates and binds a
+  cuda-oxide context, allocates with `cuMemAlloc_v2`, copies with checked
+  `cuMemcpy*` byte counts, and frees with context-bound `cuMemFree_v2`;
+  `CudaBuffer<T>` keeps `PhantomData<T>` and the owning context for typed,
+  context-correct destruction. CUDA allocation hints resolve through one
+  non-managed primary-buffer tier: allocatable hints record
   `MemoryTier::Device`, budget-only tiers are rejected, and
   `MappablePrimaryBuffers` is false. This resolves the former KS-8 WDDM
-  `STATUS_IN_PAGE_ERROR` residual, including
-  `concurrent_device_acquisition_is_safe`. The blocked-decomposition region
+  `STATUS_IN_PAGE_ERROR` compute aborts. The blocked-decomposition region
   helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
   Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence tier: compile-time
-  validation, clippy, rustdoc, and value-semantic live-CUDA/no-driver contract tests.
-  Checks: `cargo fmt -p hephaestus-cuda --check`, `cargo check -p
-  hephaestus-cuda`, `cargo check -p hephaestus-cuda --no-default-features`,
-  `cargo clippy -p hephaestus-cuda --all-targets --no-deps -- -D warnings`,
-  `cargo clippy -p hephaestus-cuda --no-default-features --all-targets
-  --no-deps -- -D warnings`, `cargo nextest run -p hephaestus-cuda` (105/105),
-  `cargo nextest run -p hephaestus-cuda --no-default-features` (60/60),
-  `cargo test --doc -p hephaestus-cuda` (0 doctests), and `cargo doc -p
-  hephaestus-cuda --no-deps`. Current focused closure checks: `cargo nextest
-  run -p hephaestus-cuda concurrent_device_acquisition_is_safe` (1/1), `cargo
-  nextest run -p hephaestus-cuda device_capabilities_are_driver_backed` (1/1),
-  and `cargo nextest run -p hephaestus-cuda test_placement_aware_allocation`
-  (1/1).
+  validation, clippy, rustdoc, and value-semantic live-CUDA/no-driver contract
+  tests. Current focused closure checks: `cargo nextest run -p hephaestus-cuda
+  reduction_sum_matches_cpu_reference reduction_min_max_matches_cpu_reference
+  reduction_width_is_part_of_dispatch_contract
+  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
+  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
+  hessenberg_reconstructs_and_preserves_similarity_invariants
+  non_default_block_width_produces_identical_results` (9/9). Residual tracking
+  is limited to the documented concurrent-device-acquisition case; `cargo
+  nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe` passes
+  1/1 on the current live-CUDA host.
 
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real
