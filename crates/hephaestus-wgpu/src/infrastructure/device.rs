@@ -281,14 +281,16 @@ impl WgpuDevice {
         // `HostPinned` placement on them is rejected (require_staging_device).
         let _ = ACTIVE_WGPU_DEVICE.set(device.clone());
 
-        mnemosyne_backend::WGPU_ALLOCATE_CALLBACK.store(
-            wgpu_allocate_callback as *mut core::ffi::c_void,
-            std::sync::atomic::Ordering::Release,
-        );
-        mnemosyne_backend::WGPU_DEALLOCATE_CALLBACK.store(
-            wgpu_deallocate_callback as *mut core::ffi::c_void,
-            std::sync::atomic::Ordering::Release,
-        );
+        // SAFETY: the callbacks allocate mapped WGPU buffers on the registered
+        // process staging device, keep them mapped until the matching
+        // deallocation callback removes and unmaps the registry entry, and do
+        // not unwind across the callback boundary.
+        unsafe {
+            mnemosyne_backend::register_wgpu_callbacks(
+                wgpu_allocate_callback,
+                wgpu_deallocate_callback,
+            );
+        }
 
         Self {
             device,
