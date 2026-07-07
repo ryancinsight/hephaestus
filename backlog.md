@@ -110,8 +110,22 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     mechanism-level fix, no runtime perf claim made); the correctness gate
     was real-hardware verification: 151/151 `hephaestus-cuda` contract tests
     (CUDA) + 295/295 full-workspace tests (CUDA + wgpu) green post-change.
-    CU-P1/P6/M3 (streams + pinned staging), CU-P5 (batched matmul), WG-P1/P3/P4/P5
-    remain open in this item.
+  - **CU-P5 done** (commit `681d3c8`, 2026-07-07): `batched_matmul_into`
+    looped `matmul_into` once per batch element — each iteration a separate
+    `cuLaunchKernel` plus (Windows, per KS-8) a `cuCtxSynchronize` context
+    drain. Added `batched_matmul_kernel` carrying per-operand batch strides
+    (broadcast operands pass stride 0) and indexing the batch via
+    `blockIdx.z`, so the whole batch dispatches in one launch; batches past
+    CUDA's 65535 grid.z hardware cap chunk into further launches via a
+    `batch_offset` kernel arg. `batched_matmul_into` had zero prior test
+    coverage — added two contract tests with hand-computed oracles
+    (non-broadcast 2-batch, and an `lhs`-batch=1 broadcast case) before and
+    after the change. New `PipelineKey::BatchedMatmul` variant (own
+    shader/entry point) and a `to_i64` stride-conversion helper alongside
+    `to_i32`/`to_u32`. Verification: full workspace `cargo nextest run
+    --all-features` 297/297 (CUDA + wgpu hardware, up from 295).
+    CU-P1/P6/M3 (streams + pinned staging), WG-P1/P3/P4/P5 remain open in
+    this item.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
