@@ -302,7 +302,7 @@ pub fn cholesky_decompose_blocked(
 mod syrk_impl {
     use super::*;
     use crate::application::linalg::{to_i32, to_u32};
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -410,8 +410,12 @@ mod syrk_impl {
             panel_stride: to_u32(panel_stride, "SYRK panel stride")?,
         };
 
-        let key = "cholesky_syrk".to_string();
-        let kernel = cached_kernel(device, key, "syrk_kernel", syrk_shader_source)?;
+        let kernel = cached_kernel(
+            device,
+            PipelineKey::CholeskySyrk,
+            "syrk_kernel",
+            syrk_shader_source,
+        )?;
 
         let workgroups_x = cols.div_ceil(16);
         let workgroups_y = rows.div_ceil(16);

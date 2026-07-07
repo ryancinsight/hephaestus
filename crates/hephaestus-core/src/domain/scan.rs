@@ -18,7 +18,7 @@ use bytemuck::{Pod, Zeroable};
 use leto::Layout;
 
 /// Direction of a scan along an axis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ScanDirection {
     /// Accumulate from index 0 upward.
     Forward,

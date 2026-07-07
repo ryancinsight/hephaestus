@@ -367,7 +367,7 @@ pub fn qr_decompose_blocked(
 mod hh_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -518,8 +518,12 @@ mod hh_impl {
             .collect::<Result<Vec<_>>>()?;
         device.write_sub_buffer(reflector_buf, 0, &reflector_host)?;
 
-        let key = "qr_householder".to_string();
-        let kernel = cached_kernel(device, key, "householder_kernel", hh_shader_source)?;
+        let kernel = cached_kernel(
+            device,
+            PipelineKey::QrHouseholder,
+            "householder_kernel",
+            hh_shader_source,
+        )?;
 
         let mut v_ptr = v_buf.raw();
         let mut a_ptr = a_buf.raw();

@@ -1,7 +1,9 @@
 //! GPU-resident sparse matrix–vector product `y = A · x` on CUDA CSR buffers.
 
 use super::GpuCsrMatrix;
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{
+    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use bytemuck::Pod;
@@ -68,11 +70,10 @@ pub fn spmv_into<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     let width = BlockWidth::DEFAULT;
     let grid = grid_size(nrows, width)?;
 
-    let key = format!(
-        "spmv_{}_{}",
-        std::any::type_name::<SparseSpmvKernel<T>>(),
-        std::any::type_name::<T>()
-    );
+    let key = PipelineKey::Spmv {
+        marker: std::any::TypeId::of::<SparseSpmvKernel<T>>(),
+        scalar: std::any::TypeId::of::<T>(),
+    };
 
     let kernel = cached_kernel(device, key, "spmv_kernel", || spmv_shader_source::<T>())?;
 

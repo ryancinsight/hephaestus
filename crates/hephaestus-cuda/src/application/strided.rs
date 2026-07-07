@@ -5,7 +5,9 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{
+    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 
@@ -377,12 +379,11 @@ where
 {
     let grid_size_val = grid_size(len, width)?;
 
-    let key = format!(
-        "strided_binary_{}_{}_{}",
-        std::any::type_name::<Op>(),
-        std::any::type_name::<T>(),
-        width.get()
-    );
+    let key = PipelineKey::StridedBinary {
+        op: std::any::TypeId::of::<Op>(),
+        scalar: std::any::TypeId::of::<T>(),
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "binary_strided_kernel", || {
         binary_shader::<Op, T>()
@@ -423,12 +424,11 @@ where
 {
     let grid_size_val = grid_size(len, width)?;
 
-    let key = format!(
-        "strided_unary_{}_{}_{}",
-        std::any::type_name::<Op>(),
-        std::any::type_name::<T>(),
-        width.get()
-    );
+    let key = PipelineKey::StridedUnary {
+        op: std::any::TypeId::of::<Op>(),
+        scalar: std::any::TypeId::of::<T>(),
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "unary_strided_kernel", || {
         unary_shader::<Op, T>()
@@ -468,12 +468,11 @@ where
 {
     let grid_size_val = grid_size(len, width)?;
 
-    let key = format!(
-        "strided_scalar_{}_{}_{}",
-        std::any::type_name::<Op>(),
-        std::any::type_name::<T>(),
-        width.get()
-    );
+    let key = PipelineKey::StridedScalar {
+        op: std::any::TypeId::of::<Op>(),
+        scalar: std::any::TypeId::of::<T>(),
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "scalar_strided_kernel", || {
         scalar_shader::<Op, T>()

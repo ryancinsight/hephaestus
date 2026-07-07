@@ -9,7 +9,7 @@ use hephaestus_core::{
     MultiStorageKernel, Result, UnaryStorageKernel,
 };
 
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
@@ -50,7 +50,6 @@ impl MultiStorageDevice for CudaDevice {
 /// CUDA C kernel with N storage buffers and one POD parameter block.
 #[derive(Debug)]
 pub struct CudaMultiStorageKernel {
-    label: &'static str,
     source: &'static str,
     entry_point: &'static str,
     storage_bindings: Vec<u32>,
@@ -97,7 +96,6 @@ impl CudaMultiStorageKernel {
         validate_distinct_bindings(storage_bindings)?;
 
         Ok(Self {
-            label,
             source,
             entry_point,
             storage_bindings: storage_bindings.to_vec(),
@@ -140,13 +138,12 @@ impl<'a, P: Pod, const N: usize> MultiStorageKernel<CudaDevice, P, [CudaStorageB
             return Ok(());
         }
 
-        let cache_key = format!(
-            "hephaestus-cuda-multi-storage:{}:{}:{:016x}",
-            self.label, self.entry_point, self.source_hash
-        );
-        let compiled = cached_kernel(device, cache_key, self.entry_point, || {
-            self.source.to_string()
-        })?;
+        let compiled = cached_kernel(
+            device,
+            PipelineKey::MultiStorage(self.source_hash),
+            self.entry_point,
+            || self.source.to_string(),
+        )?;
 
         let mut device_ptrs: Vec<DevicePtr> = bindings.iter().map(|binding| binding.ptr).collect();
         let mut params_value = *params;

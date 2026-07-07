@@ -5,7 +5,7 @@ use core::marker::PhantomData;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::{map_layout_err, to_i32, to_u32};
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
@@ -196,11 +196,10 @@ where
         _pad: [0; 2],
     };
 
-    let key = format!(
-        "matrix_properties_{}_{}",
-        std::any::type_name::<MatrixRankKernel<T>>(),
-        std::any::type_name::<T>()
-    );
+    let key = PipelineKey::MatrixRank {
+        marker: std::any::TypeId::of::<MatrixRankKernel<T>>(),
+        scalar: std::any::TypeId::of::<T>(),
+    };
 
     let kernel = cached_kernel(device, key, "matrix_properties_kernel", || {
         matrix_properties_source::<T>()

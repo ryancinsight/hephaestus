@@ -4,6 +4,7 @@ use hephaestus_core::{
     DeviceLimits, DevicePreference, HephaestusError, Result,
 };
 
+use crate::application::pipeline::PipelineKey;
 use crate::infrastructure::buffer::CudaBuffer;
 
 /// Stub CUDA device for builds without the `cuda` feature.
@@ -18,7 +19,8 @@ use crate::infrastructure::buffer::CudaBuffer;
 pub struct CudaDevice {
     _private: core::convert::Infallible,
     #[allow(dead_code)]
-    pub(crate) pipeline_cache: std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<String, ()>>,
+    pub(crate) pipeline_cache:
+        std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<PipelineKey, ()>>,
     #[allow(dead_code)]
     topology: Option<std::sync::Arc<themis::GpuTopology>>,
 }

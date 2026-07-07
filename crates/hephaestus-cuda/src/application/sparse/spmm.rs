@@ -2,7 +2,9 @@
 
 use super::GpuCsrMatrix;
 use crate::application::linalg::AsGpuMatrixOperand;
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{
+    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+};
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -127,11 +129,10 @@ pub fn spmm_into<
     let width = BlockWidth::DEFAULT;
     let grid = grid_size(expected_c_len, width)?;
 
-    let key = format!(
-        "spmm_{}_{}",
-        std::any::type_name::<SparseSpmmKernel<T>>(),
-        std::any::type_name::<T>()
-    );
+    let key = PipelineKey::Spmm {
+        marker: std::any::TypeId::of::<SparseSpmmKernel<T>>(),
+        scalar: std::any::TypeId::of::<T>(),
+    };
 
     let kernel = cached_kernel(device, key, "spmm_kernel", || spmm_shader_source::<T>())?;
 

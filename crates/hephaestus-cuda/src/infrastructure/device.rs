@@ -9,6 +9,7 @@ use hephaestus_core::{
     Result,
 };
 
+use crate::application::pipeline::PipelineKey;
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 
 /// CUDA context handle acquired through cuda-oxide's driver bindings.
@@ -95,7 +96,7 @@ pub struct CudaDevice {
     /// [`crate::application::pipeline::cached_kernel`]).
     pub(crate) pipeline_cache: Arc<
         moirai_sync::sync::ConcurrentHashMap<
-            String,
+            PipelineKey,
             Arc<std::sync::OnceLock<Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
         >,
     >,

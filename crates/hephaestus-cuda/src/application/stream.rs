@@ -13,7 +13,7 @@ use hephaestus_core::{
 
 #[cfg(not(feature = "cuda"))]
 use crate::application::pipeline::SafeCachedKernel;
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::compiler::SafeCachedKernel;
@@ -111,12 +111,7 @@ impl KernelDevice for CudaDevice {
     fn prepare<K: KernelSource<CudaC>>(&self, kernel: &K) -> Result<Self::Prepared<K>> {
         let source = kernel.source().into_owned();
         let source_hash = source_hash(K::LABEL, K::ENTRY, &source);
-        let cache_key = format!(
-            "hephaestus-cuda-stream:{}:{}:{source_hash:016x}",
-            K::LABEL,
-            K::ENTRY
-        );
-        let compiled = cached_kernel(self, cache_key, K::ENTRY, || source)?;
+        let compiled = cached_kernel(self, PipelineKey::Stream(source_hash), K::ENTRY, || source)?;
         Ok(CudaPrepared {
             kernel: compiled,
             source_hash,
@@ -141,12 +136,12 @@ impl GroupedKernelDevice for CudaDevice {
     ) -> Result<Self::GroupedPrepared<K>> {
         let source = kernel.source().into_owned();
         let source_hash = source_hash(K::LABEL, K::ENTRY, &source);
-        let cache_key = format!(
-            "hephaestus-cuda-grouped-stream:{}:{}:{source_hash:016x}",
-            K::LABEL,
-            K::ENTRY
-        );
-        let compiled = cached_kernel(self, cache_key, K::ENTRY, || source)?;
+        let compiled = cached_kernel(
+            self,
+            PipelineKey::GroupedStream(source_hash),
+            K::ENTRY,
+            || source,
+        )?;
         Ok(CudaGroupedPrepared {
             kernel: compiled,
             source_hash,

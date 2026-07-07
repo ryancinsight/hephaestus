@@ -358,7 +358,7 @@ pub fn lu_decompose_blocked(
 mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]
@@ -487,8 +487,12 @@ mod gemm_impl {
             ],
         };
 
-        let key = "lu_gemm".to_string();
-        let kernel = cached_kernel(device, key, "gemm_kernel", gemm_shader_source)?;
+        let kernel = cached_kernel(
+            device,
+            PipelineKey::LuGemm,
+            "gemm_kernel",
+            gemm_shader_source,
+        )?;
 
         let workgroups_x = n.div_ceil(16);
         let workgroups_y = m.div_ceil(16);

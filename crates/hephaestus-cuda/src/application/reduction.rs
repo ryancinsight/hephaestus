@@ -1,4 +1,6 @@
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{
+    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+};
 use crate::application::strided::{map_layout_err, StridedOperand};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
@@ -116,12 +118,11 @@ where
         let out_len = current_len.div_ceil(width.get() as usize);
         let out_buffer = device.alloc_zeroed::<T>(out_len)?;
 
-        let key = format!(
-            "reduction_{}_{}_{}",
-            std::any::type_name::<Op>(),
-            std::any::type_name::<T>(),
-            width.get()
-        );
+        let key = PipelineKey::Reduction {
+            op: std::any::TypeId::of::<Op>(),
+            scalar: std::any::TypeId::of::<T>(),
+            width: width.get(),
+        };
 
         let kernel = cached_kernel(device, key, "reduction_kernel", || {
             shader_source::<Op, T>(width)
@@ -313,13 +314,12 @@ where
         return Ok(());
     };
 
-    let key = format!(
-        "axis_reduction_{}_{}_{}_{}",
-        std::any::type_name::<Op>(),
-        std::any::type_name::<T>(),
+    let key = PipelineKey::AxisReduction {
+        op: std::any::TypeId::of::<Op>(),
+        scalar: std::any::TypeId::of::<T>(),
         axis,
-        width.get()
-    );
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "axis_reduction_kernel", || {
         axis_reduction_shader_source::<Op, T>()
@@ -394,12 +394,11 @@ where
         return Ok(());
     };
 
-    let key = format!(
-        "mean_axis_{}_{}_{}",
-        std::any::type_name::<T>(),
+    let key = PipelineKey::MeanAxis {
+        scalar: std::any::TypeId::of::<T>(),
         axis,
-        width.get()
-    );
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "mean_axis_kernel", || {
         mean_axis_shader_source::<T>()

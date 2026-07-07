@@ -8,7 +8,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
@@ -116,14 +116,13 @@ where
         return Ok(());
     };
 
-    let key = format!(
-        "axis_scan_{}_{}_{:?}_{}_{}",
-        std::any::type_name::<AxisScanKernel<Op>>(),
-        std::any::type_name::<T>(),
+    let key = PipelineKey::AxisScan {
+        marker: std::any::TypeId::of::<AxisScanKernel<Op>>(),
+        scalar: std::any::TypeId::of::<T>(),
         direction,
         axis,
-        width.get()
-    );
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "scan_kernel", || scan_shader_source::<Op, T>())?;
 

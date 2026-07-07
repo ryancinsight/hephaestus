@@ -11,7 +11,7 @@ use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, Hephaes
 use leto::Layout;
 
 use super::{map_layout, map_layout_err};
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
 
@@ -148,11 +148,10 @@ where
     let b_meta = map_layout(rhs.layout)?;
     let c_meta = map_layout(out.layout)?;
 
-    let key = format!(
-        "matmul_{}_{}",
-        std::any::type_name::<MatmulKernel<T>>(),
-        std::any::type_name::<T>()
-    );
+    let key = PipelineKey::Matmul {
+        marker: std::any::TypeId::of::<MatmulKernel<T>>(),
+        scalar: std::any::TypeId::of::<T>(),
+    };
 
     let kernel = cached_kernel(device, key, "matmul_kernel", || matmul_shader_source::<T>())?;
 

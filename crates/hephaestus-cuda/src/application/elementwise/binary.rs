@@ -1,5 +1,7 @@
 use super::reject_output_alias;
-use crate::application::pipeline::{cached_kernel, grid_size, launch_kernel, LaunchConfig};
+use crate::application::pipeline::{
+    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
 use bytemuck::Pod;
@@ -64,12 +66,11 @@ where
 
     let grid_size_val = grid_size(out.len(), width)?;
 
-    let key = format!(
-        "binary_{}_{}_{}",
-        std::any::type_name::<Op>(),
-        std::any::type_name::<T>(),
-        width.get()
-    );
+    let key = PipelineKey::Binary {
+        op: std::any::TypeId::of::<Op>(),
+        scalar: std::any::TypeId::of::<T>(),
+        width: width.get(),
+    };
 
     let kernel = cached_kernel(device, key, "binary_kernel", || shader_source::<Op, T>())?;
 

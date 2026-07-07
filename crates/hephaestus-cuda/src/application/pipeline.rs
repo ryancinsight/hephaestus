@@ -1,5 +1,6 @@
 use crate::CudaDevice;
-use hephaestus_core::{BlockWidth, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, HephaestusError, Result, ScanDirection};
+use std::any::TypeId;
 use std::sync::Arc;
 
 #[cfg(feature = "cuda")]
@@ -9,6 +10,114 @@ use crate::infrastructure::compiler::SafeCachedKernel;
 /// Stub cached kernel.
 pub struct SafeCachedKernel;
 
+/// Pipeline-cache key for a compiled CUDA kernel.
+///
+/// One variant per distinct shader source / `extern "C"` entry point in this
+/// crate, so two call sites can never collide even when they share the same
+/// `Op`/`T` type parameters (e.g. `binary_elementwise_into` and
+/// `scalar_elementwise_into` are both generic over `Op: BinaryExpr`, but
+/// compile to different kernels — a bare `(TypeId::of::<Op>(), ..)` tuple
+/// shared across both would alias the wrong compiled function). Mirrors
+/// `hephaestus-wgpu`'s `(TypeId, TypeId, u32)` pipeline key (CU-P9/P10):
+/// `Copy`, no heap allocation, no `format!`/`type_name` string building on
+/// every dispatch (including cache hits).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum PipelineKey {
+    Binary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    Scalar {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    Unary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    Reduction {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    AxisReduction {
+        op: TypeId,
+        scalar: TypeId,
+        axis: usize,
+        width: u32,
+    },
+    MeanAxis {
+        scalar: TypeId,
+        axis: usize,
+        width: u32,
+    },
+    AxisScan {
+        marker: TypeId,
+        scalar: TypeId,
+        direction: ScanDirection,
+        axis: usize,
+        width: u32,
+    },
+    Kron {
+        marker: TypeId,
+        scalar: TypeId,
+    },
+    Matmul {
+        marker: TypeId,
+        scalar: TypeId,
+    },
+    MatrixRank {
+        marker: TypeId,
+        scalar: TypeId,
+    },
+    Spmm {
+        marker: TypeId,
+        scalar: TypeId,
+    },
+    Spmv {
+        marker: TypeId,
+        scalar: TypeId,
+    },
+    StridedBinary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    StridedUnary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    StridedScalar {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    /// Fixed non-generic decomposition kernels: one f32 shader each, no
+    /// `Op`/`T` type parameter to key on. Only constructed by the
+    /// `cuda`-feature decomposition modules.
+    #[cfg(feature = "cuda")]
+    CholeskySyrk,
+    #[cfg(feature = "cuda")]
+    LuGemm,
+    #[cfg(feature = "cuda")]
+    QrHouseholder,
+    /// Runtime-authored kernels (the ADR-0004 `KernelSource<L>` seam and the
+    /// legacy multi-storage API): `K::LABEL`/`K::ENTRY`/the compiled source
+    /// text vary per value, not per Rust type, so `TypeId` cannot key these —
+    /// `source_hash(label, entry, source)` (already computed once at
+    /// prepare/construction time) is the uniqueness signal. Each variant
+    /// still gets its own tag so a stream kernel, a grouped-stream kernel,
+    /// and a legacy multi-storage kernel sharing identical label/entry/source
+    /// text never alias.
+    Stream(u64),
+    GroupedStream(u64),
+    MultiStorage(u64),
+}
+
 /// Retrieve a cached kernel, compiling the source if it is not present in the cache.
 ///
 /// Only successful compilations are cached: a failed NVRTC compile or module
@@ -17,9 +126,9 @@ pub struct SafeCachedKernel;
 /// device's lifetime. Two threads racing on a cold key may both compile and
 /// one module is dropped — bounded first-use-only waste, preferred over
 /// caching failures or holding a lock across a 10–100 ms NVRTC compile.
-pub fn cached_kernel(
+pub(crate) fn cached_kernel(
     device: &CudaDevice,
-    key: String,
+    key: PipelineKey,
     func_name: &str,
     source: impl FnOnce() -> String,
 ) -> Result<Arc<SafeCachedKernel>> {
