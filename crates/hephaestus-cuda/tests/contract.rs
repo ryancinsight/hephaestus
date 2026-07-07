@@ -9,11 +9,11 @@ use hephaestus_core::{
     HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    binary_elementwise, binary_elementwise_into, det, dot, kron, matexp, matmul, matmul_into,
-    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, reduce_axis,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis, trace,
-    unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp,
-    MinOp, MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, det, dot, kron, matexp,
+    matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv,
+    reduce_axis, reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
+    scan_axis, trace, unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice,
+    CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
 };
 use leto::Layout;
 
@@ -525,6 +525,99 @@ fn linalg_matmul_matches_cpu_reference() {
     let out_layout = Layout::c_contiguous([3, 4]).unwrap();
 
     matmul_into(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 12];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_batched_matmul_matches_cpu_reference() {
+    let Some(dev) = device("linalg_batched_matmul_matches_cpu_reference") else {
+        return;
+    };
+
+    // Batch 0: [[1,2],[3,4]] @ [[5,6],[7,8]]     = [[19,22],[43,50]]
+    // Batch 1: [[9,10],[11,12]] @ [[13,14],[15,16]] = [[267,286],[323,346]]
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 9.0, 10.0, 11.0, 12.0];
+    let b_host = vec![5.0f32, 6.0, 7.0, 8.0, 13.0, 14.0, 15.0, 16.0];
+    let expected = vec![19.0f32, 22.0, 43.0, 50.0, 267.0, 286.0, 323.0, 346.0];
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+    let out = dev.alloc_zeroed::<f32>(8).unwrap();
+
+    let a_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+    let out_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+
+    batched_matmul_into(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 8];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_batched_matmul_broadcasts_single_batch_lhs() {
+    let Some(dev) = device("linalg_batched_matmul_broadcasts_single_batch_lhs") else {
+        return;
+    };
+
+    // lhs has batch=1 and broadcasts across rhs's batch=3:
+    //   lhs = [[1,2],[3,4]]
+    //   rhs0 = I        -> out0 = lhs            = [[1,2],[3,4]]
+    //   rhs1 = 2*I       -> out1 = 2*lhs          = [[2,4],[6,8]]
+    //   rhs2 = swap cols -> out2 = lhs @ swap     = [[2,1],[4,3]]
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![
+        1.0f32, 0.0, 0.0, 1.0, // identity
+        2.0, 0.0, 0.0, 2.0, // 2 * identity
+        0.0, 1.0, 1.0, 0.0, // column swap
+    ];
+    let expected = vec![
+        1.0f32, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0, 2.0, 1.0, 4.0, 3.0,
+    ];
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+    let out = dev.alloc_zeroed::<f32>(12).unwrap();
+
+    let a_layout = Layout::c_contiguous([1, 2, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([3, 2, 2]).unwrap();
+    let out_layout = Layout::c_contiguous([3, 2, 2]).unwrap();
+
+    batched_matmul_into(
         &dev,
         StridedOperand {
             buffer: &a,

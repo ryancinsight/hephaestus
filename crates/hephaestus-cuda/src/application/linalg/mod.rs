@@ -85,3 +85,15 @@ pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
         message: format!("{what} {value} exceeds i32 range"),
     })
 }
+
+/// Convert an `isize` batch stride to the `long long` (`i64`) a batched
+/// kernel argument uses. Unlike the per-matrix `i32` strides, a batch stride
+/// is multiplied by up to the batch count on the device side, so it needs
+/// the wider range even though `isize` is losslessly representable on every
+/// 64-bit target this crate builds for.
+#[inline]
+pub(crate) fn to_i64(value: isize, what: &str) -> Result<i64> {
+    i64::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("{what} {value} exceeds i64 range"),
+    })
+}

@@ -69,6 +69,10 @@ pub(crate) enum PipelineKey {
         marker: TypeId,
         scalar: TypeId,
     },
+    BatchedMatmul {
+        marker: TypeId,
+        scalar: TypeId,
+    },
     MatrixRank {
         marker: TypeId,
         scalar: TypeId,
@@ -241,6 +245,24 @@ impl LaunchConfig {
     pub(crate) const fn planar(grid_x: u32, grid_y: u32, block_x: u32, block_y: u32) -> Self {
         Self {
             grid: (grid_x, grid_y, 1),
+            block: (block_x, block_y, 1),
+            shared_bytes: 0,
+        }
+    }
+
+    /// Three-dimensional launch: `grid_x` × `grid_y` × `grid_z` blocks of
+    /// `block_x` × `block_y` threads (the batch/z dimension carries one
+    /// thread block's worth of work per z-slice, not per-thread depth).
+    #[must_use]
+    pub(crate) const fn batched_planar(
+        grid_x: u32,
+        grid_y: u32,
+        grid_z: u32,
+        block_x: u32,
+        block_y: u32,
+    ) -> Self {
+        Self {
+            grid: (grid_x, grid_y, grid_z),
             block: (block_x, block_y, 1),
             shared_bytes: 0,
         }
