@@ -94,6 +94,24 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
   (WG-P3), rank/det serial-kernel fix (WG-P1), axis-1 grid-stride reduction
   (WG-P5). Status: todo; criterion baselines before/after each.
+  - **CU-P9/P10 done** (commit `8c5d022`, 2026-07-07): replaced the
+    per-dispatch `format!()` + `type_name::<Op/T>()` `String` pipeline-cache
+    key (15 call sites across `elementwise/{binary,scalar,unary}.rs`,
+    `linalg/{kron,matmul,matrix_rank}.rs`, `reduction.rs` ×3, `scan.rs`,
+    `sparse/{spmm,spmv}.rs`, `strided.rs` ×3, plus 3 non-generic decomposition
+    sites and 3 runtime-authored-kernel sites in `storage_kernel.rs`/
+    `stream.rs` found during implementation but not listed in the original
+    audit inventory) with a `Copy`, non-allocating `PipelineKey` enum keyed
+    on `TypeId` (mirrors `hephaestus-wgpu`'s `(TypeId, TypeId, u32)`
+    pattern), one variant per distinct shader family so call sites sharing
+    the same `Op: BinaryExpr<CudaC>` concrete types (e.g. binary vs. scalar
+    elementwise) can't alias the wrong compiled kernel. This was NOT a
+    theoretical risk check — no baseline benchmark was taken (LOW-severity
+    mechanism-level fix, no runtime perf claim made); the correctness gate
+    was real-hardware verification: 151/151 `hephaestus-cuda` contract tests
+    (CUDA) + 295/295 full-workspace tests (CUDA + wgpu) green post-change.
+    CU-P1/P6/M3 (streams + pinned staging), CU-P5 (batched matmul), WG-P1/P3/P4/P5
+    remain open in this item.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
