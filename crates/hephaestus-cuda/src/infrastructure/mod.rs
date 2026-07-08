@@ -16,3 +16,6 @@ pub mod device;
 
 #[cfg(feature = "cuda")]
 pub mod compiler;
+
+#[cfg(feature = "cuda")]
+pub(crate) mod pinned;
