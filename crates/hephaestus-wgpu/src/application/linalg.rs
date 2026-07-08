@@ -79,7 +79,22 @@ pub trait L2NormScalar:
 impl L2NormScalar for f32 {}
 
 /// WGPU scalar whose shader type supports row-reduction rank estimation.
-pub trait MatrixRankScalar: DialectScalar<Wgsl> + Pod {}
+///
+/// Bundles the arithmetic and ordering bounds the host-delegated Gaussian
+/// elimination behind [`matrix_rank`], [`matrix_rank_with_tolerance`], and
+/// [`det`] requires, so callers need only state `T: MatrixRankScalar` (SSOT
+/// for the rank/determinant scalar contract).
+pub trait MatrixRankScalar:
+    DialectScalar<Wgsl>
+    + Pod
+    + PartialOrd
+    + core::ops::Neg<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + From<f32>
+{
+}
 
 impl MatrixRankScalar for f32 {}
 
@@ -93,21 +108,9 @@ struct GpuMatrixLayout {
     _pad: [u32; 3], // pad to 32 bytes (multiple of 16)
 }
 
-/// Packed layout metadata matching the WGSL `RankMeta` uniform.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct RankMeta {
-    shape: [u32; 2],
-    strides: [i32; 2],
-    offset: u32,
-    tolerance: f32,
-    _pad: [u32; 2],
-}
-
 struct MatmulKernel<T>(PhantomData<T>);
 struct KronKernel<T>(PhantomData<T>);
 struct MapReductionKernel<Op>(PhantomData<Op>);
-struct MatrixPropertiesKernel<T>(PhantomData<T>);
 
 trait MapReductionOp: Copy + Send + Sync + 'static {
     type ReduceOp: CombineExpr<Wgsl>;
@@ -474,116 +477,103 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
-fn matrix_properties_shader_source<T: MatrixRankScalar>() -> String {
-    format!(
-        r#"
-struct RankMeta {{
-    shape: vec2<u32>,
-    strides: vec2<i32>,
-    offset: u32,
+/// Host-side partial-pivoting Gaussian elimination, computing numerical rank
+/// and (for square inputs) determinant in one pass over `scratch`.
+///
+/// Port of the row-reduction algorithm the WGSL `hephaestus-matrix-properties`
+/// kernel used to run in a single `@workgroup_size(1)` invocation (WG-P1):
+/// that kernel gained nothing from GPU dispatch — one thread does O(rows·cols²)
+/// scalar work while every other lane in the launch sits idle — and paid the
+/// full pipeline/dispatch/readback overhead for it. This host port preserves
+/// the exact pivot-selection and elimination order (same threshold
+/// `max_abs * relative_tolerance`, same sign-flip-on-swap determinant
+/// tracking), so the two pinned contract tests that assert this algorithm's
+/// specific divergence from Leto's SVD-spectrum criterion
+/// (`matrix_rank_relative_tolerance_is_the_discriminator`,
+/// `det_of_near_singular_triangular_is_exact_pivot_product`) still hold —
+/// this is a dispatch-mechanism change, not an algorithm change.
+fn matrix_properties_host<T>(
+    scratch: &mut [T],
+    rows: usize,
+    cols: usize,
     tolerance: f32,
-    _pad: vec2<u32>,
-}}
+) -> (usize, T)
+where
+    T: MatrixRankScalar,
+{
+    let zero = T::from(0.0);
+    let one = T::from(1.0);
+    let abs = |v: T| if v < zero { -v } else { v };
 
-@group(0) @binding(0) var<uniform> rank_meta: RankMeta;
-@group(0) @binding(1) var<storage, read> input: array<{ty}>;
-@group(0) @binding(2) var<storage, read_write> scratch: array<{ty}>;
-@group(0) @binding(3) var<storage, read_write> rank_out: array<u32>;
-@group(0) @binding(4) var<storage, read_write> det_out: array<{ty}>;
-
-@compute @workgroup_size(1)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
-    if (gid.x != 0u) {{
-        return;
-    }}
-
-    let rows = rank_meta.shape.x;
-    let cols = rank_meta.shape.y;
-    if (rows == 0u || cols == 0u) {{
-        rank_out[0] = 0u;
-        det_out[0] = {ty}(0.0);
-        return;
-    }}
+    if rows == 0 || cols == 0 {
+        return (0, zero);
+    }
 
     let square = rows == cols;
-    var max_abs = {ty}(0.0);
-    let len = rows * cols;
-    for (var idx = 0u; idx < len; idx = idx + 1u) {{
-        let row = idx / cols;
-        let col = idx - row * cols;
-        let input_offset = i32(rank_meta.offset)
-            + i32(row) * rank_meta.strides.x
-            + i32(col) * rank_meta.strides.y;
-        let value = input[u32(input_offset)];
-        scratch[idx] = value;
-        max_abs = max(max_abs, abs(value));
-    }}
+    let mut max_abs = zero;
+    for &value in scratch.iter() {
+        let magnitude = abs(value);
+        if magnitude > max_abs {
+            max_abs = magnitude;
+        }
+    }
 
-    if (max_abs <= {ty}(0.0)) {{
-        rank_out[0] = 0u;
-        det_out[0] = {ty}(0.0);
-        return;
-    }}
+    if max_abs <= zero {
+        return (0, zero);
+    }
 
-    let threshold = max_abs * {ty}(rank_meta.tolerance);
-    var rank = 0u;
-    var det = {ty}(1.0);
-    var sign = {ty}(1.0);
-    for (var col = 0u; col < cols; col = col + 1u) {{
-        if (rank >= rows) {{
+    let threshold = max_abs * T::from(tolerance);
+    let mut rank = 0usize;
+    let mut det = one;
+    let mut sign = one;
+
+    for col in 0..cols {
+        if rank >= rows {
             break;
-        }}
+        }
 
-        var pivot_row = rank;
-        var pivot_abs = {ty}(0.0);
-        for (var row = rank; row < rows; row = row + 1u) {{
+        let mut pivot_row = rank;
+        let mut pivot_abs = zero;
+        for row in rank..rows {
             let magnitude = abs(scratch[row * cols + col]);
-            if (magnitude > pivot_abs) {{
+            if magnitude > pivot_abs {
                 pivot_abs = magnitude;
                 pivot_row = row;
-            }}
-        }}
+            }
+        }
 
-        if (pivot_abs > threshold) {{
-            if (pivot_row != rank) {{
+        if pivot_abs > threshold {
+            if pivot_row != rank {
                 sign = -sign;
-                for (var swap_col = 0u; swap_col < cols; swap_col = swap_col + 1u) {{
-                    let lhs = rank * cols + swap_col;
-                    let rhs = pivot_row * cols + swap_col;
-                    let tmp = scratch[lhs];
-                    scratch[lhs] = scratch[rhs];
-                    scratch[rhs] = tmp;
-                }}
-            }}
+                for swap_col in 0..cols {
+                    scratch.swap(rank * cols + swap_col, pivot_row * cols + swap_col);
+                }
+            }
 
             let pivot = scratch[rank * cols + col];
-            if (square) {{
+            if square {
                 det = det * pivot;
-            }}
-            for (var row = 0u; row < rows; row = row + 1u) {{
-                if (row != rank) {{
+            }
+            for row in 0..rows {
+                if row != rank {
                     let factor = scratch[row * cols + col] / pivot;
-                    for (var elim_col = col; elim_col < cols; elim_col = elim_col + 1u) {{
+                    for elim_col in col..cols {
                         let target_idx = row * cols + elim_col;
                         let source = rank * cols + elim_col;
                         scratch[target_idx] = scratch[target_idx] - factor * scratch[source];
-                    }}
-                }}
-            }}
-            rank = rank + 1u;
-        }}
-    }}
+                    }
+                }
+            }
+            rank += 1;
+        }
+    }
 
-    rank_out[0] = rank;
-    if (square && rank == rows) {{
-        det_out[0] = sign * det;
-    }} else {{
-        det_out[0] = {ty}(0.0);
-    }}
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-    )
+    let determinant = if square && rank == rows {
+        sign * det
+    } else {
+        zero
+    };
+    (rank, determinant)
 }
 
 fn kron_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
@@ -1360,91 +1350,32 @@ where
         .validate_storage_len(matrix.buffer.len)
         .map_err(map_layout_err)?;
 
-    let len = matrix.layout.checked_size().map_err(map_layout_err)?;
-    let scratch = device.alloc_zeroed::<T>(len)?;
-    let rank_out = device.alloc_zeroed::<u32>(1)?;
-    let det_out = device.alloc_zeroed::<T>(1)?;
-    let meta = RankMeta {
-        shape: [
-            to_u32(rows, "rank row count")?,
-            to_u32(cols, "rank column count")?,
-        ],
-        strides: [
-            to_i32(matrix.layout.strides[0], "rank row stride")?,
-            to_i32(matrix.layout.strides[1], "rank column stride")?,
-        ],
-        offset: to_u32(matrix.layout.offset, "rank input offset")?,
-        tolerance: relative_tolerance,
-        _pad: [0; 2],
-    };
+    // Host-delegated (WG-P1): the single-thread `@workgroup_size(1)` kernel
+    // this replaced gained nothing from GPU dispatch. Download the whole
+    // backing buffer once, then copy the strided view into a contiguous
+    // row-major scratch buffer the elimination algorithm can swap/mutate
+    // in place (mirrors the WGSL kernel's own `input` -> `scratch` copy).
+    let mut host_buffer = vec![T::from(0.0); matrix.buffer.len];
+    device.download(matrix.buffer, &mut host_buffer)?;
 
-    let pipeline = cached_pipeline(
-        device,
-        (
-            TypeId::of::<MatrixPropertiesKernel<T>>(),
-            TypeId::of::<T>(),
-            1,
-        ),
-        "hephaestus-matrix-properties",
-        || matrix_properties_shader_source::<T>(),
-    );
-
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RankMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
-    device
-        .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
-
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-matrix-rank"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: meta_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: matrix.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: scratch.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: rank_out.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: det_out.buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-matrix-properties"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-matrix-properties"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+    let row_stride = matrix.layout.strides[0];
+    let col_stride = matrix.layout.strides[1];
+    let base_offset = matrix.layout.offset as isize;
+    let mut scratch = vec![T::from(0.0); rows * cols];
+    for row in 0..rows {
+        for col in 0..cols {
+            let src_offset = base_offset + row as isize * row_stride + col as isize * col_stride;
+            let src_offset =
+                usize::try_from(src_offset).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("rank input offset {src_offset} is negative"),
+                })?;
+            scratch[row * cols + col] = host_buffer[src_offset];
+        }
     }
-    device.queue().submit(Some(encoder.finish()));
 
-    let mut rank = [0u32; 1];
-    device.download(&rank_out, &mut rank)?;
-    let rank = usize::try_from(rank[0]).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("matrix rank {} exceeds usize range", rank[0]),
-    })?;
+    let (rank, determinant) = matrix_properties_host(&mut scratch, rows, cols, relative_tolerance);
+
+    let det_out = device.upload(&[determinant])?;
     Ok((rank, det_out))
 }
 
