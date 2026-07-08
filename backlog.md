@@ -188,12 +188,29 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     cuda,decomposition` 106/106 (real CUDA hardware); full workspace `cargo
     nextest run --all-features` 298/298.
     CU-P1 (async stream pipelining/overlap — the narrower "staging" half of
-    the original finding is now closed above) and WG-P4 (encoder-borrowing
-    batching) remain open in this item. CU-P1's remaining scope (custom
-    per-device `CUstream`s for compute/transfer overlap) is lower-value on
-    this crate's primary target (Windows/WDDM, where KS-8 already forces a
-    `cuCtxSynchronize` drain after every kernel launch) — worth reassessing
-    scope before starting.
+    the original finding is now closed above) remains open in this item.
+    CU-P1's remaining scope (custom per-device `CUstream`s for compute/
+    transfer overlap) is lower-value on this crate's primary target
+    (Windows/WDDM, where KS-8 already forces a `cuCtxSynchronize` drain
+    after every kernel launch) — worth reassessing scope before starting.
+  - **WG-P4 closed as a standalone item, re-filed under KS-3** (ADR 0004,
+    `docs/adr/0004-wg-p4-composite-op-submit-batching.md`, accepted
+    2026-07-08): investigation found the multi-pass reduction tree
+    (`reduction_with_width`) already batches its own internal passes into
+    one encoder/one submit — `norm_l2`'s "3 submits" is three separately-
+    submitting *function calls* chained together (`map_reduction` then
+    `unary_elementwise_into` for `sqrt`), not multiplied internal passes.
+    Merging them requires giving `reduction_with_width` an encode-into-
+    caller's-encoder entry point — real surgery on correctness-load-bearing
+    multi-pass logic. This project already has the intended fix for this
+    problem class: the `CommandStream`/`GroupedCommandStream` seam
+    (KS-2/KS-4/KS-4G), but `CommandStream::encode` requires the newer
+    `KernelSource<Dialect>` trait, which `norm_l2`/`map_reduction`/
+    `reduction`/the elementwise family don't implement yet — that port is
+    KS-3's already-in-progress scope. Decision: defer to KS-3 rather than
+    build ad-hoc `encode_*` variants now that KS-3 would make redundant for
+    these call sites; re-open WG-P4 independently only if KS-3 stalls or
+    excludes this op family.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
