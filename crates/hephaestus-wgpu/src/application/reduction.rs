@@ -19,10 +19,8 @@ pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for reduction operations.
 struct ReductionOpWrapper<Op>(PhantomData<Op>);
 struct ReductionFinalOpWrapper<Op>(PhantomData<Op>);
-struct AxisReductionKernel<Op>(PhantomData<Op>);
 struct AxisReductionParallelKernel<Op>(PhantomData<Op>);
 struct AxisReductionAxis0TiledKernel<Op>(PhantomData<Op>);
-struct MeanAxisKernel<T>(PhantomData<T>);
 struct MeanAxisParallelKernel<T>(PhantomData<T>);
 struct MeanAxis0TiledKernel<T>(PhantomData<T>);
 
@@ -210,61 +208,24 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {{
     )
 }
 
-fn axis_reduction_shader_source<Op, T>(width: BlockWidth) -> String
-where
-    Op: CombineExpr<Wgsl>,
-    T: IdentityToken<Op, Wgsl>,
-{
-    format!(
-        r#"
-struct AxisReductionMeta {{
-    input_shape: vec2<u32>,
-    input_strides: vec2<i32>,
-    output_strides: vec2<i32>,
-    offsets: vec4<u32>,
-}}
-
-@group(0) @binding(0) var<uniform> axis_meta: AxisReductionMeta;
-@group(0) @binding(1) var<storage, read> input: array<{ty}>;
-@group(0) @binding(2) var<storage, read_write> output: array<{ty}>;
-
-@compute @workgroup_size({wg})
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
-    let i = gid.x;
-    if (i >= axis_meta.offsets.w) {{
-        return;
-    }}
-
-    let axis = axis_meta.offsets.z;
-    let axis_len = select(axis_meta.input_shape.y, axis_meta.input_shape.x, axis == 0u);
-    let out_row = select(i, 0u, axis == 0u);
-    let out_col = select(0u, i, axis == 0u);
-    var acc: {ty} = {identity};
-
-    for (var r = 0u; r < axis_len; r = r + 1u) {{
-        let in_row = select(out_row, r, axis == 0u);
-        let in_col = select(r, out_col, axis == 0u);
-        let in_off = i32(axis_meta.offsets.x)
-            + i32(in_row) * axis_meta.input_strides.x
-            + i32(in_col) * axis_meta.input_strides.y;
-        let lhs = acc;
-        let rhs = input[u32(in_off)];
-        acc = {expr};
-    }}
-
-    let out_off = i32(axis_meta.offsets.y)
-        + i32(out_row) * axis_meta.output_strides.x
-        + i32(out_col) * axis_meta.output_strides.y;
-    output[u32(out_off)] = acc;
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-        wg = width.get(),
-        identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
-        expr = <Op as CombineExpr<Wgsl>>::EXPR,
-    )
-}
-
+/// Grid-strided workgroup-parallel axis reduction (WG-P5): each of the `wg`
+/// lanes accumulates every `axis_len`-th element starting at its lane index
+/// (a per-lane sequential fold, not a single load), then the lanes'
+/// `wg` partials tree-reduce as before. Correct and fully lane-parallel for
+/// any `axis_len` — including `axis_len > wg`, where the previous "parallel"
+/// kernel could only read the first `wg` elements (each lane loaded at most
+/// one) and dispatch fell back to a genuinely serial one-thread-per-row
+/// kernel that did zero cross-lane work. This one kernel now covers both
+/// regimes; the serial kernel is dead and removed.
+///
+/// The per-lane stride-accumulation reassociates the combine relative to a
+/// purely sequential fold (elements interleave across lanes before the tree
+/// reduction), so exact bitwise equality with a sequential CPU reference is
+/// no longer guaranteed for inputs where the combine is not exact under
+/// reassociation (e.g. float sums with real rounding). Differential tests
+/// against a derived epsilon bound this (`axis_reduction_grid_stride_...`
+/// contract tests); small-integer-valued fixtures remain exact because
+/// integer-valued f32 sums have no rounding error under any grouping.
 fn axis_reduction_parallel_shader_source<Op, T>(width: BlockWidth) -> String
 where
     Op: CombineExpr<Wgsl>,
@@ -301,16 +262,23 @@ fn main(
     let out_row = select(i, 0u, axis == 0u);
     let out_col = select(0u, i, axis == 0u);
 
-    var value: {ty} = {identity};
-    if (lane < axis_len) {{
-        let in_row = select(out_row, lane, axis == 0u);
-        let in_col = select(lane, out_col, axis == 0u);
+    var acc: {ty} = {identity};
+    var idx = lane;
+    loop {{
+        if (idx >= axis_len) {{
+            break;
+        }}
+        let in_row = select(out_row, idx, axis == 0u);
+        let in_col = select(idx, out_col, axis == 0u);
         let in_off = i32(axis_meta.offsets.x)
             + i32(in_row) * axis_meta.input_strides.x
             + i32(in_col) * axis_meta.input_strides.y;
-        value = input[u32(in_off)];
+        let lhs = acc;
+        let rhs = input[u32(in_off)];
+        acc = {expr};
+        idx = idx + {wg}u;
     }}
-    partials[lane] = value;
+    partials[lane] = acc;
     workgroupBarrier();
 
     var stride = {wg}u / 2u;
@@ -342,57 +310,9 @@ fn main(
     )
 }
 
-fn mean_axis_shader_source<T>(width: BlockWidth) -> String
-where
-    T: IdentityToken<SumOp, Wgsl>,
-{
-    format!(
-        r#"
-struct AxisReductionMeta {{
-    input_shape: vec2<u32>,
-    input_strides: vec2<i32>,
-    output_strides: vec2<i32>,
-    offsets: vec4<u32>,
-}}
-
-@group(0) @binding(0) var<uniform> axis_meta: AxisReductionMeta;
-@group(0) @binding(1) var<storage, read> input: array<{ty}>;
-@group(0) @binding(2) var<storage, read_write> output: array<{ty}>;
-
-@compute @workgroup_size({wg})
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
-    let i = gid.x;
-    if (i >= axis_meta.offsets.w) {{
-        return;
-    }}
-
-    let axis = axis_meta.offsets.z;
-    let axis_len = select(axis_meta.input_shape.y, axis_meta.input_shape.x, axis == 0u);
-    let out_row = select(i, 0u, axis == 0u);
-    let out_col = select(0u, i, axis == 0u);
-    var acc: {ty} = {identity};
-
-    for (var r = 0u; r < axis_len; r = r + 1u) {{
-        let in_row = select(out_row, r, axis == 0u);
-        let in_col = select(r, out_col, axis == 0u);
-        let in_off = i32(axis_meta.offsets.x)
-            + i32(in_row) * axis_meta.input_strides.x
-            + i32(in_col) * axis_meta.input_strides.y;
-        acc = acc + input[u32(in_off)];
-    }}
-
-    let out_off = i32(axis_meta.offsets.y)
-        + i32(out_row) * axis_meta.output_strides.x
-        + i32(out_col) * axis_meta.output_strides.y;
-    output[u32(out_off)] = acc / {ty}(axis_len);
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-        wg = width.get(),
-        identity = <T as IdentityToken<SumOp, Wgsl>>::TOKEN,
-    )
-}
-
+/// Grid-strided workgroup-parallel mean-axis reduction (WG-P5); see
+/// [`axis_reduction_parallel_shader_source`] for the rationale (same fix,
+/// applied to the sum-then-divide mean kernel).
 fn mean_axis_parallel_shader_source<T>(width: BlockWidth) -> String
 where
     T: IdentityToken<SumOp, Wgsl>,
@@ -428,16 +348,21 @@ fn main(
     let out_row = select(i, 0u, axis == 0u);
     let out_col = select(0u, i, axis == 0u);
 
-    var value: {ty} = {identity};
-    if (lane < axis_len) {{
-        let in_row = select(out_row, lane, axis == 0u);
-        let in_col = select(lane, out_col, axis == 0u);
+    var acc: {ty} = {identity};
+    var idx = lane;
+    loop {{
+        if (idx >= axis_len) {{
+            break;
+        }}
+        let in_row = select(out_row, idx, axis == 0u);
+        let in_col = select(idx, out_col, axis == 0u);
         let in_off = i32(axis_meta.offsets.x)
             + i32(in_row) * axis_meta.input_strides.x
             + i32(in_col) * axis_meta.input_strides.y;
-        value = input[u32(in_off)];
+        acc = acc + input[u32(in_off)];
+        idx = idx + {wg}u;
     }}
-    partials[lane] = value;
+    partials[lane] = acc;
     workgroupBarrier();
 
     var stride = {wg}u / 2u;
@@ -759,7 +684,6 @@ fn empty_prepared_axis_reduction<T>() -> PreparedAxisReduction<T> {
 fn axis_reduction_pipeline<Op, T>(
     device: &WgpuDevice,
     width: BlockWidth,
-    reduced_axis_len: usize,
     dispatch: &mut AxisReductionDispatch,
 ) -> wgpu::ComputePipeline
 where
@@ -779,7 +703,9 @@ where
             "hephaestus-axis-reduction-axis0-tiled",
             || axis_reduction_axis0_tiled_shader_source::<Op, T>(width),
         )
-    } else if reduced_axis_len <= width.get() as usize {
+    } else {
+        // Grid-strided (WG-P5): one workgroup per output row, correct and
+        // fully lane-parallel for any axis length.
         dispatch.groups = dispatch.meta.offsets[3];
         cached_pipeline(
             device,
@@ -791,24 +717,12 @@ where
             "hephaestus-axis-reduction-parallel",
             || axis_reduction_parallel_shader_source::<Op, T>(width),
         )
-    } else {
-        cached_pipeline(
-            device,
-            (
-                TypeId::of::<AxisReductionKernel<Op>>(),
-                TypeId::of::<T>(),
-                width.get(),
-            ),
-            "hephaestus-axis-reduction",
-            || axis_reduction_shader_source::<Op, T>(width),
-        )
     }
 }
 
 fn mean_axis_pipeline<T>(
     device: &WgpuDevice,
     width: BlockWidth,
-    reduced_axis_len: usize,
     dispatch: &mut AxisReductionDispatch,
 ) -> wgpu::ComputePipeline
 where
@@ -827,7 +741,9 @@ where
             "hephaestus-mean-axis0-tiled",
             || mean_axis0_tiled_shader_source::<T>(width),
         )
-    } else if reduced_axis_len <= width.get() as usize {
+    } else {
+        // Grid-strided (WG-P5): one workgroup per output row, correct and
+        // fully lane-parallel for any axis length.
         dispatch.groups = dispatch.meta.offsets[3];
         cached_pipeline(
             device,
@@ -838,17 +754,6 @@ where
             ),
             "hephaestus-mean-axis-parallel",
             || mean_axis_parallel_shader_source::<T>(width),
-        )
-    } else {
-        cached_pipeline(
-            device,
-            (
-                TypeId::of::<MeanAxisKernel<T>>(),
-                TypeId::of::<T>(),
-                width.get(),
-            ),
-            "hephaestus-mean-axis",
-            || mean_axis_shader_source::<T>(width),
         )
     }
 }
@@ -873,8 +778,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
-    let reduced_axis_len = axis_len(input, axis)?;
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, reduced_axis_len, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
     prepared_axis_reduction(
         device,
         pipeline,
@@ -953,7 +857,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
-    let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
+    let pipeline = mean_axis_pipeline::<T>(device, width, &mut dispatch);
     prepared_axis_reduction(
         device,
         pipeline,
@@ -983,8 +887,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
-    let reduced_axis_len = axis_len(input, axis)?;
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, reduced_axis_len, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
     dispatch_axis_reduction(device, &pipeline, input, output, dispatch)
 }
 
@@ -1143,7 +1046,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
-    let pipeline = mean_axis_pipeline::<T>(device, width, reduced_axis_len, &mut dispatch);
+    let pipeline = mean_axis_pipeline::<T>(device, width, &mut dispatch);
     dispatch_axis_reduction(device, &pipeline, input, output, dispatch)
 }
 
