@@ -148,8 +148,26 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     shader source, `RankMeta` uniform struct, and `MatrixPropertiesKernel<T>`
     marker. Verification: full workspace `cargo nextest run --all-features`
     297/297 (CUDA + wgpu hardware).
-    CU-P1/P6/M3 (streams + pinned staging) and WG-P4/P5 remain open in this
-    item.
+  - **WG-P5 done** (commit `ee92464`, 2026-07-07): the workgroup-parallel
+    axis/mean-axis reduction kernels loaded at most one element per lane
+    (`if lane < axis_len`), correct only for `axis_len <= width`; dispatch
+    fell back to a genuinely serial one-thread-per-row kernel for longer
+    axes (zero cross-lane work, full dispatch overhead paid anyway).
+    Generalized both kernels to a per-lane strided accumulation loop before
+    the existing tree-reduction, correct and fully lane-parallel for any
+    axis length — one kernel now covers both regimes; deleted the dead
+    serial shader sources and their kernel markers, and the now-unconditional
+    dispatch branch. The strided accumulation reassociates the combine
+    relative to Leto's sequential CPU reference, so added a new contract
+    test at the scale this targets (axis_len=500 > `BlockWidth::DEFAULT`=256,
+    real float values) asserting a derived epsilon bound
+    (`O(n*eps*sum|x|)` with tree-reduction headroom) rather than exact
+    equality; the existing small-integer-fixture test still passes exact
+    equality unchanged (integer-valued f32 sums have no rounding error under
+    any grouping). Verification: full workspace `cargo nextest run
+    --all-features` 298/298 (CUDA + wgpu hardware).
+    CU-P1/P6/M3 (streams + pinned staging) and WG-P4 (encoder-borrowing
+    batching) remain open in this item.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
