@@ -166,8 +166,34 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     equality unchanged (integer-valued f32 sums have no rounding error under
     any grouping). Verification: full workspace `cargo nextest run
     --all-features` 298/298 (CUDA + wgpu hardware).
-    CU-P1/P6/M3 (streams + pinned staging) and WG-P4 (encoder-borrowing
-    batching) remain open in this item.
+  - **CU-P6/CU-M3 done** (commit `4b8581c`, 2026-07-07): the blocked LU/
+    Cholesky decompositions' per-panel host round-trip
+    (`download_matrix_region_compact`/`write_matrix_region_compact`) staged
+    through a plain `Vec<f32>` (pageable memory, forcing the driver to bounce
+    through its own internal pinned staging buffer) with fully synchronous
+    per-row `cuMemcpyDtoH_v2`/`cuMemcpyHtoD_v2` calls. Added
+    `PinnedHostBuffer<T>` (`cuMemAllocHost_v2`/`cuMemFreeHost` RAII wrapper,
+    `Deref`/`DerefMut` to `[T]` so it drops in wherever the `Vec<f32>` was
+    used as a slice) — this was CU-M3's "dead capability": zero pinned-memory
+    usage existed anywhere in the crate despite host<->device transfers on
+    every blocked-decomposition panel round-trip. Switched both functions to
+    the pinned buffer and the async copy variants, enqueuing every row before
+    one `cuStreamSynchronize` instead of blocking per row. Same-algorithm,
+    same-values change (`factor_lu_panel`/`factor_cholesky_panel`'s factored
+    output is unaffected). Miri can't execute this crate's CUDA FFI, so the
+    new unsafe is verified by real-hardware differential tests instead (the
+    existing LU/Cholesky contract tests exercise exactly this code path) —
+    stated explicitly rather than claiming Miri coverage it doesn't have.
+    Verification: `cargo nextest run -p hephaestus-cuda --features
+    cuda,decomposition` 106/106 (real CUDA hardware); full workspace `cargo
+    nextest run --all-features` 298/298.
+    CU-P1 (async stream pipelining/overlap — the narrower "staging" half of
+    the original finding is now closed above) and WG-P4 (encoder-borrowing
+    batching) remain open in this item. CU-P1's remaining scope (custom
+    per-device `CUstream`s for compute/transfer overlap) is lower-value on
+    this crate's primary target (Windows/WDDM, where KS-8 already forces a
+    `cuCtxSynchronize` drain after every kernel launch) — worth reassessing
+    scope before starting.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
