@@ -124,8 +124,32 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     shader/entry point) and a `to_i64` stride-conversion helper alongside
     `to_i32`/`to_u32`. Verification: full workspace `cargo nextest run
     --all-features` 297/297 (CUDA + wgpu hardware, up from 295).
-    CU-P1/P6/M3 (streams + pinned staging), WG-P1/P3/P4/P5 remain open in
-    this item.
+  - **WG-P3 already closed** (found 2026-07-07, no code change needed):
+    `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
+    linalg.rs` already route through the fused `map_reduction`/
+    `map_reduction_first_pass` machinery the audit's fix suggested — no
+    full-length temporaries are materialized. Stale audit finding, same
+    pattern as CU-C1/WG-S1/BOTH-SCAN.
+  - **WG-P1 done** (commit `f7537ca`, 2026-07-07): `matrix_properties_with_
+    tolerance` dispatched a WGSL kernel at `@workgroup_size(1)`
+    `dispatch_workgroups(1,1,1)` — one GPU thread running O(rows·cols²)
+    scalar partial-pivoting Gaussian elimination, zero parallelism exploited,
+    full pipeline/dispatch/readback overhead paid anyway. Ported the exact
+    same algorithm (same pivot order, same `max_abs*tolerance` threshold,
+    same sign-flip-on-swap determinant) to run on the host — a
+    dispatch-mechanism change, not an algorithm change, verified by the two
+    existing contract tests that pin this algorithm's specific divergence
+    from Leto's SVD-spectrum criterion
+    (`matrix_rank_relative_tolerance_is_the_discriminator`,
+    `det_of_near_singular_triangular_is_exact_pivot_product`) still asserting
+    the same values. `MatrixRankScalar` now bundles the arithmetic bounds
+    (`PartialOrd`, `Neg`/`Sub`/`Mul`/`Div`, `From<f32>`) as supertraits so
+    callers still only write `T: MatrixRankScalar`. Deleted the dead WGSL
+    shader source, `RankMeta` uniform struct, and `MatrixPropertiesKernel<T>`
+    marker. Verification: full workspace `cargo nextest run --all-features`
+    297/297 (CUDA + wgpu hardware).
+    CU-P1/P6/M3 (streams + pinned staging) and WG-P4/P5 remain open in this
+    item.
 - [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
   (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
   with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
