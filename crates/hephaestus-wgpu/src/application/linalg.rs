@@ -1489,6 +1489,7 @@ where
 /// the CPU via `leto_ops::pinv` (SVD-based), and the result uploaded. This
 /// provides API parity over device buffers, not a GPU kernel; the transfer
 /// is O(rows·cols) each way.
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     matrix
@@ -1517,6 +1518,7 @@ pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<W
 /// `leto_ops::matexp` (scaling-and-squaring), and the result uploaded. This
 /// provides API parity over device buffers, not a GPU kernel; the transfer
 /// is O(n²) each way.
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn matexp(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
     let [rows, cols] = matrix.layout.shape;
     if rows != cols {
@@ -1877,7 +1879,17 @@ impl<'a, M: AsGpuMatrixOperand<'a, f32>> MatrixSolve for M {
     }
     #[inline]
     fn pinv(&self, device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
-        pinv(device, self.as_operand())
+        #[cfg(any(feature = "decomposition", feature = "sparse"))]
+        {
+            pinv(device, self.as_operand())
+        }
+        #[cfg(not(any(feature = "decomposition", feature = "sparse")))]
+        {
+            let _ = device;
+            Err(HephaestusError::DispatchFailed {
+                message: "pinv requires the decomposition or sparse feature".to_string(),
+            })
+        }
     }
 }
 
@@ -1921,6 +1933,16 @@ impl<'a, M: AsGpuMatrixOperand<'a, f32>> MatrixFunction for M {
     }
     #[inline]
     fn matexp(&self, device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
-        matexp(device, self.as_operand())
+        #[cfg(any(feature = "decomposition", feature = "sparse"))]
+        {
+            matexp(device, self.as_operand())
+        }
+        #[cfg(not(any(feature = "decomposition", feature = "sparse")))]
+        {
+            let _ = device;
+            Err(HephaestusError::DispatchFailed {
+                message: "matexp requires the decomposition or sparse feature".to_string(),
+            })
+        }
     }
 }

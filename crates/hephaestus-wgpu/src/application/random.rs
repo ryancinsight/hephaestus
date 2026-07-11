@@ -1,13 +1,19 @@
 //! Seeded host-delegated PRNG initializers.
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 use crate::infrastructure::buffer::WgpuBuffer;
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 use crate::infrastructure::device::WgpuDevice;
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 use bytemuck::Pod;
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 use hephaestus_core::{ComputeDevice, DialectScalar, Result, Wgsl};
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 use leto_ops::RealScalar;
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. uniform samples in
 /// `[low, high)`, derived deterministically from `seed`.
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn uniform_with_seed<T: DialectScalar<Wgsl> + RealScalar + Pod, const N: usize>(
     device: &WgpuDevice,
     shape: [usize; N],
@@ -25,6 +31,7 @@ pub fn uniform_with_seed<T: DialectScalar<Wgsl> + RealScalar + Pod, const N: usi
 
 /// Fill a GPU-resident buffer of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn normal_with_seed<T: DialectScalar<Wgsl> + RealScalar + Pod, const N: usize>(
     device: &WgpuDevice,
     shape: [usize; N],

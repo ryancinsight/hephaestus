@@ -25,11 +25,14 @@ pub use application::elementwise::{
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
-    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
-    matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
+    batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matmul, matmul_into,
+    matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
     AsGpuMatrixOperand, L2NormScalar, MatmulZero, MatrixFunction, MatrixIdentityScalar, MatrixNorm,
     MatrixProduct, MatrixProperties, MatrixRankScalar, MatrixSolve,
 };
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+pub use application::linalg::{matexp, pinv};
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into,
