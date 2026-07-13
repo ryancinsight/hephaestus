@@ -4,13 +4,14 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## Open
+## Closed
 
-- [WGPU-CB-1] [major] **In progress — owner `/root`, scope
-  `crates/hephaestus-wgpu/src/infrastructure/device.rs`, its contract test, and
-  PM artifacts.** Migrate device construction to Mnemosyne's immutable callback
-  pair and surface a conflicting process registration through typed
-  `HephaestusError`. Driver: Mnemosyne ADR 0002.
+- [WGPU-CB-1] [major] **Done.** Device construction registers Mnemosyne's
+  immutable callback pair before publishing the staging device and surfaces a
+  conflicting registration through typed `HephaestusError`. Driver: Mnemosyne
+  ADR 0002; local decision: ADR 0005.
+
+## Open
 
 ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
 audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch

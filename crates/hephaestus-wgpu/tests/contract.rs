@@ -1165,7 +1165,8 @@ fn acquisition_reports_themis_topology_from_adapter() {
     eprintln!("DEBUG: Capacities checked");
 
     // The Arc-wrapping constructor has no adapter and reports none.
-    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
+    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone())
+        .expect("the canonical WGPU callback pair must be idempotent");
     eprintln!("DEBUG: Wrapped device created");
     assert_eq!(
         wrapped.topology().map(|topology| topology.compute_units()),

@@ -1,16 +1,17 @@
 # Checklist — hephaestus
 
-Sprint target: 0.11.0 (ADR-0004 kernel-seam release). Phase: Closure.
+Sprint target: 0.12.0. Phase: Closure.
 
-## In progress — WGPU-CB-1 immutable staging callbacks [major]
+## Verified — WGPU-CB-1 immutable staging callbacks [major]
 
 - [x] Reconcile the stale broad KS-3 claim and reclaim only `device.rs` plus
   its contract test.
-- [ ] Make `WgpuDevice::new` return typed `Result` and register one static
+- [x] Make `WgpuDevice::new` return typed `Result` and register one static
   Mnemosyne callback pair before publishing the staging device.
-- [ ] Update all package-local constructors and contract tests.
-- [ ] Run focused and full `hephaestus-wgpu` gates.
-- [ ] Synchronize migration notes, commit, and push the consumer change.
+- [x] Update all package-local constructors and contract tests.
+- [x] Run focused and full `hephaestus-wgpu` gates: check and clippy pass;
+  nextest passes 131/131; doctests and rustdoc pass.
+- [x] Synchronize migration notes, commit, and push the consumer change.
 
 2026-07-06 (KS-8 WDDM launch-drain recheck). Verified the CUDA launch SSOT in
 `crates/hephaestus-cuda/src/application/pipeline.rs` carries the Windows-gated
