@@ -6,6 +6,12 @@ cuda-oxide + cutile).
 
 ## Open
 
+- [WGPU-CB-1] [major] **In progress — owner `/root`, scope
+  `crates/hephaestus-wgpu/src/infrastructure/device.rs`, its contract test, and
+  PM artifacts.** Migrate device construction to Mnemosyne's immutable callback
+  pair and surface a conflicting process registration through typed
+  `HephaestusError`. Driver: Mnemosyne ADR 0002.
+
 ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
 audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
 `arch/kernel-seam`, owner claude-seam session 2026-07-02):
@@ -19,8 +25,9 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (commit `f18bb72`).
 - [KS-3] [major] Backends consume the core op vocabulary; per-backend trait
   pairs and duplicated ZSTs deleted; CUDA binary/scalar templates renamed to
-  canonical `lhs`/`rhs` operands. Status: in-progress (owner claude-seam;
-  scope `hephaestus-wgpu/**` + `hephaestus-cuda/**`).
+  canonical `lhs`/`rhs` operands. Status: stale claim superseded for
+  `device.rs` only by WGPU-CB-1 after no scoped activity since 2026-07-10;
+  remaining scope stays with owner claude-seam.
 - [KS-4] [minor] `KernelDevice`/`CommandStream` impls for `WgpuDevice` and
   `CudaDevice` + shared generic contract tests. Supersedes the standing "CUDA
   implementor for multi-storage kernels" item below for NEW consumers; the
