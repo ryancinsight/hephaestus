@@ -9,6 +9,8 @@ Target release: 0.12.0.
 - [patch] Replaced path-only first-party dependency declarations with exact Git
   revisions while retaining local path patches for Atlas development. The
   Hephaestus Git source now resolves for standalone downstream consumers.
+- [patch] Advanced Leto and Moirai to their integrated provider release
+  revisions.
 
 ### Breaking
 

@@ -12,6 +12,8 @@ Sprint target: 0.12.0. Phase: Closure.
   132 focused nextest cases, and inverse dependency inspection all pass.
 - [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
   exact Git revisions so standalone Git consumers resolve the provider graph.
+- [x] Advance Leto to `1b125ce` and Moirai to `b2f3732`; rerun focused
+  Hephaestus Clippy and 179/179 canonical nextest gates.
 
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 
