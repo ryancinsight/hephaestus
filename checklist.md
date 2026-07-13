@@ -2,7 +2,7 @@
 
 Sprint target: 0.12.0. Phase: Closure.
 
-## Verified — WGPU-CB-1 immutable staging callbacks [major]
+## Verified locally — WGPU-CB-1 immutable staging callbacks [major]
 
 - [x] Reconcile the stale broad KS-3 claim and reclaim only `device.rs` plus
   its contract test.
@@ -11,7 +11,11 @@ Sprint target: 0.12.0. Phase: Closure.
 - [x] Update all package-local constructors and contract tests.
 - [x] Run focused and full `hephaestus-wgpu` gates: check and clippy pass;
   nextest passes 131/131; doctests and rustdoc pass.
-- [x] Synchronize migration notes, commit, and push the consumer change.
+- [x] Commit and push the consumer change.
+- [ ] Publish gate: merge Mnemosyne 0.3 to its default branch, update Moirai's
+  default-branch dependency, then rerun isolated semver analysis. The local
+  Atlas patched graph is green; isolated resolution currently sees only
+  Mnemosyne 0.2.0.
 
 2026-07-06 (KS-8 WDDM launch-drain recheck). Verified the CUDA launch SSOT in
 `crates/hephaestus-cuda/src/application/pipeline.rs` carries the Windows-gated
