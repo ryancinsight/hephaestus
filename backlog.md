@@ -10,6 +10,10 @@ cuda-oxide + cutile).
   Git revision directly; consumers no longer resolve a private Themis 0.6
   identity that workspace-local patches cannot replace.
 
+- [GIT-SOURCE-1] [patch] First-party Leto, Mnemosyne, Moirai, and Eunomia
+  dependencies use exact Git revisions; local development remains zero-drift
+  through the root path patch table.
+
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through
   canonical Leto state. CUDA/WGPU value-semantic contracts and the full

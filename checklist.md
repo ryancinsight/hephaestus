@@ -10,6 +10,8 @@ Sprint target: 0.12.0. Phase: Closure.
 - [x] Pass focused Hephaestus WGPU gates and confirm the provider graph resolves
   one Themis 0.9 identity. Evidence: warning-denied `hephaestus-wgpu` clippy,
   132 focused nextest cases, and inverse dependency inspection all pass.
+- [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
+  exact Git revisions so standalone Git consumers resolve the provider graph.
 
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 
