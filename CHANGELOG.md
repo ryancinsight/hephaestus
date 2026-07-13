@@ -24,6 +24,10 @@ Target release: 0.12.0.
 
 ### Changed
 
+- [patch] Updated the declared Themis dependency from the obsolete 0.6 revision
+  to the exact current 0.9 revision and removed the non-transitive local patch.
+  Downstream workspaces can now resolve one Themis 0.9 provider identity.
+
 - `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: completed
   KS-5 reduction planner parity. Axis-reduction metadata packing,
   shape/stride/output/alias validation, scalar reduction width validation, and

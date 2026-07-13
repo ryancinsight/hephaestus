@@ -38,7 +38,7 @@ thiserror = "2.0"
 leto = { path = "../leto/crates/leto", features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
-themis = { git = "https://github.com/ryancinsight/themis", rev = "bdcddfe294f941ef2f84fd4ce38537906b0fec23", default-features = false, features = ["std"] }
+themis = { git = "https://github.com/ryancinsight/themis", rev = "6140468c79279ec8f112641ea7422cef4688c7f6", default-features = false, features = ["std"] }
 leto-ops = { path = "../leto/crates/leto-ops", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
 mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
@@ -82,11 +82,7 @@ moirai-executor = { path = "../moirai/moirai-executor" }
 moirai-transport = { path = "../moirai/moirai-transport" }
 moirai-iter = { path = "../moirai/moirai-iter" }
 moirai-pal = { path = "../moirai/moirai-pal" }
-moirai-tls = { path = "../moirai/moirai-tls" }
-moirai-http = { path = "../moirai/moirai-http" }
-moirai-python = { path = "../moirai/moirai-python" }
 moirai-utils = { path = "../moirai/moirai-utils" }
-moirai-metrics = { path = "../moirai/moirai-metrics" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
@@ -96,7 +92,4 @@ eunomia = { path = "../eunomia/crates/eunomia" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
-
-[patch."https://github.com/ryancinsight/themis"]
-themis = { path = "../themis" }
 

@@ -2,6 +2,15 @@
 
 Sprint target: 0.12.0. Phase: Closure.
 
+## Themis provider identity [patch]
+
+- [x] Replace the obsolete Themis 0.6 revision with the exact current Git
+  revision used by Hermes and Leto.
+- [x] Remove the root-only path patch that downstream consumers could not see.
+- [x] Pass focused Hephaestus WGPU gates and confirm the provider graph resolves
+  one Themis 0.9 identity. Evidence: warning-denied `hephaestus-wgpu` clippy,
+  132 focused nextest cases, and inverse dependency inspection all pass.
+
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 
 - [x] Enumerate every synthetic 1x1 branch and verify Leto's canonical

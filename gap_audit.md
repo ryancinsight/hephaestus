@@ -13,6 +13,11 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [patch] Hephaestus declared Themis 0.6 and relied on a root patch that Cargo
+  ignores when Hephaestus is a dependency. The declared source and revision now
+  match the Themis 0.9 provider used by Hermes and Leto, allowing consumer roots
+  to provide one local provider identity.
+
 - [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
   branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty
   state now preserves actual shapes, identity factors, rank, permutations, and

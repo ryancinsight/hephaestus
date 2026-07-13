@@ -6,6 +6,10 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [THEMIS-IDENTITY-1] [patch] Hephaestus now declares the exact current Themis
+  Git revision directly; consumers no longer resolve a private Themis 0.6
+  identity that workspace-local patches cannot replace.
+
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through
   canonical Leto state. CUDA/WGPU value-semantic contracts and the full
