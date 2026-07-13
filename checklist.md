@@ -2,6 +2,19 @@
 
 Sprint target: 0.12.0. Phase: Closure.
 
+## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
+
+- [x] Enumerate every synthetic 1x1 branch and verify Leto's canonical
+  decompositions already represent the actual empty dimensions.
+- [x] Add CUDA/WGPU value-semantic regressions for empty identity factors,
+  determinant, rank, permutations, and shapes.
+- [x] Delete the synthetic branches and route empty inputs through the same
+  canonical Leto representation as nonempty inputs.
+- [x] Pass formatting, focused CUDA/WGPU contracts, Clippy, all 239 package
+  tests, doctests, and warning-clean package documentation.
+- [x] Synchronize the release artifacts for the stacked Hephaestus commit and
+  Atlas integration-pointer advance.
+
 ## Verified locally — WGPU-CB-1 immutable staging callbacks [major]
 
 - [x] Reconcile the stale broad KS-3 claim and reclaim only `device.rs` plus

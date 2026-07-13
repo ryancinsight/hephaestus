@@ -13,6 +13,12 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
+  branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty
+  state now preserves actual shapes, identity factors, rank, permutations, and
+  the empty-product determinant. The stronger optional-state redesign was
+  rejected because it would duplicate state that Leto already represents.
+
 - [major] WGPU staging callback ownership is one immutable process-lifetime
   pair. `WgpuDevice::new` registers the canonical static pair before publishing
   the first staging device and returns typed failure for a competing Mnemosyne

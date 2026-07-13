@@ -8,8 +8,6 @@ use crate::infrastructure::device::CudaDevice;
 
 /// Hessenberg reduction result: device-resident factors.
 pub struct GpuHessenbergDecomposition {
-    #[allow(dead_code)]
-    inner: leto_ops::HessenbergDecomposition<f32>,
     q: CudaBuffer<f32>,
     h: CudaBuffer<f32>,
     n: usize,
@@ -54,20 +52,6 @@ pub fn hessenberg(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    if rows == 0 {
-        let q = device.alloc_zeroed::<f32>(0)?;
-        let h = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::hessenberg(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Hessenberg reduction failed: {e}"),
-        })?;
-        return Ok(GpuHessenbergDecomposition { inner, q, h, n: 0 });
-    }
-
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
@@ -81,10 +65,5 @@ pub fn hessenberg(
     let q = device.upload(q_slice)?;
     let h = device.upload(h_slice)?;
 
-    Ok(GpuHessenbergDecomposition {
-        inner,
-        q,
-        h,
-        n: rows,
-    })
+    Ok(GpuHessenbergDecomposition { q, h, n: rows })
 }

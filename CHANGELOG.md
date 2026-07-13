@@ -58,6 +58,12 @@ Target release: 0.12.0.
 
 ### Fixed
 
+- `hephaestus-cuda` / `hephaestus-wgpu` [patch]: empty decomposition results
+  retain their actual dimensions and algebraic identities instead of storing a
+  synthetic singular 1x1 Leto factorization. In particular, the determinant of
+  the empty full-pivot LU factorization is the empty product `1`, and a tall
+  `m x 0` QR/bidiagonalization exposes the real `m x m` identity factor.
+
 - The local Atlas patch set now covers every transitive Mnemosyne crate used by
   Hephaestus. Cargo no longer instantiates parallel local/git
   `mnemosyne-backend` type identities while resolving the WGPU callback pair.

@@ -3189,3 +3189,72 @@ fn blocked_qr_rejects_non_dense_operands() {
     use hephaestus_cuda::qr_decompose_blocked;
     assert_blocked_rejects_non_dense(&dev, qr_decompose_blocked, "QR");
 }
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn empty_decompositions_preserve_shapes_and_identities() {
+    use hephaestus_cuda::{
+        bidiagonalize, col_piv_qr, full_piv_lu, hessenberg, qr_decompose, qr_decompose_blocked,
+    };
+
+    let Some(dev) = device("empty_decompositions_preserve_shapes_and_identities") else {
+        return;
+    };
+    let empty = dev.alloc_zeroed::<f32>(0).unwrap();
+    let tall_layout = Layout::c_contiguous([3, 0]).unwrap();
+    let tall = StridedOperand {
+        buffer: &empty,
+        layout: &tall_layout,
+    };
+
+    let bidiagonal = bidiagonalize(&dev, tall).unwrap();
+    assert_eq!(bidiagonal.shape(), (3, 0));
+    assert_eq!(bidiagonal.u_buffer().len(), 9);
+    assert_eq!(bidiagonal.b_buffer().len(), 0);
+    assert_eq!(bidiagonal.v_buffer().len(), 0);
+    let expected_identity = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    let mut identity = vec![0.0; 9];
+    dev.download(bidiagonal.u_buffer(), &mut identity).unwrap();
+    assert_eq!(identity, expected_identity);
+
+    let pivoted = col_piv_qr(&dev, tall).unwrap();
+    assert_eq!(pivoted.rank(), 0);
+    assert_eq!(pivoted.permutation(), []);
+    assert_eq!(pivoted.q().len(), 9);
+    assert_eq!(pivoted.r().len(), 0);
+    identity.fill(0.0);
+    dev.download(pivoted.q(), &mut identity).unwrap();
+    assert_eq!(identity, expected_identity);
+
+    for qr in [
+        qr_decompose(&dev, tall).unwrap(),
+        qr_decompose_blocked(&dev, tall).unwrap(),
+    ] {
+        assert_eq!(qr.shape(), (3, 0));
+        assert_eq!(qr.r_buffer().len(), 0);
+        assert_eq!(qr.inner().shape(), (3, 0));
+        assert_eq!(
+            leto::Storage::as_slice(qr.inner().q().storage()),
+            expected_identity
+        );
+        assert_eq!(qr.inner().r().shape(), [3, 0]);
+    }
+
+    let square_layout = Layout::c_contiguous([0, 0]).unwrap();
+    let square = StridedOperand {
+        buffer: &empty,
+        layout: &square_layout,
+    };
+    let lu = full_piv_lu(&dev, square).unwrap();
+    assert_eq!(lu.n(), 0);
+    assert_eq!(lu.rank(), 0);
+    assert_eq!(lu.det(), 1.0);
+    assert_eq!(lu.row_permutation(), []);
+    assert_eq!(lu.col_permutation(), []);
+    assert_eq!(lu.lu_buffer().len(), 0);
+
+    let h = hessenberg(&dev, square).unwrap();
+    assert_eq!(h.n(), 0);
+    assert_eq!(h.q_buffer().len(), 0);
+    assert_eq!(h.h_buffer().len(), 0);
+}

@@ -6,6 +6,11 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
+  Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through
+  canonical Leto state. CUDA/WGPU value-semantic contracts and the full
+  239-test backend suite pass; no synthetic 1x1 factorization remains.
+
 - [WGPU-CB-1] [major] **Done.** Device construction registers Mnemosyne's
   immutable callback pair before publishing the staging device and surfaces a
   conflicting registration through typed `HephaestusError`. Driver: Mnemosyne

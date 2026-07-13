@@ -121,24 +121,6 @@ pub fn qr_decompose(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    if rows == 0 || cols == 0 {
-        let r_buf = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::qr_decompose(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("QR decomposition failed: {e}"),
-        })?;
-        return Ok(GpuQrDecomposition {
-            inner,
-            r: r_buf,
-            rows,
-            cols,
-        });
-    }
-
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
@@ -201,14 +183,8 @@ pub fn qr_decompose_blocked(
 
         if m == 0 || n == 0 {
             let r_buf = device.alloc_zeroed::<f32>(0)?;
-            let placeholder = vec![0.0f32];
-            let inner = leto_ops::qr_decompose(&leto::ArrayView::<f32, 2>::new(
-                leto::Layout::c_contiguous([1, 1]).unwrap(),
-                &placeholder,
-            ))
-            .map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("QR decomposition failed: {e}"),
-            })?;
+            let inner =
+                leto_ops::QrDecomposition::from_raw_parts(Vec::new(), Vec::new(), Vec::new(), m, n);
             return Ok(GpuQrDecomposition {
                 inner,
                 r: r_buf,

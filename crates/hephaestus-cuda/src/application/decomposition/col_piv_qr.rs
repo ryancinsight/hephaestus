@@ -8,7 +8,6 @@ use crate::infrastructure::device::CudaDevice;
 
 /// Column-pivoted QR decomposition result: device-resident factors.
 pub struct GpuColPivQrDecomposition {
-    #[allow(dead_code)]
     inner: leto_ops::ColPivQrDecomposition<f32>,
     q: CudaBuffer<f32>,
     r: CudaBuffer<f32>,
@@ -90,29 +89,6 @@ pub fn col_piv_qr(
         .layout
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
-
-    if rows == 0 || cols == 0 {
-        let q = device.alloc_zeroed::<f32>(0)?;
-        let r = device.alloc_zeroed::<f32>(0)?;
-        // Construct placeholder inner
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("ColPivQR decomposition failed: {e}"),
-        })?;
-        return Ok(GpuColPivQrDecomposition {
-            inner,
-            q,
-            r,
-            permutation: vec![],
-            rank: 0,
-            m: rows,
-            n: cols,
-        });
-    }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
