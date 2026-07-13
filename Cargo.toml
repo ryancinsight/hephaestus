@@ -35,14 +35,14 @@ thiserror = "2.0"
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "d77f6a6daa6345ce5a517761d71c9afe90f859ea", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "acd97ec6556656b5f04c294a9bcd11333585a8f7", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", rev = "6140468c79279ec8f112641ea7422cef4688c7f6", default-features = false, features = ["std"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "d77f6a6daa6345ce5a517761d71c9afe90f859ea", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "7435ea0b305210874d6f3faae7860f40de835426" }
-mnemosyne-backend = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "7435ea0b305210874d6f3faae7860f40de835426" }
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "7435ea0b305210874d6f3faae7860f40de835426" }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "acd97ec6556656b5f04c294a9bcd11333585a8f7", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "eb0d94109c452cdca934c87c1e3dd53884f2ca28" }
+mnemosyne-backend = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "eb0d94109c452cdca934c87c1e3dd53884f2ca28" }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "eb0d94109c452cdca934c87c1e3dd53884f2ca28" }
 moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", rev = "5987a3bb35748b7077dc17bdd98d79dfd710a2ad", default-features = false, features = [
     "std",
     "parallel",
