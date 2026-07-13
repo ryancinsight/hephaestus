@@ -4,6 +4,18 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## Closed
+
+- [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
+  Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through
+  canonical Leto state. CUDA/WGPU value-semantic contracts and the full
+  239-test backend suite pass; no synthetic 1x1 factorization remains.
+
+- [WGPU-CB-1] [major] **Done.** Device construction registers Mnemosyne's
+  immutable callback pair before publishing the staging device and surfaces a
+  conflicting registration through typed `HephaestusError`. Driver: Mnemosyne
+  ADR 0002; local decision: ADR 0005.
+
 ## Open
 
 ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
@@ -19,8 +31,9 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (commit `f18bb72`).
 - [KS-3] [major] Backends consume the core op vocabulary; per-backend trait
   pairs and duplicated ZSTs deleted; CUDA binary/scalar templates renamed to
-  canonical `lhs`/`rhs` operands. Status: in-progress (owner claude-seam;
-  scope `hephaestus-wgpu/**` + `hephaestus-cuda/**`).
+  canonical `lhs`/`rhs` operands. Status: stale claim superseded for
+  `device.rs` only by WGPU-CB-1 after no scoped activity since 2026-07-10;
+  remaining scope stays with owner claude-seam.
 - [KS-4] [minor] `KernelDevice`/`CommandStream` impls for `WgpuDevice` and
   `CudaDevice` + shared generic contract tests. Supersedes the standing "CUDA
   implementor for multi-storage kernels" item below for NEW consumers; the

@@ -8,8 +8,6 @@ use crate::infrastructure::device::CudaDevice;
 
 /// Bidiagonal decomposition result: device-resident factors.
 pub struct GpuBidiagonalDecomposition {
-    #[allow(dead_code)]
-    inner: leto_ops::BidiagonalDecomposition<f32>,
     u: CudaBuffer<f32>,
     b: CudaBuffer<f32>,
     v: CudaBuffer<f32>,
@@ -63,28 +61,6 @@ pub fn bidiagonalize(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    if m == 0 || n == 0 {
-        let u = device.alloc_zeroed::<f32>(0)?;
-        let b = device.alloc_zeroed::<f32>(0)?;
-        let v = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::bidiagonalize(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Bidiagonalization failed: {e}"),
-        })?;
-        return Ok(GpuBidiagonalDecomposition {
-            inner,
-            u,
-            b,
-            v,
-            m,
-            n,
-        });
-    }
-
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
@@ -100,12 +76,5 @@ pub fn bidiagonalize(
     let b = device.upload(b_slice)?;
     let v = device.upload(v_slice)?;
 
-    Ok(GpuBidiagonalDecomposition {
-        inner,
-        u,
-        b,
-        v,
-        m,
-        n,
-    })
+    Ok(GpuBidiagonalDecomposition { u, b, v, m, n })
 }

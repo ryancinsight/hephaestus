@@ -4,6 +4,24 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+Target release: 0.12.0.
+
+### Breaking
+
+- `WgpuDevice::new` now returns `hephaestus_core::Result<Self>`. Construction
+  fails with `HephaestusError::DeviceUnavailable` when another static callback
+  pair already owns Mnemosyne's process-global WGPU staging backend.
+- WGPU staging callbacks convert panics and poisoned-registry failures into
+  allocation/deallocation failure values, so no Rust unwind crosses their C
+  ABI boundary.
+
+### Migration
+
+- Add `?` at propagated construction sites or handle the typed result. Code
+  wrapping an existing device directly must use
+  `WgpuDevice::new(device, queue)?`; repeated construction with Hephaestus's
+  canonical static callback pair remains valid.
+
 ### Changed
 
 - `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: completed
@@ -39,6 +57,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   tests (incl. the adversarial dense-operand cases) pass unchanged.
 
 ### Fixed
+
+- `hephaestus-cuda` / `hephaestus-wgpu` [patch]: empty decomposition results
+  retain their actual dimensions and algebraic identities instead of storing a
+  synthetic singular 1x1 Leto factorization. In particular, the determinant of
+  the empty full-pivot LU factorization is the empty product `1`, and a tall
+  `m x 0` QR/bidiagonalization exposes the real `m x m` identity factor.
+
+- The local Atlas patch set now covers every transitive Mnemosyne crate used by
+  Hephaestus. Cargo no longer instantiates parallel local/git
+  `mnemosyne-backend` type identities while resolving the WGPU callback pair.
 
 - `hephaestus-cuda` / `hephaestus-wgpu` [patch]: restored all-targets
   compilation after Leto general-eigenvalue APIs returned `leto::Complex<f32>`

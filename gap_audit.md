@@ -13,6 +13,22 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
+  branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty
+  state now preserves actual shapes, identity factors, rank, permutations, and
+  the empty-product determinant. The stronger optional-state redesign was
+  rejected because it would duplicate state that Leto already represents.
+
+- [major] WGPU staging callback ownership is one immutable process-lifetime
+  pair. `WgpuDevice::new` registers the canonical static pair before publishing
+  the first staging device and returns typed failure for a competing Mnemosyne
+  registration. Repeated Hephaestus construction reuses the same pair. Evidence
+  tier: Mnemosyne atomic publication/race tests plus Hephaestus compile and
+  HostPinned contract gates.
+- [patch] The Hephaestus patch table now covers all transitive Mnemosyne crates,
+  eliminating the duplicate local/git `mnemosyne-backend` identities that made
+  `HasSegmentPool` implementations incompatible during dependency resolution.
+
 - [major] KS-5 reduction host planning is shared for WGPU and CUDA. Axis
   reduction metadata packing, shape/stride/output/alias validation, scalar
   reduction width validation, and scalar pass-depth planning now live in
@@ -604,6 +620,12 @@ host before uploading device buffers.
 
 ## Environment / Toolchain Limitations
 
+- [major] The 0.12.0 `hephaestus-wgpu` semver comparison is blocked before API
+  analysis because cargo-semver-checks creates an isolated consumer that drops
+  the workspace patch table, while Moirai requires Mnemosyne 0.3.0 and the
+  Mnemosyne default branch still publishes 0.2.0. Re-run after the coordinated
+  Mnemosyne 0.3.0 producer change reaches its default branch. Evidence tier:
+  exact cargo-semver-checks dependency-resolution diagnostic (2026-07-13).
 - [patch] `cargo-semver-checks` cannot verify `hephaestus-wgpu`/`hephaestus-cuda`
   against a git baseline: its isolated `cargo update` cannot resolve the
   `themis ^0.8` git dependency through the workspace `[patch]` table

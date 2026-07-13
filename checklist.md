@@ -1,6 +1,34 @@
 # Checklist — hephaestus
 
-Sprint target: 0.11.0 (ADR-0004 kernel-seam release). Phase: Closure.
+Sprint target: 0.12.0. Phase: Closure.
+
+## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
+
+- [x] Enumerate every synthetic 1x1 branch and verify Leto's canonical
+  decompositions already represent the actual empty dimensions.
+- [x] Add CUDA/WGPU value-semantic regressions for empty identity factors,
+  determinant, rank, permutations, and shapes.
+- [x] Delete the synthetic branches and route empty inputs through the same
+  canonical Leto representation as nonempty inputs.
+- [x] Pass formatting, focused CUDA/WGPU contracts, Clippy, all 239 package
+  tests, doctests, and warning-clean package documentation.
+- [x] Synchronize the release artifacts for the stacked Hephaestus commit and
+  Atlas integration-pointer advance.
+
+## Verified locally — WGPU-CB-1 immutable staging callbacks [major]
+
+- [x] Reconcile the stale broad KS-3 claim and reclaim only `device.rs` plus
+  its contract test.
+- [x] Make `WgpuDevice::new` return typed `Result` and register one static
+  Mnemosyne callback pair before publishing the staging device.
+- [x] Update all package-local constructors and contract tests.
+- [x] Run focused and full `hephaestus-wgpu` gates: check and clippy pass;
+  nextest passes 131/131; doctests and rustdoc pass.
+- [x] Commit and push the consumer change.
+- [ ] Semver gate: make the baseline clone resolve repository-external sibling
+  path dependencies. The current 0.12.0 rustdoc build passes, but the baseline
+  clone cannot find `../leto/crates/leto`; the local Atlas graph is green with
+  Moirai's committed Mnemosyne 0.2 requirement and no consumer-tree edits.
 
 2026-07-06 (KS-8 WDDM launch-drain recheck). Verified the CUDA launch SSOT in
 `crates/hephaestus-cuda/src/application/pipeline.rs` carries the Windows-gated

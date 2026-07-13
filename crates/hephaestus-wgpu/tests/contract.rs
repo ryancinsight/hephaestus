@@ -1165,7 +1165,8 @@ fn acquisition_reports_themis_topology_from_adapter() {
     eprintln!("DEBUG: Capacities checked");
 
     // The Arc-wrapping constructor has no adapter and reports none.
-    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
+    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone())
+        .expect("the canonical WGPU callback pair must be idempotent");
     eprintln!("DEBUG: Wrapped device created");
     assert_eq!(
         wrapped.topology().map(|topology| topology.compute_units()),
@@ -4705,4 +4706,29 @@ fn blocked_qr_rejects_non_dense_operands() {
         return;
     };
     assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::qr_decompose_blocked, "QR");
+}
+
+#[test]
+fn empty_qr_preserves_shape_and_identity() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let empty = device.alloc_zeroed::<f32>(0).unwrap();
+    let layout = leto::Layout::c_contiguous([3, 0]).unwrap();
+    let operand = hephaestus_wgpu::StridedOperand {
+        buffer: &empty,
+        layout: &layout,
+    };
+    let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+
+    for qr in [
+        hephaestus_wgpu::qr_decompose(&device, operand).unwrap(),
+        hephaestus_wgpu::qr_decompose_blocked(&device, operand).unwrap(),
+    ] {
+        assert_eq!(qr.shape(), (3, 0));
+        assert_eq!(qr.r_buffer().len(), 0);
+        assert_eq!(qr.inner().shape(), (3, 0));
+        assert_eq!(leto::Storage::as_slice(qr.inner().q().storage()), identity);
+        assert_eq!(qr.inner().r().shape(), [3, 0]);
+    }
 }

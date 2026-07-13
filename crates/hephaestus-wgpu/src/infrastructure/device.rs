@@ -20,6 +20,13 @@ use mnemosyne::{MnemosyneAllocator, StandardPolicy, WgpuStagingBackend};
 pub(crate) static WGPU_STAGING_ALLOCATOR: MnemosyneAllocator<StandardPolicy, WgpuStagingBackend> =
     MnemosyneAllocator::new();
 
+// SAFETY: both callbacks operate on the process staging device and one shared
+// mapped-buffer registry, preserve the allocation size until deallocation, and
+// catch all internal failure modes without unwinding across the FFI boundary.
+static WGPU_CALLBACKS: mnemosyne_backend::WgpuCallbacks = unsafe {
+    mnemosyne_backend::WgpuCallbacks::new(wgpu_allocate_callback, wgpu_deallocate_callback)
+};
+
 /// The process's registered staging device: the first `WgpuDevice`
 /// constructed. The mnemosyne staging callbacks ([`wgpu_allocate_callback`]/
 /// [`wgpu_deallocate_callback`]) are process-global and create mapped buffers
@@ -67,9 +74,16 @@ pub(crate) static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
 /// returned `wgpu::Buffer` is a cheap `Arc` handle clone.
 fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
     let block_addr = ptr as usize;
-    let mapped = WGPU_MAPPED_BUFFERS.read().unwrap();
+    let mapped = WGPU_MAPPED_BUFFERS
+        .read()
+        .map_err(|_| HephaestusError::AllocationFailed {
+            message: "WGPU mapped-buffer registry read lock is poisoned".to_string(),
+        })?;
     if let Some((&base_addr, mapped_buf)) = mapped.range(..=block_addr).next_back() {
-        if block_addr < base_addr + mapped_buf.size {
+        if base_addr
+            .checked_add(mapped_buf.size)
+            .is_some_and(|end| block_addr < end)
+        {
             return Ok(mapped_buf.buffer.clone());
         }
     }
@@ -90,7 +104,18 @@ fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
 /// that documented mapping lifetime, not under the guard's lifetime. Unmapping
 /// while a Mnemosyne sub-allocation is live would invalidate this; the
 /// registry's remove-then-unmap ordering prevents it.
+fn catch_callback_unwind<T: Copy>(failure: T, operation: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation)) {
+        Ok(result) => result,
+        Err(_) => failure,
+    }
+}
+
 unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
+    catch_callback_unwind(core::ptr::null_mut(), || allocate_mapped_buffer(size))
+}
+
+fn allocate_mapped_buffer(size: usize) -> *mut u8 {
     let device = match ACTIVE_WGPU_DEVICE.get() {
         Some(d) => d,
         None => return core::ptr::null_mut(),
@@ -139,14 +164,22 @@ unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
         return core::ptr::null_mut();
     }
 
-    let mut mapped = WGPU_MAPPED_BUFFERS.write().unwrap();
+    let Ok(mut mapped) = WGPU_MAPPED_BUFFERS.write() else {
+        return core::ptr::null_mut();
+    };
     mapped.insert(ptr as usize, WgpuMappedBuffer { buffer, size });
 
     ptr
 }
 
 unsafe extern "C" fn wgpu_deallocate_callback(ptr: *mut u8, _size: usize) -> bool {
-    let mut mapped = WGPU_MAPPED_BUFFERS.write().unwrap();
+    catch_callback_unwind(false, || deallocate_mapped_buffer(ptr))
+}
+
+fn deallocate_mapped_buffer(ptr: *mut u8) -> bool {
+    let Ok(mut mapped) = WGPU_MAPPED_BUFFERS.write() else {
+        return false;
+    };
     if let Some(mapped_buf) = mapped.remove(&(ptr as usize)) {
         mapped_buf.buffer.unmap();
         true
@@ -273,26 +306,25 @@ impl WgpuDevice {
     /// No adapter is available on this path, so no topology snapshot is
     /// reported ([`topology`](Self::topology) returns `None`); the
     /// `try_default*` acquisition paths capture one from the adapter.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::DeviceUnavailable`] if a different WGPU
+    /// callback pair already owns Mnemosyne's process staging backend.
     #[inline]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Result<Self> {
+        mnemosyne_backend::register_wgpu_callbacks(&WGPU_CALLBACKS).map_err(|error| {
+            HephaestusError::DeviceUnavailable {
+                message: error.to_string(),
+            }
+        })?;
+
         // First-wins registration: the first constructed device becomes the
         // process staging device; later devices still compute normally but
         // `HostPinned` placement on them is rejected (require_staging_device).
         let _ = ACTIVE_WGPU_DEVICE.set(device.clone());
 
-        // SAFETY: the callbacks allocate mapped WGPU buffers on the registered
-        // process staging device, keep them mapped until the matching
-        // deallocation callback removes and unmaps the registry entry, and do
-        // not unwind across the callback boundary.
-        unsafe {
-            mnemosyne_backend::register_wgpu_callbacks(
-                wgpu_allocate_callback,
-                wgpu_deallocate_callback,
-            );
-        }
-
-        Self {
+        Ok(Self {
             device,
             queue,
             adapter_info: None,
@@ -307,7 +339,7 @@ impl WgpuDevice {
                 UNIFORM_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
             )),
-        }
+        })
     }
 
     /// Build a themis topology snapshot from the adapter (atlas ADR 0002:
@@ -686,7 +718,7 @@ impl WgpuDevice {
         .map_err(|error| HephaestusError::DeviceUnavailable {
             message: error.to_string(),
         })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(adapter))
+        Ok(Self::new(Arc::new(device), Arc::new(queue))?.with_adapter_metadata(adapter))
     }
 
     fn try_default_with_adapter_features_and_limits(
@@ -706,7 +738,7 @@ impl WgpuDevice {
         select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
         select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
     ) -> Result<Self> {
-        let try_acquire = |instance: &wgpu::Instance| -> Option<Self> {
+        let try_acquire = |instance: &wgpu::Instance| -> Option<Result<Self>> {
             let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
@@ -733,7 +765,7 @@ impl WgpuDevice {
                 if let Ok((device, queue)) = try_device(&adapter) {
                     return Some(
                         Self::new(Arc::new(device), Arc::new(queue))
-                            .with_adapter_metadata(&adapter),
+                            .map(|device| device.with_adapter_metadata(&adapter)),
                     );
                 }
             }
@@ -749,7 +781,7 @@ impl WgpuDevice {
                 if let Ok((device, queue)) = try_device(&fallback_adapter) {
                     return Some(
                         Self::new(Arc::new(device), Arc::new(queue))
-                            .with_adapter_metadata(&fallback_adapter),
+                            .map(|device| device.with_adapter_metadata(&fallback_adapter)),
                     );
                 }
             }
@@ -765,7 +797,7 @@ impl WgpuDevice {
             desc.backends = wgpu::Backends::DX12;
             let instance = wgpu::Instance::new(&desc);
             if let Some(device) = try_acquire(&instance) {
-                return Ok(device);
+                return device;
             }
 
             // Fallback to Vulkan if DX12 is unavailable on the host
@@ -773,13 +805,13 @@ impl WgpuDevice {
             desc.backends = wgpu::Backends::VULKAN;
             let instance = wgpu::Instance::new(&desc);
             if let Some(device) = try_acquire(&instance) {
-                return Ok(device);
+                return device;
             }
         } else {
             let desc = wgpu::InstanceDescriptor::from_env_or_default();
             let instance = wgpu::Instance::new(&desc);
             if let Some(device) = try_acquire(&instance) {
-                return Ok(device);
+                return device;
             }
         }
 
@@ -794,7 +826,7 @@ impl WgpuDevice {
     ///
     /// [`HephaestusError::AdapterUnavailable`] when no Metal adapter can be acquired.
     pub fn try_metal(label: &str) -> Result<Self> {
-        let try_acquire = |instance: &wgpu::Instance| -> Option<Self> {
+        let try_acquire = |instance: &wgpu::Instance| -> Option<Result<Self>> {
             let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
@@ -817,9 +849,12 @@ impl WgpuDevice {
             {
                 let topology = Self::topology_from_adapter(&adapter);
                 if let Ok((device, queue)) = try_device(&adapter) {
-                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-                    acquired.topology = Some(Arc::new(topology));
-                    return Some(acquired);
+                    return Some(Self::new(Arc::new(device), Arc::new(queue)).map(
+                        |mut acquired| {
+                            acquired.topology = Some(Arc::new(topology));
+                            acquired
+                        },
+                    ));
                 }
             }
             None
@@ -829,7 +864,7 @@ impl WgpuDevice {
         desc.backends = wgpu::Backends::METAL;
         let instance = wgpu::Instance::new(&desc);
         if let Some(device) = try_acquire(&instance) {
-            Ok(device)
+            device
         } else {
             Err(HephaestusError::AdapterUnavailable {
                 message: "No compatible Metal GPU adapter or device could be acquired.".to_string(),
@@ -1456,5 +1491,14 @@ mod tests {
             ),
             other => panic!("expected allocation failure, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn callback_boundary_converts_panics_to_failure_values() {
+        assert_eq!(catch_callback_unwind(17, || 23), 23);
+        assert_eq!(
+            catch_callback_unwind(17, || -> i32 { panic!("callback failure") }),
+            17
+        );
     }
 }

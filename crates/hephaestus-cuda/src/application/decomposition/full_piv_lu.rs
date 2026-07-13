@@ -119,26 +119,6 @@ pub fn full_piv_lu(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    if rows == 0 {
-        let lu = device.alloc_zeroed::<f32>(0)?;
-        let placeholder = vec![0.0f32];
-        let inner = leto_ops::full_piv_lu(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([1, 1]).unwrap(),
-            &placeholder,
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("FullPivLU decomposition failed: {e}"),
-        })?;
-        return Ok(GpuFullPivLuDecomposition {
-            inner,
-            lu,
-            row_perm: vec![],
-            col_perm: vec![],
-            rank: 0,
-            n: 0,
-        });
-    }
-
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
     device.download(matrix.buffer, &mut host_data)?;
 
