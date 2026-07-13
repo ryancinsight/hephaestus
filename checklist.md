@@ -12,10 +12,10 @@ Sprint target: 0.12.0. Phase: Closure.
 - [x] Run focused and full `hephaestus-wgpu` gates: check and clippy pass;
   nextest passes 131/131; doctests and rustdoc pass.
 - [x] Commit and push the consumer change.
-- [ ] Publish gate: merge Mnemosyne 0.3 to its default branch, update Moirai's
-  default-branch dependency, then rerun isolated semver analysis. The local
-  Atlas patched graph is green; isolated resolution currently sees only
-  Mnemosyne 0.2.0.
+- [ ] Semver gate: make the baseline clone resolve repository-external sibling
+  path dependencies. The current 0.12.0 rustdoc build passes, but the baseline
+  clone cannot find `../leto/crates/leto`; the local Atlas graph is green with
+  Moirai's committed Mnemosyne 0.2 requirement and no consumer-tree edits.
 
 2026-07-06 (KS-8 WDDM launch-drain recheck). Verified the CUDA launch SSOT in
 `crates/hephaestus-cuda/src/application/pipeline.rs` carries the Windows-gated
