@@ -15,9 +15,13 @@ cuda-oxide + cutile).
   Git revision directly; consumers no longer resolve a private Themis 0.6
   identity that workspace-local patches cannot replace.
 
+- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes Leto `7f216f1`,
+  Mnemosyne `32b4a2a`, Moirai `8cd356c`, and Themis 0.10.0 without local
+  provider patches. Driver: Apollo's provider-owned multilevel transform path.
+
 - [GIT-SOURCE-1] [patch] First-party Leto, Mnemosyne, Moirai, and Eunomia
-  dependencies use exact Git revisions; local development remains zero-drift
-  through the root path patch table.
+  dependencies use exact Git revisions. Remaining root patches are confined to
+  Hermes, Eunomia, and Melinoe development and do not replace this topology graph.
 
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through

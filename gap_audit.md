@@ -20,12 +20,17 @@ architectural decision or a tracked future-work item:
 
 - [patch] Hephaestus declared Themis 0.6 and relied on a root patch that Cargo
   ignores when Hephaestus is a dependency. The declared source and revision now
-  match the Themis 0.9 provider used by Hermes and Leto, allowing consumer roots
+  match the Themis 0.10 provider used by Hermes and Leto, allowing consumer roots
   to provide one local provider identity.
 
 - [patch] Standalone Git resolution previously failed because first-party
   dependencies were declared only by sibling paths. Exact Git requirements now
-  define the distribution contract; the root patch table remains local-only.
+  define the distribution contract; remaining root patches do not override the
+  Leto, Mnemosyne, Moirai, or Themis topology graph.
+
+- [HEPH-TOPOLOGY-GRAPH-1] [patch] The WGPU/CUDA packages now validate against
+  the published Leto, Mnemosyne, Moirai, and Themis topology graph. Evidence
+  is package-scoped compile, lint, and real-device value-semantic testing.
 
 - [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
   branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty
