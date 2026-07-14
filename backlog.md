@@ -26,6 +26,14 @@ cuda-oxide + cutile).
 
 ## Open
 
+- [WGPU-ABI-30] [major] **In progress; owner Codex, 2026-07-13.** Migrate the
+  provider-owned public WGPU ABI from 26.0.1 to current 30.0.0, update every
+  backend call site natively, and publish Hephaestus 0.13.0 for Apollo. Scope is
+  the WGPU dependency and WGPU-consuming crates; the 2026-07-02 `claude-seam`
+  claim is stale (clean tree and no scoped commits for more than one day), so
+  this item takes over only the overlapping WGPU API surface. Acceptance and
+  migration design are in ADR 0006.
+
 ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
 audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
 `arch/kernel-seam`, owner claude-seam session 2026-07-02):
