@@ -13,6 +13,11 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [HEPH-STREAM-PREFIX-1] [minor] Multilevel transform kernels no longer need a
+  raw WGPU partial-copy escape hatch. `CommandStream::copy_prefix` owns the
+  typed, length-checked prefix transfer in both WGPU and CUDA; the WGPU
+  real-device regression verifies copied values and an unchanged suffix.
+
 - [patch] Hephaestus declared Themis 0.6 and relied on a root patch that Cargo
   ignores when Hephaestus is a dependency. The declared source and revision now
   match the Themis 0.9 provider used by Hermes and Leto, allowing consumer roots

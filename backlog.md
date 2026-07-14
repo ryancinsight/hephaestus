@@ -6,6 +6,11 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-STREAM-PREFIX-1] [minor] `CommandStream::copy_prefix` is the provider
+  SSOT for bounded device-to-device prefix copies. WGPU and CUDA implement the
+  same length-checked contract; the WGPU real-device regression proves the
+  destination suffix remains unchanged. Driver: Apollo multilevel Haar DWT.
+
 - [THEMIS-IDENTITY-1] [patch] Hephaestus now declares the exact current Themis
   Git revision directly; consumers no longer resolve a private Themis 0.6
   identity that workspace-local patches cannot replace.

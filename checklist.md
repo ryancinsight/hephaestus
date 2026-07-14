@@ -2,6 +2,13 @@
 
 Sprint target: 0.13.0. Phase: Closure.
 
+## Prefix-copy provider contract [minor]
+
+- [x] Add the length-checked `CommandStream::copy_prefix` contract and native
+  WGPU/CUDA implementations.
+- [x] Prove WGPU prefix-copy ordering and suffix preservation with a real-device
+  value-semantic nextest regression.
+
 ## WGPU 30 provider ABI [major]
 
 - [x] Verify current registry WGPU is 30.0.0 with Rust 1.87 MSRV and record the
