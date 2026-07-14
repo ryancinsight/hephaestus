@@ -105,3 +105,6 @@ eunomia = { path = "../eunomia/crates/eunomia" }
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
 
+[patch."https://github.com/ryancinsight/themis"]
+themis = { path = "../themis" }
+

@@ -82,6 +82,46 @@ impl DialectScalar<CudaC> for i32 {
     const TYPE_TOKEN: &'static str = "int";
 }
 
+// ── f64 ──────────────────────────────────────────────────────────────────
+
+impl DialectScalar<Wgsl> for f64 {
+    const TYPE_TOKEN: &'static str = "f64";
+}
+
+impl DialectScalar<CudaC> for f64 {
+    const TYPE_TOKEN: &'static str = "double";
+}
+
+// ── GPU vector types (fixed-size arrays of scalar elements) ──────────────
+
+macro_rules! impl_dialect_vector {
+    ($ty:ty, $wgsl_token:expr, $cuda_token:expr) => {
+        impl DialectScalar<Wgsl> for $ty {
+            const TYPE_TOKEN: &'static str = $wgsl_token;
+        }
+        impl DialectScalar<CudaC> for $ty {
+            const TYPE_TOKEN: &'static str = $cuda_token;
+        }
+    };
+}
+
+// f32 vectors
+impl_dialect_vector!([f32; 2], "vec2<f32>", "float2");
+impl_dialect_vector!([f32; 3], "vec3<f32>", "float3");
+impl_dialect_vector!([f32; 4], "vec4<f32>", "float4");
+// f64 vectors
+impl_dialect_vector!([f64; 2], "vec2<f64>", "double2");
+impl_dialect_vector!([f64; 3], "vec3<f64>", "double3");
+impl_dialect_vector!([f64; 4], "vec4<f64>", "double4");
+// i32 vectors
+impl_dialect_vector!([i32; 2], "vec2<i32>", "int2");
+impl_dialect_vector!([i32; 3], "vec3<i32>", "int3");
+impl_dialect_vector!([i32; 4], "vec4<i32>", "int4");
+// u32 vectors
+impl_dialect_vector!([u32; 2], "vec2<u32>", "uint2");
+impl_dialect_vector!([u32; 3], "vec3<u32>", "uint3");
+impl_dialect_vector!([u32; 4], "vec4<u32>", "uint4");
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,5 +138,36 @@ mod tests {
         assert_eq!(token_of::<u32, CudaC>(), "unsigned int");
         assert_eq!(token_of::<i32, Wgsl>(), "i32");
         assert_eq!(token_of::<i32, CudaC>(), "int");
+        // f64
+        assert_eq!(token_of::<f64, Wgsl>(), "f64");
+        assert_eq!(token_of::<f64, CudaC>(), "double");
+        // GPU vector types — f32
+        assert_eq!(token_of::<[f32; 2], Wgsl>(), "vec2<f32>");
+        assert_eq!(token_of::<[f32; 2], CudaC>(), "float2");
+        assert_eq!(token_of::<[f32; 3], Wgsl>(), "vec3<f32>");
+        assert_eq!(token_of::<[f32; 3], CudaC>(), "float3");
+        assert_eq!(token_of::<[f32; 4], Wgsl>(), "vec4<f32>");
+        assert_eq!(token_of::<[f32; 4], CudaC>(), "float4");
+        // GPU vector types — f64
+        assert_eq!(token_of::<[f64; 2], Wgsl>(), "vec2<f64>");
+        assert_eq!(token_of::<[f64; 2], CudaC>(), "double2");
+        assert_eq!(token_of::<[f64; 3], Wgsl>(), "vec3<f64>");
+        assert_eq!(token_of::<[f64; 3], CudaC>(), "double3");
+        assert_eq!(token_of::<[f64; 4], Wgsl>(), "vec4<f64>");
+        assert_eq!(token_of::<[f64; 4], CudaC>(), "double4");
+        // GPU vector types — i32
+        assert_eq!(token_of::<[i32; 2], Wgsl>(), "vec2<i32>");
+        assert_eq!(token_of::<[i32; 2], CudaC>(), "int2");
+        assert_eq!(token_of::<[i32; 3], Wgsl>(), "vec3<i32>");
+        assert_eq!(token_of::<[i32; 3], CudaC>(), "int3");
+        assert_eq!(token_of::<[i32; 4], Wgsl>(), "vec4<i32>");
+        assert_eq!(token_of::<[i32; 4], CudaC>(), "int4");
+        // GPU vector types — u32
+        assert_eq!(token_of::<[u32; 2], Wgsl>(), "vec2<u32>");
+        assert_eq!(token_of::<[u32; 2], CudaC>(), "uint2");
+        assert_eq!(token_of::<[u32; 3], Wgsl>(), "vec3<u32>");
+        assert_eq!(token_of::<[u32; 3], CudaC>(), "uint3");
+        assert_eq!(token_of::<[u32; 4], Wgsl>(), "vec4<u32>");
+        assert_eq!(token_of::<[u32; 4], CudaC>(), "uint4");
     }
 }
