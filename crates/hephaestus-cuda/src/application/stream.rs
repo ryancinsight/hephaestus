@@ -227,6 +227,47 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         }
     }
 
+    fn copy_prefix<T: Pod>(
+        &mut self,
+        src: &CudaBuffer<T>,
+        dst: &CudaBuffer<T>,
+        elements: usize,
+    ) -> Result<()> {
+        use hephaestus_core::DeviceBuffer;
+        if elements > src.len() || elements > dst.len() {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: elements,
+                device_len: src.len().min(dst.len()),
+            });
+        }
+        let byte_len = byte_len::<T>(elements)?;
+        if byte_len == 0 {
+            return Ok(());
+        }
+        self.device.bind()?;
+        #[cfg(feature = "cuda")]
+        {
+            let byte_count = cuda_byte_count(byte_len, "command stream prefix copy byte count")?;
+            // SAFETY: `src` and `dst` are device pointers allocated by this
+            // device, and `elements` is bounded by both typed buffer lengths.
+            let res = unsafe { cuda_oxide::sys::cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_count) };
+            if res != 0 {
+                return Err(HephaestusError::TransferFailed {
+                    message: format!(
+                        "command stream prefix copy cuMemcpyDtoD_v2({byte_len} bytes) -> {res}"
+                    ),
+                });
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Err(HephaestusError::AdapterUnavailable {
+                message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+            })
+        }
+    }
+
     fn fill_zero<T: Pod>(&mut self, dst: &CudaBuffer<T>) -> Result<()> {
         use hephaestus_core::DeviceBuffer;
         let byte_len = byte_len::<T>(dst.len())?;

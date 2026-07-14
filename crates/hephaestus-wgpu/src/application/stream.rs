@@ -327,6 +327,27 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
         Ok(())
     }
 
+    fn copy_prefix<T: Pod>(
+        &mut self,
+        src: &WgpuBuffer<T>,
+        dst: &WgpuBuffer<T>,
+        elements: usize,
+    ) -> Result<()> {
+        use hephaestus_core::DeviceBuffer;
+        if elements > src.len() || elements > dst.len() {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: elements,
+                device_len: src.len().min(dst.len()),
+            });
+        }
+        let byte_len = WgpuDevice::byte_size::<T>(elements)?;
+        if byte_len != 0 {
+            self.encoder
+                .copy_buffer_to_buffer(src.raw(), 0, dst.raw(), 0, byte_len);
+        }
+        Ok(())
+    }
+
     fn fill_zero<T: Pod>(&mut self, dst: &WgpuBuffer<T>) -> Result<()> {
         use hephaestus_core::DeviceBuffer;
         let byte_len = WgpuDevice::byte_size::<T>(dst.len())?;
@@ -797,6 +818,23 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                 device_len: 2
             }
         ));
+    }
+
+    #[test]
+    fn command_stream_copy_prefix_preserves_the_destination_suffix() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping command stream prefix-copy test");
+            return;
+        };
+        let src = device.upload(&[3u32, 5, 7, 11]).unwrap();
+        let dst = device.alloc_zeroed::<u32>(4).unwrap();
+        let mut stream = device.stream().unwrap();
+        stream.copy_prefix(&src, &dst, 2).unwrap();
+        stream.submit().unwrap();
+
+        let mut host = [0u32; 4];
+        device.download(&dst, &mut host).unwrap();
+        assert_eq!(host, [3, 5, 0, 0]);
     }
 
     #[test]

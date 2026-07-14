@@ -6,6 +6,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 Target release: 0.13.0.
 
+- [minor] `CommandStream` now owns bounded prefix copies as a typed provider
+  operation. WGPU and CUDA preserve the destination suffix, removing the last
+  raw-device copy requirement for multilevel transform kernels.
+
 - [patch] Replaced path-only first-party dependency declarations with exact Git
   revisions while retaining local path patches for Atlas development. The
   Hephaestus Git source now resolves for standalone downstream consumers.
