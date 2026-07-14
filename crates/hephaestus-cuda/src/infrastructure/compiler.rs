@@ -157,22 +157,22 @@ fn find_nvrtc_library() -> Option<Library> {
             if let Ok(entries) = std::fs::read_dir(&cleaned_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            let matches = if cfg!(windows) {
-                                filename.starts_with("nvrtc")
-                                    && !filename.contains("builtins")
-                                    && filename.ends_with(".dll")
-                            } else {
-                                filename.starts_with("libnvrtc")
-                                    && (filename.ends_with(".so") || filename.contains(".so."))
-                            };
-                            if matches {
-                                // SAFETY: as above (NVRTC library under
-                                // `CUDA_PATH`).
-                                if let Ok(lib) = unsafe { Library::new(&path) } {
-                                    return Some(lib);
-                                }
+                    if path.is_file()
+                        && let Some(filename) = path.file_name().and_then(|s| s.to_str())
+                    {
+                        let matches = if cfg!(windows) {
+                            filename.starts_with("nvrtc")
+                                && !filename.contains("builtins")
+                                && filename.ends_with(".dll")
+                        } else {
+                            filename.starts_with("libnvrtc")
+                                && (filename.ends_with(".so") || filename.contains(".so."))
+                        };
+                        if matches {
+                            // SAFETY: as above (NVRTC library under
+                            // `CUDA_PATH`).
+                            if let Ok(lib) = unsafe { Library::new(&path) } {
+                                return Some(lib);
                             }
                         }
                     }

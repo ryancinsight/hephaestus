@@ -3,7 +3,7 @@
 
 use crate::array::PyArray;
 use crate::backend::{
-    backend_norm, backend_reduction, backend_scalar, BackendBuffer, BackendDevice,
+    BackendBuffer, BackendDevice, backend_norm, backend_reduction, backend_scalar,
 };
 use leto::Layout;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -21,7 +21,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     let operand = hephaestus_wgpu::StridedOperand {
                         buffer,
@@ -113,7 +113,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_reduction!(&dev, &buf, hephaestus_wgpu::SumOp, hephaestus_cuda::SumOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -128,7 +128,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_reduction!(&dev, &buf, hephaestus_wgpu::MinOp, hephaestus_cuda::MinOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -143,7 +143,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_reduction!(&dev, &buf, hephaestus_wgpu::MaxOp, hephaestus_cuda::MaxOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -159,7 +159,7 @@ impl PyArray {
         let buf = self.buffer.clone();
         let len = self.buffer.len();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 let summed =
                     backend_reduction!(&dev, &buf, hephaestus_wgpu::SumOp, hephaestus_cuda::SumOp)?;
                 backend_scalar!(
@@ -205,7 +205,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,
@@ -221,7 +221,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,
@@ -248,7 +248,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,
@@ -264,7 +264,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,
@@ -291,7 +291,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,
@@ -307,7 +307,7 @@ impl PyArray {
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
                 let dev = self.device.clone();
                 let buf = self.buffer.clone();
-                py.allow_threads(move || {
+                py.detach(move || {
                     backend_norm!(
                         &dev,
                         &buf,

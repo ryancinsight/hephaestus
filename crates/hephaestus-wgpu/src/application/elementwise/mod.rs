@@ -2,7 +2,6 @@
 
 use hephaestus_core::{HephaestusError, Result};
 
-use crate::application::pipeline::workgroups;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -13,11 +12,11 @@ pub mod scalar;
 /// Unary elementwise compute operations.
 pub mod unary;
 
-pub use binary::{binary_elementwise, binary_elementwise_into, AddOp, DivOp, MulOp, PowOp, SubOp};
+pub use binary::{AddOp, DivOp, MulOp, PowOp, SubOp, binary_elementwise, binary_elementwise_into};
 pub use scalar::{scalar_elementwise, scalar_elementwise_into};
 pub use unary::{
-    unary_elementwise, unary_elementwise_into, AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp,
-    NegOp, RecipOp, SinOp, SqrtOp,
+    AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp,
+    unary_elementwise, unary_elementwise_into,
 };
 
 fn reject_output_alias<T, U>(
@@ -73,18 +72,4 @@ pub(crate) fn encode_elementwise(
     }
     device.queue().submit(Some(encoder.finish()));
     Ok(())
-}
-
-/// Compute the workgroup count and reject empty inputs.
-///
-/// Returns `None` when `len == 0` (caller should return `Ok(())` immediately).
-#[allow(dead_code)]
-pub(crate) fn elementwise_groups(
-    len: usize,
-    width: hephaestus_core::BlockWidth,
-) -> Result<Option<u32>> {
-    if len == 0 {
-        return Ok(None);
-    }
-    workgroups(len, width).map(Some)
 }

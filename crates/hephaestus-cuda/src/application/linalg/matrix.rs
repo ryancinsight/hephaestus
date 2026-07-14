@@ -152,7 +152,7 @@ pub trait MatrixDecompose {
     fn eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<num_complex::Complex<f32>>>;
     /// Real Schur decomposition.
     fn schur(&self, device: &CudaDevice)
-        -> Result<crate::application::decomposition::GpuRealSchur>;
+    -> Result<crate::application::decomposition::GpuRealSchur>;
 }
 
 #[cfg(feature = "decomposition")]

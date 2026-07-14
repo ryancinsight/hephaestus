@@ -3,10 +3,10 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
 use hephaestus_cuda::{
-    binary_elementwise_strided_dyn_into, binary_elementwise_strided_into,
+    AddOp, CudaBuffer, CudaDevice, MulOp, NegOp, SqrtOp, StridedLayout, StridedOperand,
+    StridedOperandDyn, binary_elementwise_strided_dyn_into, binary_elementwise_strided_into,
     scalar_elementwise_strided_into, unary_elementwise_strided_dyn_into,
-    unary_elementwise_strided_into, AddOp, CudaBuffer, CudaDevice, MulOp, NegOp, SqrtOp,
-    StridedLayout, StridedOperand, StridedOperandDyn,
+    unary_elementwise_strided_into,
 };
 use leto::Layout;
 

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise, binary_elementwise_into, AddOp, ComputeDevice, WgpuDevice,
+    AddOp, ComputeDevice, WgpuDevice, binary_elementwise, binary_elementwise_into,
 };
 
 const LEN: usize = 1 << 20;
@@ -18,7 +18,7 @@ const ITERS: usize = 20;
 fn wait(device: &WgpuDevice) {
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .expect("invariant: benchmark device poll succeeds");
 }
 

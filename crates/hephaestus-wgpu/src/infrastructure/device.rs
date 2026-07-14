@@ -1,192 +1,18 @@
 use core::marker::PhantomData;
-use std::alloc::GlobalAlloc;
 use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
-    ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError,
-    Result,
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
+    DeviceLimits, DevicePreference, HephaestusError, Result, validate_buffer_size,
+    validate_slice_alignment,
 };
 use std::any::TypeId;
 use wgpu::util::DeviceExt;
 
-use crate::infrastructure::buffer::{StagingPointer, WgpuBuffer};
+use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::pool::PoolBuffer;
 use moirai_sync::ShardedResourcePool;
-
-use mnemosyne::{MnemosyneAllocator, StandardPolicy, WgpuStagingBackend};
-
-pub(crate) static WGPU_STAGING_ALLOCATOR: MnemosyneAllocator<StandardPolicy, WgpuStagingBackend> =
-    MnemosyneAllocator::new();
-
-// SAFETY: both callbacks operate on the process staging device and one shared
-// mapped-buffer registry, preserve the allocation size until deallocation, and
-// catch all internal failure modes without unwinding across the FFI boundary.
-static WGPU_CALLBACKS: mnemosyne_backend::WgpuCallbacks = unsafe {
-    mnemosyne_backend::WgpuCallbacks::new(wgpu_allocate_callback, wgpu_deallocate_callback)
-};
-
-/// The process's registered staging device: the first `WgpuDevice`
-/// constructed. The mnemosyne staging callbacks ([`wgpu_allocate_callback`]/
-/// [`wgpu_deallocate_callback`]) are process-global and create mapped buffers
-/// on THIS device only; `HostPinned` placement on any other device is
-/// rejected with a typed error (see `require_staging_device`) because a
-/// mapped buffer belongs to the device that created it. Stored as the `Arc`
-/// so identity is checkable via `Arc::ptr_eq` (wgpu resources expose no
-/// identity comparison).
-pub(crate) static ACTIVE_WGPU_DEVICE: std::sync::OnceLock<Arc<wgpu::Device>> =
-    std::sync::OnceLock::new();
-
-std::thread_local! {
-    pub(crate) static WGPU_ALLOCATION_USAGE: std::cell::Cell<wgpu::BufferUsages> = const { std::cell::Cell::new(wgpu::BufferUsages::STORAGE) };
-}
-
-/// Metadata for an active mapped wgpu buffer tracked by Mnemosyne.
-///
-/// Internal to the staging-allocator integration (the `wgpu_allocate`/
-/// `wgpu_deallocate` callbacks and [`resolve_mapped_buffer`]); not part of the
-/// crate's public surface.
-pub(crate) struct WgpuMappedBuffer {
-    /// The underlying raw wgpu buffer.
-    pub(crate) buffer: wgpu::Buffer,
-    /// The allocated size in bytes.
-    pub(crate) size: usize,
-}
-
-/// Thread-safe registry mapping each mapped block's base host address to its
-/// underlying `WgpuMappedBuffer` descriptor.
-///
-/// A `BTreeMap` (keyed by base address) is used rather than a `HashMap` so that
-/// resolving a sub-allocated pointer to its containing block is an `O(log n)`
-/// range query ([`resolve_mapped_buffer`]) instead of an `O(n)` linear scan
-/// while holding only a shared read lock.
-pub(crate) static WGPU_MAPPED_BUFFERS: std::sync::LazyLock<
-    std::sync::RwLock<std::collections::BTreeMap<usize, WgpuMappedBuffer>>,
-> = std::sync::LazyLock::new(|| std::sync::RwLock::new(std::collections::BTreeMap::new()));
-
-/// Resolves the `wgpu::Buffer` whose mapped host range contains `ptr`.
-///
-/// The Mnemosyne staging allocator may return a pointer offset into a larger
-/// mapped block, so the registry is queried for the greatest base address
-/// `<= ptr` and the result is range-checked for containment. The `BTreeMap`
-/// range query keeps the shared-read critical section `O(log n)`; the
-/// returned `wgpu::Buffer` is a cheap `Arc` handle clone.
-fn resolve_mapped_buffer(ptr: *mut u8) -> Result<wgpu::Buffer> {
-    let block_addr = ptr as usize;
-    let mapped = WGPU_MAPPED_BUFFERS
-        .read()
-        .map_err(|_| HephaestusError::AllocationFailed {
-            message: "WGPU mapped-buffer registry read lock is poisoned".to_string(),
-        })?;
-    if let Some((&base_addr, mapped_buf)) = mapped.range(..=block_addr).next_back() {
-        if base_addr
-            .checked_add(mapped_buf.size)
-            .is_some_and(|end| block_addr < end)
-        {
-            return Ok(mapped_buf.buffer.clone());
-        }
-    }
-    Err(HephaestusError::AllocationFailed {
-        message: format!("Buffer not found in WGPU_MAPPED_BUFFERS registry for ptr {ptr:p}"),
-    })
-}
-
-/// Mnemosyne staging-backend allocation callback.
-///
-/// # Pointer-validity invariant (mapped-range escape)
-///
-/// The returned pointer comes from `get_mapped_range{_mut}` on a buffer that
-/// STAYS MAPPED for the allocation's whole lifetime: it is unmapped only in
-/// [`wgpu_deallocate_callback`] after removal from the registry. wgpu pins the
-/// host allocation of a mapped buffer for as long as the mapping is active, so
-/// the pointer outliving the temporary `BufferView{Mut}` guard is sound under
-/// that documented mapping lifetime, not under the guard's lifetime. Unmapping
-/// while a Mnemosyne sub-allocation is live would invalidate this; the
-/// registry's remove-then-unmap ordering prevents it.
-fn catch_callback_unwind<T: Copy>(failure: T, operation: impl FnOnce() -> T) -> T {
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation)) {
-        Ok(result) => result,
-        Err(_) => failure,
-    }
-}
-
-unsafe extern "C" fn wgpu_allocate_callback(size: usize) -> *mut u8 {
-    catch_callback_unwind(core::ptr::null_mut(), || allocate_mapped_buffer(size))
-}
-
-fn allocate_mapped_buffer(size: usize) -> *mut u8 {
-    let device = match ACTIVE_WGPU_DEVICE.get() {
-        Some(d) => d,
-        None => return core::ptr::null_mut(),
-    };
-    let usage = WGPU_ALLOCATION_USAGE.with(|u| u.get());
-
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("hephaestus-mnemosyne-staging"),
-        size: size as u64,
-        usage,
-        mapped_at_creation: false,
-    });
-
-    let slice = buffer.slice(..);
-    let ptr = if usage.contains(wgpu::BufferUsages::MAP_WRITE) {
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Write, move |res| {
-            let _ = tx.send(res);
-        });
-        if device.poll(wgpu::PollType::Wait).is_err() {
-            return core::ptr::null_mut();
-        }
-        if rx.recv().is_ok_and(|res| res.is_ok()) {
-            slice.get_mapped_range_mut().as_mut_ptr()
-        } else {
-            return core::ptr::null_mut();
-        }
-    } else if usage.contains(wgpu::BufferUsages::MAP_READ) {
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
-        if device.poll(wgpu::PollType::Wait).is_err() {
-            return core::ptr::null_mut();
-        }
-        if rx.recv().is_ok_and(|res| res.is_ok()) {
-            slice.get_mapped_range().as_ptr() as *mut u8
-        } else {
-            return core::ptr::null_mut();
-        }
-    } else {
-        return core::ptr::null_mut();
-    };
-
-    if ptr.is_null() {
-        return core::ptr::null_mut();
-    }
-
-    let Ok(mut mapped) = WGPU_MAPPED_BUFFERS.write() else {
-        return core::ptr::null_mut();
-    };
-    mapped.insert(ptr as usize, WgpuMappedBuffer { buffer, size });
-
-    ptr
-}
-
-unsafe extern "C" fn wgpu_deallocate_callback(ptr: *mut u8, _size: usize) -> bool {
-    catch_callback_unwind(false, || deallocate_mapped_buffer(ptr))
-}
-
-fn deallocate_mapped_buffer(ptr: *mut u8) -> bool {
-    let Ok(mut mapped) = WGPU_MAPPED_BUFFERS.write() else {
-        return false;
-    };
-    if let Some(mapped_buf) = mapped.remove(&(ptr as usize)) {
-        mapped_buf.buffer.unmap();
-        true
-    } else {
-        false
-    }
-}
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
 pub(crate) type PipelineKey = (TypeId, TypeId, u32);
@@ -252,7 +78,7 @@ impl WgpuDevice {
             DeviceFeature::ShaderF64 => wgpu::Features::SHADER_F64,
             DeviceFeature::ShaderF16 => wgpu::Features::SHADER_F16,
             DeviceFeature::MappablePrimaryBuffers => wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
-            DeviceFeature::PushConstants => wgpu::Features::PUSH_CONSTANTS,
+            DeviceFeature::ImmediateData => wgpu::Features::IMMEDIATES,
         }
     }
 
@@ -275,7 +101,7 @@ impl WgpuDevice {
             max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup,
             max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size,
             max_storage_buffers_per_shader_stage: Some(limits.max_storage_buffers_per_shader_stage),
-            max_push_constant_size: limits.max_push_constant_size,
+            max_immediate_size: limits.max_immediate_size,
         }
     }
 
@@ -290,7 +116,7 @@ impl WgpuDevice {
             max_storage_buffers_per_shader_stage: required
                 .max_storage_buffers_per_shader_stage
                 .unwrap_or_else(|| wgpu::Limits::default().max_storage_buffers_per_shader_stage),
-            max_push_constant_size: required.max_push_constant_size,
+            max_immediate_size: required.max_immediate_size,
             ..wgpu::Limits::default()
         }
     }
@@ -307,24 +133,12 @@ impl WgpuDevice {
     /// reported ([`topology`](Self::topology) returns `None`); the
     /// `try_default*` acquisition paths capture one from the adapter.
     ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::DeviceUnavailable`] if a different WGPU
-    /// callback pair already owns Mnemosyne's process staging backend.
+    /// Construction is infallible because the caller already owns a valid
+    /// WGPU device and queue pair.
+    #[must_use]
     #[inline]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Result<Self> {
-        mnemosyne_backend::register_wgpu_callbacks(&WGPU_CALLBACKS).map_err(|error| {
-            HephaestusError::DeviceUnavailable {
-                message: error.to_string(),
-            }
-        })?;
-
-        // First-wins registration: the first constructed device becomes the
-        // process staging device; later devices still compute normally but
-        // `HostPinned` placement on them is rejected (require_staging_device).
-        let _ = ACTIVE_WGPU_DEVICE.set(device.clone());
-
-        Ok(Self {
+    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        Self {
             device,
             queue,
             adapter_info: None,
@@ -339,7 +153,7 @@ impl WgpuDevice {
                 UNIFORM_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
             )),
-        })
+        }
     }
 
     /// Build a themis topology snapshot from the adapter (atlas ADR 0002:
@@ -354,7 +168,6 @@ impl WgpuDevice {
     /// "unreported fields are zero, never fabricated" contract — the CUDA
     /// backend fills the full set from device attributes.
     fn topology_from_adapter(adapter: &wgpu::Adapter) -> themis::GpuTopology {
-        let limits = adapter.limits();
         let info = adapter.get_info();
         let memory_tier = match info.device_type {
             wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::Cpu => themis::MemoryTier::Dram,
@@ -362,7 +175,7 @@ impl WgpuDevice {
         };
         themis::GpuTopology::from_provider(themis::GpuDeviceProperties {
             compute_units: 0,
-            warp_width: limits.min_subgroup_size,
+            warp_width: info.subgroup_min_size,
             max_threads_per_unit: 0,
             registers_per_unit: 0,
             shared_mem_per_unit_bytes: 0,
@@ -372,31 +185,19 @@ impl WgpuDevice {
         })
     }
 
-    /// Require that `self` is the process's registered staging device before
-    /// a `HostPinned` allocation.
-    ///
-    /// The mnemosyne staging callbacks are process-global and bound to the
-    /// FIRST constructed device; a mapped buffer they create belongs to that
-    /// `wgpu::Device`, and binding or copying it on another device is a wgpu
-    /// validation error surfaced far from the cause. Rejecting here names the
-    /// real constraint at the allocation site instead.
-    ///
-    /// Identity is `Arc` pointer identity: clones of the registered
-    /// `WgpuDevice` share the `Arc` and pass; a device wrapped separately via
-    /// [`new`](Self::new) around the same `wgpu::Device` is conservatively
-    /// rejected (wgpu resources expose no identity comparison).
-    fn require_staging_device(&self) -> Result<()> {
-        match ACTIVE_WGPU_DEVICE.get() {
-            Some(registered) if Arc::ptr_eq(registered, &self.device) => Ok(()),
-            Some(_) => Err(HephaestusError::AllocationFailed {
-                message: "HostPinned placement is only available on the process's registered \
-                          staging device (the first WgpuDevice constructed); allocate HostPinned \
-                          there or use the default Device tier on this device"
-                    .to_string(),
-            }),
-            None => Err(HephaestusError::AllocationFailed {
-                message: "no registered staging device for HostPinned placement".to_string(),
-            }),
+    fn device_tier(hint: themis::PlacementHint) -> Result<themis::MemoryTier> {
+        let tier = match hint {
+            themis::PlacementHint::Tier(tier) => tier,
+            _ => themis::MemoryTier::Device,
+        };
+        if tier == themis::MemoryTier::Device {
+            Ok(tier)
+        } else {
+            Err(HephaestusError::AllocationFailed {
+                message: format!(
+                    "WGPU cannot guarantee requested memory tier {tier:?}; use Device placement"
+                ),
+            })
         }
     }
 
@@ -644,12 +445,12 @@ impl WgpuDevice {
         select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
         select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
     ) -> Result<Vec<Self>> {
-        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
         desc.backends = wgpu::Backends::all();
-        let instance = wgpu::Instance::new(&desc);
+        let instance = wgpu::Instance::new(desc);
         let mut devices = Vec::new();
 
-        for adapter in instance.enumerate_adapters(wgpu::Backends::all()) {
+        for adapter in moirai::block_on(instance.enumerate_adapters(wgpu::Backends::all())) {
             let info = adapter.get_info();
             if !accept_adapter(&info) {
                 continue;
@@ -712,13 +513,14 @@ impl WgpuDevice {
             label: Some(label),
             required_features,
             required_limits,
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::default(),
             trace: wgpu::Trace::Off,
         }))
         .map_err(|error| HephaestusError::DeviceUnavailable {
             message: error.to_string(),
         })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue))?.with_adapter_metadata(adapter))
+        Ok(Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(adapter))
     }
 
     fn try_default_with_adapter_features_and_limits(
@@ -749,6 +551,7 @@ impl WgpuDevice {
                     label: Some(label),
                     required_features,
                     required_limits,
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::default(),
                     trace: wgpu::Trace::Off,
                 }))
@@ -760,14 +563,13 @@ impl WgpuDevice {
                     power_preference,
                     compatible_surface: None,
                     force_fallback_adapter: false,
+                    apply_limit_buckets: false,
                 }))
+                && let Ok((device, queue)) = try_device(&adapter)
             {
-                if let Ok((device, queue)) = try_device(&adapter) {
-                    return Some(
-                        Self::new(Arc::new(device), Arc::new(queue))
-                            .map(|device| device.with_adapter_metadata(&adapter)),
-                    );
-                }
+                return Some(Ok(
+                    Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(&adapter)
+                ));
             }
 
             // Fallback to software/fallback adapter
@@ -776,14 +578,12 @@ impl WgpuDevice {
                     power_preference: wgpu::PowerPreference::LowPower,
                     compatible_surface: None,
                     force_fallback_adapter: true,
+                    apply_limit_buckets: false,
                 }))
+                && let Ok((device, queue)) = try_device(&fallback_adapter)
             {
-                if let Ok((device, queue)) = try_device(&fallback_adapter) {
-                    return Some(
-                        Self::new(Arc::new(device), Arc::new(queue))
-                            .map(|device| device.with_adapter_metadata(&fallback_adapter)),
-                    );
-                }
+                return Some(Ok(Self::new(Arc::new(device), Arc::new(queue))
+                    .with_adapter_metadata(&fallback_adapter)));
             }
             None
         };
@@ -793,23 +593,23 @@ impl WgpuDevice {
 
         if cfg!(target_os = "windows") && !has_env {
             // Try DX12 first to completely avoid Vulkan driver access violations in parallel nextest runs.
-            let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
             desc.backends = wgpu::Backends::DX12;
-            let instance = wgpu::Instance::new(&desc);
+            let instance = wgpu::Instance::new(desc);
             if let Some(device) = try_acquire(&instance) {
                 return device;
             }
 
             // Fallback to Vulkan if DX12 is unavailable on the host
-            let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
             desc.backends = wgpu::Backends::VULKAN;
-            let instance = wgpu::Instance::new(&desc);
+            let instance = wgpu::Instance::new(desc);
             if let Some(device) = try_acquire(&instance) {
                 return device;
             }
         } else {
-            let desc = wgpu::InstanceDescriptor::from_env_or_default();
-            let instance = wgpu::Instance::new(&desc);
+            let desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+            let instance = wgpu::Instance::new(desc);
             if let Some(device) = try_acquire(&instance) {
                 return device;
             }
@@ -835,6 +635,7 @@ impl WgpuDevice {
                     label: Some(label),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::default(),
                     trace: wgpu::Trace::Off,
                 }))
@@ -845,24 +646,22 @@ impl WgpuDevice {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: None,
                     force_fallback_adapter: false,
+                    apply_limit_buckets: false,
                 }))
             {
                 let topology = Self::topology_from_adapter(&adapter);
                 if let Ok((device, queue)) = try_device(&adapter) {
-                    return Some(Self::new(Arc::new(device), Arc::new(queue)).map(
-                        |mut acquired| {
-                            acquired.topology = Some(Arc::new(topology));
-                            acquired
-                        },
-                    ));
+                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
+                    acquired.topology = Some(Arc::new(topology));
+                    return Some(Ok(acquired));
                 }
             }
             None
         };
 
-        let mut desc = wgpu::InstanceDescriptor::from_env_or_default();
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
         desc.backends = wgpu::Backends::METAL;
-        let instance = wgpu::Instance::new(&desc);
+        let instance = wgpu::Instance::new(desc);
         if let Some(device) = try_acquire(&instance) {
             device
         } else {
@@ -1124,67 +923,23 @@ impl ComputeDevice for WgpuDevice {
         hint: themis::PlacementHint,
     ) -> Result<WgpuBuffer<T>> {
         validate_buffer_size::<T>(len)?;
-        let tier = match hint {
-            themis::PlacementHint::Tier(t) => t,
-            _ => themis::MemoryTier::Device,
-        };
-        if tier == themis::MemoryTier::HostPinned {
-            self.require_staging_device()?;
-            let padded_len = Self::padded_size::<T>(len)?;
-            let padded_len_usize =
-                usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
-                    message: "padded length overflows usize".to_string(),
-                })?;
-            WGPU_ALLOCATION_USAGE.with(|u| {
-                u.set(wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST);
-            });
-            let layout = std::alloc::Layout::from_size_align(padded_len_usize, 8).map_err(|e| {
-                HephaestusError::AllocationFailed {
-                    message: format!("invalid layout: {e}"),
-                }
-            })?;
-            // SAFETY: `layout` has non-zero-checked size and valid alignment
-            // (constructed just above); the allocator routes to
-            // `wgpu_allocate_callback`, whose returned pointer is valid for
-            // `layout.size()` bytes until deallocated (mapped-range invariant
-            // documented on the callback).
-            let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
-            if ptr.is_null() {
-                return Err(HephaestusError::AllocationFailed {
-                    message: "Mnemosyne WgpuStagingBackend allocation returned null".to_string(),
-                });
-            }
-            let buffer = resolve_mapped_buffer(ptr)?;
-            let staging_ptr = Arc::new(StagingPointer {
-                ptr,
-                size: padded_len_usize,
-            });
-            Ok(WgpuBuffer {
-                buffer,
-                len,
-                tier,
-                staging_ptr: Some(staging_ptr),
-                marker: PhantomData,
-            })
-        } else {
-            let usage = wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST;
-            // WebGPU guarantees newly created buffers are zero-initialized.
-            let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("hephaestus-storage"),
-                size: Self::padded_size::<T>(len)?,
-                usage,
-                mapped_at_creation: false,
-            });
-            Ok(WgpuBuffer {
-                buffer,
-                len,
-                tier,
-                staging_ptr: None,
-                marker: PhantomData,
-            })
-        }
+        let tier = Self::device_tier(hint)?;
+        let usage = wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST;
+        // WebGPU guarantees newly created buffers are zero-initialized.
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("hephaestus-storage"),
+            size: Self::padded_size::<T>(len)?,
+            usage,
+            mapped_at_creation: false,
+        });
+        Ok(WgpuBuffer {
+            buffer,
+            len,
+            tier,
+            marker: PhantomData,
+        })
     }
 
     fn upload_with_hint<T: Pod>(
@@ -1193,97 +948,32 @@ impl ComputeDevice for WgpuDevice {
         hint: themis::PlacementHint,
     ) -> Result<WgpuBuffer<T>> {
         validate_slice_alignment(host)?;
-        let byte_len = Self::byte_size::<T>(host.len())?;
         let padded_len = Self::padded_size::<T>(host.len())?;
-        let tier = match hint {
-            themis::PlacementHint::Tier(t) => t,
-            _ => themis::MemoryTier::Device,
-        };
-        if tier == themis::MemoryTier::HostPinned {
-            self.require_staging_device()?;
-            let padded_len_usize =
-                usize::try_from(padded_len).map_err(|_| HephaestusError::AllocationFailed {
-                    message: "padded length overflows usize".to_string(),
-                })?;
-            WGPU_ALLOCATION_USAGE.with(|u| {
-                u.set(wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC);
-            });
-            let layout = std::alloc::Layout::from_size_align(padded_len_usize, 8).map_err(|e| {
-                HephaestusError::AllocationFailed {
-                    message: format!("invalid layout: {e}"),
-                }
-            })?;
-            // SAFETY: `layout` has non-zero-checked size and valid alignment
-            // (constructed just above); the allocator routes to
-            // `wgpu_allocate_callback`, whose returned pointer is valid for
-            // `layout.size()` bytes until deallocated (mapped-range invariant
-            // documented on the callback).
-            let ptr = unsafe { WGPU_STAGING_ALLOCATOR.alloc(layout) };
-            if ptr.is_null() {
-                return Err(HephaestusError::AllocationFailed {
-                    message: "Mnemosyne WgpuStagingBackend allocation returned null".to_string(),
-                });
-            }
-            let byte_len_usize = usize::try_from(byte_len).expect("invariant: byte_len fits usize");
-            // SAFETY: `ptr` is valid for `padded_len_usize >= byte_len_usize`
-            // writes (allocated above, null-checked); the source is
-            // `byte_len_usize` readable bytes of `host` (`T: Pod`); the two
-            // ranges cannot overlap — one is a fresh mapped-GPU-buffer range,
-            // the other caller host memory.
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    bytemuck::cast_slice(host).as_ptr(),
-                    ptr,
-                    byte_len_usize,
-                );
-            }
-            let buffer = resolve_mapped_buffer(ptr)?;
-            let staging_ptr = Arc::new(StagingPointer {
-                ptr,
-                size: padded_len_usize,
-            });
-            Ok(WgpuBuffer {
-                buffer,
-                len: host.len(),
-                tier,
-                staging_ptr: Some(staging_ptr),
-                marker: PhantomData,
+        let tier = Self::device_tier(hint)?;
+        let usage = wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST;
+        let buffer = if padded_len == 0 {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hephaestus-upload"),
+                size: 0,
+                usage,
+                mapped_at_creation: false,
             })
         } else {
-            let usage = wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST;
-            let buffer = if padded_len == 0 {
-                self.device.create_buffer(&wgpu::BufferDescriptor {
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("hephaestus-upload"),
-                    size: 0,
-                    usage,
-                    mapped_at_creation: false,
-                })
-            } else {
-                // Both byte_len and padded_len come from byte_size/padded_size which
-                // already ensure the value fits usize (they start from usize*size_of<T>).
-                let byte_len_usize = usize::try_from(byte_len).expect(
-                    "invariant: byte_len <= usize::MAX (derived from host.len() * size_of::<T>())",
-                );
-                let padded_len_usize = usize::try_from(padded_len)
-                    .expect("invariant: padded_len <= usize::MAX (padded_size rounds byte_len up by at most alignment-1)");
-                let mut padded = vec![0u8; padded_len_usize];
-                padded[..byte_len_usize].copy_from_slice(bytemuck::cast_slice(host));
-                (*self.device).create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("hephaestus-upload"),
-                    contents: &padded,
+                    contents: bytemuck::cast_slice(host),
                     usage,
                 })
-            };
-            Ok(WgpuBuffer {
-                buffer,
-                len: host.len(),
-                tier,
-                staging_ptr: None,
-                marker: PhantomData,
-            })
-        }
+        };
+        Ok(WgpuBuffer {
+            buffer,
+            len: host.len(),
+            tier,
+            marker: PhantomData,
+        })
     }
 
     fn download<T: Pod>(&self, buffer: &WgpuBuffer<T>, out: &mut [T]) -> Result<()> {
@@ -1335,7 +1025,7 @@ impl ComputeDevice for WgpuDevice {
 
     fn synchronize(&self) -> Result<()> {
         self.device
-            .poll(wgpu::PollType::Wait)
+            .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("device poll failed: {e:?}"),
             })?;
@@ -1421,7 +1111,7 @@ impl WgpuDevice {
             let _ = sender.send(result);
         });
         self.device
-            .poll(wgpu::PollType::Wait)
+            .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("device poll failed: {e:?}"),
             })?;
@@ -1437,7 +1127,11 @@ impl WgpuDevice {
         // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
         let byte_len_usize = usize::try_from(byte_len)
             .expect("invariant: byte_len fits usize (derived from element count * size_of::<T>())");
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .map_err(|error| HephaestusError::TransferFailed {
+                message: format!("mapped-range acquisition failed: {error}"),
+            })?;
         out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len_usize]));
         drop(mapped);
         staging.unmap();
@@ -1491,14 +1185,5 @@ mod tests {
             ),
             other => panic!("expected allocation failure, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn callback_boundary_converts_panics_to_failure_values() {
-        assert_eq!(catch_callback_unwind(17, || 23), 23);
-        assert_eq!(
-            catch_callback_unwind(17, || -> i32 { panic!("callback failure") }),
-            17
-        );
     }
 }

@@ -1,16 +1,16 @@
 # Checklist — hephaestus
 
-Sprint target: 0.13.0. Phase: Execution.
+Sprint target: 0.13.0. Phase: Closure.
 
 ## WGPU 30 provider ABI [major]
 
 - [x] Verify current registry WGPU is 30.0.0 with Rust 1.87 MSRV and record the
   provider-first migration decision in ADR 0006.
-- [ ] Update the workspace WGPU SSOT and all native Hephaestus call sites until
+- [x] Update the workspace WGPU SSOT and all native Hephaestus call sites until
   warning-denied WGPU/Python/Metal compilation passes.
-- [ ] Run formatting, warning-denied Clippy, nextest, doctest, rustdoc, RustSec,
+- [x] Run formatting, warning-denied Clippy, nextest, doctest, rustdoc, RustSec,
   dependency policy, and semver classification gates.
-- [ ] Bump the workspace to 0.13.0, synchronize changelog/backlog/gap audit,
+- [x] Bump the workspace to 0.13.0, synchronize changelog/backlog/gap audit,
   commit, and push the provider release increment.
 - [ ] Repin Apollo to the pushed provider commit and repeat Apollo's complete
   release gate before advancing Atlas gitlinks.
@@ -41,7 +41,7 @@ Sprint target: 0.13.0. Phase: Execution.
 - [x] Synchronize the release artifacts for the stacked Hephaestus commit and
   Atlas integration-pointer advance.
 
-## Verified locally — WGPU-CB-1 immutable staging callbacks [major]
+## Superseded — WGPU-CB-1 immutable staging callbacks [major]
 
 - [x] Reconcile the stale broad KS-3 claim and reclaim only `device.rs` plus
   its contract test.

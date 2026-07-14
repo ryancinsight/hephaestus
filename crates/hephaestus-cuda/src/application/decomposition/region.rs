@@ -14,7 +14,7 @@
 //! the per-row copies instead of serializing a blocking call per row.
 
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
+use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
 use crate::infrastructure::pinned::PinnedHostBuffer;
 use hephaestus_core::{HephaestusError, Result};
 

@@ -6,7 +6,7 @@
 //! ray-marcher, evaluated on the live GPU.
 
 use hephaestus_core::{BlockWidth, ComputeDevice};
-use hephaestus_wgpu::{ray_line_integrals, FieldGeometry, WgpuDevice, RAY_STRIDE};
+use hephaestus_wgpu::{FieldGeometry, RAY_STRIDE, WgpuDevice, ray_line_integrals};
 
 fn device_or_skip() -> Option<WgpuDevice> {
     match WgpuDevice::try_default("hephaestus-volume-test") {

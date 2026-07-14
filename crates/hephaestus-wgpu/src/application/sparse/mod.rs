@@ -4,11 +4,11 @@ mod batch;
 mod spmm;
 mod spmv;
 
-pub use batch::{submit_prepared_sparse_batch, PreparedSparseDispatch};
+pub use batch::{PreparedSparseDispatch, submit_prepared_sparse_batch};
 pub use spmm::{
-    prepare_spmm, prepare_spmv_many, spmm, spmm_into, spmv_many, spmv_many_into, PreparedSpmm,
+    PreparedSpmm, prepare_spmm, prepare_spmv_many, spmm, spmm_into, spmv_many, spmv_many_into,
 };
-pub use spmv::{prepare_spmv, spmv, spmv_into, PreparedSpmv};
+pub use spmv::{PreparedSpmv, prepare_spmv, spmv, spmv_into};
 
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;

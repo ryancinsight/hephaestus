@@ -16,7 +16,7 @@ use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, Hephaes
 use leto::Layout;
 
 use super::{map_layout, map_layout_err, to_i64};
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
 

@@ -7,11 +7,12 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_cuda::{
+    CudaDevice, GpuCsrMatrix as CudaCsrMatrix, StridedOperand as CudaStridedOperand,
     normal_with_seed as cuda_normal_with_seed, spmm as cuda_spmm, spmv as cuda_spmv,
-    uniform_with_seed as cuda_uniform_with_seed, CudaDevice, GpuCsrMatrix as CudaCsrMatrix,
-    StridedOperand as CudaStridedOperand,
+    uniform_with_seed as cuda_uniform_with_seed,
 };
 use hephaestus_wgpu::{
+    AddOp, ExpOp, GpuCsrMatrix, StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
     bidiagonalize, binary_elementwise_into, bunch_kaufman, cholesky_decompose_blocked, col_piv_qr,
     cumsum_into, det, dot, eigenvalues, full_piv_lu, hessenberg, kron_into, lu_decompose,
     lu_decompose_blocked, matexp, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into,
@@ -19,8 +20,7 @@ use hephaestus_wgpu::{
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
     qr_decompose, qr_decompose_blocked, schur, spmm, spmv, submit_prepared_axis_reduction_batch,
     sum_axis_into, svd_decompose, symmetric_eigen_jacobi, trace, udu_decompose,
-    unary_elementwise_into, uniform_with_seed, AddOp, ExpOp, GpuCsrMatrix,
-    StridedOperand as WgpuStridedOperand, SumOp, WgpuDevice,
+    unary_elementwise_into, uniform_with_seed,
 };
 use leto::Storage;
 use nalgebra::DMatrix;
@@ -35,7 +35,7 @@ const ITERS: usize = 50;
 fn wait_wgpu(device: &WgpuDevice) {
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .expect("invariant: benchmark device poll succeeds");
 }
 

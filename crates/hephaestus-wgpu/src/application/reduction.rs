@@ -3,14 +3,14 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
-    AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError,
-    IdentityToken, OpIdentity, Result, Wgsl,
+    AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice,
+    DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result, Wgsl, plan_axis_reduction,
+    reduction_pass_count, validate_reduction_width,
 };
 use leto::Layout;
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 

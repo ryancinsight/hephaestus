@@ -36,14 +36,14 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
-use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
 #[cfg(feature = "cuda")]
 use hephaestus_core::factor_lu_panel;
 
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
+use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
 
 /// LU decomposition result: device-resident packed factors with host-side
 /// decomposition for solve/inv/det.
@@ -358,7 +358,7 @@ pub fn lu_decompose_blocked(
 mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+    use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]

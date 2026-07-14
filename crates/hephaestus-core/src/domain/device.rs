@@ -30,8 +30,8 @@ pub enum DeviceFeature {
     ShaderF16,
     /// Host-mappable primary buffers.
     MappablePrimaryBuffers,
-    /// Push-constant support.
-    PushConstants,
+    /// Immediate shader-data support.
+    ImmediateData,
 }
 
 /// Backend-neutral compute-resource limits.
@@ -59,8 +59,8 @@ pub struct DeviceLimits {
     /// storage-buffer slot limit, so CUDA reports `None` instead of fabricating
     /// a WGPU-shaped value.
     pub max_storage_buffers_per_shader_stage: Option<u32>,
-    /// Maximum push-constant byte count.
-    pub max_push_constant_size: u32,
+    /// Maximum immediate shader-data byte count.
+    pub max_immediate_size: u32,
 }
 
 /// The compute-device seam every accelerator backend implements.
@@ -214,7 +214,9 @@ pub fn validate_buffer_size<T>(len: usize) -> Result<()> {
         return Err(crate::domain::error::HephaestusError::AllocationFailed {
             message: format!(
                 "Buffer byte size {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
-                byte_len, len, core::mem::size_of::<T>()
+                byte_len,
+                len,
+                core::mem::size_of::<T>()
             ),
         });
     }
@@ -229,7 +231,9 @@ pub fn validate_slice_alignment<T>(slice: &[T]) -> Result<()> {
         return Err(crate::domain::error::HephaestusError::TransferFailed {
             message: format!(
                 "Transfer byte length {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
-                byte_len, slice.len(), core::mem::size_of::<T>()
+                byte_len,
+                slice.len(),
+                core::mem::size_of::<T>()
             ),
         });
     }

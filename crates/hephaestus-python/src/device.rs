@@ -4,7 +4,7 @@ use crate::backend::BackendDevice;
 use pyo3::prelude::*;
 
 /// Python wrapper around a compute device.
-#[pyclass(name = "Device")]
+#[pyclass(name = "Device", from_py_object)]
 #[derive(Clone)]
 pub struct PyDevice {
     pub(crate) inner: BackendDevice,

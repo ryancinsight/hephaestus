@@ -10,7 +10,7 @@
 //! asynchronous instead of silently degrading to synchronous behavior on
 //! pageable memory.
 
-use crate::infrastructure::device::{cuda_byte_count, CudaContext};
+use crate::infrastructure::device::{CudaContext, cuda_byte_count};
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use hephaestus_core::{HephaestusError, Result};

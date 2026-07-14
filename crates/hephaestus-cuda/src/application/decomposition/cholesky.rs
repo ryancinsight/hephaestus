@@ -12,15 +12,15 @@
 #[cfg(feature = "cuda")]
 use bytemuck::Pod;
 use hephaestus_core::{
-    factor_cholesky_panel, ComputeDevice, DeviceBuffer, HephaestusError, Result,
+    ComputeDevice, DeviceBuffer, HephaestusError, Result, factor_cholesky_panel,
 };
 
 #[cfg(feature = "cuda")]
-use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
+use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
 
 /// Lower-triangular Cholesky factor on the device, with host-side
 /// decomposition for solve/inv/det without re-factorization.
@@ -302,7 +302,7 @@ pub fn cholesky_decompose_blocked(
 mod syrk_impl {
     use super::*;
     use crate::application::linalg::{to_i32, to_u32};
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+    use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]

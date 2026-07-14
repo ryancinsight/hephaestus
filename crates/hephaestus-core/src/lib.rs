@@ -22,8 +22,8 @@ pub use domain::decomposition::{
     panel_qr_packed, require_dense_operand, split_packed_lu, validate_square_operand,
 };
 pub use domain::device::{
-    validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
-    ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference,
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
+    DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
 };
 pub use domain::dialect::{CudaC, DialectScalar, KernelDialect, Wgsl};
 pub use domain::error::{HephaestusError, Result};
@@ -41,11 +41,11 @@ pub use domain::ops::{
     SqrtOp, SubOp, SumOp, UnaryExpr,
 };
 pub use domain::reduction::{
-    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
-    AxisReductionMeta,
+    AxisReductionDispatch, AxisReductionMeta, plan_axis_reduction, reduction_pass_count,
+    validate_reduction_width,
 };
-pub use domain::scan::{plan_axis_scan, AxisScanDispatch, AxisScanMeta, ScanDirection};
+pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, plan_axis_scan};
 pub use domain::stream::{
-    validate_bindings, validate_grouped_bindings, Binding, CommandStream, GroupedBinding,
-    GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence, KernelDevice,
+    Binding, CommandStream, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
+    GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };

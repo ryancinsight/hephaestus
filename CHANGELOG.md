@@ -4,7 +4,7 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.12.0.
+Target release: 0.13.0.
 
 - [patch] Replaced path-only first-party dependency declarations with exact Git
   revisions while retaining local path patches for Atlas development. The
@@ -14,22 +14,26 @@ Target release: 0.12.0.
 
 ### Breaking
 
-- `WgpuDevice::new` now returns `hephaestus_core::Result<Self>`. Construction
-  fails with `HephaestusError::DeviceUnavailable` when another static callback
-  pair already owns Mnemosyne's process-global WGPU staging backend.
-- WGPU staging callbacks convert panics and poisoned-registry failures into
-  allocation/deallocation failure values, so no Rust unwind crosses their C
-  ABI boundary.
+- The provider-owned WGPU ABI advances from 26.0.1 to 30.0.0. Push constants
+  become immediate data, descriptor construction and polling use WGPU 30's
+  native contracts, and all public WGPU identities change with the provider.
+- `WgpuDevice::new` is infallible again. Mnemosyne 0.4.0 removes the invalid
+  raw-pointer WGPU allocator contract, so wrapping an owned device/queue pair
+  has no process-global registration failure.
+- WGPU allocation accepts only the abstract `MemoryTier::Device`. HostPinned,
+  Dram, and other concrete tier requests return `AllocationFailed` because
+  WGPU does not guarantee those physical placement properties.
 
 ### Migration
 
-- Add `?` at propagated construction sites or handle the typed result. Code
-  wrapping an existing device directly must use
-  `WgpuDevice::new(device, queue)?`; repeated construction with Hephaestus's
-  canonical static callback pair remains valid.
+- Remove `?` or callback-registration error handling from
+  `WgpuDevice::new(device, queue)` call sites. Request `Device` placement and
+  use provider-owned upload/download staging for host transfers.
 
 ### Changed
 
+- The Python boundary advances to PyO3 0.29.0 and rust-numpy 0.29.0, closing
+  RUSTSEC-2025-0020 and RUSTSEC-2026-0177 without advisory exceptions.
 - [patch] Updated the declared Themis dependency from the obsolete 0.6 revision
   to the exact current 0.9 revision and removed the non-transitive local patch.
   Downstream workspaces can now resolve one Themis 0.9 provider identity.
@@ -74,9 +78,10 @@ Target release: 0.12.0.
   the empty full-pivot LU factorization is the empty product `1`, and a tall
   `m x 0` QR/bidiagonalization exposes the real `m x m` identity factor.
 
-- The local Atlas patch set now covers every transitive Mnemosyne crate used by
-  Hephaestus. Cargo no longer instantiates parallel local/git
-  `mnemosyne-backend` type identities while resolving the WGPU callback pair.
+- The local Atlas graph now resolves Mnemosyne 0.4.0 coherently through Leto,
+  Moirai, and Hephaestus. The obsolete WGPU callback/backend dependencies,
+  global mapped-buffer registry, first-device coupling, and raw staging pointer
+  owner are removed.
 
 - `hephaestus-cuda` / `hephaestus-wgpu` [patch]: restored all-targets
   compilation after Leto general-eigenvalue APIs returned `leto::Complex<f32>`

@@ -2,7 +2,7 @@
 //! `hephaestus_core` validators.
 
 use bytemuck::Pod;
-use hephaestus_core::{require_dense_operand, validate_square_operand, Result};
+use hephaestus_core::{Result, require_dense_operand, validate_square_operand};
 
 use crate::application::strided::StridedOperand;
 

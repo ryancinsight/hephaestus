@@ -3,8 +3,10 @@
 //!
 //! The panel routines operate on packed row-major `f32` slices and return the
 //! bookkeeping data the blocked loop needs (permutation vectors, Householder
-//! heads, β coefficients). The [`validate_square_operand`] and
-//! [`require_dense_operand`] validators check a rank-2 [`leto::Layout`] once so
+//! heads, β coefficients). The
+//! [`validate_square_operand`](crate::domain::decomposition::validate_square_operand) and
+//! [`require_dense_operand`](crate::domain::decomposition::require_dense_operand) validators
+//! check a rank-2 [`leto::Layout`] once so
 //! both backends share the same dispatch preconditions. All are used by both
 //! the wgpu and CUDA backends.
 
@@ -615,7 +617,7 @@ mod tests {
         assert_eq!(pivots, vec![0, 1]);
         // L should be identity (no below-diagonal entries).
         assert_eq!(a[2], 0.0); // L[1,0]
-                               // U should be identity.
+        // U should be identity.
         assert_eq!(a[0], 1.0); // U[0,0]
         assert_eq!(a[3], 1.0); // U[1,1]
     }

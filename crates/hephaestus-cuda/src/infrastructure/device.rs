@@ -4,9 +4,9 @@ use std::sync::Arc;
 use bytemuck::Pod;
 use cuda_oxide::Cuda;
 use hephaestus_core::{
-    validate_buffer_size, validate_slice_alignment, ComputeDevice, ComputeDeviceAcquisition,
-    ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError,
-    Result,
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
+    DeviceLimits, DevicePreference, HephaestusError, Result, validate_buffer_size,
+    validate_slice_alignment,
 };
 
 use crate::application::pipeline::PipelineKey;
@@ -106,7 +106,7 @@ pub struct CudaDevice {
 #[derive(Clone, Copy, Debug)]
 struct CudaDeviceFeatures {
     shader_f64: bool,
-    push_constants: bool,
+    immediate_data: bool,
 }
 
 impl core::fmt::Debug for CudaDevice {
@@ -122,8 +122,7 @@ impl CudaDevice {
     /// device is present, rather than fabricating a device. The acquired
     /// device is bound to the calling thread.
     pub fn try_default() -> Result<Self> {
-        let device_ordinal = Self::default_device_ordinal()?;
-        Self::try_with_ordinal(device_ordinal)
+        Self::try_with_ordinal(0)
     }
 
     /// Acquire a CUDA device by ordinal.
@@ -187,38 +186,6 @@ impl CudaDevice {
         Ok(dev)
     }
 
-    fn default_device_ordinal() -> Result<usize> {
-        let mut device_ordinal = 0usize;
-        if let Ok(thread_id_str) = std::env::var("NEXTEST_THREAD_ID") {
-            if let Ok(thread_id) = thread_id_str.parse::<i32>() {
-                init_driver()?;
-                static STAGGERED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !STAGGERED.load(std::sync::atomic::Ordering::Acquire)
-                    && STAGGERED
-                        .compare_exchange(
-                            false,
-                            true,
-                            std::sync::atomic::Ordering::AcqRel,
-                            std::sync::atomic::Ordering::Acquire,
-                        )
-                        .is_ok()
-                {
-                    std::thread::sleep(std::time::Duration::from_millis(thread_id as u64 * 100));
-                }
-
-                let mut count: core::ffi::c_int = 0;
-                // SAFETY: `count` is a valid out-pointer for one `c_int`; the
-                // CUDA driver has been initialized by `try_with_ordinal`.
-                if unsafe { cuda_oxide::sys::cuDeviceGetCount(&mut count) } == 0 && count > 0 {
-                    device_ordinal = usize::try_from(thread_id % count).unwrap_or(0);
-                }
-            }
-        }
-
-        Ok(device_ordinal)
-    }
-
     fn device_count() -> Result<usize> {
         init_driver()?;
         let mut count: core::ffi::c_int = 0;
@@ -268,9 +235,9 @@ impl CudaDevice {
                 u64::from(required.max_compute_workgroup_storage_size),
             ),
             (
-                "max_push_constant_size",
-                u64::from(actual.max_push_constant_size),
-                u64::from(required.max_push_constant_size),
+                "max_immediate_size",
+                u64::from(actual.max_immediate_size),
+                u64::from(required.max_immediate_size),
             ),
         ];
         for (name, available, needed) in comparable {
@@ -285,14 +252,13 @@ impl CudaDevice {
         if let (Some(available), Some(needed)) = (
             actual.max_storage_buffers_per_shader_stage,
             required.max_storage_buffers_per_shader_stage,
-        ) {
-            if available < needed {
-                return Err(HephaestusError::DeviceUnavailable {
-                    message: format!(
-                        "CUDA shader-stage storage-buffer limit {available} is below required {needed}"
-                    ),
-                });
-            }
+        ) && available < needed
+        {
+            return Err(HephaestusError::DeviceUnavailable {
+                message: format!(
+                    "CUDA shader-stage storage-buffer limit {available} is below required {needed}"
+                ),
+            });
         }
         Ok(())
     }
@@ -543,7 +509,7 @@ fn query_device_limits(device: &cuda_oxide::sys::CUdevice) -> Result<DeviceLimit
             "max_shared_memory_per_block",
         )?),
         max_storage_buffers_per_shader_stage: None,
-        max_push_constant_size: 0,
+        max_immediate_size: 0,
     })
 }
 
@@ -564,7 +530,7 @@ fn query_device_features(device: &cuda_oxide::sys::CUdevice) -> Result<CudaDevic
 
     Ok(CudaDeviceFeatures {
         shader_f64: compute_capability >= 13,
-        push_constants: true,
+        immediate_data: true,
     })
 }
 
@@ -641,7 +607,7 @@ impl ComputeDeviceCapabilities for CudaDevice {
             DeviceFeature::ShaderF64 => self.features.shader_f64,
             DeviceFeature::ShaderF16 => false,
             DeviceFeature::MappablePrimaryBuffers => false,
-            DeviceFeature::PushConstants => self.features.push_constants,
+            DeviceFeature::ImmediateData => self.features.immediate_data,
         }
     }
 }

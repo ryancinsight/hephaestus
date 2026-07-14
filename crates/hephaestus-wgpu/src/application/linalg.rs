@@ -13,12 +13,12 @@ use hephaestus_core::{
 use leto::Layout;
 use std::any::TypeId;
 
-use crate::application::elementwise::{unary_elementwise_into, SqrtOp};
+use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
 use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::reduction::{reduction, MaxOp, SumOp};
+use crate::application::reduction::{MaxOp, SumOp, reduction};
 use crate::application::strided::{
-    map_layout_err, pad_shape, pad_strides, to_i32, to_u32, unary_elementwise_strided_into,
-    StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META,
+    StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META, map_layout_err, pad_shape, pad_strides,
+    to_i32, to_u32, unary_elementwise_strided_into,
 };
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -1695,7 +1695,7 @@ pub trait MatrixDecompose {
     fn eigenvalues(&self, device: &WgpuDevice) -> Result<WgpuBuffer<num_complex::Complex<f32>>>;
     /// Real Schur decomposition.
     fn schur(&self, device: &WgpuDevice)
-        -> Result<crate::application::decomposition::GpuRealSchur>;
+    -> Result<crate::application::decomposition::GpuRealSchur>;
 }
 
 #[cfg(feature = "decomposition")]

@@ -19,7 +19,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::det(
                     device,
                     hephaestus_wgpu::StridedOperand {
@@ -56,7 +56,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     hephaestus_wgpu::matexp(
                         device,
@@ -97,7 +97,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     hephaestus_wgpu::matpow(
                         device,
@@ -142,7 +142,7 @@ impl PyArray {
             Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let dev = self.device.clone();
         let buf = self.buffer.clone();
-        py.allow_threads(move || match (&dev, &buf) {
+        py.detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 hephaestus_wgpu::matrix_rank(
                     device,
@@ -179,7 +179,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     hephaestus_wgpu::pinv(
                         device,
@@ -226,7 +226,7 @@ pub(crate) fn matexp(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let buf = a.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::matexp(
                 device,
                 hephaestus_wgpu::StridedOperand {
@@ -268,7 +268,7 @@ pub(crate) fn pinv(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let buf = a.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => hephaestus_wgpu::pinv(
                 device,
                 hephaestus_wgpu::StridedOperand {

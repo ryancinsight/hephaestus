@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::BlockWidth;
 use hephaestus_cuda::{
+    AddOp, ComputeDevice, CudaDevice, ExpOp, StridedOperand as CudaStridedOperand, SumOp,
     binary_elementwise_into, cholesky_decompose_blocked, cumsum_into, det, dot, kron_into,
     lu_decompose, matmul_into, matpow, matrix_rank, max_axis_into, mean_axis_into, min_axis_into,
     norm_l1, norm_l2, norm_max, qr_decompose, qr_decompose_blocked, reduction, sum_axis_into,
-    symmetric_eigen_jacobi, trace, unary_elementwise_into, AddOp, ComputeDevice, CudaDevice, ExpOp,
-    StridedOperand as CudaStridedOperand, SumOp,
+    symmetric_eigen_jacobi, trace, unary_elementwise_into,
 };
 use nalgebra::DMatrix;
 use ndarray::Array2 as NdArray2;

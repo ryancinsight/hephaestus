@@ -27,12 +27,12 @@ use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_core::panel_qr_packed;
 
 #[cfg(feature = "cuda")]
-use super::region::{download_matrix_region_compact, write_matrix_region_compact, MatrixRegion};
+use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
 use super::validate::validate_dense_operand;
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{cuda_byte_count, CudaDevice};
+use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
 
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.
@@ -343,7 +343,7 @@ pub fn qr_decompose_blocked(
 mod hh_impl {
     use super::*;
     use crate::application::linalg::to_u32;
-    use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+    use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Zeroable)]

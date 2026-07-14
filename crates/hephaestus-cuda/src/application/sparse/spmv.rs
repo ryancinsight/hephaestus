@@ -2,7 +2,7 @@
 
 use super::GpuCsrMatrix;
 use crate::application::pipeline::{
-    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;

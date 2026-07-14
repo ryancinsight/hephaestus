@@ -3,7 +3,7 @@
 use super::GpuCsrMatrix;
 use crate::application::linalg::AsGpuMatrixOperand;
 use crate::application::pipeline::{
-    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;

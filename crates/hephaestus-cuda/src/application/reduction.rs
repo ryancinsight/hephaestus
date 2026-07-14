@@ -1,16 +1,16 @@
+use crate::CudaDevice;
 use crate::application::pipeline::{
-    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::device::cuda_byte_count;
-use crate::CudaDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
-    plan_axis_reduction, reduction_pass_count, validate_reduction_width, AxisReductionDispatch,
-    AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar,
-    HephaestusError, IdentityToken, OpIdentity, Result,
+    AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC,
+    DeviceBuffer, DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result,
+    plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
 use leto::Layout;
 

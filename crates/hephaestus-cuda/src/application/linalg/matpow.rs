@@ -7,9 +7,9 @@ use hephaestus_core::{
 use leto::Layout;
 
 use super::{map_layout_err, matmul_into};
-use crate::application::strided::{unary_elementwise_strided_into, StridedOperand};
-use crate::infrastructure::buffer::CudaBuffer;
 use crate::CudaDevice;
+use crate::application::strided::{StridedOperand, unary_elementwise_strided_into};
+use crate::infrastructure::buffer::CudaBuffer;
 
 /// CUDA scalar whose host identity values support matrix-power initialization.
 pub trait MatrixIdentityScalar: DialectScalar<CudaC> + Pod {

@@ -32,7 +32,7 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+            .detach(move || match (&dev, &buf_a, &buf_b) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
                     hephaestus_wgpu::matmul(
                         device,
@@ -93,7 +93,7 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+            .detach(move || match (&dev, &buf_a, &buf_b) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
                     hephaestus_wgpu::dot(
                         device,
@@ -148,7 +148,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf) {
+            .detach(move || match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     hephaestus_wgpu::trace(
                         device,
@@ -197,7 +197,7 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+            .detach(move || match (&dev, &buf_a, &buf_b) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
                     hephaestus_wgpu::kron(
                         device,
@@ -261,7 +261,7 @@ impl PyArray {
         let buf_a = self.buffer.clone();
         let buf_b = other.buffer.clone();
         let out_buf = py
-            .allow_threads(move || match (&dev, &buf_a, &buf_b) {
+            .detach(move || match (&dev, &buf_a, &buf_b) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(a), BackendBuffer::Wgpu(b)) => {
                     hephaestus_wgpu::batched_matmul(
                         device,

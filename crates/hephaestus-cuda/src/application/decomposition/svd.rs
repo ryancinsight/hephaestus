@@ -2,13 +2,12 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 /// SVD decomposition result: device-resident factors.
 pub struct GpuSvdDecomposition {
-    #[allow(dead_code)]
     inner: leto_ops::SvdDecomposition<f32>,
     u: CudaBuffer<f32>,
     v: CudaBuffer<f32>,

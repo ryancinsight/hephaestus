@@ -3,9 +3,9 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
 use hephaestus_wgpu::{
-    binary_elementwise_strided, binary_elementwise_strided_into, scalar_elementwise_strided,
-    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_into,
-    AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice,
+    AddOp, MulOp, NegOp, SqrtOp, StridedOperand, WgpuDevice, binary_elementwise_strided,
+    binary_elementwise_strided_into, scalar_elementwise_strided, scalar_elementwise_strided_into,
+    unary_elementwise_strided, unary_elementwise_strided_into,
 };
 
 fn op<'a, T, const N: usize>(

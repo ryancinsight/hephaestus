@@ -1,9 +1,9 @@
 use super::reject_output_alias;
+use crate::CudaDevice;
 use crate::application::pipeline::{
-    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::CudaDevice;
 use bytemuck::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,

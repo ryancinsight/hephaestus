@@ -1,6 +1,6 @@
 # ADR 0005: Immutable WGPU staging callbacks
 
-Status: accepted for implementation (2026-07-13)
+Status: superseded by ADR 0006 and Mnemosyne ADR 0003 (2026-07-13)
 
 ## Context
 

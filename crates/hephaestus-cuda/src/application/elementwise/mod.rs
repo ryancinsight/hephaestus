@@ -10,11 +10,11 @@ pub mod scalar;
 /// Unary elementwise operations.
 pub mod unary;
 
-pub use binary::{binary_elementwise, binary_elementwise_into, AddOp, DivOp, MulOp, PowOp, SubOp};
+pub use binary::{AddOp, DivOp, MulOp, PowOp, SubOp, binary_elementwise, binary_elementwise_into};
 pub use scalar::{scalar_elementwise, scalar_elementwise_into};
 pub use unary::{
-    unary_elementwise, unary_elementwise_into, AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp,
-    NegOp, RecipOp, SinOp, SqrtOp,
+    AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp,
+    unary_elementwise, unary_elementwise_into,
 };
 
 fn reject_output_alias<T, U>(

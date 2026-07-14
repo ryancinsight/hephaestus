@@ -5,14 +5,14 @@
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    binary_elementwise, binary_elementwise_into, cumsum_into, matrix_rank,
-    matrix_rank_with_tolerance, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
-    min_axis_into, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
-    prepare_reduction, prepare_sum_axis_into, reduction, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
-    sum_axis, sum_axis_into, unary_elementwise, unary_elementwise_into, AbsOp, AddOp,
-    ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp, MulOp, NegOp,
-    RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice,
+    AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp,
+    MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
+    binary_elementwise_into, cumsum_into, matrix_rank, matrix_rank_with_tolerance, max_axis,
+    max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
+    prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
+    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, sum_axis_into,
+    unary_elementwise, unary_elementwise_into,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -200,7 +200,8 @@ fn assert_complex_spectrum_close(
         assert_close(actual.re, expected.re, tolerance);
         assert_close(actual.im, expected.im, tolerance);
         assert!(
-            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt() <= tolerance,
+            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt()
+                <= tolerance,
             "complex spectrum mismatch at {index}: got {actual:?}, expected {expected:?}, tolerance {tolerance}"
         );
     }
@@ -268,41 +269,29 @@ fn test_placement_aware_allocation() {
 
     let host: Vec<f32> = (0..128).map(|i| i as f32 * 0.25 - 7.0).collect();
 
-    // HostPinned buffers are persistently host-mapped staging buffers
-    // (`hephaestus-mnemosyne-staging`): the upload variant is MAP_WRITE|COPY_SRC,
-    // the zeroed variant MAP_READ|COPY_DST. Because the buffer stays mapped, it
-    // cannot be a `copy_buffer_to_buffer` source/destination (wgpu rejects a
-    // queue submit touching a mapped buffer), so `download`/compute dispatch are
-    // not its access path — the host reads/writes through the mapped pointer.
-    // The publicly verifiable placement contract for this tier is therefore the
-    // recorded tier and element length on both constructors.
-    let pinned = PlacementHint::Tier(MemoryTier::HostPinned);
-    let buf_pinned = device.upload_with_hint(&host, pinned).unwrap();
-    assert_eq!(buf_pinned.len(), 128);
-    assert_eq!(buf_pinned.tier(), MemoryTier::HostPinned);
-
-    let zeroed_pinned = device.alloc_zeroed_with_hint::<f32>(128, pinned).unwrap();
-    assert_eq!(zeroed_pinned.len(), 128);
-    assert_eq!(zeroed_pinned.tier(), MemoryTier::HostPinned);
-
-    // Dram tier: a device-local STORAGE buffer. The hint changes placement,
-    // never values, so an upload must round-trip identically to the default
-    // path and a zeroed allocation must be genuinely zero-initialized.
-    let dram = PlacementHint::Tier(MemoryTier::Dram);
-    let buf_dram = device.upload_with_hint(&host, dram).unwrap();
-    assert_eq!(buf_dram.tier(), MemoryTier::Dram);
-    let mut dram_out = vec![0.0f32; 128];
-    device.download(&buf_dram, &mut dram_out).unwrap();
-    assert_eq!(dram_out, host, "Dram upload must preserve data");
-
-    let zeroed_dram = device.alloc_zeroed_with_hint::<f32>(128, dram).unwrap();
-    let mut zeroed_out = vec![1.0f32; 128];
-    device.download(&zeroed_dram, &mut zeroed_out).unwrap();
-    assert_eq!(
-        zeroed_out,
-        vec![0.0f32; 128],
-        "Dram alloc_zeroed must zero-initialize"
-    );
+    // WGPU exposes device buffers and transient mapped transfer buffers, but
+    // does not guarantee host-pinned or host-DRAM placement. Unsupported tier
+    // requests fail at the boundary instead of recording a false tier.
+    for tier in [MemoryTier::HostPinned, MemoryTier::Dram] {
+        let hint = PlacementHint::Tier(tier);
+        let expected =
+            format!("WGPU cannot guarantee requested memory tier {tier:?}; use Device placement");
+        for error in [
+            device
+                .upload_with_hint(&host, hint)
+                .expect_err("unsupported upload placement must fail"),
+            device
+                .alloc_zeroed_with_hint::<f32>(128, hint)
+                .expect_err("unsupported allocation placement must fail"),
+        ] {
+            match error {
+                HephaestusError::AllocationFailed { message } => {
+                    assert_eq!(message, expected)
+                }
+                other => panic!("expected allocation failure, got {other:?}"),
+            }
+        }
+    }
 
     // Default (non-hinted) allocation lands on Device and round-trips data.
     let buf_default = device.upload(&host).unwrap();
@@ -1017,7 +1006,7 @@ fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
     };
 
     let axis_len = 500usize; // > BlockWidth::DEFAULT (256): forces the
-                             // previously-serial path onto the grid-strided kernel.
+    // previously-serial path onto the grid-strided kernel.
     let rows = 3usize;
     let host: Vec<f32> = (0..rows * axis_len)
         .map(|i| ((i % 97) as f32) * 0.1 + 0.01)
@@ -1058,7 +1047,7 @@ fn axis_scans_match_leto_reference() {
         return;
     };
     use hephaestus_wgpu::{
-        cumsum, scan_axis, scan_axis_into, CumProdOp, ScanDirection, StridedOperand,
+        CumProdOp, ScanDirection, StridedOperand, cumsum, scan_axis, scan_axis_into,
     };
     use leto::Layout;
 
@@ -1143,36 +1132,27 @@ fn axis_scans_match_leto_reference() {
 
 #[test]
 fn acquisition_reports_themis_topology_from_adapter() {
-    eprintln!("DEBUG: Test started");
     let Some(device) = device_or_skip() else {
-        eprintln!("DEBUG: Device skipped");
         return;
     };
-    eprintln!("DEBUG: Device acquired");
     let topology = device
         .topology()
         .expect("acquisition path must capture a topology snapshot");
-    eprintln!("DEBUG: Topology retrieved");
 
     // Verify reported fields have reasonable defaults/values
     assert!(topology.warp_width() == 0 || topology.warp_width().is_power_of_two());
-    eprintln!("DEBUG: Warp width checked");
 
     // Unreported-by-wgpu capacities must be zero, never fabricated.
     assert_eq!(topology.compute_units(), 0);
     assert_eq!(topology.registers_per_unit(), 0);
     assert_eq!(topology.shared_mem_per_unit_bytes(), 0);
-    eprintln!("DEBUG: Capacities checked");
 
     // The Arc-wrapping constructor has no adapter and reports none.
-    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone())
-        .expect("the canonical WGPU callback pair must be idempotent");
-    eprintln!("DEBUG: Wrapped device created");
+    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
     assert_eq!(
         wrapped.topology().map(|topology| topology.compute_units()),
         None
     );
-    eprintln!("DEBUG: Test finished successfully");
 }
 
 #[test]
@@ -1180,7 +1160,7 @@ fn linalg_matmul_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matmul, matmul_into, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matmul, matmul_into};
     use leto::Layout;
 
     // Multiply two f32 matrices: shape [3, 2] x [2, 4] -> [3, 4]
@@ -1241,7 +1221,7 @@ fn linalg_batched_matmul_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{batched_matmul, batched_matmul_into, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, batched_matmul, batched_matmul_into};
     use leto::Layout;
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
@@ -1298,7 +1278,7 @@ fn linalg_kron_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{kron, kron_into, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, kron, kron_into};
     use leto::Layout;
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -1359,7 +1339,7 @@ fn linalg_matpow_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matpow, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matpow};
     use leto::Layout;
 
     let shear_host = vec![1.0f32, 1.0, 0.0, 1.0];
@@ -1401,7 +1381,7 @@ fn linalg_matpow_rejects_non_square() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matpow, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matpow};
     use leto::Layout;
 
     let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -1425,7 +1405,7 @@ fn linalg_dot_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{dot, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, dot};
     use leto::Layout;
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -1461,7 +1441,7 @@ fn linalg_trace_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{trace, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, trace};
     use leto::Layout;
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
@@ -1565,7 +1545,7 @@ fn linalg_det_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{det, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, det};
     use leto::Layout;
 
     let nonsingular_host = vec![2.0f32, 1.0, 3.0, 4.0];
@@ -1679,7 +1659,7 @@ fn det_of_near_singular_triangular_is_exact_pivot_product() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{det, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, det};
     use leto::Layout;
 
     let delta = 1.0e-5f32;
@@ -1724,7 +1704,7 @@ fn cholesky_decomposition_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
     use leto::Layout;
 
     let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
@@ -1782,7 +1762,7 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
         return;
     };
     eprintln!("TEST_CHOL: Device ok");
-    use hephaestus_wgpu::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let n = 66usize;
@@ -1835,7 +1815,7 @@ fn lu_decomposition_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose};
     use leto::Layout;
 
     let matrix_host = vec![2.0f32, 1.0, 4.0, 3.0];
@@ -1888,7 +1868,7 @@ fn qr_decomposition_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
@@ -1945,7 +1925,7 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi};
     use leto::Layout;
 
     let matrix_host = vec![
@@ -2005,7 +1985,7 @@ fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{symmetric_eigen_jacobi, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, symmetric_eigen_jacobi};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0];
@@ -2030,7 +2010,7 @@ fn eigenvalues_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
 
     let matrix_host = vec![2.0f32, 0.0, 0.0, 3.0];
@@ -2066,7 +2046,7 @@ fn eigenvalues_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
 
     let matrix_host = vec![0.0f32, 1.0, -2.0, 3.0];
@@ -2109,7 +2089,7 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
     use num_complex::Complex;
 
@@ -2153,7 +2133,7 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
     use nalgebra::DMatrix;
     use num_complex::Complex;
@@ -2205,7 +2185,7 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
     use nalgebra::DMatrix;
     use num_complex::Complex;
@@ -2244,7 +2224,7 @@ fn eigenvalues_rejects_non_square_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2269,7 +2249,7 @@ fn singular_values_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{singular_values, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, singular_values};
     use leto::Layout;
 
     let matrix_host = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0];
@@ -2296,7 +2276,7 @@ fn svd_decompose_reconstructs_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{svd_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, svd_decompose};
     use leto::Layout;
 
     let rows = 4usize;
@@ -2342,7 +2322,7 @@ fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{svd_rank_revealing, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, svd_rank_revealing};
     use leto::Layout;
 
     let rows = 3usize;
@@ -2380,7 +2360,7 @@ fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{bidiagonalize, singular_values, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, bidiagonalize, singular_values};
     use leto::Layout;
 
     let rows = 4usize;
@@ -2456,7 +2436,7 @@ fn bidiagonalize_rejects_wide_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{bidiagonalize, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, bidiagonalize};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2482,7 +2462,7 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{eigenvalues, schur, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, eigenvalues, schur};
     use leto::Layout;
 
     let n = 3usize;
@@ -2559,7 +2539,10 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     device.download(&t_values, &mut got_t).unwrap();
     device.download(&a_values, &mut got_a).unwrap();
     assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 }
 
 #[test]
@@ -2567,7 +2550,7 @@ fn schur_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{schur, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, schur};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2586,7 +2569,10 @@ fn schur_rejects_rectangular_matrix() {
         Err(HephaestusError::DispatchFailed { message })
             if message.contains("square matrix")
     ));
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 }
 
 #[test]
@@ -2594,7 +2580,7 @@ fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{hessenberg, norm_l2, trace, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, hessenberg, norm_l2, trace};
     use leto::Layout;
 
     let n = 4usize;
@@ -2688,7 +2674,7 @@ fn hessenberg_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{hessenberg, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, hessenberg};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2714,7 +2700,7 @@ fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{full_piv_lu, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
     use leto::Layout;
 
     let n = 4usize;
@@ -2783,7 +2769,7 @@ fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{full_piv_lu, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
     use leto::Layout;
 
     let n = 3usize;
@@ -2812,7 +2798,7 @@ fn full_piv_lu_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{full_piv_lu, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2938,7 +2924,7 @@ fn cholesky_identity_matrix_yields_identity_lower() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -2972,7 +2958,7 @@ fn cholesky_spd_reconstruction_matches_original() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
     use leto::Layout;
 
     // SPD matrix: A = [[4, 2, 0.5], [2, 5, 1], [0.5, 1, 3]]
@@ -3022,7 +3008,7 @@ fn cholesky_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
     use leto::Layout;
 
     // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5].
@@ -3076,7 +3062,7 @@ fn cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -3100,7 +3086,7 @@ fn lu_identity_yields_identity_factors() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -3133,7 +3119,7 @@ fn lu_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose};
     use leto::Layout;
 
     // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
@@ -3177,7 +3163,7 @@ fn lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -3198,7 +3184,7 @@ fn qr_identity_yields_identity_r() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -3231,7 +3217,7 @@ fn qr_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose};
     use leto::Layout;
 
     // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
@@ -3268,7 +3254,7 @@ fn linalg_norms_match_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{norm_l1, norm_l2, norm_max, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, norm_l1, norm_l2, norm_max};
     use leto::Layout;
 
     let a_host = vec![-1.0f32, 2.0, -3.0, 4.0];
@@ -3311,7 +3297,7 @@ fn linalg_reductions_accept_strided_views() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{dot, norm_l1, norm_l2, norm_max, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, dot, norm_l1, norm_l2, norm_max};
     use leto::Layout;
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -3368,7 +3354,7 @@ fn blocked_lu_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     // 66×66 matrix exercises the block boundary (LU_BLOCK_SIZE = 64).
@@ -3431,7 +3417,7 @@ fn blocked_lu_identity_yields_identity_factors() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -3459,7 +3445,7 @@ fn blocked_lu_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
@@ -3501,7 +3487,7 @@ fn blocked_lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -3525,7 +3511,7 @@ fn blocked_qr_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     // 70×35 matrix exercises two QR blocks (QR_BLOCK_SIZE = 32).
@@ -3608,7 +3594,7 @@ fn blocked_qr_identity_yields_identity_r() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -3648,7 +3634,7 @@ fn blocked_qr_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
@@ -3694,7 +3680,7 @@ fn blocked_qr_rejects_underdetermined() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     let host = vec![0.0f32; 6];
@@ -3718,7 +3704,7 @@ fn blocked_cholesky_identity_yields_identity_lower() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -3750,7 +3736,7 @@ fn blocked_cholesky_spd_reconstruction_matches_original() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     // 66×66 SPD matrix exercises the block boundary.
@@ -3812,7 +3798,7 @@ fn blocked_cholesky_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5]
@@ -3857,7 +3843,7 @@ fn blocked_cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -3881,7 +3867,7 @@ fn col_piv_qr_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{col_piv_qr, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, col_piv_qr};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
@@ -3921,7 +3907,7 @@ fn full_piv_lu_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{full_piv_lu, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -3981,14 +3967,17 @@ fn udu_decompose_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{udu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, udu_decompose};
     use leto::Layout;
 
     let n = 3usize;
     let matrix_host = vec![4.0f32, 2.0, -2.0, 2.0, -3.0, 1.0, -2.0, 1.0, 2.0];
     let rhs_host = vec![3.0f32, -1.0, 2.0];
     let matrix = device.upload(&matrix_host).unwrap();
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
     let layout = Layout::c_contiguous([n, n]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
     let leto_decomp = leto_ops::udu_decompose(&leto_matrix.view()).unwrap();
@@ -4001,7 +3990,10 @@ fn udu_decompose_matches_leto_reference() {
         },
     )
     .unwrap();
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     assert_eq!(gpu_decomp.n(), n);
     assert_close(gpu_decomp.det(), leto_decomp.det(), 1.0e-4);
@@ -4051,7 +4043,7 @@ fn udu_decompose_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{udu_decompose, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, udu_decompose};
     use leto::Layout;
 
     let rectangular_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0];
@@ -4108,13 +4100,16 @@ fn bunch_kaufman_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{bunch_kaufman, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, bunch_kaufman};
     use leto::Layout;
 
     let n = 3usize;
     let matrix_host = vec![0.1f32, 10.0, 0.0, 10.0, 1000.0, 0.0, 0.0, 0.0, 2.0];
     let matrix = device.upload(&matrix_host).unwrap();
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
     let layout = Layout::c_contiguous([n, n]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
     let leto_decomp = leto_ops::bunch_kaufman(&leto_matrix.view()).unwrap();
@@ -4127,7 +4122,10 @@ fn bunch_kaufman_matches_leto_reference() {
         },
     )
     .unwrap();
-    device.device().poll(wgpu::PollType::Wait).unwrap();
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     assert_eq!(gpu_decomp.n(), n);
     assert_eq!(gpu_decomp.permutation(), leto_decomp.permutation());
@@ -4159,7 +4157,7 @@ fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{bunch_kaufman, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, bunch_kaufman};
     use leto::Layout;
 
     let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -4200,7 +4198,7 @@ fn linalg_pinv_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{pinv, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
 
     let matrix_host = vec![2.0f32, 0.0, 0.0, 4.0];
@@ -4226,7 +4224,7 @@ fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{pinv, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
     use nalgebra::DMatrix;
 
@@ -4272,7 +4270,7 @@ fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{pinv, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
     use nalgebra::DMatrix;
 
@@ -4315,7 +4313,7 @@ fn linalg_pinv_rejects_non_finite_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{pinv, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
@@ -4340,7 +4338,7 @@ fn linalg_matexp_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matexp, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matexp};
     use leto::Layout;
 
     let matrix_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -4373,7 +4371,7 @@ fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matexp, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matexp};
     use leto::Layout;
 
     let layout = Layout::c_contiguous([2, 2]).unwrap();
@@ -4418,7 +4416,7 @@ fn linalg_matexp_matches_nalgebra_general_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matexp, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matexp};
     use leto::Layout;
     use nalgebra::DMatrix;
 
@@ -4454,7 +4452,7 @@ fn linalg_matexp_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{matexp, StridedOperand};
+    use hephaestus_wgpu::{StridedOperand, matexp};
     use leto::Layout;
 
     let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -4526,9 +4524,9 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
         return;
     };
     use hephaestus_wgpu::{
-        prepare_spmm, prepare_spmv, prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many,
-        spmv_many_into, submit_prepared_sparse_batch, GpuCsrMatrix, PreparedSparseDispatch,
-        StridedOperand,
+        GpuCsrMatrix, PreparedSparseDispatch, StridedOperand, prepare_spmm, prepare_spmv,
+        prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+        submit_prepared_sparse_batch,
     };
     use leto::Layout;
 

@@ -49,7 +49,7 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    download_matrix_region_compact_into, write_matrix_region_compact_reusable, MatrixRegion,
+    MatrixRegion, download_matrix_region_compact_into, write_matrix_region_compact_reusable,
 };
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::pipeline::cached_pipeline;

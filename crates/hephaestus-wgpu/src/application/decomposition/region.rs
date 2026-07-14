@@ -228,7 +228,7 @@ pub(crate) fn download_matrix_region_compact_into(
     });
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .map_err(|e| HephaestusError::TransferFailed {
             message: format!("device poll failed: {e:?}"),
         })?;
@@ -241,7 +241,11 @@ pub(crate) fn download_matrix_region_compact_into(
             message: format!("buffer mapping failed: {e:?}"),
         })?;
 
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .map_err(|error| HephaestusError::TransferFailed {
+            message: format!("mapped-range acquisition failed: {error}"),
+        })?;
     // Reuse `out`'s existing capacity; `resize` only grows when needed.
     out.resize(compact_len, 0.0);
     // compact_bytes == compact_len * size_of::<f32>(); compute in usize to avoid the

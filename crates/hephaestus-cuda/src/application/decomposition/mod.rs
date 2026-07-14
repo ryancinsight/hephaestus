@@ -139,18 +139,18 @@ pub mod schur;
 pub mod svd;
 pub mod udu;
 
-pub use bidiagonal::{bidiagonalize, GpuBidiagonalDecomposition};
-pub use bunch_kaufman::{bunch_kaufman, GpuBunchKaufmanDecomposition};
-pub use cholesky::{cholesky_decompose, cholesky_decompose_blocked, GpuCholesky};
-pub use col_piv_qr::{col_piv_qr, GpuColPivQrDecomposition};
+pub use bidiagonal::{GpuBidiagonalDecomposition, bidiagonalize};
+pub use bunch_kaufman::{GpuBunchKaufmanDecomposition, bunch_kaufman};
+pub use cholesky::{GpuCholesky, cholesky_decompose, cholesky_decompose_blocked};
+pub use col_piv_qr::{GpuColPivQrDecomposition, col_piv_qr};
 pub use eigen::{
-    eigenvalues, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
-    GpuSymmetricEigenDecomposition,
+    GpuSymmetricEigenDecomposition, eigenvalues, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi,
 };
-pub use full_piv_lu::{full_piv_lu, GpuFullPivLuDecomposition};
-pub use hessenberg::{hessenberg, GpuHessenbergDecomposition};
-pub use lu::{lu_decompose, lu_decompose_blocked, GpuLuDecomposition};
-pub use qr::{qr_decompose, qr_decompose_blocked, GpuQrDecomposition};
-pub use schur::{schur, GpuRealSchur};
-pub use svd::{singular_values, svd_decompose, svd_rank_revealing, GpuSvdDecomposition};
-pub use udu::{udu_decompose, GpuUduDecomposition};
+pub use full_piv_lu::{GpuFullPivLuDecomposition, full_piv_lu};
+pub use hessenberg::{GpuHessenbergDecomposition, hessenberg};
+pub use lu::{GpuLuDecomposition, lu_decompose, lu_decompose_blocked};
+pub use qr::{GpuQrDecomposition, qr_decompose, qr_decompose_blocked};
+pub use schur::{GpuRealSchur, schur};
+pub use svd::{GpuSvdDecomposition, singular_values, svd_decompose, svd_rank_revealing};
+pub use udu::{GpuUduDecomposition, udu_decompose};

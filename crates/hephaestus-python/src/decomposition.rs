@@ -4,8 +4,8 @@
 //! (`split_packed_lu`); this module only marshals buffers.
 
 use crate::array::PyArray;
-use crate::backend::{clone_cuda_buffer, BackendBuffer, BackendDevice};
-use hephaestus_core::{split_packed_lu, ComputeDevice, DeviceBuffer};
+use crate::backend::{BackendBuffer, BackendDevice, clone_cuda_buffer};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, split_packed_lu};
 use leto::Layout;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -23,7 +23,7 @@ pub(crate) fn cholesky(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
     let dev = a.device.clone();
     let buf = a.buffer.clone();
     let lower = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -63,7 +63,7 @@ pub(crate) fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
     let buf = a.buffer.clone();
 
     let (decomp, l_buf, u_buf) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -127,7 +127,7 @@ pub(crate) fn hessenberg(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyAr
     let buf = a.buffer.clone();
 
     let (q_buf, h_buf) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -188,7 +188,7 @@ pub(crate) fn full_piv_lu(
     let buf = a.buffer.clone();
 
     let (l_buf, u_buf, row_perm, col_perm) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -258,7 +258,7 @@ pub(crate) fn bidiagonalize(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, P
     let buf = a.buffer.clone();
 
     let (u_buf, b_buf, v_buf) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -320,7 +320,7 @@ pub(crate) fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
     let buf = a.buffer.clone();
 
     let (q_buf, r_buf, q_shape, r_shape) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -387,7 +387,7 @@ pub(crate) fn col_piv_qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyAr
     let buf = a.buffer.clone();
 
     let (q_buf, r_buf, m, n, perm) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -460,7 +460,7 @@ pub(crate) fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, P
     let buf = a.buffer.clone();
 
     let (l_buf, d_buf, perm, n_val) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,

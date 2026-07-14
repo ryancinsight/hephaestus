@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    validate_bindings, validate_grouped_bindings, Binding, CommandStream, DispatchGrid,
-    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
-    GroupedKernelSource, HephaestusError, KernelDevice, KernelSource, Result, Wgsl,
+    Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
+    GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
+    KernelSource, Result, Wgsl, validate_bindings, validate_grouped_bindings,
 };
 
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -160,8 +160,8 @@ impl KernelDevice for WgpuDevice {
             self.inner()
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some(K::LABEL),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
                 });
         let pipeline = self
             .inner()
@@ -215,16 +215,16 @@ impl GroupedKernelDevice for WgpuDevice {
 
         let bind_group_layouts =
             grouped_layouts::<K>(self.inner(), K::PARAM_GROUP, K::PARAM_BINDING)?;
-        let layout_refs: Vec<&wgpu::BindGroupLayout> = bind_group_layouts
+        let layout_refs: Vec<Option<&wgpu::BindGroupLayout>> = bind_group_layouts
             .iter()
-            .map(|(_, layout)| layout)
+            .map(|(_, layout)| Some(layout))
             .collect();
         let pipeline_layout =
             self.inner()
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some(K::LABEL),
                     bind_group_layouts: &layout_refs,
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 });
         let pipeline = self
             .inner()

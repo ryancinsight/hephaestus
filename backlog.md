@@ -19,20 +19,22 @@ cuda-oxide + cutile).
   canonical Leto state. CUDA/WGPU value-semantic contracts and the full
   239-test backend suite pass; no synthetic 1x1 factorization remains.
 
-- [WGPU-CB-1] [major] **Done.** Device construction registers Mnemosyne's
+- [WGPU-CB-1] [major] **Superseded by WGPU-ABI-30.** Device construction registers Mnemosyne's
   immutable callback pair before publishing the staging device and surfaces a
   conflicting registration through typed `HephaestusError`. Driver: Mnemosyne
   ADR 0002; local decision: ADR 0005.
 
 ## Open
 
-- [WGPU-ABI-30] [major] **In progress; owner Codex, 2026-07-13.** Migrate the
+- [WGPU-ABI-30] [major] **Review; owner Codex, 2026-07-13.** Migrated the
   provider-owned public WGPU ABI from 26.0.1 to current 30.0.0, update every
-  backend call site natively, and publish Hephaestus 0.13.0 for Apollo. Scope is
+  backend call site natively, and prepared Hephaestus 0.13.0 for Apollo. Scope is
   the WGPU dependency and WGPU-consuming crates; the 2026-07-02 `claude-seam`
   claim is stale (clean tree and no scoped commits for more than one day), so
-  this item takes over only the overlapping WGPU API surface. Acceptance and
-  migration design are in ADR 0006.
+  this item took over only the overlapping WGPU API surface. The complete local
+  gate passes; CUDA/Python semver rustdoc is blocked by a cargo-semver-checks
+  isolated-build collision in `psm`/`stacker`, while core, Metal, and WGPU
+  classification complete. Acceptance and migration design are in ADR 0006.
 
 ADR-0004 kernel-seam programme (atlas `docs/adr/0004-hephaestus-kernel-seam.md`,
 audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch

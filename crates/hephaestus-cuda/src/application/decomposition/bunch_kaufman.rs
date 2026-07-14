@@ -2,14 +2,12 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 /// Bunch-Kaufman decomposition result: device-resident factors.
 pub struct GpuBunchKaufmanDecomposition {
-    #[allow(dead_code)]
-    inner: Option<leto_ops::BunchKaufmanDecomposition<f32>>,
     l: CudaBuffer<f32>,
     d: CudaBuffer<f32>,
     permutation: Vec<usize>,
@@ -66,7 +64,6 @@ pub fn bunch_kaufman(
         let l = device.alloc_zeroed::<f32>(0)?;
         let d = device.alloc_zeroed::<f32>(0)?;
         return Ok(GpuBunchKaufmanDecomposition {
-            inner: None,
             l,
             d,
             permutation: vec![],
@@ -91,7 +88,6 @@ pub fn bunch_kaufman(
     let permutation = inner.permutation().to_vec();
 
     Ok(GpuBunchKaufmanDecomposition {
-        inner: Some(inner),
         l,
         d,
         permutation,

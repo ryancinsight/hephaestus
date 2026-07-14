@@ -19,7 +19,7 @@ pub(crate) fn uniform_with_seed(
     let dev = device.inner.clone();
     let shape_cloned = shape.clone();
     let out_buf = py
-        .allow_threads(move || match (&dev, shape_cloned.as_slice()) {
+        .detach(move || match (&dev, shape_cloned.as_slice()) {
             (BackendDevice::Wgpu(device), [n]) => {
                 hephaestus_wgpu::uniform_with_seed(device, [*n], low, high, seed)
                     .map(BackendBuffer::Wgpu)
@@ -64,7 +64,7 @@ pub(crate) fn normal_with_seed(
     let dev = device.inner.clone();
     let shape_cloned = shape.clone();
     let out_buf = py
-        .allow_threads(move || match (&dev, shape_cloned.as_slice()) {
+        .detach(move || match (&dev, shape_cloned.as_slice()) {
             (BackendDevice::Wgpu(device), [n]) => {
                 hephaestus_wgpu::normal_with_seed(device, [*n], mean, std_dev, seed)
                     .map(BackendBuffer::Wgpu)
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_py_rng_initializers() {
         prepare_python();
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let device = PyDevice::new(None).unwrap();
             let u = uniform_with_seed(py, vec![100], -1.0, 2.0, 13, &device).unwrap();
             assert_eq!(u.shape, vec![100]);

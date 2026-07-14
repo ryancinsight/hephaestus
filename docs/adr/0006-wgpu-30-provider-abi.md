@@ -13,6 +13,12 @@ and requires Rust 1.87. Apollo and the local Atlas toolchain satisfy that MSRV.
 WGPU 26 also retains the archived `paste` advisory through its Metal backend and
 caps `ordered-float`, so keeping 26 leaves known supply-chain residue.
 
+WGPU HAL 30 and `gpu-allocator` 0.28 expose a resolver-sensitive Windows edge:
+the allocator accepts `windows` 0.53 through 0.62, while HAL exchanges D3D12
+types from 0.62. A graph already containing Moirai PAL's 0.58 binding can cause
+Cargo to reuse 0.58 for the allocator and produce two incompatible D3D12 type
+families inside HAL itself.
+
 ## Decision
 
 Hephaestus owns the migration. Update its single workspace WGPU dependency to
@@ -23,6 +29,20 @@ because public re-exported WGPU types change identity. After the provider gates
 pass and the commit is pushed, Apollo pins that exact revision, updates its own
 WGPU SSOT to 30.0.0, removes the obsolete advisory exception, and repeats its
 release gates.
+
+WGPU 30 also makes the former Mnemosyne staging callback unrepresentable:
+`BufferViewMut` is an explicit write-only byte view because mapped memory may
+be write-combining, while `MemoryBackend` promises a generally writable raw
+pointer. Mnemosyne 0.4.0 deletes that backend. Hephaestus deletes the callback
+registry and pointer ownership, makes `WgpuDevice::new` infallible, retains its
+provider-owned transient transfer pools, and rejects concrete memory-tier
+requests WGPU cannot guarantee.
+
+Until the allocator narrows its Windows requirement, the Windows WGPU package
+declares an exact 0.62.2 dependency. This constrains the allocator/HAL edge to
+one type identity while leaving Moirai PAL's independent 0.58 API intact. The
+pin is dependency-resolution policy, not a runtime adapter or compatibility
+surface; remove it when upstream makes the constraint redundant.
 
 ## Rejected alternatives
 

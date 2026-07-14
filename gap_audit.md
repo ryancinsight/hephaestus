@@ -28,15 +28,13 @@ architectural decision or a tracked future-work item:
   the empty-product determinant. The stronger optional-state redesign was
   rejected because it would duplicate state that Leto already represents.
 
-- [major] WGPU staging callback ownership is one immutable process-lifetime
-  pair. `WgpuDevice::new` registers the canonical static pair before publishing
-  the first staging device and returns typed failure for a competing Mnemosyne
-  registration. Repeated Hephaestus construction reuses the same pair. Evidence
-  tier: Mnemosyne atomic publication/race tests plus Hephaestus compile and
-  HostPinned contract gates.
-- [patch] The Hephaestus patch table now covers all transitive Mnemosyne crates,
-  eliminating the duplicate local/git `mnemosyne-backend` identities that made
-  `HasSegmentPool` implementations incompatible during dependency resolution.
+- [major] WGPU 30 invalidated the former Mnemosyne raw-pointer staging backend:
+  mapped-write memory is exposed only through explicit write-only byte views.
+  Hephaestus deleted the callback registry, first-device global, mapped-pointer
+  owner, and WGPU-facing Mnemosyne dependencies. Unsupported physical placement
+  tiers fail at the typed boundary; provider-owned transfer pools remain the
+  only WGPU staging mechanism. Evidence tier: provider type-system enforcement,
+  compile-time integration, and value-semantic allocation contracts.
 
 - [major] KS-5 reduction host planning is shared for WGPU and CUDA. Axis
   reduction metadata packing, shape/stride/output/alias validation, scalar
@@ -629,34 +627,20 @@ host before uploading device buffers.
 
 ## Environment / Toolchain Limitations
 
-- [major] The 0.12.0 `hephaestus-wgpu` semver comparison is blocked before API
-  analysis because cargo-semver-checks creates an isolated consumer that drops
-  the workspace patch table, while Moirai requires Mnemosyne 0.3.0 and the
-  Mnemosyne default branch still publishes 0.2.0. Re-run after the coordinated
-  Mnemosyne 0.3.0 producer change reaches its default branch. Evidence tier:
-  exact cargo-semver-checks dependency-resolution diagnostic (2026-07-13).
-- [patch] `cargo-semver-checks` cannot verify `hephaestus-wgpu`/`hephaestus-cuda`
-  against a git baseline: its isolated `cargo update` cannot resolve the
-  `themis ^0.8` git dependency through the workspace `[patch]` table
-  (`hephaestus-core` verifies clean — 196/196 checks vs master). 0.11.0's
-  compatibility classification therefore rests on the CHANGELOG
-  Breaking/Migration section and the pre-1.0 breaking-minor policy, not on a
-  semver-checks run. Re-verify when the stack publishes to a registry or
-  semver-checks grows patch-table support. Evidence tier: tool output
-  (2026-07-02).
+- [patch] The 0.12.0 to 0.13.0 semver classification completes for
+  `hephaestus-core`, `hephaestus-metal`, and `hephaestus-wgpu` as a pre-1.0 major
+  change. `hephaestus-cuda` and `hephaestus-python` rustdoc generation is blocked
+  because cargo-semver-checks builds current and baseline dependency graphs into
+  one target tree, causing the GNU `cc` probe for `psm`/`stacker` to fail while
+  the ordinary workspace rustdoc gate passes. Re-run those two packages when
+  cargo-semver-checks isolates build outputs. Evidence tier: tool diagnostics
+  (2026-07-13).
 - [minor] CUDA mirrors the current core operation and decomposition slice in the
   source tree and passes stub-mode verification. Real CUDA feature verification is
   still required on CUDA hardware/toolchain before claiming device-execution
   parity for the CUDA kernels. CUDA blocked Cholesky remains CUDA-feature gated and
   is not part of the default stub-mode claim. Evidence tier: static diagnostics and
   stub-mode contract tests. (Blocked on CUDA hardware availability.)
-- [patch] Full workspace `--all-features` clippy is blocked by `cuda-bindings`
-  requiring `CUDA_TOOLKIT_PATH`. The canonical clean local gate is therefore
-  default-feature scoped (`cargo clippy --workspace --all-targets -- -D warnings`
-  + `cargo nextest run --workspace`, which builds `hephaestus-cuda` in stub mode);
-  the `--all-features` variant runs on CUDA-equipped CI. Evidence tier: static
-  diagnostics from the attempted all-features gate; default-feature gates are
-  clean.
 - [patch] `cuda-oxide` 0.4.0's build script links `cuda.lib`, so the default
   `hephaestus-cuda` feature needs `CUDA_LIB_PATH` pointing at a CUDA import
   library even though adapterless runtime tests skip and the

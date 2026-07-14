@@ -6,8 +6,8 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_metal::{
-    binary_elementwise, matmul, reduction, scalar_elementwise, unary_elementwise,
-    unary_elementwise_into, AddOp, MetalDevice, MulOp, NegOp, SqrtOp, StridedOperand, SumOp,
+    AddOp, MetalDevice, MulOp, NegOp, SqrtOp, StridedOperand, SumOp, binary_elementwise, matmul,
+    reduction, scalar_elementwise, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 

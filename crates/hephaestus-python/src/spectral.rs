@@ -2,7 +2,7 @@
 //! values, Schur form, and general eigenvalues.
 
 use crate::array::PyArray;
-use crate::backend::{clone_cuda_buffer, BackendBuffer, BackendComplexBuffer, BackendDevice};
+use crate::backend::{BackendBuffer, BackendComplexBuffer, BackendDevice, clone_cuda_buffer};
 use hephaestus_core::ComputeDevice;
 use hephaestus_cuda::CudaDevice;
 use hephaestus_wgpu::WgpuDevice;
@@ -108,7 +108,7 @@ pub(crate) fn svd(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Py
     let buf = a.buffer.clone();
 
     let outputs = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -163,7 +163,7 @@ pub(crate) fn symmetric_eigen(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray,
     let buf = a.buffer.clone();
 
     let (w_buf, v_buf, w_shape, v_shape) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -230,7 +230,7 @@ pub(crate) fn singular_values(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> 
     let buf = a.buffer.clone();
 
     let s_buf = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 hephaestus_wgpu::singular_values(
                     device,
@@ -275,7 +275,7 @@ pub(crate) fn schur(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)>
     let buf = a.buffer.clone();
 
     let (q_buf, t_buf, n_val) = py
-        .allow_threads(move || match (&dev, &buf) {
+        .detach(move || match (&dev, &buf) {
             (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                 let op = hephaestus_wgpu::StridedOperand {
                     buffer,
@@ -336,7 +336,7 @@ pub(crate) fn eigenvalues<'py>(
     let buf = a.buffer.clone();
 
     let host_data = py
-        .allow_threads(move || {
+        .detach(move || {
             let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
             let e_buf = match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
@@ -362,7 +362,7 @@ pub(crate) fn eigenvalues<'py>(
                 _ => {
                     return Err(hephaestus_core::HephaestusError::DispatchFailed {
                         message: "array buffer belongs to a different backend".to_string(),
-                    })
+                    });
                 }
             };
             dev.download_complex(&e_buf, &mut host_data)?;

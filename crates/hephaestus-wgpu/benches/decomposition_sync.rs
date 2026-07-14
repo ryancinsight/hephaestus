@@ -8,7 +8,7 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use hephaestus_core::{panel_qr_packed, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, HephaestusError, Result, panel_qr_packed};
 use hephaestus_wgpu::WgpuDevice;
 
 const ITERS: usize = 100;
@@ -20,7 +20,7 @@ const QR_BLOCK_SIZE: usize = 32;
 fn wait_wgpu(device: &WgpuDevice) {
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .expect("invariant: benchmark device poll succeeds");
 }
 
@@ -303,7 +303,7 @@ fn profile_blocked_qr_launch_timestamps(device: &WgpuDevice) -> Result<Timestamp
     });
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .map_err(|e| HephaestusError::TransferFailed {
             message: format!("device poll failed: {e:?}"),
         })?;
@@ -316,7 +316,9 @@ fn profile_blocked_qr_launch_timestamps(device: &WgpuDevice) -> Result<Timestamp
             message: format!("timestamp buffer mapping failed: {e:?}"),
         })?;
 
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .expect("invariant: successful map callback publishes a readable range");
     let timestamps: &[u64] = bytemuck::cast_slice(&mapped);
     let mut durations: Vec<f64> = timestamps
         .chunks_exact(2)

@@ -5,7 +5,7 @@
 //!
 //! The binding layer marshals Python/NumPy values to device buffers,
 //! dispatches to backend kernels with the GIL released
-//! (`Python::allow_threads`), and maps `HephaestusError` to Python
+//! (`Python::detach`), and maps `HephaestusError` to Python
 //! exceptions. It holds no domain logic: matrix mathematics lives in
 //! `hephaestus-core` and the backend crates.
 //!
@@ -95,6 +95,6 @@ pub(crate) mod test_support {
     static INIT_PYTHON: Once = Once::new();
 
     pub(crate) fn prepare_python() {
-        INIT_PYTHON.call_once(pyo3::prepare_freethreaded_python);
+        INIT_PYTHON.call_once(pyo3::Python::initialize);
     }
 }

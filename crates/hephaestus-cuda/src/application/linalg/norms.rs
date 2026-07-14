@@ -13,13 +13,13 @@ use hephaestus_core::{
 use leto::Layout;
 
 use super::map_layout_err;
-use crate::application::elementwise::{unary_elementwise_into, AbsOp, IdentityOp, MulOp, SqrtOp};
-use crate::application::reduction::{reduction, MaxOp, SumOp};
+use crate::CudaDevice;
+use crate::application::elementwise::{AbsOp, IdentityOp, MulOp, SqrtOp, unary_elementwise_into};
+use crate::application::reduction::{MaxOp, SumOp, reduction};
 use crate::application::strided::{
-    binary_elementwise_strided_into, unary_elementwise_strided_into, StridedOperand,
+    StridedOperand, binary_elementwise_strided_into, unary_elementwise_strided_into,
 };
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::CudaDevice;
 
 /// Compute the vector dot product `Σᵢ a[i] * b[i]` on the CUDA device.
 pub fn dot<T>(

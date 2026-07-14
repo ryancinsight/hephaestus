@@ -10,7 +10,7 @@
 use std::time::{Duration, Instant};
 
 use hephaestus_core::BlockWidth;
-use hephaestus_wgpu::{cumsum_into, ComputeDevice, StridedOperand, WgpuDevice};
+use hephaestus_wgpu::{ComputeDevice, StridedOperand, WgpuDevice, cumsum_into};
 use leto::Layout;
 
 const ROWS: usize = 512;
@@ -20,7 +20,7 @@ const ITERS: usize = 20;
 fn wait(device: &WgpuDevice) {
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .expect("invariant: benchmark device poll succeeds");
 }
 

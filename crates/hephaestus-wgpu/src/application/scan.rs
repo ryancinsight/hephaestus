@@ -5,13 +5,13 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    plan_axis_scan, AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar,
-    IdentityToken, OpIdentity, Result, Wgsl,
+    AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar, IdentityToken, OpIdentity,
+    Result, Wgsl, plan_axis_scan,
 };
 use leto::Layout;
 
 use crate::application::pipeline::cached_pipeline;
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 

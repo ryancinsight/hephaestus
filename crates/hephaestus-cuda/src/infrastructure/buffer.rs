@@ -81,17 +81,17 @@ impl<T> DeviceBuffer<T> for CudaBuffer<T> {
 
 impl<T> Drop for CudaBuffer<T> {
     fn drop(&mut self) {
-        if self.ptr != 0 {
-            if let Some(context) = self.context.take() {
-                if context.bind().is_ok() {
-                    // SAFETY: `self.ptr` is non-null (guarded above), was
-                    // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
-                    // and this buffer owns that allocation exactly once.
-                    let res = unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) };
-                    debug_assert_eq!(res, 0, "cuMemFree_v2 failed with code {res}");
-                } else {
-                    debug_assert!(false, "CudaBuffer drop: context bind failed");
-                }
+        if self.ptr != 0
+            && let Some(context) = self.context.take()
+        {
+            if context.bind().is_ok() {
+                // SAFETY: `self.ptr` is non-null (guarded above), was
+                // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
+                // and this buffer owns that allocation exactly once.
+                let res = unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) };
+                debug_assert_eq!(res, 0, "cuMemFree_v2 failed with code {res}");
+            } else {
+                debug_assert!(false, "CudaBuffer drop: context bind failed");
             }
         }
     }

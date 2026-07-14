@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::{
-    prepare_spmm, prepare_spmv, prepare_spmv_many, spmm, spmv, spmv_many,
-    submit_prepared_sparse_batch, GpuCsrMatrix, PreparedSparseDispatch, StridedOperand, WgpuDevice,
+    GpuCsrMatrix, PreparedSparseDispatch, StridedOperand, WgpuDevice, prepare_spmm, prepare_spmv,
+    prepare_spmv_many, spmm, spmv, spmv_many, submit_prepared_sparse_batch,
 };
 
 const ITERS: usize = 50;
@@ -17,7 +17,7 @@ const RHS_COLS: usize = 128;
 fn wait_wgpu(device: &WgpuDevice) {
     device
         .inner()
-        .poll(wgpu::PollType::Wait)
+        .poll(wgpu::PollType::wait_indefinitely())
         .expect("invariant: benchmark device poll succeeds");
 }
 

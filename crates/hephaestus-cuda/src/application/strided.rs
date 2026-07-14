@@ -5,11 +5,11 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+use crate::CudaDevice;
 use crate::application::pipeline::{
-    cached_kernel, grid_size, launch_kernel, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::CudaDevice;
 
 /// Maximum rank the packed rank-4 metadata covers.
 pub const MAX_STRIDED_RANK: usize = 4;

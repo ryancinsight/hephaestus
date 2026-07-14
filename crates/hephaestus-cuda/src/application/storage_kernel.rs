@@ -9,7 +9,7 @@ use hephaestus_core::{
     MultiStorageKernel, Result, UnaryStorageKernel,
 };
 
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 

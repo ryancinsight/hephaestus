@@ -2,14 +2,12 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 /// Schur decomposition result: device-resident factors.
 pub struct GpuRealSchur {
-    #[allow(dead_code)]
-    inner: Option<leto_ops::RealSchur<f32>>,
     q: CudaBuffer<f32>,
     t: CudaBuffer<f32>,
     n: usize,
@@ -56,12 +54,7 @@ pub fn schur(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
     if rows == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let t = device.alloc_zeroed::<f32>(0)?;
-        return Ok(GpuRealSchur {
-            inner: None,
-            q,
-            t,
-            n: 0,
-        });
+        return Ok(GpuRealSchur { q, t, n: 0 });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len()];
@@ -79,10 +72,5 @@ pub fn schur(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
     let q = device.upload(q_slice)?;
     let t = device.upload(t_slice)?;
 
-    Ok(GpuRealSchur {
-        inner: Some(inner),
-        q,
-        t,
-        n: rows,
-    })
+    Ok(GpuRealSchur { q, t, n: rows })
 }

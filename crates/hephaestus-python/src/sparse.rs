@@ -33,7 +33,7 @@ impl PyCsrMatrix {
         let len = arr.buffer.len();
 
         let host_data = py
-            .allow_threads(move || {
+            .detach(move || {
                 let mut host_data = vec![0.0f32; len];
                 device
                     .download_f32(&buffer, &mut host_data)
@@ -69,7 +69,7 @@ impl PyCsrMatrix {
         let (rows, cols) = inner.shape();
 
         let cpu_csr = py
-            .allow_threads(move || match (&device, &inner) {
+            .detach(move || match (&device, &inner) {
                 (BackendDevice::Wgpu(device), BackendCsrMatrix::Wgpu(matrix)) => {
                     matrix.to_cpu(device)
                 }
@@ -115,7 +115,7 @@ pub(crate) fn spmv(py: Python<'_>, a: &PyCsrMatrix, x: &PyArray) -> PyResult<PyA
     let buf_x = x.buffer.clone();
 
     let out_buf = py
-        .allow_threads(move || match (&device, &inner_a, &buf_x) {
+        .detach(move || match (&device, &inner_a, &buf_x) {
             (
                 BackendDevice::Wgpu(device),
                 BackendCsrMatrix::Wgpu(matrix),
@@ -156,7 +156,7 @@ pub(crate) fn spmm(py: Python<'_>, a: &PyCsrMatrix, b: &PyArray) -> PyResult<PyA
         Layout::c_contiguous([b_rows, bcols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let out_buf = py
-        .allow_threads(move || match (&device, &inner_a, &buf_b) {
+        .detach(move || match (&device, &inner_a, &buf_b) {
             (
                 BackendDevice::Wgpu(device),
                 BackendCsrMatrix::Wgpu(matrix),
@@ -209,7 +209,7 @@ pub(crate) fn spmv_many(py: Python<'_>, a: &PyCsrMatrix, x_batch: &PyArray) -> P
         Layout::c_contiguous([x_rows, xcols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let out_buf = py
-        .allow_threads(move || match (&device, &inner_a, &buf_x) {
+        .detach(move || match (&device, &inner_a, &buf_x) {
             (
                 BackendDevice::Wgpu(device),
                 BackendCsrMatrix::Wgpu(matrix),
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn test_py_sparse_matrix_roundtrip_spmv_spmm() {
         prepare_python();
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let device = PyDevice::new(None).unwrap();
 
             // Create a 3x3 matrix:

@@ -9,8 +9,6 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Schur decomposition result: device-resident factors.
 pub struct GpuRealSchur {
-    #[allow(dead_code)]
-    inner: Option<leto_ops::RealSchur<f32>>,
     q: WgpuBuffer<f32>,
     t: WgpuBuffer<f32>,
     n: usize,
@@ -46,12 +44,7 @@ pub fn schur(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
     if n == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let t = device.alloc_zeroed::<f32>(0)?;
-        return Ok(GpuRealSchur {
-            inner: None,
-            q,
-            t,
-            n: 0,
-        });
+        return Ok(GpuRealSchur { q, t, n: 0 });
     }
 
     let mut host_data = vec![0.0f32; matrix.buffer.len];
@@ -69,10 +62,5 @@ pub fn schur(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
     let q = device.upload(q_slice)?;
     let t = device.upload(t_slice)?;
 
-    Ok(GpuRealSchur {
-        inner: Some(inner),
-        q,
-        t,
-        n,
-    })
+    Ok(GpuRealSchur { q, t, n })
 }

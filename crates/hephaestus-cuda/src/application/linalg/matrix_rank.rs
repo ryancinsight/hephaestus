@@ -5,10 +5,10 @@ use core::marker::PhantomData;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::{map_layout_err, to_i32, to_u32};
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+use crate::CudaDevice;
+use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::CudaDevice;
 
 /// CUDA scalar supporting matrix-rank and determinant estimation.
 pub trait MatrixRankScalar: DialectScalar<CudaC> + Pod {}

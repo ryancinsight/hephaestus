@@ -9,11 +9,11 @@ use hephaestus_core::{
     HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, det, dot, kron, matexp,
-    matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv,
-    reduce_axis, reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
-    scan_axis, trace, unary_elementwise, unary_elementwise_into, AbsOp, AddOp, CudaDevice,
-    CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp, StridedOperand, SubOp, SumOp,
+    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp,
+    StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into,
+    det, dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
+    norm_l2, norm_max, pinv, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, scan_axis, trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -76,9 +76,9 @@ fn device_capabilities_are_driver_backed() {
     assert!(limits.max_compute_invocations_per_workgroup > 0);
     assert!(limits.max_compute_workgroup_storage_size > 0);
     assert_eq!(limits.max_storage_buffers_per_shader_stage, None);
-    assert_eq!(limits.max_push_constant_size, 0);
+    assert_eq!(limits.max_immediate_size, 0);
 
-    assert!(dev.supports_device_feature(DeviceFeature::PushConstants));
+    assert!(dev.supports_device_feature(DeviceFeature::ImmediateData));
     assert!(!dev.supports_device_feature(DeviceFeature::TimestampQuery));
     assert!(!dev.supports_device_feature(DeviceFeature::ShaderF16));
     assert!(!dev.supports_device_feature(DeviceFeature::MappablePrimaryBuffers));
@@ -1029,7 +1029,7 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     let Some(dev) = device("blocked_cholesky_matches_leto_reference_across_block_boundary") else {
         return;
     };
-    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let n = 66usize;
@@ -1609,7 +1609,7 @@ fn blocked_lu_matches_leto_reference() {
     let Some(dev) = device("blocked_lu_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     // 66×66 matrix exercises the block boundary (LU_BLOCK_SIZE = 64).
@@ -1667,7 +1667,7 @@ fn blocked_lu_identity_yields_identity_factors() {
     let Some(dev) = device("blocked_lu_identity_yields_identity_factors") else {
         return;
     };
-    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -1696,7 +1696,7 @@ fn blocked_lu_solve_known_system_accurate() {
     let Some(dev) = device("blocked_lu_solve_known_system_accurate") else {
         return;
     };
-    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
@@ -1739,7 +1739,7 @@ fn blocked_lu_rejects_singular_matrix() {
     let Some(dev) = device("blocked_lu_rejects_singular_matrix") else {
         return;
     };
-    use hephaestus_cuda::{lu_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, lu_decompose_blocked};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -1764,7 +1764,7 @@ fn blocked_qr_matches_leto_reference() {
     let Some(dev) = device("blocked_qr_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     // 70×35 matrix exercises two QR blocks (QR_BLOCK_SIZE = 32).
@@ -1848,7 +1848,7 @@ fn blocked_qr_identity_yields_identity_r() {
     let Some(dev) = device("blocked_qr_identity_yields_identity_r") else {
         return;
     };
-    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -1889,7 +1889,7 @@ fn blocked_qr_solve_known_system_accurate() {
     let Some(dev) = device("blocked_qr_solve_known_system_accurate") else {
         return;
     };
-    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
@@ -1936,7 +1936,7 @@ fn blocked_qr_rejects_underdetermined() {
     let Some(dev) = device("blocked_qr_rejects_underdetermined") else {
         return;
     };
-    use hephaestus_cuda::{qr_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     let host = vec![0.0f32; 6];
@@ -1961,7 +1961,7 @@ fn blocked_cholesky_identity_yields_identity_lower() {
     let Some(dev) = device("blocked_cholesky_identity_yields_identity_lower") else {
         return;
     };
-    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
@@ -1994,7 +1994,7 @@ fn blocked_cholesky_spd_reconstruction_matches_original() {
     let Some(dev) = device("blocked_cholesky_spd_reconstruction_matches_original") else {
         return;
     };
-    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     // 66×66 SPD matrix exercises the block boundary.
@@ -2057,7 +2057,7 @@ fn blocked_cholesky_solve_known_system_accurate() {
     let Some(dev) = device("blocked_cholesky_solve_known_system_accurate") else {
         return;
     };
-    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5]
@@ -2103,7 +2103,7 @@ fn blocked_cholesky_rejects_singular_matrix() {
     let Some(dev) = device("blocked_cholesky_rejects_singular_matrix") else {
         return;
     };
-    use hephaestus_cuda::{cholesky_decompose_blocked, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
     let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
@@ -2240,7 +2240,8 @@ fn assert_complex_spectrum_close(
         assert_close(actual.re, expected.re, tolerance);
         assert_close(actual.im, expected.im, tolerance);
         assert!(
-            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt() <= tolerance,
+            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt()
+                <= tolerance,
             "complex spectrum mismatch at {index}: got {actual:?}, expected {expected:?}, tolerance {tolerance}"
         );
     }
@@ -2256,7 +2257,7 @@ fn symmetric_eigen_jacobi_matches_leto_reference() {
     let Some(dev) = device("symmetric_eigen_jacobi_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi};
     use leto::Layout;
 
     let matrix_host = vec![
@@ -2313,7 +2314,7 @@ fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     let Some(dev) = device("symmetric_eigen_jacobi_rejects_non_symmetric_input") else {
         return;
     };
-    use hephaestus_cuda::{symmetric_eigen_jacobi, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, symmetric_eigen_jacobi};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0];
@@ -2339,7 +2340,7 @@ fn eigenvalues_match_closed_form_diagonal() {
     let Some(dev) = device("eigenvalues_match_closed_form_diagonal") else {
         return;
     };
-    use hephaestus_cuda::{eigenvalues, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, eigenvalues};
     use leto::Layout;
 
     let matrix_host = vec![2.0f32, 0.0, 0.0, 3.0];
@@ -2376,7 +2377,7 @@ fn eigenvalues_matches_leto_reference() {
     let Some(dev) = device("eigenvalues_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{eigenvalues, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, eigenvalues};
     use leto::Layout;
 
     let matrix_host = vec![0.0f32, 1.0, -2.0, 3.0];
@@ -2420,7 +2421,7 @@ fn singular_values_match_closed_form_diagonal() {
     let Some(dev) = device("singular_values_match_closed_form_diagonal") else {
         return;
     };
-    use hephaestus_cuda::{singular_values, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, singular_values};
     use leto::Layout;
 
     let matrix_host = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0];
@@ -2448,7 +2449,7 @@ fn svd_decompose_reconstructs_leto_reference() {
     let Some(dev) = device("svd_decompose_reconstructs_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{svd_decompose, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, svd_decompose};
     use leto::Layout;
 
     let rows = 4usize;
@@ -2494,7 +2495,7 @@ fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     let Some(dev) = device("svd_rank_revealing_accepts_rank_deficient_matrix") else {
         return;
     };
-    use hephaestus_cuda::{svd_rank_revealing, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, svd_rank_revealing};
     use leto::Layout;
 
     let rows = 3usize;
@@ -2532,7 +2533,7 @@ fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     let Some(dev) = device("bidiagonalize_reconstructs_and_preserves_singular_values") else {
         return;
     };
-    use hephaestus_cuda::{bidiagonalize, singular_values, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, bidiagonalize, singular_values};
     use leto::Layout;
 
     let rows = 4usize;
@@ -2609,7 +2610,7 @@ fn bidiagonalize_rejects_wide_matrix() {
     let Some(dev) = device("bidiagonalize_rejects_wide_matrix") else {
         return;
     };
-    use hephaestus_cuda::{bidiagonalize, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, bidiagonalize};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2636,7 +2637,7 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     let Some(dev) = device("schur_reconstructs_quasi_triangular_and_preserves_spectrum") else {
         return;
     };
-    use hephaestus_cuda::{eigenvalues, schur, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, eigenvalues, schur};
     use leto::Layout;
 
     let n = 3usize;
@@ -2717,7 +2718,7 @@ fn schur_rejects_rectangular_matrix() {
     let Some(dev) = device("schur_rejects_rectangular_matrix") else {
         return;
     };
-    use hephaestus_cuda::{schur, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, schur};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2744,7 +2745,7 @@ fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     let Some(dev) = device("hessenberg_reconstructs_and_preserves_similarity_invariants") else {
         return;
     };
-    use hephaestus_cuda::{hessenberg, norm_l2, trace, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, hessenberg, norm_l2, trace};
     use leto::Layout;
 
     let n = 4usize;
@@ -2836,7 +2837,7 @@ fn hessenberg_rejects_rectangular_matrix() {
     let Some(dev) = device("hessenberg_rejects_rectangular_matrix") else {
         return;
     };
-    use hephaestus_cuda::{hessenberg, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, hessenberg};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -2863,7 +2864,7 @@ fn col_piv_qr_matches_leto_reference() {
     let Some(dev) = device("col_piv_qr_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{col_piv_qr, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, col_piv_qr};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
@@ -2904,7 +2905,7 @@ fn full_piv_lu_matches_leto_reference() {
     let Some(dev) = device("full_piv_lu_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{full_piv_lu, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, full_piv_lu};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -2965,7 +2966,7 @@ fn udu_decompose_matches_leto_reference() {
     let Some(dev) = device("udu_decompose_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{udu_decompose, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, udu_decompose};
     use leto::Layout;
 
     let matrix_host = vec![4.0f32, 12.0, -16.0, 12.0, 37.0, -43.0, -16.0, -43.0, 98.0];
@@ -3002,7 +3003,7 @@ fn bunch_kaufman_matches_leto_reference() {
     let Some(dev) = device("bunch_kaufman_matches_leto_reference") else {
         return;
     };
-    use hephaestus_cuda::{bunch_kaufman, StridedOperand};
+    use hephaestus_cuda::{StridedOperand, bunch_kaufman};
     use leto::Layout;
 
     let matrix_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0, 3.0, 5.0, 6.0];
@@ -3071,7 +3072,7 @@ fn test_cuda_sparse_matrix_spmv_spmm() {
     let Some(dev) = device("test_cuda_sparse_matrix_spmv_spmm") else {
         return;
     };
-    use hephaestus_cuda::{spmm, spmv, GpuCsrMatrix, StridedOperand};
+    use hephaestus_cuda::{GpuCsrMatrix, StridedOperand, spmm, spmv};
     use leto::Layout;
 
     // Create a 3x3 diagonal-ish matrix:

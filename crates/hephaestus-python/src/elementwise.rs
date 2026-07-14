@@ -15,7 +15,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::ExpOp, hephaestus_cuda::ExpOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -30,7 +30,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::LnOp, hephaestus_cuda::LnOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -45,7 +45,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::SinOp, hephaestus_cuda::SinOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -60,7 +60,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::CosOp, hephaestus_cuda::CosOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -75,7 +75,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::SqrtOp, hephaestus_cuda::SqrtOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -90,7 +90,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::AbsOp, hephaestus_cuda::AbsOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -105,7 +105,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let out_buf = py
-            .allow_threads(move || {
+            .detach(move || {
                 backend_unary!(&dev, &buf, hephaestus_wgpu::NegOp, hephaestus_cuda::NegOp)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -130,7 +130,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_binary!(
                         &dev,
                         &buf,
@@ -149,7 +149,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_scalar!(
                         &dev,
                         &buf,
@@ -185,7 +185,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_binary!(
                         &dev,
                         &buf,
@@ -204,7 +204,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_scalar!(
                         &dev,
                         &buf,
@@ -229,7 +229,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     let negated =
                         backend_unary!(&dev, &buf, hephaestus_wgpu::NegOp, hephaestus_cuda::NegOp)?;
                     backend_scalar!(
@@ -263,7 +263,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_binary!(
                         &dev,
                         &buf,
@@ -282,7 +282,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_scalar!(
                         &dev,
                         &buf,
@@ -318,7 +318,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_binary!(
                         &dev,
                         &buf,
@@ -337,7 +337,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_scalar!(
                         &dev,
                         &buf,
@@ -362,7 +362,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     let recip = backend_unary!(
                         &dev,
                         &buf,
@@ -405,7 +405,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let other_buf = other_arr.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_binary!(
                         &dev,
                         &buf,
@@ -424,7 +424,7 @@ impl PyArray {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     backend_scalar!(
                         &dev,
                         &buf,
@@ -458,7 +458,7 @@ impl PyArray {
             let buf = self.buffer.clone();
             let ln_val = val.ln();
             let out_buf = py
-                .allow_threads(move || {
+                .detach(move || {
                     let scaled = backend_scalar!(
                         &dev,
                         &buf,

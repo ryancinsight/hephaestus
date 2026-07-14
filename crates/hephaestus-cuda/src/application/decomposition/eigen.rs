@@ -3,13 +3,12 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use num_complex::Complex;
 
-use crate::application::strided::{map_layout_err, StridedOperand};
+use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {
-    #[allow(dead_code)]
     inner: leto_ops::SymmetricEigenDecomposition<f32>,
     eigenvalues: CudaBuffer<f32>,
     eigenvectors: CudaBuffer<f32>,

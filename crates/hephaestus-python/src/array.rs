@@ -61,7 +61,7 @@ impl PyArray {
         let len = data.len();
         let dev = device.inner.clone();
         let buffer = py
-            .allow_threads(move || dev.upload_f32(&data))
+            .detach(move || dev.upload_f32(&data))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -97,7 +97,7 @@ impl PyArray {
         let len = slice.len();
         let dev = device.inner.clone();
         let buffer = py
-            .allow_threads(move || dev.upload_f32(slice))
+            .detach(move || dev.upload_f32(slice))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -129,7 +129,7 @@ impl PyArray {
         let buf = self.buffer.clone();
         let len = self.buffer.len();
         let host_data = py
-            .allow_threads(move || {
+            .detach(move || {
                 let mut host_data = vec![0.0f32; len];
                 dev.download_f32(&buf, &mut host_data).map(|_| host_data)
             })
@@ -143,7 +143,7 @@ impl PyArray {
         let buf = self.buffer.clone();
         let len = self.buffer.len();
         let host_data = py
-            .allow_threads(move || {
+            .detach(move || {
                 let mut host_data = vec![0.0f32; len];
                 dev.download_f32(&buf, &mut host_data).map(|_| host_data)
             })
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_py_array_tolist_and_numpy() {
         prepare_python();
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let device = PyDevice::new(None).unwrap();
             let data = vec![1.0f32, 2.0, 3.0, 4.0];
             let py_arr = PyArray::new(py, data.clone(), &device).unwrap();

@@ -3,15 +3,15 @@
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use hephaestus_core::{
-    plan_axis_scan, AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer,
-    DialectScalar, HephaestusError, IdentityToken, Result,
+    AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar,
+    HephaestusError, IdentityToken, Result, plan_axis_scan,
 };
 use leto::Layout;
 
-use crate::application::pipeline::{cached_kernel, launch_kernel, LaunchConfig, PipelineKey};
+use crate::CudaDevice;
+use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::CudaDevice;
 
 pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 
