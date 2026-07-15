@@ -21,12 +21,14 @@ Sprint target: 0.13.0. Phase: Closure.
   revision used by Hermes and Leto.
 - [x] Remove the root-only path patch that downstream consumers could not see.
 - [x] Pass focused Hephaestus WGPU gates and confirm the provider graph resolves
-  one Themis 0.9 identity. Evidence: warning-denied `hephaestus-wgpu` clippy,
+  one Themis 0.10 identity. Evidence: warning-denied `hephaestus-wgpu` clippy,
   132 focused nextest cases, and inverse dependency inspection all pass.
 - [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
   exact Git revisions so standalone Git consumers resolve the provider graph.
-- [x] Advance Leto to `1b125ce` and Moirai to `b2f3732`; rerun focused
-  Hephaestus Clippy and 179/179 canonical nextest gates.
+- [x] Advance Leto to `8d39f58` and rerun the provider gates. Evidence:
+  workspace metadata and warning-denied Clippy pass; `hephaestus-wgpu`
+  `cargo nextest run --all-features` passes 131/131, doctests pass with zero
+  tests, and package rustdoc is warning-free.
 
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 

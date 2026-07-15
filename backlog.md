@@ -6,9 +6,11 @@ cuda-oxide + cutile).
 
 ## Closed
 
-- [THEMIS-IDENTITY-1] [patch] Hephaestus now declares the exact current Themis
-  Git revision directly; consumers no longer resolve a private Themis 0.6
-  identity that workspace-local patches cannot replace.
+- [THEMIS-IDENTITY-1] [patch] Hephaestus declares the exact current Themis Git
+  revision directly and advances Leto to `8d39f58`; the Themis pin is
+  `18807bb5` (0.10.0, merged main), so consumers no longer resolve the stale
+  0.9.17 identity that workspace-local patches cannot replace. The WGPU
+  provider gate passes 131/131 after the co-evolution update.
 
 - [GIT-SOURCE-1] [patch] First-party Leto, Mnemosyne, Moirai, and Eunomia
   dependencies use exact Git revisions; local development remains zero-drift
