@@ -11,9 +11,10 @@ cuda-oxide + cutile).
   same length-checked contract; the WGPU real-device regression proves the
   destination suffix remains unchanged. Driver: Apollo multilevel Haar DWT.
 
-- [THEMIS-IDENTITY-1] [patch] Hephaestus now declares the exact current Themis
-  Git revision directly; consumers no longer resolve a private Themis 0.6
-  identity that workspace-local patches cannot replace.
+- [THEMIS-IDENTITY-1] [patch] Hephaestus declares the exact current Themis Git
+  revision directly; the pin is `18807bb5` (Themis 0.10.0, merged main), so
+  consumers no longer resolve the stale 0.9.17 identity that workspace-local
+  patches cannot replace.
 
 - [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes Leto `7f216f1`,
   Mnemosyne `32b4a2a`, Moirai `8cd356c`, and Themis 0.10.0 without local
