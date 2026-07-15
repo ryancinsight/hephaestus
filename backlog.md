@@ -36,13 +36,14 @@ cuda-oxide + cutile).
 
 ## Open
 
-- [/] [minor] HEPH-REQUIRED-FEATURE-1 (owner Codex, claimed 2026-07-15;
+- [x] [minor] HEPH-REQUIRED-FEATURE-1 (owner Codex, completed 2026-07-15;
   scope `hephaestus-wgpu` device acquisition, provider tests, release/PM
-  records): expose required `DeviceFeature` acquisition through the
-  backend-neutral Hephaestus vocabulary. Driver: Apollo native-f16 FFT must
-  require `ShaderF16` without importing WGPU or Pollster. Acceptance: feature
-  mapping and acquisition-contract tests, focused warning-denied WGPU gates,
-  and published Git revision for consumer repinning.
+  records): `WgpuDevice` now requires a complete `DeviceFeature` set under the
+  selected device preference and downlevel-default limits. Driver: Apollo
+  native-f16 FFT can require `ShaderF16` without importing WGPU or Pollster.
+  Evidence: feature-mapping contract, warning-denied WGPU check and Clippy,
+  133-case WGPU nextest run, doctest, rustdoc, and 196/196 applicable
+  semver checks against Apollo's 0.13 baseline.
 
 - [WGPU-ABI-30] [major] **Review; owner Codex, 2026-07-13.** Migrated the
   provider-owned public WGPU ABI from 26.0.1 to current 30.0.0, update every

@@ -13,6 +13,13 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [HEPH-REQUIRED-FEATURE-1] [minor] `WgpuDevice` now acquires a device only
+  when it can enable every requested `DeviceFeature`; unavailable capabilities
+  surface as typed acquisition failure. Apollo can require `ShaderF16` through
+  Hephaestus without importing WGPU or Pollster. Evidence tier: compile-time
+  feature mapping, 133-case WGPU nextest, and 196/196 applicable minor semver
+  checks; real native-f16 transform evidence remains Apollo-owned.
+
 - [HEPH-STREAM-PREFIX-1] [minor] Multilevel transform kernels no longer need a
   raw WGPU partial-copy escape hatch. `CommandStream::copy_prefix` owns the
   typed, length-checked prefix transfer in both WGPU and CUDA; the WGPU
@@ -663,7 +670,3 @@ host before uploading device buffers.
   reduce scalar-reduction pass/submit overhead via Hephaestus/Mnemosyne launch
   planning or add a measured small-reduction CPU-routing policy before returning
   to single-vector SpMV and blocked QR synchronization.
-# Active provider gap: consumers that require an accelerator capability can
-# only use WGPU-typed acquisition or the backend-neutral optional-feature path.
-# `WgpuDevice` needs a `DeviceFeature`-typed required acquisition contract so
-# Apollo native-f16 can require `ShaderF16` without a local WGPU dependency.

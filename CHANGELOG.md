@@ -4,7 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.13.0.
+Target release: 0.14.0.
+
+- [minor] `WgpuDevice` now acquires devices with a required
+  `DeviceFeature` set through the Hephaestus vocabulary. Consumers can require
+  `ShaderF16` without importing WGPU or Pollster; unavailable adapters return
+  the existing typed acquisition failure rather than silently dropping it.
 
 - [minor] `CommandStream` now owns bounded prefix copies as a typed provider
   operation. WGPU and CUDA preserve the destination suffix, removing the last
