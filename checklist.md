@@ -2,6 +2,13 @@
 
 Sprint target: 0.13.0. Phase: Closure.
 
+## Prefix-copy provider contract [minor]
+
+- [x] Add the length-checked `CommandStream::copy_prefix` contract and native
+  WGPU/CUDA implementations.
+- [x] Prove WGPU prefix-copy ordering and suffix preservation with a real-device
+  value-semantic nextest regression.
+
 ## WGPU 30 provider ABI [major]
 
 - [x] Verify current registry WGPU is 30.0.0 with Rust 1.87 MSRV and record the
@@ -25,10 +32,12 @@ Sprint target: 0.13.0. Phase: Closure.
   132 focused nextest cases, and inverse dependency inspection all pass.
 - [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
   exact Git revisions so standalone Git consumers resolve the provider graph.
-- [x] Advance Leto to `8d39f58` and rerun the provider gates. Evidence:
-  workspace metadata and warning-denied Clippy pass; `hephaestus-wgpu`
-  `cargo nextest run --all-features` passes 131/131, doctests pass with zero
-  tests, and package rustdoc is warning-free.
+- [x] Advance Leto to `7f216f1` and Moirai to `8cd356c`; rerun focused
+  Hephaestus Clippy and 179/179 canonical nextest gates.
+- [x] Repin Leto to the published Themis 0.10.0 topology closure, then rerun
+  the focused Hephaestus WGPU/CUDA gates against published providers only.
+  Evidence: formatting; warning-denied three-package Clippy; full configured
+  nextest; and an inverse graph containing only Themis 0.10.0.
 
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 

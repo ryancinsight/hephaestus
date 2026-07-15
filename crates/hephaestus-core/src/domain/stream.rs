@@ -250,6 +250,20 @@ pub trait CommandStream<'d, D: KernelDevice + ?Sized> {
     /// typed failure on encoding errors.
     fn copy<T: Pod>(&mut self, src: &D::Buffer<T>, dst: &D::Buffer<T>) -> Result<()>;
 
+    /// Encode a device-to-device copy of the first `elements` values.
+    ///
+    /// The source and destination retain all values outside the copied prefix.
+    ///
+    /// # Errors
+    /// [`HephaestusError::LengthMismatch`] when `elements` exceeds either
+    /// buffer's length; the backend's typed failure on encoding errors.
+    fn copy_prefix<T: Pod>(
+        &mut self,
+        src: &D::Buffer<T>,
+        dst: &D::Buffer<T>,
+        elements: usize,
+    ) -> Result<()>;
+
     /// Encode a device-side zero fill of `dst`.
     ///
     /// # Errors

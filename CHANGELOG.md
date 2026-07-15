@@ -6,11 +6,17 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 Target release: 0.13.0.
 
+- [minor] `CommandStream` now owns bounded prefix copies as a typed provider
+  operation. WGPU and CUDA preserve the destination suffix, removing the last
+  raw-device copy requirement for multilevel transform kernels.
+
 - [patch] Replaced path-only first-party dependency declarations with exact Git
-  revisions while retaining local path patches for Atlas development. The
-  Hephaestus Git source now resolves for standalone downstream consumers.
-- [patch] Advanced Leto and Moirai to their integrated provider release
-  revisions.
+  revisions. The published Leto, Mnemosyne, Moirai, and Themis graph no longer
+  relies on a workspace-local override.
+- [patch] Advance Leto to `7f216f1` and Moirai to `8cd356c`, removing local
+  provider overrides from the published-provider validation graph.
+- [patch] Advance Themis, Mnemosyne, and Moirai to their published 0.10
+  topology graph; remove their local patch overrides from the provider build.
 
 ### Breaking
 
@@ -35,8 +41,8 @@ Target release: 0.13.0.
 - The Python boundary advances to PyO3 0.29.0 and rust-numpy 0.29.0, closing
   RUSTSEC-2025-0020 and RUSTSEC-2026-0177 without advisory exceptions.
 - [patch] Updated the declared Themis dependency from the obsolete 0.6 revision
-  to the exact current 0.9 revision and removed the non-transitive local patch.
-  Downstream workspaces can now resolve one Themis 0.9 provider identity.
+  to the exact current 0.10 revision and removed the non-transitive local patch.
+  Downstream workspaces can now resolve one Themis 0.10 provider identity.
 
 - `hephaestus-core` / `hephaestus-wgpu` / `hephaestus-cuda` [minor]: completed
   KS-5 reduction planner parity. Axis-reduction metadata packing,
