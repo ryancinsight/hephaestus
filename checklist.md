@@ -2,6 +2,14 @@
 
 Sprint target: 0.13.0. Phase: Closure.
 
+## Required device-feature acquisition [minor]
+
+- [/] Add a `DeviceFeature`-typed required acquisition entry point to
+  `WgpuDevice`, preserving backend selection while rejecting adapters that
+  cannot enable every requested feature.
+- [ ] Verify the feature-set mapping, focused WGPU checks, warning-denied
+  Clippy, value-semantic nextest, rustdoc, release records, and consumer pin.
+
 ## Prefix-copy provider contract [minor]
 
 - [x] Add the length-checked `CommandStream::copy_prefix` contract and native

@@ -663,3 +663,7 @@ host before uploading device buffers.
   reduce scalar-reduction pass/submit overhead via Hephaestus/Mnemosyne launch
   planning or add a measured small-reduction CPU-routing policy before returning
   to single-vector SpMV and blocked QR synchronization.
+# Active provider gap: consumers that require an accelerator capability can
+# only use WGPU-typed acquisition or the backend-neutral optional-feature path.
+# `WgpuDevice` needs a `DeviceFeature`-typed required acquisition contract so
+# Apollo native-f16 can require `ShaderF16` without a local WGPU dependency.
