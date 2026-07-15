@@ -1,6 +1,16 @@
 # Checklist — hephaestus
 
-Sprint target: 0.13.0. Phase: Closure.
+Sprint target: 0.14.0. Phase: Closure.
+
+## Required device-feature acquisition [minor]
+
+- [x] Add a `DeviceFeature`-typed required acquisition entry point to
+  `WgpuDevice`, preserving backend selection while rejecting adapters that
+  cannot enable every requested feature.
+- [x] Verify the feature-set mapping, focused WGPU check, warning-denied
+  Clippy, 133-case WGPU nextest, doctest, rustdoc, 196/196 applicable minor
+  semver checks, and release records. Apollo's consumer pin is the next
+  dependency-ordered increment.
 
 ## Prefix-copy provider contract [minor]
 

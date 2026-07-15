@@ -345,6 +345,30 @@ impl WgpuDevice {
         )
     }
 
+    /// Acquire an adapter matching `device_preference` and require every
+    /// requested Hephaestus device feature.
+    ///
+    /// Uses the backend's downlevel-default WGPU limits. Adapter selection
+    /// rejects an adapter when it cannot create a device with the complete
+    /// requested feature set; it never silently drops a required feature.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no available adapter can
+    /// create a device with every requested feature.
+    pub fn try_with_device_preference_and_required_device_features(
+        label: &str,
+        device_preference: DevicePreference,
+        required_features: &[DeviceFeature],
+    ) -> Result<Self> {
+        Self::try_default_with_adapter_features_and_limits(
+            label,
+            wgpu::Limits::downlevel_defaults(),
+            Self::wgpu_power_preference(device_preference),
+            |_| Self::wgpu_features(required_features),
+        )
+    }
+
     /// Acquire an adapter matching `device_preference`, enabling optional
     /// Hephaestus features when supported and applying backend-neutral required
     /// compute limits.
@@ -1185,5 +1209,13 @@ mod tests {
             ),
             other => panic!("expected allocation failure, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn device_feature_mapping_preserves_required_shader_f16() {
+        assert_eq!(
+            WgpuDevice::wgpu_features(&[DeviceFeature::ShaderF16, DeviceFeature::TimestampQuery,]),
+            wgpu::Features::SHADER_F16 | wgpu::Features::TIMESTAMP_QUERY
+        );
     }
 }
