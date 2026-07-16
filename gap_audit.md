@@ -25,11 +25,12 @@ architectural decision or a tracked future-work item:
   typed, length-checked prefix transfer in both WGPU and CUDA; the WGPU
   real-device regression verifies copied values and an unchanged suffix.
 
-- [HEPH-TOPOLOGY-GRAPH-1] [patch] The WGPU/CUDA packages now validate against
-  the default-branch Leto, Hermes, Mnemosyne, Moirai, Eunomia, and Themis
-  topology graph without root patches. Evidence tier: locked
-  dependency-resolution, warning-denied WGPU Clippy, value-semantic nextest,
-  and warning-clean rustdoc.
+- [HEPH-PROVIDER-DEFAULT-2] [minor] The revision-quarantine regression is
+  removed. The resolved library graph contains one default-source identity for
+  Leto `87c67f0`, Mnemosyne `cb103a5`, Moirai `4ad6520`, and Themis `709aec6`;
+  no workspace provider requirement carries `rev` or a patch override. Evidence
+  tier: dependency-resolution, MSRV acceptance/rejection, warning-denied
+  Clippy, value-semantic nextest, rustdoc, and 196/196 applicable semver checks.
 
 - [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
   branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty
