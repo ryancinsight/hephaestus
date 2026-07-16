@@ -15,13 +15,11 @@ Target release: 0.14.0.
   operation. WGPU and CUDA preserve the destination suffix, removing the last
   raw-device copy requirement for multilevel transform kernels.
 
-- [patch] Replaced path-only first-party dependency declarations with exact Git
-  revisions. The published Leto, Mnemosyne, Moirai, and Themis graph no longer
-  relies on a workspace-local override.
-- [patch] Advance Leto to `7f216f1` and Moirai to `8cd356c`, removing local
-  provider overrides from the published-provider validation graph.
-- [patch] Advance Themis, Mnemosyne, and Moirai to their published 0.10
-  topology graph; remove their local patch overrides from the provider build.
+- [patch] Themis, Mnemosyne, and Moirai now follow their provider default
+  branches rather than revision quarantines. The published graph resolves one
+  source identity for each provider through direct and transitive consumers.
+- [patch] Leto now follows its provider default branch; all workspace-local
+  first-party patches are removed from the published validation graph.
 
 ### Breaking
 
