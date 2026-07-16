@@ -15,11 +15,10 @@ Target release: 0.14.0.
   operation. WGPU and CUDA preserve the destination suffix, removing the last
   raw-device copy requirement for multilevel transform kernels.
 
-- [patch] Themis, Mnemosyne, and Moirai now follow their provider default
-  branches rather than revision quarantines. The published graph resolves one
-  source identity for each provider through direct and transitive consumers.
-- [patch] Leto now follows its provider default branch; all workspace-local
-  first-party patches are removed from the published validation graph.
+- [patch] Direct Leto, Mnemosyne, Moirai, and Themis requirements now use the
+  exact revisions required transitively by their providers. This removes the
+  duplicate default-branch and revision source identities Cargo otherwise
+  resolves for the same provider graph.
 
 ### Breaking
 
