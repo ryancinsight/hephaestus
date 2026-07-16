@@ -15,6 +15,15 @@ Sprint target: 0.15.0. Phase: Closure.
 - [x] Update Apollo to the merged provider revision and pass its native-f16
   consumer integration gate (Apollo merge commit `26f433e3`).
 
+## CUDA Bindgen toolchain selection [patch]
+
+- [x] Reproduce the CUDA bindgen loader failure against the UCRT LLVM
+  distribution and verify that the installed MinGW LLVM distribution loads.
+- [x] Set `LIBCLANG_PATH` and prepend the MinGW LLVM directory to `PATH`, then
+  pass `hephaestus-cuda --all-targets --locked` plus the formerly blocked
+  core/WGPU all-target, all-feature check. This is compile-time evidence only;
+  CUDA execution remains a separate device contract.
+
 ## Provider default-source convergence [minor]
 
 - [x] Advance the root to the current default branch and remove every Leto,
@@ -28,9 +37,9 @@ Sprint target: 0.15.0. Phase: Closure.
 - [x] Pass formatting, warning-denied release WGPU Clippy, release nextest,
   doctests, rustdoc, and 196/196 applicable minor semver checks before
   publishing 0.15.0.
-- [ ] Update Apollo's direct provider graph after this Hephaestus source change
-  merges; acceptance is one locked provider identity in Apollo's transform
-  consumer packages.
+- [x] Update Apollo's direct provider graph after this Hephaestus source change
+  merges; Apollo merge commit `26f433e3` locks one provider identity in its
+  transform consumer packages.
 
 ## Required device-feature acquisition [minor]
 
@@ -59,8 +68,9 @@ Sprint target: 0.15.0. Phase: Closure.
   dependency policy, and semver classification gates.
 - [x] Bump the workspace to 0.13.0, synchronize changelog/backlog/gap audit,
   commit, and push the provider release increment.
-- [ ] Repin Apollo to the pushed provider commit and repeat Apollo's complete
-  release gate before advancing Atlas gitlinks.
+- [x] Repin Apollo to the pushed provider commit and repeat its complete
+  release gate before advancing Atlas gitlinks (Apollo merge commit
+  `26f433e3`).
 
 ## Themis provider identity [patch]
 

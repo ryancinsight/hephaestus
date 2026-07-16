@@ -6,6 +6,12 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-CUDA-BINDGEN-1] [patch] CUDA-enabled builds set `LIBCLANG_PATH` and
+  prepend the installed MinGW LLVM directory to `PATH`, replacing the host's
+  non-loading UCRT distribution. Evidence: locked `hephaestus-cuda` all-target
+  check and the core/WGPU all-target, all-feature check. This closes compilation
+  only; CUDA device execution remains independently verified.
+
 - [HEPH-PROVIDER-DEFAULT-2] [minor] Hephaestus 0.15.0 removes every Leto,
   Mnemosyne, Moirai, and Themis revision quarantine, publishes Rust 1.95 from
   every package, and resolves one source identity per provider. Evidence:

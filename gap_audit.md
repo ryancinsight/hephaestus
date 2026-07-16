@@ -646,13 +646,14 @@ host before uploading device buffers.
 
 ## Environment / Toolchain Limitations
 
-- [patch] `cargo check -p hephaestus-core -p hephaestus-wgpu --all-targets
-  --all-features` reaches the intentionally feature-gated WGPU-versus-CUDA
-  comparative benchmark, then fails before compilation because bindgen cannot
-  load `D:\msys64\ucrt64\bin\libclang.dll`. Default-feature all-target check,
-  core/WGPU Nextest, Clippy, doctests, docs, and no-default-feature library
-  check pass. Re-run the comparative build when the host libclang loader is
-  repaired; it is not evidence against odd-length storage behavior.
+- [patch] CUDA-enabled build generation requires both
+  `LIBCLANG_PATH=D:\\msys64\\mingw64\\bin` and
+  `PATH=D:\\msys64\\mingw64\\bin;%PATH%` on this host. Bindgen rejects the UCRT
+  `libclang.dll`, while that MinGW LLVM environment builds
+  `hephaestus-cuda --all-targets --locked` and the formerly blocked
+  `hephaestus-core`/`hephaestus-wgpu --all-targets --all-features --locked`.
+  Evidence tier: compile-time validation; this does not establish CUDA device
+  execution parity.
 
 - [patch] The 0.12.0 to 0.13.0 semver classification completes for
   `hephaestus-core`, `hephaestus-metal`, and `hephaestus-wgpu` as a pre-1.0 major
