@@ -11,18 +11,18 @@ cuda-oxide + cutile).
   same length-checked contract; the WGPU real-device regression proves the
   destination suffix remains unchanged. Driver: Apollo multilevel Haar DWT.
 
-- [THEMIS-IDENTITY-1] [patch] Hephaestus declares the exact current Themis Git
-  revision directly; the pin is `18807bb5` (Themis 0.10.0, merged main), so
-  consumers no longer resolve the stale 0.9.17 identity that workspace-local
-  patches cannot replace.
+- [THEMIS-IDENTITY-1] [patch] Hephaestus follows the Themis default branch so
+  consumers resolve the current 0.10 provider identity without a revision
+  quarantine or workspace-local override.
 
-- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes Leto `7f216f1`,
-  Mnemosyne `32b4a2a`, Moirai `8cd356c`, and Themis 0.10.0 without local
-  provider patches. Driver: Apollo's provider-owned multilevel transform path.
+- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes default-branch Leto,
+  Hermes, Mnemosyne, Moirai, Eunomia, and Themis providers without local
+  patches. Format, warning-denied WGPU Clippy, locked WGPU nextest, rustdoc,
+  and the provider-duplicate scan pass. Driver: Apollo's provider-owned
+  multilevel transform path.
 
-- [GIT-SOURCE-1] [patch] First-party Leto, Mnemosyne, Moirai, and Eunomia
-  dependencies use exact Git revisions. Remaining root patches are confined to
-  Hermes, Eunomia, and Melinoe development and do not replace this topology graph.
+- [GIT-SOURCE-1] [patch] First-party provider source policy uses default
+  branches. Root patches are absent from the published topology graph.
 
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through

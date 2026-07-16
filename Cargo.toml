@@ -45,19 +45,19 @@ thiserror = "2.0"
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
-themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false, features = ["std"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d" }
-moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", default-features = false, features = [
+themis = { git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
+moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
-moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", default-features = false, features = ["async"] }
+moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
 ndarray = "0.16"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
@@ -65,13 +65,4 @@ nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
 num-complex = { version = "0.4", features = ["bytemuck"] }
-
-[patch."https://github.com/ryancinsight/hermes.git"]
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
-
-[patch."https://github.com/ryancinsight/eunomia"]
-eunomia = { path = "../eunomia/crates/eunomia" }
-
-[patch."https://github.com/ryancinsight/melinoe.git"]
-melinoe = { path = "../melinoe" }
 

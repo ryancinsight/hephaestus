@@ -25,19 +25,11 @@ architectural decision or a tracked future-work item:
   typed, length-checked prefix transfer in both WGPU and CUDA; the WGPU
   real-device regression verifies copied values and an unchanged suffix.
 
-- [patch] Hephaestus declared Themis 0.6 and relied on a root patch that Cargo
-  ignores when Hephaestus is a dependency. The declared source and revision now
-  match the Themis 0.10 provider used by Hermes and Leto, allowing consumer roots
-  to provide one local provider identity.
-
-- [patch] Standalone Git resolution previously failed because first-party
-  dependencies were declared only by sibling paths. Exact Git requirements now
-  define the distribution contract; remaining root patches do not override the
-  Leto, Mnemosyne, Moirai, or Themis topology graph.
-
 - [HEPH-TOPOLOGY-GRAPH-1] [patch] The WGPU/CUDA packages now validate against
-  the published Leto, Mnemosyne, Moirai, and Themis topology graph. Evidence
-  is package-scoped compile, lint, and real-device value-semantic testing.
+  the default-branch Leto, Hermes, Mnemosyne, Moirai, Eunomia, and Themis
+  topology graph without root patches. Evidence tier: locked
+  dependency-resolution, warning-denied WGPU Clippy, value-semantic nextest,
+  and warning-clean rustdoc.
 
 - [HEPH-EMPTY-001] [patch] Deleted every synthetic singular 1x1 empty-state
   branch from the CUDA decomposition family and WGPU QR. Canonical Leto empty

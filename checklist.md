@@ -2,6 +2,18 @@
 
 Sprint target: 0.14.0. Phase: Closure.
 
+## Provider default-branch convergence [patch]
+
+- [x] Remove the Themis, Mnemosyne, and Moirai revision quarantines from the
+  workspace dependency SSOT.
+- [x] Regenerate the locked graph and verify that `hephaestus-wgpu` resolves
+  one identity for each provider. Verified 2026-07-15 with format,
+  warning-denied Clippy, locked nextest, rustdoc, and the provider-duplicate
+  scan.
+- [ ] Update Apollo's direct provider graph after this Hephaestus source change
+  merges; acceptance is one locked provider identity in Apollo's transform
+  consumer packages.
+
 ## Required device-feature acquisition [minor]
 
 - [x] Add a `DeviceFeature`-typed required acquisition entry point to
