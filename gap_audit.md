@@ -11,27 +11,16 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
-## In progress
-
-- [HEPH-WGPU-ODD-STORAGE-1] [patch] Apollo's native-f16 3x3x3 FFT exposes a
-  provider defect: the WGPU backend already rounds physical buffer allocation
-  up to four bytes, but the core validator rejects the 54-byte logical `u16`
-  payload before that padding can apply. Upload and full-write paths likewise
-  require an exact multiple-of-four host slice. The intended contract is
-  `physical_bytes = 4 * ceil(logical_bytes / 4)` while `WgpuBuffer<T>::len()`
-  remains the exact logical element count and download returns exactly that
-  logical payload. ADR 0008 owns the decision. The provider implementation,
-  core validation, and real-device regression now pass; Apollo integration
-  remains pending the merged provider revision.
-- Residual verification boundary: `cargo check -p hephaestus-core -p
-  hephaestus-wgpu --all-targets --all-features` reaches the intentionally
-  feature-gated WGPU-versus-CUDA comparative benchmark, then fails before
-  compilation because bindgen cannot load `D:\msys64\ucrt64\bin\libclang.dll`.
-  Default-feature all-target check, core/WGPU Nextest, Clippy, doctests, docs,
-  and no-default-feature library check pass. Re-open the comparative build when
-  the host libclang loader is repaired; it is not evidence against this change.
-
 ## Resolved
+
+- [HEPH-WGPU-ODD-STORAGE-1] [patch] WGPU now accepts odd-byte logical typed
+  storage. Core validates byte-size overflow only; WGPU uses
+  `physical_bytes = 4 * ceil(logical_bytes / 4)`, zero-filling only trailing
+  physical bytes while buffers retain exact logical length and values. Core and
+  real-device `u16` upload/write/download regressions pass. Apollo commit
+  `26f433e3` locks the provider and passes the 3x3x3 native-f16 Bluestein
+  roundtrip with no consumer padding or acquisition wrapper. Evidence tier:
+  arithmetic contract plus value-semantic real-device and consumer CI evidence.
 
 - [HEPH-REQUIRED-FEATURE-1] [minor] `WgpuDevice` now acquires a device only
   when it can enable every requested `DeviceFeature`; unavailable capabilities
@@ -656,6 +645,14 @@ host before uploading device buffers.
   contract test, value-checked benchmark outputs, and empirical benchmark.
 
 ## Environment / Toolchain Limitations
+
+- [patch] `cargo check -p hephaestus-core -p hephaestus-wgpu --all-targets
+  --all-features` reaches the intentionally feature-gated WGPU-versus-CUDA
+  comparative benchmark, then fails before compilation because bindgen cannot
+  load `D:\msys64\ucrt64\bin\libclang.dll`. Default-feature all-target check,
+  core/WGPU Nextest, Clippy, doctests, docs, and no-default-feature library
+  check pass. Re-run the comparative build when the host libclang loader is
+  repaired; it is not evidence against odd-length storage behavior.
 
 - [patch] The 0.12.0 to 0.13.0 semver classification completes for
   `hephaestus-core`, `hephaestus-metal`, and `hephaestus-wgpu` as a pre-1.0 major
