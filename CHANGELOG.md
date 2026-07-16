@@ -83,6 +83,11 @@ Target release: 0.15.0.
 
 ### Fixed
 
+- [patch] CUDA build guidance now requires both `LIBCLANG_PATH` and a prepended
+  MinGW LLVM `bin` directory on `PATH`. This restores bindgen generation for
+  the CUDA comparative benchmark on the current host, whose UCRT LLVM
+  distribution cannot load as a Bindgen library.
+
 - `hephaestus-core` / `hephaestus-wgpu` [patch]: logical typed buffer lengths
   no longer need a four-byte byte size. WGPU now owns the minimal physical
   storage and transfer padding, zero-filling only the trailing bytes while
