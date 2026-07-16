@@ -42,14 +42,15 @@ cuda-oxide + cutile).
   133-case WGPU nextest run, doctest, rustdoc, and 196/196 applicable
   semver checks against Apollo's 0.13 baseline.
 
-- [ ] [patch] HEPH-WGPU-ODD-STORAGE-1 (owner Codex, in-progress 2026-07-16;
+- [ ] [patch] HEPH-WGPU-ODD-STORAGE-1 (owner Codex, review 2026-07-16;
   scope `hephaestus-core` buffer validation, `hephaestus-wgpu` storage and
   transfer implementation, provider tests, ADR/PM records): preserve logical
   odd-length `u16` storage by padding only WGPU's physical byte allocation and
   transfers. Driver: Apollo native-f16 FFT 3x3x3 Bluestein verification.
   Acceptance: exact logical lengths and host values survive upload, write, and
-  download; no generic four-byte rejection remains; focused core/WGPU gates,
-  real-device regression, rustdoc, and consumer integration pass.
+  download; no generic four-byte rejection remains. The focused core/WGPU
+  gates, real-device regression, and rustdoc pass; Apollo consumer integration
+  remains the release criterion.
 
 - [WGPU-ABI-30] [major] **Review; owner Codex, 2026-07-13.** Migrated the
   provider-owned public WGPU ABI from 26.0.1 to current 30.0.0, update every

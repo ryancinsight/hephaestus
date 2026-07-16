@@ -1,6 +1,6 @@
 # ADR 0008: Odd-length WGPU storage padding
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-16
 - Change class: patch
 
@@ -28,11 +28,14 @@ mutating adjacent data.
 
 ## Invariant and evidence boundary
 
-The padding bytes are outside the typed logical range. Therefore kernels index
-only `[0, n)`, and host roundtrips preserve each of the `n` values exactly.
-Core unit tests prove the pure size relation; a real WGPU device regression
-checks allocation, upload, write, and download for an odd `u16` length. This
-is type/contract plus empirical-device evidence, not a proof for every driver.
+The padding bytes are outside the typed logical range. For
+`p = 4 * ceil(ns / 4)`, `p` is the least four-byte multiple with `p >= ns`,
+so `0 <= p - ns < 4`; full-buffer padding cannot extend past physical storage.
+Kernels index only `[0, n)`, and host roundtrips preserve each of the `n`
+values exactly. Core and WGPU unit tests validate representative logical and
+physical sizes; a real-device regression checks allocation, upload, write, and
+download for an odd `u16` length. This is arithmetic/contract plus
+empirical-device evidence, not a proof for every driver.
 
 ## Consequences
 

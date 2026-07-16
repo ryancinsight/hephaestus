@@ -20,8 +20,16 @@ architectural decision or a tracked future-work item:
   require an exact multiple-of-four host slice. The intended contract is
   `physical_bytes = 4 * ceil(logical_bytes / 4)` while `WgpuBuffer<T>::len()`
   remains the exact logical element count and download returns exactly that
-  logical payload. ADR 0008 owns the decision; the provider implementation and
-  real-device regression are in progress.
+  logical payload. ADR 0008 owns the decision. The provider implementation,
+  core validation, and real-device regression now pass; Apollo integration
+  remains pending the merged provider revision.
+- Residual verification boundary: `cargo check -p hephaestus-core -p
+  hephaestus-wgpu --all-targets --all-features` reaches the intentionally
+  feature-gated WGPU-versus-CUDA comparative benchmark, then fails before
+  compilation because bindgen cannot load `D:\msys64\ucrt64\bin\libclang.dll`.
+  Default-feature all-target check, core/WGPU Nextest, Clippy, doctests, docs,
+  and no-default-feature library check pass. Re-open the comparative build when
+  the host libclang loader is repaired; it is not evidence against this change.
 
 ## Resolved
 

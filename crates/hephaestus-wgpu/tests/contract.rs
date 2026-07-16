@@ -21,10 +21,11 @@ fn device_or_skip() -> Option<WgpuDevice> {
         .get_or_init(
             || match WgpuDevice::try_default("hephaestus-contract-test") {
                 Ok(device) => Some(device),
-                Err(e) => {
-                    eprintln!("skipping wgpu contract test: {e}");
+                Err(HephaestusError::AdapterUnavailable { .. }) => {
+                    eprintln!("skipping wgpu contract test: adapter unavailable");
                     None
                 }
+                Err(error) => panic!("WGPU contract tests require a working provider: {error}"),
             },
         )
         .clone()
@@ -258,6 +259,34 @@ fn upload_download_round_trips_values() {
     let mut out = vec![0.0f32; host.len()];
     device.download(&buffer, &mut out).unwrap();
     assert_eq!(out, host);
+}
+
+#[test]
+fn odd_u16_storage_preserves_logical_values_when_device_exists() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let uploaded: Vec<u16> = (0..27).map(|index| index * 257 + 1).collect();
+    let upload_buffer = device.upload(&uploaded).expect("odd u16 upload");
+    assert_eq!(upload_buffer.len(), uploaded.len());
+    let mut uploaded_readback = vec![0_u16; uploaded.len()];
+    device
+        .download(&upload_buffer, &mut uploaded_readback)
+        .expect("odd u16 upload readback");
+    assert_eq!(uploaded_readback, uploaded);
+
+    let written: Vec<u16> = uploaded.iter().map(|value| value ^ 0x55AA).collect();
+    let allocated = device
+        .alloc_zeroed::<u16>(written.len())
+        .expect("odd u16 allocation");
+    device
+        .write_buffer(&allocated, &written)
+        .expect("odd u16 full-buffer write");
+    let mut written_readback = vec![0_u16; written.len()];
+    device
+        .download(&allocated, &mut written_readback)
+        .expect("odd u16 full-buffer readback");
+    assert_eq!(written_readback, written);
 }
 
 #[test]

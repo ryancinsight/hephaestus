@@ -83,6 +83,11 @@ Target release: 0.15.0.
 
 ### Fixed
 
+- `hephaestus-core` / `hephaestus-wgpu` [patch]: logical typed buffer lengths
+  no longer need a four-byte byte size. WGPU now owns the minimal physical
+  storage and transfer padding, zero-filling only the trailing bytes while
+  upload, full-buffer write, and download preserve the exact logical values.
+
 - `hephaestus-cuda` / `hephaestus-wgpu` [patch]: empty decomposition results
   retain their actual dimensions and algebraic identities instead of storing a
   synthetic singular 1x1 Leto factorization. In particular, the determinant of
