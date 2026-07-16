@@ -1,15 +1,20 @@
 # Checklist — hephaestus
 
-Sprint target: 0.14.0. Phase: Closure.
+Sprint target: 0.15.0. Phase: Closure.
 
-## Provider default-branch convergence [patch]
+## Provider default-source convergence [minor]
 
-- [x] Remove the Themis, Mnemosyne, and Moirai revision quarantines from the
-  workspace dependency SSOT.
-- [x] Regenerate the locked graph and verify that `hephaestus-wgpu` resolves
-  one identity for each provider. Verified 2026-07-15 with format,
-  warning-denied Clippy, locked nextest, rustdoc, and the provider-duplicate
-  scan.
+- [x] Advance the root to the current default branch and remove every Leto,
+  Mnemosyne, Moirai, and Themis revision requirement from the workspace SSOT.
+- [x] Publish Rust 1.95 through the workspace package metadata and every
+  member manifest; record the pre-1.0 0.15.0 release decision in ADR 0007.
+- [x] Regenerate the ignored library lockfile and verify one identity for each
+  provider: Leto `87c67f0`, Mnemosyne `cb103a5`, Moirai `4ad6520`, and Themis
+  `709aec6`. Rust 1.95 checks `hephaestus-wgpu`; Rust 1.94.1 rejects the
+  resolved graph, including the declared Hephaestus packages.
+- [x] Pass formatting, warning-denied release WGPU Clippy, release nextest,
+  doctests, rustdoc, and 196/196 applicable minor semver checks before
+  publishing 0.15.0.
 - [ ] Update Apollo's direct provider graph after this Hephaestus source change
   merges; acceptance is one locked provider identity in Apollo's transform
   consumer packages.
@@ -52,16 +57,8 @@ Sprint target: 0.14.0. Phase: Closure.
 - [x] Pass focused Hephaestus WGPU gates and confirm the provider graph resolves
   one Themis 0.10 identity. Evidence: warning-denied `hephaestus-wgpu` clippy,
   132 focused nextest cases, and inverse dependency inspection all pass.
-- [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
-  exact Git revisions so standalone Git consumers resolve the provider graph.
-- [x] Pin Leto, Mnemosyne, Moirai, and Themis to the revisions required by the
-  transitive provider graph; remove the root-only Hermes override. Evidence:
-  formatting, locked warning-denied `hephaestus-wgpu` Clippy, 133/133 focused
-  nextest cases, doctests, docs, and one resolved source identity per provider.
-- [x] Repin Leto to the published Themis 0.10.0 topology closure, then rerun
-  the focused Hephaestus WGPU/CUDA gates against published providers only.
-  Evidence: formatting; warning-denied three-package Clippy; full configured
-  nextest; and an inverse graph containing only Themis 0.10.0.
+- [x] The previous revision quarantine is deleted by HEPH-PROVIDER-DEFAULT-2;
+  no compatibility source policy remains on the release branch.
 
 ## Verified locally — HEPH-EMPTY-001 genuine empty decompositions [patch]
 

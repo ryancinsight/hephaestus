@@ -9,9 +9,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ryancinsight/hephaestus.git"
@@ -45,19 +45,19 @@ thiserror = "2.0"
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "30de5b797087ad92e21211dae7d22906b6ae2b83", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
-themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false, features = ["std"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "30de5b797087ad92e21211dae7d22906b6ae2b83", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d" }
-moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", rev = "33d4211fb64a81f76943762366ef1225806b7b44", default-features = false, features = [
+themis = { git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
+moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
-moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git", rev = "33d4211fb64a81f76943762366ef1225806b7b44" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "33d4211fb64a81f76943762366ef1225806b7b44", default-features = false, features = ["async"] }
+moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
 ndarray = "0.16"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 

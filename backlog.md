@@ -6,24 +6,20 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-PROVIDER-DEFAULT-2] [minor] Hephaestus 0.15.0 removes every Leto,
+  Mnemosyne, Moirai, and Themis revision quarantine, publishes Rust 1.95 from
+  every package, and resolves one source identity per provider. Evidence:
+  Rust 1.95 focused WGPU check; Rust 1.94.1 resolution rejection; formatting;
+  warning-denied release Clippy; release nextest; doctest; rustdoc; and
+  196/196 applicable minor semver checks. Driver: Apollo provider convergence.
+
 - [HEPH-STREAM-PREFIX-1] [minor] `CommandStream::copy_prefix` is the provider
   SSOT for bounded device-to-device prefix copies. WGPU and CUDA implement the
   same length-checked contract; the WGPU real-device regression proves the
   destination suffix remains unchanged. Driver: Apollo multilevel Haar DWT.
 
-- [THEMIS-IDENTITY-1] [patch] Hephaestus declares Themis `18807bb5` directly,
-  matching its transitive provider requirements so Cargo resolves one 0.10
-  source identity without a workspace-local override.
-
-- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes Leto `30de5b7`,
-  Mnemosyne `32b4a2a`, Moirai `33d4211`, and Themis `18807bb5` through one
-  source identity each, with no root Hermes override. Format, warning-denied
-  WGPU Clippy, locked WGPU nextest, rustdoc, and the provider-duplicate scan
-  pass. Driver: Apollo's provider-owned multilevel transform path.
-
-- [GIT-SOURCE-1] [patch] First-party provider requirements use exact Git
-  revisions when transitive requirements already pin those sources. This keeps
-  Cargo's source identity graph singular without workspace-local patches.
+- [THEMIS-IDENTITY-1] [patch] Themis 0.10 resolves from its default source with
+  no workspace-local override.
 
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through

@@ -4,7 +4,7 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.14.0.
+Target release: 0.15.0.
 
 - [minor] `WgpuDevice` now acquires devices with a required
   `DeviceFeature` set through the Hephaestus vocabulary. Consumers can require
@@ -15,13 +15,15 @@ Target release: 0.14.0.
   operation. WGPU and CUDA preserve the destination suffix, removing the last
   raw-device copy requirement for multilevel transform kernels.
 
-- [patch] Direct Leto, Mnemosyne, Moirai, and Themis requirements now use the
-  exact revisions required transitively by their providers. This removes the
-  duplicate default-branch and revision source identities Cargo otherwise
-  resolves for the same provider graph.
+- [minor] Direct Leto, Mnemosyne, Moirai, and Themis requirements now use the
+  providers' default sources with no revision or workspace patch override.
+  Every published package declares Rust 1.95, the actual minimum supported by
+  the resolved Leto, Mnemosyne, and Moirai graph.
 
 ### Breaking
 
+- The minimum Rust version is 1.95. Rust 1.94.1 and earlier reject the
+  resolved provider graph during dependency resolution.
 - The provider-owned WGPU ABI advances from 26.0.1 to 30.0.0. Push constants
   become immediate data, descriptor construction and polling use WGPU 30's
   native contracts, and all public WGPU identities change with the provider.
@@ -34,6 +36,7 @@ Target release: 0.14.0.
 
 ### Migration
 
+- Upgrade the consumer toolchain to Rust 1.95 before updating Hephaestus.
 - Remove `?` or callback-registration error handling from
   `WgpuDevice::new(device, queue)` call sites. Request `Device` placement and
   use provider-owned upload/download staging for host transfers.
