@@ -11,6 +11,18 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## In progress
+
+- [HEPH-WGPU-ODD-STORAGE-1] [patch] Apollo's native-f16 3x3x3 FFT exposes a
+  provider defect: the WGPU backend already rounds physical buffer allocation
+  up to four bytes, but the core validator rejects the 54-byte logical `u16`
+  payload before that padding can apply. Upload and full-write paths likewise
+  require an exact multiple-of-four host slice. The intended contract is
+  `physical_bytes = 4 * ceil(logical_bytes / 4)` while `WgpuBuffer<T>::len()`
+  remains the exact logical element count and download returns exactly that
+  logical payload. ADR 0008 owns the decision; the provider implementation and
+  real-device regression are in progress.
+
 ## Resolved
 
 - [HEPH-REQUIRED-FEATURE-1] [minor] `WgpuDevice` now acquires a device only
