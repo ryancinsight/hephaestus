@@ -198,10 +198,14 @@ pub trait ComputeDeviceAcquisition: ComputeDeviceCapabilities + Sized {
     ) -> Result<Vec<Self>>;
 }
 
-/// Validate that a buffer size is a multiple of 4 bytes.
+/// Validate that a typed buffer's byte-size calculation cannot overflow.
+///
+/// Device implementations own physical alignment requirements. The logical
+/// element count remains valid even when its byte length needs provider-local
+/// padding for storage or transfer.
 #[inline]
 pub fn validate_buffer_size<T>(len: usize) -> Result<()> {
-    let byte_len = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
+    len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
         crate::domain::error::HephaestusError::AllocationFailed {
             message: format!(
                 "Buffer byte size calculation overflows (elements: {}, element size: {})",
@@ -210,42 +214,25 @@ pub fn validate_buffer_size<T>(len: usize) -> Result<()> {
             ),
         }
     })?;
-    if !byte_len.is_multiple_of(4) {
-        return Err(crate::domain::error::HephaestusError::AllocationFailed {
-            message: format!(
-                "Buffer byte size {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
-                byte_len,
-                len,
-                core::mem::size_of::<T>()
-            ),
-        });
-    }
     Ok(())
 }
 
-/// Validate that a host slice satisfies both size and pointer 4-byte alignment.
+/// Validate that a host slice's byte-size calculation cannot overflow.
+///
+/// Device implementations own physical transfer alignment and must preserve
+/// the slice's exact logical element count.
 #[inline]
 pub fn validate_slice_alignment<T>(slice: &[T]) -> Result<()> {
-    let byte_len = core::mem::size_of_val(slice);
-    if !byte_len.is_multiple_of(4) {
-        return Err(crate::domain::error::HephaestusError::TransferFailed {
+    slice
+        .len()
+        .checked_mul(core::mem::size_of::<T>())
+        .ok_or_else(|| crate::domain::error::HephaestusError::TransferFailed {
             message: format!(
-                "Transfer byte length {} (elements: {}, element size: {}) must be a multiple of 4 bytes for GPU compatibility",
-                byte_len,
+                "Transfer byte size calculation overflows (elements: {}, element size: {})",
                 slice.len(),
                 core::mem::size_of::<T>()
             ),
-        });
-    }
-    let addr = slice.as_ptr() as usize;
-    if !addr.is_multiple_of(4) {
-        return Err(crate::domain::error::HephaestusError::TransferFailed {
-            message: format!(
-                "Transfer host memory address 0x{:x} is not 4-byte aligned",
-                addr
-            ),
-        });
-    }
+        })?;
     Ok(())
 }
 
@@ -259,8 +246,10 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_buffer_size_alignment() {
+    fn validates_odd_logical_lengths_without_provider_alignment() {
         assert!(validate_buffer_size::<u8>(4).is_ok());
-        assert!(validate_buffer_size::<u8>(3).is_err());
+        assert!(validate_buffer_size::<u8>(3).is_ok());
+        assert!(validate_buffer_size::<u16>(27).is_ok());
+        assert!(validate_slice_alignment(&[0_u16; 27]).is_ok());
     }
 }

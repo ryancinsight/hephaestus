@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -762,6 +762,42 @@ impl WgpuDevice {
         Self::aligned_size(bytes, wgpu::COPY_BUFFER_ALIGNMENT)
     }
 
+    /// Borrow host bytes when they already meet WGPU's copy alignment; otherwise
+    /// append zeroed physical padding outside the logical typed range.
+    fn padded_host_bytes<T: Pod>(host: &[T]) -> Result<Cow<'_, [u8]>> {
+        let bytes: &[u8] = bytemuck::cast_slice(host);
+        let padded_len = usize::try_from(Self::padded_size::<T>(host.len())?).map_err(|_| {
+            HephaestusError::AllocationFailed {
+                message: format!(
+                    "padded byte size does not fit usize for {} elements of {} bytes",
+                    host.len(),
+                    core::mem::size_of::<T>()
+                ),
+            }
+        })?;
+        if bytes.len() == padded_len {
+            return Ok(Cow::Borrowed(bytes));
+        }
+
+        let mut padded = Vec::with_capacity(padded_len);
+        padded.extend_from_slice(bytes);
+        padded.resize(padded_len, 0);
+        Ok(Cow::Owned(padded))
+    }
+
+    /// Ensure a WGPU copy starts at a valid byte boundary.
+    fn validate_copy_offset(byte_offset: u64) -> Result<()> {
+        if !byte_offset.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT) {
+            return Err(HephaestusError::TransferFailed {
+                message: format!(
+                    "sub-buffer offset {byte_offset} must be a multiple of {} bytes",
+                    wgpu::COPY_BUFFER_ALIGNMENT
+                ),
+            });
+        }
+        Ok(())
+    }
+
     /// Align `size` upward to `alignment`.
     fn aligned_size(size: u64, alignment: u64) -> Result<u64> {
         size.checked_add(alignment - 1)
@@ -878,6 +914,7 @@ impl WgpuDevice {
 
         // byte_size::<T>(offset) = offset * size_of::<T>() with checked overflow → u64.
         let byte_offset = Self::byte_size::<T>(offset)?;
+        Self::validate_copy_offset(byte_offset)?;
         let byte_len = Self::byte_size::<T>(out.len())?;
         let padded = Self::padded_size::<T>(out.len())?;
         self.stage_and_read(
@@ -925,10 +962,25 @@ impl WgpuDevice {
             return Ok(());
         }
 
-        // byte_size reuses the existing checked multiplication (offset * size_of::<T>()).
+        // Byte offset reuses the existing checked multiplication.
         let byte_offset = Self::byte_size::<T>(offset)?;
+        Self::validate_copy_offset(byte_offset)?;
+        let bytes = bytemuck::cast_slice(host);
+        let payload = if end == buffer.len {
+            Self::padded_host_bytes(host)?
+        } else if bytes.len() % (wgpu::COPY_BUFFER_ALIGNMENT as usize) == 0 {
+            Cow::Borrowed(bytes)
+        } else {
+            return Err(HephaestusError::TransferFailed {
+                message: format!(
+                    "interior sub-buffer byte length {} must be a multiple of {} bytes",
+                    bytes.len(),
+                    wgpu::COPY_BUFFER_ALIGNMENT
+                ),
+            });
+        };
         self.queue
-            .write_buffer(buffer.raw(), byte_offset, bytemuck::cast_slice(host));
+            .write_buffer(buffer.raw(), byte_offset, payload.as_ref());
         Ok(())
     }
 }
@@ -973,6 +1025,7 @@ impl ComputeDevice for WgpuDevice {
     ) -> Result<WgpuBuffer<T>> {
         validate_slice_alignment(host)?;
         let padded_len = Self::padded_size::<T>(host.len())?;
+        let payload = Self::padded_host_bytes(host)?;
         let tier = Self::device_tier(hint)?;
         let usage = wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_SRC
@@ -988,7 +1041,7 @@ impl ComputeDevice for WgpuDevice {
             self.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("hephaestus-upload"),
-                    contents: bytemuck::cast_slice(host),
+                    contents: payload.as_ref(),
                     usage,
                 })
         };
@@ -1032,8 +1085,8 @@ impl ComputeDevice for WgpuDevice {
                 device_len: buffer.len,
             });
         }
-        self.queue
-            .write_buffer(buffer.raw(), 0, bytemuck::cast_slice(host));
+        let payload = Self::padded_host_bytes(host)?;
+        self.queue.write_buffer(buffer.raw(), 0, payload.as_ref());
         Ok(())
     }
 
@@ -1182,6 +1235,15 @@ mod tests {
             Ok(bytes) => assert_eq!(bytes, 0),
             Err(error) => panic!("expected zero byte size, got {error:?}"),
         }
+    }
+
+    #[test]
+    fn padded_host_bytes_preserve_an_odd_u16_payload() {
+        let host = [0x0001_u16, 0x0203, 0x0405];
+        let payload = WgpuDevice::padded_host_bytes(&host).expect("padded host bytes");
+        assert_eq!(payload.len(), 8);
+        assert_eq!(&payload[..6], bytemuck::cast_slice(&host));
+        assert_eq!(&payload[6..], [0, 0]);
     }
 
     #[test]

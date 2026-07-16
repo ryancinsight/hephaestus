@@ -2,6 +2,19 @@
 
 Sprint target: 0.15.0. Phase: Closure.
 
+## Odd-length WGPU storage padding [patch]
+
+- [x] Record ADR 0008: logical scalar length remains authoritative while WGPU
+  owns physical four-byte padding at allocation and transfer boundaries.
+- [x] Remove the core-wide four-byte logical-length rejection without removing
+  overflow validation.
+- [x] Pad only the WGPU storage/upload/full-write byte payload and retain the
+  original typed buffer length plus exact host readback.
+- [x] Add core and real-device value-semantic regressions for a 27-element
+  `u16` payload; pass focused diagnostics, Nextest, doctest, and rustdoc.
+- [ ] Update Apollo to the merged provider revision and pass its native-f16
+  consumer integration gate.
+
 ## Provider default-source convergence [minor]
 
 - [x] Advance the root to the current default branch and remove every Leto,
