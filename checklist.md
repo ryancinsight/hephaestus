@@ -54,8 +54,10 @@ Sprint target: 0.14.0. Phase: Closure.
   132 focused nextest cases, and inverse dependency inspection all pass.
 - [x] Replace path-only Leto, Mnemosyne, Moirai, and Eunomia requirements with
   exact Git revisions so standalone Git consumers resolve the provider graph.
-- [x] Advance Leto to `7f216f1` and Moirai to `8cd356c`; rerun focused
-  Hephaestus Clippy and 179/179 canonical nextest gates.
+- [x] Pin Leto, Mnemosyne, Moirai, and Themis to the revisions required by the
+  transitive provider graph; remove the root-only Hermes override. Evidence:
+  formatting, locked warning-denied `hephaestus-wgpu` Clippy, 133/133 focused
+  nextest cases, doctests, docs, and one resolved source identity per provider.
 - [x] Repin Leto to the published Themis 0.10.0 topology closure, then rerun
   the focused Hephaestus WGPU/CUDA gates against published providers only.
   Evidence: formatting; warning-denied three-package Clippy; full configured

@@ -11,18 +11,19 @@ cuda-oxide + cutile).
   same length-checked contract; the WGPU real-device regression proves the
   destination suffix remains unchanged. Driver: Apollo multilevel Haar DWT.
 
-- [THEMIS-IDENTITY-1] [patch] Hephaestus follows the Themis default branch so
-  consumers resolve the current 0.10 provider identity without a revision
-  quarantine or workspace-local override.
+- [THEMIS-IDENTITY-1] [patch] Hephaestus declares Themis `18807bb5` directly,
+  matching its transitive provider requirements so Cargo resolves one 0.10
+  source identity without a workspace-local override.
 
-- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes default-branch Leto,
-  Hermes, Mnemosyne, Moirai, Eunomia, and Themis providers without local
-  patches. Format, warning-denied WGPU Clippy, locked WGPU nextest, rustdoc,
-  and the provider-duplicate scan pass. Driver: Apollo's provider-owned
-  multilevel transform path.
+- [HEPH-TOPOLOGY-GRAPH-1] [patch] Hephaestus consumes Leto `30de5b7`,
+  Mnemosyne `32b4a2a`, Moirai `33d4211`, and Themis `18807bb5` through one
+  source identity each, with no root Hermes override. Format, warning-denied
+  WGPU Clippy, locked WGPU nextest, rustdoc, and the provider-duplicate scan
+  pass. Driver: Apollo's provider-owned multilevel transform path.
 
-- [GIT-SOURCE-1] [patch] First-party provider source policy uses default
-  branches. Root patches are absent from the published topology graph.
+- [GIT-SOURCE-1] [patch] First-party provider requirements use exact Git
+  revisions when transitive requirements already pin those sources. This keeps
+  Cargo's source identity graph singular without workspace-local patches.
 
 - [HEPH-EMPTY-001] [patch] CUDA bidiagonal, column-pivoted QR, full-pivot LU,
   Hessenberg, and QR plus WGPU QR now preserve genuine empty dimensions through
