@@ -51,6 +51,17 @@ architectural decision or a tracked future-work item:
   typed, length-checked prefix transfer in both WGPU and CUDA; the WGPU
   real-device regression verifies copied values and an unchanged suffix.
 
+- [HEPH-SCAN-TILED-1] [minor] Axis scans now dispatch one workgroup/block per
+  scan line. Each lane folds a contiguous chunk, lane zero folds chunk totals
+  in logical order, and the second pass applies the preceding chunk prefix.
+  The core planner is the SSOT for the exact line-count dispatch. Evidence
+  tier: theorem/spec in ADR 0009, core dispatch tests (48/48), WGPU source
+  contract plus 140/140 real-device nextest, CUDA source contract plus
+  108/108 non-concurrency real-device nextest, and warning-denied Clippy for
+  core/WGPU/CUDA in both default and CUDA stub modes. The CUDA concurrent
+  acquisition test independently aborts with Windows access violation
+  `0xc0000005` and is tracked under Environment / Toolchain Limitations.
+
 - [HEPH-PROVIDER-DEFAULT-2] [minor] The revision-quarantine regression is
   removed. The resolved library graph contains one default-source identity for
   Leto `87c67f0`, Mnemosyne `cb103a5`, Moirai `4ad6520`, and Themis `709aec6`;
@@ -109,10 +120,10 @@ architectural decision or a tracked future-work item:
   reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
   linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
   hessenberg_reconstructs_and_preserves_similarity_invariants
-  non_default_block_width_produces_identical_results` (9/9). Residual tracking
-  is limited to the documented concurrent-device-acquisition case; `cargo
-  nextest run -p hephaestus-cuda concurrent_device_acquisition_is_safe` passes
-  1/1 on the current live-CUDA host.
+  non_default_block_width_produces_identical_results` (9/9). A current rerun
+  of `concurrent_device_acquisition_is_safe` aborts with Windows access
+  violation `0xc0000005` before assertions execute; this is an environment/
+  concurrency residual, not touched by the scan slice, and remains open below.
 
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real
@@ -663,6 +674,14 @@ host before uploading device buffers.
 
 ## Environment / Toolchain Limitations
 
+- [patch] The current CUDA host rerun of
+  `concurrent_device_acquisition_is_safe` aborts with Windows access
+  violation `0xc0000005` (OS error 998) before the test assertions execute.
+  The remaining 108 CUDA tests pass when this single case is excluded,
+  including the new long-line scan contract. The abort is outside the tiled
+  scan files and needs an isolated CUDA-context/concurrency investigation;
+  it must not be hidden by a test skip or timeout change.
+
 - [patch] CUDA-enabled build generation requires both
   `LIBCLANG_PATH=D:\\msys64\\mingw64\\bin` and
   `PATH=D:\\msys64\\mingw64\\bin;%PATH%` on this host. Bindgen rejects the UCRT
@@ -694,7 +713,8 @@ host before uploading device buffers.
 
 ## Next Increment
 
-- Continue the parity audit at the next highest-risk Open future-work residual:
-  reduce scalar-reduction pass/submit overhead via Hephaestus/Mnemosyne launch
-  planning or add a measured small-reduction CPU-routing policy before returning
-  to single-vector SpMV and blocked QR synchronization.
+- Continue KS-5b with a bounded multi-pass block-sums/uniform-add extension for
+  lines that exceed provider workgroup/shared-memory limits. Preserve the
+  generic `CombineExpr`/`IdentityToken` seam and derive the floating-point
+  differential bound before accepting reordered results; otherwise continue
+  the measured scalar-reduction launch-overhead slice.

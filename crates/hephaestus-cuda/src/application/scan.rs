@@ -2,6 +2,7 @@
 
 use bytemuck::Pod;
 use core::marker::PhantomData;
+use core::mem::size_of;
 use hephaestus_core::{
     AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar,
     HephaestusError, IdentityToken, Result, plan_axis_scan,
@@ -24,7 +25,9 @@ fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     }
 }
 
-fn scan_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
+fn scan_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(
+    width: BlockWidth,
+) -> String {
     format!(
         r#"
 struct AxisScanMeta {{
@@ -49,41 +52,71 @@ __device__ unsigned int dest_offset(AxisScanMeta meta, unsigned int row, unsigne
     return (unsigned int)off;
 }}
 
-// One thread owns one full scan line and walks it sequentially, writing every
-// prefix: O(L) work per length-L line. The combine order is strictly
-// left-to-right (right-to-left when reversed), matching the sequential
-// reference exactly (bitwise-identical floating-point results).
+// One block owns one scan line. Each lane folds a contiguous chunk in logical
+// order, then lane zero folds chunk totals in order. The second pass applies
+// the prefix of preceding chunks to each local prefix. This is the tiled scan
+// theorem: every element receives the same mathematical fold as a sequential
+// scan for associative `expr`; floating-point reassociation is explicit and
+// is covered by the provider's derived error bound.
+extern __shared__ {ty} partial[];
+
 extern "C" __global__ void scan_kernel(
     AxisScanMeta meta,
     const {ty}* input,
     {ty}* output
 ) {{
-    unsigned int line = blockIdx.x * blockDim.x + threadIdx.x;
-    if (line >= meta.offsets[3]) {{
-        return;
-    }}
+    unsigned int line = blockIdx.x;
+    unsigned int lane = threadIdx.x;
 
     unsigned int rows = meta.input_shape[0];
     unsigned int cols = meta.input_shape[1];
     unsigned int axis = meta.offsets[2] & 1u;
     bool reverse = (meta.offsets[2] & 2u) != 0u;
     unsigned int len = (axis == 0u) ? rows : cols;
-    {ty} acc = {identity};
+    unsigned int chunk_len = (len + {wg}u - 1u) / {wg}u;
+    unsigned int start = lane * chunk_len;
+    unsigned int end = min(start + chunk_len, len);
+    {ty} local_acc = {identity};
 
-    // `axis` and `reverse` are uniform across the launch, so these selects
-    // never diverge within a warp.
-    for (unsigned int s = 0u; s < len; s++) {{
+    // Empty lanes retain the identity. `axis` and `reverse` are uniform
+    // across the launch, so only the loop bounds vary by lane.
+    for (unsigned int s = start; s < end; s++) {{
         unsigned int idx = reverse ? (len - 1u - s) : s;
         unsigned int row = (axis == 0u) ? idx : line;
         unsigned int col = (axis == 0u) ? line : idx;
-        {ty} lhs = acc;
+        {ty} lhs = local_acc;
         {ty} rhs = input[source_offset(meta, row, col)];
-        acc = {expr};
-        output[dest_offset(meta, row, col)] = acc;
+        local_acc = {expr};
+        output[dest_offset(meta, row, col)] = local_acc;
+    }}
+    partial[lane] = local_acc;
+    __syncthreads();
+
+    if (lane == 0u) {{
+        {ty} prefix = {identity};
+        for (unsigned int chunk = 0u; chunk < {wg}u; chunk++) {{
+            {ty} total = partial[chunk];
+            partial[chunk] = prefix;
+            {ty} lhs = prefix;
+            {ty} rhs = total;
+            prefix = {expr};
+        }}
+    }}
+    __syncthreads();
+
+    {ty} prefix = partial[lane];
+    for (unsigned int s = start; s < end; s++) {{
+        unsigned int idx = reverse ? (len - 1u - s) : s;
+        unsigned int row = (axis == 0u) ? idx : line;
+        unsigned int col = (axis == 0u) ? line : idx;
+        {ty} lhs = prefix;
+        {ty} rhs = output[dest_offset(meta, row, col)];
+        output[dest_offset(meta, row, col)] = {expr};
     }}
 }}
 "#,
         ty = T::TYPE_TOKEN,
+        wg = width.get(),
         identity = T::TOKEN,
         expr = Op::EXPR,
     )
@@ -124,7 +157,9 @@ where
         width: width.get(),
     };
 
-    let kernel = cached_kernel(device, key, "scan_kernel", || scan_shader_source::<Op, T>())?;
+    let kernel = cached_kernel(device, key, "scan_kernel", || {
+        scan_shader_source::<Op, T>(width)
+    })?;
 
     let mut meta_val = dispatch.meta;
     let mut in_ptr = input.buffer.raw();
@@ -137,10 +172,21 @@ where
         &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
     ];
 
+    let shared_bytes = width
+        .get()
+        .checked_mul(u32::try_from(size_of::<T>()).map_err(|_| {
+            HephaestusError::DispatchFailed {
+                message: "scan scalar size exceeds CUDA shared-memory address range".to_string(),
+            }
+        })?)
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: "scan shared-memory byte count overflows u32".to_string(),
+        })?;
+
     launch_kernel(
         device,
         &kernel,
-        LaunchConfig::linear(dispatch.groups, width),
+        LaunchConfig::linear_shared(dispatch.groups, width, shared_bytes),
         &mut args,
     )
 }
@@ -201,4 +247,19 @@ where
     T: DialectScalar<CudaC> + Pod + IdentityToken<CumSumOp, CudaC>,
 {
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_declares_tiled_shared_memory_contract() {
+        let width = BlockWidth::new(8).expect("non-zero test width");
+        let source = scan_shader_source::<CumSumOp, f32>(width);
+        assert!(source.contains("extern __shared__ float partial[];"));
+        assert!(source.contains("unsigned int line = blockIdx.x;"));
+        assert!(source.contains("__syncthreads();"));
+        assert!(source.contains("unsigned int chunk_len = (len + 8u - 1u) / 8u;"));
+    }
 }

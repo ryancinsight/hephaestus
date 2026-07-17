@@ -3,9 +3,10 @@
 //!
 //! This benchmark uses a real adapter, dispatches real scan kernels, waits for
 //! completion, and validates the output against a host-side sequential prefix
-//! sum (bitwise-equal: the kernel accumulates in the same left-to-right
-//! order). It prints timing only; no speedup threshold is claimed without a
-//! stored baseline.
+//! sum. The tiled kernel reassociates floating-point additions; the oracle
+//! uses the derived `gamma_n = n*eps/(1-n*eps)` bound with the maximum path
+//! depth of the configured tile. It prints timing only; no speedup threshold
+//! is claimed without a stored baseline.
 
 use std::time::{Duration, Instant};
 
@@ -49,8 +50,8 @@ fn main() {
         }
     };
 
-    // Values are quarter-integers so the correctness oracle is bitwise
-    // identity of the left-to-right addition order, not an epsilon bound.
+    // Keep the workload deterministic; the correctness oracle below remains
+    // an analytical floating-point bound rather than an exact-equality claim.
     let host: Vec<f32> = (0..ROWS * COLS)
         .map(|i| f32::from(u8::try_from(i % 7).expect("invariant: i % 7 < 7")) * 0.25)
         .collect();
@@ -81,7 +82,24 @@ fn main() {
     wait(&device);
     let mut got = vec![0.0f32; ROWS * COLS];
     device.download(&output, &mut got).expect("download cumsum");
-    assert_eq!(got, expected, "cumsum output diverges from host reference");
+    let width = usize::try_from(BlockWidth::DEFAULT.get())
+        .expect("invariant: default block width fits usize");
+    let depth = COLS.div_ceil(width) + width;
+    let depth = f32::from(u16::try_from(depth).expect("invariant: scan path depth fits u16"));
+    let denominator = 1.0f32 - depth * f32::EPSILON;
+    let gamma = depth * f32::EPSILON / denominator;
+    for row in 0..ROWS {
+        let mut sum_abs = 0.0f32;
+        for col in 0..COLS {
+            sum_abs += host[row * COLS + col].abs();
+            let tolerance = gamma * sum_abs;
+            let error = (got[row * COLS + col] - expected[row * COLS + col]).abs();
+            assert!(
+                error <= tolerance,
+                "row={row} col={col} error={error} exceeds derived tolerance={tolerance}"
+            );
+        }
+    }
 
     let start = Instant::now();
     for _ in 0..ITERS {

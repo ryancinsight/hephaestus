@@ -51,34 +51,66 @@ fn dest_offset(row: u32, col: u32) -> u32 {{
     return u32(off);
 }}
 
-// One thread owns one full scan line and walks it sequentially, writing every
-// prefix: O(L) work per length-L line. The combine order is strictly
-// left-to-right (right-to-left when reversed), matching the sequential
-// reference exactly (bitwise-identical floating-point results).
+var<workgroup> partial: array<{ty}, {wg}>;
+
+// One workgroup owns one scan line. Each lane folds a contiguous chunk in
+// logical order, then lane zero folds chunk totals in order. The second pass
+// applies the prefix of preceding chunks to each local prefix. This is the
+// tiled scan theorem: every element receives the same mathematical fold as a
+// sequential scan for associative `expr`; floating-point reassociation is
+// explicit and is covered by the provider's derived error bound.
 @compute @workgroup_size({wg})
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
-    let line = gid.x;
-    if (line >= scan_meta.offsets.w) {{
-        return;
-    }}
+fn main(
+    @builtin(workgroup_id) workgroup: vec3<u32>,
+    @builtin(local_invocation_id) local: vec3<u32>,
+) {{
+    let line = workgroup.x;
+    let lane = local.x;
 
     let rows = scan_meta.input_shape.x;
     let cols = scan_meta.input_shape.y;
     let axis = scan_meta.offsets.z & 1u;
     let reverse = (scan_meta.offsets.z & 2u) != 0u;
     let len = select(cols, rows, axis == 0u);
-    var acc: {ty} = {identity};
+    let chunk_len = (len + {wg}u - 1u) / {wg}u;
+    let start = lane * chunk_len;
+    let end = min(start + chunk_len, len);
+    var local_acc: {ty} = {identity};
 
     // `axis` and `reverse` are uniform across the dispatch, so these selects
-    // never diverge within a subgroup.
-    for (var s = 0u; s < len; s = s + 1u) {{
+    // never diverge within a subgroup. Empty lanes retain the identity.
+    for (var s = start; s < end; s = s + 1u) {{
         let idx = select(s, len - 1u - s, reverse);
         let row = select(line, idx, axis == 0u);
         let col = select(idx, line, axis == 0u);
-        let lhs = acc;
+        let lhs = local_acc;
         let rhs = input[source_offset(row, col)];
-        acc = {expr};
-        output[dest_offset(row, col)] = acc;
+        local_acc = {expr};
+        output[dest_offset(row, col)] = local_acc;
+    }}
+    partial[lane] = local_acc;
+    workgroupBarrier();
+
+    if (lane == 0u) {{
+        var prefix: {ty} = {identity};
+        for (var chunk = 0u; chunk < {wg}u; chunk = chunk + 1u) {{
+            let total = partial[chunk];
+            partial[chunk] = prefix;
+            let lhs = prefix;
+            let rhs = total;
+            prefix = {expr};
+        }}
+    }}
+    workgroupBarrier();
+
+    let prefix = partial[lane];
+    for (var s = start; s < end; s = s + 1u) {{
+        let idx = select(s, len - 1u - s, reverse);
+        let row = select(line, idx, axis == 0u);
+        let col = select(idx, line, axis == 0u);
+        let lhs = prefix;
+        let rhs = output[dest_offset(row, col)];
+        output[dest_offset(row, col)] = {expr};
     }}
 }}
 "#,
@@ -231,4 +263,19 @@ where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_declares_tiled_workgroup_contract() {
+        let width = BlockWidth::new(8).expect("non-zero test width");
+        let source = scan_shader_source::<CumSumOp, f32>(width);
+        assert!(source.contains("var<workgroup> partial: array<f32, 8>;"));
+        assert!(source.contains("@builtin(workgroup_id)"));
+        assert!(source.contains("workgroupBarrier();"));
+        assert!(!source.contains("global_invocation_id"));
+    }
 }

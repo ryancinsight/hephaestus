@@ -2,6 +2,26 @@
 
 Sprint target: 0.16.1. Phase: Closure.
 
+## HEPH-SCAN-TILED-1 order-preserving tiled scan [minor]
+
+- [x] Claim the provider-owned scan slice and record its exact backend/core
+  scope (Codex, `codex/hephaestus-tiled-scan`).
+- [x] Change the core dispatch contract to one workgroup/block per scan line.
+- [x] Generate shared-memory tiled kernels for WGPU and CUDA; retain logical
+  chunk order for every scalar type and direction, with floating-point
+  reassociation documented and bounded.
+- [x] Add theorem/spec Rustdoc and value-semantic core/backend contract coverage.
+- [x] Run focused formatting, checks, warning-denied Clippy, nextest, and
+  bench compilation. Core 48/48, WGPU 140/140, CUDA 108/108 excluding the
+  independent `concurrent_device_acquisition_is_safe` abort; doctests and
+  rustdoc pass for all three packages.
+
+Evidence: ADR 0009; WGPU and CUDA long-line real-device contracts; source
+contract tests; `cargo clippy -p hephaestus-core -p hephaestus-wgpu
+-p hephaestus-cuda --all-targets --no-deps -- -D warnings`; and the matching
+CUDA no-default-features Clippy run. The full CUDA run is blocked by the
+pre-existing Windows access violation tracked in `gap_audit.md`.
+
 ## Typed WGPU downlevel limits [minor]
 
 - [x] Add `WgpuDevice::downlevel_device_limits` as the provider-owned typed
