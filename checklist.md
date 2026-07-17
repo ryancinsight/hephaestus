@@ -2,6 +2,19 @@
 
 Sprint target: 0.16.1. Phase: Closure.
 
+## HEPH-SCAN-LIMIT-AUDIT [patch]
+
+- [x] Audit the WGPU/CUDA scan shader and planner bounds before adding a
+      multi-pass implementation.
+- [x] Confirm the existing `L = 513`, `W = 256` integer contracts prove the
+      `L > W` path, while shared partial storage remains `W` elements.
+- [x] Record the theorem, evidence tier, and measured re-open trigger in the
+      provider backlog, gap audit, and ADR 0009.
+
+Evidence tier: source algebra plus existing value-semantic real-device
+contracts. No multi-pass code is added because the stated workgroup/shared-
+memory limit is not present in the current implementation.
+
 ## HEPH-SCAN-TILED-1 order-preserving tiled scan [minor]
 
 - [x] Claim the provider-owned scan slice and record its exact backend/core
