@@ -1,6 +1,17 @@
 # Checklist — hephaestus
 
-Sprint target: 0.15.0. Phase: Closure.
+Sprint target: 0.16.0. Phase: Closure.
+
+## Typed WGPU downlevel limits [minor]
+
+- [x] Add `WgpuDevice::downlevel_device_limits` as the provider-owned typed
+  mapping of WGPU's downlevel baseline, without exposing WGPU limits to
+  consumers.
+- [x] Add a value-semantic mapping regression and verify the WGPU package
+  diagnostics, nextest, doctest, rustdoc, and minor SemVer classification.
+- [ ] Merge the provider release increment, then update the CFDrs consumer
+  lock to the merged default branch before deleting its remaining public WGPU
+  capability surface.
 
 ## Odd-length WGPU storage padding [patch]
 

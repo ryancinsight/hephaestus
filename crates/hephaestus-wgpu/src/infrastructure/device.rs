@@ -127,6 +127,16 @@ impl WgpuDevice {
         Self::device_limits_from_wgpu(&wgpu::Limits::default())
     }
 
+    /// WGPU downlevel limits mapped into the backend-neutral Hephaestus vocabulary.
+    ///
+    /// Use this acquisition baseline when a consumer must retain compatibility
+    /// with WGPU downlevel adapters while raising only the limits its kernels
+    /// require.
+    #[must_use]
+    pub fn downlevel_device_limits() -> DeviceLimits {
+        Self::device_limits_from_wgpu(&wgpu::Limits::downlevel_defaults())
+    }
+
     /// Wrap an existing device and queue.
     ///
     /// No adapter is available on this path, so no topology snapshot is
@@ -1279,5 +1289,16 @@ mod tests {
             WgpuDevice::wgpu_features(&[DeviceFeature::ShaderF16, DeviceFeature::TimestampQuery,]),
             wgpu::Features::SHADER_F16 | wgpu::Features::TIMESTAMP_QUERY
         );
+    }
+
+    #[test]
+    fn downlevel_device_limits_preserve_wgpu_downlevel_contract() {
+        let downlevel = WgpuDevice::downlevel_device_limits();
+
+        assert_eq!(
+            downlevel,
+            WgpuDevice::device_limits_from_wgpu(&wgpu::Limits::downlevel_defaults())
+        );
+        assert_eq!(downlevel.max_storage_buffers_per_shader_stage, Some(4));
     }
 }
