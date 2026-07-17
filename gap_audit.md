@@ -57,10 +57,18 @@ architectural decision or a tracked future-work item:
   The core planner is the SSOT for the exact line-count dispatch. Evidence
   tier: theorem/spec in ADR 0009, core dispatch tests (48/48), WGPU source
   contract plus 140/140 real-device nextest, CUDA source contract plus
-  108/108 non-concurrency real-device nextest, and warning-denied Clippy for
-  core/WGPU/CUDA in both default and CUDA stub modes. The CUDA concurrent
-  acquisition test independently aborts with Windows access violation
-  `0xc0000005` and is tracked under Environment / Toolchain Limitations.
+  109/109 real-device nextest, and warning-denied Clippy for
+  core/WGPU/CUDA in both default and CUDA stub modes. The concurrent CUDA
+  acquisition residual was closed by HEPH-CUDA-CONCURRENT-1 below; the full
+  CUDA package now passes 109/109.
+
+- [HEPH-CUDA-CONCURRENT-1] [patch] CUDA driver initialization is now memoized
+  through a process-wide `OnceLock`, and the Windows context creation/bind
+  boundary is serialized while transfers and kernels remain concurrent. This
+  removes the race that aborted the 16-thread acquisition contract with
+  `0xc0000005`. Evidence tier: full real-device CUDA nextest 109/109,
+  including `concurrent_device_acquisition_is_safe`, plus warning-denied
+  Clippy and locked package check.
 
 - [HEPH-PROVIDER-DEFAULT-2] [minor] The revision-quarantine regression is
   removed. The resolved library graph contains one default-source identity for
@@ -120,10 +128,9 @@ architectural decision or a tracked future-work item:
   reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
   linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
   hessenberg_reconstructs_and_preserves_similarity_invariants
-  non_default_block_width_produces_identical_results` (9/9). A current rerun
-  of `concurrent_device_acquisition_is_safe` aborts with Windows access
-  violation `0xc0000005` before assertions execute; this is an environment/
-  concurrency residual, not touched by the scan slice, and remains open below.
+  non_default_block_width_produces_identical_results` (9/9). The formerly
+  aborting concurrent-acquisition contract is now part of the full 109/109
+  CUDA nextest after HEPH-CUDA-CONCURRENT-1.
 
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real
@@ -673,14 +680,6 @@ host before uploading device buffers.
   contract test, value-checked benchmark outputs, and empirical benchmark.
 
 ## Environment / Toolchain Limitations
-
-- [patch] The current CUDA host rerun of
-  `concurrent_device_acquisition_is_safe` aborts with Windows access
-  violation `0xc0000005` (OS error 998) before the test assertions execute.
-  The remaining 108 CUDA tests pass when this single case is excluded,
-  including the new long-line scan contract. The abort is outside the tiled
-  scan files and needs an isolated CUDA-context/concurrency investigation;
-  it must not be hidden by a test skip or timeout change.
 
 - [patch] CUDA-enabled build generation requires both
   `LIBCLANG_PATH=D:\\msys64\\mingw64\\bin` and

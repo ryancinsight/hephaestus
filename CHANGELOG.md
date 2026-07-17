@@ -37,6 +37,11 @@ Target release: 0.16.1.
   tolerance policy. Core, WGPU, and CUDA value-semantic contracts cover
   lines longer than the configured block width.
 
+- [patch] CUDA driver initialization is memoized and Windows context
+  creation/bind is serialized at the provider boundary. Concurrent device
+  acquisition now preserves typed failures and passes the full real-device
+  concurrency contract without changing transfer/kernel concurrency.
+
 ### Breaking
 
 - The minimum Rust version is 1.95. Rust 1.94.1 and earlier reject the

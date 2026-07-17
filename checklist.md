@@ -12,15 +12,26 @@ Sprint target: 0.16.1. Phase: Closure.
   reassociation documented and bounded.
 - [x] Add theorem/spec Rustdoc and value-semantic core/backend contract coverage.
 - [x] Run focused formatting, checks, warning-denied Clippy, nextest, and
-  bench compilation. Core 48/48, WGPU 140/140, CUDA 108/108 excluding the
-  independent `concurrent_device_acquisition_is_safe` abort; doctests and
+  bench compilation. Core 48/48, WGPU 140/140, and CUDA 109/109; doctests and
   rustdoc pass for all three packages.
 
 Evidence: ADR 0009; WGPU and CUDA long-line real-device contracts; source
 contract tests; `cargo clippy -p hephaestus-core -p hephaestus-wgpu
 -p hephaestus-cuda --all-targets --no-deps -- -D warnings`; and the matching
-CUDA no-default-features Clippy run. The full CUDA run is blocked by the
-pre-existing Windows access violation tracked in `gap_audit.md`.
+CUDA no-default-features Clippy run. HEPH-CUDA-CONCURRENT-1 closes the former
+Windows access violation.
+
+## HEPH-CUDA-CONCURRENT-1 driver initialization [patch]
+
+- [x] Claim the concurrent-acquisition residual and restrict the scope to
+  `hephaestus-cuda/src/infrastructure/device.rs`, its concurrency contract,
+  and synchronized PM records (Codex,
+  `codex/hephaestus-cuda-init-serialization`).
+- [x] Make provider driver initialization single-assignment and thread-safe;
+  preserve the typed unavailable-driver error.
+- [x] Re-run the concurrent real-device contract, package gates, and docs;
+  close the environment residual after the exact abort is gone. The full CUDA
+  package nextest passes 109/109.
 
 ## Typed WGPU downlevel limits [minor]
 
