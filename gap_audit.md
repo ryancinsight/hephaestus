@@ -11,6 +11,23 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-SCAN-LIMIT-AUDIT] Scan line-length bound (2026-07-17)
+
+- Finding: KS-5b proposed a multi-pass block-sums/uniform-add extension on the
+  premise that long lines exceed the current workgroup/shared-memory limit.
+- Resolution: the current provider path assigns `W` lanes to one line; each
+  lane folds `ceil(L/W)` values and stores one total, then the ordered prefix
+  pass applies one preceding value per lane. Shared storage is exactly `W`
+  partials, so its size is independent of line length `L`.
+- Theorem: for `L >= 1`, `shared_bytes = W * size_of(T)` and
+  `work_per_lane <= ceil(L/W)`. Therefore `L > W` does not require a
+  multi-pass dispatch; it changes loop count only. The WGPU and CUDA
+  `L = 513`, `W = 256` integer contracts are the value-semantic witness.
+- Evidence tier: source algebra and existing real-device contract tests. No
+  correctness defect remains. Re-open only after a measured device-specific
+  workgroup/latency limit and a derived floating-point bound for reordered
+  accumulation are recorded.
+
 ## Resolved
 
 - [HEPH-DOWNLEVEL-ACQUISITION-2] [patch] Typed device acquisition now uses

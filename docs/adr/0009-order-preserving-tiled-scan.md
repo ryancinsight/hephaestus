@@ -46,6 +46,13 @@ backends, core dispatch value tests, and the existing real-device integer scan
 contracts. A backend contract that exercises `L > W` is required before the
 KS-5b multi-pass extension is accepted.
 
+The existing WGPU and CUDA `L = 513`, `W = 256` integer contracts satisfy that
+condition. For `L >= 1`, the kernel uses `W` shared partials and each lane
+performs at most `ceil(L/W)` sequential folds, so `shared_bytes = W *
+size_of(T)` is independent of `L`. The current implementation therefore has
+no line-length-driven shared-memory overflow; KS-5b is a performance follow-up
+that reopens only on a measured device limit or latency-budget failure.
+
 ## Consequences
 
 - Long lines expose lane-level work without duplicating scan algorithms in

@@ -4,6 +4,21 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## [HEPH-SCAN-LIMIT-AUDIT] [patch] — done
+
+- Owner: Codex; scope: scan theorem/ADR and synchronized provider PM records.
+- Acceptance: determine whether the current one-workgroup tiled scan actually
+  hits a line-length workgroup/shared-memory limit before adding a multi-pass
+  kernel; record the algebraic bound and a concrete re-open trigger.
+- Evidence: both WGPU and CUDA contracts already exercise `L = 513` with
+  `BlockWidth::DEFAULT` (`W = 256`), so `L > W` is covered. Each lane loops
+  over `ceil(L/W)` values while shared storage remains exactly `W` partials;
+  shared-memory use is therefore `O(W)`, independent of `L`. No correctness
+  gap justifies a multi-pass implementation in this increment.
+- Closure: KS-5b remains a performance follow-up only; reopen when a measured
+  device-specific line-length or latency budget is exceeded, with a derived
+  floating-point bound for any reordered multi-pass path.
+
 ## Closed
 
 - [HEPH-DOWNLEVEL-ACQUISITION-2] [patch] Typed device acquisition preserves
@@ -159,8 +174,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   to extend the provider-owned single-workgroup tiled path beyond device
   workgroup/shared-memory limits. Reorders FP addition: needs a derived
   per-element bound encoded in differential tests as a DERIVED tolerance —
-  never a widened exact-equality contract. Status: split; HEPH-SCAN-TILED-1
-  delivers the order-preserving single-workgroup slice.
+  never a widened exact-equality contract. Status: performance follow-up;
+  HEPH-SCAN-TILED-1 already handles `L > W` without growing shared storage.
+  Re-open trigger: a measured provider workgroup/latency limit or a benchmark
+  showing the bounded single-workgroup path misses its declared budget.
 - [x] [HEPH-SCAN-TILED-1] [minor] Order-preserving shared-memory tiled scan
   (owner Codex, branch `codex/hephaestus-tiled-scan`, scope
   `hephaestus-core/src/domain/scan.rs`, `hephaestus-wgpu/src/application/scan.rs`,
