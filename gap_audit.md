@@ -13,13 +13,20 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
-- [HEPH-DOWNLEVEL-LIMITS-1] [minor] `WgpuDevice` exposes WGPU's downlevel
-  acquisition baseline as typed `DeviceLimits`. CFDrs can preserve downlevel
-  adapter compatibility while requesting its seven storage bindings without
-  importing `wgpu::Limits`. Evidence tier: value-semantic mapping regression,
-  focused package diagnostics, 136-case WGPU nextest, doctest, rustdoc, and
-  minor SemVer classification. CFDrs consumer integration remains the next
-  dependency-ordered increment.
+- [HEPH-DOWNLEVEL-ACQUISITION-2] [patch] Typed device acquisition now uses
+  WGPU's downlevel descriptor as the baseline before applying mapped
+  `DeviceLimits`. Raising a mapped field therefore retains every unmapped
+  downlevel WGPU limit. Evidence tier: exact descriptor-mapping regression,
+  warning-denied WGPU Clippy, 137-case WGPU nextest, doctest, rustdoc, and
+  223/223 applicable patch SemVer checks. CFDrs real-device integration is the
+  final dependency-ordered verification.
+
+- [HEPH-DOWNLEVEL-LIMITS-1] [minor] `WgpuDevice` exposes the mapped WGPU
+  downlevel limits as typed `DeviceLimits`. Evidence tier: value-semantic
+  mapping regression, focused package diagnostics, 136-case WGPU nextest,
+  doctest, rustdoc, and minor SemVer classification. Full descriptor
+  preservation during generic acquisition is tracked by
+  HEPH-DOWNLEVEL-ACQUISITION-2.
 
 - [HEPH-WGPU-ODD-STORAGE-1] [patch] WGPU now accepts odd-byte logical typed
   storage. Core validates byte-size overflow only; WGPU uses

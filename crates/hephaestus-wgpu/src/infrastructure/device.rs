@@ -106,6 +106,8 @@ impl WgpuDevice {
     }
 
     fn wgpu_limits_from_device_limits(required: DeviceLimits) -> wgpu::Limits {
+        let downlevel = wgpu::Limits::downlevel_defaults();
+
         wgpu::Limits {
             max_buffer_size: required.max_buffer_size,
             max_compute_workgroup_size_x: required.max_compute_workgroup_size_x,
@@ -115,9 +117,9 @@ impl WgpuDevice {
             max_compute_workgroup_storage_size: required.max_compute_workgroup_storage_size,
             max_storage_buffers_per_shader_stage: required
                 .max_storage_buffers_per_shader_stage
-                .unwrap_or_else(|| wgpu::Limits::default().max_storage_buffers_per_shader_stage),
+                .unwrap_or(downlevel.max_storage_buffers_per_shader_stage),
             max_immediate_size: required.max_immediate_size,
-            ..wgpu::Limits::default()
+            ..downlevel
         }
     }
 
@@ -1300,5 +1302,13 @@ mod tests {
             WgpuDevice::device_limits_from_wgpu(&wgpu::Limits::downlevel_defaults())
         );
         assert_eq!(downlevel.max_storage_buffers_per_shader_stage, Some(4));
+    }
+
+    #[test]
+    fn typed_downlevel_limits_preserve_full_wgpu_acquisition_contract() {
+        assert_eq!(
+            WgpuDevice::wgpu_limits_from_device_limits(WgpuDevice::downlevel_device_limits()),
+            wgpu::Limits::downlevel_defaults()
+        );
     }
 }

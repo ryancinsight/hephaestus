@@ -1,6 +1,6 @@
 # Checklist — hephaestus
 
-Sprint target: 0.16.0. Phase: Closure.
+Sprint target: 0.16.1. Phase: Closure.
 
 ## Typed WGPU downlevel limits [minor]
 
@@ -9,9 +9,16 @@ Sprint target: 0.16.0. Phase: Closure.
   consumers.
 - [x] Add a value-semantic mapping regression and verify the WGPU package
   diagnostics, nextest, doctest, rustdoc, and minor SemVer classification.
-- [ ] Merge the provider release increment, then update the CFDrs consumer
-  lock to the merged default branch before deleting its remaining public WGPU
-  capability surface.
+- [x] Merge the 0.16.0 provider release increment as PR #40.
+
+## Typed downlevel acquisition contract [patch]
+
+- [x] Reproduce the conversion defect: unmapped WGPU limits were rebuilt from
+  ordinary defaults, so a typed downlevel request became incompatible.
+- [x] Preserve the full WGPU downlevel baseline during typed acquisition and
+  prove it with an exact mapping regression plus complete WGPU package gates.
+- [ ] Merge the patch release, update CFDrs to the merged default branch, and
+  prove its typed acquisition succeeds on the real-device regression suite.
 
 ## Odd-length WGPU storage padding [patch]
 
