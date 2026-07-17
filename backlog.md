@@ -6,6 +6,12 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-DOWNLEVEL-LIMITS-1] [minor] `WgpuDevice::downlevel_device_limits`
+  exposes WGPU's downlevel baseline through `DeviceLimits`, so CFDrs can retain
+  adapter compatibility while raising only its required storage binding count.
+  Evidence: value-semantic mapping regression; warning-denied WGPU Clippy;
+  136/136 WGPU nextest; rustdoc; doctest; and minor SemVer classification.
+
 - [HEPH-CUDA-BINDGEN-1] [patch] CUDA-enabled builds set `LIBCLANG_PATH` and
   prepend the installed MinGW LLVM directory to `PATH`, replacing the host's
   non-loading UCRT distribution. Evidence: locked `hephaestus-cuda` all-target

@@ -4,7 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.15.0.
+Target release: 0.16.0.
+
+- [minor] `WgpuDevice::downlevel_device_limits` exposes WGPU's downlevel
+  acquisition baseline through the backend-neutral `DeviceLimits` vocabulary.
+  Consumers retain downlevel adapter compatibility while changing only the
+  limits their kernels require, without importing WGPU limits.
 
 - [minor] `WgpuDevice` now acquires devices with a required
   `DeviceFeature` set through the Hephaestus vocabulary. Consumers can require
