@@ -22,6 +22,17 @@ contract tests; `cargo clippy -p hephaestus-core -p hephaestus-wgpu
 CUDA no-default-features Clippy run. The full CUDA run is blocked by the
 pre-existing Windows access violation tracked in `gap_audit.md`.
 
+## HEPH-CUDA-CONCURRENT-1 driver initialization [patch]
+
+- [ ] Claim the concurrent-acquisition residual and restrict the scope to
+  `hephaestus-cuda/src/infrastructure/device.rs`, its concurrency contract,
+  and synchronized PM records (Codex,
+  `codex/hephaestus-cuda-init-serialization`).
+- [ ] Make provider driver initialization single-assignment and thread-safe;
+  preserve the typed unavailable-driver error.
+- [ ] Re-run the concurrent real-device contract, package gates, and docs;
+  close the environment residual only when the exact abort is gone.
+
 ## Typed WGPU downlevel limits [minor]
 
 - [x] Add `WgpuDevice::downlevel_device_limits` as the provider-owned typed
