@@ -4,7 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.16.0.
+Target release: 0.16.1.
+
+- [patch] Typed device acquisition now preserves WGPU's full downlevel limit
+  baseline when converting `DeviceLimits`. Raising a mapped limit no longer
+  accidentally restores stricter ordinary-default requirements for unmapped
+  WGPU limits.
 
 - [minor] `WgpuDevice::downlevel_device_limits` exposes WGPU's downlevel
   acquisition baseline through the backend-neutral `DeviceLimits` vocabulary.

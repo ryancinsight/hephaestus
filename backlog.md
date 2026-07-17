@@ -6,9 +6,15 @@ cuda-oxide + cutile).
 
 ## Closed
 
+- [HEPH-DOWNLEVEL-ACQUISITION-2] [patch] Typed device acquisition preserves
+  WGPU's full downlevel descriptor when a consumer raises a mapped
+  `DeviceLimits` field. Evidence: exact descriptor-mapping regression,
+  warning-denied WGPU Clippy, 137/137 WGPU nextest, doctest, rustdoc, and
+  223/223 applicable patch SemVer checks. CFDrs now consumes this contract.
+
 - [HEPH-DOWNLEVEL-LIMITS-1] [minor] `WgpuDevice::downlevel_device_limits`
-  exposes WGPU's downlevel baseline through `DeviceLimits`, so CFDrs can retain
-  adapter compatibility while raising only its required storage binding count.
+  exposes the mapped WGPU downlevel limits through `DeviceLimits`. The
+  provider's full acquisition-preservation fix is HEPH-DOWNLEVEL-ACQUISITION-2.
   Evidence: value-semantic mapping regression; warning-denied WGPU Clippy;
   136/136 WGPU nextest; rustdoc; doctest; and minor SemVer classification.
 
