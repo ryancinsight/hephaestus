@@ -17,8 +17,9 @@ Sprint target: 0.16.1. Phase: Closure.
   ordinary defaults, so a typed downlevel request became incompatible.
 - [x] Preserve the full WGPU downlevel baseline during typed acquisition and
   prove it with an exact mapping regression plus complete WGPU package gates.
-- [ ] Merge the patch release, update CFDrs to the merged default branch, and
-  prove its typed acquisition succeeds on the real-device regression suite.
+- [x] Merge patch release PR #41, update CFDrs to merged 0.16.1, and prove
+  typed acquisition on cfd-core GPU nextest 245/245, cfd-math GPU 362/362, and
+  cfd-2d GPU 570/570 (27 pre-existing skips) in merged CFDrs PR #295.
 
 ## Odd-length WGPU storage padding [patch]
 

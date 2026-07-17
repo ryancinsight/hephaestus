@@ -18,8 +18,10 @@ architectural decision or a tracked future-work item:
   `DeviceLimits`. Raising a mapped field therefore retains every unmapped
   downlevel WGPU limit. Evidence tier: exact descriptor-mapping regression,
   warning-denied WGPU Clippy, 137-case WGPU nextest, doctest, rustdoc, and
-  223/223 applicable patch SemVer checks. CFDrs real-device integration is the
-  final dependency-ordered verification.
+  223/223 applicable patch SemVer checks. CFDrs PR #295 updates the locked
+  provider to 0.16.1 and passes cfd-core GPU 245/245, cfd-math GPU 362/362,
+  and cfd-2d GPU 570/570 (27 pre-existing skips): real-device consumer
+  integration is complete.
 
 - [HEPH-DOWNLEVEL-LIMITS-1] [minor] `WgpuDevice` exposes the mapped WGPU
   downlevel limits as typed `DeviceLimits`. Evidence tier: value-semantic
