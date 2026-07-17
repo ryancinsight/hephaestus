@@ -59,6 +59,17 @@ pub struct DeviceLimits {
     /// storage-buffer slot limit, so CUDA reports `None` instead of fabricating
     /// a WGPU-shaped value.
     pub max_storage_buffers_per_shader_stage: Option<u32>,
+    /// Maximum combined buffer + acceleration-structure bindings available to
+    /// one shader stage.
+    ///
+    /// WGPU 30 folds storage buffers, uniform buffers, and acceleration
+    /// structures into a single per-stage budget
+    /// (`max_buffers_and_acceleration_structures_per_shader_stage`), so a kernel
+    /// binding N storage buffers *and* a uniform buffer needs this limit at
+    /// `N + 1`, independent of `max_storage_buffers_per_shader_stage`. `None`
+    /// when the backend has no equivalent combined slot limit (CUDA flat
+    /// kernel arguments).
+    pub max_buffers_and_acceleration_structures_per_shader_stage: Option<u32>,
     /// Maximum immediate shader-data byte count.
     pub max_immediate_size: u32,
 }

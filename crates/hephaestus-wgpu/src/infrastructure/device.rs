@@ -101,6 +101,9 @@ impl WgpuDevice {
             max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup,
             max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size,
             max_storage_buffers_per_shader_stage: Some(limits.max_storage_buffers_per_shader_stage),
+            max_buffers_and_acceleration_structures_per_shader_stage: Some(
+                limits.max_buffers_and_acceleration_structures_per_shader_stage,
+            ),
             max_immediate_size: limits.max_immediate_size,
         }
     }
@@ -110,12 +113,15 @@ impl WgpuDevice {
         let max_storage_buffers = required
             .max_storage_buffers_per_shader_stage
             .unwrap_or(downlevel.max_storage_buffers_per_shader_stage);
-        let max_buffers_and_acceleration_structures =
-            if max_storage_buffers > downlevel.max_storage_buffers_per_shader_stage {
-                max_storage_buffers
-            } else {
-                downlevel.max_buffers_and_acceleration_structures_per_shader_stage
-            };
+        // Prefer the consumer's explicit combined budget when supplied — only it
+        // can account for uniform buffers bound alongside storage buffers. Fall
+        // back to deriving from the storage-buffer request for callers that pin
+        // only the legacy limit. Storage buffers always count against the
+        // aggregate, so it can never fall below the storage request.
+        let max_buffers_and_acceleration_structures = required
+            .max_buffers_and_acceleration_structures_per_shader_stage
+            .unwrap_or(downlevel.max_buffers_and_acceleration_structures_per_shader_stage)
+            .max(max_storage_buffers);
 
         wgpu::Limits {
             max_buffer_size: required.max_buffer_size,

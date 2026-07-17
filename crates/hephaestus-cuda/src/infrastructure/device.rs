@@ -509,6 +509,7 @@ fn query_device_limits(device: &cuda_oxide::sys::CUdevice) -> Result<DeviceLimit
             "max_shared_memory_per_block",
         )?),
         max_storage_buffers_per_shader_stage: None,
+        max_buffers_and_acceleration_structures_per_shader_stage: None,
         max_immediate_size: 0,
     })
 }
