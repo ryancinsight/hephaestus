@@ -107,6 +107,15 @@ impl WgpuDevice {
 
     fn wgpu_limits_from_device_limits(required: DeviceLimits) -> wgpu::Limits {
         let downlevel = wgpu::Limits::downlevel_defaults();
+        let max_storage_buffers = required
+            .max_storage_buffers_per_shader_stage
+            .unwrap_or(downlevel.max_storage_buffers_per_shader_stage);
+        let max_buffers_and_acceleration_structures =
+            if max_storage_buffers > downlevel.max_storage_buffers_per_shader_stage {
+                max_storage_buffers
+            } else {
+                downlevel.max_buffers_and_acceleration_structures_per_shader_stage
+            };
 
         wgpu::Limits {
             max_buffer_size: required.max_buffer_size,
@@ -115,9 +124,9 @@ impl WgpuDevice {
             max_compute_workgroup_size_z: required.max_compute_workgroup_size_z,
             max_compute_invocations_per_workgroup: required.max_compute_invocations_per_workgroup,
             max_compute_workgroup_storage_size: required.max_compute_workgroup_storage_size,
-            max_storage_buffers_per_shader_stage: required
-                .max_storage_buffers_per_shader_stage
-                .unwrap_or(downlevel.max_storage_buffers_per_shader_stage),
+            max_buffers_and_acceleration_structures_per_shader_stage:
+                max_buffers_and_acceleration_structures,
+            max_storage_buffers_per_shader_stage: max_storage_buffers,
             max_immediate_size: required.max_immediate_size,
             ..downlevel
         }
@@ -1309,6 +1318,20 @@ mod tests {
         assert_eq!(
             WgpuDevice::wgpu_limits_from_device_limits(WgpuDevice::downlevel_device_limits()),
             wgpu::Limits::downlevel_defaults()
+        );
+    }
+
+    #[test]
+    fn elevated_storage_limit_raises_the_aggregate_buffer_limit() {
+        let mut required = WgpuDevice::downlevel_device_limits();
+        required.max_storage_buffers_per_shader_stage = Some(32);
+
+        let limits = WgpuDevice::wgpu_limits_from_device_limits(required);
+
+        assert_eq!(limits.max_storage_buffers_per_shader_stage, 32);
+        assert_eq!(
+            limits.max_buffers_and_acceleration_structures_per_shader_stage,
+            32
         );
     }
 }
