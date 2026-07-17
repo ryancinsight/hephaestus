@@ -161,6 +161,15 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   per-element bound ~O(log2(L)*eps*sum|x|) (tree depth log2 L vs sequential
   depth L) encoded in the differential tests as a DERIVED tolerance for the
   reordered kernel — never a widened exact-equality contract. Status: todo.
+- [HEPH-SCAN-TILED-1] [minor] Order-preserving shared-memory tiled scan
+  (owner Codex, branch `codex/hephaestus-tiled-scan`, scope
+  `hephaestus-core/src/domain/scan.rs`, `hephaestus-wgpu/src/application/scan.rs`,
+  `hephaestus-cuda/src/application/scan.rs`, scan contracts and ADR): partition
+  each line into contiguous thread chunks, combine chunk totals in logical
+  order, and apply the ordered prefix. Acceptance: one workgroup/block per
+  line, no floating-point reassociation, shared-memory staging on both
+  backends, exact sequential results, and warning-clean focused gates. The
+  multi-pass long-line variant in KS-5b remains a follow-up after this slice.
 - [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
   (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
   Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).

@@ -2,6 +2,17 @@
 
 Sprint target: 0.16.1. Phase: Closure.
 
+## HEPH-SCAN-TILED-1 order-preserving tiled scan [minor]
+
+- [ ] Claim the provider-owned scan slice and record its exact backend/core
+  scope (Codex, `codex/hephaestus-tiled-scan`).
+- [ ] Change the core dispatch contract to one workgroup/block per scan line.
+- [ ] Generate order-preserving shared-memory tiled kernels for WGPU and CUDA;
+  retain the existing combine order for every scalar type and direction.
+- [ ] Add theorem/spec Rustdoc and value-semantic core/backend contract coverage.
+- [ ] Run focused formatting, checks, warning-denied Clippy, nextest, doctest,
+  and rustdoc; update PM artifacts and commit the verified increment.
+
 ## Typed WGPU downlevel limits [minor]
 
 - [x] Add `WgpuDevice::downlevel_device_limits` as the provider-owned typed
