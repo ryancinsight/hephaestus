@@ -1,5 +1,5 @@
 use core::ffi::c_void;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use bytemuck::Pod;
 use cuda_oxide::Cuda;
@@ -103,6 +103,11 @@ pub struct CudaDevice {
     topology: Option<Arc<themis::GpuTopology>>,
 }
 
+/// CUDA context creation is process-global inside the Windows driver even
+/// though context use is thread-current. Serialize only the creation/bind
+/// boundary; transfers and kernels remain concurrent after acquisition.
+static CONTEXT_CREATE_LOCK: Mutex<()> = Mutex::new(());
+
 #[derive(Clone, Copy, Debug)]
 struct CudaDeviceFeatures {
     shader_f64: bool,
@@ -147,8 +152,15 @@ impl CudaDevice {
                 message: format!("CUDA device {device_ordinal} unavailable: {status}"),
             });
         }
+        let _context_guard =
+            CONTEXT_CREATE_LOCK
+                .lock()
+                .map_err(|_| HephaestusError::DeviceUnavailable {
+                    message: "CUDA context creation lock is poisoned".to_string(),
+                })?;
         let context = Arc::new(CudaContext::create(device)?);
         context.bind()?;
+        drop(_context_guard);
         let limits = query_device_limits(&device)?;
         let features = query_device_features(&device)?;
         let topology = Some(Arc::new(query_topology(&device)?));
@@ -424,10 +436,22 @@ impl CudaDevice {
     }
 }
 
+static DRIVER_INIT: OnceLock<core::result::Result<(), String>> = OnceLock::new();
+
+/// Initialize the process-wide CUDA driver exactly once.
+///
+/// `cuda-oxide` loads the driver dynamically; keeping the initialization
+/// result in a `OnceLock` prevents concurrent `CudaDevice` acquisition from
+/// racing the loader. A failure is retained and surfaced as the same typed
+/// adapter-unavailable error on every later attempt.
 fn init_driver() -> Result<()> {
-    Cuda::init().map_err(|e| HephaestusError::AdapterUnavailable {
-        message: format!("cuda-oxide driver initialization failed: {e}"),
-    })
+    let state = DRIVER_INIT.get_or_init(|| Cuda::init().map_err(|e| e.to_string()));
+    match state {
+        Ok(()) => Ok(()),
+        Err(message) => Err(HephaestusError::AdapterUnavailable {
+            message: format!("cuda-oxide driver initialization failed: {message}"),
+        }),
+    }
 }
 
 fn device_attribute(

@@ -173,12 +173,14 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   Evidence: ADR 0009, core 48/48, WGPU 140/140, CUDA 108/108 with the
   independent concurrent-acquisition abort excluded, and warning-denied
   Clippy for all touched packages.
-- [HEPH-CUDA-CONCURRENT-1] [patch] Serialize and memoize CUDA driver
+- [x] [HEPH-CUDA-CONCURRENT-1] [patch] Serialize and memoize CUDA driver
   initialization through a provider-owned `OnceLock` so concurrent
   `CudaDevice::try_default` calls cannot race the dynamic driver loader.
   Acceptance: the existing 16-thread real-device acquisition/transfer
   contract passes without an access violation; missing-driver errors remain
-  typed and no test skip or timeout change is introduced.
+  typed and no test skip or timeout change is introduced. Evidence: the full
+  CUDA package nextest now passes 109/109, including the formerly aborting
+  16-thread contract, after the provider-owned initialization/context locks.
 - [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
   (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
   Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).
