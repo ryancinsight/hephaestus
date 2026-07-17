@@ -1160,6 +1160,43 @@ fn axis_scans_match_leto_reference() {
 }
 
 #[test]
+fn axis_scan_long_line_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cumsum_into};
+    use leto::Layout;
+
+    let cols = 513usize;
+    let host: Vec<i32> = (0..2 * cols)
+        .map(|index| i32::try_from(index).expect("test index fits i32") - 300)
+        .collect();
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, cols]).unwrap();
+    let output = device.alloc_zeroed::<i32>(host.len()).unwrap();
+    cumsum_into::<i32>(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &output,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let leto_input = leto::Array::from_shape_vec([2, cols], host).unwrap();
+    let expected = leto_ops::cumsum(&leto_input.view(), 1).unwrap().into_vec();
+    let mut got = vec![0i32; expected.len()];
+    device.download(&output, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+#[test]
 fn acquisition_reports_themis_topology_from_adapter() {
     let Some(device) = device_or_skip() else {
         return;

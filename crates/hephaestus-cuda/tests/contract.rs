@@ -914,6 +914,45 @@ fn scan_scan_axis_matches_cpu() {
 }
 
 #[test]
+fn scan_long_line_matches_integer_reference() {
+    let Some(dev) = device("scan_long_line_matches_integer_reference") else {
+        return;
+    };
+
+    let cols = 513usize;
+    let host: Vec<i32> = (0..2 * cols)
+        .map(|index| i32::try_from(index).expect("test index fits i32") - 300)
+        .collect();
+    let input = dev.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, cols]).unwrap();
+    let output = scan_axis::<CumSumOp, i32>(
+        &dev,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+        1,
+        hephaestus_cuda::ScanDirection::Forward,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = vec![0i32; host.len()];
+    dev.download(&output, &mut got).unwrap();
+    let expected: Vec<i32> = host
+        .chunks_exact(cols)
+        .flat_map(|row| {
+            let mut acc = 0i32;
+            row.iter().map(move |value| {
+                acc += *value;
+                acc
+            })
+        })
+        .collect();
+    assert_eq!(got, expected);
+}
+
+#[test]
 fn linalg_matrix_rank_matches_reference() {
     let Some(dev) = device("linalg_matrix_rank_matches_reference") else {
         return;

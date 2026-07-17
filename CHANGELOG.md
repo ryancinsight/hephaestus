@@ -30,6 +30,13 @@ Target release: 0.16.1.
   Every published package declares Rust 1.95, the actual minimum supported by
   the resolved Leto, Mnemosyne, and Moirai graph.
 
+- [minor] Axis scans now dispatch one workgroup/block per scan line and use
+  provider-owned shared-memory tiles on WGPU and CUDA. Contiguous lane chunks
+  and an ordered chunk-prefix fold preserve associative scan semantics while
+  making floating-point reassociation explicit in ADR 0009 and its derived
+  tolerance policy. Core, WGPU, and CUDA value-semantic contracts cover
+  lines longer than the configured block width.
+
 ### Breaking
 
 - The minimum Rust version is 1.95. Rust 1.94.1 and earlier reject the

@@ -1,7 +1,11 @@
 //! Backend-neutral axis-scan planning.
 //!
-//! Both GPU backends dispatch a one-thread-per-line inclusive scan over a
-//! rank-2 strided operand with the identical host-side contract: validate the
+//! Both GPU backends dispatch one workgroup/block per scan line. Each lane
+//! owns a contiguous chunk, and the chunk totals are combined in logical
+//! order, exposing lane-level parallel work. For associative operations this
+//! preserves the sequential mathematical fold; floating-point addition and
+//! multiplication are reassociated and therefore use a derived error bound.
+//! The host-side contract is identical: validate the
 //! shapes/strides, pack the launch metadata into a `#[repr(C)]` block that
 //! mirrors the shader's uniform struct, and derive the workgroup count. That
 //! logic is dialect-independent — only the shader source and the raw dispatch
@@ -47,12 +51,12 @@ pub struct AxisScanMeta {
     pub offsets: [u32; 4],
 }
 
-/// A validated axis-scan dispatch: launch metadata plus the workgroup count.
+/// A validated axis-scan dispatch: launch metadata plus the line count.
 #[derive(Clone, Copy, Debug)]
 pub struct AxisScanDispatch {
     /// Launch metadata for the shader uniform.
     pub meta: AxisScanMeta,
-    /// Workgroup (block) count covering one thread per scan line.
+    /// Workgroup (block) count, exactly one workgroup/block per scan line.
     pub groups: u32,
 }
 
@@ -122,8 +126,10 @@ pub fn plan_axis_scan(
         ScanDirection::Forward => 0usize,
         ScanDirection::Reverse => 2usize,
     };
-    // One thread per scan line: lines run along `axis`, so their count is the
-    // orthogonal extent. Non-zero here because output_len > 0.
+    // Lines run along `axis`, so their count is the orthogonal extent. The
+    // tiled kernel launches one workgroup/block per line; every lane then
+    // owns a contiguous chunk of that line. Non-zero here because output_len
+    // > 0.
     let line_count = input_layout.shape[1 - axis];
     let meta = AxisScanMeta {
         input_shape: [
@@ -151,11 +157,9 @@ pub fn plan_axis_scan(
         u64::try_from(line_count).map_err(|_| HephaestusError::DispatchFailed {
             message: format!("scan line count {line_count} exceeds u64 range"),
         })?;
-    let groups = width
-        .checked_covering_blocks(line_count_u64)
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!("scan line count {line_count} exceeds u32 workgroup range"),
-        })?;
+    let groups = u32::try_from(line_count_u64).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("scan line count {line_count} exceeds u32 workgroup range"),
+    })?;
 
     Ok(Some(AxisScanDispatch { meta, groups }))
 }
@@ -181,7 +185,7 @@ mod tests {
         // axis 1, forward → offsets[2] = 1 | 0 = 1; line_count = rows = 3.
         assert_eq!(plan.meta.offsets[2], 1);
         assert_eq!(plan.meta.offsets[3], 3);
-        assert_eq!(plan.groups, 1);
+        assert_eq!(plan.groups, 3);
         assert_eq!(plan.meta.input_shape, [3, 4]);
     }
 
@@ -218,5 +222,24 @@ mod tests {
         let w = BlockWidth::new(3).expect("non-zero");
         let err = plan_axis_scan(&l, 4, &l, 4, 0, ScanDirection::Forward, w, false).unwrap_err();
         assert!(matches!(err, HephaestusError::DispatchFailed { .. }));
+    }
+
+    #[test]
+    fn plans_one_workgroup_per_line_for_long_lines() {
+        let l = layout([3, 1_024]);
+        let plan = plan_axis_scan(
+            &l,
+            3 * 1_024,
+            &l,
+            3 * 1_024,
+            1,
+            ScanDirection::Forward,
+            width(),
+            false,
+        )
+        .expect("valid")
+        .expect("non-empty");
+        assert_eq!(plan.meta.offsets[3], 3);
+        assert_eq!(plan.groups, 3);
     }
 }

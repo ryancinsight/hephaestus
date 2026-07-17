@@ -239,6 +239,16 @@ impl LaunchConfig {
         }
     }
 
+    /// One-dimensional launch with dynamic shared memory per block.
+    #[must_use]
+    pub(crate) const fn linear_shared(grid_x: u32, width: BlockWidth, shared_bytes: u32) -> Self {
+        Self {
+            grid: (grid_x, 1, 1),
+            block: (width.get(), 1, 1),
+            shared_bytes,
+        }
+    }
+
     /// Two-dimensional launch: `grid_x` × `grid_y` blocks of
     /// `block_x` × `block_y` threads.
     #[must_use]
