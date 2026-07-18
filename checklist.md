@@ -2,6 +2,18 @@
 
 Sprint target: 0.17.0. Phase: Closure.
 
+## HEPH-EUNOMIA-0.4-REFRESH [patch]
+
+- [x] Advance the reproducibility lock from Eunomia 0.2.0 `34d0cc8a` to
+      Eunomia 0.4.0 `49dc115e`.
+- [x] Confirm WGPU, CUDA, Metal, and Python compile against the merged provider.
+- [x] Pass formatting, warning-denied all-target/all-feature Clippy, configured
+      Nextest, doctest, and warning-denied rustdoc gates.
+
+**Evidence:** the dependency lock resolves one Eunomia 0.4.0 source identity;
+the complete compile and documentation gates pass, and configured Nextest is
+312/312.
+
 ## HEPH-EUNOMIA-COMPLEX-1 [arch]
 
 - [x] Audit production, test, and transitive complex-provider ownership.

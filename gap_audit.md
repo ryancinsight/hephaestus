@@ -11,6 +11,16 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-EUNOMIA-0.4-REFRESH] Provider lock (2026-07-18)
+
+- Resolution: advance the lock from Eunomia 0.2.0 `34d0cc8a` to 0.4.0
+  `49dc115e`, carrying the canonical sub-byte conversion kernel and corrected
+  reduced-format constants into every Hephaestus backend.
+- Evidence tier: dependency-resolution identity plus warning-denied
+  all-target/all-feature Clippy, configured Nextest 312/312, doctest, and
+  warning-denied rustdoc.
+- Residual: the refresh changes no Hephaestus source or public API.
+
 ## [HEPH-EUNOMIA-COMPLEX-1] Eunomia complex ownership (2026-07-18)
 
 - Finding: general-eigenvalue APIs owned `num_complex::Complex<f32>` even

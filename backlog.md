@@ -4,6 +4,16 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-EUNOMIA-0.4-REFRESH [patch] — done
+
+- Owner: Codex `/root`; scope: Eunomia reproducibility pin and synchronized
+  provider evidence.
+- Acceptance: the lock resolves Eunomia 0.4.0 from its merged default commit;
+  the complete warning-denied compile, test, doctest, and rustdoc gates pass.
+- Evidence: `Cargo.lock` resolves `49dc115e`; formatter, warning-denied
+  all-target/all-feature Clippy, configured Nextest 312/312, doctest, and
+  warning-denied rustdoc pass.
+
 ## HEPH-EUNOMIA-COMPLEX-1 [arch] — done
 
 - Owner: Codex `/root`; scope: workspace numeric dependency ownership,
