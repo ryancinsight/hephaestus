@@ -4,6 +4,18 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-LEGACY-MATH-RESIDUE-1 [patch] — in-progress
+
+- Owner: Codex `/root`; scope: workspace math manifests, WGPU differential
+  oracles, and comparative benchmark CPU baselines. The provider owns the
+  WGPU/CUDA implementation; this slice deletes only obsolete consumer-side
+  reference dependencies.
+- Acceptance: `ndarray` and `nalgebra` disappear from Hephaestus manifests,
+  tests, and benchmarks; Leto/Leto Ops or analytical value references retain
+  differential coverage and real benchmark measurements.
+- Last update: 2026-07-17; claim is backed by branch
+  `codex/hephaestus-remove-legacy-math` before implementation.
+
 ## [HEPH-SCAN-LIMIT-AUDIT] [patch] — done
 
 - Owner: Codex; scope: scan theorem/ADR and synchronized provider PM records.

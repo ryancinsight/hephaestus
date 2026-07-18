@@ -2,6 +2,15 @@
 
 Sprint target: 0.16.1. Phase: Closure.
 
+## HEPH-LEGACY-MATH-RESIDUE-1 [patch]
+
+- [ ] Remove the obsolete `ndarray`/`nalgebra` manifest edges and migrate
+      WGPU differential oracles to Leto-owned implementations.
+- [ ] Keep comparative benchmarks real and provider-focused by measuring
+      Leto CPU operations against WGPU/CUDA, with no legacy baseline crates.
+- [ ] Run formatting, locked checks, warning-denied diagnostics, Nextest,
+      doctests, rustdoc, and the source-residue audit.
+
 ## HEPH-SCAN-LIMIT-AUDIT [patch]
 
 - [x] Audit the WGPU/CUDA scan shader and planner bounds before adding a
