@@ -1,6 +1,6 @@
 # Checklist — hephaestus
 
-Sprint target: 0.17.0. Phase: Execution.
+Sprint target: 0.17.0. Phase: Closure.
 
 ## HEPH-EUNOMIA-COMPLEX-1 [arch]
 
@@ -14,7 +14,8 @@ Sprint target: 0.17.0. Phase: Execution.
       workspace lock.
 - [x] Pass format, all-target checks, warning-denied Clippy, Nextest, doctests,
       rustdoc, residue, and SemVer gates.
-- [ ] Publish and merge the 0.17.0 consumer cutover.
+- [x] Publish and merge the 0.17.0 consumer cutover as PR #48
+      (`82bb3a7`).
 
 **Evidence:** affected all-target/all-feature checks and warning-denied Clippy
 pass; supported minimal decomposition feature combinations compile; WGPU,
