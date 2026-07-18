@@ -149,7 +149,7 @@ pub trait MatrixDecompose {
     /// Symmetric eigenvalues only.
     fn symmetric_eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<f32>>;
     /// All eigenvalues of a general (non-symmetric) matrix.
-    fn eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<num_complex::Complex<f32>>>;
+    fn eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<eunomia::Complex<f32>>>;
     /// Real Schur decomposition.
     fn schur(&self, device: &CudaDevice)
     -> Result<crate::application::decomposition::GpuRealSchur>;
@@ -250,7 +250,7 @@ impl<'a, M: AsGpuMatrixOperand<'a, f32>> MatrixDecompose for M {
         crate::application::decomposition::symmetric_eigenvalues_jacobi(device, self.as_operand())
     }
     #[inline]
-    fn eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<num_complex::Complex<f32>>> {
+    fn eigenvalues(&self, device: &CudaDevice) -> Result<CudaBuffer<eunomia::Complex<f32>>> {
         crate::application::decomposition::eigenvalues(device, self.as_operand())
     }
     #[inline]

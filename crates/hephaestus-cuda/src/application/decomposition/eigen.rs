@@ -1,7 +1,7 @@
 //! GPU-resident Eigendecomposition.
 
+use eunomia::Complex;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
-use num_complex::Complex;
 
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
@@ -165,13 +165,9 @@ pub fn eigenvalues(
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
-    let e_host = leto_ops::eigenvalues(&view)
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("General eigenvalues failed: {e}"),
-        })?
-        .into_iter()
-        .map(|z| Complex::new(z.re, z.im))
-        .collect::<Vec<_>>();
+    let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("General eigenvalues failed: {e}"),
+    })?;
 
     device.upload(&e_host)
 }

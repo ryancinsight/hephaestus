@@ -11,6 +11,25 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-EUNOMIA-COMPLEX-1] Eunomia complex ownership (2026-07-18)
+
+- Finding: general-eigenvalue APIs owned `num_complex::Complex<f32>` even
+  though Leto already returned `eunomia::Complex<f32>`. WGPU/CUDA rebuilt the
+  same representation field-by-field, and the Python boundary allocated a
+  second vector solely to change the Rust type identity.
+- Resolution: WGPU, CUDA, Metal, and Python use Eunomia's type directly; Leto
+  eigenvalue vectors upload without conversion; NumPy construction consumes
+  the downloaded Eunomia vector directly through Eunomia's `numpy::Element`
+  contract. Direct `num-complex` manifests and source references are deleted.
+- Evidence tier: compile-time type unification and committed dependency lock;
+  WGPU/CUDA real-device value-semantic eigenvalue contracts; Python NumPy
+  differential parity; 264/264 affected Nextest cases; warning-denied Clippy
+  and rustdoc; doctests; supported minimal-feature checks; source/manifest
+  residue scan; and public API SemVer analysis.
+- Residual: `num-complex` remains transitively inside NumPy/ndarray, an
+  external FFI implementation detail that does not enter Hephaestus source or
+  public buffer types.
+
 ## [HEPH-LEGACY-MATH-RESIDUE-1] Leto-only CPU references (2026-07-17)
 
 - Finding: the provider still carried direct `ndarray`/`nalgebra` edges only
@@ -46,6 +65,15 @@ architectural decision or a tracked future-work item:
   correctness defect remains. Re-open only after a measured device-specific
   workgroup/latency limit and a derived floating-point bound for reordered
   accumulation are recorded.
+
+## Open feature hygiene
+
+- [HEPH-CUDA-DECOMPOSITION-FEATURE-1] [patch] `decomposition` without `cuda`
+  currently compiles decomposition modules that import CUDA-only byte-count
+  machinery. The supported `decomposition,cuda` combination passes. Re-open
+  by defining whether non-CUDA decomposition is a real backend contract, then
+  either encode `decomposition = ["cuda"]` or separate the host-only surface;
+  this baseline defect is not caused by the Eunomia cutover.
 
 ## Resolved
 

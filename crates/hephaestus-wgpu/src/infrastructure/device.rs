@@ -1269,7 +1269,7 @@ mod tests {
         let host = [0x0001_u16, 0x0203, 0x0405];
         let payload = WgpuDevice::padded_host_bytes(&host).expect("padded host bytes");
         assert_eq!(payload.len(), 8);
-        assert_eq!(&payload[..6], bytemuck::cast_slice(&host));
+        assert_eq!(&payload[..6], bytemuck::cast_slice::<u16, u8>(&host));
         assert_eq!(&payload[6..], [0, 0]);
     }
 

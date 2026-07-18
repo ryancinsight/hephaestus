@@ -17,6 +17,14 @@ Target release: 0.17.0.
   APIs. The layout remains `repr(C)` real/imaginary pairs and is pinned by
   Eunomia 0.2.0 compile-time assertions.
 
+### Changed
+
+- WGPU and CUDA upload Leto's Eunomia eigenvalue vectors directly. The Python
+  NumPy boundary constructs its result from the same downloaded vector,
+  removing both field-wise conversions and the second allocation.
+- Commit the workspace dependency lock so the PyO3 artifact and GPU providers
+  resolve the reviewed Eunomia 0.2.0 merge commit reproducibly.
+
 - [patch] Remove the obsolete CPU reference dependencies from Hephaestus
   tests and comparative benches. WGPU and CUDA comparisons now use Leto/Leto
   Ops for CPU values and retain real provider measurements for elementwise,

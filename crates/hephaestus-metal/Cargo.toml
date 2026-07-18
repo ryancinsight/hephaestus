@@ -20,7 +20,7 @@ decomposition = ["dep:leto-ops"]
 hephaestus-core = { workspace = true }
 hephaestus-wgpu = { workspace = true }
 leto = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }

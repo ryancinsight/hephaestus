@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-EUNOMIA-COMPLEX-1 [arch] — in progress
+## HEPH-EUNOMIA-COMPLEX-1 [arch] — review
 
 - Owner: Codex `/root`; scope: workspace numeric dependency ownership,
   WGPU/CUDA/Metal eigenvalue buffer APIs, Python complex buffer boundary,
@@ -14,6 +14,10 @@ cuda-oxide + cutile).
   `eunomia::Complex`; the Python result path does not allocate a second complex
   vector; all affected package gates pass.
 - Driver: Eunomia 0.2.0 PR #36 and ADR 0010.
+- Closure evidence: affected package checks and warning-denied Clippy pass;
+  supported minimal feature combinations compile; Nextest passes 264/264;
+  doctests and warning-denied rustdoc pass; direct residue is zero; and the
+  workspace lock pins merged Eunomia commit `34d0cc8a`.
 
 ## HEPH-LEGACY-MATH-RESIDUE-1 [patch] — done
 
