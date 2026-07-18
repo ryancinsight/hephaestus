@@ -11,6 +11,25 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-LEGACY-MATH-RESIDUE-1] Leto-only CPU references (2026-07-17)
+
+- Finding: the provider still carried direct `ndarray`/`nalgebra` edges only
+  for comparative benchmark baselines and WGPU differential oracles, creating
+  a second CPU vocabulary beside the Atlas array/linalg provider.
+- Resolution: remove those manifest edges, replace the differential oracles
+  with Leto/Leto Ops, and reduce both comparative benches to real Leto-versus-
+  provider measurements for elementwise, reduction, and matrix products.
+- Theorem: for a fixed input (x), each comparison now evaluates the same
+  operation (f) through exactly two implementations, `leto_ops::f(x)` and
+  the provider dispatch (P_f(x)); the downloaded provider result is checked
+  against the Leto storage oracle before either timing loop. No third-party
+  reference can define a competing shape, layout, or tolerance contract.
+- Evidence tier: compiler-checked dependency removal, 48/48 core tests,
+  140/140 WGPU tests, 109/109 CUDA tests, warning-denied Clippy, doctests,
+  warning-clean rustdoc, and all-target benchmark compilation. The Python
+  `numpy` bridge remains an external FFI representation and is not a domain
+  compute dependency.
+
 ## [HEPH-SCAN-LIMIT-AUDIT] Scan line-length bound (2026-07-17)
 
 - Finding: KS-5b proposed a multi-pass block-sums/uniform-add extension on the

@@ -6,6 +6,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 Target release: 0.16.1.
 
+- [patch] Remove the obsolete CPU reference dependencies from Hephaestus
+  tests and comparative benches. WGPU and CUDA comparisons now use Leto/Leto
+  Ops for CPU values and retain real provider measurements for elementwise,
+  reduction, and matrix-product operations. The Python `numpy` bridge remains
+  only at the external FFI representation boundary.
+
 - [patch] Typed device acquisition now preserves WGPU's full downlevel limit
   baseline when converting `DeviceLimits`. Raising a mapped limit no longer
   accidentally restores stricter ordinary-default requirements for unmapped

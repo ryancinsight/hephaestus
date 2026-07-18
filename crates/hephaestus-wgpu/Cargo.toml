@@ -40,8 +40,6 @@ windows = { workspace = true }
 [dev-dependencies]
 pollster = { workspace = true }
 leto-ops = { workspace = true }
-ndarray = { workspace = true }
-nalgebra = { workspace = true }
 
 [[bench]]
 name = "elementwise_into"

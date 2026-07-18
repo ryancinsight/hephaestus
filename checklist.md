@@ -2,6 +2,20 @@
 
 Sprint target: 0.16.1. Phase: Closure.
 
+## HEPH-LEGACY-MATH-RESIDUE-1 [patch]
+
+- [x] Remove the obsolete `ndarray`/`nalgebra` manifest edges and migrate
+      WGPU differential oracles to Leto-owned implementations.
+- [x] Keep comparative benchmarks real and provider-focused by measuring
+      Leto CPU operations against WGPU/CUDA, with no legacy baseline crates.
+- [x] Run formatting, locked checks, warning-denied diagnostics, Nextest,
+      doctests, rustdoc, and the source-residue audit.
+
+**Evidence:** core 48/48, WGPU 140/140, CUDA 109/109; all-target checks and
+warning-denied Clippy pass with the MinGW LLVM path required by the provider's
+documented Windows build contract. `numpy` remains only in the Python FFI
+boundary, not in provider computation or test/benchmark references.
+
 ## HEPH-SCAN-LIMIT-AUDIT [patch]
 
 - [x] Audit the WGPU/CUDA scan shader and planner bounds before adding a
