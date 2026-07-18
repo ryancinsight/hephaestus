@@ -15,7 +15,7 @@ Target release: 0.17.0.
 
 - Import `eunomia::Complex` for WGPU, CUDA, Metal, and Python complex buffer
   APIs. The layout remains `repr(C)` real/imaginary pairs and is pinned by
-  Eunomia 0.2.0 compile-time assertions.
+  Eunomia 0.4.0 compile-time assertions.
 
 ### Changed
 
@@ -23,7 +23,8 @@ Target release: 0.17.0.
   NumPy boundary constructs its result from the same downloaded vector,
   removing both field-wise conversions and the second allocation.
 - Commit the workspace dependency lock so the PyO3 artifact and GPU providers
-  resolve the reviewed Eunomia 0.2.0 merge commit reproducibly.
+  resolve the reviewed Eunomia 0.4.0 default commit reproducibly, including its
+  canonical round-to-nearest-even sub-byte conversion kernel.
 
 - [patch] Remove the obsolete CPU reference dependencies from Hephaestus
   tests and comparative benches. WGPU and CUDA comparisons now use Leto/Leto
