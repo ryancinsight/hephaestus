@@ -2256,7 +2256,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
 }
 
 #[cfg(feature = "decomposition")]
-fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
+fn sort_complex(values: &mut [eunomia::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
             .total_cmp(&rhs.re)
@@ -2266,8 +2266,8 @@ fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
 
 #[cfg(feature = "decomposition")]
 fn assert_complex_spectrum_close(
-    actual: &[num_complex::Complex<f32>],
-    expected: &[num_complex::Complex<f32>],
+    actual: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
     tolerance: f32,
 ) {
     assert_eq!(actual.len(), expected.len());
@@ -2394,13 +2394,13 @@ fn eigenvalues_match_closed_form_diagonal() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![eunomia::Complex::new(0.0f32, 0.0); 2];
     dev.download(&eigen, &mut got).unwrap();
     got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
 
     let expected = [
-        num_complex::Complex::new(2.0f32, 0.0),
-        num_complex::Complex::new(3.0f32, 0.0),
+        eunomia::Complex::new(2.0f32, 0.0),
+        eunomia::Complex::new(3.0f32, 0.0),
     ];
     for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
         assert_eq!(
@@ -2431,7 +2431,7 @@ fn eigenvalues_matches_leto_reference() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![eunomia::Complex::new(0.0f32, 0.0); 2];
     dev.download(&eigen, &mut got).unwrap();
 
     let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
@@ -2744,8 +2744,8 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         },
     )
     .unwrap();
-    let mut got_t = vec![num_complex::Complex::new(0.0f32, 0.0); n];
-    let mut got_a = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    let mut got_t = vec![eunomia::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![eunomia::Complex::new(0.0f32, 0.0); n];
     dev.download(&t_values, &mut got_t).unwrap();
     dev.download(&a_values, &mut got_a).unwrap();
     assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
@@ -3259,7 +3259,7 @@ fn empty_decompositions_preserve_shapes_and_identities() {
 
     let pivoted = col_piv_qr(&dev, tall).unwrap();
     assert_eq!(pivoted.rank(), 0);
-    assert_eq!(pivoted.permutation(), []);
+    assert_eq!(pivoted.permutation(), &[] as &[usize]);
     assert_eq!(pivoted.q().len(), 9);
     assert_eq!(pivoted.r().len(), 0);
     identity.fill(0.0);
@@ -3289,8 +3289,8 @@ fn empty_decompositions_preserve_shapes_and_identities() {
     assert_eq!(lu.n(), 0);
     assert_eq!(lu.rank(), 0);
     assert_eq!(lu.det(), 1.0);
-    assert_eq!(lu.row_permutation(), []);
-    assert_eq!(lu.col_permutation(), []);
+    assert_eq!(lu.row_permutation(), &[] as &[usize]);
+    assert_eq!(lu.col_permutation(), &[] as &[usize]);
     assert_eq!(lu.lu_buffer().len(), 0);
 
     let h = hessenberg(&dev, square).unwrap();

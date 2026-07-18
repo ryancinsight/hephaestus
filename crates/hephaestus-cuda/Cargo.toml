@@ -23,7 +23,7 @@ decomposition = []
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true }
 leto-ops = { workspace = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }

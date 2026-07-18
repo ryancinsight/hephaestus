@@ -4,7 +4,26 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.16.1.
+Target release: 0.17.0.
+
+### Breaking
+
+- [arch] General-eigenvalue device buffers now expose
+  `eunomia::Complex<f32>` instead of `num_complex::Complex<f32>`.
+
+### Migration
+
+- Import `eunomia::Complex` for WGPU, CUDA, Metal, and Python complex buffer
+  APIs. The layout remains `repr(C)` real/imaginary pairs and is pinned by
+  Eunomia 0.2.0 compile-time assertions.
+
+### Changed
+
+- WGPU and CUDA upload Leto's Eunomia eigenvalue vectors directly. The Python
+  NumPy boundary constructs its result from the same downloaded vector,
+  removing both field-wise conversions and the second allocation.
+- Commit the workspace dependency lock so the PyO3 artifact and GPU providers
+  resolve the reviewed Eunomia 0.2.0 merge commit reproducibly.
 
 - [patch] Remove the obsolete CPU reference dependencies from Hephaestus
   tests and comparative benches. WGPU and CUDA comparisons now use Leto/Leto

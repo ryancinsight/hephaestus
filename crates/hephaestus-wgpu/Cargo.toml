@@ -22,7 +22,7 @@ cuda-comparative = ["dep:hephaestus-cuda"]
 [dependencies]
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }

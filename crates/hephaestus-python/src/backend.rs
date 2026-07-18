@@ -2,10 +2,10 @@
 //! backends, plus the dispatch macros the operation modules expand to
 //! route a Python call to the matching backend kernel.
 
+use eunomia::Complex;
 use hephaestus_core::{ComputeDevice, DeviceBuffer};
 use hephaestus_cuda::{CudaBuffer, CudaDevice};
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
-use num_complex::Complex;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::sync::Arc;

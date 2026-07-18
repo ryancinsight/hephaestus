@@ -86,8 +86,8 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
 }
 
 fn assert_complex_spectra_close(
-    got: &[num_complex::Complex<f32>],
-    expected: &[num_complex::Complex<f32>],
+    got: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
     abs_tol: f32,
     rel_tol: f32,
 ) {
@@ -179,7 +179,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     }
 }
 
-fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
+fn sort_complex(values: &mut [eunomia::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
             .total_cmp(&rhs.re)
@@ -188,8 +188,8 @@ fn sort_complex(values: &mut [num_complex::Complex<f32>]) {
 }
 
 fn assert_complex_spectrum_close(
-    actual: &[num_complex::Complex<f32>],
-    expected: &[num_complex::Complex<f32>],
+    actual: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
     tolerance: f32,
 ) {
     assert_eq!(actual.len(), expected.len());
@@ -2091,13 +2091,13 @@ fn eigenvalues_match_closed_form_diagonal() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![eunomia::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
     got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
 
     let expected = [
-        num_complex::Complex::new(2.0f32, 0.0),
-        num_complex::Complex::new(3.0f32, 0.0),
+        eunomia::Complex::new(2.0f32, 0.0),
+        eunomia::Complex::new(3.0f32, 0.0),
     ];
     for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
         assert_eq!(
@@ -2127,7 +2127,7 @@ fn eigenvalues_matches_leto_reference() {
     )
     .unwrap();
 
-    let mut got = vec![num_complex::Complex::new(0.0f32, 0.0); 2];
+    let mut got = vec![eunomia::Complex::new(0.0f32, 0.0); 2];
     device.download(&eigen, &mut got).unwrap();
 
     let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
@@ -2155,9 +2155,9 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
     let Some(device) = device_or_skip() else {
         return;
     };
+    use eunomia::Complex;
     use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
-    use num_complex::Complex;
 
     let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
         (
@@ -2199,9 +2199,9 @@ fn eigenvalues_match_structured_and_dense_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
+    use eunomia::Complex;
     use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
-    use num_complex::Complex;
 
     let cases: [(usize, Vec<f32>, f32); 4] = [
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
@@ -2251,9 +2251,9 @@ fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     let Some(device) = device_or_skip() else {
         return;
     };
+    use eunomia::Complex;
     use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
-    use num_complex::Complex;
 
     let n = 3usize;
     let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
@@ -2600,8 +2600,8 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         },
     )
     .unwrap();
-    let mut got_t = vec![num_complex::Complex::new(0.0f32, 0.0); n];
-    let mut got_a = vec![num_complex::Complex::new(0.0f32, 0.0); n];
+    let mut got_t = vec![eunomia::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![eunomia::Complex::new(0.0f32, 0.0); n];
     device.download(&t_values, &mut got_t).unwrap();
     device.download(&a_values, &mut got_a).unwrap();
     assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);

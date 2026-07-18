@@ -4,8 +4,8 @@ use crate::application::decomposition::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use eunomia::Complex;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
-use num_complex::Complex;
 
 /// Symmetric eigendecomposition result: device-resident eigenvalues and eigenvectors.
 pub struct GpuSymmetricEigenDecomposition {
@@ -132,13 +132,9 @@ pub fn eigenvalues(
     device.download(matrix.buffer, &mut host_data)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
-    let e_host = leto_ops::eigenvalues(&view)
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("General eigenvalues failed: {e}"),
-        })?
-        .into_iter()
-        .map(|z| Complex::new(z.re, z.im))
-        .collect::<Vec<_>>();
+    let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("General eigenvalues failed: {e}"),
+    })?;
 
     device.upload(&e_host)
 }

@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.16.1"
+version = "0.17.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -42,6 +42,7 @@ windows = "=0.62.2"
 # ── Foundations ──
 bytemuck = { version = "1.19", features = ["derive"] }
 thiserror = "2.0"
+eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
@@ -61,5 +62,4 @@ moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features 
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
-num-complex = { version = "0.4", features = ["bytemuck"] }
 

@@ -3,11 +3,11 @@
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendComplexBuffer, BackendDevice, clone_cuda_buffer};
+use eunomia::{Complex, Complex32};
 use hephaestus_core::ComputeDevice;
 use hephaestus_cuda::CudaDevice;
 use hephaestus_wgpu::WgpuDevice;
 use leto::Layout;
-use num_complex::Complex;
 use numpy::PyArray1;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -324,7 +324,7 @@ pub(crate) fn schur(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)>
 pub(crate) fn eigenvalues<'py>(
     py: Python<'py>,
     a: &PyArray,
-) -> PyResult<Bound<'py, PyArray1<numpy::Complex32>>> {
+) -> PyResult<Bound<'py, PyArray1<Complex32>>> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err(
             "eigenvalues requires a square 2D matrix",
@@ -370,10 +370,5 @@ pub(crate) fn eigenvalues<'py>(
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-    let py_data = host_data
-        .into_iter()
-        .map(|c| numpy::Complex32::new(c.re, c.im))
-        .collect::<Vec<_>>();
-
-    Ok(PyArray1::from_vec(py, py_data))
+    Ok(PyArray1::from_vec(py, host_data))
 }

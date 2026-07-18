@@ -1,6 +1,27 @@
 # Checklist — hephaestus
 
-Sprint target: 0.16.1. Phase: Closure.
+Sprint target: 0.17.0. Phase: Execution.
+
+## HEPH-EUNOMIA-COMPLEX-1 [arch]
+
+- [x] Audit production, test, and transitive complex-provider ownership.
+- [x] Merge Eunomia 0.2.0 and record the public type migration in ADR 0010.
+- [x] Replace WGPU, CUDA, Metal, and Python complex buffer types with
+      `eunomia::Complex`.
+- [x] Remove the Python `eunomia::Complex32` to `numpy::Complex32` conversion
+      allocation by using Eunomia's NumPy 0.29 element contract directly.
+- [x] Remove direct `num-complex` manifest ownership and commit the updated
+      workspace lock.
+- [x] Pass format, all-target checks, warning-denied Clippy, Nextest, doctests,
+      rustdoc, residue, and SemVer gates.
+- [ ] Publish and merge the 0.17.0 consumer cutover.
+
+**Evidence:** affected all-target/all-feature checks and warning-denied Clippy
+pass; supported minimal decomposition feature combinations compile; WGPU,
+CUDA, Metal, and Python Nextest pass 264/264; doctests and warning-denied
+rustdoc pass; public API SemVer analysis reports no additional incompatible
+surface; direct source/manifest residue is zero; and the installed PyO3 module's
+general eigenvalue result passes the targeted NumPy parity regression.
 
 ## HEPH-LEGACY-MATH-RESIDUE-1 [patch]
 
