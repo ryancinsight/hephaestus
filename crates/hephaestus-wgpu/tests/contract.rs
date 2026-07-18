@@ -2195,13 +2195,12 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
 }
 
 #[test]
-fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
+fn eigenvalues_match_structured_and_dense_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
-    use nalgebra::DMatrix;
     use num_complex::Complex;
 
     let cases: [(usize, Vec<f32>, f32); 4] = [
@@ -2237,8 +2236,9 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
 
         let mut got = vec![Complex::new(0.0f32, 0.0); n];
         device.download(&eigen, &mut got).unwrap();
-        let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
-            .complex_eigenvalues()
+        let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+        let expected: Vec<Complex<f32>> = leto_ops::eigenvalues(&leto_matrix.view())
+            .unwrap()
             .iter()
             .map(|c| Complex::new(c.re, c.im))
             .collect();
@@ -2247,13 +2247,12 @@ fn eigenvalues_match_structured_and_dense_nalgebra_oracles() {
 }
 
 #[test]
-fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
+fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::{StridedOperand, eigenvalues};
     use leto::Layout;
-    use nalgebra::DMatrix;
     use num_complex::Complex;
 
     let n = 3usize;
@@ -2277,8 +2276,9 @@ fn eigenvalues_symmetric_input_is_real_and_matches_nalgebra() {
             "symmetric input produced complex eigenvalue {value:?}"
         );
     }
-    let expected: Vec<Complex<f32>> = DMatrix::from_row_slice(n, n, &matrix_host)
-        .complex_eigenvalues()
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let expected: Vec<Complex<f32>> = leto_ops::eigenvalues(&leto_matrix.view())
+        .unwrap()
         .iter()
         .map(|c| Complex::new(c.re, c.im))
         .collect();
@@ -4292,7 +4292,6 @@ fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     };
     use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
-    use nalgebra::DMatrix;
 
     let n = 2usize;
     let matrix_host = vec![1.0f32, 2.0, 2.0, 4.0];
@@ -4311,15 +4310,9 @@ fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     let mut got = vec![0.0f32; n * n];
     device.download(&out, &mut got).unwrap();
 
-    let expected = DMatrix::from_row_slice(n, n, &matrix_host)
-        .pseudo_inverse(1.0e-6)
-        .unwrap();
-    let mut expected_host = Vec::with_capacity(n * n);
-    for row in 0..n {
-        for col in 0..n {
-            expected_host.push(expected[(row, col)]);
-        }
-    }
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
+    let expected = leto_ops::pinv(&leto_matrix.view()).unwrap();
+    let expected_host = leto::Storage::as_slice(expected.storage()).to_vec();
     assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
 
     let a_ap = matmul_host(&matrix_host, n, n, &got, n);
@@ -4338,7 +4331,6 @@ fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     };
     use hephaestus_wgpu::{StridedOperand, pinv};
     use leto::Layout;
-    use nalgebra::DMatrix;
 
     let rows = 3usize;
     let cols = 2usize;
@@ -4358,15 +4350,9 @@ fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     let mut got = vec![0.0f32; cols * rows];
     device.download(&out, &mut got).unwrap();
 
-    let expected = DMatrix::from_row_slice(rows, cols, &matrix_host)
-        .pseudo_inverse(1.0e-6)
-        .unwrap();
-    let mut expected_host = Vec::with_capacity(cols * rows);
-    for row in 0..cols {
-        for col in 0..rows {
-            expected_host.push(expected[(row, col)]);
-        }
-    }
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host.clone()).unwrap();
+    let expected = leto_ops::pinv(&leto_matrix.view()).unwrap();
+    let expected_host = leto::Storage::as_slice(expected.storage()).to_vec();
     assert_close_slice(&got, &expected_host, 1.0e-4, 1.0e-4);
 
     let a_ap = matmul_host(&matrix_host, rows, cols, &got, rows);
@@ -4478,13 +4464,12 @@ fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
 }
 
 #[test]
-fn linalg_matexp_matches_nalgebra_general_matrix() {
+fn linalg_matexp_matches_leto_general_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::{StridedOperand, matexp};
     use leto::Layout;
-    use nalgebra::DMatrix;
 
     let n = 3usize;
     let matrix_host = vec![1.2f32, -0.7, 0.4, 0.3, 2.1, -1.5, -0.6, 0.8, 0.5];
@@ -4503,13 +4488,9 @@ fn linalg_matexp_matches_nalgebra_general_matrix() {
     let mut got = vec![0.0f32; n * n];
     device.download(&out, &mut got).unwrap();
 
-    let expected = DMatrix::from_row_slice(n, n, &matrix_host).exp();
-    let mut expected_host = Vec::with_capacity(n * n);
-    for row in 0..n {
-        for col in 0..n {
-            expected_host.push(expected[(row, col)]);
-        }
-    }
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let expected = leto_ops::matexp(&leto_matrix.view()).unwrap();
+    let expected_host = leto::Storage::as_slice(expected.storage()).to_vec();
     assert_close_slice(&got, &expected_host, 1.0e-3, 1.0e-4);
 }
 

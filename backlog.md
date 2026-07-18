@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-LEGACY-MATH-RESIDUE-1 [patch] — in-progress
+## HEPH-LEGACY-MATH-RESIDUE-1 [patch] — done
 
 - Owner: Codex `/root`; scope: workspace math manifests, WGPU differential
   oracles, and comparative benchmark CPU baselines. The provider owns the
@@ -15,6 +15,9 @@ cuda-oxide + cutile).
   differential coverage and real benchmark measurements.
 - Last update: 2026-07-17; claim is backed by branch
   `codex/hephaestus-remove-legacy-math` before implementation.
+- Closure: direct manifest edges and source references are removed; the
+  Leto-only comparative benches and WGPU oracle migration pass the provider
+  gates recorded in `gap_audit.md`.
 
 ## [HEPH-SCAN-LIMIT-AUDIT] [patch] — done
 

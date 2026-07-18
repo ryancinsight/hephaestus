@@ -58,9 +58,6 @@ moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-featu
 ] }
 moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
-ndarray = "0.16"
-nalgebra = { version = "0.35", default-features = false, features = ["std"] }
-
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
