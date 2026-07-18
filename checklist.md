@@ -1,6 +1,19 @@
 # Checklist — hephaestus
 
-Sprint target: 0.16.1. Phase: Closure.
+Sprint target: 0.17.0. Phase: Execution.
+
+## HEPH-EUNOMIA-COMPLEX-1 [arch]
+
+- [x] Audit production, test, and transitive complex-provider ownership.
+- [x] Merge Eunomia 0.2.0 and record the public type migration in ADR 0010.
+- [ ] Replace WGPU, CUDA, Metal, and Python complex buffer types with
+      `eunomia::Complex`.
+- [ ] Remove the Python `eunomia::Complex32` to `numpy::Complex32` conversion
+      allocation by using Eunomia's NumPy 0.29 element contract directly.
+- [ ] Remove direct `num-complex` manifest ownership and update the lock.
+- [ ] Pass format, all-target checks, warning-denied Clippy, Nextest, doctests,
+      rustdoc, residue, and SemVer gates.
+- [ ] Publish and merge the 0.17.0 consumer cutover.
 
 ## HEPH-LEGACY-MATH-RESIDUE-1 [patch]
 
