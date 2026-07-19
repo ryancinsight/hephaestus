@@ -9,7 +9,8 @@ Sprint target: 0.17.0. Phase: Closure.
       defaults using Cargo's lock resolver.
 - [x] Pass formatting, all-target/all-feature check, warning-denied Clippy,
       configured Nextest, doctests, and warning-denied rustdoc.
-- [ ] Merge the lock refresh and update the Atlas gitlink.
+- [x] Merge Hephaestus PR #51 at `594d57a`; Atlas PR #44 records that default
+      and ATLAS-INTEGRATION-028 tracks this PM-only closeout commit.
 
 **Evidence:** the dependency lock resolves Eunomia `df77dfde`, Hermes
 `c9bbdf8a`, and Leto `7afcbd0e`; the full compile and documentation gates pass,
