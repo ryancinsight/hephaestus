@@ -9,6 +9,9 @@ pub mod elementwise;
 pub mod linalg;
 pub(crate) mod pipeline;
 
+/// Provider-owned finite-difference stencil operators.
+pub mod stencil;
+
 /// Seeded host-delegated PRNG initializers.
 pub mod random;
 /// Reduction compute operations.

@@ -4,7 +4,7 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.17.0.
+Target release: 0.18.0.
 
 ### Breaking
 
@@ -306,6 +306,16 @@ breaking minor per the versioning policy.
   Evidence: `cargo check -p hephaestus-wgpu` passes.
 
 ### Added
+
+- `hephaestus-wgpu` [minor]: added provider-owned 2D Laplacian stencil
+  (`Laplacian2DKernel`, `Laplacian2DParams`, `BoundaryCondition`) under the
+  new `application::stencil` module. The WGSL source and dispatch machinery
+  now live in Hephaestus; `cfd-core` is a thin typed consumer. Includes
+  Dirichlet, Neumann, and periodic boundary conditions and differential
+  contract tests against a CPU reference.
+
+- `hephaestus-core` [minor]: added `HephaestusError::InvalidConfiguration`
+  for typed rejection of invalid kernel/dispatch parameters.
 
 - `hephaestus-core` / `hephaestus-cuda` [minor]: implemented
   `ComputeDeviceCapabilities` for the CUDA provider without fabricating
