@@ -7,9 +7,14 @@ Sprint target: 0.17.0. Phase: Closure.
 - [x] Reproduce the stale-provider failure against Eunomia 0.6.0.
 - [x] Advance Eunomia, Hermes, and Leto to their merged native-provider
       defaults using Cargo's lock resolver.
-- [ ] Pass formatting, all-target/all-feature check, warning-denied Clippy,
+- [x] Pass formatting, all-target/all-feature check, warning-denied Clippy,
       configured Nextest, doctests, and warning-denied rustdoc.
 - [ ] Merge the lock refresh and update the Atlas gitlink.
+
+**Evidence:** the dependency lock resolves Eunomia `df77dfde`, Hermes
+`c9bbdf8a`, and Leto `7afcbd0e`; the full compile and documentation gates pass,
+and configured Nextest is 312/312 across CPU, CUDA, WGPU, Metal, and Python
+contracts.
 
 ## HEPH-EUNOMIA-0.4-REFRESH [patch]
 

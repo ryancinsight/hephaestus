@@ -19,6 +19,9 @@ Target release: 0.17.0.
 
 ### Changed
 
+- [patch] Advance the reproducible provider closure to Eunomia 0.6.0, Hermes
+  0.4.0, and Leto 0.39.0. This removes the obsolete raw-half SIMD dependency
+  while preserving all backend contracts.
 - WGPU and CUDA upload Leto's Eunomia eigenvalue vectors directly. The Python
   NumPy boundary constructs its result from the same downloaded vector,
   removing both field-wise conversions and the second allocation.

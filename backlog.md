@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-EUNOMIA-0.6-REFRESH [patch] — in progress
+## HEPH-EUNOMIA-0.6-REFRESH [patch] — done
 
 - Owner: Codex `/root`; scope: provider lock and synchronized PM evidence.
 - Acceptance: the lock resolves Eunomia 0.6.0 `df77dfde`, Hermes 0.4.0
@@ -13,6 +13,8 @@ cuda-oxide + cutile).
 - Driver: Eunomia E-025c removes the obsolete foreign raw-half numeric/cast
   surface. The initial consumer check proved Hephaestus's Hermes 0.3/Leto 0.38
   lock closure still required that surface.
+- Evidence: formatter, all-target/all-feature workspace check, warning-denied
+  Clippy, configured Nextest 312/312, doctests, and warning-denied rustdoc pass.
 
 ## HEPH-EUNOMIA-0.4-REFRESH [patch] — done
 
