@@ -244,6 +244,82 @@ fn laplacian_periodic_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
+#[test]
+fn laplacian_non_square_2x3_matches_cpu_reference() {
+    // Covers nx < ny aspect ratio and the nx == 2 minimum in the X direction.
+    let field: Vec<f32> = (0..6)
+        .map(|k| {
+            let i = (k % 2) as f32;
+            let j = (k / 2) as f32;
+            i * i + j * j * j
+        })
+        .collect();
+
+    let Some(got) = run_laplacian(&field, 2, 3, 0.5, 0.75, BoundaryCondition::Dirichlet) else {
+        return;
+    };
+    let expected = laplacian_2d_reference(&field, 2, 3, 0.5, 0.75, BoundaryCondition::Dirichlet);
+    assert_close_slice(&got, &expected, 1e-5, 1e-5);
+}
+
+#[test]
+fn laplacian_non_square_3x2_matches_cpu_reference() {
+    // Covers ny < nx aspect ratio and the ny == 2 minimum in the Y direction.
+    let field: Vec<f32> = (0..6)
+        .map(|k| {
+            let i = (k % 3) as f32;
+            let j = (k / 3) as f32;
+            (i + 1.0).ln() + (j + 2.0).sin()
+        })
+        .collect();
+
+    let Some(got) = run_laplacian(&field, 3, 2, 0.25, 1.0, BoundaryCondition::Neumann) else {
+        return;
+    };
+    let expected = laplacian_2d_reference(&field, 3, 2, 0.25, 1.0, BoundaryCondition::Neumann);
+    assert_close_slice(&got, &expected, 1e-5, 1e-5);
+}
+
+#[test]
+fn laplacian_large_dirichlet_16x16_matches_cpu_reference() {
+    // Exercises multiple 8x8 workgroups with Dirichlet boundaries.
+    let n = 16;
+    let field: Vec<f32> = (0..n * n)
+        .map(|k| {
+            let i = (k % n) as f32;
+            let j = (k / n) as f32;
+            (i + 1.0).ln() + (j + 2.0).sin()
+        })
+        .collect();
+
+    let Some(got) = run_laplacian(&field, n, n, 0.125, 0.25, BoundaryCondition::Dirichlet) else {
+        return;
+    };
+    let expected = laplacian_2d_reference(&field, n, n, 0.125, 0.25, BoundaryCondition::Dirichlet);
+    assert_close_slice(&got, &expected, 1e-5, 1e-5);
+}
+
+#[test]
+fn laplacian_large_periodic_16x16_matches_cpu_reference() {
+    // Exercises multiple 8x8 workgroups with a genuinely periodic field.
+    let n = 16;
+    let field: Vec<f32> = (0..n * n)
+        .map(|k| {
+            let i = (k % n) as f32;
+            let j = (k / n) as f32;
+            let x = 2.0 * std::f32::consts::PI * i / n as f32;
+            let y = 2.0 * std::f32::consts::PI * j / n as f32;
+            x.sin() * y.cos()
+        })
+        .collect();
+
+    let Some(got) = run_laplacian(&field, n, n, 0.125, 0.25, BoundaryCondition::Periodic) else {
+        return;
+    };
+    let expected = laplacian_2d_reference(&field, n, n, 0.125, 0.25, BoundaryCondition::Periodic);
+    assert_close_slice(&got, &expected, 1e-5, 1e-5);
+}
+
 fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32) {
     assert_eq!(got.len(), expected.len());
     for (index, (&got, &expected)) in got.iter().zip(expected.iter()).enumerate() {
