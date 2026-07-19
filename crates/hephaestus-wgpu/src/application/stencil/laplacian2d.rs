@@ -5,10 +5,13 @@
 //! kernel is intentionally f32-only: WGSL does not guarantee f64 storage
 //! support, and exposing a generic scalar would be a falsely generic boundary.
 
+use aequitas::systems::si::{quantities::Length, units::Meter};
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{DispatchGrid, HephaestusError, MultiStorageKernel, Result};
 
-use crate::application::storage_kernel::{WgslStorageBinding, WgslStorageBindingLayout, WgslMultiStorageKernel};
+use crate::application::storage_kernel::{
+    WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
+};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -54,20 +57,32 @@ impl Laplacian2DParams {
     /// # Errors
     /// Returns `HephaestusError::InvalidConfiguration` when `dx` or `dy` is not
     /// finite and positive, or when `nx` or `ny` is less than 2.
-    pub fn new(nx: u32, ny: u32, dx: f32, dy: f32, bc: BoundaryCondition) -> Result<Self> {
+    pub fn new(
+        nx: u32,
+        ny: u32,
+        dx: Length<f32>,
+        dy: Length<f32>,
+        bc: BoundaryCondition,
+    ) -> Result<Self> {
         if nx < 2 || ny < 2 {
             return Err(HephaestusError::InvalidConfiguration {
-                message: format!("Laplacian grid axes must contain at least two points: nx={nx}, ny={ny}"),
+                message: format!(
+                    "Laplacian grid axes must contain at least two points: nx={nx}, ny={ny}"
+                ),
             });
         }
-        if !dx.is_finite() || dx <= 0.0 || !dy.is_finite() || dy <= 0.0 {
+        let dx_m = dx.in_unit::<Meter>();
+        let dy_m = dy.in_unit::<Meter>();
+        if !dx_m.is_finite() || dx_m <= 0.0 || !dy_m.is_finite() || dy_m <= 0.0 {
             return Err(HephaestusError::InvalidConfiguration {
-                message: format!("Laplacian spacing must be finite and positive: dx={dx}, dy={dy}"),
+                message: format!(
+                    "Laplacian spacing must be finite and positive: dx={dx_m} m, dy={dy_m} m"
+                ),
             });
         }
         Ok(Self {
             dims_bc: [nx, ny, bc.as_u32(), 0],
-            inv2: [dx.recip().powi(2), dy.recip().powi(2), 0.0, 0.0],
+            inv2: [dx_m.recip().powi(2), dy_m.recip().powi(2), 0.0, 0.0],
         })
     }
 }
@@ -133,46 +148,6 @@ impl Laplacian2DKernel {
             params,
             grid,
         )
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn params_valid_grid() {
-        let p = Laplacian2DParams::new(4, 5, 0.1, 0.2, BoundaryCondition::Dirichlet).unwrap();
-        assert_eq!(p.dims_bc, [4, 5, 0, 0]);
-        assert!((p.inv2[0] - 100.0).abs() < f32::EPSILON);
-        assert!((p.inv2[1] - 25.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn params_rejects_too_small_axes() {
-        assert!(matches!(
-            Laplacian2DParams::new(1, 4, 1.0, 1.0, BoundaryCondition::Neumann),
-            Err(HephaestusError::InvalidConfiguration { .. })
-        ));
-        assert!(matches!(
-            Laplacian2DParams::new(4, 1, 1.0, 1.0, BoundaryCondition::Neumann),
-            Err(HephaestusError::InvalidConfiguration { .. })
-        ));
-    }
-
-    #[test]
-    fn params_rejects_bad_spacing() {
-        for bad in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, 0.0, -1.0] {
-            assert!(matches!(
-                Laplacian2DParams::new(4, 4, bad, 1.0, BoundaryCondition::Periodic),
-                Err(HephaestusError::InvalidConfiguration { .. })
-            ));
-            assert!(matches!(
-                Laplacian2DParams::new(4, 4, 1.0, bad, BoundaryCondition::Periodic),
-                Err(HephaestusError::InvalidConfiguration { .. })
-            ));
-        }
     }
 }
 
@@ -305,3 +280,6 @@ fn laplacian_2d(@builtin(global_invocation_id) global_id: vec3<u32>) {
     result[idx] = laplacian;
 }
 ";
+
+#[cfg(test)]
+mod tests;

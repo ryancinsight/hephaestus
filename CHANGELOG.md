@@ -11,6 +11,10 @@ Target release: 0.18.0.
 - [arch] General-eigenvalue device buffers now expose
   `eunomia::Complex<f32>` instead of `num_complex::Complex<f32>`.
 
+- [arch] The new provider-owned 2D Laplacian accepts Aequitas `Length<f32>`
+  grid spacing and derives its raw metre-based inverse-square coefficients once
+  at parameter construction.
+
 ### Migration
 
 - Import `eunomia::Complex` for WGPU, CUDA, Metal, and Python complex buffer

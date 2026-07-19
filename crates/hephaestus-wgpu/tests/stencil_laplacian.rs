@@ -4,6 +4,7 @@
 //! output is compared against a CPU replica of the same finite-difference
 //! stencil, including Dirichlet/Neumann/Periodic boundary handling.
 
+use aequitas::systems::si::{quantities::Length, units::Meter};
 use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::{BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, WgpuDevice};
 
@@ -148,12 +149,26 @@ fn laplacian_2d_reference(
     out
 }
 
-fn run_laplacian(field: &[f32], nx: usize, ny: usize, dx: f32, dy: f32, bc: BoundaryCondition) -> Option<Vec<f32>> {
+fn run_laplacian(
+    field: &[f32],
+    nx: usize,
+    ny: usize,
+    dx: f32,
+    dy: f32,
+    bc: BoundaryCondition,
+) -> Option<Vec<f32>> {
     let device = device_or_skip()?;
 
     let input = device.upload(field).unwrap();
     let output = device.alloc_zeroed::<f32>(field.len()).unwrap();
-    let params = Laplacian2DParams::new(nx as u32, ny as u32, dx, dy, bc).unwrap();
+    let params = Laplacian2DParams::new(
+        nx as u32,
+        ny as u32,
+        Length::from_unit::<Meter>(dx),
+        Length::from_unit::<Meter>(dy),
+        bc,
+    )
+    .unwrap();
     let kernel = Laplacian2DKernel::new(&device).unwrap();
     kernel.dispatch(&device, &input, &output, &params).unwrap();
 
