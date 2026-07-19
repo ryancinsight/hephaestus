@@ -2,6 +2,15 @@
 
 Sprint target: 0.17.0. Phase: Closure.
 
+## HEPH-EUNOMIA-0.6-REFRESH [patch]
+
+- [x] Reproduce the stale-provider failure against Eunomia 0.6.0.
+- [x] Advance Eunomia, Hermes, and Leto to their merged native-provider
+      defaults using Cargo's lock resolver.
+- [ ] Pass formatting, all-target/all-feature check, warning-denied Clippy,
+      configured Nextest, doctests, and warning-denied rustdoc.
+- [ ] Merge the lock refresh and update the Atlas gitlink.
+
 ## HEPH-EUNOMIA-0.4-REFRESH [patch]
 
 - [x] Advance the reproducibility lock from Eunomia 0.2.0 `34d0cc8a` to
