@@ -20,6 +20,7 @@ sparse = ["dep:leto-ops"]
 cuda-comparative = ["dep:hephaestus-cuda"]
 
 [dependencies]
+aequitas = { workspace = true }
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }

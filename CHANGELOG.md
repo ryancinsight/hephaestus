@@ -4,12 +4,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
-Target release: 0.17.0.
+Target release: 0.18.0.
 
 ### Breaking
 
 - [arch] General-eigenvalue device buffers now expose
   `eunomia::Complex<f32>` instead of `num_complex::Complex<f32>`.
+
+- [arch] The new provider-owned 2D Laplacian accepts Aequitas `Length<f32>`
+  grid spacing and derives its raw metre-based inverse-square coefficients once
+  at parameter construction.
 
 ### Migration
 
@@ -306,6 +310,16 @@ breaking minor per the versioning policy.
   Evidence: `cargo check -p hephaestus-wgpu` passes.
 
 ### Added
+
+- `hephaestus-wgpu` [minor]: added provider-owned 2D Laplacian stencil
+  (`Laplacian2DKernel`, `Laplacian2DParams`, `BoundaryCondition`) under the
+  new `application::stencil` module. The WGSL source and dispatch machinery
+  now live in Hephaestus; `cfd-core` is a thin typed consumer. Includes
+  Dirichlet, Neumann, and periodic boundary conditions and differential
+  contract tests against a CPU reference.
+
+- `hephaestus-core` [minor]: added `HephaestusError::InvalidConfiguration`
+  for typed rejection of invalid kernel/dispatch parameters.
 
 - `hephaestus-core` / `hephaestus-cuda` [minor]: implemented
   `ComputeDeviceCapabilities` for the CUDA provider without fabricating

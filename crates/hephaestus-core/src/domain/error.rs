@@ -39,6 +39,13 @@ pub enum HephaestusError {
         /// Backend-reported detail.
         message: String,
     },
+    /// A configuration or argument value supplied to a kernel or dispatch
+    /// parameter was invalid.
+    #[error("invalid configuration: {message}")]
+    InvalidConfiguration {
+        /// Caller-facing detail.
+        message: String,
+    },
     /// A device-to-host or host-to-device transfer failure.
     #[error("device transfer failed: {message}")]
     TransferFailed {

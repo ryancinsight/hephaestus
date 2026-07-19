@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -42,6 +42,7 @@ windows = "=0.62.2"
 # ── Foundations ──
 bytemuck = { version = "1.19", features = ["derive"] }
 thiserror = "2.0"
+aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "49ee8004e008a480ac871c3782d00d921ba41c01", default-features = false }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
