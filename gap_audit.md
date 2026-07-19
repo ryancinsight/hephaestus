@@ -21,6 +21,18 @@ architectural decision or a tracked future-work item:
   warning-denied rustdoc.
 - Residual: the refresh changes no Hephaestus source or public API.
 
+## [HEPH-EUNOMIA-0.6-REFRESH] Native reduced-precision closure (2026-07-19)
+
+- Finding: Hephaestus's lock selected Hermes 0.3 and Leto 0.38, whose
+  `half::f16`/`half::bf16` SIMD contracts required Eunomia's deleted foreign
+  numeric implementations.
+- Resolution: advance the coherent provider closure to Eunomia 0.6.0
+  `df77dfde`, Hermes 0.4.0 `c9bbdf8a`, and Leto 0.39.0 `7afcbd0e`.
+- Evidence tier: dependency-resolution identity; all-target/all-feature
+  workspace check; warning-denied Clippy; real-device and CPU Nextest 312/312;
+  doctests; warning-denied rustdoc.
+- Residual: the lock refresh changes no Hephaestus source or public API.
+
 ## [HEPH-EUNOMIA-COMPLEX-1] Eunomia complex ownership (2026-07-18)
 
 - Finding: general-eigenvalue APIs owned `num_complex::Complex<f32>` even
