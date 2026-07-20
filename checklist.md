@@ -2,6 +2,16 @@
 
 Sprint target: 0.17.0. Phase: Closure.
 
+## HEPH-CUDA-FEATURE-HYGIENE [patch]
+
+- [x] Reproduce decomposition-only dead-code warnings with the CUDA-only
+      feature combination.
+- [x] Gate pinned host staging and decomposition pipeline keys on both
+      `cuda` and `decomposition`.
+- [x] Pass warning-denied all-target Clippy for `cuda` and
+      `cuda,decomposition`.
+- [x] Pass configured Nextest: 109/109.
+
 ## HEPH-EUNOMIA-0.6-REFRESH [patch]
 
 - [x] Reproduce the stale-provider failure against Eunomia 0.6.0.

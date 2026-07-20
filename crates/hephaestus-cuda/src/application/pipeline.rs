@@ -102,12 +102,12 @@ pub(crate) enum PipelineKey {
     },
     /// Fixed non-generic decomposition kernels: one f32 shader each, no
     /// `Op`/`T` type parameter to key on. Only constructed by the
-    /// `cuda`-feature decomposition modules.
-    #[cfg(feature = "cuda")]
+    /// CUDA-backed decomposition modules.
+    #[cfg(all(feature = "cuda", feature = "decomposition"))]
     CholeskySyrk,
-    #[cfg(feature = "cuda")]
+    #[cfg(all(feature = "cuda", feature = "decomposition"))]
     LuGemm,
-    #[cfg(feature = "cuda")]
+    #[cfg(all(feature = "cuda", feature = "decomposition"))]
     QrHouseholder,
     /// Runtime-authored kernels (the ADR-0004 `KernelSource<L>` seam and the
     /// legacy multi-storage API): `K::LABEL`/`K::ENTRY`/the compiled source
