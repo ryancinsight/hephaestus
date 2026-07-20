@@ -29,6 +29,8 @@ Target release: 0.18.0.
 - [patch] Advance the same Aequitas source identity to the reciprocal
   temperature-dimension revision used by Proteus temperature constitutive
   laws, preventing duplicate Aequitas packages in shared consumer graphs.
+- [patch] Advance Aequitas to the merged biological-response quantity revision
+  so Asclepius-enabled GPU consumers retain one dimensional type identity.
 - [patch] Synchronize the supply-chain source allowlist to the reviewed Git
   providers already present in the reproducible lockfile.
 - [patch] Advance the reproducible provider closure to Eunomia 0.6.0, Hermes
