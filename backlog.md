@@ -4,6 +4,16 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-CUDA-FEATURE-HYGIENE [patch] — done
+
+- Owner: Codex `/root`; scope: CUDA feature-gated infrastructure, pipeline
+  keys, and synchronized PM evidence.
+- Acceptance: enabling CUDA without decomposition does not compile
+  decomposition-only pinned staging storage or pipeline keys, and both feature
+  combinations remain warning-clean.
+- Evidence: warning-denied all-target Clippy passes for `cuda` and
+  `cuda,decomposition`; configured Nextest passes 109/109.
+
 ## HEPH-EUNOMIA-0.6-REFRESH [patch] — done
 
 - Owner: Codex `/root`; scope: provider lock and synchronized PM evidence.

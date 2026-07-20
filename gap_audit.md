@@ -11,6 +11,18 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-CUDA-FEATURE-HYGIENE] CUDA-only warning closure (2026-07-20)
+
+- Finding: `PinnedHostBuffer` and three decomposition pipeline keys compiled
+  whenever CUDA was enabled, although their only consumers require the
+  independent `decomposition` feature.
+- Resolution: gate those private implementation details on the conjunction of
+  `cuda` and `decomposition`.
+- Evidence tier: feature-matrix static verification plus configured native
+  tests; warning-denied all-target Clippy passes for both feature combinations,
+  and Nextest passes 109/109.
+- Residual: none; public APIs and runtime behavior are unchanged.
+
 ## [HEPH-EUNOMIA-0.4-REFRESH] Provider lock (2026-07-18)
 
 - Resolution: advance the lock from Eunomia 0.2.0 `34d0cc8a` to 0.4.0

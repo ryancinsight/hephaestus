@@ -17,5 +17,5 @@ pub mod device;
 #[cfg(feature = "cuda")]
 pub mod compiler;
 
-#[cfg(feature = "cuda")]
+#[cfg(all(feature = "cuda", feature = "decomposition"))]
 pub(crate) mod pinned;

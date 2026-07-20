@@ -23,6 +23,9 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Compile CUDA pinned host staging and decomposition pipeline keys only
+  when the decomposition feature is enabled, keeping the CUDA-only feature
+  combination warning-clean.
 - [patch] Advance Aequitas to the merged thermal-diffusivity revision so
   Hephaestus stencil quantities retain one type identity with Proteus-enabled
   consumers.
