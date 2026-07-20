@@ -26,6 +26,11 @@ Target release: 0.18.0.
 - [patch] Advance Aequitas to the merged thermal-diffusivity revision so
   Hephaestus stencil quantities retain one type identity with Proteus-enabled
   consumers.
+- [patch] Advance the same Aequitas source identity to the reciprocal
+  temperature-dimension revision used by Proteus temperature constitutive
+  laws, preventing duplicate Aequitas packages in shared consumer graphs.
+- [patch] Synchronize the supply-chain source allowlist to the reviewed Git
+  providers already present in the reproducible lockfile.
 - [patch] Advance the reproducible provider closure to Eunomia 0.6.0, Hermes
   0.4.0, and Leto 0.39.0. This removes the obsolete raw-half SIMD dependency
   while preserving all backend contracts.
