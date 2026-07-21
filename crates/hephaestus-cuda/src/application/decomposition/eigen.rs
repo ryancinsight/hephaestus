@@ -69,11 +69,10 @@ pub fn symmetric_eigen_jacobi(
     if rows == 0 {
         let eigenvalues = device.alloc_zeroed::<f32>(0)?;
         let eigenvectors = device.alloc_zeroed::<f32>(0)?;
-        let empty_view =
-            leto::ArrayView::<f32, 2>::new(
-                leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
-                &[],
-            );
+        let empty_view = leto::ArrayView::<f32, 2>::new(
+            leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
+            &[],
+        );
         let inner = leto_ops::symmetric_eigen_jacobi(&empty_view).map_err(|e| {
             HephaestusError::DispatchFailed {
                 message: format!("Symmetric eigendecomposition empty failed: {e}"),
