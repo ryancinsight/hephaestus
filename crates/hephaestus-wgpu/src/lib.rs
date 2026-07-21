@@ -51,7 +51,9 @@ pub use application::sparse::{
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
-pub use application::stencil::{BoundaryCondition, Laplacian2DKernel, Laplacian2DParams};
+pub use application::stencil::{
+    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+};
 pub use application::storage_kernel::{
     WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
     WgslUnaryStorageKernel,

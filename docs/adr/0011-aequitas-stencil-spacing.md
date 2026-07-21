@@ -13,14 +13,16 @@ centimetres, millimetres, and metres to be mixed before the dispatch boundary.
 
 ## Decision
 
-- `Laplacian2DParams::new` accepts Aequitas `Length<f32>` values.
-- The constructor converts each length to canonical metres once, validates it,
-  and derives the raw inverse-square coefficients stored in the POD parameter
-  block.
+- `Laplacian2DParams::new` accepts Aequitas `Length<f32>` values and an
+  explicit `LaplacianPolarity`.
+- Leto owns the generic `Laplacian2D<T>`, boundary, and polarity contracts.
+  The Hephaestus constructor delegates validation and canonical-metre
+  conversion to that contract, then stores its signed inverse-square
+  coefficients in the POD parameter block.
 - WGSL and buffer storage remain monomorphic `f32`; Aequitas does not enter the
   device ABI or the per-element loop.
-- Consumers own domain validation and construct typed lengths before calling
-  the provider.
+- Consumers construct typed lengths and select the operation polarity before
+  calling the provider; they do not duplicate stencil validation.
 
 ## Alternatives rejected
 
@@ -28,8 +30,8 @@ centimetres, millimetres, and metres to be mixed before the dispatch boundary.
   prevent unit mismatch.
 - Store quantities in the WGSL parameter block: rejected because type-level
   dimensions are a host contract and must not alter the device ABI.
-- Make Hephaestus own CFD grid types: rejected because domain validity belongs
-  to the consumer.
+- Make Hephaestus own Cartesian grid types: rejected because CPU and accelerator
+  providers require the same contract, whose deepest common owner is Leto.
 
 ## Consequences
 

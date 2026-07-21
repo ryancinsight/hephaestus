@@ -11,6 +11,19 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-LAPLACIAN-CONTRACT-1] Shared typed stencil (2026-07-20)
+
+- Finding: the WGPU provider duplicated boundary codes and host validation,
+  while its differential test carried a second CPU stencil implementation.
+- Resolution: derive parameters from Leto's `Laplacian2D`, re-export the Leto
+  boundary and polarity types, and use Leto Ops as the CPU differential oracle.
+- Evidence tier: compile-time type unification, exact signed-coefficient unit
+  coverage, real-device differential tests when an adapter is available, and
+  focused package gates (configured Nextest 152/152; doctest and
+  warning-denied rustdoc pass).
+- Residual: WGSL remains intentionally `f32`; Leto CPU execution also covers
+  `f64`, whose accelerator support requires a backend with native storage.
+
 ## [HEPH-CUDA-FEATURE-HYGIENE] CUDA-only warning closure (2026-07-20)
 
 - Finding: `PinnedHostBuffer` and three decomposition pipeline keys compiled

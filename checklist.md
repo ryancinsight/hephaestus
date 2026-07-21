@@ -1,6 +1,14 @@
 # Checklist — hephaestus
 
-Sprint target: 0.17.0. Phase: Closure.
+Sprint target: 0.18.0. Phase: Closure.
+
+## HEPH-LAPLACIAN-CONTRACT-1 [arch]
+
+- [x] Replace the local boundary enum with Leto's canonical contract.
+- [x] Derive POD spacing coefficients through `Laplacian2D` and expose polarity.
+- [x] Delete the local CPU reference stencil from WGPU differential tests.
+- [x] Pass focused format, check, Clippy, Nextest (152/152), doctest, and
+      warning-denied rustdoc gates.
 
 ## HEPH-CUDA-FEATURE-HYGIENE [patch]
 
