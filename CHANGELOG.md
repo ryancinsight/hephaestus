@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] GitHub Releases tagged `hephaestus-python-v<version>` now build,
+  install, attest, and attach locked CPython 3.9–3.13 wheels for Linux, Windows,
+  and macOS, then publish the exact wheel set to PyPI through OIDC.
+
 - [arch] `hephaestus-wgpu` now derives its Laplacian parameter block from
   Leto's typed grid, boundary, spacing, and polarity contract. The duplicate
   local boundary enum and CPU test stencil are removed; differential tests use

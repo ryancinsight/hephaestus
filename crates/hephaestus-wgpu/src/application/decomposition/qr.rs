@@ -114,8 +114,10 @@ impl GpuQrDecomposition {
         let mut rhs_host = vec![0.0f32; m];
         device.download(rhs, &mut rhs_host)?;
 
-        let rhs_view =
-            leto::ArrayView::<f32, 1>::new(            leto::Layout::c_contiguous([m]).expect("infallible: valid contiguous layout"), &rhs_host);
+        let rhs_view = leto::ArrayView::<f32, 1>::new(
+            leto::Layout::c_contiguous([m]).expect("infallible: valid contiguous layout"),
+            &rhs_host,
+        );
         let x = self.inner.solve_least_squares(&rhs_view).map_err(|e| {
             HephaestusError::DispatchFailed {
                 message: format!("QR least-squares solve failed: {e}"),

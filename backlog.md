@@ -4,6 +4,26 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-PYTHON-RELEASE-1 [patch] — in-progress
+
+- Owner: Codex `/root`; scope: the `hephaestus-python` release workflow,
+  protected GitHub environment, distribution documentation, and PyPI trusted
+  publisher. Python binding behavior and backend kernels are non-goals.
+- Acceptance: a GitHub Release tagged `hephaestus-python-v<version>` builds
+  locked Linux, Windows, and universal macOS wheels for CPython 3.9–3.13,
+  installs and imports each wheel as `pyhephaestus`, validates Cargo-owned
+  distribution identity, attests and attaches the exact artifacts, then
+  publishes the same wheels to the `hephaestus-python` PyPI project through
+  OIDC.
+- Current evidence: the release workflow and synchronized distribution
+  contract are implemented, and GitHub environment `pypi` accepts only
+  `hephaestus-python-v*` tags. A locked CPython 3.13 wheel builds as
+  `hephaestus-python` 0.18.0, installs into an isolated target, and imports as
+  `pyhephaestus`. The local GNU linker emits its existing `.drectve` diagnostic;
+  the full formatter gate passes after normalizing three pre-existing
+  decomposition view expressions. Hosted MSVC and cross-platform CI plus
+  pending-publisher registration remain open.
+
 ## HEPH-LAPLACIAN-CONTRACT-1 [arch] — done
 
 - Owner: Codex `/root`; scope: `hephaestus-wgpu` Laplacian parameter contract,

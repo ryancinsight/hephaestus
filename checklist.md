@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-PYTHON-RELEASE-1 [patch]
+
+- [x] Add the pinned build-once GitHub Release and PyPI workflow.
+- [x] Document the `hephaestus-python` distribution, `pyhephaestus` import,
+      Cargo version source, supported CPython range, and OIDC publication
+      contract.
+- [x] Build, install, import, and inspect a production CPython 3.13 wheel
+      locally as `hephaestus-python` 0.18.0 / `pyhephaestus`; the local GNU
+      linker retains its existing `.drectve` diagnostic pending hosted MSVC
+      coverage.
+- [x] Create the protected `pypi` environment restricted to
+      `hephaestus-python-v*` tags.
+- [ ] Pass hosted CI on the exact release-automation head.
+- [ ] Register the PyPI pending trusted publisher.
+
 ## HEPH-LAPLACIAN-CONTRACT-1 [arch]
 
 - [x] Replace the local boundary enum with Leto's canonical contract.
