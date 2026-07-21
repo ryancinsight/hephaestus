@@ -242,7 +242,8 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
             return Err(format!("nvrtcCreateProgram failed: {}", res));
         }
 
-        let options = [std::ffi::CString::new("--std=c++11").unwrap()];
+        let options = [std::ffi::CString::new("--std=c++11")
+            .expect("infallible: C++ standard flag contains no null bytes")];
         let options_ptr: Vec<*const std::ffi::c_char> =
             options.iter().map(|o| o.as_ptr()).collect();
 

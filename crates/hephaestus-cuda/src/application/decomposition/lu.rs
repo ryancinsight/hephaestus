@@ -100,7 +100,7 @@ impl GpuLuDecomposition {
         device.download(rhs, &mut rhs_host)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
-            leto::Layout::c_contiguous([self.n]).unwrap(),
+            leto::Layout::c_contiguous([self.n]).expect("infallible: valid contiguous layout"),
             &rhs_host,
         );
         let x = self
@@ -148,7 +148,7 @@ pub fn lu_decompose(
     if n == 0 {
         let factors = device.alloc_zeroed::<f32>(0)?;
         let inner = leto_ops::lu_decompose(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([0, 0]).unwrap(),
+            leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
             &[],
         ))
         .map_err(|e| HephaestusError::DispatchFailed {
@@ -211,7 +211,7 @@ pub fn lu_decompose_blocked(
         if n == 0 {
             let factors = device.alloc_zeroed::<f32>(0)?;
             let inner = leto_ops::lu_decompose(&leto::ArrayView::<f32, 2>::new(
-                leto::Layout::c_contiguous([0, 0]).unwrap(),
+                leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
                 &[],
             ))
             .map_err(|e| HephaestusError::DispatchFailed {

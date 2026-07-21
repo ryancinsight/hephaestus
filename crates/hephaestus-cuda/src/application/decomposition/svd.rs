@@ -74,8 +74,10 @@ pub fn svd_decompose(
         let s = device.alloc_zeroed::<f32>(0)?;
         let inner = leto_ops::SvdDecomposition {
             singular_values: vec![],
-            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
+            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+                .expect("infallible: empty matrix from matching shape and data"),
+            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+                .expect("infallible: empty matrix from matching shape and data"),
         };
         return Ok(GpuSvdDecomposition {
             inner,
@@ -131,8 +133,10 @@ pub fn svd_rank_revealing(
         let s = device.alloc_zeroed::<f32>(0)?;
         let inner = leto_ops::SvdDecomposition {
             singular_values: vec![],
-            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
-            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![]).unwrap(),
+            left_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+                .expect("infallible: empty matrix from matching shape and data"),
+            right_singular_vectors: leto::Array2::from_shape_vec([0, 0], vec![])
+                .expect("infallible: empty matrix from matching shape and data"),
         };
         return Ok(GpuSvdDecomposition {
             inner,
