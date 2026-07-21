@@ -20,7 +20,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "aequitas"
 version = "0.1.0"
-source = "git+https://github.com/ryancinsight/aequitas?rev=be3a1ac91286a17aecf18f0065d2aa6b385eb67b#be3a1ac91286a17aecf18f0065d2aa6b385eb67b"
+source = "git+https://github.com/ryancinsight/aequitas?rev=cf9b2c3debabf0c08a2769fa8246908ad7cf53da#cf9b2c3debabf0c08a2769fa8246908ad7cf53da"
 dependencies = [
  "eunomia",
  "typenum",
@@ -947,7 +947,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "leto"
 version = "0.39.0"
-source = "git+https://github.com/ryancinsight/leto.git#6545b6efe235daac04d78f2aa2522d3ccfaf284e"
+source = "git+https://github.com/ryancinsight/leto.git#80406d9cca46813ae808088cd82721959a150bbf"
 dependencies = [
  "aequitas",
  "bytemuck",
@@ -960,7 +960,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.39.0"
-source = "git+https://github.com/ryancinsight/leto.git#6545b6efe235daac04d78f2aa2522d3ccfaf284e"
+source = "git+https://github.com/ryancinsight/leto.git#80406d9cca46813ae808088cd82721959a150bbf"
 dependencies = [
  "bytemuck",
  "eunomia",
