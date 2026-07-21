@@ -20,9 +20,16 @@ Target release: 0.18.0.
 - Import `eunomia::Complex` for WGPU, CUDA, Metal, and Python complex buffer
   APIs. The layout remains `repr(C)` real/imaginary pairs and is pinned by
   Eunomia 0.4.0 compile-time assertions.
+- Pass `LaplacianPolarity::Laplacian` or
+  `LaplacianPolarity::NegativeLaplacian` as the final
+  `Laplacian2DParams::new` argument.
 
 ### Changed
 
+- [arch] `hephaestus-wgpu` now derives its Laplacian parameter block from
+  Leto's typed grid, boundary, spacing, and polarity contract. The duplicate
+  local boundary enum and CPU test stencil are removed; differential tests use
+  Leto Ops as the CPU provider.
 - [patch] Compile CUDA pinned host staging and decomposition pipeline keys only
   when the decomposition feature is enabled, keeping the CUDA-only feature
   combination warning-clean.

@@ -5,9 +5,11 @@
 //! kernel is intentionally f32-only: WGSL does not guarantee f64 storage
 //! support, and exposing a generic scalar would be a falsely generic boundary.
 
-use aequitas::systems::si::{quantities::Length, units::Meter};
+use aequitas::systems::si::quantities::Length;
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{DispatchGrid, HephaestusError, MultiStorageKernel, Result};
+use leto::Laplacian2D;
+pub use leto::{BoundaryCondition, LaplacianPolarity};
 
 use crate::application::storage_kernel::{
     WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
@@ -16,27 +18,6 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 const WORKGROUP: [usize; 3] = [8, 8, 1];
-
-/// Boundary condition applied by the 2D Laplacian stencil.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BoundaryCondition {
-    /// Homogeneous Dirichlet: `u = 0` on boundaries.
-    Dirichlet,
-    /// Homogeneous Neumann: `∂u/∂n = 0` on boundaries.
-    Neumann,
-    /// Periodic wrapping across domain boundaries.
-    Periodic,
-}
-
-impl BoundaryCondition {
-    const fn as_u32(self) -> u32 {
-        match self {
-            BoundaryCondition::Dirichlet => 0,
-            BoundaryCondition::Neumann => 1,
-            BoundaryCondition::Periodic => 2,
-        }
-    }
-}
 
 /// Uniform parameters for the 2D Laplacian dispatch.
 ///
@@ -63,26 +44,25 @@ impl Laplacian2DParams {
         dx: Length<f32>,
         dy: Length<f32>,
         bc: BoundaryCondition,
+        polarity: LaplacianPolarity,
     ) -> Result<Self> {
-        if nx < 2 || ny < 2 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "Laplacian grid axes must contain at least two points: nx={nx}, ny={ny}"
-                ),
-            });
-        }
-        let dx_m = dx.in_unit::<Meter>();
-        let dy_m = dy.in_unit::<Meter>();
-        if !dx_m.is_finite() || dx_m <= 0.0 || !dy_m.is_finite() || dy_m <= 0.0 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "Laplacian spacing must be finite and positive: dx={dx_m} m, dy={dy_m} m"
-                ),
-            });
-        }
+        let nx_usize =
+            usize::try_from(nx).map_err(|error| HephaestusError::InvalidConfiguration {
+                message: format!("Laplacian nx does not fit usize: nx={nx}, error={error}"),
+            })?;
+        let ny_usize =
+            usize::try_from(ny).map_err(|error| HephaestusError::InvalidConfiguration {
+                message: format!("Laplacian ny does not fit usize: ny={ny}, error={error}"),
+            })?;
+        let contract = Laplacian2D::new(nx_usize, ny_usize, dx, dy, bc)
+            .map_err(|error| HephaestusError::InvalidConfiguration {
+                message: error.to_string(),
+            })?
+            .with_polarity(polarity);
+        let [dx_inv2, dy_inv2] = contract.signed_inverse_spacing_squared();
         Ok(Self {
-            dims_bc: [nx, ny, bc.as_u32(), 0],
-            inv2: [dx_m.recip().powi(2), dy_m.recip().powi(2), 0.0, 0.0],
+            dims_bc: [nx, ny, u32::from(bc), 0],
+            inv2: [dx_inv2, dy_inv2, 0.0, 0.0],
         })
     }
 }
@@ -136,8 +116,22 @@ impl Laplacian2DKernel {
                 device_len: output.len,
             });
         }
-        let nx = params.dims_bc[0] as usize;
-        let ny = params.dims_bc[1] as usize;
+        let nx = usize::try_from(params.dims_bc[0]).map_err(|error| {
+            HephaestusError::InvalidConfiguration {
+                message: format!(
+                    "Laplacian nx does not fit usize: nx={}, error={error}",
+                    params.dims_bc[0]
+                ),
+            }
+        })?;
+        let ny = usize::try_from(params.dims_bc[1]).map_err(|error| {
+            HephaestusError::InvalidConfiguration {
+                message: format!(
+                    "Laplacian ny does not fit usize: ny={}, error={error}",
+                    params.dims_bc[1]
+                ),
+            }
+        })?;
         let grid = DispatchGrid::covering_domain([nx, ny, 1], WORKGROUP)?;
         self.kernel.dispatch(
             device,

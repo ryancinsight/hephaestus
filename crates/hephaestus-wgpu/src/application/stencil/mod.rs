@@ -5,4 +5,4 @@
 
 mod laplacian2d;
 
-pub use laplacian2d::{BoundaryCondition, Laplacian2DKernel, Laplacian2DParams};
+pub use laplacian2d::{BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity};

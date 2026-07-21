@@ -947,8 +947,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "leto"
 version = "0.39.0"
-source = "git+https://github.com/ryancinsight/leto.git#7afcbd0e9ba0d79d16a1da0df7c64714fabfe865"
+source = "git+https://github.com/ryancinsight/leto.git#6545b6efe235daac04d78f2aa2522d3ccfaf284e"
 dependencies = [
+ "aequitas",
  "bytemuck",
  "eunomia",
  "mnemosyne",
@@ -959,7 +960,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.39.0"
-source = "git+https://github.com/ryancinsight/leto.git#7afcbd0e9ba0d79d16a1da0df7c64714fabfe865"
+source = "git+https://github.com/ryancinsight/leto.git#6545b6efe235daac04d78f2aa2522d3ccfaf284e"
 dependencies = [
  "bytemuck",
  "eunomia",

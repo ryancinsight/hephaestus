@@ -4,6 +4,18 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-LAPLACIAN-CONTRACT-1 [arch] — done
+
+- Owner: Codex `/root`; scope: `hephaestus-wgpu` Laplacian parameter contract,
+  Leto dependency lock, differential test oracle, ADR and PM artifacts.
+- Acceptance: boundary and polarity types have one Leto owner; parameter
+  construction delegates dimensional validation to `Laplacian2D`; the local
+  CPU stencil is deleted; WGPU results remain differential against the Leto
+  CPU implementation; focused package gates pass.
+- Evidence: all-target/all-feature check and warning-denied Clippy pass;
+  configured Nextest passes 152/152, including eight real-adapter Leto/WGSL
+  Laplacian comparisons; doctest and warning-denied rustdoc gates pass.
+
 ## HEPH-CUDA-FEATURE-HYGIENE [patch] — done
 
 - Owner: Codex `/root`; scope: CUDA feature-gated infrastructure, pipeline
