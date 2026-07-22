@@ -40,10 +40,14 @@ use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_r
 #[cfg(feature = "cuda")]
 use hephaestus_core::factor_lu_panel;
 
-use super::validate::{validate_dense_operand, validate_square};
+#[cfg(feature = "cuda")]
+use super::validate::validate_dense_operand;
+use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
+use crate::infrastructure::device::CudaDevice;
+#[cfg(feature = "cuda")]
+use crate::infrastructure::device::cuda_byte_count;
 
 /// LU decomposition result: device-resident packed factors with host-side
 /// decomposition for solve/inv/det.

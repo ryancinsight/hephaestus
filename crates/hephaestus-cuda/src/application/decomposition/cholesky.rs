@@ -11,16 +11,20 @@
 
 #[cfg(feature = "cuda")]
 use bytemuck::Pod;
-use hephaestus_core::{
-    ComputeDevice, DeviceBuffer, HephaestusError, Result, factor_cholesky_panel,
-};
+#[cfg(feature = "cuda")]
+use hephaestus_core::factor_cholesky_panel;
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
 use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
-use super::validate::{validate_dense_operand, validate_square};
+#[cfg(feature = "cuda")]
+use super::validate::validate_dense_operand;
+use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
+use crate::infrastructure::device::CudaDevice;
+#[cfg(feature = "cuda")]
+use crate::infrastructure::device::cuda_byte_count;
 
 /// Lower-triangular Cholesky factor on the device, with host-side
 /// decomposition for solve/inv/det without re-factorization.

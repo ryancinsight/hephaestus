@@ -13,9 +13,16 @@ crate-type = ["cdylib", "rlib"]
 doc = false
 doctest = false
 
+[features]
+default = []
+cuda = ["hephaestus-cuda/cuda"]
+
 [dependencies]
 hephaestus-core = { workspace = true }
-hephaestus-cuda = { workspace = true }
+# PyPI wheels remain portable across hosts without a CUDA toolkit. The CUDA
+# backend keeps its full Python surface and reports explicit unavailability;
+# source builds can opt into the real backend with `--features cuda`.
+hephaestus-cuda = { workspace = true, features = ["decomposition"] }
 hephaestus-wgpu = { workspace = true }
 # `multiple-pymethods` lets each operation-family module extend `PyArray`
 # with its own `#[pymethods]` block (one leaf module per family).

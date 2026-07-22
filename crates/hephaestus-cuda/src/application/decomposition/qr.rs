@@ -28,11 +28,14 @@ use hephaestus_core::panel_qr_packed;
 
 #[cfg(feature = "cuda")]
 use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
+#[cfg(feature = "cuda")]
 use super::validate::validate_dense_operand;
 
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
-use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
+use crate::infrastructure::device::CudaDevice;
+#[cfg(feature = "cuda")]
+use crate::infrastructure::device::cuda_byte_count;
 
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.

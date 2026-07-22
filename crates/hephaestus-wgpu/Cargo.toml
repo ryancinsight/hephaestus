@@ -17,7 +17,7 @@ decomposition = ["dep:leto-ops"]
 ## Enable CSR sparse matrix upload/download and GPU sparse products.
 sparse = ["dep:leto-ops"]
 ## Enable the WGPU-versus-CUDA comparative benchmark target.
-cuda-comparative = ["dep:hephaestus-cuda"]
+cuda-comparative = ["dep:hephaestus-cuda", "hephaestus-cuda/cuda", "hephaestus-cuda/decomposition"]
 
 [dependencies]
 aequitas = { workspace = true }

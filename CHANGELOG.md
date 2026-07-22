@@ -35,6 +35,10 @@ Target release: 0.18.0.
 - [patch] GitHub Releases tagged `hephaestus-python-v<version>` now build,
   install, attest, and attach locked CPython 3.9–3.13 wheels for Linux, Windows,
   and macOS, then publish the exact wheel set to PyPI through OIDC.
+- [patch] `hephaestus-python` wheels now use the CUDA crate's explicit
+  unavailable backend so Linux, Windows, and macOS artifacts build without a
+  host CUDA toolkit. Source builds enable native CUDA with `--features cuda`;
+  WGPU remains enabled in published wheels.
 
 - [arch] `hephaestus-wgpu` now derives its Laplacian parameter block from
   Leto's typed grid, boundary, spacing, and polarity contract. The duplicate

@@ -2,7 +2,9 @@
 //! `hephaestus_core` validators.
 
 use bytemuck::Pod;
-use hephaestus_core::{DeviceBuffer, Result, require_dense_operand, validate_square_operand};
+#[cfg(feature = "cuda")]
+use hephaestus_core::require_dense_operand;
+use hephaestus_core::{DeviceBuffer, Result, validate_square_operand};
 
 use crate::application::strided::StridedOperand;
 
@@ -12,6 +14,7 @@ pub(crate) fn validate_square<T: Pod>(matrix: &StridedOperand<'_, T, 2>) -> Resu
 }
 
 /// Require a dense C-contiguous zero-offset operand for a blocked decomposition.
+#[cfg(feature = "cuda")]
 pub(crate) fn validate_dense_operand<T: Pod>(
     label: &str,
     matrix: &StridedOperand<'_, T, 2>,
