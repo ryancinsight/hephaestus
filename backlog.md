@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — review
+## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — done
 
 - Owner: Codex `/root`; scope: prepared WGPU dot and L2-norm map-reduction
   dispatch, the reduction encoder seam it requires, value/allocation contracts,
@@ -28,7 +28,8 @@ cuda-oxide + cutile).
   encoder path. An isolated 65,536-element Criterion comparison measured
   prepared dot 25.7% and prepared L2 23.0% below their one-shot point
   estimates. Local format, all-target Clippy, package/focused Nextest, doctest,
-  Rustdoc, example, and benchmark gates pass; hosted review remains open.
+  Rustdoc, example, and benchmark gates pass. PR #60 merged as
+  `ff7e77536e7d80b09bba1b88b8c23f85238da608`.
 
 ## HEPH-PYTHON-RELEASE-1 [patch] — blocked
 
