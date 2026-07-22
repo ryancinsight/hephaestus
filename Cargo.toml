@@ -43,8 +43,8 @@ windows = "=0.62.2"
 # ── Foundations ──
 bytemuck = { version = "1.19", features = ["derive"] }
 thiserror = "2.0"
-aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "cf9b2c3debabf0c08a2769fa8246908ad7cf53da", default-features = false }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
+aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "767e2d0550f1dc15bd8c4434a1a1002806f93498", default-features = false }
+eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", rev = "7021628fe8eb3637c297105f626ee5df78abda84", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
