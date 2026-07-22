@@ -19,7 +19,7 @@ kernels are forged for accelerator hardware.
 | Crate | Responsibility |
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
-| `hephaestus-wgpu` | Portable wgpu backend (wgpu 26): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
+| `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
@@ -49,6 +49,11 @@ version.
   allocation policy stays with the consumer. Contiguous outputs must not alias
   inputs; scalar dispatch reuses the same uniform-buffer pool as strided
   metadata.
+- `prepare_dot` and `prepare_norm_l2` bind fixed input buffers once and retain
+  their scalar output and reduction-tree scratch buffers. Repeated dispatches
+  observe writes to those buffers without reallocating or rebuilding bind
+  groups. L2 norm encodes its map, reduction tree, and square root into one
+  command buffer and submits once.
 - Staging and uniform buffer pools are bounded by retained count and retained
   bytes, keeping transient GPU memory reuse from becoming unbounded growth.
 - `WgpuBuffer::raw()` is the consumer escape hatch: apollo transform kernels
@@ -84,6 +89,8 @@ cargo test --doc
 cargo doc --no-deps
 cargo bench --bench elementwise_into
 cargo bench --bench reduction_width
+cargo run -p hephaestus-wgpu --example prepared_map_reduction
+cargo bench -p hephaestus-wgpu --bench prepared_map_reduction
 ```
 
 Contract tests run real device dispatch differentially against CPU references
@@ -91,9 +98,11 @@ Contract tests run real device dispatch differentially against CPU references
 length-mismatch rejection). On hosts without an adapter the tests skip with a
 message rather than fabricate a pass.
 
-The `elementwise_into` and `reduction_width` benchmarks run real WGPU dispatch
-and validate output values. They are empirical timing tools, not Criterion
-regression baselines.
+The `elementwise_into`, `reduction_width`, and `prepared_map_reduction`
+benchmarks run real WGPU dispatch and validate output values. The prepared
+map-reduction benchmark compares fixed-buffer prepared dot/L2 dispatch against
+the same one-shot operations at identical inputs and Criterion settings. These
+are empirical timing tools, not stored regression baselines.
 
 ## Consumers
 

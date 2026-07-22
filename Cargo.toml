@@ -33,6 +33,7 @@ hephaestus-metal = { path = "crates/hephaestus-metal" }
 # default set minus D3D12.
 wgpu = { version = "30.0.0", default-features = false, features = ["wgsl", "vulkan", "metal"] }
 pollster = "0.3"
+criterion = "0.8.2"
 
 # gpu-allocator 0.28 accepts Windows bindings 0.53..=0.62 while WGPU HAL 30
 # exchanges its D3D12 types with Windows 0.62. Pin the shared edge so Cargo

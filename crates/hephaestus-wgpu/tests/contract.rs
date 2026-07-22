@@ -1503,6 +1503,48 @@ fn linalg_dot_matches_cpu_reference() {
 }
 
 #[test]
+fn prepared_dot_reuses_output_and_observes_input_updates() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, prepare_dot};
+    use leto::Layout;
+
+    const LEN: usize = 1_025;
+    let mut lhs_host = vec![1.0f32; LEN];
+    let rhs_host = vec![1.0f32; LEN];
+    let lhs = device.upload(&lhs_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([LEN]).unwrap();
+    let prepared = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &lhs,
+            layout: &layout,
+        },
+        StridedOperand {
+            buffer: &rhs,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let output_handle = prepared.output().raw().clone();
+
+    prepared.dispatch(&device).unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [LEN as f32]);
+    assert_eq!(&output_handle, prepared.output().raw());
+
+    lhs_host.fill(2.0);
+    device.write_buffer(&lhs, &lhs_host).unwrap();
+    prepared.dispatch(&device).unwrap();
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [2.0 * LEN as f32]);
+    assert_eq!(&output_handle, prepared.output().raw());
+}
+
+#[test]
 fn linalg_trace_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3356,6 +3398,42 @@ fn linalg_norms_match_cpu_reference() {
     let mut got_max = [0.0f32; 1];
     device.download(&max_buf, &mut got_max).unwrap();
     assert_eq!(got_max[0], 4.0);
+}
+
+#[test]
+fn prepared_l2_norm_reuses_output_and_observes_input_updates() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, prepare_norm_l2};
+    use leto::Layout;
+
+    const LEN: usize = 1_024;
+    let mut host = vec![3.0f32; LEN];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([LEN]).unwrap();
+    let prepared = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let output_handle = prepared.output().raw().clone();
+
+    prepared.dispatch(&device).unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [96.0]);
+    assert_eq!(&output_handle, prepared.output().raw());
+
+    host.fill(4.0);
+    device.write_buffer(&input, &host).unwrap();
+    prepared.dispatch(&device).unwrap();
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [128.0]);
+    assert_eq!(&output_handle, prepared.output().raw());
 }
 
 #[test]

@@ -6,19 +6,13 @@
 
 use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
-use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError, IdentityToken,
-    OpIdentity, Result, Wgsl,
-};
+use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};
 use leto::Layout;
 use std::any::TypeId;
 
-use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
-use crate::application::pipeline::{cached_pipeline, workgroups};
-use crate::application::reduction::{MaxOp, SumOp, reduction};
+use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{
-    StridedMeta, StridedOperand, WGSL_DECODE, WGSL_META, map_layout_err, pad_shape, pad_strides,
-    to_i32, to_u32, unary_elementwise_strided_into,
+    StridedOperand, map_layout_err, to_i32, to_u32, unary_elementwise_strided_into,
 };
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -64,20 +58,6 @@ impl MatrixIdentityScalar for i32 {
     const ONE: Self = 1;
 }
 
-/// WGPU scalar whose shader type supports the real-valued square root needed
-/// to finish an L2 / Frobenius norm.
-///
-/// WGPU's portable scalar surface here exposes `f32`, `u32`, and `i32`.
-/// Leto's `norm_l2` contract is real-valued, so Hephaestus only implements
-/// this marker for the real WGSL scalar currently available through
-/// [`DialectScalar<Wgsl>`](DialectScalar).
-pub trait L2NormScalar:
-    DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>
-{
-}
-
-impl L2NormScalar for f32 {}
-
 /// WGPU scalar whose shader type supports row-reduction rank estimation.
 ///
 /// Bundles the arithmetic and ordering bounds the host-delegated Gaussian
@@ -110,47 +90,12 @@ struct GpuMatrixLayout {
 
 struct MatmulKernel<T>(PhantomData<T>);
 struct KronKernel<T>(PhantomData<T>);
-struct MapReductionKernel<Op>(PhantomData<Op>);
 
-trait MapReductionOp: Copy + Send + Sync + 'static {
-    type ReduceOp: CombineExpr<Wgsl>;
-    const WGSL_MAP_EXPR: &'static str;
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct TraceOp;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct NormL1Op;
-
-/// Fused multiply map + sum reduction: serves `dot` (over two operands) and
-/// the squared-sum first pass of `norm_l2` (over `(view, view)`).
-#[derive(Clone, Copy, Debug, Default)]
-struct DotOp;
-
-/// Fused absolute-value map + max reduction backing `norm_max`.
-#[derive(Clone, Copy, Debug, Default)]
-struct NormMaxOp;
-
-impl MapReductionOp for TraceOp {
-    type ReduceOp = SumOp;
-    const WGSL_MAP_EXPR: &'static str = "lhs";
-}
-
-impl MapReductionOp for NormL1Op {
-    type ReduceOp = SumOp;
-    const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
-}
-
-impl MapReductionOp for DotOp {
-    type ReduceOp = SumOp;
-    const WGSL_MAP_EXPR: &'static str = "lhs * rhs";
-}
-
-impl MapReductionOp for NormMaxOp {
-    type ReduceOp = MaxOp;
-    const WGSL_MAP_EXPR: &'static str = "abs(lhs)";
-}
+mod map_reduction;
+pub use map_reduction::{
+    L2NormScalar, PreparedDot, PreparedL2Norm, dot, norm_l1, norm_l2, norm_max, prepare_dot,
+    prepare_norm_l2, trace,
+};
 
 fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
     Ok(GpuMatrixLayout {
@@ -165,180 +110,6 @@ fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
         offset: to_u32(layout.offset, "offset")?,
         _pad: [0; 3],
     })
-}
-
-fn map_reduction_shader_source<Op, T>(width: BlockWidth) -> String
-where
-    Op: MapReductionOp,
-    T: IdentityToken<Op::ReduceOp, Wgsl>,
-{
-    format!(
-        r#"{meta}
-@group(0) @binding(0) var<uniform> lmeta: Meta;
-@group(0) @binding(1) var<storage, read> a: array<{ty}>;
-@group(0) @binding(2) var<storage, read> b: array<{ty}>;
-@group(0) @binding(3) var<storage, read_write> out: array<{ty}>;
-
-var<workgroup> shared_data: array<{ty}, {wg}>;
-
-@compute @workgroup_size({wg})
-fn main(
-    @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(local_invocation_id) local_id: vec3<u32>,
-    @builtin(workgroup_id) workgroup_id: vec3<u32>
-) {{
-    let i = global_id.x;
-    if (i < lmeta.offsets.w) {{
-{decode}        let lhs = a[u32(a_off)];
-        let rhs = b[u32(b_off)];
-        shared_data[local_id.x] = {map_expr};
-    }} else {{
-        shared_data[local_id.x] = {identity};
-    }}
-
-    workgroupBarrier();
-
-    for (var stride = {wg}u / 2u; stride > 0u; stride = stride / 2u) {{
-        if (local_id.x < stride) {{
-            let lhs = shared_data[local_id.x];
-            let rhs = shared_data[local_id.x + stride];
-            shared_data[local_id.x] = {reduce_expr};
-        }}
-        workgroupBarrier();
-    }}
-
-    if (local_id.x == 0u) {{
-        out[workgroup_id.x] = shared_data[0];
-    }}
-}}
-"#,
-        meta = WGSL_META,
-        ty = T::TYPE_TOKEN,
-        wg = width.get(),
-        decode = WGSL_DECODE,
-        identity = <T as IdentityToken<Op::ReduceOp, Wgsl>>::TOKEN,
-        map_expr = Op::WGSL_MAP_EXPR,
-        reduce_expr = <Op::ReduceOp as CombineExpr<Wgsl>>::EXPR,
-    )
-}
-
-fn map_reduction_first_pass<Op, T, const N: usize>(
-    device: &WgpuDevice,
-    a: StridedOperand<'_, T, N>,
-    b: StridedOperand<'_, T, N>,
-    width: BlockWidth,
-) -> Result<WgpuBuffer<T>>
-where
-    Op: MapReductionOp,
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, Wgsl>,
-{
-    let len = a.layout.checked_size().map_err(map_layout_err)?;
-    if len == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let b_layout = b.layout.broadcast(a.layout.shape).map_err(map_layout_err)?;
-    a.layout
-        .validate_storage_len(a.buffer.len)
-        .map_err(map_layout_err)?;
-    b_layout
-        .validate_storage_len(b.buffer.len)
-        .map_err(map_layout_err)?;
-
-    let groups = workgroups(len, width)? as usize;
-    let out = device.alloc_zeroed::<T>(groups)?;
-
-    let meta = StridedMeta {
-        shape: pad_shape(a.layout.shape)?,
-        a_strides: pad_strides(a.layout.strides)?,
-        b_strides: pad_strides(b_layout.strides)?,
-        out_strides: [1, 1, 1, 1],
-        offsets: [
-            to_u32(a.layout.offset, "input offset")?,
-            to_u32(b_layout.offset, "input offset")?,
-            0,
-            to_u32(len, "dispatch size")?,
-        ],
-    };
-
-    let pipeline = cached_pipeline(
-        device,
-        (
-            TypeId::of::<MapReductionKernel<Op>>(),
-            TypeId::of::<T>(),
-            width.get(),
-        ),
-        "hephaestus-map-reduction",
-        || map_reduction_shader_source::<Op, T>(width),
-    );
-
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
-    device
-        .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
-
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-map-reduction"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: meta_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: a.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: b.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: out.buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-map-reduction"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-map-reduction"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(groups as u32, 1, 1);
-    }
-    device.queue().submit(Some(encoder.finish()));
-
-    Ok(out)
-}
-
-/// Fully reduce `Op`'s map expression over two strided operands: one fused
-/// map+reduce first pass, then contiguous reduction passes on the partials.
-/// Unary maps pass the same operand twice (the map expression ignores `rhs`).
-fn map_reduction<Op, T, const N: usize>(
-    device: &WgpuDevice,
-    a: StridedOperand<'_, T, N>,
-    b: StridedOperand<'_, T, N>,
-) -> Result<WgpuBuffer<T>>
-where
-    Op: MapReductionOp,
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, Wgsl>,
-{
-    let partial = map_reduction_first_pass::<Op, T, N>(device, a, b, BlockWidth::DEFAULT)?;
-    if partial.len == 1 {
-        return Ok(partial);
-    }
-    reduction::<Op::ReduceOp, T>(device, &partial)
 }
 
 fn matmul_shader_source<T: MatmulZero>() -> String {
@@ -1269,57 +1040,6 @@ where
     Ok(result)
 }
 
-/// Compute the vector dot product `Σᵢ a[i] * b[i]` on the GPU.
-pub fn dot<T>(
-    device: &WgpuDevice,
-    a: StridedOperand<'_, T, 1>,
-    b: StridedOperand<'_, T, 1>,
-) -> Result<WgpuBuffer<T>>
-where
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
-{
-    if a.layout.shape != b.layout.shape {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                a.layout.shape, b.layout.shape
-            ),
-        });
-    }
-
-    map_reduction::<DotOp, T, 1>(device, a, b)
-}
-
-/// Compute the trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix on the GPU.
-pub fn trace<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<WgpuBuffer<T>>
-where
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
-{
-    let [rows, cols] = matrix.layout.shape;
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "trace requires a square matrix, got shape {:?}",
-                matrix.layout.shape
-            ),
-        });
-    }
-
-    if rows == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let s0 = matrix.layout.strides[0];
-    let s1 = matrix.layout.strides[1];
-    let diag_layout = Layout::new([rows], [s0 + s1], matrix.layout.offset);
-    let diag_operand = StridedOperand {
-        buffer: matrix.buffer,
-        layout: &diag_layout,
-    };
-
-    map_reduction::<TraceOp, T, 1>(device, diag_operand, diag_operand)
-}
-
 fn matrix_properties_with_tolerance<T>(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, T, 2>,
@@ -1445,42 +1165,6 @@ where
         });
     }
     matrix_properties_with_tolerance(device, matrix, 0.0).map(|(_, determinant)| determinant)
-}
-
-/// Compute the L1 norm `Σ |x|` on the GPU.
-pub fn norm_l1<T, const N: usize>(
-    device: &WgpuDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<WgpuBuffer<T>>
-where
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
-{
-    map_reduction::<NormL1Op, T, N>(device, view, view)
-}
-
-/// Compute the L2 / Frobenius norm `sqrt(Σ x²)` on the GPU.
-pub fn norm_l2<T, const N: usize>(
-    device: &WgpuDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<WgpuBuffer<T>>
-where
-    T: L2NormScalar,
-{
-    let squared_sum = map_reduction::<DotOp, T, N>(device, view, view)?;
-    let out = device.alloc_zeroed::<T>(1)?;
-    unary_elementwise_into::<SqrtOp, T>(device, &squared_sum, &out, BlockWidth::DEFAULT)?;
-    Ok(out)
-}
-
-/// Compute the Max norm `max |x|` on the GPU.
-pub fn norm_max<T, const N: usize>(
-    device: &WgpuDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<WgpuBuffer<T>>
-where
-    T: DialectScalar<Wgsl> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, Wgsl>,
-{
-    map_reduction::<NormMaxOp, T, N>(device, view, view)
 }
 
 /// Compute the Moore-Penrose pseudoinverse A⁺ of a device-resident matrix.

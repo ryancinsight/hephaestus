@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — in-progress
+## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — review
 
 - Owner: Codex `/root`; scope: prepared WGPU dot and L2-norm map-reduction
   dispatch, the reduction encoder seam it requires, value/allocation contracts,
@@ -22,6 +22,13 @@ cuda-oxide + cutile).
   their leaf modules if split, `crates/hephaestus-wgpu/tests/contract.rs`, the
   focused example/benchmark and package manifest, `README.md`, `CHANGELOG.md`,
   `CHECKLIST.md`, and this item. Last update: 2026-07-21.
+- Current evidence: the two prepared real-adapter value/allocation contracts
+  pass (2/2, 1.239 s). The one-shot scalar-reduction tree, prepared dispatch,
+  batch dispatch, and fused map-reduction tail now share one prepared plan and
+  encoder path. An isolated 65,536-element Criterion comparison measured
+  prepared dot 25.7% and prepared L2 23.0% below their one-shot point
+  estimates. Local format, all-target Clippy, package/focused Nextest, doctest,
+  Rustdoc, example, and benchmark gates pass; hosted review remains open.
 
 ## HEPH-PYTHON-RELEASE-1 [patch] — blocked
 

@@ -2,6 +2,7 @@
 
 use hephaestus_core::{HephaestusError, Result};
 
+use crate::application::pipeline::encode_compute_pass;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -61,15 +62,7 @@ pub(crate) fn encode_elementwise(
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(label),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(groups, 1, 1);
-    }
+    encode_compute_pass(&mut encoder, pipeline, &bind_group, groups, label);
     device.queue().submit(Some(encoder.finish()));
     Ok(())
 }

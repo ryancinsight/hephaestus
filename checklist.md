@@ -4,16 +4,43 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor]
 
-- [ ] Hoist reduction-tree encoding behind a caller-supplied encoder without
+- [x] Hoist reduction-tree encoding behind a caller-supplied encoder without
       duplicating pass planning or submission ownership.
-- [ ] Add prepared dot and L2-norm dispatch that reuse fixed-buffer resources
+- [x] Add prepared dot and L2-norm dispatch that reuse fixed-buffer resources
       and issue one command-buffer submission per operation.
-- [ ] Prove CPU-reference values, changed-input sensitivity, and stable output
+- [x] Prove CPU-reference values, changed-input sensitivity, and stable output
       allocation identity on a real WGPU adapter.
-- [ ] Add and run the focused example plus a controlled prepared-versus-one-shot
+- [x] Add and run the focused example plus a controlled prepared-versus-one-shot
       benchmark with unchanged inputs and Criterion measurement settings.
-- [ ] Pass focused format, warning-denied Clippy, Nextest, doctest, rustdoc,
+- [x] Pass focused format, warning-denied Clippy, Nextest, doctest, rustdoc,
       example, and benchmark gates; synchronize public documentation.
+
+Current value evidence: `cargo nextest run -p hephaestus-wgpu -E
+'test(prepared_dot_reuses_output_and_observes_input_updates) |
+test(prepared_l2_norm_reuses_output_and_observes_input_updates)'
+--no-fail-fast` passed 2/2 on a real adapter in 1.239 s. Both tests execute a
+multi-pass reduction, rewrite the fixed input buffer, assert the changed exact
+result, and assert the raw scalar output handle remains identical.
+
+Isolated Criterion evidence on an Intel Core Ultra 9 285K / NVIDIA RTX 5080
+(driver 610.47), 65,536 elements and 100 samples: dot one-shot
+`[141.65, 144.79, 148.34] µs` versus prepared
+`[105.19, 107.65, 110.40] µs` (25.7% lower point estimate); L2 one-shot
+`[150.88, 158.89, 169.24] µs` versus prepared
+`[119.79, 122.28, 124.79] µs` (23.0% lower point estimate). The first run was
+rejected because it overlapped an Apollo benchmark and produced 14–18% severe
+outliers; these figures are from the uncontended rerun with the instrument and
+inputs unchanged.
+
+Closure evidence: `cargo fmt -p hephaestus-wgpu --check`; warning-denied
+all-target Clippy; full package Nextest (154/154, 97.521 s); exact final focused
+Nextest (5/5, 6.895 s); runnable doctest (1/1); warning-denied Rustdoc; example
+output `dot=70 l2=5.4772253`; and the isolated Criterion run all pass.
+`cargo semver-checks check-release -p hephaestus-wgpu --baseline-rev
+origin/master` cannot construct its temporary unlocked dependency graph because
+Aequitas requires Eunomia `^0.6.0` while Eunomia's Git head is 0.7.0. The
+delivered public diff is additive (`PreparedDot`, `PreparedL2Norm`, and their
+two constructors); no existing export is removed or changed.
 
 ## HEPH-PYTHON-RELEASE-1 [patch]
 
