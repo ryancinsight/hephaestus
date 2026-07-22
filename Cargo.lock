@@ -953,7 +953,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.4.1"
-source = "git+https://github.com/ryancinsight/hermes.git#fbdab542f501f832731f909d1f7b72458016efd5"
+source = "git+https://github.com/ryancinsight/hermes.git?rev=fbdab542f501f832731f909d1f7b72458016efd5#fbdab542f501f832731f909d1f7b72458016efd5"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -966,7 +966,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.4.1"
-source = "git+https://github.com/ryancinsight/hermes.git#fbdab542f501f832731f909d1f7b72458016efd5"
+source = "git+https://github.com/ryancinsight/hermes.git?rev=fbdab542f501f832731f909d1f7b72458016efd5#fbdab542f501f832731f909d1f7b72458016efd5"
 dependencies = [
  "bytemuck",
  "eunomia",
@@ -978,7 +978,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.4.1"
-source = "git+https://github.com/ryancinsight/hermes.git#fbdab542f501f832731f909d1f7b72458016efd5"
+source = "git+https://github.com/ryancinsight/hermes.git?rev=fbdab542f501f832731f909d1f7b72458016efd5#fbdab542f501f832731f909d1f7b72458016efd5"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -987,7 +987,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.4.1"
-source = "git+https://github.com/ryancinsight/hermes.git#fbdab542f501f832731f909d1f7b72458016efd5"
+source = "git+https://github.com/ryancinsight/hermes.git?rev=fbdab542f501f832731f909d1f7b72458016efd5#fbdab542f501f832731f909d1f7b72458016efd5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -997,7 +997,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.4.1"
-source = "git+https://github.com/ryancinsight/hermes.git#fbdab542f501f832731f909d1f7b72458016efd5"
+source = "git+https://github.com/ryancinsight/hermes.git?rev=fbdab542f501f832731f909d1f7b72458016efd5#fbdab542f501f832731f909d1f7b72458016efd5"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -1096,7 +1096,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "leto"
 version = "0.40.0"
-source = "git+https://github.com/ryancinsight/leto.git#42604ad0832833fadc38faf1e169084271a3d1bb"
+source = "git+https://github.com/ryancinsight/leto.git?rev=000f41de2510658fd8dea15527d98b2edcb8a1fb#000f41de2510658fd8dea15527d98b2edcb8a1fb"
 dependencies = [
  "aequitas",
  "bytemuck",
@@ -1109,7 +1109,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.40.0"
-source = "git+https://github.com/ryancinsight/leto.git#42604ad0832833fadc38faf1e169084271a3d1bb"
+source = "git+https://github.com/ryancinsight/leto.git?rev=000f41de2510658fd8dea15527d98b2edcb8a1fb#000f41de2510658fd8dea15527d98b2edcb8a1fb"
 dependencies = [
  "bytemuck",
  "eunomia",
