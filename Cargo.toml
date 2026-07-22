@@ -43,16 +43,16 @@ windows = "=0.62.2"
 # ── Foundations ──
 bytemuck = { version = "1.19", features = ["derive"] }
 thiserror = "2.0"
-aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "767e2d0550f1dc15bd8c4434a1a1002806f93498", default-features = false }
-eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", rev = "7021628fe8eb3637c297105f626ee5df78abda84", default-features = false }
+aequitas = { version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", rev = "000f41de2510658fd8dea15527d98b2edcb8a1fb", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots.
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
-leto-ops = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", rev = "000f41de2510658fd8dea15527d98b2edcb8a1fb", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+leto-ops = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
 mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
