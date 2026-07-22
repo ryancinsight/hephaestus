@@ -31,7 +31,9 @@ imports each wheel as `pyhephaestus`, verifies that its `hephaestus-python`
 metadata version matches the release tag, attests and attaches the exact wheel
 set to the GitHub Release, then publishes those same artifacts to PyPI through
 OIDC Trusted Publishing. The tag version must equal the workspace Cargo
-version.
+version. Published wheels enable the portable WGPU backend. CUDA entry points
+remain present and return the typed backend-unavailable error; source builds on
+CUDA 13.2+ hosts opt into the native backend with the `cuda` feature.
 
 ## Design
 

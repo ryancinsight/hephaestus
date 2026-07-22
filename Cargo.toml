@@ -20,7 +20,7 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 # ── Local Workspace Crates ──
 hephaestus-core = { path = "crates/hephaestus-core" }
 hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
-hephaestus-cuda = { path = "crates/hephaestus-cuda" }
+hephaestus-cuda = { path = "crates/hephaestus-cuda", default-features = false }
 hephaestus-metal = { path = "crates/hephaestus-metal" }
 
 # ── GPU ──

@@ -150,3 +150,20 @@ impl ComputeDevice for CudaDevice {
         Self::unavailable()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn acquisition_reports_cuda_feature_requirement() {
+        let error = CudaDevice::try_default().expect_err("CUDA is unavailable without the feature");
+        match error {
+            HephaestusError::AdapterUnavailable { message } => assert_eq!(
+                message,
+                "hephaestus-cuda built without the `cuda` feature; rebuild with --features cuda"
+            ),
+            other => panic!("expected adapter-unavailable error, got {other}"),
+        }
+    }
+}
