@@ -41,6 +41,7 @@ origin/master` cannot construct its temporary unlocked dependency graph because
 Aequitas requires Eunomia `^0.6.0` while Eunomia's Git head is 0.7.0. The
 delivered public diff is additive (`PreparedDot`, `PreparedL2Norm`, and their
 two constructors); no existing export is removed or changed.
+PR #60 merged as `ff7e77536e7d80b09bba1b88b8c23f85238da608`.
 
 ## HEPH-PYTHON-RELEASE-1 [patch]
 
