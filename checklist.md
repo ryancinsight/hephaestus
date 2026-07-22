@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-PREPARED-MAP-REDUCTION-1 [minor]
+
+- [ ] Hoist reduction-tree encoding behind a caller-supplied encoder without
+      duplicating pass planning or submission ownership.
+- [ ] Add prepared dot and L2-norm dispatch that reuse fixed-buffer resources
+      and issue one command-buffer submission per operation.
+- [ ] Prove CPU-reference values, changed-input sensitivity, and stable output
+      allocation identity on a real WGPU adapter.
+- [ ] Add and run the focused example plus a controlled prepared-versus-one-shot
+      benchmark with unchanged inputs and Criterion measurement settings.
+- [ ] Pass focused format, warning-denied Clippy, Nextest, doctest, rustdoc,
+      example, and benchmark gates; synchronize public documentation.
+
 ## HEPH-PYTHON-RELEASE-1 [patch]
 
 - [x] Add the pinned build-once GitHub Release and PyPI workflow.
