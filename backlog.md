@@ -4,7 +4,33 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-PYTHON-RELEASE-1 [patch] — in-progress
+## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — review
+
+- Owner: Codex `/root`; scope: prepared WGPU dot and L2-norm map-reduction
+  dispatch, the reduction encoder seam it requires, value/allocation contracts,
+  the focused example and benchmark, Rustdoc, changelog, and checklist.
+  CUDA behavior, release publication, and unrelated operation families are
+  non-goals.
+- Acceptance: repeated fixed-buffer dot and L2-norm dispatch reuse pipelines,
+  bind groups, metadata, scalar output, and tree scratch; one command encoder
+  carries the fused map, reduction, and optional square-root passes; one-shot
+  APIs retain their value contract through the same canonical machinery;
+  CPU-reference and mutated-input tests pass; allocation identity is pinned;
+  the example runs; and a controlled benchmark reports prepared versus
+  one-shot dispatch without changing inputs or measurement settings.
+- Claimed files: `crates/hephaestus-wgpu/src/application/{linalg,reduction}.rs`,
+  their leaf modules if split, `crates/hephaestus-wgpu/tests/contract.rs`, the
+  focused example/benchmark and package manifest, `README.md`, `CHANGELOG.md`,
+  `CHECKLIST.md`, and this item. Last update: 2026-07-21.
+- Current evidence: the two prepared real-adapter value/allocation contracts
+  pass (2/2, 1.239 s). The one-shot scalar-reduction tree, prepared dispatch,
+  batch dispatch, and fused map-reduction tail now share one prepared plan and
+  encoder path. An isolated 65,536-element Criterion comparison measured
+  prepared dot 25.7% and prepared L2 23.0% below their one-shot point
+  estimates. Local format, all-target Clippy, package/focused Nextest, doctest,
+  Rustdoc, example, and benchmark gates pass; hosted review remains open.
+
+## HEPH-PYTHON-RELEASE-1 [patch] — blocked
 
 - Owner: Codex `/root`; scope: the `hephaestus-python` release workflow,
   protected GitHub environment, distribution documentation, and PyPI trusted
@@ -22,7 +48,9 @@ cuda-oxide + cutile).
   `pyhephaestus`. The local GNU linker emits its existing `.drectve` diagnostic;
   the full formatter gate passes after normalizing three pre-existing
   decomposition view expressions. Hosted MSVC and cross-platform CI plus
-  pending-publisher registration remain open.
+  pending-publisher registration remain open. Re-open trigger: explicit release
+  authority plus PyPI trusted-publisher registration; neither is implied by the
+  active provider-development scope.
 
 ## HEPH-LAPLACIAN-CONTRACT-1 [arch] — done
 

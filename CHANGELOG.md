@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] `hephaestus-wgpu` adds fixed-buffer `prepare_dot` and
+  `prepare_norm_l2` dispatch. Prepared operations reuse pipelines, bind groups,
+  metadata, reduction scratch, and scalar outputs; L2 map, reduction, and
+  square-root passes share one command-buffer submission. One-shot dot and L2
+  norm delegate to the same canonical prepared machinery.
+
 - [patch] GitHub Releases tagged `hephaestus-python-v<version>` now build,
   install, attest, and attach locked CPython 3.9–3.13 wheels for Linux, Windows,
   and macOS, then publish the exact wheel set to PyPI through OIDC.

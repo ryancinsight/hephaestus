@@ -5,6 +5,23 @@ use mnemosyne_core::KernelResourceBudget;
 
 use crate::infrastructure::device::{PipelineKey, WgpuDevice};
 
+/// Encode one bind-and-dispatch compute pass into a caller-owned command stream.
+pub(crate) fn encode_compute_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    bind_group: &wgpu::BindGroup,
+    groups: u32,
+    label: &'static str,
+) {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some(label),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, bind_group, &[]);
+    pass.dispatch_workgroups(groups, 1, 1);
+}
+
 /// Fetch the cached pipeline for `key`, compiling `source` on first use.
 #[must_use]
 pub(crate) fn cached_pipeline(

@@ -39,6 +39,7 @@ hephaestus-cuda = { workspace = true, optional = true }
 windows = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }
 
@@ -65,4 +66,8 @@ harness = false
 
 [[bench]]
 name = "scan_throughput"
+harness = false
+
+[[bench]]
+name = "prepared_map_reduction"
 harness = false

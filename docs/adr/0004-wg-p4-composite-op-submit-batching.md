@@ -1,6 +1,6 @@
 # ADR 0004 — WG-P4 composite-op submit batching (norm_l2 / matpow)
 
-- Status: **Accepted (Option B)** — 2026-07-08, user sign-off
+- Status: **Amended** — prepared encoder seam implemented 2026-07-21
 - Date: 2026-07-08
 - Scope: `hephaestus-wgpu` (`application/linalg.rs`, `application/reduction.rs`, `application/elementwise/`)
 - Refs: WG-P4 (backlog, KS-7 perf batch), audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md` §WG-P4, KS-3/KS-4/KS-4G (backlog, the authored-kernel seam)
@@ -107,3 +107,25 @@ tracked-under-KS-3: `norm_l2`/`matpow` submit-batching happens as a side effect 
 family. No ad-hoc `encode_*` surgery on `reduction_with_width` or the elementwise dispatch path
 in the meantime. Re-open as an independent WG-P4 item only if KS-3 stalls or its scope excludes
 these ops.
+
+## Amendment — 2026-07-21
+
+The documented re-open condition fired: the authored-kernel migration did not
+provide the fixed-buffer reduction and allocation-reuse contract required by
+Athena's repeated Krylov reductions. Implement a narrow prepared-operation
+seam, but keep it canonical rather than adding parallel encoder variants:
+
+- `PreparedReduction::encode` owns reduction-tree encoding for individual,
+  batched, and composite dispatch; one-shot scalar reduction constructs and
+  consumes that same prepared plan.
+- `PreparedMapReduction` owns the fused map pipeline, metadata, partial buffer,
+  and optional prepared reduction tail.
+- `PreparedDot` and `PreparedL2Norm` expose stable fixed-buffer operations;
+  one-shot dot and L2 norm construct and consume the same prepared machinery.
+- The shared elementwise encoder records the final square-root pass, so a
+  prepared L2 norm uses one encoder and one submission for the complete
+  operation.
+
+This amends Option B because the consumer requirement is now present and the
+implementation consolidates existing prepared-reduction ownership instead of
+creating the duplicate ad-hoc dispatch family rejected by the original ADR.

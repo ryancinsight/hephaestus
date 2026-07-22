@@ -33,6 +33,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
+pub(crate) fn unary_pipeline<Op, T>(device: &WgpuDevice, width: BlockWidth) -> wgpu::ComputePipeline
+where
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl>,
+{
+    let key = (
+        std::any::TypeId::of::<Op>(),
+        std::any::TypeId::of::<T>(),
+        width.get(),
+    );
+    cached_pipeline(device, key, "hephaestus-unary", || {
+        shader_source::<Op, T>(width)
+    })
+}
+
 /// Run `out[i] = op(a[i])` on the device into distinct caller-owned storage.
 pub fn unary_elementwise_into<Op, T>(
     device: &WgpuDevice,
@@ -56,14 +71,7 @@ where
     }
     let groups = workgroups(out.len, width)?;
 
-    let key = (
-        std::any::TypeId::of::<Op>(),
-        std::any::TypeId::of::<T>(),
-        width.get(),
-    );
-    let pipeline = cached_pipeline(device, key, "hephaestus-unary", || {
-        shader_source::<Op, T>(width)
-    });
+    let pipeline = unary_pipeline::<Op, T>(device, width);
 
     super::encode_elementwise(
         device,
