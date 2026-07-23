@@ -35,6 +35,15 @@ version. Published wheels enable the portable WGPU backend. CUDA entry points
 remain present and return the typed backend-unavailable error; source builds on
 CUDA 13.2+ hosts opt into the native backend with the `cuda` feature.
 
+## Rust Crate Releases
+
+The `Crates.io Release` workflow validates a named workspace package on manual
+dispatch. After that package's required first release is published locally and
+its crates.io Trusted Publisher is registered, a GitHub Release tagged
+`crate-<package>-v<version>` packages, verifies, and publishes the matching
+Cargo version with a short-lived OIDC token. `hephaestus-python` remains a
+wheel-only artifact and is marked `publish = false` for crates.io.
+
 ## Design
 
 - The `ComputeDevice` trait is the deliberate extension seam — not sealed;
