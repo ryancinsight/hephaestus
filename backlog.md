@@ -4,7 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-REDUCTION-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-AXIS-REDUCTION-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm rank-2 axis sum/min/max/mean reductions using the
+  shared `AxisReductionMeta` and `plan_axis_reduction` contracts, HIP module
+  launches over typed strided operands, value-semantic CPU differential tests,
+  and the existing ROCm CI lanes. Scans, sparse, linalg, streams, storage,
+  and random families are non-goals for this increment.
+- Acceptance: ROCm exposes the same rank-2 axis-reduction contract as CUDA and
+  WGPU, preserving the reduced axis as length one, validating shape/stride/
+  alias/empty-axis boundaries through the shared core planner, and returning
+  values matching CPU references for sum, min, max, and mean. The container
+  lane compiles and tests the real feature path, while the required-device lane
+  executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-REDUCTION-1 [minor] — done
 
 - Owner: Codex; scope: ROCm 1D sum/min/max reduction kernels using the shared
   `HipC` operation and identity vocabulary, multi-pass typed-buffer ownership,
@@ -19,8 +36,11 @@ cuda-oxide + cutile).
   compiles and tests the real feature path, while the required-device lane
   executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
-  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Hosted ROCm
+  container run `30106758162` passed the real feature build, warning-denied
+  Clippy, Nextest (10/10), doctest, and rustdoc at PR head `621bbf2`; PR #68
+  merged as `1146ee4`. The required-device lane remained skipped for the PR
+  event. Last update: 2026-07-24.
 
 ## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor] — done
 
