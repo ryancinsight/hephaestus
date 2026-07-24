@@ -3,6 +3,8 @@
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
 pub mod elementwise;
+/// Rank-2 matrix multiplication over strided layouts.
+pub mod linalg;
 pub(crate) mod pipeline;
 /// Contiguous multi-pass tree reductions.
 pub mod reduction;

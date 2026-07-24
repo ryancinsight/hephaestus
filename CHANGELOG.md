@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP module-launched tiled rank-2 matrix
+  multiplication. The `matmul` and caller-owned `matmul_into` APIs preserve
+  shared strided layout, storage, shape, and alias validation and are covered
+  by CPU differential contracts across 16×16 tile boundaries.
+
 - [minor] Extend ROCm parity with HIP module-launched rank-2 forward/reverse
   scans over shared Leto layouts. The tiled kernels cover cumulative sum and
   product, use the shared axis-scan planner for shape, stride, storage, and

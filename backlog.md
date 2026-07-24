@@ -4,7 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-SCAN-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-MATMUL-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm rank-2 tiled matrix multiplication using shared
+  strided layouts, HIP module launches, typed allocating and caller-owned
+  output APIs, CPU differential contracts, and the existing ROCm CI lanes.
+  Batched linalg, sparse, strided elementwise, streams, storage, and random
+  families are non-goals for this increment.
+- Acceptance: ROCm exposes the same rank-2 `matmul`/`matmul_into` contract as
+  CUDA and WGPU, validates shape, storage, layout, and output aliasing before
+  launch, computes partial 16×16 edge tiles correctly, and returns values
+  matching a CPU reference. The container lane compiles and tests the real
+  feature path, while the required-device lane executes the same contracts on
+  AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-SCAN-1 [minor] — done
 
 - Owner: Codex; scope: ROCm rank-2 forward/reverse scans using the shared
   `AxisScanMeta` and `plan_axis_scan` contracts, HIP module launches over typed
@@ -20,8 +37,11 @@ cuda-oxide + cutile).
   path, while the required-device lane executes the same contracts on AMD
   hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
-  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Hosted ROCm
+  container run `30109934133` passed the corrected scan feature build,
+  warning-denied Clippy, Nextest (13/13), doctest, and rustdoc at PR head
+  `3d70841`; PR #70 merged as `06dd503`. The required-device lane remained
+  skipped for the PR event. Last update: 2026-07-24.
 
 ## HEPH-ROCM-PARITY-AXIS-REDUCTION-1 [minor] — done
 
