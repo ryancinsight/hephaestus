@@ -24,7 +24,10 @@ use hephaestus_rocm::{
     unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
-use hephaestus_rocm::{cholesky_decompose, cholesky_decompose_blocked};
+use hephaestus_rocm::{
+    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, lu_decompose_blocked,
+    qr_decompose, qr_decompose_blocked,
+};
 use leto::Layout;
 use std::borrow::Cow;
 
@@ -1819,5 +1822,237 @@ fn cholesky_rejects_empty_invalid_and_non_positive_definite_inputs() {
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message.contains("not positive-definite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn lu_factorization_and_host_contracts_match_values() {
+    let Some(device) = device("lu_factorization_and_host_contracts_match_values") else {
+        return;
+    };
+
+    let matrix_values = [0.0_f32, 2.0, 1.0, 3.0];
+    let matrix = device.upload(&matrix_values).expect("HIP LU input upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("LU matrix layout");
+    let factor = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP LU factorization");
+
+    assert_eq!(factor.n(), 2);
+    assert_eq!(factor.pivots(), &[1, 1]);
+    assert_near(factor.det(), -2.0, 128.0);
+    let mut packed = [0.0_f32; 4];
+    device
+        .download(factor.factors(), &mut packed)
+        .expect("HIP LU factor download");
+    assert_near(packed[0], 1.0, 128.0);
+    assert_near(packed[1], 3.0, 128.0);
+    assert_near(packed[2], 0.0, 128.0);
+    assert_near(packed[3], 2.0, 128.0);
+
+    let rhs = device.upload(&[4.0_f32, 7.0]).expect("HIP LU RHS upload");
+    let solution = factor.solve(&device, &rhs).expect("HIP LU solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP LU solution download");
+    assert_near(solution_values[0], 1.0, 128.0);
+    assert_near(solution_values[1], 2.0, 128.0);
+
+    let inverse = factor.inv(&device).expect("HIP LU inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP LU inverse download");
+    for (actual, expected) in inverse_values.iter().zip([-1.5_f32, 1.0, 0.5, 0.0]) {
+        assert_near(*actual, expected, 128.0);
+    }
+
+    let blocked = lu_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked LU factorization");
+    assert_eq!(blocked.pivots(), factor.pivots());
+    let mut blocked_packed = [0.0_f32; 4];
+    device
+        .download(blocked.factors(), &mut blocked_packed)
+        .expect("HIP blocked LU factor download");
+    for (actual, expected) in blocked_packed.iter().zip(packed) {
+        assert_near(*actual, expected, 128.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn lu_strided_and_invalid_contracts_are_enforced() {
+    let Some(device) = device("lu_strided_and_invalid_contracts_are_enforced") else {
+        return;
+    };
+
+    let strided_values = [0.0_f32, 2.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided LU upload");
+    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let factor = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided LU factorization");
+    assert_eq!(factor.pivots(), &[1, 1]);
+
+    let blocked = lu_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        blocked,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let singular_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0])
+        .expect("HIP singular LU upload");
+    let dense_layout = Layout::c_contiguous([2, 2]).expect("dense LU layout");
+    assert!(matches!(
+        lu_decompose(
+            &device,
+            StridedOperand {
+                buffer: &singular_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("singular")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn qr_factorization_and_least_squares_match_values() {
+    let Some(device) = device("qr_factorization_and_least_squares_match_values") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_values).expect("HIP QR input upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("QR matrix layout");
+    let factor = qr_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP QR factorization");
+    assert_eq!(factor.shape(), (3, 2));
+
+    let expected_layout = Layout::c_contiguous([3, 2]).expect("QR reference layout");
+    let expected = leto_ops::qr_decompose(&leto::ArrayView::<f32, 2>::new(
+        expected_layout,
+        &matrix_values,
+    ))
+    .expect("CPU QR reference");
+    let expected_r_matrix = expected.r();
+    let expected_r = leto::Storage::as_slice(expected_r_matrix.storage());
+    let mut actual_r = [0.0_f32; 6];
+    device
+        .download(factor.r_buffer(), &mut actual_r)
+        .expect("HIP QR factor download");
+    for row in 0..3 {
+        for col in row..2 {
+            assert_near(actual_r[row * 2 + col], expected_r[row * 2 + col], 256.0);
+        }
+    }
+
+    let rhs = device
+        .upload(&[5.0_f32, 11.0, 17.0])
+        .expect("HIP QR RHS upload");
+    let solution = factor
+        .solve_least_squares(&device, &rhs)
+        .expect("HIP QR least-squares solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP QR solution download");
+    assert_near(solution_values[0], 1.0, 512.0);
+    assert_near(solution_values[1], 2.0, 512.0);
+
+    let blocked = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked QR factorization");
+    assert_eq!(blocked.shape(), factor.shape());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs() {
+    let Some(device) = device("qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs")
+    else {
+        return;
+    };
+
+    let underdetermined_buffer = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP underdetermined QR upload");
+    let underdetermined_layout = Layout::c_contiguous([2, 2]).expect("square QR layout");
+    let rank_deficient_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0])
+        .expect("HIP rank-deficient QR upload");
+    let rank_deficient_layout = Layout::c_contiguous([3, 2]).expect("rank-deficient QR layout");
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &underdetermined_buffer,
+                layout: &underdetermined_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("m ≥ n")
+    ));
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &rank_deficient_buffer,
+                layout: &rank_deficient_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("rank-deficient")
+    ));
+
+    let nonfinite_buffer = device
+        .upload(&[1.0_f32, f32::NAN, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP nonfinite QR upload");
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite_buffer,
+                layout: &rank_deficient_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
     ));
 }

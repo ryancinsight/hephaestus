@@ -88,6 +88,12 @@ pub(crate) enum PipelineKey {
     /// Cholesky factorization stage keyed by its HIP entry point.
     #[cfg(feature = "decomposition")]
     Cholesky(CholeskyStage),
+    /// LU factorization stage keyed by its HIP entry point.
+    #[cfg(feature = "decomposition")]
+    Lu(LuStage),
+    /// QR factorization stage keyed by its HIP entry point.
+    #[cfg(feature = "decomposition")]
+    Qr(QrStage),
     /// Backend-neutral multi-storage kernel keyed by its authored source.
     MultiStorage(u64),
     /// Authored kernel stream keyed by its source.
@@ -108,6 +114,26 @@ pub(crate) enum CholeskyStage {
     Column,
     /// Clear the strictly upper-triangular output region.
     ClearUpper,
+}
+
+/// HIP entry points used by ROCm LU factorization.
+#[cfg(feature = "decomposition")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum LuStage {
+    /// Validate the input matrix values.
+    Validate,
+    /// Pivot and eliminate one column.
+    Step,
+}
+
+/// HIP entry points used by ROCm QR factorization.
+#[cfg(feature = "decomposition")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum QrStage {
+    /// Validate the input matrix values.
+    Validate,
+    /// Apply one Householder reflector.
+    Step,
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
