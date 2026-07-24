@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP module-launched strided Kronecker
+  products. `kron` and caller-owned `kron_into` preserve shared rank-2 layout,
+  storage, output-shape, zero-stride, and alias validation and are covered by
+  CPU differential contracts for non-contiguous inputs, strided output, and
+  invalid contracts.
+
 - [minor] Extend ROCm parity with HIP module-launched strided dot products,
   traces, and L1/L2/max norms. One shared rank-four map-reduction metadata
   contract covers transposed, sliced, and diagonal views; the contract suite

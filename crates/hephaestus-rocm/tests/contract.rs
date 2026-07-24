@@ -11,10 +11,10 @@ use hephaestus_core::{
 };
 use hephaestus_rocm::{
     CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumsum, dot, matmul,
-    matmul_into, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max,
-    reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into, sum_axis, trace,
-    unary_elementwise,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumsum, dot, kron,
+    kron_into, matmul, matmul_into, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1,
+    norm_l2, norm_max, reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into,
+    sum_axis, trace, unary_elementwise,
 };
 use leto::Layout;
 
@@ -736,6 +736,128 @@ fn batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_c
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "output buffer must not alias either input buffer"
+    ));
+}
+
+#[test]
+fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contracts() {
+    let Some(device) =
+        device("kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contracts")
+    else {
+        return;
+    };
+
+    let lhs_values = [99_i32, 1, 2, 3, 4];
+    let rhs_values = [5_i32, 6, 7, 8];
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP kron lhs upload");
+    let rhs_buffer = device.upload(&rhs_values).expect("HIP kron rhs upload");
+    let lhs_layout = Layout::new([2, 2], [2, 1], 1);
+    let rhs_layout = Layout::c_contiguous([2, 2]).expect("kron rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+    let expected = vec![
+        5_i32, 6, 10, 12, 7, 8, 14, 16, 15, 18, 20, 24, 21, 24, 28, 32,
+    ];
+
+    let output = kron(&device, lhs, rhs).expect("HIP kron");
+    let mut output_values = vec![0_i32; 16];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP kron download");
+    assert_eq!(output_values, expected);
+
+    let strided_output_layout = Layout::new([4, 4], [8, 2], 0);
+    let strided_output = device
+        .alloc_zeroed::<i32>(31)
+        .expect("HIP strided kron output");
+    kron_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &strided_output,
+            layout: &strided_output_layout,
+        },
+    )
+    .expect("HIP caller-owned strided kron");
+    let mut strided_values = vec![0_i32; 31];
+    device
+        .download(&strided_output, &mut strided_values)
+        .expect("HIP strided kron download");
+    let gathered: Vec<_> = strided_values
+        .chunks_exact(8)
+        .take(4)
+        .flat_map(|row| row.iter().step_by(2).take(4).copied())
+        .collect();
+    assert_eq!(gathered, expected);
+
+    let empty_lhs_buffer = device.upload(&[]).expect("HIP empty kron lhs upload");
+    let empty_lhs_layout = Layout::c_contiguous([0, 2]).expect("empty kron lhs layout");
+    let empty_output = kron(
+        &device,
+        StridedOperand {
+            buffer: &empty_lhs_buffer,
+            layout: &empty_lhs_layout,
+        },
+        rhs,
+    )
+    .expect("HIP empty kron");
+    assert_eq!(empty_output.len(), 0);
+
+    let wrong_layout = Layout::c_contiguous([3, 4]).expect("wrong kron output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(12)
+        .expect("wrong kron output buffer");
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("Kronecker output shape mismatch")
+    ));
+
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
+    ));
+
+    let aliased_output_layout = Layout::new([4, 4], [0, 1], 0);
+    let aliased_output = device
+        .alloc_zeroed::<i32>(4)
+        .expect("zero-stride kron output buffer");
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &aliased_output,
+                layout: &aliased_output_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "Kronecker output layout must not contain zero-stride aliasing"
     ));
 }
 

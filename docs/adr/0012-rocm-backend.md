@@ -18,8 +18,8 @@ acquisition, typed device memory, host/device transfer, synchronization,
 capability limits, and Themis topology. The bounded operator slices now have a
 consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
 operations, contiguous and rank-2 axis reductions, rank-2 scans, rank-2/3
-matrix multiplication, and strided map-reductions can be compared against CPU
-values and the existing CUDA/WGPU contracts.
+matrix multiplication, strided Kronecker products, and strided map-reductions
+can be compared against CPU values and the existing CUDA/WGPU contracts.
 
 ## Decision
 
@@ -63,6 +63,10 @@ Dot products, traces, and L1/L2/max norms share one rank-four packed metadata
 contract. Each workgroup maps its logical strided view into shared memory and
 the existing contiguous reduction kernel finishes multi-workgroup inputs;
 L2 applies the HIP square-root elementwise kernel to the reduced scalar.
+Kronecker products use one HIP thread per logical output coordinate. The kernel
+decomposes that coordinate into left/right matrix coordinates and applies the
+three strided rank-2 layouts, so output tiling and non-contiguous views do not
+require a provider-specific host copy.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -88,10 +92,10 @@ the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
 surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
 axis sum/min/max/mean reduction, rank-2 forward/reverse scans, rank-2/3
-matrix multiplication including singleton-batch broadcasting, and strided
-dot/trace/L1/L2/max map-reductions. Sparse, strided elementwise, streams,
-storage, and random operations remain tracked follow-up families with
-differential CPU/WGPU contracts.
+matrix multiplication including singleton-batch broadcasting, strided
+Kronecker products, and strided dot/trace/L1/L2/max map-reductions. Sparse,
+strided elementwise, streams, storage, and random operations remain tracked
+follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,
