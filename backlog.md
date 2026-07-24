@@ -4,7 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-REDUCTION-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm 1D sum/min/max reduction kernels using the shared
+  `HipC` operation and identity vocabulary, multi-pass typed-buffer ownership,
+  value-semantic CPU differential contracts, and the existing ROCm CI lanes.
+  Axis reductions, scans, sparse, linalg, streams, storage, and random
+  families are non-goals for this increment.
+- Acceptance: ROCm exposes the same contiguous 1D reduction contract as CUDA
+  and WGPU through the shared operation markers; HIP kernels compile through
+  hipRTC, load through the HIP module API, reduce non-empty and empty inputs
+  over multiple passes, reject invalid widths and representable-length
+  violations, and return values matching the CPU oracle. The container lane
+  compiles and tests the real feature path, while the required-device lane
+  executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor] — done
 
 - Owner: Codex; scope: shared HIP-C dialect vocabulary, ROCm runtime-compiled
   elementwise binary/unary/scalar kernels, value-semantic ROCm contracts, and
@@ -20,7 +38,10 @@ cuda-oxide + cutile).
 - Claimed files: `crates/hephaestus-core/src/domain/{dialect,ops}.rs`,
   `crates/hephaestus-rocm/**`, `.github/workflows/rocm.yml`,
   `docs/adr/0012-rocm-backend.md`, `README.md`, `CHANGELOG.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24.
+  and this item. Hosted ROCm container run `30105156934` passed the real
+  feature checks, warning-denied Clippy, Nextest (9/9), doctest, and rustdoc at
+  PR head `563783f`; the required-device lane remained skipped for the PR
+  event. PR #67 merged as `7e1fbb9`. Last update: 2026-07-24.
 
 ## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
 

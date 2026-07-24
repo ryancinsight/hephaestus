@@ -2,20 +2,39 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor]
+## HEPH-ROCM-PARITY-REDUCTION-1 [minor]
 
-- [ ] Add the shared HIP-C dialect and operation/identity expression
-      implementations without duplicating the operation vocabulary.
-- [ ] Implement real ROCm binary, unary, and scalar elementwise kernels using
-      hipRTC/module launch and typed `RocmBuffer` ownership.
-- [ ] Add value-semantic, alias-rejection, and invalid-length contracts that
-      run through the container and required-device CI lanes.
+- [ ] Add the shared HipC reduction source and cached HIP module launch for
+      typed sum, min, and max over contiguous buffers, including multi-pass
+      partial outputs and empty-input identities.
+- [ ] Add value-semantic CPU differential contracts for trailing-width,
+      multi-pass, empty, min, max, and invalid-width inputs.
 - [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
 - [ ] Pass format, locked feature checks, warning-denied Clippy, Nextest,
       doctest, and rustdoc for the affected packages; commit and publish the
       verified increment.
 
-Execution owner: Codex on `codex/hephaestus-rocm-parity`; claimed files are
+Execution owner: Codex on `codex/hephaestus-rocm-reduction`; claimed files are
+the ROCm crate and the synchronized documentation artifacts above.
+
+## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor]
+
+- [x] Add the shared HIP-C dialect and operation/identity expression
+      implementations without duplicating the operation vocabulary.
+- [x] Implement real ROCm binary, unary, and scalar elementwise kernels using
+      hipRTC/module launch and typed `RocmBuffer` ownership.
+- [x] Add value-semantic, alias-rejection, and invalid-length contracts that
+      run through the container and required-device CI lanes.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass format, locked feature checks, warning-denied Clippy, Nextest,
+      doctest, and rustdoc for the affected packages; commit and publish the
+      verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-parity`; completed evidence:
+the ROCm container run `30105156934` passed the real feature checks,
+warning-denied Clippy, Nextest (9/9), doctest, and rustdoc at PR head
+`563783f`; PR #67 merged as `7e1fbb9`. The required-device lane was skipped for
+the PR event. The claimed files were
 the backlog item above, core dialect/ops, the ROCm crate, ROCm workflow, and
 the synchronized documentation artifacts.
 
