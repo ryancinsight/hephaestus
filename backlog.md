@@ -24,9 +24,11 @@ cuda-oxide + cutile).
 - Non-goal: HIP kernel authoring and operator-family parity. Re-open as the
   next vertical item when a consumer supplies a ROCm kernel contract.
 - Local implementation and package gates pass on 2026-07-24. The new CI
-  workflow is YAML-validated but its hosted container and manually enabled
-  AMD hardware lanes remain required external evidence because this host has
-  no ROCm runtime or AMD device.
+  workflow is YAML-validated. Hosted ROCm run `30097596676` passes the
+  container build, feature checks, warning-denied Clippy, Nextest (8/8),
+  doctest, and rustdoc at PR head `05300bc`; the manually enabled AMD
+  hardware lane remains unexecuted because this host has no ROCm runtime or
+  AMD device and no self-hosted runner was available for the pull request.
 - Last update: 2026-07-24.
 
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — done

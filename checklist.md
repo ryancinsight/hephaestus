@@ -20,8 +20,13 @@ Local evidence (2026-07-24): `cargo fmt --all -- --check`, locked release
 checks for the default and Linux `rocm` feature, warning-denied release
 Clippy for both feature states, release Nextest 8/8 for the adapterless path,
 doctest, rustdoc, metadata, and workflow YAML parsing pass. The local host has
-no ROCm runtime or AMD device; the container and required-device lanes remain
-CI evidence, not local hardware evidence.
+no ROCm runtime or AMD device; these are not local hardware evidence.
+
+Hosted evidence (2026-07-24): ROCm workflow run `30097596676` passes the
+container build and verification lane in 5m34s at PR head `05300bc`; its
+required-device AMD lane is correctly skipped for the pull-request event.
+Hardware execution remains a separate workflow-dispatch acceptance gate on a
+self-hosted runner labeled `rocm`.
 
 Acceptance boundary: this increment owns the HIP device substrate only;
 operator kernels are a follow-up item with an independent consumer contract.
