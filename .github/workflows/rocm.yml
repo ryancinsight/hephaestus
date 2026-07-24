@@ -45,6 +45,20 @@ jobs:
           path: leto
           persist-credentials: false
 
+      - name: Check out Hermes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancinsight/hermes
+          path: hermes
+          persist-credentials: false
+
+      - name: Check out Eunomia
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancinsight/eunomia
+          path: eunomia
+          persist-credentials: false
+
       - name: Check out Mnemosyne
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,6 +103,11 @@ jobs:
               rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
               rustup toolchain install stable --profile minimal
               cargo +stable install cargo-nextest --locked
+              # Hermes currently uses a sibling Eunomia path dependency after
+              # its monorepo cutover. Patch the git source to the checked-out
+              # workspace so path resolution remains valid in CI.
+              mkdir -p /workspace/.cargo
+              cp /workspace/hephaestus/.github/rocm-cargo-config.toml /workspace/.cargo/config.toml
               cargo "+$RUST_TOOLCHAIN" fmt --check
               # Hephaestus currently consumes sibling Atlas path crates while
               # their migration versions are unpublished. Resolve that

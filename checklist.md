@@ -2,21 +2,80 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-STREAM-1 [minor]
+
+- [x] Implement ROCm `KernelDevice`/`GroupedKernelDevice` preparation and
+      grouped sequence seams over HIP module cache entries.
+- [x] Implement ordered authored-kernel dispatch, device copy, prefix copy,
+      byte fill, and grouped dispatch using HIP operations.
+- [x] Add value-semantic ROCm contracts for dispatch, copy, fill, and grouped
+      output values.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
+- [x] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the current head.
+- [ ] Publish and merge the verified increment.
+
+Execution owner: Codex on the current ROCm stream parity branch. Valid hosted
+ROCm container run `30124401681` passed the real feature build, warning-denied
+Clippy, Nextest (34/34), doctest, and rustdoc at head `a80b8c5`; the required-
+device lane was skipped by the manual `run_hardware=false` input.
+
+## HEPH-ROCM-PARITY-STORAGE-1 [minor]
+
+- [x] Add ROCm `RocmStorageBinding` and `RocmMultiStorageKernel` implementations
+      for the shared multi-storage provider seams.
+- [x] Validate binding arity/order, duplicate slots, zero block dimensions,
+      and unary/binary length mismatches before HIP dispatch.
+- [x] Add a real HIP binary-kernel contract with exact output values and wrong
+      length rejection.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
+- [x] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the current head.
+- [ ] Publish and merge the verified increment.
+
+Execution owner: Codex on the current ROCm storage parity branch; authored
+kernel streams remain outside this increment. Valid hosted ROCm container run
+`30124401681` passed the real feature build, warning-denied Clippy, Nextest
+(34/34), doctest, and rustdoc at head `a80b8c5`; the required-device lane was
+skipped by the manual `run_hardware=false` input.
+
+## HEPH-ROCM-PARITY-SPARSE-1 [minor]
+
+- [x] Add ROCm device-resident CSR storage with checked index conversion and
+      CPU round-trip reconstruction.
+- [x] Implement real HIP CSR SpMV and SpMM kernels; reuse SpMM for multi-RHS
+      SpMV without duplicating sparse kernel logic.
+- [x] Add value-semantic contracts for round-trip storage, vector products,
+      dense RHS products, reused outputs, and wrong-shape rejection.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass the hosted feature build, warning-denied Clippy, Nextest, doctest,
+      and rustdoc for the affected package.
+- [ ] Publish and merge the verified increment.
+
+Execution owner: Codex on the current ROCm sparse parity branch; claimed files
+are the ROCm crate and the synchronized documentation artifacts above.
+Valid hosted ROCm container run `30124401681` passed the real feature build,
+warning-denied Clippy, Nextest (34/34), doctest, and rustdoc at head `a80b8c5`;
+the required-device lane was skipped by the manual `run_hardware=false` input.
+
 ## HEPH-ROCM-PARITY-RANDOM-1 [minor]
 
-- [ ] Add ROCm `uniform_with_seed` and `normal_with_seed` APIs for supported
+- [x] Add ROCm `uniform_with_seed` and `normal_with_seed` APIs for supported
       real scalars and ranks using the shared deterministic random contract.
-- [ ] Upload generated values to typed ROCm buffers and map producer failures
+- [x] Upload generated values to typed ROCm buffers and map producer failures
       to the backend's typed dispatch error.
-- [ ] Add value-semantic contracts for repeated seeds, uniform bounds, and
+- [x] Add value-semantic contracts for repeated seeds, uniform bounds, and
       non-degenerate normal samples.
-- [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
-- [ ] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
       rustdoc for the affected package; commit, publish, and merge the
       verified increment.
 
-Execution owner: Codex on the current ROCm parity branch; claimed files are
-the ROCm crate and the synchronized documentation artifacts above.
+Execution owner: Codex on the completed ROCm parity branch; hosted ROCm
+container run `30119890105` passed the real feature build, warning-denied
+Clippy, Nextest (28/28), doctest, and rustdoc at corrected PR head `4005991`;
+PR #78 merged as `81bed23`. The required-device lane was skipped for the
+pull-request event.
 
 ## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor]
 

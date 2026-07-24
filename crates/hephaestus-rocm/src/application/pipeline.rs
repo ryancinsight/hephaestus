@@ -81,6 +81,16 @@ pub(crate) enum PipelineKey {
     Kron { marker: TypeId, scalar: TypeId },
     /// Rank-2 matrix rank and determinant keyed by kernel marker and scalar.
     MatrixRank { marker: TypeId, scalar: TypeId },
+    /// Sparse-dense matrix product keyed by kernel marker and scalar.
+    Spmm { marker: TypeId, scalar: TypeId },
+    /// Sparse matrix-vector product keyed by kernel marker and scalar.
+    Spmv { marker: TypeId, scalar: TypeId },
+    /// Backend-neutral multi-storage kernel keyed by its authored source.
+    MultiStorage(u64),
+    /// Authored kernel stream keyed by its source.
+    Stream(u64),
+    /// Grouped authored kernel stream keyed by its source.
+    GroupedStream(u64),
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -418,14 +428,14 @@ pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel,
 mod unavailable {
     use super::{LaunchConfig, PipelineKey};
     use crate::RocmDevice;
-    use std::sync::Arc;
+    use std::rc::Rc;
 
     pub(crate) fn cached_kernel(
         _device: &RocmDevice,
         _key: PipelineKey,
         _func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
         let _ = (source,);
         Err(hephaestus_core::HephaestusError::AdapterUnavailable {
             message:

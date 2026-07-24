@@ -85,6 +85,24 @@ Seeded uniform and normal initializers follow the existing CUDA/WGPU
 host-delegated contract: `leto-ops` owns deterministic random-value generation,
 and ROCm owns the typed device upload. This boundary is explicit in the API and
 does not silently substitute CPU execution for a requested HIP kernel.
+CSR sparse storage follows the CUDA/WGPU provider boundary: ROCm owns typed
+device buffers for values, column indices, and row pointers, while HIP kernels
+perform SpMV and SpMM directly over those buffers. Multi-RHS SpMV reuses the
+SpMM kernel so the sparse implementation has one authoritative dense-RHS
+dispatch path.
+ROCm also implements the backend-neutral `MultiStorageKernel` and
+`MultiStorageDevice` seams. `RocmStorageBinding` keeps typed buffer lifetimes
+at the Rust boundary while the HIP launch ABI receives flat device pointers and
+one copied POD parameter block. Binding arity/order, zero block dimensions,
+duplicate slots, and unary/binary length mismatches are validated before
+hipRTC/module dispatch; the implementation does not add a consumer-owned
+adapter or a CPU fallback.
+The authored-kernel stream seam is implemented over HIP's ordered default
+stream. `RocmPrepared` and `RocmGroupedPrepared` cache the same loaded module
+handles used by direct operations; `RocmCommandStream` validates typed and
+grouped binding declarations, launches in order, and performs device copies,
+prefix copies, and byte fills through HIP. Grouped sequences retain the core
+same-region contract while HIP receives the flat pointer ABI.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -111,10 +129,11 @@ hardware test cannot be mistaken for device evidence. The current ROCm parity
 surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
 axis sum/min/max/mean reduction, rank-2 forward/reverse scans, rank-2/3
 matrix multiplication including singleton-batch broadcasting, rank-≤4 strided
-binary/unary/scalar elementwise operations, strided Kronecker products, and
+binary/unary/scalar elementwise operations, strided Kronecker products,
 matrix powers, matrix rank/determinant, strided dot/trace/L1/L2/max
-map-reductions, and seeded random initializers. Sparse, streams, and storage
-remain tracked follow-up families with differential CPU/WGPU contracts.
+map-reductions, seeded random initializers, and device-resident CSR SpMV/SpMM.
+Backend-neutral storage kernels and authored-kernel streams now have ROCm
+coverage with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,

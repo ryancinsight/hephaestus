@@ -6,20 +6,95 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    AddOp, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
-    HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    AddOp, BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
+    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
+    GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
+    GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice,
+    KernelInterface, KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
-    binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron, kron_into, matmul,
-    matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
-    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, sum_axis,
-    trace, unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed,
+    CumSumOp, GpuCsrMatrix, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
+    StridedOperand, batched_matmul, batched_matmul_into, binary_elementwise,
+    binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
+    cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
+    norm_max, normal_with_seed, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
+    spmv_many_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    unary_elementwise_strided_into, uniform_with_seed,
 };
 use leto::Layout;
+use std::borrow::Cow;
+
+struct StreamAddKernel;
+
+impl KernelInterface for StreamAddKernel {
+    type Params = u32;
+
+    const LABEL: &'static str = "rocm-contract-stream-add";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_write::<f32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [64, 1, 1];
+}
+
+impl KernelSource<HipC> for StreamAddKernel {
+    const ENTRY: &'static str = "rocm_contract_stream_add";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(
+            r#"
+extern "C" __global__ void rocm_contract_stream_add(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        )
+    }
+}
+
+struct GroupedStreamAddKernel;
+
+impl GroupedKernelInterface for GroupedStreamAddKernel {
+    type Params = u32;
+
+    const LABEL: &'static str = "rocm-contract-grouped-stream-add";
+    const BINDINGS: &'static [GroupedBindingDecl] = &[
+        GroupedBindingDecl::read_only::<f32>(0, 0),
+        GroupedBindingDecl::read_only::<f32>(0, 1),
+        GroupedBindingDecl::read_write::<f32>(0, 2),
+    ];
+    const PARAM_GROUP: u32 = 0;
+    const PARAM_BINDING: u32 = 3;
+    const WORKGROUP: [u32; 3] = [64, 1, 1];
+}
+
+impl GroupedKernelSource<HipC> for GroupedStreamAddKernel {
+    const ENTRY: &'static str = "rocm_contract_grouped_stream_add";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(
+            r#"
+extern "C" __global__ void rocm_contract_grouped_stream_add(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        )
+    }
+}
 
 fn device(test: &str) -> Option<RocmDevice> {
     match RocmDevice::try_default() {
@@ -1208,6 +1283,222 @@ fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
         .download(&normal, &mut normal_values)
         .expect("HIP normal download");
     assert!(normal_values.iter().any(|&value| value != 0.0));
+}
+
+#[test]
+fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
+    let Some(device) = device("sparse_csr_products_match_cpu_values_and_reject_wrong_shapes")
+    else {
+        return;
+    };
+
+    let cpu_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .expect("valid CSR contract fixture");
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).expect("HIP CSR upload");
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+    assert_eq!(gpu_csr.to_cpu(&device).expect("HIP CSR download"), cpu_csr);
+
+    let x = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("SpMV input upload");
+    let y = spmv(&device, &gpu_csr, &x).expect("HIP SpMV");
+    let mut y_values = [0.0_f32; 3];
+    device.download(&y, &mut y_values).expect("SpMV download");
+    assert_eq!(y_values, [-1.0, 6.0, 12.0]);
+
+    let b = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("SpMM input upload");
+    let b_layout = Layout::c_contiguous([3, 2]).expect("SpMM input layout");
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &b_layout,
+    };
+    let c = spmm(&device, &gpu_csr, b_operand).expect("HIP SpMM");
+    let mut c_values = [0.0_f32; 6];
+    device.download(&c, &mut c_values).expect("SpMM download");
+    assert_eq!(c_values, [-3.0, -2.0, 9.0, 12.0, 20.0, 24.0]);
+
+    let many = spmv_many(&device, &gpu_csr, b_operand).expect("HIP batched SpMV");
+    let mut many_values = [0.0_f32; 6];
+    device
+        .download(&many, &mut many_values)
+        .expect("batched SpMV download");
+    assert_eq!(many_values, c_values);
+
+    let mut c_reused = device.upload(&[99.0_f32; 6]).expect("SpMM output upload");
+    spmm_into(&device, &gpu_csr, b_operand, &mut c_reused).expect("HIP SpMM into");
+    let mut reused_values = [0.0_f32; 6];
+    device
+        .download(&c_reused, &mut reused_values)
+        .expect("reused SpMM download");
+    assert_eq!(reused_values, c_values);
+
+    let mut many_reused = device
+        .upload(&[88.0_f32; 6])
+        .expect("batched output upload");
+    spmv_many_into(&device, &gpu_csr, b_operand, &mut many_reused).expect("HIP batched SpMV into");
+    let mut many_reused_values = [0.0_f32; 6];
+    device
+        .download(&many_reused, &mut many_reused_values)
+        .expect("reused batched SpMV download");
+    assert_eq!(many_reused_values, c_values);
+
+    let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
+    assert_length_mismatch(spmv(&device, &gpu_csr, &wrong_x), 3, 2);
+}
+
+#[test]
+fn multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths() {
+    let Some(device) =
+        device("multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths")
+    else {
+        return;
+    };
+
+    let kernel = RocmMultiStorageKernel::new(
+        "contract-binary",
+        r#"
+extern "C" __global__ void contract_binary(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        "contract_binary",
+        &[0, 1, 2],
+        [64, 1, 1],
+        0,
+    )
+    .expect("valid ROCm multi-storage kernel");
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("multi-storage lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("multi-storage rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("multi-storage output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("valid dispatch grid");
+
+    <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+        &kernel, &device, &lhs, &rhs, &output, &4, grid,
+    )
+    .expect("HIP multi-storage dispatch");
+    let mut values = [0.0_f32; 4];
+    device
+        .download(&output, &mut values)
+        .expect("multi-storage output download");
+    assert_eq!(values, [6.0, 8.0, 10.0, 12.0]);
+
+    let short_rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0])
+        .expect("short multi-storage rhs upload");
+    assert_length_mismatch(
+        <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+            &kernel, &device, &lhs, &short_rhs, &output, &4, grid,
+        ),
+        4,
+        3,
+    );
+}
+
+#[test]
+fn authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values() {
+    let Some(device) =
+        device("authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values")
+    else {
+        return;
+    };
+
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("stream lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("stream rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("stream output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("stream grid");
+    let prepared = device.prepare(&StreamAddKernel).expect("stream prepare");
+    let bindings = [
+        Binding::read(&lhs),
+        Binding::read(&rhs),
+        Binding::read_write(&output),
+    ];
+    let mut stream = device.stream().expect("stream open");
+    stream
+        .encode(&prepared, &bindings, &4, grid)
+        .expect("stream dispatch");
+
+    let copied = device
+        .alloc_zeroed::<f32>(4)
+        .expect("copy output allocation");
+    let prefix = device
+        .alloc_zeroed::<f32>(4)
+        .expect("prefix output allocation");
+    stream.copy(&output, &copied).expect("stream copy");
+    stream
+        .copy_prefix(&output, &prefix, 2)
+        .expect("stream prefix copy");
+    stream.fill_zero(&output).expect("stream fill");
+    stream.submit().expect("stream submit");
+
+    let mut output_values = [9.0_f32; 4];
+    let mut copied_values = [0.0_f32; 4];
+    let mut prefix_values = [0.0_f32; 4];
+    device
+        .download(&output, &mut output_values)
+        .expect("stream output download");
+    device
+        .download(&copied, &mut copied_values)
+        .expect("stream copy download");
+    device
+        .download(&prefix, &mut prefix_values)
+        .expect("stream prefix download");
+    assert_eq!(output_values, [0.0; 4]);
+    assert_eq!(copied_values, [6.0, 8.0, 10.0, 12.0]);
+    assert_eq!(prefix_values, [6.0, 8.0, 0.0, 0.0]);
+
+    let grouped_prepared = device
+        .prepare_grouped(&GroupedStreamAddKernel)
+        .expect("grouped stream prepare");
+    let grouped_output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("grouped output allocation");
+    let grouped_bindings = [
+        GroupedBinding::read(0, 0, &lhs),
+        GroupedBinding::read(0, 1, &rhs),
+        GroupedBinding::read_write(0, 2, &grouped_output),
+    ];
+    let mut grouped_stream = device.grouped_stream().expect("grouped stream open");
+    grouped_stream
+        .encode_grouped_sequence("grouped-contract", |sequence| {
+            sequence.encode_grouped(&grouped_prepared, &grouped_bindings, &4, grid)
+        })
+        .expect("grouped stream dispatch");
+    grouped_stream
+        .submit_grouped()
+        .expect("grouped stream submit");
+
+    let mut grouped_values = [0.0_f32; 4];
+    device
+        .download(&grouped_output, &mut grouped_values)
+        .expect("grouped output download");
+    assert_eq!(grouped_values, [6.0, 8.0, 10.0, 12.0]);
 }
 
 #[test]

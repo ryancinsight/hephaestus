@@ -20,6 +20,10 @@ pub struct RocmDevice {
 }
 
 impl RocmDevice {
+    pub(crate) fn bind(&self) -> Result<()> {
+        Err(unavailable())
+    }
+
     /// Report that the optional ROCm backend is unavailable.
     pub fn try_default() -> Result<Self> {
         Err(unavailable())

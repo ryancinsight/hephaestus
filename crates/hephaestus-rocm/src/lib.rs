@@ -12,7 +12,7 @@
 //! acquisition, typed device buffers, host/device transfers, and
 //! synchronization, and hipRTC/module-launched elementwise, reduction,
 //! rank-2 axis-reduction, scan, map-reduction, Kronecker-product,
-//! matrix-power, and matrix-multiplication
+//! matrix-power, matrix-multiplication, and CSR sparse matrix products
 //! operation families. Additional operator families are separate parity
 //! increments with their own value-semantic contracts.
 //!
@@ -47,6 +47,11 @@ pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into,
 };
+pub use application::sparse::{
+    GpuCsrMatrix, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+};
+pub use application::storage_kernel::{RocmMultiStorageKernel, RocmStorageBinding};
+pub use application::stream::{RocmCommandStream, RocmGroupedPrepared, RocmPrepared};
 pub use application::strided::StridedOperand;
 pub use application::strided_elementwise::{
     MAX_STRIDED_RANK, binary_elementwise_strided, binary_elementwise_strided_into,

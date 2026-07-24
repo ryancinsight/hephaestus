@@ -26,6 +26,20 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with device-resident CSR sparse matrices and
+  HIP SpMV/SpMM kernels. CSR metadata remains in typed ROCm buffers, multi-RHS
+  SpMV reuses the sparse-dense kernel, and contracts cover round-trip storage,
+  vector products, dense RHS products, reused outputs, and shape rejection.
+
+- [minor] Implement ROCm's backend-neutral multi-storage kernel contracts with
+  typed HIP pointer bindings, POD parameter blocks, pre-launch layout checks,
+  real module dispatch, and value-semantic binary-kernel coverage.
+
+- [minor] Implement ROCm authored-kernel `KernelDevice` and `CommandStream`
+  contracts, including grouped sequencing, ordered HIP module launches,
+  device-to-device copies, prefix copies, byte fills, and value-semantic
+  dispatch/copy/fill coverage.
+
 - [minor] Extend ROCm parity with seeded uniform and normal initializers.
   Random values are generated deterministically by the shared `leto-ops`
   contract and uploaded to typed ROCm buffers, matching the explicit

@@ -80,6 +80,10 @@ impl core::fmt::Debug for RocmDevice {
 }
 
 impl RocmDevice {
+    pub(crate) fn bind(&self) -> Result<()> {
+        self.context.set_current()
+    }
+
     /// Acquire the default AMD device (ordinal zero).
     ///
     /// # Errors
