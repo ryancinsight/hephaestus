@@ -79,6 +79,8 @@ pub(crate) enum PipelineKey {
     BatchedMatmul { marker: TypeId, scalar: TypeId },
     /// Rank-2 Kronecker product keyed by kernel marker and scalar.
     Kron { marker: TypeId, scalar: TypeId },
+    /// Rank-2 matrix rank and determinant keyed by kernel marker and scalar.
+    MatrixRank { marker: TypeId, scalar: TypeId },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
