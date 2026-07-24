@@ -16,11 +16,13 @@ use leto::Layout;
 mod batched_matmul;
 mod kron;
 mod matmul;
+mod matpow;
 mod norms;
 
 pub use batched_matmul::{batched_matmul, batched_matmul_into};
 pub use kron::{kron, kron_into};
 pub use matmul::{matmul, matmul_into};
+pub use matpow::{MatrixIdentityScalar, matpow};
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 
 #[repr(C)]

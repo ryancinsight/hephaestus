@@ -4,7 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-STRIDED-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-MATPOW-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm matrix powers over strided rank-2 inputs using
+  native identity-copy, tiled matrix multiplication, exponentiation by
+  squaring, CPU differential contracts, and the existing ROCm CI lanes.
+  Matrix properties, sparse, streams, storage, and random families are
+  non-goals for this increment.
+- Acceptance: ROCm exposes the same `matpow` contract as CUDA and WGPU for
+  square rank-2 views, validates square shape and storage, returns identity
+  for exponent zero, computes real device-resident products without CPU or
+  WGPU fallback, and returns CPU-reference values for contiguous and strided
+  inputs. The container lane compiles and tests the real feature path, while
+  the required-device lane executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-STRIDED-1 [minor] — done
 
 - Owner: Codex; scope: ROCm rank-≤4 strided binary, unary, and scalar
   elementwise dispatch using one packed HIP metadata/decode core, broadcast
@@ -20,7 +37,10 @@ cuda-oxide + cutile).
   executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Hosted ROCm container run `30117107666` passed the real feature
+  build, warning-denied Clippy, Nextest (23/23), doctest, and rustdoc at PR
+  head `8699345`; PR #75 merged as `8060f33`. The required-device lane remained
+  skipped for the PR event.
 
 ## HEPH-ROCM-PARITY-KRON-1 [minor] — done
 
