@@ -11,7 +11,7 @@
 //! implements the shared [`hephaestus_core::ComputeDevice`] seam for device
 //! acquisition, typed device buffers, host/device transfers, and
 //! synchronization, and hipRTC/module-launched elementwise, reduction,
-//! rank-2 axis-reduction, and scan operation families. Additional operator
+//! rank-2 axis-reduction, scan, and matrix-multiplication operation families. Additional operator
 //! families are separate parity increments with their own value-semantic
 //! contracts.
 //!
@@ -35,6 +35,7 @@ pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into,
 };
+pub use application::linalg::{matmul, matmul_into};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,

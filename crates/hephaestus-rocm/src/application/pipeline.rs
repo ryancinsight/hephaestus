@@ -49,6 +49,8 @@ pub(crate) enum PipelineKey {
         axis: usize,
         width: u32,
     },
+    /// Rank-2 matrix multiplication keyed by kernel marker and scalar.
+    Matmul { marker: TypeId, scalar: TypeId },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -75,6 +77,15 @@ impl LaunchConfig {
             grid: (grid_x, 1, 1),
             block: (width.get(), 1, 1),
             shared_bytes,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn planar(grid_x: u32, grid_y: u32, block_x: u32, block_y: u32) -> Self {
+        Self {
+            grid: (grid_x, grid_y, 1),
+            block: (block_x, block_y, 1),
+            shared_bytes: 0,
         }
     }
 }

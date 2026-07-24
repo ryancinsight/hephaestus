@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-MATMUL-1 [minor]
+
+- [ ] Add the ROCm rank-2 strided matrix multiplication API and shared layout
+      metadata with shape, storage, and output-alias validation.
+- [ ] Implement the real HIP module-launched 16×16 tiled matrix kernel with
+      allocating and caller-owned output forms, including partial edge tiles.
+- [ ] Add value-semantic CPU differential contracts across tile boundaries and
+      invalid output shape and alias inputs.
+- [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [ ] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the affected packages; commit, publish, and merge the
+      verified increment.
+
+Execution owner: Codex on the current ROCm parity branch; claimed files are
+the ROCm crate and the synchronized documentation artifacts above.
+
 ## HEPH-ROCM-PARITY-SCAN-1 [minor]
 
 - [x] Add the ROCm rank-2 strided scan API and shared-core axis-scan planner
@@ -11,12 +27,15 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Add value-semantic CPU differential contracts for both axes, both
       directions, long tiled lines, and invalid shape/alias inputs.
 - [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
-- [ ] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
+- [x] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
       rustdoc for the affected packages; commit, publish, and merge the
       verified increment.
 
-Execution owner: Codex on the current ROCm parity branch; claimed files are
-the ROCm crate and the synchronized documentation artifacts above.
+Execution owner: Codex on the current ROCm parity branch; completed evidence:
+the corrected ROCm container run `30109934133` passed the real feature build,
+warning-denied Clippy, Nextest (13/13), doctest, and rustdoc at PR head
+`3d70841`; PR #70 merged as `06dd503`. The required-device lane was skipped
+for the PR event.
 
 ## HEPH-ROCM-PARITY-AXIS-REDUCTION-1 [minor]
 

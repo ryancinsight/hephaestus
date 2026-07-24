@@ -11,9 +11,9 @@ use hephaestus_core::{
 };
 use hephaestus_rocm::{
     CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, binary_elementwise,
-    binary_elementwise_into, cumprod, cumsum, max_axis, mean_axis, mean_axis_into, min_axis,
-    reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into, sum_axis,
-    unary_elementwise,
+    binary_elementwise_into, cumprod, cumsum, matmul, matmul_into, max_axis, mean_axis,
+    mean_axis_into, min_axis, reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into,
+    sum_axis, unary_elementwise,
 };
 use leto::Layout;
 
@@ -542,5 +542,98 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "scan output buffer must not alias input buffer"
+    ));
+}
+
+#[test]
+fn matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_contracts() {
+    let Some(device) = device(
+        "matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_contracts",
+    ) else {
+        return;
+    };
+
+    let lhs_values: Vec<i32> = (0..17 * 19).map(|index| (index % 7) - 3).collect();
+    let rhs_values: Vec<i32> = (0..19 * 5).map(|index| (index % 5) - 2).collect();
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP matmul lhs upload");
+    let rhs_buffer = device.upload(&rhs_values).expect("HIP matmul rhs upload");
+    let lhs_layout = Layout::c_contiguous([17, 19]).expect("matmul lhs layout");
+    let rhs_layout = Layout::c_contiguous([19, 5]).expect("matmul rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let output = matmul(&device, lhs, rhs).expect("HIP tiled matmul");
+    let mut output_values = vec![0_i32; 17 * 5];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP matmul download");
+    let mut expected = Vec::with_capacity(17 * 5);
+    for row in 0..17 {
+        for col in 0..5 {
+            expected.push(
+                (0..19)
+                    .map(|shared| lhs_values[row * 19 + shared] * rhs_values[shared * 5 + col])
+                    .sum(),
+            );
+        }
+    }
+    assert_eq!(output_values, expected);
+
+    let output_layout = Layout::c_contiguous([17, 5]).expect("matmul output layout");
+    let output_into = device
+        .alloc_zeroed::<i32>(17 * 5)
+        .expect("HIP caller-owned matmul output");
+    matmul_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &output_layout,
+        },
+    )
+    .expect("HIP caller-owned tiled matmul");
+    let mut output_into_values = vec![0_i32; 17 * 5];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned matmul download");
+    assert_eq!(output_into_values, expected);
+
+    let wrong_layout = Layout::c_contiguous([17, 4]).expect("wrong matmul output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(17 * 4)
+        .expect("wrong matmul output buffer");
+    assert!(matches!(
+        matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("matmul dimension mismatch")
+    ));
+
+    assert!(matches!(
+        matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
     ));
 }

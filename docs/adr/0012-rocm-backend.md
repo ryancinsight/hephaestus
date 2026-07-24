@@ -17,8 +17,9 @@ The first complete vertical slice was the device substrate: HIP device
 acquisition, typed device memory, host/device transfer, synchronization,
 capability limits, and Themis topology. The bounded operator slices now have a
 consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
-operations, contiguous and rank-2 axis reductions, and rank-2 scans can be
-compared against CPU values and the existing CUDA/WGPU contracts.
+operations, contiguous and rank-2 axis reductions, rank-2 scans, and rank-2
+matrix multiplication can be compared against CPU values and the existing
+CUDA/WGPU contracts.
 
 ## Decision
 
@@ -50,6 +51,11 @@ Rank-2 scans use the shared `AxisScanMeta` and `plan_axis_scan` contracts. One
 HIP block owns each logical scan line, lanes fold contiguous chunks in order,
 and shared-memory chunk prefixes complete forward or reverse cumulative sums
 and products without a second provider-specific host planner.
+Rank-2 matrix multiplication uses one 16×16 HIP block per output tile and
+shared-memory tiles over the contracted dimension. `matmul_into` accepts the
+same strided rank-2 layouts as CUDA and WGPU, validates storage and output
+aliasing before launch, and zero-fills partial edge tiles so non-multiple
+matrix dimensions have the same value contract.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -74,9 +80,10 @@ a ROCm development container. A manually enabled self-hosted AMD runner runs
 the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
 surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
-axis sum/min/max/mean reduction, and rank-2 forward/reverse scans. Linalg,
-sparse, strided elementwise, streams, storage, and random operations remain
-tracked follow-up families with differential CPU/WGPU contracts.
+axis sum/min/max/mean reduction, rank-2 forward/reverse scans, and rank-2
+matrix multiplication. Batched linalg, sparse, strided elementwise, streams,
+storage, and random operations remain tracked follow-up families with
+differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,
