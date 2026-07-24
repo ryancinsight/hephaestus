@@ -29,7 +29,13 @@ pub fn uniform_with_seed<T: DialectScalar<HipC> + RealScalar + Pod, const N: usi
             message: format!("RNG uniform failed: {error}"),
         }
     })?;
-    device.upload(leto::Storage::as_slice(array.storage()))
+    let values =
+        array
+            .as_slice()
+            .ok_or_else(|| hephaestus_core::HephaestusError::DispatchFailed {
+                message: "RNG uniform output is not contiguous".to_string(),
+            })?;
+    device.upload(values)
 }
 
 /// Fill a ROCm buffer with deterministic normal samples.
@@ -54,5 +60,11 @@ pub fn normal_with_seed<T: DialectScalar<HipC> + RealScalar + Pod, const N: usiz
             message: format!("RNG normal failed: {error}"),
         }
     })?;
-    device.upload(leto::Storage::as_slice(array.storage()))
+    let values =
+        array
+            .as_slice()
+            .ok_or_else(|| hephaestus_core::HephaestusError::DispatchFailed {
+                message: "RNG normal output is not contiguous".to_string(),
+            })?;
+    device.upload(values)
 }
