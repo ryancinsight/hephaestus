@@ -28,6 +28,19 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Rank-2 axis reduction keyed by operation, scalar, axis, and block width.
+    AxisReduction {
+        op: TypeId,
+        scalar: TypeId,
+        axis: usize,
+        width: u32,
+    },
+    /// Rank-2 mean reduction keyed by scalar, axis, and block width.
+    MeanAxis {
+        scalar: TypeId,
+        axis: usize,
+        width: u32,
+    },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -335,7 +348,7 @@ mod native {
 }
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-pub(crate) use native::{PipelineCache, cached_kernel, launch_kernel, new_cache};
+pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel, new_cache};
 
 #[cfg(not(all(feature = "rocm", target_os = "linux")))]
 mod unavailable {
@@ -375,4 +388,4 @@ mod unavailable {
 }
 
 #[cfg(not(all(feature = "rocm", target_os = "linux")))]
-pub(crate) use unavailable::{cached_kernel, launch_kernel};
+pub(crate) use unavailable::{RocmKernel, cached_kernel, launch_kernel};

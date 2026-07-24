@@ -6,7 +6,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and runtime-compiled elementwise kernels."
+description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and runtime-compiled operator kernels."
 
 [features]
 default = []
@@ -16,4 +16,5 @@ rocm = ["dep:cubecl-hip-sys"]
 hephaestus-core = { workspace = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
+leto = { workspace = true }
 cubecl-hip-sys = { workspace = true, optional = true }

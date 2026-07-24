@@ -10,9 +10,11 @@ use hephaestus_core::{
     HephaestusError, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    Result, RocmDevice, binary_elementwise, binary_elementwise_into, reduction_with_width,
-    scalar_elementwise, unary_elementwise,
+    Result, RocmDevice, StridedOperand, binary_elementwise, binary_elementwise_into, max_axis,
+    mean_axis, mean_axis_into, min_axis, reduction_with_width, scalar_elementwise, sum_axis,
+    unary_elementwise,
 };
+use leto::Layout;
 
 fn device(test: &str) -> Option<RocmDevice> {
     match RocmDevice::try_default() {
@@ -311,5 +313,121 @@ fn reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries() {
         reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
         Err(HephaestusError::DispatchFailed { message })
             if message == "reduction block width 192 must be a power of two"
+    ));
+}
+
+#[test]
+fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
+    let Some(device) = device("axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts")
+    else {
+        return;
+    };
+
+    let width = BlockWidth::new(2).expect("test reduction width is non-zero");
+    let input: Vec<u32> = vec![1, 2, 3, 4, 10, 20, 30, 40, 5, 7, 9, 11];
+    let input_buffer = device.upload(&input).expect("HIP axis input upload");
+    let input_layout = Layout::c_contiguous([3, 4]).expect("axis input layout");
+    let input_operand = StridedOperand {
+        buffer: &input_buffer,
+        layout: &input_layout,
+    };
+
+    let sum_rows = sum_axis(&device, input_operand, 1, width).expect("HIP axis row sum");
+    let sum_columns = sum_axis(&device, input_operand, 0, width).expect("HIP axis column sum");
+    let min_rows = min_axis(&device, input_operand, 1, width).expect("HIP axis row min");
+    let max_rows = max_axis(&device, input_operand, 1, width).expect("HIP axis row max");
+    let mut sum_rows_output = [0_u32; 3];
+    let mut sum_columns_output = [0_u32; 4];
+    let mut min_rows_output = [0_u32; 3];
+    let mut max_rows_output = [0_u32; 3];
+    device
+        .download(&sum_rows, &mut sum_rows_output)
+        .expect("HIP row sum download");
+    device
+        .download(&sum_columns, &mut sum_columns_output)
+        .expect("HIP column sum download");
+    device
+        .download(&min_rows, &mut min_rows_output)
+        .expect("HIP row min download");
+    device
+        .download(&max_rows, &mut max_rows_output)
+        .expect("HIP row max download");
+    assert_eq!(sum_rows_output, [10, 100, 32]);
+    assert_eq!(sum_columns_output, [16, 29, 42, 55]);
+    assert_eq!(min_rows_output, [1, 10, 5]);
+    assert_eq!(max_rows_output, [4, 40, 11]);
+
+    let mean_input: Vec<f32> = (1..=12).map(|value| value as f32).collect();
+    let mean_buffer = device.upload(&mean_input).expect("HIP mean input upload");
+    let mean_layout = Layout::c_contiguous([3, 4]).expect("mean input layout");
+    let mean = mean_axis(
+        &device,
+        StridedOperand {
+            buffer: &mean_buffer,
+            layout: &mean_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP row mean");
+    let mut mean_output = [0.0_f32; 3];
+    device
+        .download(&mean, &mut mean_output)
+        .expect("HIP mean download");
+    assert_eq!(mean_output, [2.5, 6.5, 10.5]);
+
+    let wrong_layout = Layout::c_contiguous([3, 2]).expect("wrong output layout");
+    let wrong_buffer = device.alloc_zeroed::<u32>(6).expect("wrong output buffer");
+    assert!(matches!(
+        hephaestus_rocm::sum_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_buffer,
+                layout: &wrong_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    let output_layout = Layout::c_contiguous([3, 1]).expect("alias output layout");
+    assert!(matches!(
+        hephaestus_rocm::sum_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &input_buffer,
+                layout: &output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "axis reduction output buffer must not alias input buffer"
+    ));
+
+    let empty_buffer = device.upload::<u32>(&[]).expect("empty axis input upload");
+    let empty_input_layout = Layout::c_contiguous([3, 0]).expect("empty input layout");
+    let empty_output_layout = Layout::c_contiguous([3, 1]).expect("empty output layout");
+    let empty_output = device.alloc_zeroed::<u32>(3).expect("empty output buffer");
+    assert!(matches!(
+        mean_axis_into(
+            &device,
+            StridedOperand {
+                buffer: &empty_buffer,
+                layout: &empty_input_layout,
+            },
+            1,
+            StridedOperand {
+                buffer: &empty_output,
+                layout: &empty_output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "mean_axis is undefined for empty axis 1"
     ));
 }
