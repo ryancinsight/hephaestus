@@ -64,22 +64,41 @@ Claimed files: ROCm decomposition, ROCm contract tests and CI, and synchronized
 documentation artifacts. SVD, eigen, Schur, Hessenberg, bidiagonal, UDU, and
 Bunch–Kaufman remain outside this increment.
 
-## HEPH-ROCM-PARITY-SPECTRAL-4 [minor]
+## HEPH-ROCM-PARITY-SPECTRAL-4 [minor] — done
 
-- [ ] Add ROCm bidiagonalization and SVD public surfaces behind `decomposition`.
-- [ ] Mirror the CUDA/WGPU Leto provider boundary into typed ROCm U/B/V and
+- [x] Add ROCm bidiagonalization and SVD public surfaces behind `decomposition`.
+- [x] Mirror the CUDA/WGPU Leto provider boundary into typed ROCm U/B/V and
       U/V/singular-value buffers; do not add a backend-selection fallback.
-- [ ] Add tall, square, strided, empty, invalid, reconstruction, singular-value,
+- [x] Add tall, square, strided, empty, invalid, reconstruction, singular-value,
       and rank-revealing value contracts.
-- [ ] Extend hosted ROCm CI and feature hygiene for the new spectral code.
+- [x] Extend hosted ROCm CI and feature hygiene for the new spectral code.
+- [x] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [x] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment as PR #83 at `56e83e4`.
+
+Execution owner: Codex on `codex/hephaestus-rocm-spectral-next`. Hosted ROCm
+container run `30132885402` passed at head `6864aa7`; the required-device lane
+was skipped by the pull-request event. Claimed files:
+ROCm decomposition, ROCm contract tests, and synchronized documentation
+artifacts. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman were outside this
+increment.
+
+## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor]
+
+- [ ] Add ROCm UDU and Bunch–Kaufman public surfaces behind `decomposition`.
+- [ ] Mirror the CUDA/WGPU shared Leto factor boundary into typed ROCm U/D and
+      L/D/permutation results without a backend-selection fallback.
+- [ ] Add square, empty, non-symmetric, non-finite, reconstruction, solve,
+      determinant, inverse, and permutation value contracts.
+- [ ] Extend hosted ROCm CI and feature hygiene for the symmetric-indefinite
+      decomposition code.
 - [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
 - [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
       merge the verified increment.
 
-Execution owner: Codex on `codex/hephaestus-rocm-spectral-next`. Claimed files:
-ROCm decomposition, ROCm contract tests, and synchronized documentation
-artifacts. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman remain outside this
-increment.
+Execution owner: Codex on `codex/hephaestus-rocm-factorization-next`. Claimed
+files: ROCm decomposition, ROCm contract tests, and synchronized documentation
+artifacts. Eigen, Schur, and Hessenberg remain outside this increment.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 

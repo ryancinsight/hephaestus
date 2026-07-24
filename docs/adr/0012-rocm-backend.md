@@ -114,7 +114,10 @@ executes Cholesky diagonal/column recurrences, partial/complete-pivot LU, and
 Householder/column-pivoted QR as ordered HIP module launches. Bidiagonalization
 and SVD use the established shared Leto provider boundary, then upload their
 typed U/B/V and U/V/singular-value results into ROCm buffers; they do not add a
-second spectral implementation or a backend-selection fallback. The dense
+second spectral implementation or a backend-selection fallback. UDU and
+Bunch–Kaufman use the same shared Leto provider boundary, uploading typed U/D
+and L/D/permutation factors; UDU's solve, determinant, and inverse methods
+retain the common host-operation contract. The dense
 blocked entry points retain the CUDA/WGPU dense-layout contract. Device factors
 and permutations are authoritative; the common scalar solve, determinant,
 inverse, and least-squares methods retain the established host-side provider
@@ -151,8 +154,9 @@ Backend-neutral storage kernels and authored-kernel streams now have ROCm
 coverage with differential CPU/WGPU contracts. Cholesky, LU, complete-pivot LU,
 QR, and column-pivoted QR are covered behind the `decomposition` feature with
 HIP factorization and common host-operation contracts. Bidiagonalization and
-SVD are covered through the shared Leto provider boundary with ROCm-resident
-result buffers. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman remain open.
+SVD, UDU, and Bunch–Kaufman are covered through the shared Leto provider
+boundary with ROCm-resident result buffers and value-semantic contracts. Eigen,
+Schur, and Hessenberg remain open.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches, with Hermes pinned to `v0.4.1` because Leto main currently
