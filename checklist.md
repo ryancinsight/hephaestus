@@ -44,24 +44,42 @@ documentation artifacts. Remaining decomposition families are non-goals for
 this increment. The local package gate remains blocked by the sibling Leto
 checkout's `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
-## HEPH-ROCM-PARITY-PIVOTED-3 [minor]
+## HEPH-ROCM-PARITY-PIVOTED-3 [minor] — done
 
-- [ ] Add the ROCm complete-pivot LU and column-pivoted QR public surfaces
+- [x] Add the ROCm complete-pivot LU and column-pivoted QR public surfaces
       behind `decomposition`.
-- [ ] Implement HIP row/column pivot selection and factorization with
+- [x] Implement HIP row/column pivot selection and factorization with
       device-resident factors and permutations; do not delegate computation to
       the CPU.
-- [ ] Add empty, strided, dense, singular, rank-deficient, solve, inverse,
+- [x] Add empty, strided, dense, singular, rank-deficient, solve, inverse,
       rank, and least-squares value contracts matching the common APIs.
-- [ ] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
-- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
-- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
-      merge the verified increment.
+- [x] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
+- [x] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
+- [x] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc at
+      head `d030520` with run `30131762591`.
+- [x] Merge the verified increment as PR #82 at `6613690`.
 
 Execution owner: Codex on `codex/hephaestus-rocm-decomposition-followup`.
 Claimed files: ROCm decomposition, ROCm contract tests and CI, and synchronized
 documentation artifacts. SVD, eigen, Schur, Hessenberg, bidiagonal, UDU, and
 Bunch–Kaufman remain outside this increment.
+
+## HEPH-ROCM-PARITY-SPECTRAL-4 [minor]
+
+- [ ] Add ROCm bidiagonalization and SVD public surfaces behind `decomposition`.
+- [ ] Mirror the CUDA/WGPU Leto provider boundary into typed ROCm U/B/V and
+      U/V/singular-value buffers; do not add a backend-selection fallback.
+- [ ] Add tall, square, strided, empty, invalid, reconstruction, singular-value,
+      and rank-revealing value contracts.
+- [ ] Extend hosted ROCm CI and feature hygiene for the new spectral code.
+- [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-spectral-next`. Claimed files:
+ROCm decomposition, ROCm contract tests, and synchronized documentation
+artifacts. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman remain outside this
+increment.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 

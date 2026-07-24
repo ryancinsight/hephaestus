@@ -106,15 +106,19 @@ same-region contract while HIP receives the flat pointer ABI.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 The optional decomposition feature adds the common `GpuCholesky`,
-`GpuLuDecomposition`, `GpuFullPivLuDecomposition`, `GpuQrDecomposition`, and
-`GpuColPivQrDecomposition` surfaces. ROCm validates all logical input values on
-the device, materializes strided inputs through the native identity kernel, and
+`GpuLuDecomposition`, `GpuFullPivLuDecomposition`, `GpuQrDecomposition`,
+`GpuColPivQrDecomposition`, `GpuBidiagonalDecomposition`, and
+`GpuSvdDecomposition` surfaces. ROCm validates all logical input values on the
+device, materializes strided inputs through the native identity kernel, and
 executes Cholesky diagonal/column recurrences, partial/complete-pivot LU, and
-Householder/column-pivoted QR as ordered HIP module launches. The dense blocked
-entry points retain the CUDA/WGPU dense-layout contract. Device factors and
-permutations are authoritative; the common scalar solve, determinant, inverse,
-and least-squares methods retain the established host-side provider contract,
-with no backend-selection fallback to CPU or WGPU.
+Householder/column-pivoted QR as ordered HIP module launches. Bidiagonalization
+and SVD use the established shared Leto provider boundary, then upload their
+typed U/B/V and U/V/singular-value results into ROCm buffers; they do not add a
+second spectral implementation or a backend-selection fallback. The dense
+blocked entry points retain the CUDA/WGPU dense-layout contract. Device factors
+and permutations are authoritative; the common scalar solve, determinant,
+inverse, and least-squares methods retain the established host-side provider
+contract, with no backend-selection fallback to CPU or WGPU.
 
 ## Alternatives rejected
 
@@ -146,8 +150,9 @@ map-reductions, seeded random initializers, and device-resident CSR SpMV/SpMM.
 Backend-neutral storage kernels and authored-kernel streams now have ROCm
 coverage with differential CPU/WGPU contracts. Cholesky, LU, complete-pivot LU,
 QR, and column-pivoted QR are covered behind the `decomposition` feature with
-HIP factorization and common host-operation contracts; eigen, SVD, Schur,
-Hessenberg, bidiagonal, UDU, and Bunch–Kaufman remain open.
+HIP factorization and common host-operation contracts. Bidiagonalization and
+SVD are covered through the shared Leto provider boundary with ROCm-resident
+result buffers. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman remain open.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches, with Hermes pinned to `v0.4.1` because Leto main currently

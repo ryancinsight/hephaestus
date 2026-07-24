@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with the common
+  bidiagonalization and SVD surfaces. The shared Leto provider computes the
+  factors, which ROCm uploads into typed U/B/V and U/V/singular-value buffers;
+  contract tests cover tall, empty, rank-deficient, reconstruction, and invalid
+  shape cases in the hosted feature matrix.
+
 - [minor] Extend the optional ROCm `decomposition` feature with HIP
   complete-pivot LU and column-pivoted QR. Device factors, permutations, rank,
   and Q/R buffers are exposed through the common CUDA/WGPU surfaces, while

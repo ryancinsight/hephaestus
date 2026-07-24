@@ -25,8 +25,9 @@ use hephaestus_rocm::{
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
-    cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, full_piv_lu,
-    full_piv_lu_blocked, lu_decompose, lu_decompose_blocked, qr_decompose, qr_decompose_blocked,
+    bidiagonalize, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked,
+    full_piv_lu, full_piv_lu_blocked, lu_decompose, lu_decompose_blocked, qr_decompose,
+    qr_decompose_blocked, singular_values, svd_decompose, svd_rank_revealing,
 };
 use leto::Layout;
 use std::borrow::Cow;
@@ -135,6 +136,26 @@ fn assert_near(actual: f32, expected: f32, ulps: f32) {
         (actual - expected).abs() <= tolerance,
         "got {actual}, expected {expected}, tolerance {tolerance}"
     );
+}
+
+#[cfg(feature = "decomposition")]
+fn reconstruct_svd(
+    u: &[f32],
+    v: &[f32],
+    singular_values: &[f32],
+    rows: usize,
+    cols: usize,
+) -> Vec<f32> {
+    let rank = singular_values.len();
+    (0..rows)
+        .flat_map(|row| {
+            (0..cols).map(move |col| {
+                (0..rank)
+                    .map(|k| u[row * rank + k] * singular_values[k] * v[col * rank + k])
+                    .sum()
+            })
+        })
+        .collect()
 }
 
 #[test]
@@ -2284,4 +2305,211 @@ fn col_piv_qr_reports_rank_and_rejects_nonfinite_values() {
         Err(HephaestusError::DispatchFailed { message })
             if message.contains("non-finite")
     ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bidiagonalization_matches_leto_factors_and_validates_shapes() {
+    let Some(device) = device("bidiagonalization_matches_leto_factors_and_validates_shapes") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP bidiagonal upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("bidiagonal layout");
+    let factor = bidiagonalize(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm bidiagonalization");
+    let expected = leto_ops::bidiagonalize(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU bidiagonal reference");
+
+    assert_eq!(factor.shape(), (3, 2));
+    let expected_u = leto::Storage::as_slice(expected.u().storage());
+    let expected_b = leto::Storage::as_slice(expected.b().storage());
+    let expected_v = leto::Storage::as_slice(expected.v().storage());
+    let mut actual_u = vec![0.0_f32; expected_u.len()];
+    let mut actual_b = vec![0.0_f32; expected_b.len()];
+    let mut actual_v = vec![0.0_f32; expected_v.len()];
+    device
+        .download(factor.u_buffer(), &mut actual_u)
+        .expect("HIP U download");
+    device
+        .download(factor.b_buffer(), &mut actual_b)
+        .expect("HIP B download");
+    device
+        .download(factor.v_buffer(), &mut actual_v)
+        .expect("HIP V download");
+    for (actual, expected) in actual_u.iter().zip(expected_u) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    for (actual, expected) in actual_b.iter().zip(expected_b) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    for (actual, expected) in actual_v.iter().zip(expected_v) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    let mut reconstructed = vec![0.0_f32; matrix_values.len()];
+    for row in 0..3 {
+        for col in 0..2 {
+            let mut value = 0.0_f32;
+            for u_col in 0..3 {
+                for b_col in 0..2 {
+                    value += actual_u[row * 3 + u_col]
+                        * actual_b[u_col * 2 + b_col]
+                        * actual_v[col * 2 + b_col];
+                }
+            }
+            reconstructed[row * 2 + col] = value;
+        }
+    }
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+
+    let wide = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP wide bidiagonal upload");
+    let wide_layout = Layout::c_contiguous([2, 3]).expect("wide bidiagonal layout");
+    assert!(matches!(
+        bidiagonalize(
+            &device,
+            StridedOperand {
+                buffer: &wide,
+                layout: &wide_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("m ≥ n")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn svd_surfaces_match_leto_values_and_rank_contracts() {
+    let Some(device) = device("svd_surfaces_match_leto_values_and_rank_contracts") else {
+        return;
+    };
+
+    let matrix_values = [3.0_f32, 0.0, 0.0, 4.0, 0.0, 0.0];
+    let matrix = device.upload(&matrix_values).expect("HIP SVD upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("SVD layout");
+    let expected = leto_ops::svd_decompose(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU SVD reference");
+    let factor = svd_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm thin SVD");
+    assert_eq!(factor.shape(), (3, 2));
+    let mut actual_values = vec![0.0_f32; expected.singular_values.len()];
+    device
+        .download(factor.singular_values(), &mut actual_values)
+        .expect("HIP thin SVD singular values download");
+    for (actual, expected) in actual_values.iter().zip(&expected.singular_values) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    let mut actual_u =
+        vec![0.0_f32; leto::Storage::as_slice(expected.left_singular_vectors.storage()).len()];
+    let mut actual_v =
+        vec![0.0_f32; leto::Storage::as_slice(expected.right_singular_vectors.storage()).len()];
+    device
+        .download(factor.u(), &mut actual_u)
+        .expect("HIP thin SVD U download");
+    device
+        .download(factor.v(), &mut actual_v)
+        .expect("HIP thin SVD V download");
+    let reconstructed = reconstruct_svd(&actual_u, &actual_v, &actual_values, 3, 2);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+
+    let only_values = singular_values(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm singular-values-only SVD");
+    let mut only_values_host = vec![0.0_f32; expected.singular_values.len()];
+    device
+        .download(&only_values, &mut only_values_host)
+        .expect("HIP singular-values-only download");
+    for (actual, expected) in only_values_host.iter().zip(&expected.singular_values) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+
+    let rank_deficient_values = [1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0];
+    let rank_deficient = device
+        .upload(&rank_deficient_values)
+        .expect("HIP rank-deficient SVD upload");
+    let rank_deficient_factor = svd_rank_revealing(
+        &device,
+        StridedOperand {
+            buffer: &rank_deficient,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm rank-revealing SVD");
+    let rank_expected = leto_ops::svd_rank_revealing(&leto::ArrayView::<f32, 2>::new(
+        layout,
+        &rank_deficient_values,
+    ))
+    .expect("CPU rank-revealing SVD reference");
+    let mut rank_values = vec![0.0_f32; rank_expected.singular_values.len()];
+    device
+        .download(rank_deficient_factor.singular_values(), &mut rank_values)
+        .expect("HIP rank-revealing values download");
+    for (actual, expected) in rank_values.iter().zip(&rank_expected.singular_values) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    let mut rank_u =
+        vec![0.0_f32; leto::Storage::as_slice(rank_expected.left_singular_vectors.storage()).len()];
+    let mut rank_v = vec![
+        0.0_f32;
+        leto::Storage::as_slice(rank_expected.right_singular_vectors.storage())
+            .len()
+    ];
+    device
+        .download(rank_deficient_factor.u(), &mut rank_u)
+        .expect("HIP rank-revealing U download");
+    device
+        .download(rank_deficient_factor.v(), &mut rank_v)
+        .expect("HIP rank-revealing V download");
+    let reconstructed = reconstruct_svd(&rank_u, &rank_v, &rank_values, 3, 2);
+    for (actual, expected) in reconstructed.iter().zip(rank_deficient_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+    assert!(matches!(
+        svd_decompose(
+            &device,
+            StridedOperand {
+                buffer: &rank_deficient,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("thin SVD")
+    ));
+
+    let empty = device.upload(&[] as &[f32]).expect("HIP empty SVD upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty SVD layout");
+    let empty_factor = svd_decompose(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty SVD");
+    assert_eq!(empty_factor.shape(), (0, 0));
 }
