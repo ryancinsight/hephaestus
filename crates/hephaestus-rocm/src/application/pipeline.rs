@@ -325,7 +325,7 @@ mod native {
 }
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel, new_cache};
+pub(crate) use native::{PipelineCache, cached_kernel, launch_kernel, new_cache};
 
 #[cfg(not(all(feature = "rocm", target_os = "linux")))]
 mod unavailable {

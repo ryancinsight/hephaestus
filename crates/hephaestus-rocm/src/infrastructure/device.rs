@@ -66,11 +66,11 @@ pub(crate) fn check_status(status: cubecl_hip_sys::hipError_t, operation: &str) 
 /// An acquired AMD device backed by the ROCm HIP runtime.
 #[derive(Clone)]
 pub struct RocmDevice {
-    pub(super) context: Arc<RocmContext>,
+    pub(crate) context: Arc<RocmContext>,
     pub(super) limits: DeviceLimits,
     pub(super) features: RocmDeviceFeatures,
     topology: Arc<themis::GpuTopology>,
-    pub(super) pipeline_cache: crate::application::pipeline::PipelineCache,
+    pub(crate) pipeline_cache: crate::application::pipeline::PipelineCache,
 }
 
 impl core::fmt::Debug for RocmDevice {
