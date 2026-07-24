@@ -9,8 +9,8 @@ use hephaestus_core::{
     AddOp, BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
     ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
     GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
-    GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice, KernelInterface,
-    KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice,
+    KernelInterface, KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
     CumSumOp, GpuCsrMatrix, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
