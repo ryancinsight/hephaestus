@@ -166,7 +166,7 @@ fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     Ok(padded)
 }
 
-fn validate_output<T, const N: usize>(output: StridedOperand<'_, T, N>) -> Result<usize> {
+fn validate_output<T: Pod, const N: usize>(output: StridedOperand<'_, T, N>) -> Result<usize> {
     if output.layout.has_zero_stride_aliasing() {
         return Err(HephaestusError::DispatchFailed {
             message: "output layout must not contain zero-stride aliasing".to_string(),
