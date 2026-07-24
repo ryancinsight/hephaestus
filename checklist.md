@@ -2,6 +2,35 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-SUBSTRATE-1 [arch]
+
+- [x] Add the `hephaestus-rocm` workspace crate with a Linux-only optional
+      `rocm` feature backed by the current HIP bindings.
+- [x] Implement real HIP acquisition, typed allocation/transfer/sync,
+      placement validation, capabilities, and Themis topology.
+- [x] Add value-semantic contract tests for hardware and adapterless paths;
+      require a device in the hardware CI lane.
+- [x] Add ROCm container build/test CI plus manually enabled self-hosted AMD
+      device CI, with path dependencies checked out at sibling locations.
+- [x] Synchronize ADR, README, core contract docs, changelog, and evidence.
+- [x] Pass formatting, locked check, warning-denied Clippy, configured
+      Nextest, doctest, and rustdoc for the affected packages.
+
+Local evidence (2026-07-24): `cargo fmt --all -- --check`, locked release
+checks for the default and Linux `rocm` feature, warning-denied release
+Clippy for both feature states, release Nextest 8/8 for the adapterless path,
+doctest, rustdoc, metadata, and workflow YAML parsing pass. The local host has
+no ROCm runtime or AMD device; these are not local hardware evidence.
+
+Hosted evidence (2026-07-24): ROCm workflow run `30097596676` passes the
+container build and verification lane in 5m34s at PR head `05300bc`; its
+required-device AMD lane is correctly skipped for the pull-request event.
+Hardware execution remains a separate workflow-dispatch acceptance gate on a
+self-hosted runner labeled `rocm`.
+
+Acceptance boundary: this increment owns the HIP device substrate only;
+operator kernels are a follow-up item with an independent consumer contract.
+
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor]
 
 - [x] Hoist reduction-tree encoding behind a caller-supplied encoder without

@@ -4,6 +4,33 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
+
+- Owner: Codex; scope: new `hephaestus-rocm` crate implementing the existing
+  `ComputeDevice`, capability, and acquisition seams with HIP/ROCm device
+  acquisition, typed device buffers, transfers, synchronization, topology,
+  contract tests, ROCm build/device CI, ADR, README, changelog, and checklist.
+  Existing WGPU/CUDA/Metal behavior and Python backend selection are
+  non-goals.
+- Acceptance: the default workspace compiles without ROCm; the `rocm` feature
+  compiles against the pinned HIP bindings on Linux; real HIP allocation,
+  zeroing, upload/download, subrange writes, length rejection, capabilities,
+  and topology are value-tested on an AMD device; adapterless execution
+  returns a typed unavailable error; CI runs a ROCm container build/test lane
+  and an explicitly enabled self-hosted AMD hardware lane.
+- Claimed files: workspace `Cargo.toml`/`Cargo.lock`; `crates/hephaestus-rocm/**`;
+  `.github/workflows/rocm.yml`; `docs/adr/0012-rocm-backend.md`; core/README/
+  CHANGELOG/checklist/backlog documentation touched by the new provider.
+- Non-goal: HIP kernel authoring and operator-family parity. Re-open as the
+  next vertical item when a consumer supplies a ROCm kernel contract.
+- Local implementation and package gates pass on 2026-07-24. The new CI
+  workflow is YAML-validated. Hosted ROCm run `30097596676` passes the
+  container build, feature checks, warning-denied Clippy, Nextest (8/8),
+  doctest, and rustdoc at PR head `05300bc`; the manually enabled AMD
+  hardware lane remains unexecuted because this host has no ROCm runtime or
+  AMD device and no self-hosted runner was available for the pull request.
+- Last update: 2026-07-24.
+
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — done
 
 - Owner: Codex `/root`; scope: prepared WGPU dot and L2-norm map-reduction

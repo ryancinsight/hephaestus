@@ -6,7 +6,8 @@ use bytemuck::Pod;
 ///
 /// This is an acquisition policy hint, not a capability claim. Backends map it
 /// onto their concrete adapter/device selection APIs while preserving the same
-/// consumer-facing contract across WGPU, CUDA, Metal, or future providers.
+/// consumer-facing contract across WGPU, CUDA, ROCm, Metal, or future
+/// providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DevicePreference {
     /// Prefer the highest-throughput device available.
@@ -77,9 +78,10 @@ pub struct DeviceLimits {
 /// The compute-device seam every accelerator backend implements.
 ///
 /// This trait is a **deliberate extension seam** (atlas ADR 0001): the wgpu
-/// backend and the CUDA backend (cuda-oxide + cutile composed) substitute here
-/// without consumers changing. It is intentionally *not* sealed — new backend
-/// crates in the hephaestus workspace implement it. Consumers bind generically
+/// backend, the CUDA backend (cuda-oxide + cutile composed), and the ROCm
+/// backend substitute here without consumers changing. It is intentionally
+/// *not* sealed — new backend crates in the hephaestus workspace implement it.
+/// Consumers bind generically
 /// (`<D: ComputeDevice>`) so dispatch is monomorphized; no `dyn` on hot paths.
 ///
 /// Element types are bounded by [`bytemuck::Pod`]: device transfer is a
@@ -148,16 +150,18 @@ pub trait ComputeDevice {
     /// device context have completed.
     ///
     /// Backends map this to their real synchronization primitive (`Device::poll`
-    /// for WGPU, `cuCtxSynchronize` for CUDA). Consumers use this for explicit
-    /// blocking semantics without depending on a concrete GPU API.
+    /// for WGPU, `cuCtxSynchronize` for CUDA, `hipDeviceSynchronize` for ROCm).
+    /// Consumers use this for explicit blocking semantics without depending on a
+    /// concrete GPU API.
     fn synchronize(&self) -> Result<()>;
 }
 
 /// Capability-query seam for accelerator backends.
 ///
 /// Consumers that need device limits or optional feature checks bind to this
-/// trait instead of a concrete backend API. WGPU, CUDA, and future providers
-/// map their native descriptors into the shared Hephaestus vocabulary.
+/// trait instead of a concrete backend API. WGPU, CUDA, ROCm, and future
+/// providers map their native descriptors into the shared Hephaestus
+/// vocabulary.
 pub trait ComputeDeviceCapabilities: ComputeDevice {
     /// Return the enabled device limits in backend-neutral form.
     fn device_limits(&self) -> DeviceLimits;
