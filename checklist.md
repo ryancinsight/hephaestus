@@ -4,17 +4,24 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-ROCM-SUBSTRATE-1 [arch]
 
-- [ ] Add the `hephaestus-rocm` workspace crate with a Linux-only optional
+- [x] Add the `hephaestus-rocm` workspace crate with a Linux-only optional
       `rocm` feature backed by the current HIP bindings.
-- [ ] Implement real HIP acquisition, typed allocation/transfer/sync,
+- [x] Implement real HIP acquisition, typed allocation/transfer/sync,
       placement validation, capabilities, and Themis topology.
-- [ ] Add value-semantic contract tests for hardware and adapterless paths;
+- [x] Add value-semantic contract tests for hardware and adapterless paths;
       require a device in the hardware CI lane.
-- [ ] Add ROCm container build/test CI plus manually enabled self-hosted AMD
+- [x] Add ROCm container build/test CI plus manually enabled self-hosted AMD
       device CI, with path dependencies checked out at sibling locations.
-- [ ] Synchronize ADR, README, core contract docs, changelog, and evidence.
-- [ ] Pass formatting, locked check, warning-denied Clippy, configured
+- [x] Synchronize ADR, README, core contract docs, changelog, and evidence.
+- [x] Pass formatting, locked check, warning-denied Clippy, configured
       Nextest, doctest, and rustdoc for the affected packages.
+
+Local evidence (2026-07-24): `cargo fmt --all -- --check`, locked release
+checks for the default and Linux `rocm` feature, warning-denied release
+Clippy for both feature states, release Nextest 8/8 for the adapterless path,
+doctest, rustdoc, metadata, and workflow YAML parsing pass. The local host has
+no ROCm runtime or AMD device; the container and required-device lanes remain
+CI evidence, not local hardware evidence.
 
 Acceptance boundary: this increment owns the HIP device substrate only;
 operator kernels are a follow-up item with an independent consumer contract.

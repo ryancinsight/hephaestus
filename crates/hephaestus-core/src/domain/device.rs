@@ -150,8 +150,9 @@ pub trait ComputeDevice {
     /// device context have completed.
     ///
     /// Backends map this to their real synchronization primitive (`Device::poll`
-    /// for WGPU, `cuCtxSynchronize` for CUDA). Consumers use this for explicit
-    /// blocking semantics without depending on a concrete GPU API.
+    /// for WGPU, `cuCtxSynchronize` for CUDA, `hipDeviceSynchronize` for ROCm).
+    /// Consumers use this for explicit blocking semantics without depending on a
+    /// concrete GPU API.
     fn synchronize(&self) -> Result<()>;
 }
 

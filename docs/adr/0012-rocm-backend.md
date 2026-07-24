@@ -56,3 +56,12 @@ a ROCm development container. A manually enabled self-hosted AMD runner runs
 the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. HIP operator families
 remain a follow-up item with differential CPU/WGPU contracts.
+
+## Implementation references
+
+- [HIP runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/): device
+  acquisition, memory, transfer, synchronization, and attribute contracts.
+- [`cubecl-hip-sys` 7.2.5321100](https://docs.rs/crate/cubecl-hip-sys/7.2.5321100):
+  the Linux raw HIP bindings used by the optional feature.
+- [ROCm Ubuntu development images](https://hub.docker.com/r/rocm/dev-ubuntu-24.04/tags):
+  the pinned container source used by the container CI job.

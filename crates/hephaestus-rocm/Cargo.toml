@@ -1,0 +1,19 @@
+[package]
+name = "hephaestus-rocm"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and host/device transfer."
+
+[features]
+default = []
+rocm = ["dep:cubecl-hip-sys"]
+
+[dependencies]
+hephaestus-core = { workspace = true }
+bytemuck = { workspace = true }
+themis = { workspace = true }
+cubecl-hip-sys = { workspace = true, optional = true }

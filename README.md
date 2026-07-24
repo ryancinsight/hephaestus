@@ -21,6 +21,7 @@ kernels are forged for accelerator hardware.
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP device substrate: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, zeroed allocation, host/device transfer, subrange writes, and synchronization. Enable the optional `rocm` feature on a ROCm host; HIP operator authoring is a follow-up increment. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
 ## Python Releases
@@ -59,6 +60,9 @@ register each package's Trusted Publisher with that environment.
   entry points, and the op contributes only its shader combine expression. No
   type names appear in API identifiers (`WgslScalar::WGSL_TYPE` /
   `CudaScalar::CUDA_TYPE` substitutes the shader type token).
+- The ROCm backend owns native HIP device mechanics through the optional
+  `cubecl-hip-sys` bindings. Its default build has no ROCm linkage and returns
+  a typed unavailable-device error instead of falling back to WGPU or CPU.
 - Contiguous and strided elementwise callers can supply output buffers, so
   allocation policy stays with the consumer. Contiguous outputs must not alias
   inputs; scalar dispatch reuses the same uniform-buffer pool as strided
@@ -83,7 +87,9 @@ planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
 (hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
 GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
 expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
-and does not inherit Moirai's optional WGPU backend.
+and does not inherit Moirai's optional WGPU backend. Native HIP device
+mechanics belong to `hephaestus-rocm`; ROCm kernel families remain separate
+application-layer work with their own differential contracts.
 
 Hermes integration is intentionally indirect for host-delegated Leto parity
 wrappers: Hephaestus depends on `leto-ops` with its `simd` feature enabled, and
@@ -101,6 +107,10 @@ cargo clippy --all-targets -- -D warnings
 cargo nextest run
 cargo test --doc
 cargo doc --no-deps
+cargo check -p hephaestus-rocm --features rocm --all-targets --locked
+cargo clippy -p hephaestus-rocm --features rocm --all-targets --no-deps -- -D warnings
+cargo nextest run -p hephaestus-rocm --features rocm --locked
+cargo test -p hephaestus-rocm --features rocm --doc --locked
 cargo bench --bench elementwise_into
 cargo bench --bench reduction_width
 cargo run -p hephaestus-wgpu --example prepared_map_reduction
@@ -111,6 +121,13 @@ Contract tests run real device dispatch differentially against CPU references
 (upload/download round-trip, partial trailing workgroup add, integral mul,
 length-mismatch rejection). On hosts without an adapter the tests skip with a
 message rather than fabricate a pass.
+
+The ROCm contract suite runs HIP allocation, zeroing, upload/download,
+subrange-write, length-rejection, capability, and topology checks. The ROCm
+container CI lane validates the feature build and adapterless path; the
+manually enabled self-hosted AMD lane sets
+`HEPHAESTUS_ROCM_REQUIRE_DEVICE=1` so hardware evidence cannot be replaced by
+a skip.
 
 The `elementwise_into`, `reduction_width`, and `prepared_map_reduction`
 benchmarks run real WGPU dispatch and validate output values. The prepared

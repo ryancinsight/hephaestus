@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [arch] Add the Linux `hephaestus-rocm` backend. Its optional `rocm` feature
+  maps HIP device acquisition, typed device buffers, zeroed allocation,
+  host/device transfer, subrange writes, synchronization, driver-backed
+  capabilities, and Themis topology onto the shared Hephaestus contracts.
+  ROCm operator kernels remain a follow-up increment; the default build has no
+  ROCm linkage and reports typed backend unavailability.
+
 - [minor] `hephaestus-wgpu` adds fixed-buffer `prepare_dot` and
   `prepare_norm_l2` dispatch. Prepared operations reuse pipelines, bind groups,
   metadata, reduction scratch, and scalar outputs; L2 map, reduction, and

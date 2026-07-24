@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-SUBSTRATE-1 [arch] — in-progress
+## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
 
 - Owner: Codex; scope: new `hephaestus-rocm` crate implementing the existing
   `ComputeDevice`, capability, and acquisition seams with HIP/ROCm device
@@ -23,6 +23,10 @@ cuda-oxide + cutile).
   CHANGELOG/checklist/backlog documentation touched by the new provider.
 - Non-goal: HIP kernel authoring and operator-family parity. Re-open as the
   next vertical item when a consumer supplies a ROCm kernel contract.
+- Local implementation and package gates pass on 2026-07-24. The new CI
+  workflow is YAML-validated but its hosted container and manually enabled
+  AMD hardware lanes remain required external evidence because this host has
+  no ROCm runtime or AMD device.
 - Last update: 2026-07-24.
 
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor] — done
