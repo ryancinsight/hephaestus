@@ -7,14 +7,16 @@
 
 use hephaestus_core::{
     AddOp, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
-    HephaestusError, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
     CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumsum, dot, kron,
-    kron_into, matmul, matmul_into, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1,
-    norm_l2, norm_max, reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into,
-    sum_axis, trace, unary_elementwise,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
+    binary_elementwise_strided_into, cumprod, cumsum, dot, kron, kron_into, matmul, matmul_into,
+    max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max,
+    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
+    scan_axis_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    unary_elementwise_strided_into,
 };
 use leto::Layout;
 
@@ -258,6 +260,157 @@ fn elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts() {
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "output buffer must not alias binary left input"
+    ));
+}
+
+#[test]
+fn strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts() {
+    let Some(device) =
+        device("strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts")
+    else {
+        return;
+    };
+
+    let width = BlockWidth::DEFAULT;
+    let lhs_values = [99_i32, 1, 2, 3, 4];
+    let rhs_values = [10_i32, 20];
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP strided lhs upload");
+    let rhs_buffer = device
+        .upload(&rhs_values)
+        .expect("HIP broadcast rhs upload");
+    let lhs_layout = Layout::new([2, 2], [1, 2], 1);
+    let rhs_layout = Layout::c_contiguous([1, 2]).expect("broadcast rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let sum = binary_elementwise_strided::<AddOp, _, 2>(&device, lhs, rhs, [2, 2], width)
+        .expect("HIP strided add");
+    let mut sum_values = [0_i32; 4];
+    device
+        .download(&sum, &mut sum_values)
+        .expect("HIP strided add download");
+    assert_eq!(sum_values, [11, 23, 12, 24]);
+
+    let identity = unary_elementwise_strided::<IdentityOp, _, 2>(&device, lhs, [2, 2], width)
+        .expect("HIP strided identity");
+    let mut identity_values = [0_i32; 4];
+    device
+        .download(&identity, &mut identity_values)
+        .expect("HIP strided identity download");
+    assert_eq!(identity_values, [1, 3, 2, 4]);
+
+    let scalar_output_layout = Layout::c_contiguous([2, 2]).expect("strided scalar layout");
+    let scalar_output = device
+        .alloc_zeroed::<i32>(4)
+        .expect("strided scalar output");
+    scalar_elementwise_strided_into::<MulOp, _, 2>(
+        &device,
+        lhs,
+        2,
+        StridedOperand {
+            buffer: &scalar_output,
+            layout: &scalar_output_layout,
+        },
+        width,
+    )
+    .expect("HIP strided scalar");
+    let mut scalar_values = [0_i32; 4];
+    device
+        .download(&scalar_output, &mut scalar_values)
+        .expect("HIP strided scalar download");
+    assert_eq!(scalar_values, [2, 6, 4, 8]);
+
+    let output_into = device
+        .alloc_zeroed::<i32>(4)
+        .expect("strided caller-owned output");
+    binary_elementwise_strided_into::<AddOp, _, 2>(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &scalar_output_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned strided add");
+    let mut output_into_values = [0_i32; 4];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned strided add download");
+    assert_eq!(output_into_values, [11, 23, 12, 24]);
+
+    let empty_buffer = device.upload::<i32>(&[]).expect("empty strided upload");
+    let empty_layout = Layout::c_contiguous([0, 2]).expect("empty strided layout");
+    let empty = unary_elementwise_strided::<IdentityOp, _, 2>(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+        [0, 2],
+        width,
+    )
+    .expect("empty strided identity");
+    assert_eq!(empty.len(), 0);
+
+    let bad_rhs_values = [1_i32; 6];
+    let bad_rhs_buffer = device
+        .upload(&bad_rhs_values)
+        .expect("bad broadcast upload");
+    let bad_rhs_layout = Layout::c_contiguous([3, 2]).expect("bad broadcast layout");
+    assert!(matches!(
+        binary_elementwise_strided_into::<AddOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &bad_rhs_buffer,
+                layout: &bad_rhs_layout,
+            },
+            StridedOperand {
+                buffer: &output_into,
+                layout: &scalar_output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
+
+    assert!(matches!(
+        unary_elementwise_strided_into::<IdentityOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias input buffer"
+    ));
+
+    let aliased_layout = Layout::new([2, 2], [0, 1], 0);
+    let aliased_output = device.alloc_zeroed::<i32>(2).expect("zero-stride output");
+    assert!(matches!(
+        unary_elementwise_strided_into::<IdentityOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &aliased_output,
+                layout: &aliased_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output layout must not contain zero-stride aliasing"
     ));
 }
 

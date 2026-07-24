@@ -46,6 +46,11 @@ pub use application::scan::{
     scan_axis_into,
 };
 pub use application::strided::StridedOperand;
+pub use application::strided_elementwise::{
+    MAX_STRIDED_RANK, binary_elementwise_strided, binary_elementwise_strided_into,
+    scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
+    unary_elementwise_strided_into,
+};
 
 pub use hephaestus_core::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceBuffer,

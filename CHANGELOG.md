@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with rank-≤4 HIP strided binary, unary, and
+  scalar elementwise operations. One packed metadata/decode contract covers
+  Leto transposed, sliced, and broadcast views; allocating and caller-owned
+  forms validate storage, offsets, signed strides, output aliasing, and
+  zero-stride output races against CPU differential contracts.
+
 - [minor] Extend ROCm parity with HIP module-launched strided Kronecker
   products. `kron` and caller-owned `kron_into` preserve shared rank-2 layout,
   storage, output-shape, zero-stride, and alias validation and are covered by

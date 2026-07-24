@@ -12,3 +12,5 @@ pub mod reduction;
 pub mod scan;
 /// Layout-aware operand descriptors.
 pub mod strided;
+/// Rank-≤4 layout-aware elementwise operations.
+pub mod strided_elementwise;
