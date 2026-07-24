@@ -6,6 +6,8 @@ pub mod elementwise;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 pub(crate) mod pipeline;
+/// Seeded host-delegated random initializers.
+pub mod random;
 /// Contiguous multi-pass tree reductions.
 pub mod reduction;
 /// Rank-2 prefix and suffix scans over strided layouts.

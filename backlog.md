@@ -4,7 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-RANDOM-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm seeded uniform and normal initializers using the
+  shared deterministic `leto-ops` contract, typed device uploads, CPU-value
+  contracts, and the existing ROCm CI lanes. Sparse, streams, and storage
+  families are non-goals for this increment.
+- Acceptance: ROCm exposes the same `uniform_with_seed` and
+  `normal_with_seed` contracts as CUDA and WGPU for supported real scalars and
+  ranks, preserves deterministic repeated seeds and uniform bounds, maps
+  producer errors to typed backend errors, and uploads the resulting values to
+  typed ROCm buffers. The container lane compiles and tests the feature path,
+  while the required-device lane executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor] — done
 
 - Owner: Codex; scope: ROCm finite matrix rank estimation and determinant over
   strided rank-2 inputs using one HIP Gaussian-elimination kernel, shared
@@ -20,7 +36,10 @@ cuda-oxide + cutile).
   executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Hosted ROCm container run `30118716147` passed the real feature
+  build, warning-denied Clippy, Nextest (27/27), doctest, and rustdoc at PR
+  head `ca602c6`; PR #77 merged as `148436f`. The required-device lane
+  remained skipped for the PR event.
 
 ## HEPH-ROCM-PARITY-MATPOW-1 [minor] — done
 

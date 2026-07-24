@@ -17,4 +17,5 @@ hephaestus-core = { workspace = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
 leto = { workspace = true }
+leto-ops = { workspace = true }
 cubecl-hip-sys = { workspace = true, optional = true }

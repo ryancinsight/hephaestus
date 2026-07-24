@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with seeded uniform and normal initializers.
+  Random values are generated deterministically by the shared `leto-ops`
+  contract and uploaded to typed ROCm buffers, matching the explicit
+  host-delegated CUDA and WGPU APIs. Contracts cover deterministic repeated
+  seeds, uniform bounds, and non-degenerate normal samples.
+
 - [minor] Extend ROCm parity with HIP matrix rank estimation and determinant
   calculation over strided rank-2 inputs. One device-resident Gaussian
   elimination kernel shares layout validation with CUDA and WGPU, supports a

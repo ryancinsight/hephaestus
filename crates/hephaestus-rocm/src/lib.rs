@@ -41,6 +41,7 @@ pub use application::linalg::{
     dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
     norm_l1, norm_l2, norm_max, trace,
 };
+pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
