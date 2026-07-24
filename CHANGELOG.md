@@ -31,6 +31,10 @@ Target release: 0.18.0.
   shared strided layout, storage, shape, and alias validation and are covered
   by CPU differential contracts across 16×16 tile boundaries.
 
+- [minor] Extend ROCm matrix multiplication with grid-z dispatched batched
+  products, singleton-batch broadcasting, checked batch strides, and one
+  caller-owned output contract across the HIP grid-z limit.
+
 - [minor] Extend ROCm parity with HIP module-launched rank-2 forward/reverse
   scans over shared Leto layouts. The tiled kernels cover cumulative sum and
   product, use the shared axis-scan planner for shape, stride, storage, and

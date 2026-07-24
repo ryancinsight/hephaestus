@@ -1,16 +1,19 @@
-//! Rank-2 linear algebra operations on the ROCm device.
+//! Rank-2 and rank-3 linear algebra operations on the ROCm device.
 //!
 //! Matrix multiplication uses one HIP workgroup per 16×16 output tile and
 //! shared-memory tiles along the contracted dimension. Host-side validation
 //! preserves the same strided-layout and alias contract as the other GPU
-//! backends.
+//! backends. The batched form dispatches the batch dimension through grid-z
+//! and supports singleton input-batch broadcasting.
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
 use leto::Layout;
 
+mod batched_matmul;
 mod matmul;
 
+pub use batched_matmul::{batched_matmul, batched_matmul_into};
 pub use matmul::{matmul, matmul_into};
 
 #[repr(C)]
@@ -58,5 +61,12 @@ fn to_u32(value: usize, what: &str) -> Result<u32> {
 fn to_i32(value: isize, what: &str) -> Result<i32> {
     i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds i32 range"),
+    })
+}
+
+#[inline]
+pub(super) fn to_i64(value: isize, what: &str) -> Result<i64> {
+    i64::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("{what} {value} exceeds i64 range"),
     })
 }

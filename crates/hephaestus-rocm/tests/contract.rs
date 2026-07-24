@@ -10,10 +10,10 @@ use hephaestus_core::{
     HephaestusError, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, binary_elementwise,
-    binary_elementwise_into, cumprod, cumsum, matmul, matmul_into, max_axis, mean_axis,
-    mean_axis_into, min_axis, reduction_with_width, scalar_elementwise, scan_axis, scan_axis_into,
-    sum_axis, unary_elementwise,
+    CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumsum, matmul,
+    matmul_into, max_axis, mean_axis, mean_axis_into, min_axis, reduction_with_width,
+    scalar_elementwise, scan_axis, scan_axis_into, sum_axis, unary_elementwise,
 };
 use leto::Layout;
 
@@ -625,6 +625,106 @@ fn matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_c
 
     assert!(matches!(
         matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
+    ));
+}
+
+#[test]
+fn batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_contracts() {
+    let Some(device) = device(
+        "batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_contracts",
+    ) else {
+        return;
+    };
+
+    let lhs_values: Vec<i32> = (0..3 * 17 * 19).map(|index| (index % 7) - 3).collect();
+    let rhs_values: Vec<i32> = (0..19 * 5).map(|index| (index % 5) - 2).collect();
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP batched lhs upload");
+    let rhs_buffer = device
+        .upload(&rhs_values)
+        .expect("HIP broadcast rhs upload");
+    let lhs_layout = Layout::c_contiguous([3, 17, 19]).expect("batched lhs layout");
+    let rhs_layout = Layout::c_contiguous([1, 19, 5]).expect("broadcast rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let output = batched_matmul(&device, lhs, rhs).expect("HIP batched matmul");
+    let mut output_values = vec![0_i32; 3 * 17 * 5];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP batched matmul download");
+    let mut expected = Vec::with_capacity(3 * 17 * 5);
+    for batch in 0..3 {
+        for row in 0..17 {
+            for col in 0..5 {
+                expected.push(
+                    (0..19)
+                        .map(|shared| {
+                            lhs_values[(batch * 17 + row) * 19 + shared]
+                                * rhs_values[shared * 5 + col]
+                        })
+                        .sum(),
+                );
+            }
+        }
+    }
+    assert_eq!(output_values, expected);
+
+    let output_layout = Layout::c_contiguous([3, 17, 5]).expect("batched output layout");
+    let output_into = device
+        .alloc_zeroed::<i32>(3 * 17 * 5)
+        .expect("HIP caller-owned batched output");
+    batched_matmul_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &output_layout,
+        },
+    )
+    .expect("HIP caller-owned batched matmul");
+    let mut output_into_values = vec![0_i32; 3 * 17 * 5];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned batched download");
+    assert_eq!(output_into_values, expected);
+
+    let wrong_layout = Layout::c_contiguous([2, 17, 5]).expect("wrong batched output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(2 * 17 * 5)
+        .expect("wrong batched output buffer");
+    assert!(matches!(
+        batched_matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("batched matmul shape mismatch")
+    ));
+
+    assert!(matches!(
+        batched_matmul_into(
             &device,
             lhs,
             rhs,

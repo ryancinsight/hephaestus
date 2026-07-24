@@ -35,7 +35,7 @@ pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into,
 };
-pub use application::linalg::{matmul, matmul_into};
+pub use application::linalg::{batched_matmul, batched_matmul_into, matmul, matmul_into};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,

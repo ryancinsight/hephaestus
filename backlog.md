@@ -4,7 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-MATMUL-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-BATCHED-MATMUL-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm rank-3 batched matrix multiplication using the
+  shared tiled matmul kernel family, singleton-batch broadcasting, checked
+  batch strides, typed allocating and caller-owned output APIs, CPU
+  differential contracts, and the existing ROCm CI lanes. Norms, Kronecker,
+  matrix properties, sparse, strided elementwise, streams, storage, and random
+  families are non-goals for this increment.
+- Acceptance: ROCm exposes the same rank-3 `batched_matmul`/`batched_matmul_into`
+  contract as CUDA and WGPU, validates batch shape, storage, layout, output
+  aliasing, and zero-stride output races before launch, computes partial tiles,
+  broadcasts singleton inputs, and returns CPU-reference values. The container
+  lane compiles and tests the real feature path, while the required-device lane
+  executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-MATMUL-1 [minor] — done
 
 - Owner: Codex; scope: ROCm rank-2 tiled matrix multiplication using shared
   strided layouts, HIP module launches, typed allocating and caller-owned
@@ -18,8 +36,11 @@ cuda-oxide + cutile).
   feature path, while the required-device lane executes the same contracts on
   AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
-  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Hosted ROCm
+  container run `30111559905` passed the real feature build, warning-denied
+  Clippy, Nextest (15/15), doctest, and rustdoc at PR head `74c9948`; PR #71
+  merged as `29e8e5c`. The required-device lane remained skipped for the PR
+  event. Last update: 2026-07-24.
 
 ## HEPH-ROCM-PARITY-SCAN-1 [minor] — done
 
