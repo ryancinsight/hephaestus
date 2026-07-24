@@ -30,7 +30,7 @@ cuda-oxide + cutile).
   compilation remains blocked by the sibling Leto checkout's
   `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
-## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor] — in progress
+## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor] — done
 
 - Owner: Codex; scope: ROCm LU and QR decomposition surfaces, real HIP
   factorization kernels, device-resident factors, solve/determinant/inverse or
@@ -50,7 +50,33 @@ cuda-oxide + cutile).
   `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
   `.github/workflows/rocm.yml`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24. The branch is based on merged Cholesky parity at `4f52769`.
+  2026-07-24. Hosted ROCm run `30129776247` passed the base and
+  `rocm,decomposition` checks, warning-denied Clippy, Nextest, doctest, and
+  rustdoc at head `47e13ee`; the required-device lane was skipped by the
+  pull-request event. Merged through PR #81 at `82d3bc8`.
+
+## HEPH-ROCM-PARITY-PIVOTED-3 [minor] — in progress
+
+- Owner: Codex; scope: ROCm complete-pivot LU and column-pivoted QR surfaces,
+  real HIP pivot/factorization kernels, device-resident factors and
+  permutations, solve/inverse or least-squares contracts, value-semantic
+  tests, decomposition feature CI, and synchronized backend documentation.
+  SVD, eigen, Schur, Hessenberg, bidiagonal, UDU, and Bunch–Kaufman remain
+  non-goals for this increment.
+- Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
+  `GpuFullPivLuDecomposition`/`full_piv_lu` and
+  `GpuColPivQrDecomposition`/`col_piv_qr` APIs; factorization executes with
+  HIP kernels for the supported dense and strided contracts; row/column
+  permutations, rank, solve, inverse, and least-squares values match the
+  independent `leto-ops` reference; invalid, empty, singular, and
+  rank-deficient cases return typed results; and hosted ROCm CI passes build,
+  warning-denied Clippy, Nextest, doctest, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/src/application/decomposition/**`,
+  `crates/hephaestus-rocm/src/application/pipeline.rs`,
+  `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
+  `.github/workflows/rocm.yml`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24. Branch starts from merged LU/QR parity at `82d3bc8`.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 

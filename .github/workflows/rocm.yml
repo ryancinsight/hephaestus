@@ -49,6 +49,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ryancinsight/hermes
+          # Leto main currently requires the 0.4.1 workspace contract; keep
+          # the sibling checkout aligned until that dependency migration lands.
+          ref: v0.4.1
           path: hermes
           persist-credentials: false
 

@@ -106,14 +106,15 @@ same-region contract while HIP receives the flat pointer ABI.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 The optional decomposition feature adds the common `GpuCholesky`,
-`GpuLuDecomposition`, and `GpuQrDecomposition` surfaces. ROCm validates all
-logical input values on the device, materializes strided inputs through the
-native identity kernel, and executes Cholesky diagonal/column recurrences, LU
-partial-pivot elimination, and QR Householder steps as ordered HIP module
-launches. The dense blocked entry points retain the CUDA/WGPU dense-layout
-contract. Returned factors keep host copies only for the existing solve,
-determinant, inverse, and least-squares methods; no host-side factorization is
-used.
+`GpuLuDecomposition`, `GpuFullPivLuDecomposition`, `GpuQrDecomposition`, and
+`GpuColPivQrDecomposition` surfaces. ROCm validates all logical input values on
+the device, materializes strided inputs through the native identity kernel, and
+executes Cholesky diagonal/column recurrences, partial/complete-pivot LU, and
+Householder/column-pivoted QR as ordered HIP module launches. The dense blocked
+entry points retain the CUDA/WGPU dense-layout contract. Device factors and
+permutations are authoritative; the common scalar solve, determinant, inverse,
+and least-squares methods retain the established host-side provider contract,
+with no backend-selection fallback to CPU or WGPU.
 
 ## Alternatives rejected
 
@@ -143,18 +144,19 @@ binary/unary/scalar elementwise operations, strided Kronecker products,
 matrix powers, matrix rank/determinant, strided dot/trace/L1/L2/max
 map-reductions, seeded random initializers, and device-resident CSR SpMV/SpMM.
 Backend-neutral storage kernels and authored-kernel streams now have ROCm
-coverage with differential CPU/WGPU contracts. Cholesky, LU, and QR are covered
-behind the `decomposition` feature with HIP factorization and common
-host-operation contracts; eigen, SVD, and other decomposition families remain
-open.
+coverage with differential CPU/WGPU contracts. Cholesky, LU, complete-pivot LU,
+QR, and column-pivoted QR are covered behind the `decomposition` feature with
+HIP factorization and common host-operation contracts; eigen, SVD, Schur,
+Hessenberg, bidiagonal, UDU, and Bunch–Kaufman remain open.
 
 The hosted job checks out the sibling Atlas path repositories at their current
-default branches. Those repositories are in an unpublished version migration,
-so the job resolves the checkout-local path graph once before running the
-verification commands with `--locked`. This is a temporary integration
-constraint, not a dependency-resolution fallback; remove the bootstrap when
-the sibling migration commits are published and the committed lockfile can
-represent the hosted checkout graph directly.
+default branches, with Hermes pinned to `v0.4.1` because Leto main currently
+requires that workspace version. Those repositories are in an unpublished
+version migration, so the job resolves the checkout-local path graph once
+before running the verification commands with `--locked`. This is a temporary
+integration constraint, not a dependency-resolution fallback; remove the
+Hermes pin and bootstrap when the sibling migration commits are published and
+the committed lockfile can represent the hosted checkout graph directly.
 
 ## Implementation references
 

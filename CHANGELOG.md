@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with HIP
+  complete-pivot LU and column-pivoted QR. Device factors, permutations, rank,
+  and Q/R buffers are exposed through the common CUDA/WGPU surfaces, while
+  scalar solve, inverse, determinant, and least-squares methods retain the
+  established host-side contract. CI covers the new feature combination and
+  value-semantic pivot/rank cases.
+
 - [minor] Extend the optional ROCm `decomposition` feature with HIP LU partial
   pivoting and Householder QR factorization. Device buffers retain packed
   factors while the common solve, determinant, inverse, and least-squares
