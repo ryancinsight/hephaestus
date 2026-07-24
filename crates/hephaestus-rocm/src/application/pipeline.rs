@@ -22,6 +22,12 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Contiguous reduction operation keyed by operation, scalar, and block width.
+    Reduction {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -39,6 +45,15 @@ impl LaunchConfig {
             grid: (grid_x, 1, 1),
             block: (width.get(), 1, 1),
             shared_bytes: 0,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn linear_shared(grid_x: u32, width: BlockWidth, shared_bytes: u32) -> Self {
+        Self {
+            grid: (grid_x, 1, 1),
+            block: (width.get(), 1, 1),
+            shared_bytes,
         }
     }
 }

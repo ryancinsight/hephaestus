@@ -6,12 +6,12 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    AddOp, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, HephaestusError,
-    MulOp, NegOp,
+    AddOp, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
+    HephaestusError, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    Result, RocmDevice, binary_elementwise, binary_elementwise_into, scalar_elementwise,
-    unary_elementwise,
+    Result, RocmDevice, binary_elementwise, binary_elementwise_into, reduction_with_width,
+    scalar_elementwise, unary_elementwise,
 };
 
 fn device(test: &str) -> Option<RocmDevice> {
@@ -254,5 +254,62 @@ fn elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts() {
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "output buffer must not alias binary left input"
+    ));
+}
+
+#[test]
+fn reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries() {
+    let Some(device) =
+        device("reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries")
+    else {
+        return;
+    };
+
+    let input: Vec<u32> = (0..513).map(|index| (index % 17) as u32).collect();
+    let input_buffer = device.upload(&input).expect("HIP reduction input upload");
+    let width = BlockWidth::new(128).expect("test reduction width is non-zero");
+
+    let sum =
+        reduction_with_width::<SumOp, _>(&device, &input_buffer, width).expect("HIP sum reduction");
+    let min =
+        reduction_with_width::<MinOp, _>(&device, &input_buffer, width).expect("HIP min reduction");
+    let max =
+        reduction_with_width::<MaxOp, _>(&device, &input_buffer, width).expect("HIP max reduction");
+
+    let expected_sum: u32 = input.iter().copied().sum();
+    let expected_min = input.iter().copied().min().expect("non-empty input");
+    let expected_max = input.iter().copied().max().expect("non-empty input");
+    let mut sum_output = [0_u32];
+    let mut min_output = [0_u32];
+    let mut max_output = [0_u32];
+    device
+        .download(&sum, &mut sum_output)
+        .expect("HIP sum download");
+    device
+        .download(&min, &mut min_output)
+        .expect("HIP min download");
+    device
+        .download(&max, &mut max_output)
+        .expect("HIP max download");
+    assert_eq!(sum_output, [expected_sum]);
+    assert_eq!(min_output, [expected_min]);
+    assert_eq!(max_output, [expected_max]);
+
+    let empty = device
+        .upload::<u32>(&[])
+        .expect("HIP empty reduction upload");
+    let empty_sum =
+        reduction_with_width::<SumOp, _>(&device, &empty, width).expect("HIP empty sum reduction");
+    let mut empty_output = [u32::MAX];
+    device
+        .download(&empty_sum, &mut empty_output)
+        .expect("HIP empty sum download");
+    assert_eq!(empty_output, [0]);
+
+    let invalid_width = BlockWidth::new(192).expect("test invalid width is non-zero");
+    assert!(matches!(
+        reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 192 must be a power of two"
     ));
 }

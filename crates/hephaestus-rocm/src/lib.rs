@@ -30,6 +30,7 @@ pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into,
 };
+pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 
 pub use hephaestus_core::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceBuffer,

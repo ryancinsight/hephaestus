@@ -17,7 +17,8 @@ The first complete vertical slice was the device substrate: HIP device
 acquisition, typed device memory, host/device transfer, synchronization,
 capability limits, and Themis topology. The next bounded parity slice now has a
 consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
-operations can be compared against CPU values and the existing CUDA contract.
+operations plus sum/min/max reductions can be compared against CPU values and
+the existing CUDA/WGPU contracts.
 
 ## Decision
 
@@ -39,9 +40,12 @@ and topology are queried from HIP attributes and memory information;
 unsupported acquisition is surfaced as a typed error. Elementwise sources use
 the shared `HipC` dialect and compile through hipRTC, then load one cached HIP
 module entry point per `(operation, scalar, block width)` key. Output buffers
-must be distinct from inputs, matching the CUDA/WGPU elementwise contract. The
-module cache is thread-confined with the HIP current-device binding because
-HIP module handles and device pointers are not cross-thread Rust values.
+must be distinct from inputs, matching the CUDA/WGPU elementwise contract.
+Contiguous reductions use the same cached module shape for each tree pass and
+retain typed partial buffers until the final one-element result is returned;
+empty inputs return the typed operation identity. The module cache is
+thread-confined with the HIP current-device binding because HIP module handles
+and device pointers are not cross-thread Rust values.
 
 ## Alternatives rejected
 
@@ -53,8 +57,8 @@ HIP module handles and device pointers are not cross-thread Rust values.
   capability and violate the provider's typed-unavailable contract.
 - Implementing the full CUDA/WGPU operator surface in one ROCm increment: it
   would couple unrelated kernel families and obscure which parity contracts
-  have real AMD hardware evidence. Elementwise is the first bounded family;
-  each later family gets its own CPU-differential contract.
+  have real AMD hardware evidence. Elementwise and contiguous reduction are
+  bounded families; each later family gets its own CPU-differential contract.
 
 ## Consequences and verification
 
@@ -63,9 +67,9 @@ support. CI always checks the default, ROCm-featured, and adapterless paths in
 a ROCm development container. A manually enabled self-hosted AMD runner runs
 the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
-surface is elementwise; reductions, scans, linalg, sparse, strided, streams,
-storage, and random operations remain tracked follow-up families with
-differential CPU/WGPU contracts.
+surface is contiguous elementwise and sum/min/max reduction. Axis reductions,
+scans, linalg, sparse, strided, streams, storage, and random operations remain
+tracked follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,
