@@ -21,7 +21,7 @@ kernels are forged for accelerator hardware.
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
-| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, and strided dot/trace/L1/L2/max norms. Enable the optional `rocm` feature on a ROCm host. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, and strided dot/trace/L1/L2/max norms. Enable the optional `rocm` feature on a ROCm host. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
 ## Python Releases
@@ -72,7 +72,10 @@ register each package's Trusted Publisher with that environment.
   the grid-z dimension and singleton-batch broadcasting. Dot, trace, and norm
   kernels use one rank-four packed layout contract for transposed, sliced, and
   diagonal views. Kronecker products use one HIP thread per logical output
-  coordinate over the same strided matrix metadata. The strided elementwise
+  coordinate over the same strided matrix metadata. Matrix powers use
+  exponentiation by squaring over device-resident matrices, copying strided
+  inputs through the native identity elementwise kernel before reusing the
+  tiled matmul path. The strided elementwise
   family decodes one packed rank-four logical index for binary, unary, and
   scalar operations, including Leto broadcast views. Its default build has no
   ROCm linkage and returns a typed
@@ -103,7 +106,7 @@ GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
 expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
 mechanics, elementwise kernels, reductions, scans, map-reductions, Kronecker
-products, and tiled matrix-multiplication families belong to `hephaestus-rocm`; sparse,
+products, matrix powers, and tiled matrix-multiplication families belong to `hephaestus-rocm`; sparse,
 streams, storage, and random families remain separate
 application-layer increments with their own differential contracts.
 
@@ -143,7 +146,7 @@ subrange-write, length-rejection, capability, topology, binary/unary/scalar
 elementwise, rank-≤4 strided binary/unary/scalar elementwise, contiguous
 sum/min/max, rank-2 axis sum/min/max/mean reduction,
 rank-2 forward/reverse scan, tiled/batched matrix-multiplication, strided
-Kronecker products, and strided dot/trace/norm value checks. The ROCm container CI lane
+Kronecker products, matrix-power, and strided dot/trace/norm value checks. The ROCm container CI lane
 validates the feature build and adapterless path; the
 manually enabled self-hosted AMD lane sets
 `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1` so hardware evidence cannot be replaced by

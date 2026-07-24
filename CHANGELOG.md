@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP module-launched matrix powers over
+  strided rank-2 inputs. Exponentiation by squaring copies non-contiguous
+  inputs through the native strided identity kernel, reuses tiled matrix
+  multiplication for device-resident products, returns an identity for
+  exponent zero, and is covered by CPU differential contracts for shear,
+  strided, and non-square inputs.
+
 - [minor] Extend ROCm parity with rank-≤4 HIP strided binary, unary, and
   scalar elementwise operations. One packed metadata/decode contract covers
   Leto transposed, sliced, and broadcast views; allocating and caller-owned

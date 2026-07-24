@@ -13,7 +13,7 @@ use hephaestus_rocm::{
     CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
     binary_elementwise_strided_into, cumprod, cumsum, dot, kron, kron_into, matmul, matmul_into,
-    max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max,
+    matpow, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max,
     reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
     scan_axis_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
     unary_elementwise_strided_into,
@@ -1011,6 +1011,88 @@ fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contr
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "Kronecker output layout must not contain zero-stride aliasing"
+    ));
+}
+
+#[test]
+fn matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square() {
+    let Some(device) =
+        device("matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square")
+    else {
+        return;
+    };
+
+    let shear_values = [1_i32, 1, 0, 1];
+    let shear_buffer = device
+        .upload(&shear_values)
+        .expect("HIP matpow shear upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("matpow square layout");
+    let shear = matpow(
+        &device,
+        StridedOperand {
+            buffer: &shear_buffer,
+            layout: &square_layout,
+        },
+        5,
+    )
+    .expect("HIP matpow shear");
+    let mut shear_output = [0_i32; 4];
+    device
+        .download(&shear, &mut shear_output)
+        .expect("HIP matpow shear download");
+    assert_eq!(shear_output, [1, 5, 0, 1]);
+
+    let strided_values = [99_i32, 1, 2, 3, 4];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided matpow upload");
+    let strided_layout = Layout::new([2, 2], [1, 2], 1);
+    let strided_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+        2,
+    )
+    .expect("HIP strided matpow");
+    let mut strided_output = [0_i32; 4];
+    device
+        .download(&strided_power, &mut strided_output)
+        .expect("HIP strided matpow download");
+    assert_eq!(strided_output, [7, 15, 10, 22]);
+
+    let identity_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+        0,
+    )
+    .expect("HIP matpow identity");
+    let mut identity_output = [0_i32; 4];
+    device
+        .download(&identity_power, &mut identity_output)
+        .expect("HIP matpow identity download");
+    assert_eq!(identity_output, [1, 0, 0, 1]);
+
+    let nonsquare_values = [1_i32, 2, 3, 4, 5, 6];
+    let nonsquare_buffer = device
+        .upload(&nonsquare_values)
+        .expect("HIP nonsquare matpow upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare matpow layout");
+    assert!(matches!(
+        matpow(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare_buffer,
+                layout: &nonsquare_layout,
+            },
+            2,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "matpow requires a square matrix, got shape [2, 3]"
     ));
 }
 
