@@ -23,6 +23,8 @@ use hephaestus_rocm::{
     spmv_many_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
     unary_elementwise_strided_into, uniform_with_seed,
 };
+#[cfg(feature = "decomposition")]
+use hephaestus_rocm::{cholesky_decompose, cholesky_decompose_blocked};
 use leto::Layout;
 use std::borrow::Cow;
 
@@ -121,6 +123,15 @@ fn assert_length_mismatch<T>(result: Result<T>, host_len: usize, device_len: usi
         Err(error) => panic!("expected length mismatch, got {error:?}"),
         Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
     }
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_near(actual: f32, expected: f32, ulps: f32) {
+    let tolerance = ulps * f32::EPSILON * expected.abs().max(1.0);
+    assert!(
+        (actual - expected).abs() <= tolerance,
+        "got {actual}, expected {expected}, tolerance {tolerance}"
+    );
 }
 
 #[test]
@@ -1623,5 +1634,190 @@ fn map_reductions_match_cpu_values_for_strided_views_and_reject_invalid_shapes()
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message.starts_with("trace requires a square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_factorization_and_common_host_contracts_match_values() {
+    let Some(device) = device("cholesky_factorization_and_common_host_contracts_match_values")
+    else {
+        return;
+    };
+
+    let matrix_values = [4.0_f32, 1.0, 1.0, 3.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP Cholesky input upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("Cholesky matrix layout");
+    let factor = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP Cholesky factorization");
+
+    assert_eq!(factor.n(), 2);
+    let mut lower = [0.0_f32; 4];
+    device
+        .download(factor.lower(), &mut lower)
+        .expect("HIP Cholesky factor download");
+    assert_near(lower[0], 2.0, 64.0);
+    assert_near(lower[1], 0.0, 64.0);
+    assert_near(lower[2], 0.5, 64.0);
+    assert_near(lower[3], 2.75_f32.sqrt(), 64.0);
+    assert_near(factor.det(), 11.0, 128.0);
+
+    let rhs = device
+        .upload(&[1.0_f32, 2.0])
+        .expect("HIP Cholesky RHS upload");
+    let solution = factor.solve(&device, &rhs).expect("HIP Cholesky solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP Cholesky solution download");
+    assert_near(solution_values[0], 1.0 / 11.0, 128.0);
+    assert_near(solution_values[1], 7.0 / 11.0, 128.0);
+
+    let inverse = factor.inv(&device).expect("HIP Cholesky inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP Cholesky inverse download");
+    for (actual, expected) in
+        inverse_values
+            .iter()
+            .zip([3.0 / 11.0, -1.0 / 11.0, -1.0 / 11.0, 4.0 / 11.0])
+    {
+        assert_near(*actual, expected, 128.0);
+    }
+
+    let blocked = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked Cholesky factorization");
+    let mut blocked_lower = [0.0_f32; 4];
+    device
+        .download(blocked.lower(), &mut blocked_lower)
+        .expect("HIP blocked Cholesky factor download");
+    for (actual, expected) in blocked_lower.iter().zip(lower) {
+        assert_near(*actual, expected, 64.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_strided_input_and_blocked_density_contracts_are_enforced() {
+    let Some(device) = device("cholesky_strided_input_and_blocked_density_contracts_are_enforced")
+    else {
+        return;
+    };
+
+    let strided_values = [4.0_f32, 1.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided Cholesky input upload");
+    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let factor = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided Cholesky factorization");
+    let mut lower = [0.0_f32; 4];
+    device
+        .download(factor.lower(), &mut lower)
+        .expect("HIP strided Cholesky factor download");
+    assert_near(lower[0], 2.0, 64.0);
+    assert_near(lower[2], 0.5, 64.0);
+
+    let blocked = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        blocked,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_rejects_empty_invalid_and_non_positive_definite_inputs() {
+    let Some(device) = device("cholesky_rejects_empty_invalid_and_non_positive_definite_inputs")
+    else {
+        return;
+    };
+
+    let empty_buffer = device.upload(&[] as &[f32]).expect("empty Cholesky upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Cholesky layout");
+    let empty = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+    )
+    .expect("empty Cholesky factorization");
+    assert_eq!(empty.n(), 0);
+    assert_eq!(empty.lower().len(), 0);
+
+    let nonsquare_buffer = device
+        .upload(&[1.0_f32; 6])
+        .expect("nonsquare Cholesky upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare Cholesky layout");
+    assert!(matches!(
+        cholesky_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare_buffer,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite_buffer = device
+        .upload(&[4.0_f32, f32::NAN, 1.0, 3.0])
+        .expect("nonfinite Cholesky upload");
+    let dense_layout = Layout::c_contiguous([2, 2]).expect("dense Cholesky layout");
+    assert!(matches!(
+        cholesky_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+
+    let indefinite_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 1.0])
+        .expect("indefinite Cholesky upload");
+    assert!(matches!(
+        cholesky_decompose_blocked(
+            &device,
+            StridedOperand {
+                buffer: &indefinite_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("not positive-definite")
     ));
 }

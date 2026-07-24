@@ -2,6 +2,9 @@
 
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
+/// Device-resident dense matrix decompositions.
+#[cfg(feature = "decomposition")]
+pub mod decomposition;
 pub mod elementwise;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;

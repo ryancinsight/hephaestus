@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add the optional ROCm `decomposition` feature with HIP Cholesky
+  factorization, dense blocked-entry validation, strided-input materialization,
+  and the common device-factor/solve/determinant/inverse contract. CI now
+  builds, lints, tests, documents, and rustdocs the ROCm decomposition feature.
+
 - [minor] Extend ROCm parity with device-resident CSR sparse matrices and
   HIP SpMV/SpMM kernels. CSR metadata remains in typed ROCm buffers, multi-RHS
   SpMV reuses the sparse-dense kernel, and contracts cover round-trip storage,

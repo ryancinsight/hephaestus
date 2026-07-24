@@ -11,6 +11,7 @@ description = "ROCm/HIP backend for the Atlas accelerator substrate: typed devic
 [features]
 default = []
 rocm = ["dep:cubecl-hip-sys"]
+decomposition = []
 
 [dependencies]
 hephaestus-core = { workspace = true }
