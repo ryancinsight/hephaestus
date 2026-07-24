@@ -2,6 +2,5 @@
 rustflags = ["-C", "target-cpu=native"]
 
 [env]
-CUDA_TOOLKIT_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3"
-CUDA_LIB_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\lib\\x64"
+# CUDA toolkit path resolved per-host by build.rs.
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1"
