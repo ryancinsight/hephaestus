@@ -9,8 +9,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
-    BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
-    KernelDevice, Result,
+    BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp, Result,
 };
 use leto::Layout;
 
