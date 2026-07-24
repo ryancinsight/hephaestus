@@ -16,7 +16,8 @@
 //! operation families. Additional operator families are separate parity
 //! increments with their own value-semantic contracts. The optional
 //! `decomposition` feature adds device-resident Cholesky, LU, and QR
-//! factorization contracts, including complete-pivoted LU and column-pivoted QR.
+//! factorization contracts, including complete-pivoted LU, column-pivoted QR,
+//! bidiagonalization, and SVD.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -36,10 +37,11 @@ pub use application::axis_reduction::{
 };
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
-    col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked, lu_decompose, lu_decompose_blocked,
-    qr_decompose, qr_decompose_blocked,
+    GpuBidiagonalDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, bidiagonalize, cholesky_decompose,
+    cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
+    lu_decompose, lu_decompose_blocked, qr_decompose, qr_decompose_blocked, singular_values,
+    svd_decompose, svd_rank_revealing,
 };
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
