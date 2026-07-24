@@ -1,10 +1,11 @@
-//! Rank-2 and rank-3 linear algebra operations on the ROCm device.
+//! Strided linear algebra operations on the ROCm device.
 //!
 //! Matrix multiplication uses one HIP workgroup per 16×16 output tile and
 //! shared-memory tiles along the contracted dimension. Host-side validation
 //! preserves the same strided-layout and alias contract as the other GPU
 //! backends. The batched form dispatches the batch dimension through grid-z
-//! and supports singleton input-batch broadcasting.
+//! and supports singleton input-batch broadcasting. Map-reduction operations
+//! use the same layout metadata for dot products, traces, and norms.
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
@@ -12,9 +13,11 @@ use leto::Layout;
 
 mod batched_matmul;
 mod matmul;
+mod norms;
 
 pub use batched_matmul::{batched_matmul, batched_matmul_into};
 pub use matmul::{matmul, matmul_into};
+pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

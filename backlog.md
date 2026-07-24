@@ -4,7 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-BATCHED-MATMUL-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-NORMS-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm strided dot product, trace, L1, L2/Frobenius,
+  and max-magnitude norms using one HIP map-reduction kernel, shared rank-four
+  layout metadata, typed outputs, CPU differential contracts, and the existing
+  ROCm CI lanes. Kronecker, matrix properties, sparse, strided elementwise,
+  streams, storage, and random families are non-goals for this increment.
+- Acceptance: ROCm exposes the same dot/trace/norm contracts as CUDA and WGPU
+  for rank-1/rank-2/rank-N strided views, validates shape, storage, offset,
+  stride, and empty-input boundaries before launch, computes real HIP
+  map-reductions plus square-root completion for L2, and returns CPU-reference
+  values. The container lane compiles and tests the real feature path, while
+  the required-device lane executes the same contracts on AMD hardware.
+- Claimed files: crates/hephaestus-rocm/**, README.md, CHANGELOG.md,
+  docs/adr/0012-rocm-backend.md, checklist.md, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-BATCHED-MATMUL-1 [minor] — done
 
 - Owner: Codex; scope: ROCm rank-3 batched matrix multiplication using the
   shared tiled matmul kernel family, singleton-batch broadcasting, checked
@@ -20,7 +37,10 @@ cuda-oxide + cutile).
   executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Hosted ROCm container run `30112489093` passed the real feature
+  build, warning-denied Clippy, Nextest (17/17), doctest, and rustdoc at PR
+  head `5377733`; PR #72 merged as `2634776`. The required-device lane
+  remained skipped for the PR event.
 
 ## HEPH-ROCM-PARITY-MATMUL-1 [minor] — done
 
