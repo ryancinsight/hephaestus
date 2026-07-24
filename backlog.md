@@ -104,7 +104,7 @@ cuda-oxide + cutile).
   doctest, and rustdoc at head `6864aa7`; the required-device lane was skipped
   by the pull-request event. Merged through PR #83 at `56e83e4`.
 
-## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor] — in progress
+## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor] — done
 
 - Owner: Codex; scope: ROCm UDU and Bunch–Kaufman decomposition surfaces,
   device-resident U/D and L/D/permutation results, provider-backed solve,
@@ -122,8 +122,31 @@ cuda-oxide + cutile).
 - Claimed files: `crates/hephaestus-rocm/src/application/decomposition/**`,
   `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
   `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24. Branch starts from merged spectral
-  parity at `56e83e4`.
+  and this item. Last update: 2026-07-24. Hosted ROCm run `30134286942`
+  passed base and `rocm,decomposition` builds, warning-denied Clippy, Nextest,
+  doctest, and rustdoc at head `8304d07`; the required-device lane was skipped
+  by the pull-request event. Merged through PR #84 at `fce147d`.
+
+## HEPH-ROCM-PARITY-EIGEN-6 [minor] — in progress
+
+- Owner: Codex; scope: ROCm symmetric Jacobi eigenpairs/eigenvalues and general
+  complex eigenvalues, device-resident typed result buffers, provider-backed
+  reconstruction and spectrum contracts, empty/invalid/non-finite validation,
+  decomposition feature CI, and synchronized documentation. Schur and
+  Hessenberg remain non-goals for this increment.
+- Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
+  `GpuSymmetricEigenDecomposition`/`symmetric_eigen_jacobi`,
+  `symmetric_eigenvalues_jacobi`, and `eigenvalues` APIs; ROCm uploads shared
+  Leto results into typed f32/complex buffers without a backend-selection
+  fallback; symmetric reconstruction and general complex spectra are
+  value-tested; and hosted ROCm CI passes build, warning-denied Clippy,
+  Nextest, doctest, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/Cargo.toml`,
+  `crates/hephaestus-rocm/src/application/decomposition/**`,
+  `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
+  and this item. Last update: 2026-07-24. Branch starts from merged symmetric
+  decomposition parity at `fce147d`.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 

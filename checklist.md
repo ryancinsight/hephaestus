@@ -83,7 +83,7 @@ ROCm decomposition, ROCm contract tests, and synchronized documentation
 artifacts. Eigen, Schur, Hessenberg, UDU, and Bunch–Kaufman were outside this
 increment.
 
-## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor]
+## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor] — done
 
 - [ ] Add ROCm UDU and Bunch–Kaufman public surfaces behind `decomposition`.
 - [ ] Mirror the CUDA/WGPU shared Leto factor boundary into typed ROCm U/D and
@@ -96,9 +96,28 @@ increment.
 - [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
       merge the verified increment.
 
-Execution owner: Codex on `codex/hephaestus-rocm-factorization-next`. Claimed
-files: ROCm decomposition, ROCm contract tests, and synchronized documentation
-artifacts. Eigen, Schur, and Hessenberg remain outside this increment.
+Execution owner: Codex on `codex/hephaestus-rocm-factorization-next`. Hosted ROCm
+container run `30134286942` passed at head `8304d07`; the required-device lane
+was skipped by the pull-request event. Claimed files: ROCm decomposition, ROCm
+contract tests, and synchronized documentation artifacts. Eigen, Schur, and
+Hessenberg were outside this increment.
+
+## HEPH-ROCM-PARITY-EIGEN-6 [minor]
+
+- [ ] Add ROCm symmetric Jacobi eigenpair/eigenvalue and general complex
+      eigenvalue surfaces behind `decomposition`.
+- [ ] Mirror the CUDA/WGPU Leto provider boundary into typed f32 and complex
+      ROCm buffers without a backend-selection fallback.
+- [ ] Add symmetric reconstruction, complex-spectrum, empty, non-square,
+      non-symmetric, and non-finite value contracts.
+- [ ] Extend hosted ROCm CI and feature hygiene for the eigen code.
+- [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-eigen-next`. Claimed files:
+ROCm decomposition, ROCm contract tests, and synchronized documentation
+artifacts. Schur and Hessenberg remain outside this increment.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
