@@ -14,7 +14,8 @@
 //! rank-2 axis-reduction, scan, map-reduction, Kronecker-product,
 //! matrix-power, matrix-multiplication, and CSR sparse matrix products
 //! operation families. Additional operator families are separate parity
-//! increments with their own value-semantic contracts.
+//! increments with their own value-semantic contracts. The optional
+//! `decomposition` feature adds the device-resident Cholesky contract.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -32,6 +33,8 @@ pub use application::axis_reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
     reduce_axis_into, sum_axis, sum_axis_into,
 };
+#[cfg(feature = "decomposition")]
+pub use application::decomposition::{GpuCholesky, cholesky_decompose, cholesky_decompose_blocked};
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
     unary_elementwise, unary_elementwise_into,

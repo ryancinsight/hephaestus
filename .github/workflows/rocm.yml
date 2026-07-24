@@ -115,10 +115,11 @@ jobs:
               # runs against the generated lockfile with --locked.
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets
-              cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-rocm --features rocm --all-targets --no-deps --locked -- -D warnings
-              cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-rocm --features rocm --locked
-              cargo "+$RUST_TOOLCHAIN" test --package hephaestus-rocm --features rocm --doc --locked
-              cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-rocm --features rocm --no-deps --locked
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm,decomposition --all-targets
+              cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-rocm --features rocm,decomposition --all-targets --no-deps --locked -- -D warnings
+              cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-rocm --features rocm,decomposition --locked
+              cargo "+$RUST_TOOLCHAIN" test --package hephaestus-rocm --features rocm,decomposition --doc --locked
+              cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-rocm --features rocm,decomposition --no-deps --locked
             '
 
   rocm-hardware:
@@ -175,4 +176,4 @@ jobs:
         working-directory: hephaestus
         env:
           HEPHAESTUS_ROCM_REQUIRE_DEVICE: "1"
-        run: cargo nextest run --package hephaestus-rocm --features rocm --locked
+        run: cargo nextest run --package hephaestus-rocm --features rocm,decomposition --locked

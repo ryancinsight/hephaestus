@@ -21,7 +21,7 @@ kernels are forged for accelerator hardware.
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
-| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, backend-neutral multi-storage HIP kernels, and authored-kernel streams with grouped sequencing. Enable the optional `rocm` feature on a ROCm host. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky decomposition. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for Cholesky. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
 ## Python Releases
@@ -88,6 +88,13 @@ register each package's Trusted Publisher with that environment.
   typed device buffers. HIP SpMV and SpMM kernels consume that representation
   directly in `O(nnz)` and `O(nnz * rhs_columns)` work; multi-RHS SpMV reuses
   the SpMM kernel rather than duplicating the sparse implementation.
+- The ROCm decomposition feature runs finite-input validation, diagonal
+  recurrence, column solves, and upper-triangle clearing through ordered HIP
+  kernels. `cholesky_decompose` accepts strided rank-2 inputs through the
+  native strided identity kernel; `cholesky_decompose_blocked` preserves the
+  dense C-contiguous contract shared with CUDA and WGPU. Solve, determinant,
+  and inverse retain the existing host-side factor contract after HIP
+  factorization; no CPU factorization fallback is used.
 - `RocmMultiStorageKernel` implements the shared `MultiStorageKernel` and
   `MultiStorageDevice` contracts with flat HIP pointer arguments plus a POD
   parameter block. Binding order, arity, block dimensions, and length
@@ -166,7 +173,9 @@ rank-2 forward/reverse scan, tiled/batched matrix-multiplication, strided
 Kronecker products, matrix-power, matrix-rank/determinant, seeded uniform and
 normal initializers, CSR round-trip, SpMV, and SpMM value checks, and strided
 dot/trace/norm value checks, multi-storage HIP binary dispatch, and authored
-kernel stream/grouped-sequence copy/fill/value checks. The ROCm
+kernel stream/grouped-sequence copy/fill/value checks. With
+`rocm,decomposition`, it also runs Cholesky factor, strided-input, blocked
+density, solve, determinant, inverse, empty-input, and failure contracts. The ROCm
 container CI lane
 validates the feature build and adapterless path; the
 manually enabled self-hosted AMD lane sets
