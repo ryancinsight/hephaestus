@@ -281,7 +281,7 @@ where
     }
 }
 
-/// Compute the vector dot product Σᵢ a[i] * b[i] on the ROCm device.
+/// Compute the vector dot product `Σᵢ a[i] * b[i]` on the ROCm device.
 ///
 /// The two rank-1 operands must have equal logical shapes. Layout validation
 /// occurs before the HIP launch, and the returned buffer contains one scalar.
