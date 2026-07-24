@@ -13,7 +13,7 @@
 //! - unary expressions read `x`;
 //! - binary and combine expressions read `lhs` and `rhs`.
 
-use super::dialect::{CudaC, DialectScalar, KernelDialect, Wgsl};
+use super::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
 use bytemuck::Pod;
 
 /// Element expression over the canonical unary operand `x` in dialect `L`.
@@ -276,6 +276,65 @@ impl CombineExpr<CudaC> for CumProdOp {
     const EXPR: &'static str = "lhs * rhs";
 }
 
+macro_rules! impl_hip_unary_exprs {
+    ($(($op:ty, $expr:literal)),+ $(,)?) => {
+        $(
+            impl UnaryExpr<HipC> for $op {
+                const EXPR: &'static str = $expr;
+            }
+        )+
+    };
+}
+
+impl_hip_unary_exprs!(
+    (ExpOp, "exp(x)"),
+    (ExpNegOp, "exp(-x)"),
+    (LnOp, "log(x)"),
+    (SinOp, "sin(x)"),
+    (CosOp, "cos(x)"),
+    (SqrtOp, "sqrt(x)"),
+    (AbsOp, "abs(x)"),
+    (NegOp, "-x"),
+    (RecipOp, "1.0 / x"),
+    (IdentityOp, "x"),
+);
+
+macro_rules! impl_hip_binary_exprs {
+    ($(($op:ty, $expr:literal)),+ $(,)?) => {
+        $(
+            impl BinaryExpr<HipC> for $op {
+                const EXPR: &'static str = $expr;
+            }
+        )+
+    };
+}
+
+impl_hip_binary_exprs!(
+    (AddOp, "lhs + rhs"),
+    (SubOp, "lhs - rhs"),
+    (MulOp, "lhs * rhs"),
+    (DivOp, "lhs / rhs"),
+    (PowOp, "pow(lhs, rhs)"),
+);
+
+macro_rules! impl_hip_combine_exprs {
+    ($(($op:ty, $expr:literal)),+ $(,)?) => {
+        $(
+            impl CombineExpr<HipC> for $op {
+                const EXPR: &'static str = $expr;
+            }
+        )+
+    };
+}
+
+impl_hip_combine_exprs!(
+    (SumOp, "lhs + rhs"),
+    (MinOp, "min(lhs, rhs)"),
+    (MaxOp, "max(lhs, rhs)"),
+    (CumSumOp, "lhs + rhs"),
+    (CumProdOp, "lhs * rhs"),
+);
+
 // ── Identities ───────────────────────────────────────────────────────────
 // Host values are dialect-free; literal tokens differ per dialect (WGSL has
 // no `f` suffix, CUDA C++ float literals carry one so arithmetic stays in
@@ -426,6 +485,30 @@ impl IdentityToken<CumProdOp, CudaC> for i32 {
     const TOKEN: &'static str = "1";
 }
 
+macro_rules! impl_hip_identity_tokens {
+    ($(($op:ty, $f32_token:literal, $u32_token:literal, $i32_token:literal)),+ $(,)?) => {
+        $(
+            impl IdentityToken<$op, HipC> for f32 {
+                const TOKEN: &'static str = $f32_token;
+            }
+            impl IdentityToken<$op, HipC> for u32 {
+                const TOKEN: &'static str = $u32_token;
+            }
+            impl IdentityToken<$op, HipC> for i32 {
+                const TOKEN: &'static str = $i32_token;
+            }
+        )+
+    };
+}
+
+impl_hip_identity_tokens!(
+    (SumOp, "0.0f", "0u", "0"),
+    (MinOp, "3.402823466e+38f", "4294967295u", "2147483647"),
+    (MaxOp, "-3.402823466e+38f", "0u", "-2147483648"),
+    (CumSumOp, "0.0f", "0u", "0"),
+    (CumProdOp, "1.0f", "1u", "1"),
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,8 +517,12 @@ mod tests {
     fn combine_and_identity_agree_per_dialect() {
         assert_eq!(<SumOp as CombineExpr<Wgsl>>::EXPR, "lhs + rhs");
         assert_eq!(<SumOp as CombineExpr<CudaC>>::EXPR, "lhs + rhs");
+        assert_eq!(<SumOp as CombineExpr<HipC>>::EXPR, "lhs + rhs");
+        assert_eq!(<AddOp as BinaryExpr<HipC>>::EXPR, "lhs + rhs");
+        assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
         assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
         assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
+        assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as OpIdentity<MinOp>>::IDENTITY, f32::MAX);
         assert_eq!(<u32 as OpIdentity<MaxOp>>::IDENTITY, u32::MIN);
     }

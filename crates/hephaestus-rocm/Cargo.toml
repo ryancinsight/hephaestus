@@ -6,7 +6,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and host/device transfer."
+description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and runtime-compiled elementwise kernels."
 
 [features]
 default = []

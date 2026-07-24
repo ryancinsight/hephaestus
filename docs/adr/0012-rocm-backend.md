@@ -13,10 +13,11 @@ workloads that require HIP runtime/device semantics rather than WGPU's portable
 Vulkan path. The provider must remain buildable on hosts without ROCm and must
 not report an AMD device when HIP cannot acquire one.
 
-The first complete vertical slice is the device substrate: HIP device
+The first complete vertical slice was the device substrate: HIP device
 acquisition, typed device memory, host/device transfer, synchronization,
-capability limits, and Themis topology. Kernel authoring is a separate concern
-because no ROCm kernel contract or consumer acceptance oracle is in scope yet.
+capability limits, and Themis topology. The next bounded parity slice now has a
+consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
+operations can be compared against CPU values and the existing CUDA contract.
 
 ## Decision
 
@@ -30,12 +31,15 @@ stores the logical element count and placement tier, and carries `T` through
 `PhantomData`.
 
 HIP's current-device selection is thread-local, so every allocation, transfer,
-synchronization, and drop binds the buffer's recorded ordinal before calling
-HIP. The backend uses ordinary `hipMalloc` device memory; host-visible or
-managed placement hints normalize to the implemented `Device` tier, while
-budget-only tiers are rejected. Device limits and topology are queried from
-HIP attributes and memory information; unsupported acquisition is surfaced as
-a typed error.
+synchronization, module load, kernel launch, and drop binds the buffer's
+recorded ordinal before calling HIP. The backend uses ordinary `hipMalloc`
+device memory; host-visible or managed placement hints normalize to the
+implemented `Device` tier, while budget-only tiers are rejected. Device limits
+and topology are queried from HIP attributes and memory information;
+unsupported acquisition is surfaced as a typed error. Elementwise sources use
+the shared `HipC` dialect and compile through hipRTC, then load one cached HIP
+module entry point per `(operation, scalar, block width)` key. Output buffers
+must be distinct from inputs, matching the CUDA/WGPU elementwise contract.
 
 ## Alternatives rejected
 
@@ -45,8 +49,10 @@ a typed error.
   HIP ownership downstream of Hephaestus.
 - A CPU or WGPU fallback behind the ROCm feature: it would hide missing HIP
   capability and violate the provider's typed-unavailable contract.
-- Adding HIP kernels before a device substrate contract: it would create an
-  unbounded operator scope without a consumer oracle or shared launch seam.
+- Implementing the full CUDA/WGPU operator surface in one ROCm increment: it
+  would couple unrelated kernel families and obscure which parity contracts
+  have real AMD hardware evidence. Elementwise is the first bounded family;
+  each later family gets its own CPU-differential contract.
 
 ## Consequences and verification
 
@@ -54,8 +60,10 @@ The new crate is Linux/ROCm-native and does not promise Windows or macOS HIP
 support. CI always checks the default, ROCm-featured, and adapterless paths in
 a ROCm development container. A manually enabled self-hosted AMD runner runs
 the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
-hardware test cannot be mistaken for device evidence. HIP operator families
-remain a follow-up item with differential CPU/WGPU contracts.
+hardware test cannot be mistaken for device evidence. The current ROCm parity
+surface is elementwise; reductions, scans, linalg, sparse, strided, streams,
+storage, and random operations remain tracked follow-up families with
+differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,

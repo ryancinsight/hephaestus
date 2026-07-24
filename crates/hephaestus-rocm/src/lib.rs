@@ -10,8 +10,9 @@
 //! error and the crate remains buildable on hosts without ROCm. The backend
 //! implements the shared [`hephaestus_core::ComputeDevice`] seam for device
 //! acquisition, typed device buffers, host/device transfers, and
-//! synchronization. HIP kernel authoring is a separate application-layer
-//! increment.
+//! synchronization, and the first hipRTC/module-launched elementwise
+//! operation family. Additional operator families are separate parity
+//! increments with their own value-semantic contracts.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -20,7 +21,15 @@ compile_error!("the hephaestus-rocm `rocm` feature requires a Linux ROCm install
 
 mod infrastructure;
 
+/// Runtime-compiled ROCm compute operations.
+pub mod application;
+
 pub use infrastructure::{RocmBuffer, RocmDevice};
+
+pub use application::elementwise::{
+    binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
+    unary_elementwise, unary_elementwise_into,
+};
 
 pub use hephaestus_core::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceBuffer,

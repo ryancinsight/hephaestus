@@ -7,7 +7,7 @@ use super::query::{
     RocmDeviceFeatures, query_device_features, query_device_limits, query_topology,
 };
 
-pub(super) const HIP_SUCCESS: cubecl_hip_sys::hipError_t = cubecl_hip_sys::HIP_SUCCESS;
+pub(crate) const HIP_SUCCESS: cubecl_hip_sys::hipError_t = cubecl_hip_sys::HIP_SUCCESS;
 
 /// A thread-bindable ROCm device identity.
 ///
@@ -36,7 +36,7 @@ impl RocmContext {
     }
 }
 
-pub(super) fn status_message(status: cubecl_hip_sys::hipError_t, operation: &str) -> String {
+pub(crate) fn status_message(status: cubecl_hip_sys::hipError_t, operation: &str) -> String {
     // SAFETY: HIP returns either a null pointer or a process-lifetime
     // null-terminated diagnostic string for an error code.
     let detail = unsafe {
@@ -70,6 +70,7 @@ pub struct RocmDevice {
     pub(super) limits: DeviceLimits,
     pub(super) features: RocmDeviceFeatures,
     topology: Arc<themis::GpuTopology>,
+    pub(super) pipeline_cache: crate::application::pipeline::PipelineCache,
 }
 
 impl core::fmt::Debug for RocmDevice {
@@ -126,6 +127,7 @@ impl RocmDevice {
             limits,
             features,
             topology,
+            pipeline_cache: crate::application::pipeline::new_cache(),
         };
 
         let buffer =

@@ -1,12 +1,12 @@
-use core::{ffi::c_void, marker::PhantomData};
+use core::marker::PhantomData;
 use std::sync::Arc;
 
 use hephaestus_core::DeviceBuffer;
 
-use super::device::{RocmContext, check_status};
-
-/// Opaque HIP device address used by ROCm kernel-launch code.
-pub type DevicePtr = *mut c_void;
+use super::{
+    DevicePtr,
+    device::{RocmContext, check_status},
+};
 
 /// A typed, device-resident linear ROCm allocation.
 ///
@@ -40,8 +40,12 @@ impl<T> RocmBuffer<T> {
     /// Borrow the opaque HIP device address for a backend kernel launch.
     #[must_use]
     #[inline]
-    pub fn raw(&self) -> DevicePtr {
+    pub(crate) fn raw(&self) -> DevicePtr {
         self.ptr
+    }
+
+    pub(crate) fn aliases<U>(&self, other: &RocmBuffer<U>) -> bool {
+        !self.ptr.is_null() && self.ptr == other.ptr
     }
 }
 
