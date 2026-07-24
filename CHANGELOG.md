@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the ROCm backend with hipRTC/module-launched contiguous
+  sum/min/max reductions. The multi-pass HIP tree keeps partial buffers on the
+  device, returns typed identities for empty inputs, and is covered by CPU
+  differential contracts for trailing-width, min, max, and invalid-width
+  behavior; axis reductions and other operator families remain separate.
+
 - [minor] Extend the ROCm backend with the shared `HipC` kernel dialect and
   real hipRTC/module-launched binary, unary, and scalar elementwise operations.
   The ROCm contract suite covers CPU-reference values, trailing workgroup
