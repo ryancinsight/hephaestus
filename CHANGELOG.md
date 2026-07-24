@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP matrix rank estimation and determinant
+  calculation over strided rank-2 inputs. One device-resident Gaussian
+  elimination kernel shares layout validation with CUDA and WGPU, supports a
+  relative tolerance for rank, returns zero for singular determinants, and is
+  covered by CPU differential contracts for strided, tolerance-boundary,
+  singular, and non-square inputs.
+
 - [minor] Extend ROCm parity with HIP module-launched matrix powers over
   strided rank-2 inputs. Exponentiation by squaring copies non-contiguous
   inputs through the native strided identity kernel, reuses tiled matrix

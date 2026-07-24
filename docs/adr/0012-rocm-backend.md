@@ -18,7 +18,8 @@ acquisition, typed device memory, host/device transfer, synchronization,
 capability limits, and Themis topology. The bounded operator slices now have a
 consumer acceptance oracle: contiguous and rank-≤4 strided binary, unary, and
 scalar elementwise operations, contiguous and rank-2 axis reductions, rank-2 scans, rank-2/3
-matrix multiplication, strided Kronecker products, matrix powers, and strided map-reductions
+matrix multiplication, strided Kronecker products, matrix powers, matrix
+rank/determinant, and strided map-reductions
 can be compared against CPU values and the existing CUDA/WGPU contracts.
 
 ## Decision
@@ -74,6 +75,12 @@ Matrix powers use exponentiation by squaring: a strided input is copied into
 contiguous device storage through the native identity elementwise kernel, the
 identity result handles exponent zero, and every product reuses the tiled
 matmul implementation. No CPU or WGPU fallback participates in the operation.
+Matrix rank and determinant use one single-thread HIP workgroup for sequential
+Gaussian elimination over a device scratch buffer. The kernel copies logical
+strided coordinates into row-major scratch storage, applies partial pivoting,
+uses the relative tolerance only for rank, and returns determinant zero for
+non-square or rank-deficient inputs. The public validation and scalar contract
+match CUDA and WGPU.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -101,7 +108,8 @@ surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
 axis sum/min/max/mean reduction, rank-2 forward/reverse scans, rank-2/3
 matrix multiplication including singleton-batch broadcasting, rank-≤4 strided
 binary/unary/scalar elementwise operations, strided Kronecker products, and
-matrix powers, strided dot/trace/L1/L2/max map-reductions. Sparse, streams, storage, and
+matrix powers, matrix rank/determinant, strided dot/trace/L1/L2/max
+map-reductions. Sparse, streams, storage, and
 random operations remain tracked
 follow-up families with differential CPU/WGPU contracts.
 

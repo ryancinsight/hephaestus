@@ -2,14 +2,14 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-ROCM-PARITY-MATPOW-1 [minor]
+## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor]
 
-- [ ] Add the ROCm `matpow` API for square rank-2 strided operands with
-      identity handling for exponent zero and typed allocating output.
-- [ ] Copy non-contiguous inputs through the native strided identity kernel
-      and reuse tiled HIP matrix multiplication for exponentiation by squaring.
-- [ ] Add value-semantic CPU differential contracts for contiguous, strided,
-      exponent-zero, and non-square inputs.
+- [ ] Add ROCm `matrix_rank`, `matrix_rank_with_tolerance`, and `det` APIs for
+      finite rank-2 strided operands with shared validation.
+- [ ] Implement one real HIP partial-pivot Gaussian-elimination kernel with
+      device scratch storage, rank tolerance, and determinant output.
+- [ ] Add value-semantic CPU differential contracts for strided full-rank,
+      tolerance-boundary, singular, and non-square inputs.
 - [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
 - [ ] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
       rustdoc for the affected package; commit, publish, and merge the
@@ -17,6 +17,25 @@ Sprint target: 0.18.0. Phase: Closure.
 
 Execution owner: Codex on the current ROCm parity branch; claimed files are
 the ROCm crate and the synchronized documentation artifacts above.
+
+## HEPH-ROCM-PARITY-MATPOW-1 [minor]
+
+- [x] Add the ROCm `matpow` API for square rank-2 strided operands with
+      identity handling for exponent zero and typed allocating output.
+- [x] Copy non-contiguous inputs through the native strided identity kernel
+      and reuse tiled HIP matrix multiplication for exponentiation by squaring.
+- [x] Add value-semantic CPU differential contracts for contiguous, strided,
+      exponent-zero, and non-square inputs.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the affected package; commit, publish, and merge the
+      verified increment.
+
+Execution owner: Codex on the completed ROCm parity branch; completed evidence:
+the hosted ROCm container run `30117981372` passed the real feature build,
+warning-denied Clippy, Nextest (25/25), doctest, and rustdoc at PR head
+`cd31db6`; PR #76 merged as `809c79f`. The required-device lane was skipped
+for the PR event.
 
 ## HEPH-ROCM-PARITY-STRIDED-1 [minor]
 

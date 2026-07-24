@@ -12,11 +12,11 @@ use hephaestus_core::{
 use hephaestus_rocm::{
     CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
-    binary_elementwise_strided_into, cumprod, cumsum, dot, kron, kron_into, matmul, matmul_into,
-    matpow, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
-    scan_axis_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
-    unary_elementwise_strided_into,
+    binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron, kron_into, matmul,
+    matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
+    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_strided_into, scan_axis, scan_axis_into, sum_axis, trace, unary_elementwise,
+    unary_elementwise_strided, unary_elementwise_strided_into,
 };
 use leto::Layout;
 
@@ -1093,6 +1093,82 @@ fn matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square() {
         ),
         Err(HephaestusError::DispatchFailed { message })
             if message == "matpow requires a square matrix, got shape [2, 3]"
+    ));
+}
+
+#[test]
+fn matrix_rank_and_det_match_cpu_values_and_tolerance_contracts() {
+    let Some(device) = device("matrix_rank_and_det_match_cpu_values_and_tolerance_contracts")
+    else {
+        return;
+    };
+
+    let values = [99.0_f32, 1.0, 2.0, 3.0, 4.0];
+    let buffer = device.upload(&values).expect("HIP matrix-rank upload");
+    let layout = Layout::new([2, 2], [1, 2], 1);
+    let matrix = StridedOperand {
+        buffer: &buffer,
+        layout: &layout,
+    };
+    assert_eq!(matrix_rank(&device, matrix).expect("HIP matrix rank"), 2);
+
+    let determinant = det(&device, matrix).expect("HIP determinant");
+    let mut determinant_value = [0.0_f32];
+    device
+        .download(&determinant, &mut determinant_value)
+        .expect("HIP determinant download");
+    assert_eq!(determinant_value, [-2.0]);
+
+    let tolerance_values = [1.0_f32, 0.0, 0.0, 1.0e-10];
+    let tolerance_buffer = device
+        .upload(&tolerance_values)
+        .expect("HIP matrix-rank tolerance upload");
+    let tolerance_layout = Layout::c_contiguous([2, 2]).expect("matrix-rank tolerance layout");
+    let tolerance_matrix = StridedOperand {
+        buffer: &tolerance_buffer,
+        layout: &tolerance_layout,
+    };
+    assert_eq!(
+        matrix_rank(&device, tolerance_matrix).expect("default matrix rank"),
+        1
+    );
+    assert_eq!(
+        matrix_rank_with_tolerance(&device, tolerance_matrix, 1.0e-12).expect("strict matrix rank"),
+        2
+    );
+
+    let singular_values = [1.0_f32, 2.0, 2.0, 4.0];
+    let singular_buffer = device
+        .upload(&singular_values)
+        .expect("HIP singular upload");
+    let singular = StridedOperand {
+        buffer: &singular_buffer,
+        layout: &tolerance_layout,
+    };
+    assert_eq!(
+        matrix_rank(&device, singular).expect("singular matrix rank"),
+        1
+    );
+    let singular_determinant = det(&device, singular).expect("singular determinant");
+    let mut singular_value = [1.0_f32];
+    device
+        .download(&singular_determinant, &mut singular_value)
+        .expect("singular determinant download");
+    assert_eq!(singular_value, [0.0]);
+
+    let nonsquare_values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let nonsquare_buffer = device.upload(&nonsquare_values).expect("nonsquare upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare layout");
+    assert!(matches!(
+        det(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare_buffer,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "det requires a square matrix, got shape [2, 3]"
     ));
 }
 

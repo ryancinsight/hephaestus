@@ -4,7 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-MATPOW-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm finite matrix rank estimation and determinant over
+  strided rank-2 inputs using one HIP Gaussian-elimination kernel, shared
+  layout validation, CPU differential contracts, and the existing ROCm CI
+  lanes. Sparse, streams, storage, and random families are non-goals for this
+  increment.
+- Acceptance: ROCm exposes the same `matrix_rank`,
+  `matrix_rank_with_tolerance`, and `det` contracts as CUDA and WGPU for
+  rank-2 views, validates finite non-negative tolerance, shape, storage, and
+  offsets, computes real device-side partial-pivot elimination, returns zero
+  for singular determinants, and matches CPU values. The container lane
+  compiles and tests the real feature path, while the required-device lane
+  executes the same contracts on AMD hardware.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-MATPOW-1 [minor] — done
 
 - Owner: Codex; scope: ROCm matrix powers over strided rank-2 inputs using
   native identity-copy, tiled matrix multiplication, exponentiation by
@@ -19,7 +37,10 @@ cuda-oxide + cutile).
   the required-device lane executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Hosted ROCm container run `30117981372` passed the real feature
+  build, warning-denied Clippy, Nextest (25/25), doctest, and rustdoc at PR
+  head `cd31db6`; PR #76 merged as `809c79f`. The required-device lane
+  remained skipped for the PR event.
 
 ## HEPH-ROCM-PARITY-STRIDED-1 [minor] — done
 
