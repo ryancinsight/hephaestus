@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-STORAGE-1 [minor]
+
+- [x] Add ROCm `RocmStorageBinding` and `RocmMultiStorageKernel` implementations
+      for the shared multi-storage provider seams.
+- [x] Validate binding arity/order, duplicate slots, zero block dimensions,
+      and unary/binary length mismatches before HIP dispatch.
+- [x] Add a real HIP binary-kernel contract with exact output values and wrong
+      length rejection.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
+- [ ] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc; commit, publish, and merge the verified increment.
+
+Execution owner: Codex on the current ROCm storage parity branch; authored
+kernel streams remain outside this increment.
+
 ## HEPH-ROCM-PARITY-SPARSE-1 [minor]
 
 - [ ] Add ROCm device-resident CSR storage with checked index conversion and

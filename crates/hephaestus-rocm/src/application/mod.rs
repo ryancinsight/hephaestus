@@ -14,6 +14,8 @@ pub mod reduction;
 pub mod scan;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
+/// Backend-neutral multi-storage kernel dispatch.
+pub mod storage_kernel;
 /// Layout-aware operand descriptors.
 pub mod strided;
 /// Rank-≤4 layout-aware elementwise operations.

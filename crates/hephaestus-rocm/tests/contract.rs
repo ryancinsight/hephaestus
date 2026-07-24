@@ -6,18 +6,19 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    AddOp, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
-    HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    AddOp, BinaryStorageKernel, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer,
+    DeviceFeature, DispatchGrid, HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    CumSumOp, GpuCsrMatrix, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
-    binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron, kron_into, matmul,
-    matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
-    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm,
-    spmm_into, spmv, spmv_many, spmv_many_into, sum_axis, trace, unary_elementwise,
-    unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
+    CumSumOp, GpuCsrMatrix, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
+    StridedOperand, batched_matmul, batched_matmul_into, binary_elementwise,
+    binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
+    cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
+    norm_max, normal_with_seed, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
+    spmv_many_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    unary_elementwise_strided_into, uniform_with_seed,
 };
 use leto::Layout;
 
@@ -1278,6 +1279,66 @@ fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
 
     let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
     assert_length_mismatch(spmv(&device, &gpu_csr, &wrong_x), 3, 2);
+}
+
+#[test]
+fn multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths() {
+    let Some(device) =
+        device("multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths")
+    else {
+        return;
+    };
+
+    let kernel = RocmMultiStorageKernel::new(
+        "contract-binary",
+        r#"
+extern "C" __global__ void contract_binary(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        "contract_binary",
+        &[0, 1, 2],
+        [64, 1, 1],
+        0,
+    )
+    .expect("valid ROCm multi-storage kernel");
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("multi-storage lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("multi-storage rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("multi-storage output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("valid dispatch grid");
+
+    <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+        &kernel, &device, &lhs, &rhs, &output, &4, grid,
+    )
+    .expect("HIP multi-storage dispatch");
+    let mut values = [0.0_f32; 4];
+    device
+        .download(&output, &mut values)
+        .expect("multi-storage output download");
+    assert_eq!(values, [6.0, 8.0, 10.0, 12.0]);
+
+    let short_rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0])
+        .expect("short multi-storage rhs upload");
+    assert_length_mismatch(
+        <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+            &kernel, &device, &lhs, &short_rhs, &output, &4, grid,
+        ),
+        4,
+        3,
+    );
 }
 
 #[test]

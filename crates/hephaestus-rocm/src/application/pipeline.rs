@@ -85,6 +85,8 @@ pub(crate) enum PipelineKey {
     Spmm { marker: TypeId, scalar: TypeId },
     /// Sparse matrix-vector product keyed by kernel marker and scalar.
     Spmv { marker: TypeId, scalar: TypeId },
+    /// Backend-neutral multi-storage kernel keyed by its authored source.
+    MultiStorage(u64),
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.

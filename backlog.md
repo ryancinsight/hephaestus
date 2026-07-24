@@ -4,6 +4,22 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ROCM-PARITY-STORAGE-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm implementations of the existing
+  `MultiStorageKernel`/`MultiStorageDevice` seams, real HIP module launches,
+  pre-launch layout and length validation, value-semantic contracts, and the
+  existing ROCm CI lanes. Authored-kernel command streams are a non-goal for
+  this increment.
+- Acceptance: ROCm exposes typed `RocmStorageBinding` and
+  `RocmMultiStorageKernel` contracts equivalent to the CUDA/WGPU multi-storage
+  surface; HIP launches real unary/binary storage kernels; invalid bindings,
+  dimensions, and lengths fail before launch; and hosted ROCm feature CI passes
+  with warning-denied Clippy, Nextest, doctests, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
 ## HEPH-ROCM-PARITY-SPARSE-1 [minor] — in-progress
 
 - Owner: Codex; scope: ROCm device-resident CSR storage, HIP SpMV/SpMM and
