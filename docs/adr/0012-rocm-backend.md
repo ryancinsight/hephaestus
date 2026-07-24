@@ -1,0 +1,58 @@
+# ADR 0012 (hephaestus): native ROCm backend through HIP
+
+- Status: Accepted
+- Date: 2026-07-24
+- Class: [arch] — introduces a new accelerator backend crate
+- Parent decision: atlas ADR 0001 (`atlas/docs/adr/0001-gpu-accelerator-substrate.md`)
+
+## Context
+
+Hephaestus already exposes one backend-neutral `ComputeDevice` seam with WGPU,
+CUDA, and Metal implementations. AMD hardware needs a native ROCm path for
+workloads that require HIP runtime/device semantics rather than WGPU's portable
+Vulkan path. The provider must remain buildable on hosts without ROCm and must
+not report an AMD device when HIP cannot acquire one.
+
+The first complete vertical slice is the device substrate: HIP device
+acquisition, typed device memory, host/device transfer, synchronization,
+capability limits, and Themis topology. Kernel authoring is a separate concern
+because no ROCm kernel contract or consumer acceptance oracle is in scope yet.
+
+## Decision
+
+Add `hephaestus-rocm` as a sibling backend crate. Its `rocm` feature enables
+the published `cubecl-hip-sys` raw bindings on Linux; the default feature set
+contains no ROCm dependency and exposes the same typed unavailable-device
+behavior as the existing CUDA stub. `RocmDevice` maps HIP runtime calls to the
+existing `ComputeDevice`, `ComputeDeviceCapabilities`, and
+`ComputeDeviceAcquisition` traits. `RocmBuffer<T>` owns a HIP device allocation,
+stores the logical element count and placement tier, and carries `T` through
+`PhantomData`.
+
+HIP's current-device selection is thread-local, so every allocation, transfer,
+synchronization, and drop binds the buffer's recorded ordinal before calling
+HIP. The backend uses ordinary `hipMalloc` device memory; host-visible or
+managed placement hints normalize to the implemented `Device` tier, while
+budget-only tiers are rejected. Device limits and topology are queried from
+HIP attributes and memory information; unsupported acquisition is surfaced as
+a typed error.
+
+## Alternatives rejected
+
+- WGPU-only AMD support: it provides portable Vulkan execution but does not
+  expose the native ROCm/HIP runtime contract requested here.
+- A consumer-owned AMD wrapper: it duplicates the provider seam and makes
+  HIP ownership downstream of Hephaestus.
+- A CPU or WGPU fallback behind the ROCm feature: it would hide missing HIP
+  capability and violate the provider's typed-unavailable contract.
+- Adding HIP kernels before a device substrate contract: it would create an
+  unbounded operator scope without a consumer oracle or shared launch seam.
+
+## Consequences and verification
+
+The new crate is Linux/ROCm-native and does not promise Windows or macOS HIP
+support. CI always checks the default, ROCm-featured, and adapterless paths in
+a ROCm development container. A manually enabled self-hosted AMD runner runs
+the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
+hardware test cannot be mistaken for device evidence. HIP operator families
+remain a follow-up item with differential CPU/WGPU contracts.

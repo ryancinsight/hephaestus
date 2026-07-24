@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-SUBSTRATE-1 [arch]
+
+- [ ] Add the `hephaestus-rocm` workspace crate with a Linux-only optional
+      `rocm` feature backed by the current HIP bindings.
+- [ ] Implement real HIP acquisition, typed allocation/transfer/sync,
+      placement validation, capabilities, and Themis topology.
+- [ ] Add value-semantic contract tests for hardware and adapterless paths;
+      require a device in the hardware CI lane.
+- [ ] Add ROCm container build/test CI plus manually enabled self-hosted AMD
+      device CI, with path dependencies checked out at sibling locations.
+- [ ] Synchronize ADR, README, core contract docs, changelog, and evidence.
+- [ ] Pass formatting, locked check, warning-denied Clippy, configured
+      Nextest, doctest, and rustdoc for the affected packages.
+
+Acceptance boundary: this increment owns the HIP device substrate only;
+operator kernels are a follow-up item with an independent consumer contract.
+
 ## HEPH-PREPARED-MAP-REDUCTION-1 [minor]
 
 - [x] Hoist reduction-tree encoding behind a caller-supplied encoder without

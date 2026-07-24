@@ -5,8 +5,8 @@
 //! GPU-dependency-free contracts for the Atlas shared accelerator substrate
 //! (atlas ADR 0001). This crate defines *what a compute device is* — device
 //! acquisition results, typed device buffers, and the dispatch seam — without
-//! depending on any GPU API. Backend crates (`hephaestus-wgpu`, and a CUDA
-//! backend composing `cuda-oxide` + `cutile`) implement these contracts.
+//! depending on any GPU API. Backend crates (`hephaestus-wgpu`,
+//! `hephaestus-cuda`, and `hephaestus-rocm`) implement these contracts.
 //!
 //! Consumers (`apollo` GPU transforms, `coeus` GPU tensor backends) program
 //! against this seam so spectral and tensor packages share one device layer
