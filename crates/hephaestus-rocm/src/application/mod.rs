@@ -12,6 +12,8 @@ pub mod random;
 pub mod reduction;
 /// Rank-2 prefix and suffix scans over strided layouts.
 pub mod scan;
+/// Device-resident CSR sparse matrix products.
+pub mod sparse;
 /// Layout-aware operand descriptors.
 pub mod strided;
 /// Rank-≤4 layout-aware elementwise operations.

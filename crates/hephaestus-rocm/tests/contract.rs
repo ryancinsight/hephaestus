@@ -10,14 +10,14 @@ use hephaestus_core::{
     HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
-    CumSumOp, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
+    CumSumOp, GpuCsrMatrix, Result, RocmDevice, ScanDirection, StridedOperand, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
     binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron, kron_into, matmul,
     matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
     mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, sum_axis,
-    trace, unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed,
+    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm,
+    spmm_into, spmv, spmv_many, spmv_many_into, sum_axis, trace, unary_elementwise,
+    unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
 };
 use leto::Layout;
 
@@ -1208,6 +1208,76 @@ fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
         .download(&normal, &mut normal_values)
         .expect("HIP normal download");
     assert!(normal_values.iter().any(|&value| value != 0.0));
+}
+
+#[test]
+fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
+    let Some(device) = device("sparse_csr_products_match_cpu_values_and_reject_wrong_shapes")
+    else {
+        return;
+    };
+
+    let cpu_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .expect("valid CSR contract fixture");
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).expect("HIP CSR upload");
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+    assert_eq!(gpu_csr.to_cpu(&device).expect("HIP CSR download"), cpu_csr);
+
+    let x = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("SpMV input upload");
+    let y = spmv(&device, &gpu_csr, &x).expect("HIP SpMV");
+    let mut y_values = [0.0_f32; 3];
+    device.download(&y, &mut y_values).expect("SpMV download");
+    assert_eq!(y_values, [-1.0, 6.0, 12.0]);
+
+    let b = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("SpMM input upload");
+    let b_layout = Layout::c_contiguous([3, 2]).expect("SpMM input layout");
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &b_layout,
+    };
+    let c = spmm(&device, &gpu_csr, b_operand).expect("HIP SpMM");
+    let mut c_values = [0.0_f32; 6];
+    device.download(&c, &mut c_values).expect("SpMM download");
+    assert_eq!(c_values, [-3.0, -2.0, 9.0, 12.0, 20.0, 24.0]);
+
+    let many = spmv_many(&device, &gpu_csr, b_operand).expect("HIP batched SpMV");
+    let mut many_values = [0.0_f32; 6];
+    device
+        .download(&many, &mut many_values)
+        .expect("batched SpMV download");
+    assert_eq!(many_values, c_values);
+
+    let mut c_reused = device.upload(&[99.0_f32; 6]).expect("SpMM output upload");
+    spmm_into(&device, &gpu_csr, b_operand, &mut c_reused).expect("HIP SpMM into");
+    let mut reused_values = [0.0_f32; 6];
+    device
+        .download(&c_reused, &mut reused_values)
+        .expect("reused SpMM download");
+    assert_eq!(reused_values, c_values);
+
+    let mut many_reused = device
+        .upload(&[88.0_f32; 6])
+        .expect("batched output upload");
+    spmv_many_into(&device, &gpu_csr, b_operand, &mut many_reused).expect("HIP batched SpMV into");
+    let mut many_reused_values = [0.0_f32; 6];
+    device
+        .download(&many_reused, &mut many_reused_values)
+        .expect("reused batched SpMV download");
+    assert_eq!(many_reused_values, c_values);
+
+    let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
+    assert_length_mismatch(spmv(&device, &gpu_csr, &wrong_x), 3, 2);
 }
 
 #[test]

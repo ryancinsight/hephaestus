@@ -4,7 +4,21 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-RANDOM-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-SPARSE-1 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm device-resident CSR storage, HIP SpMV/SpMM and
+  multi-RHS SpMV reuse, value-semantic CPU contracts, and the existing ROCm CI
+  lanes. Streams and storage families are non-goals for this increment.
+- Acceptance: ROCm exposes the CUDA/WGPU CSR `GpuCsrMatrix`, `spmv`, `spmv_into`,
+  `spmm`, `spmm_into`, `spmv_many`, and `spmv_many_into` contracts; CSR metadata
+  remains typed device storage; HIP kernels compute real sparse products; and
+  round-trip, value, reuse, and shape contracts pass in the container and
+  required-device lanes.
+- Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
+  2026-07-24.
+
+## HEPH-ROCM-PARITY-RANDOM-1 [minor] — done
 
 - Owner: Codex; scope: ROCm seeded uniform and normal initializers using the
   shared deterministic `leto-ops` contract, typed device uploads, CPU-value
@@ -17,8 +31,11 @@ cuda-oxide + cutile).
   typed ROCm buffers. The container lane compiles and tests the feature path,
   while the required-device lane executes the same contracts on AMD hardware.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
-  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Hosted ROCm
+  container run `30119890105` passed the real feature build, warning-denied
+  Clippy, Nextest (28/28), doctest, and rustdoc at corrected PR head `4005991`;
+  PR #78 merged as `81bed23`. The required-device lane remained skipped for the
+  pull-request event.
 
 ## HEPH-ROCM-PARITY-MATRIX-PROPERTIES-1 [minor] — done
 

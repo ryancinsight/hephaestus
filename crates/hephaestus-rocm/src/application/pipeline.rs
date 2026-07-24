@@ -81,6 +81,10 @@ pub(crate) enum PipelineKey {
     Kron { marker: TypeId, scalar: TypeId },
     /// Rank-2 matrix rank and determinant keyed by kernel marker and scalar.
     MatrixRank { marker: TypeId, scalar: TypeId },
+    /// Sparse-dense matrix product keyed by kernel marker and scalar.
+    Spmm { marker: TypeId, scalar: TypeId },
+    /// Sparse matrix-vector product keyed by kernel marker and scalar.
+    Spmv { marker: TypeId, scalar: TypeId },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
