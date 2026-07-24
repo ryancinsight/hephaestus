@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP module-launched rank-2 forward/reverse
+  scans over shared Leto layouts. The tiled kernels cover cumulative sum and
+  product, use the shared axis-scan planner for shape, stride, storage, and
+  alias validation, and are covered by CPU differential contracts across axes,
+  directions, long lines, and invalid output layouts.
+
 - [minor] Extend ROCm reduction parity with rank-2 axis sum/min/max/mean
   operations over shared Leto layouts. The HIP kernels consume the shared
   axis planner for shape, stride, storage, alias, and empty-axis validation and

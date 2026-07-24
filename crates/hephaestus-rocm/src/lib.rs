@@ -10,9 +10,10 @@
 //! error and the crate remains buildable on hosts without ROCm. The backend
 //! implements the shared [`hephaestus_core::ComputeDevice`] seam for device
 //! acquisition, typed device buffers, host/device transfers, and
-//! synchronization, and the first hipRTC/module-launched elementwise
-//! operation family. Additional operator families are separate parity
-//! increments with their own value-semantic contracts.
+//! synchronization, and hipRTC/module-launched elementwise, reduction,
+//! rank-2 axis-reduction, and scan operation families. Additional operator
+//! families are separate parity increments with their own value-semantic
+//! contracts.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -35,6 +36,10 @@ pub use application::elementwise::{
     unary_elementwise, unary_elementwise_into,
 };
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
+pub use application::scan::{
+    CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
+    scan_axis_into,
+};
 pub use application::strided::StridedOperand;
 
 pub use hephaestus_core::{

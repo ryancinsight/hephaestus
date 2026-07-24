@@ -41,6 +41,14 @@ pub(crate) enum PipelineKey {
         axis: usize,
         width: u32,
     },
+    /// Rank-2 axis scan keyed by operation, scalar, direction, axis, and block width.
+    AxisScan {
+        marker: TypeId,
+        scalar: TypeId,
+        direction: hephaestus_core::ScanDirection,
+        axis: usize,
+        width: u32,
+    },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
