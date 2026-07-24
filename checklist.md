@@ -2,7 +2,7 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-ROCM-PARITY-CHOLESKY-1 [minor]
+## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - [x] Add the ROCm decomposition feature seam and common Cholesky exports.
 - [x] Implement device-resident HIP Cholesky factorization and the blocked
@@ -16,13 +16,31 @@ Sprint target: 0.18.0. Phase: Closure.
       and rustdoc at head `cb657e3`.
 - [ ] Complete the local package gate; blocked by the sibling Leto checkout's
       `Quantity<T>::in_unit` / `FloatElement` mismatch.
-- [ ] Publish and merge the hosted-verified increment; retain the local Leto
-      checkout mismatch as an explicit residual environment blocker.
+- [x] Publish and merge the hosted-verified increment as PR #80 at `4f52769`;
+      retain the local Leto checkout mismatch as an explicit residual
+      environment blocker.
 
 Execution owner: Codex on `codex/hephaestus-rocm-decomposition`. Claimed files:
 the ROCm decomposition module and public surface, ROCm contract tests, ROCm CI,
 and synchronized documentation artifacts. LU, QR, eigen, SVD, and other
 decomposition families remain outside this increment.
+
+## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor]
+
+- [ ] Add the ROCm LU and QR public surfaces behind `decomposition`.
+- [ ] Implement HIP LU factorization with partial pivoting and HIP QR
+      Householder factorization; keep device factors authoritative.
+- [ ] Add empty, strided, dense, singular, rank-deficient, solve, determinant,
+      inverse, and least-squares value contracts matching the common APIs.
+- [ ] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
+- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
+- [ ] Pass the hosted build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc gates; merge the verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-decomposition-next`. Claimed
+files: ROCm decomposition, ROCm contract tests and CI, and synchronized
+documentation artifacts. Remaining decomposition families are non-goals for
+this increment.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
