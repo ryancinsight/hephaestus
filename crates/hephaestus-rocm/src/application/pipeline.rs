@@ -174,7 +174,7 @@ mod native {
     use std::sync::Arc;
 
     /// Cache confined to the thread that owns the HIP current-device binding.
-    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Arc<RocmKernel>>>>;
+    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Rc<RocmKernel>>>>;
 
     pub(crate) fn new_cache() -> PipelineCache {
         Rc::new(RefCell::new(HashMap::new()))
@@ -341,7 +341,7 @@ mod native {
         key: PipelineKey,
         func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
         if let Some(kernel) = device.pipeline_cache.borrow().get(&key) {
             return Ok(kernel.clone());
         }
@@ -382,7 +382,7 @@ mod native {
                 ),
             });
         }
-        let compiled = Arc::new(RocmKernel {
+        let compiled = Rc::new(RocmKernel {
             module,
             function,
             context: device.context.clone(),
@@ -428,14 +428,14 @@ pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel,
 mod unavailable {
     use super::{LaunchConfig, PipelineKey};
     use crate::RocmDevice;
-    use std::sync::Arc;
+    use std::rc::Rc;
 
     pub(crate) fn cached_kernel(
         _device: &RocmDevice,
         _key: PipelineKey,
         _func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
         let _ = (source,);
         Err(hephaestus_core::HephaestusError::AdapterUnavailable {
             message:

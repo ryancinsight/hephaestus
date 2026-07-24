@@ -2,7 +2,7 @@
 
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -17,7 +17,7 @@ use crate::infrastructure::{DevicePtr, RocmBuffer};
 
 /// Prepared ROCm kernel for an authored source type `K`.
 pub struct RocmPrepared<K> {
-    kernel: Arc<crate::application::pipeline::RocmKernel>,
+    kernel: Rc<crate::application::pipeline::RocmKernel>,
     source_hash: u64,
     label: &'static str,
     marker: PhantomData<K>,
@@ -25,7 +25,7 @@ pub struct RocmPrepared<K> {
 
 /// Prepared grouped ROCm kernel for an authored source type `K`.
 pub struct RocmGroupedPrepared<K> {
-    kernel: Arc<crate::application::pipeline::RocmKernel>,
+    kernel: Rc<crate::application::pipeline::RocmKernel>,
     source_hash: u64,
     label: &'static str,
     marker: PhantomData<K>,
