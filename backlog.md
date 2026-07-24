@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ROCM-PARITY-STREAM-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-STREAM-1 [minor] — verified; delivery pending
 
 - Owner: Codex; scope: ROCm implementations of `KernelDevice`,
   `CommandStream`, `GroupedKernelDevice`, and grouped sequencing, including
@@ -18,9 +18,12 @@ cuda-oxide + cutile).
   rustdoc.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Valid hosted ROCm container run `30124401681` passed the real
+  feature build, warning-denied Clippy, Nextest (34/34), doctest, and rustdoc
+  at head `a80b8c5`; the required-device lane was skipped by
+  `run_hardware=false`.
 
-## HEPH-ROCM-PARITY-STORAGE-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-STORAGE-1 [minor] — verified; delivery pending
 
 - Owner: Codex; scope: ROCm implementations of the existing
   `MultiStorageKernel`/`MultiStorageDevice` seams, real HIP module launches,
@@ -34,9 +37,12 @@ cuda-oxide + cutile).
   with warning-denied Clippy, Nextest, doctests, and rustdoc.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Valid hosted ROCm container run `30124401681` passed the real
+  feature build, warning-denied Clippy, Nextest (34/34), doctest, and rustdoc
+  at head `a80b8c5`; the required-device lane was skipped by
+  `run_hardware=false`.
 
-## HEPH-ROCM-PARITY-SPARSE-1 [minor] — in-progress
+## HEPH-ROCM-PARITY-SPARSE-1 [minor] — verified; delivery pending
 
 - Owner: Codex; scope: ROCm device-resident CSR storage, HIP SpMV/SpMM and
   multi-RHS SpMV reuse, value-semantic CPU contracts, and the existing ROCm CI
@@ -48,7 +54,10 @@ cuda-oxide + cutile).
   required-device lanes.
 - Claimed files: `crates/hephaestus-rocm/**`, `README.md`, `CHANGELOG.md`,
   `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Last update:
-  2026-07-24.
+  2026-07-24. Valid hosted ROCm container run `30124401681` passed the real
+  feature build, warning-denied Clippy, Nextest (34/34), doctest, and rustdoc
+  at head `a80b8c5`; the required-device lane was skipped by
+  `run_hardware=false`.
 
 ## HEPH-ROCM-PARITY-RANDOM-1 [minor] — done
 
