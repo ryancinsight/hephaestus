@@ -14,9 +14,10 @@ use hephaestus_rocm::{
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
     binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron, kron_into, matmul,
     matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
-    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_strided_into, scan_axis, scan_axis_into, sum_axis, trace, unary_elementwise,
-    unary_elementwise_strided, unary_elementwise_strided_into,
+    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, sum_axis,
+    trace, unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
+    uniform_with_seed,
 };
 use leto::Layout;
 
@@ -1170,6 +1171,43 @@ fn matrix_rank_and_det_match_cpu_values_and_tolerance_contracts() {
         Err(HephaestusError::DispatchFailed { message })
             if message == "det requires a square matrix, got shape [2, 3]"
     ));
+}
+
+#[test]
+fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
+    let Some(device) =
+        device("seeded_random_initializers_match_determinism_and_distribution_contracts")
+    else {
+        return;
+    };
+
+    let shape = [1000];
+    let uniform =
+        uniform_with_seed(&device, shape, -2.0_f32, 5.0, 42).expect("HIP uniform initializer");
+    let mut uniform_values = vec![0.0_f32; 1000];
+    device
+        .download(&uniform, &mut uniform_values)
+        .expect("HIP uniform download");
+    let uniform_again = uniform_with_seed(&device, shape, -2.0_f32, 5.0, 42)
+        .expect("HIP repeated uniform initializer");
+    let mut uniform_again_values = vec![0.0_f32; 1000];
+    device
+        .download(&uniform_again, &mut uniform_again_values)
+        .expect("HIP repeated uniform download");
+    assert_eq!(uniform_values, uniform_again_values);
+    assert!(
+        uniform_values
+            .iter()
+            .all(|&value| (-2.0..5.0).contains(&value))
+    );
+
+    let normal =
+        normal_with_seed(&device, shape, 0.0_f32, 1.0, 42).expect("HIP normal initializer");
+    let mut normal_values = vec![0.0_f32; 1000];
+    device
+        .download(&normal, &mut normal_values)
+        .expect("HIP normal download");
+    assert!(normal_values.iter().any(|&value| value != 0.0));
 }
 
 #[test]

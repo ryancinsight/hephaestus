@@ -81,6 +81,10 @@ strided coordinates into row-major scratch storage, applies partial pivoting,
 uses the relative tolerance only for rank, and returns determinant zero for
 non-square or rank-deficient inputs. The public validation and scalar contract
 match CUDA and WGPU.
+Seeded uniform and normal initializers follow the existing CUDA/WGPU
+host-delegated contract: `leto-ops` owns deterministic random-value generation,
+and ROCm owns the typed device upload. This boundary is explicit in the API and
+does not silently substitute CPU execution for a requested HIP kernel.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -109,9 +113,8 @@ axis sum/min/max/mean reduction, rank-2 forward/reverse scans, rank-2/3
 matrix multiplication including singleton-batch broadcasting, rank-≤4 strided
 binary/unary/scalar elementwise operations, strided Kronecker products, and
 matrix powers, matrix rank/determinant, strided dot/trace/L1/L2/max
-map-reductions. Sparse, streams, storage, and
-random operations remain tracked
-follow-up families with differential CPU/WGPU contracts.
+map-reductions, and seeded random initializers. Sparse, streams, and storage
+remain tracked follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,
