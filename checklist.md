@@ -27,13 +27,13 @@ decomposition families remain outside this increment.
 
 ## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor]
 
-- [ ] Add the ROCm LU and QR public surfaces behind `decomposition`.
-- [ ] Implement HIP LU factorization with partial pivoting and HIP QR
+- [x] Add the ROCm LU and QR public surfaces behind `decomposition`.
+- [x] Implement HIP LU factorization with partial pivoting and HIP QR
       Householder factorization; keep device factors authoritative.
-- [ ] Add empty, strided, dense, singular, rank-deficient, solve, determinant,
+- [x] Add empty, strided, dense, singular, rank-deficient, solve, determinant,
       inverse, and least-squares value contracts matching the common APIs.
-- [ ] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
-- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
+- [x] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
+- [x] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
 - [ ] Pass the hosted build, warning-denied Clippy, Nextest, doctest, and
       rustdoc gates; merge the verified increment.
 

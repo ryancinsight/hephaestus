@@ -114,6 +114,7 @@ jobs:
               # checkout-local graph once; every verification gate below then
               # runs against the generated lockfile with --locked.
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --features decomposition --all-targets
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm,decomposition --all-targets
               cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-rocm --features rocm,decomposition --all-targets --no-deps --locked -- -D warnings

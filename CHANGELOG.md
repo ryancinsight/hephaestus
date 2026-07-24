@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with HIP LU partial
+  pivoting and Householder QR factorization. Device buffers retain packed
+  factors while the common solve, determinant, inverse, and least-squares
+  contracts are preserved; strided and dense blocked validation match CUDA and
+  WGPU. CI now compiles and tests both ROCm decomposition feature combinations.
+
 - [minor] Add the optional ROCm `decomposition` feature with HIP Cholesky
   factorization, dense blocked-entry validation, strided-input materialization,
   and the common device-factor/solve/determinant/inverse contract. CI now
