@@ -7,8 +7,8 @@
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, DialectScalar, HephaestusError, HipC, IdentityToken,
-    MaxOp, OpIdentity, Result, SumOp,
+    BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
+    IdentityToken, MaxOp, OpIdentity, Result, SumOp,
 };
 use leto::Layout;
 
@@ -33,7 +33,7 @@ struct MapReductionMeta {
     offsets: [u32; 4],
 }
 
-const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 48);
+const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 64);
 
 trait MapReductionOp: Copy + Send + Sync + 'static {
     type ReduceOp: CombineExpr<HipC>;
