@@ -107,14 +107,7 @@ jobs:
               # its monorepo cutover. Patch the git source to the checked-out
               # workspace so path resolution remains valid in CI.
               mkdir -p /workspace/.cargo
-              cat > /workspace/.cargo/config.toml <<"EOF"
-              [patch."https://github.com/ryancinsight/hermes.git"]
-              hermes-simd = { path = "/workspace/hermes/crates/hermes-simd" }
-              hermes-simd-core = { path = "/workspace/hermes/crates/hermes-simd-core" }
-              hermes-simd-intrinsics = { path = "/workspace/hermes/crates/hermes-simd-intrinsics" }
-              hermes-simd-macros = { path = "/workspace/hermes/crates/hermes-simd-macros" }
-              hermes-simd-types = { path = "/workspace/hermes/crates/hermes-simd-types" }
-              EOF
+              cp /workspace/hephaestus/.github/rocm-cargo-config.toml /workspace/.cargo/config.toml
               cargo "+$RUST_TOOLCHAIN" fmt --check
               # Hephaestus currently consumes sibling Atlas path crates while
               # their migration versions are unpublished. Resolve that

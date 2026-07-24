@@ -1,0 +1,6 @@
+[patch."https://github.com/ryancinsight/hermes.git"]
+hermes-simd = { path = "/workspace/hermes/crates/hermes-simd" }
+hermes-simd-core = { path = "/workspace/hermes/crates/hermes-simd-core" }
+hermes-simd-intrinsics = { path = "/workspace/hermes/crates/hermes-simd-intrinsics" }
+hermes-simd-macros = { path = "/workspace/hermes/crates/hermes-simd-macros" }
+hermes-simd-types = { path = "/workspace/hermes/crates/hermes-simd-types" }
