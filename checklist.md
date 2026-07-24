@@ -4,15 +4,20 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor]
 
-- [ ] Add the ROCm decomposition feature seam and common Cholesky exports.
-- [ ] Implement device-resident HIP Cholesky factorization and the blocked
+- [x] Add the ROCm decomposition feature seam and common Cholesky exports.
+- [x] Implement device-resident HIP Cholesky factorization and the blocked
       entry point with typed validation and failure reporting.
-- [ ] Add value-semantic contracts for empty, strided, dense, invalid, and
+- [x] Add value-semantic contracts for empty, strided, dense, invalid, and
       positive-definite inputs plus solve, determinant, and inverse behavior.
-- [ ] Extend the ROCm CI feature matrix through build, Clippy, Nextest,
+- [x] Extend the ROCm CI feature matrix through build, Clippy, Nextest,
       doctest, and rustdoc for `rocm,decomposition`.
-- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and this checklist.
-- [ ] Pass local and hosted gates, publish, and merge the verified increment.
+- [x] Synchronize the ROCm ADR, README, changelog, backlog, and this checklist.
+- [x] Pass the hosted ROCm gate: run `30127038908`, Nextest 38/38, doctest,
+      and rustdoc at head `cb657e3`.
+- [ ] Complete the local package gate; blocked by the sibling Leto checkout's
+      `Quantity<T>::in_unit` / `FloatElement` mismatch.
+- [ ] Publish and merge the hosted-verified increment; retain the local Leto
+      checkout mismatch as an explicit residual environment blocker.
 
 Execution owner: Codex on `codex/hephaestus-rocm-decomposition`. Claimed files:
 the ROCm decomposition module and public surface, ROCm contract tests, ROCm CI,
