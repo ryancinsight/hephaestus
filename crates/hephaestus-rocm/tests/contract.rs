@@ -1969,7 +1969,8 @@ fn qr_factorization_and_least_squares_match_values() {
         &matrix_values,
     ))
     .expect("CPU QR reference");
-    let expected_r = leto::Storage::as_slice(expected.r().storage());
+    let expected_r_matrix = expected.r();
+    let expected_r = leto::Storage::as_slice(expected_r_matrix.storage());
     let mut actual_r = [0.0_f32; 6];
     device
         .download(factor.r_buffer(), &mut actual_r)
