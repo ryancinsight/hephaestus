@@ -51,6 +51,8 @@ pub(crate) enum PipelineKey {
     },
     /// Rank-2 matrix multiplication keyed by kernel marker and scalar.
     Matmul { marker: TypeId, scalar: TypeId },
+    /// Batched rank-3 matrix multiplication keyed by kernel marker and scalar.
+    BatchedMatmul { marker: TypeId, scalar: TypeId },
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -84,6 +86,21 @@ impl LaunchConfig {
     pub(crate) const fn planar(grid_x: u32, grid_y: u32, block_x: u32, block_y: u32) -> Self {
         Self {
             grid: (grid_x, grid_y, 1),
+            block: (block_x, block_y, 1),
+            shared_bytes: 0,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn batched_planar(
+        grid_x: u32,
+        grid_y: u32,
+        grid_z: u32,
+        block_x: u32,
+        block_y: u32,
+    ) -> Self {
+        Self {
+            grid: (grid_x, grid_y, grid_z),
             block: (block_x, block_y, 1),
             shared_bytes: 0,
         }

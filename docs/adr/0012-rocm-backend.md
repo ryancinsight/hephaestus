@@ -56,6 +56,9 @@ shared-memory tiles over the contracted dimension. `matmul_into` accepts the
 same strided rank-2 layouts as CUDA and WGPU, validates storage and output
 aliasing before launch, and zero-fills partial edge tiles so non-multiple
 matrix dimensions have the same value contract.
+The batched form dispatches the batch dimension through grid-z, treats a
+singleton input batch as a zero batch stride, and chunks launches at the HIP
+grid-z limit so batches are not serialized into one launch per matrix.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -81,9 +84,9 @@ the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
 surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
 axis sum/min/max/mean reduction, rank-2 forward/reverse scans, and rank-2
-matrix multiplication. Batched linalg, sparse, strided elementwise, streams,
-storage, and random operations remain tracked follow-up families with
-differential CPU/WGPU contracts.
+matrix multiplication, including singleton-batch broadcasting. Sparse,
+strided elementwise, streams, storage, and random operations remain tracked
+follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,

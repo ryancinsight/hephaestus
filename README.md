@@ -68,7 +68,8 @@ register each package's Trusted Publisher with that environment.
   across host-planned tree passes; rank-2 axis reductions and scans consume
   shared core shape/stride plans directly; matrix multiplication uses a
   16×16 shared-memory tile and the same strided layout/alias validation as
-  CUDA and WGPU. Its default build has no ROCm linkage and returns a typed
+  CUDA and WGPU. Batched matrix multiplication uses the grid-z dimension and
+  singleton-batch broadcasting. Its default build has no ROCm linkage and returns a typed
   unavailable-device error instead of falling back to WGPU or CPU.
 - Contiguous and strided elementwise callers can supply output buffers, so
   allocation policy stays with the consumer. Contiguous outputs must not alias
@@ -95,9 +96,9 @@ planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
 GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
 expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
-mechanics, elementwise kernels, reductions, scans, and the first tiled matrix-
-multiplication family belong to `hephaestus-rocm`; batched linalg, sparse,
-strided elementwise, streams, storage, and random families remain separate
+mechanics, elementwise kernels, reductions, scans, and tiled matrix-
+multiplication families belong to `hephaestus-rocm`; sparse, strided
+elementwise, streams, storage, and random families remain separate
 application-layer increments with their own differential contracts.
 
 Hermes integration is intentionally indirect for host-delegated Leto parity
@@ -134,7 +135,8 @@ message rather than fabricate a pass.
 The ROCm contract suite runs HIP allocation, zeroing, upload/download,
 subrange-write, length-rejection, capability, topology, binary/unary/scalar
 elementwise, contiguous sum/min/max, rank-2 axis sum/min/max/mean reduction,
-rank-2 forward/reverse scan, and tiled matrix-multiplication value checks. The ROCm container CI lane
+rank-2 forward/reverse scan, and tiled/batched matrix-multiplication value
+checks. The ROCm container CI lane
 validates the feature build and adapterless path; the
 manually enabled self-hosted AMD lane sets
 `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1` so hardware evidence cannot be replaced by
