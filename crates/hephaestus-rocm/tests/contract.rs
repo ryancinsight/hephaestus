@@ -6,8 +6,11 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    AddOp, BinaryStorageKernel, BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer,
-    DeviceFeature, DispatchGrid, HephaestusError, IdentityOp, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    AddOp, BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
+    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
+    GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
+    GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice, KernelInterface,
+    KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
 use hephaestus_rocm::{
     CumSumOp, GpuCsrMatrix, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
@@ -21,6 +24,77 @@ use hephaestus_rocm::{
     unary_elementwise_strided_into, uniform_with_seed,
 };
 use leto::Layout;
+use std::borrow::Cow;
+
+struct StreamAddKernel;
+
+impl KernelInterface for StreamAddKernel {
+    type Params = u32;
+
+    const LABEL: &'static str = "rocm-contract-stream-add";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_write::<f32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [64, 1, 1];
+}
+
+impl KernelSource<HipC> for StreamAddKernel {
+    const ENTRY: &'static str = "rocm_contract_stream_add";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(
+            r#"
+extern "C" __global__ void rocm_contract_stream_add(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        )
+    }
+}
+
+struct GroupedStreamAddKernel;
+
+impl GroupedKernelInterface for GroupedStreamAddKernel {
+    type Params = u32;
+
+    const LABEL: &'static str = "rocm-contract-grouped-stream-add";
+    const BINDINGS: &'static [GroupedBindingDecl] = &[
+        GroupedBindingDecl::read_only::<f32>(0, 0),
+        GroupedBindingDecl::read_only::<f32>(0, 1),
+        GroupedBindingDecl::read_write::<f32>(0, 2),
+    ];
+    const PARAM_GROUP: u32 = 0;
+    const PARAM_BINDING: u32 = 3;
+    const WORKGROUP: [u32; 3] = [64, 1, 1];
+}
+
+impl GroupedKernelSource<HipC> for GroupedStreamAddKernel {
+    const ENTRY: &'static str = "rocm_contract_grouped_stream_add";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(
+            r#"
+extern "C" __global__ void rocm_contract_grouped_stream_add(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        )
+    }
+}
 
 fn device(test: &str) -> Option<RocmDevice> {
     match RocmDevice::try_default() {
@@ -1339,6 +1413,92 @@ extern "C" __global__ void contract_binary(
         4,
         3,
     );
+}
+
+#[test]
+fn authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values() {
+    let Some(device) =
+        device("authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values")
+    else {
+        return;
+    };
+
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("stream lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("stream rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("stream output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("stream grid");
+    let prepared = device.prepare(&StreamAddKernel).expect("stream prepare");
+    let bindings = [
+        Binding::read(&lhs),
+        Binding::read(&rhs),
+        Binding::read_write(&output),
+    ];
+    let mut stream = device.stream().expect("stream open");
+    stream
+        .encode(&prepared, &bindings, &4, grid)
+        .expect("stream dispatch");
+
+    let copied = device
+        .alloc_zeroed::<f32>(4)
+        .expect("copy output allocation");
+    let prefix = device
+        .alloc_zeroed::<f32>(4)
+        .expect("prefix output allocation");
+    stream.copy(&output, &copied).expect("stream copy");
+    stream
+        .copy_prefix(&output, &prefix, 2)
+        .expect("stream prefix copy");
+    stream.fill_zero(&output).expect("stream fill");
+    stream.submit().expect("stream submit");
+
+    let mut output_values = [9.0_f32; 4];
+    let mut copied_values = [0.0_f32; 4];
+    let mut prefix_values = [0.0_f32; 4];
+    device
+        .download(&output, &mut output_values)
+        .expect("stream output download");
+    device
+        .download(&copied, &mut copied_values)
+        .expect("stream copy download");
+    device
+        .download(&prefix, &mut prefix_values)
+        .expect("stream prefix download");
+    assert_eq!(output_values, [0.0; 4]);
+    assert_eq!(copied_values, [6.0, 8.0, 10.0, 12.0]);
+    assert_eq!(prefix_values, [6.0, 8.0, 0.0, 0.0]);
+
+    let grouped_prepared = device
+        .prepare_grouped(&GroupedStreamAddKernel)
+        .expect("grouped stream prepare");
+    let grouped_output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("grouped output allocation");
+    let grouped_bindings = [
+        GroupedBinding::read(0, 0, &lhs),
+        GroupedBinding::read(0, 1, &rhs),
+        GroupedBinding::read_write(0, 2, &grouped_output),
+    ];
+    let mut grouped_stream = device.grouped_stream().expect("grouped stream open");
+    grouped_stream
+        .encode_grouped_sequence("grouped-contract", |sequence| {
+            sequence.encode_grouped(&grouped_prepared, &grouped_bindings, &4, grid)
+        })
+        .expect("grouped stream dispatch");
+    grouped_stream
+        .submit_grouped()
+        .expect("grouped stream submit");
+
+    let mut grouped_values = [0.0_f32; 4];
+    device
+        .download(&grouped_output, &mut grouped_values)
+        .expect("grouped output download");
+    assert_eq!(grouped_values, [6.0, 8.0, 10.0, 12.0]);
 }
 
 #[test]

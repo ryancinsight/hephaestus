@@ -87,6 +87,10 @@ pub(crate) enum PipelineKey {
     Spmv { marker: TypeId, scalar: TypeId },
     /// Backend-neutral multi-storage kernel keyed by its authored source.
     MultiStorage(u64),
+    /// Authored kernel stream keyed by its source.
+    Stream(u64),
+    /// Grouped authored kernel stream keyed by its source.
+    GroupedStream(u64),
 }
 
 /// Grid/block launch configuration for a one-dimensional HIP kernel.
@@ -170,7 +174,7 @@ mod native {
     use std::sync::Arc;
 
     /// Cache confined to the thread that owns the HIP current-device binding.
-    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Rc<RocmKernel>>>>;
+    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Arc<RocmKernel>>>>;
 
     pub(crate) fn new_cache() -> PipelineCache {
         Rc::new(RefCell::new(HashMap::new()))
@@ -337,7 +341,7 @@ mod native {
         key: PipelineKey,
         func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
         if let Some(kernel) = device.pipeline_cache.borrow().get(&key) {
             return Ok(kernel.clone());
         }
@@ -378,7 +382,7 @@ mod native {
                 ),
             });
         }
-        let compiled = Rc::new(RocmKernel {
+        let compiled = Arc::new(RocmKernel {
             module,
             function,
             context: device.context.clone(),

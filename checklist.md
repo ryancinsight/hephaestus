@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-STREAM-1 [minor]
+
+- [x] Implement ROCm `KernelDevice`/`GroupedKernelDevice` preparation and
+      grouped sequence seams over HIP module cache entries.
+- [x] Implement ordered authored-kernel dispatch, device copy, prefix copy,
+      byte fill, and grouped dispatch using HIP operations.
+- [x] Add value-semantic ROCm contracts for dispatch, copy, fill, and grouped
+      output values.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
+- [ ] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc; commit, publish, and merge the verified increment.
+
+Execution owner: Codex on the current ROCm stream parity branch.
+
 ## HEPH-ROCM-PARITY-STORAGE-1 [minor]
 
 - [x] Add ROCm `RocmStorageBinding` and `RocmMultiStorageKernel` implementations

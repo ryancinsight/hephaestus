@@ -35,6 +35,11 @@ Target release: 0.18.0.
   typed HIP pointer bindings, POD parameter blocks, pre-launch layout checks,
   real module dispatch, and value-semantic binary-kernel coverage.
 
+- [minor] Implement ROCm authored-kernel `KernelDevice` and `CommandStream`
+  contracts, including grouped sequencing, ordered HIP module launches,
+  device-to-device copies, prefix copies, byte fills, and value-semantic
+  dispatch/copy/fill coverage.
+
 - [minor] Extend ROCm parity with seeded uniform and normal initializers.
   Random values are generated deterministically by the shared `leto-ops`
   contract and uploaded to typed ROCm buffers, matching the explicit

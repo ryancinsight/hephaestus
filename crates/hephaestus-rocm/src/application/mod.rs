@@ -16,6 +16,8 @@ pub mod scan;
 pub mod sparse;
 /// Backend-neutral multi-storage kernel dispatch.
 pub mod storage_kernel;
+/// Backend-neutral authored-kernel command streams.
+pub mod stream;
 /// Layout-aware operand descriptors.
 pub mod strided;
 /// Rank-≤4 layout-aware elementwise operations.

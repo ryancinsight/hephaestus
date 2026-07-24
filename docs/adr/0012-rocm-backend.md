@@ -97,6 +97,12 @@ one copied POD parameter block. Binding arity/order, zero block dimensions,
 duplicate slots, and unary/binary length mismatches are validated before
 hipRTC/module dispatch; the implementation does not add a consumer-owned
 adapter or a CPU fallback.
+The authored-kernel stream seam is implemented over HIP's ordered default
+stream. `RocmPrepared` and `RocmGroupedPrepared` cache the same loaded module
+handles used by direct operations; `RocmCommandStream` validates typed and
+grouped binding declarations, launches in order, and performs device copies,
+prefix copies, and byte fills through HIP. Grouped sequences retain the core
+same-region contract while HIP receives the flat pointer ABI.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -126,8 +132,8 @@ matrix multiplication including singleton-batch broadcasting, rank-≤4 strided
 binary/unary/scalar elementwise operations, strided Kronecker products,
 matrix powers, matrix rank/determinant, strided dot/trace/L1/L2/max
 map-reductions, seeded random initializers, and device-resident CSR SpMV/SpMM.
-Backend-neutral storage kernels now have ROCm coverage; authored-kernel streams
-remain a tracked follow-up family with differential CPU/WGPU contracts.
+Backend-neutral storage kernels and authored-kernel streams now have ROCm
+coverage with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,
