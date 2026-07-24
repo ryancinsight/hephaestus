@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm parity with HIP module-launched strided dot products,
+  traces, and L1/L2/max norms. One shared rank-four map-reduction metadata
+  contract covers transposed, sliced, and diagonal views; the contract suite
+  compares all five operations with CPU values and rejects invalid shapes.
+
 - [minor] Extend ROCm parity with HIP module-launched tiled rank-2 matrix
   multiplication. The `matmul` and caller-owned `matmul_into` APIs preserve
   shared strided layout, storage, shape, and alias validation and are covered

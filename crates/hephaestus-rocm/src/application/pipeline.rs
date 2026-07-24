@@ -28,6 +28,12 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Strided map-reduction operation keyed by map, scalar, and block width.
+    MapReduction {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
     /// Rank-2 axis reduction keyed by operation, scalar, axis, and block width.
     AxisReduction {
         op: TypeId,
