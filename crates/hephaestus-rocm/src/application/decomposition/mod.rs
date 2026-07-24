@@ -11,6 +11,7 @@ mod bidiagonal;
 mod bunch_kaufman;
 mod cholesky;
 mod col_piv_qr;
+mod eigen;
 mod full_piv_lu;
 mod lu;
 mod qr;
@@ -22,6 +23,10 @@ pub use bidiagonal::{GpuBidiagonalDecomposition, bidiagonalize};
 pub use bunch_kaufman::{GpuBunchKaufmanDecomposition, bunch_kaufman};
 pub use cholesky::{GpuCholesky, cholesky_decompose, cholesky_decompose_blocked};
 pub use col_piv_qr::{GpuColPivQrDecomposition, col_piv_qr, col_piv_qr_blocked};
+pub use eigen::{
+    GpuSymmetricEigenDecomposition, eigenvalues, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi,
+};
 pub use full_piv_lu::{GpuFullPivLuDecomposition, full_piv_lu, full_piv_lu_blocked};
 pub use lu::{GpuLuDecomposition, lu_decompose, lu_decompose_blocked};
 pub use qr::{GpuQrDecomposition, qr_decompose, qr_decompose_blocked};

@@ -39,10 +39,11 @@ pub use application::axis_reduction::{
 pub use application::decomposition::{
     GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
     GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition, GpuQrDecomposition,
-    GpuSvdDecomposition, GpuUduDecomposition, bidiagonalize, bunch_kaufman, cholesky_decompose,
-    cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
-    lu_decompose, lu_decompose_blocked, qr_decompose, qr_decompose_blocked, singular_values,
-    svd_decompose, svd_rank_revealing, udu_decompose,
+    GpuSvdDecomposition, GpuSymmetricEigenDecomposition, GpuUduDecomposition, bidiagonalize,
+    bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked,
+    eigenvalues, full_piv_lu, full_piv_lu_blocked, lu_decompose, lu_decompose_blocked,
+    qr_decompose, qr_decompose_blocked, singular_values, svd_decompose, svd_rank_revealing,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,

@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with symmetric
+  Jacobi eigenpairs/eigenvalues and general complex eigenvalues. Shared Leto
+  results are uploaded into typed ROCm f32 and complex buffers; contracts cover
+  symmetric eigen reconstruction, complex spectra, empty inputs, and invalid
+  square/symmetry/non-finite cases.
+
 - [minor] Extend the optional ROCm `decomposition` feature with the common UDU
   and Bunch–Kaufman surfaces. ROCm uploads the shared Leto U/D and
   L/D/permutation factors into typed buffers; contracts cover symmetric

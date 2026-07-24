@@ -122,6 +122,8 @@ blocked entry points retain the CUDA/WGPU dense-layout contract. Device factors
 and permutations are authoritative; the common scalar solve, determinant,
 inverse, and least-squares methods retain the established host-side provider
 contract, with no backend-selection fallback to CPU or WGPU.
+Symmetric Jacobi eigenpairs/eigenvalues and general complex eigenvalues use the
+same provider boundary and upload typed f32/complex result buffers.
 
 ## Alternatives rejected
 
@@ -154,9 +156,9 @@ Backend-neutral storage kernels and authored-kernel streams now have ROCm
 coverage with differential CPU/WGPU contracts. Cholesky, LU, complete-pivot LU,
 QR, and column-pivoted QR are covered behind the `decomposition` feature with
 HIP factorization and common host-operation contracts. Bidiagonalization and
-SVD, UDU, and Bunch–Kaufman are covered through the shared Leto provider
-boundary with ROCm-resident result buffers and value-semantic contracts. Eigen,
-Schur, and Hessenberg remain open.
+SVD, UDU, Bunch–Kaufman, symmetric eigen, and general complex eigenvalues are
+covered through the shared Leto provider boundary with ROCm-resident result
+buffers and value-semantic contracts. Schur and Hessenberg remain open.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches, with Hermes pinned to `v0.4.1` because Leto main currently

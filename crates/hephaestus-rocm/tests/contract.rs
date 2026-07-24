@@ -26,9 +26,9 @@ use hephaestus_rocm::{
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
-    col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked, lu_decompose, lu_decompose_blocked,
-    qr_decompose, qr_decompose_blocked, singular_values, svd_decompose, svd_rank_revealing,
-    udu_decompose,
+    col_piv_qr_blocked, eigenvalues, full_piv_lu, full_piv_lu_blocked, lu_decompose,
+    lu_decompose_blocked, qr_decompose, qr_decompose_blocked, singular_values, svd_decompose,
+    svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use leto::Layout;
 use std::borrow::Cow;
@@ -2747,4 +2747,191 @@ fn bunch_kaufman_matches_leto_factors_and_permutation() {
     .expect("ROCm empty Bunch-Kaufman");
     assert_eq!(empty_factor.n(), 0);
     assert!(empty_factor.permutation().is_empty());
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_complex_spectrum_close(
+    actual: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
+    tolerance: f32,
+) {
+    assert_eq!(actual.len(), expected.len());
+    let mut actual = actual.to_vec();
+    let mut expected = expected.to_vec();
+    actual.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+    expected.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+    for (actual, expected) in actual.iter().zip(expected.iter()) {
+        assert_near(actual.re, expected.re, tolerance);
+        assert_near(actual.im, expected.im, tolerance);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn symmetric_eigen_surfaces_match_leto_and_reconstruct() {
+    let Some(device) = device("symmetric_eigen_surfaces_match_leto_and_reconstruct") else {
+        return;
+    };
+
+    let matrix_values = [6.0_f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP symmetric eigen upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("symmetric eigen layout");
+    let factor = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm symmetric eigendecomposition");
+    let expected =
+        leto_ops::symmetric_eigen_jacobi(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+            .expect("CPU symmetric eigendecomposition reference");
+
+    assert_eq!(factor.n(), 3);
+    let mut actual_values = [0.0_f32; 3];
+    let mut actual_vectors = [0.0_f32; 9];
+    device
+        .download(factor.eigenvalues(), &mut actual_values)
+        .expect("HIP symmetric eigenvalues download");
+    device
+        .download(factor.eigenvectors(), &mut actual_vectors)
+        .expect("HIP symmetric eigenvectors download");
+    for (actual, expected) in actual_values.iter().zip(&expected.eigenvalues) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    for row in 0..3 {
+        for col in 0..3 {
+            let value = (0..3)
+                .map(|k| matrix_values[row * 3 + k] * actual_vectors[k * 3 + col])
+                .sum();
+            assert_near(
+                value,
+                actual_values[col] * actual_vectors[row * 3 + col],
+                8192.0,
+            );
+        }
+    }
+
+    let values_only = symmetric_eigenvalues_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm symmetric eigenvalues-only");
+    let mut actual_values_only = [0.0_f32; 3];
+    device
+        .download(&values_only, &mut actual_values_only)
+        .expect("HIP symmetric eigenvalues-only download");
+    assert_eq!(actual_values, actual_values_only);
+
+    let nonsymmetric = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP nonsymmetric eigen upload");
+    let nonsymmetric_layout = Layout::c_contiguous([2, 2]).expect("nonsymmetric eigen layout");
+    assert!(matches!(
+        symmetric_eigen_jacobi(
+            &device,
+            StridedOperand {
+                buffer: &nonsymmetric,
+                layout: &nonsymmetric_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("not symmetric")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn general_eigenvalues_match_leto_complex_spectrum_and_validate_inputs() {
+    let Some(device) =
+        device("general_eigenvalues_match_leto_complex_spectrum_and_validate_inputs")
+    else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, -1.0, 1.0, 1.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP general eigen upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("general eigen layout");
+    let actual = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm general eigenvalues");
+    let mut actual_values = [eunomia::Complex::new(0.0_f32, 0.0); 2];
+    device
+        .download(&actual, &mut actual_values)
+        .expect("HIP general eigenvalues download");
+    let expected = leto_ops::eigenvalues(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU general eigenvalues reference");
+    assert_complex_spectrum_close(&actual_values, &expected, 4096.0);
+
+    let nonsquare = device
+        .upload(&[1.0_f32; 6])
+        .expect("HIP nonsquare eigen upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare eigen layout");
+    assert!(matches!(
+        eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP non-finite eigen upload");
+    assert!(matches!(
+        eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty eigen upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty eigen layout");
+    let empty_symmetric = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty symmetric eigen");
+    assert_eq!(empty_symmetric.n(), 0);
+    let empty_general = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty general eigen");
+    assert_eq!(empty_general.len(), 0);
 }
