@@ -15,10 +15,10 @@ not report an AMD device when HIP cannot acquire one.
 
 The first complete vertical slice was the device substrate: HIP device
 acquisition, typed device memory, host/device transfer, synchronization,
-capability limits, and Themis topology. The next bounded parity slice now has a
+capability limits, and Themis topology. The bounded operator slices now have a
 consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
-operations plus contiguous and rank-2 axis reductions can be compared against
-CPU values and the existing CUDA/WGPU contracts.
+operations, contiguous and rank-2 axis reductions, and rank-2 scans can be
+compared against CPU values and the existing CUDA/WGPU contracts.
 
 ## Decision
 
@@ -46,6 +46,10 @@ retain typed partial buffers until the final one-element result is returned;
 empty inputs return the typed operation identity. Rank-2 axis reductions use
 the shared `AxisReductionMeta` and `plan_axis_reduction` contracts, so shape,
 stride, storage, alias, and empty-axis validation remains provider-neutral.
+Rank-2 scans use the shared `AxisScanMeta` and `plan_axis_scan` contracts. One
+HIP block owns each logical scan line, lanes fold contiguous chunks in order,
+and shared-memory chunk prefixes complete forward or reverse cumulative sums
+and products without a second provider-specific host planner.
 The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 
@@ -69,10 +73,10 @@ support. CI always checks the default, ROCm-featured, and adapterless paths in
 a ROCm development container. A manually enabled self-hosted AMD runner runs
 the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
-surface is contiguous elementwise, contiguous sum/min/max reduction, and rank-2
-axis sum/min/max/mean reduction. Scans, linalg, sparse, strided elementwise,
-streams, storage, and random operations remain tracked follow-up families with
-differential CPU/WGPU contracts.
+surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
+axis sum/min/max/mean reduction, and rank-2 forward/reverse scans. Linalg,
+sparse, strided elementwise, streams, storage, and random operations remain
+tracked follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches. Those repositories are in an unpublished version migration,

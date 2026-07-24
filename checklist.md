@@ -2,22 +2,41 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-SCAN-1 [minor]
+
+- [x] Add the ROCm rank-2 strided scan API and shared-core axis-scan planner
+      integration, including output shape, stride, storage, and alias checks.
+- [x] Implement real HIP module-launched tiled forward/reverse cumulative sum
+      and product kernels with typed allocating and caller-owned APIs.
+- [x] Add value-semantic CPU differential contracts for both axes, both
+      directions, long tiled lines, and invalid shape/alias inputs.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [ ] Pass locked feature checks, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the affected packages; commit, publish, and merge the
+      verified increment.
+
+Execution owner: Codex on the current ROCm parity branch; claimed files are
+the ROCm crate and the synchronized documentation artifacts above.
+
 ## HEPH-ROCM-PARITY-AXIS-REDUCTION-1 [minor]
 
-- [ ] Add the ROCm strided rank-2 operand contract and shared-core axis plan
+- [x] Add the ROCm strided rank-2 operand contract and shared-core axis plan
       integration, including output shape, stride, alias, empty-axis, and
       output-storage validation.
-- [ ] Implement real HIP module-launched sum, min, max, and mean axis kernels
+- [x] Implement real HIP module-launched sum, min, max, and mean axis kernels
       with typed caller-owned and allocating APIs.
-- [ ] Add value-semantic CPU differential contracts for both axes, trailing
+- [x] Add value-semantic CPU differential contracts for both axes, trailing
       output coverage, and invalid layout/alias/empty-axis inputs.
-- [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
-- [ ] Pass format, locked feature checks, warning-denied Clippy, Nextest,
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass format, locked feature checks, warning-denied Clippy, Nextest,
       doctest, and rustdoc for the affected packages; commit and publish the
       verified increment.
 
-Execution owner: Codex on `codex/hephaestus-rocm-axis-reduction`; claimed files
-are the ROCm crate and the synchronized documentation artifacts above.
+Execution owner: Codex on `codex/hephaestus-rocm-axis-reduction`; completed
+evidence: the ROCm container run `30108405040` passed the real feature build,
+warning-denied Clippy, Nextest (11/11), doctest, and rustdoc at PR head
+`04dcce4`; PR #69 merged as `ab4b407`. The required-device lane was skipped for
+the PR event.
 
 ## HEPH-ROCM-PARITY-REDUCTION-1 [minor]
 
