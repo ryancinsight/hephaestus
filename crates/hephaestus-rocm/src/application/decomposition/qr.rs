@@ -17,7 +17,7 @@ use crate::application::decomposition::validate::validate_dense_operand;
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, QrStage, cached_kernel, grid_size, launch_kernel,
 };
-use crate::application::strided::{StridedOperand, map_layout_err};
+use crate::application::strided::StridedOperand;
 use crate::application::strided_elementwise::unary_elementwise_strided_into;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
 
@@ -32,6 +32,12 @@ struct QrMeta {
 }
 
 const _: () = assert!(core::mem::size_of::<QrMeta>() == 12);
+
+fn map_layout_err(error: leto::LetoError) -> HephaestusError {
+    HephaestusError::DispatchFailed {
+        message: format!("QR layout error: {error}"),
+    }
+}
 
 /// QR decomposition result with packed factors resident on the device.
 pub struct GpuQrDecomposition {
