@@ -64,4 +64,5 @@ remain a follow-up item with differential CPU/WGPU contracts.
 - [`cubecl-hip-sys` 7.2.5321100](https://docs.rs/crate/cubecl-hip-sys/7.2.5321100):
   the Linux raw HIP bindings used by the optional feature.
 - [ROCm Ubuntu development images](https://hub.docker.com/r/rocm/dev-ubuntu-24.04/tags):
-  the pinned container source used by the container CI job.
+  the pinned container source used by the container CI job; CI installs the
+  smaller development tag's `rocm-hip-runtime-dev` package explicitly.

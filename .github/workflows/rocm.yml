@@ -21,7 +21,7 @@ concurrency:
 
 env:
   RUST_TOOLCHAIN: 1.95.0
-  ROCM_IMAGE: rocm/dev-ubuntu-24.04:7.2.4-complete
+  ROCM_IMAGE: rocm/dev-ubuntu-24.04:7.2.4
 
 jobs:
   rocm-container:
@@ -63,6 +63,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          for attempt in 1 2 3; do
+            if docker pull "${ROCM_IMAGE}"; then
+              break
+            fi
+            if [[ "${attempt}" -eq 3 ]]; then
+              echo "failed to pull ${ROCM_IMAGE} after ${attempt} attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
           docker run --rm --network host \
             --env "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
@@ -72,7 +82,7 @@ jobs:
               set -euo pipefail
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config
+              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config rocm-hip-runtime-dev
               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               . "$HOME/.cargo/env"
               rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
