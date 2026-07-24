@@ -94,6 +94,12 @@ pub(crate) enum PipelineKey {
     /// QR factorization stage keyed by its HIP entry point.
     #[cfg(feature = "decomposition")]
     Qr(QrStage),
+    /// Complete-pivoted LU factorization stage keyed by its HIP entry point.
+    #[cfg(feature = "decomposition")]
+    FullPivLu(FullPivLuStage),
+    /// Column-pivoted QR factorization stage keyed by its HIP entry point.
+    #[cfg(feature = "decomposition")]
+    ColPivQr(ColPivQrStage),
     /// Backend-neutral multi-storage kernel keyed by its authored source.
     MultiStorage(u64),
     /// Authored kernel stream keyed by its source.
@@ -133,6 +139,26 @@ pub(crate) enum QrStage {
     /// Validate the input matrix values.
     Validate,
     /// Apply one Householder reflector.
+    Step,
+}
+
+/// HIP entry points used by complete-pivoted LU factorization.
+#[cfg(feature = "decomposition")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum FullPivLuStage {
+    /// Validate all dense matrix values before factorization.
+    Validate,
+    /// Select a trailing pivot, swap rows and columns, and eliminate.
+    Step,
+}
+
+/// HIP entry points used by column-pivoted QR factorization.
+#[cfg(feature = "decomposition")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum ColPivQrStage {
+    /// Validate all dense matrix values before factorization.
+    Validate,
+    /// Select a trailing column, apply one Householder reflector, and update Q.
     Step,
 }
 

@@ -25,8 +25,8 @@ use hephaestus_rocm::{
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
-    cholesky_decompose, cholesky_decompose_blocked, lu_decompose, lu_decompose_blocked,
-    qr_decompose, qr_decompose_blocked,
+    cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, full_piv_lu,
+    full_piv_lu_blocked, lu_decompose, lu_decompose_blocked, qr_decompose, qr_decompose_blocked,
 };
 use leto::Layout;
 use std::borrow::Cow;
@@ -2054,5 +2054,234 @@ fn qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs() {
             },
         ),
         Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn full_piv_lu_matches_device_permutations_and_host_contracts() {
+    let Some(device) = device("full_piv_lu_matches_device_permutations_and_host_contracts") else {
+        return;
+    };
+
+    let matrix_values = [0.0_f32, 2.0, 1.0, 3.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP complete-pivot LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("complete-pivot LU layout");
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP complete-pivot LU factorization");
+    let expected = leto_ops::full_piv_lu(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU complete-pivot LU reference");
+
+    assert_eq!(factor.n(), 2);
+    assert_eq!(factor.rank(), expected.rank());
+    assert_eq!(factor.row_permutation(), expected.row_permutation());
+    assert_eq!(factor.col_permutation(), expected.col_permutation());
+    assert_near(factor.det(), expected.det(), 256.0);
+
+    let mut packed = [0.0_f32; 4];
+    device
+        .download(factor.lu_buffer(), &mut packed)
+        .expect("HIP complete-pivot LU factor download");
+    for (actual, expected) in packed.iter().zip(expected.lu_factors()) {
+        assert_near(*actual, *expected, 512.0);
+    }
+
+    let rhs = device
+        .upload(&[4.0_f32, 7.0])
+        .expect("HIP complete-pivot LU RHS upload");
+    let solution = factor
+        .solve(&device, &rhs)
+        .expect("HIP complete-pivot LU solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP complete-pivot LU solution download");
+    assert_near(solution_values[0], 1.0, 512.0);
+    assert_near(solution_values[1], 2.0, 512.0);
+
+    let inverse = factor.inv(&device).expect("HIP complete-pivot LU inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP complete-pivot LU inverse download");
+    for (actual, expected) in inverse_values.iter().zip([-1.5_f32, 1.0, 0.5, 0.0]) {
+        assert_near(*actual, expected, 512.0);
+    }
+
+    let blocked = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP dense complete-pivot LU factorization");
+    assert_eq!(blocked.row_permutation(), factor.row_permutation());
+    assert_eq!(blocked.col_permutation(), factor.col_permutation());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn full_piv_lu_preserves_strided_and_rank_contracts() {
+    let Some(device) = device("full_piv_lu_preserves_strided_and_rank_contracts") else {
+        return;
+    };
+
+    let strided_values = [0.0_f32, 2.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided complete-pivot LU upload");
+    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided complete-pivot LU factorization");
+    assert_eq!(factor.rank(), 2);
+
+    let dense = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        dense,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let singular = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0])
+        .expect("HIP singular complete-pivot LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("singular complete-pivot LU layout");
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &singular,
+            layout: &layout,
+        },
+    )
+    .expect("rank-deficient complete-pivot LU remains factorable");
+    assert_eq!(factor.rank(), 1);
+    assert_eq!(factor.det(), 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn col_piv_qr_matches_device_permutation_and_least_squares_contracts() {
+    let Some(device) = device("col_piv_qr_matches_device_permutation_and_least_squares_contracts")
+    else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 0.0, 0.0, 2.0, 0.0, 0.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP column-pivot QR upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("column-pivot QR layout");
+    let factor = col_piv_qr(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP column-pivot QR factorization");
+    let expected = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU column-pivot QR reference");
+    assert_eq!(factor.rank(), expected.rank());
+    assert_eq!(factor.permutation(), expected.permutation());
+
+    let expected_r_matrix = expected.r();
+    let expected_r = leto::Storage::as_slice(expected_r_matrix.storage());
+    let mut actual_r = [0.0_f32; 6];
+    device
+        .download(factor.r(), &mut actual_r)
+        .expect("HIP column-pivot QR R download");
+    for row in 0..3 {
+        for col in row..2 {
+            assert_near(actual_r[row * 2 + col], expected_r[row * 2 + col], 1024.0);
+        }
+    }
+
+    let rhs = device
+        .upload(&[3.0_f32, 8.0, 0.0])
+        .expect("HIP column-pivot QR RHS upload");
+    let solution = factor
+        .solve_least_squares(&device, &rhs)
+        .expect("HIP column-pivot QR least-squares solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP column-pivot QR solution download");
+    assert_near(solution_values[0], 3.0, 1024.0);
+    assert_near(solution_values[1], 4.0, 1024.0);
+
+    let blocked = col_piv_qr_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP dense column-pivot QR factorization");
+    assert_eq!(blocked.permutation(), factor.permutation());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn col_piv_qr_reports_rank_and_rejects_nonfinite_values() {
+    let Some(device) = device("col_piv_qr_reports_rank_and_rejects_nonfinite_values") else {
+        return;
+    };
+
+    let rank_deficient = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0])
+        .expect("HIP rank-deficient column-pivot QR upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("rank-deficient column-pivot QR layout");
+    let factor = col_piv_qr(
+        &device,
+        StridedOperand {
+            buffer: &rank_deficient,
+            layout: &layout,
+        },
+    )
+    .expect("rank-deficient column-pivot QR factorization");
+    assert_eq!(factor.rank(), 1);
+    let rhs = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("HIP rank-deficient column-pivot QR RHS upload");
+    assert!(matches!(
+        factor.solve_least_squares(&device, &rhs),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("full column rank")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, f32::NAN, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP nonfinite column-pivot QR upload");
+    assert!(matches!(
+        col_piv_qr(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
     ));
 }

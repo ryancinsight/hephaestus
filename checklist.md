@@ -25,7 +25,7 @@ the ROCm decomposition module and public surface, ROCm contract tests, ROCm CI,
 and synchronized documentation artifacts. LU, QR, eigen, SVD, and other
 decomposition families remain outside this increment.
 
-## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor]
+## HEPH-ROCM-PARITY-DECOMPOSITION-2 [minor] — done
 
 - [x] Add the ROCm LU and QR public surfaces behind `decomposition`.
 - [x] Implement HIP LU factorization with partial pivoting and HIP QR
@@ -34,13 +34,34 @@ decomposition families remain outside this increment.
       inverse, and least-squares value contracts matching the common APIs.
 - [x] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
 - [x] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
-- [ ] Pass the hosted build, warning-denied Clippy, Nextest, doctest, and
-      rustdoc gates; merge the verified increment.
+- [x] Pass the hosted build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc gates with run `30129776247` at head `47e13ee`.
+- [x] Publish and merge the hosted-verified increment as PR #81 at `82d3bc8`.
 
 Execution owner: Codex on `codex/hephaestus-rocm-decomposition-next`. Claimed
 files: ROCm decomposition, ROCm contract tests and CI, and synchronized
 documentation artifacts. Remaining decomposition families are non-goals for
-this increment.
+this increment. The local package gate remains blocked by the sibling Leto
+checkout's `Quantity<T>::in_unit` / `FloatElement` mismatch.
+
+## HEPH-ROCM-PARITY-PIVOTED-3 [minor]
+
+- [ ] Add the ROCm complete-pivot LU and column-pivoted QR public surfaces
+      behind `decomposition`.
+- [ ] Implement HIP row/column pivot selection and factorization with
+      device-resident factors and permutations; do not delegate computation to
+      the CPU.
+- [ ] Add empty, strided, dense, singular, rank-deficient, solve, inverse,
+      rank, and least-squares value contracts matching the common APIs.
+- [ ] Extend hosted ROCm CI and feature hygiene for the new decomposition code.
+- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and checklist.
+- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-decomposition-followup`.
+Claimed files: ROCm decomposition, ROCm contract tests and CI, and synchronized
+documentation artifacts. SVD, eigen, Schur, Hessenberg, bidiagonal, UDU, and
+Bunch–Kaufman remain outside this increment.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
