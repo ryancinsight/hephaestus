@@ -57,6 +57,14 @@ the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. HIP operator families
 remain a follow-up item with differential CPU/WGPU contracts.
 
+The hosted job checks out the sibling Atlas path repositories at their current
+default branches. Those repositories are in an unpublished version migration,
+so the job resolves the checkout-local path graph once before running the
+verification commands with `--locked`. This is a temporary integration
+constraint, not a dependency-resolution fallback; remove the bootstrap when
+the sibling migration commits are published and the committed lockfile can
+represent the hosted checkout graph directly.
+
 ## Implementation references
 
 - [HIP runtime API](https://rocm.docs.amd.com/projects/HIP/en/latest/): device

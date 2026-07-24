@@ -90,8 +90,12 @@ jobs:
               rustup toolchain install stable --profile minimal
               cargo +stable install cargo-nextest --locked
               cargo "+$RUST_TOOLCHAIN" fmt --check
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets --locked
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets --locked
+              # Hephaestus currently consumes sibling Atlas path crates while
+              # their migration versions are unpublished. Resolve that
+              # checkout-local graph once; every verification gate below then
+              # runs against the generated lockfile with --locked.
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets
               cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-rocm --features rocm --all-targets --no-deps --locked -- -D warnings
               cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-rocm --features rocm --locked
               cargo "+$RUST_TOOLCHAIN" test --package hephaestus-rocm --features rocm --doc --locked
