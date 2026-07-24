@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with the common UDU
+  and Bunch–Kaufman surfaces. ROCm uploads the shared Leto U/D and
+  L/D/permutation factors into typed buffers; contracts cover symmetric
+  indefinite reconstruction, solve/determinant/inverse behavior, pivot
+  permutations, empty inputs, and invalid symmetry/shape cases.
+
 - [minor] Extend the optional ROCm `decomposition` feature with the common
   bidiagonalization and SVD surfaces. The shared Leto provider computes the
   factors, which ROCm uploads into typed U/B/V and U/V/singular-value buffers;

@@ -17,7 +17,7 @@
 //! increments with their own value-semantic contracts. The optional
 //! `decomposition` feature adds device-resident Cholesky, LU, and QR
 //! factorization contracts, including complete-pivoted LU, column-pivoted QR,
-//! bidiagonalization, and SVD.
+//! bidiagonalization, SVD, UDU, and Bunch–Kaufman.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -37,11 +37,12 @@ pub use application::axis_reduction::{
 };
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
-    GpuBidiagonalDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
-    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, bidiagonalize, cholesky_decompose,
+    GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
+    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition, GpuQrDecomposition,
+    GpuSvdDecomposition, GpuUduDecomposition, bidiagonalize, bunch_kaufman, cholesky_decompose,
     cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
     lu_decompose, lu_decompose_blocked, qr_decompose, qr_decompose_blocked, singular_values,
-    svd_decompose, svd_rank_revealing,
+    svd_decompose, svd_rank_revealing, udu_decompose,
 };
 pub use application::elementwise::{
     binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,

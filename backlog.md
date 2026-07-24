@@ -81,7 +81,7 @@ cuda-oxide + cutile).
   rustdoc at head `d030520`; the required-device lane was skipped by the
   pull-request event. Merged through PR #82 at `6613690`.
 
-## HEPH-ROCM-PARITY-SPECTRAL-4 [minor] — in progress
+## HEPH-ROCM-PARITY-SPECTRAL-4 [minor] — done
 
 - Owner: Codex; scope: ROCm bidiagonalization and SVD surfaces, device-resident
   U/B/V and U/V/singular-value buffers, thin/rank-revealing/singular-values
@@ -99,8 +99,31 @@ cuda-oxide + cutile).
 - Claimed files: `crates/hephaestus-rocm/src/application/decomposition/**`,
   `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
   `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24. Branch starts from merged pivoted
-  decomposition parity at `6613690`.
+  and this item. Last update: 2026-07-24. Hosted ROCm run `30132885402`
+  passed base and `rocm,decomposition` builds, warning-denied Clippy, Nextest,
+  doctest, and rustdoc at head `6864aa7`; the required-device lane was skipped
+  by the pull-request event. Merged through PR #83 at `56e83e4`.
+
+## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor] — in progress
+
+- Owner: Codex; scope: ROCm UDU and Bunch–Kaufman decomposition surfaces,
+  device-resident U/D and L/D/permutation results, provider-backed solve,
+  determinant, inverse, reconstruction, empty, invalid, and permutation
+  contracts, decomposition feature CI, and synchronized documentation. Eigen,
+  Schur, Hessenberg, and other decomposition families remain non-goals for
+  this increment.
+- Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
+  `GpuUduDecomposition`/`udu_decompose` and
+  `GpuBunchKaufmanDecomposition`/`bunch_kaufman` APIs; ROCm uploads the shared
+  Leto factors into typed device buffers without a backend-selection fallback;
+  UDU solve/determinant/inverse and Bunch–Kaufman permutation/reconstruction
+  behavior are value-tested; and hosted ROCm CI passes build, warning-denied
+  Clippy, Nextest, doctest, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/src/application/decomposition/**`,
+  `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
+  and this item. Last update: 2026-07-24. Branch starts from merged spectral
+  parity at `56e83e4`.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 
