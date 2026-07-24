@@ -1,7 +1,7 @@
 //! Shared validation for ROCm decomposition operands.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, require_dense_operand, validate_square_operand};
+use hephaestus_core::{DeviceBuffer, Result, require_dense_operand, validate_square_operand};
 
 use crate::application::strided::StridedOperand;
 

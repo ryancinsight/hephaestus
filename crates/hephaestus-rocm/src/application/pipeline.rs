@@ -86,6 +86,7 @@ pub(crate) enum PipelineKey {
     /// Sparse matrix-vector product keyed by kernel marker and scalar.
     Spmv { marker: TypeId, scalar: TypeId },
     /// Cholesky factorization stage keyed by its HIP entry point.
+    #[cfg(feature = "decomposition")]
     Cholesky(CholeskyStage),
     /// Backend-neutral multi-storage kernel keyed by its authored source.
     MultiStorage(u64),
@@ -96,6 +97,7 @@ pub(crate) enum PipelineKey {
 }
 
 /// HIP entry points used by the ROCm Cholesky factorization.
+#[cfg(feature = "decomposition")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CholeskyStage {
     /// Validate all dense matrix values before factorization.
