@@ -211,6 +211,7 @@ fn checked_dimensions(rows: usize, cols: usize) -> Result<(u32, u32, usize)> {
     Ok((rows_u32, cols_u32, elements))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch_stage(
     device: &RocmDevice,
     stage: QrStage,
