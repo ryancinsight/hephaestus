@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-PARITY-CHOLESKY-1 [minor]
+
+- [ ] Add the ROCm decomposition feature seam and common Cholesky exports.
+- [ ] Implement device-resident HIP Cholesky factorization and the blocked
+      entry point with typed validation and failure reporting.
+- [ ] Add value-semantic contracts for empty, strided, dense, invalid, and
+      positive-definite inputs plus solve, determinant, and inverse behavior.
+- [ ] Extend the ROCm CI feature matrix through build, Clippy, Nextest,
+      doctest, and rustdoc for `rocm,decomposition`.
+- [ ] Synchronize the ROCm ADR, README, changelog, backlog, and this checklist.
+- [ ] Pass local and hosted gates, publish, and merge the verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-decomposition`. Claimed files:
+the ROCm decomposition module and public surface, ROCm contract tests, ROCm CI,
+and synchronized documentation artifacts. LU, QR, eigen, SVD, and other
+decomposition families remain outside this increment.
+
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
 - [x] Implement ROCm `KernelDevice`/`GroupedKernelDevice` preparation and
@@ -13,7 +30,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
 - [x] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
       rustdoc for the current head.
-- [ ] Publish and merge the verified increment.
+- [x] Publish and merge the verified increment as PR #79 at `cd5a699`.
 
 Execution owner: Codex on the current ROCm stream parity branch. Valid hosted
 ROCm container run `30124401681` passed the real feature build, warning-denied
@@ -31,7 +48,7 @@ device lane was skipped by the manual `run_hardware=false` input.
 - [x] Synchronize the ROCm ADR, README, changelog, and CI tracking.
 - [x] Pass hosted feature build, warning-denied Clippy, Nextest, doctest, and
       rustdoc for the current head.
-- [ ] Publish and merge the verified increment.
+- [x] Publish and merge the verified increment as PR #79 at `cd5a699`.
 
 Execution owner: Codex on the current ROCm storage parity branch; authored
 kernel streams remain outside this increment. Valid hosted ROCm container run
@@ -50,7 +67,7 @@ skipped by the manual `run_hardware=false` input.
 - [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
 - [x] Pass the hosted feature build, warning-denied Clippy, Nextest, doctest,
       and rustdoc for the affected package.
-- [ ] Publish and merge the verified increment.
+- [x] Publish and merge the verified increment as PR #79 at `cd5a699`.
 
 Execution owner: Codex on the current ROCm sparse parity branch; claimed files
 are the ROCm crate and the synchronized documentation artifacts above.
