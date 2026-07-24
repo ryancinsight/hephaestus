@@ -150,12 +150,13 @@ HIP factorization and common host-operation contracts; eigen, SVD, Schur,
 Hessenberg, bidiagonal, UDU, and Bunch–Kaufman remain open.
 
 The hosted job checks out the sibling Atlas path repositories at their current
-default branches. Those repositories are in an unpublished version migration,
-so the job resolves the checkout-local path graph once before running the
-verification commands with `--locked`. This is a temporary integration
-constraint, not a dependency-resolution fallback; remove the bootstrap when
-the sibling migration commits are published and the committed lockfile can
-represent the hosted checkout graph directly.
+default branches, with Hermes pinned to `v0.4.1` because Leto main currently
+requires that workspace version. Those repositories are in an unpublished
+version migration, so the job resolves the checkout-local path graph once
+before running the verification commands with `--locked`. This is a temporary
+integration constraint, not a dependency-resolution fallback; remove the
+Hermes pin and bootstrap when the sibling migration commits are published and
+the committed lockfile can represent the hosted checkout graph directly.
 
 ## Implementation references
 
