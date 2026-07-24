@@ -16,8 +16,8 @@ not report an AMD device when HIP cannot acquire one.
 The first complete vertical slice was the device substrate: HIP device
 acquisition, typed device memory, host/device transfer, synchronization,
 capability limits, and Themis topology. The bounded operator slices now have a
-consumer acceptance oracle: contiguous binary, unary, and scalar elementwise
-operations, contiguous and rank-2 axis reductions, rank-2 scans, rank-2/3
+consumer acceptance oracle: contiguous and rank-≤4 strided binary, unary, and
+scalar elementwise operations, contiguous and rank-2 axis reductions, rank-2 scans, rank-2/3
 matrix multiplication, strided Kronecker products, and strided map-reductions
 can be compared against CPU values and the existing CUDA/WGPU contracts.
 
@@ -40,8 +40,11 @@ implemented `Device` tier, while budget-only tiers are rejected. Device limits
 and topology are queried from HIP attributes and memory information;
 unsupported acquisition is surfaced as a typed error. Elementwise sources use
 the shared `HipC` dialect and compile through hipRTC, then load one cached HIP
-module entry point per `(operation, scalar, block width)` key. Output buffers
-must be distinct from inputs, matching the CUDA/WGPU elementwise contract.
+module entry point per `(operation, scalar, block width)` key. The strided
+family shares one packed rank-four metadata/decode contract for binary, unary,
+and scalar kernels, maps Leto broadcast views by zeroing singleton-axis
+strides, and validates output buffers as distinct from inputs with no
+zero-stride races, matching the CUDA/WGPU elementwise contract.
 Contiguous reductions use the same cached module shape for each tree pass and
 retain typed partial buffers until the final one-element result is returned;
 empty inputs return the typed operation identity. Rank-2 axis reductions use
@@ -92,9 +95,10 @@ the same contract suite with `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1`, so a skipped
 hardware test cannot be mistaken for device evidence. The current ROCm parity
 surface is contiguous elementwise, contiguous sum/min/max reduction, rank-2
 axis sum/min/max/mean reduction, rank-2 forward/reverse scans, rank-2/3
-matrix multiplication including singleton-batch broadcasting, strided
-Kronecker products, and strided dot/trace/L1/L2/max map-reductions. Sparse,
-strided elementwise, streams, storage, and random operations remain tracked
+matrix multiplication including singleton-batch broadcasting, rank-≤4 strided
+binary/unary/scalar elementwise operations, strided Kronecker products, and
+strided dot/trace/L1/L2/max map-reductions. Sparse, streams, storage, and
+random operations remain tracked
 follow-up families with differential CPU/WGPU contracts.
 
 The hosted job checks out the sibling Atlas path repositories at their current

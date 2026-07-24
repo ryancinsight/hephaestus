@@ -22,6 +22,24 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Strided binary operation keyed by operation, scalar, and block width.
+    StridedBinary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    /// Strided unary operation keyed by operation, scalar, and block width.
+    StridedUnary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
+    /// Strided scalar operation keyed by operation, scalar, and block width.
+    StridedScalar {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
     /// Contiguous reduction operation keyed by operation, scalar, and block width.
     Reduction {
         op: TypeId,
