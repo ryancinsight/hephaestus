@@ -2,20 +2,41 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-ROCM-PARITY-REDUCTION-1 [minor]
+## HEPH-ROCM-PARITY-AXIS-REDUCTION-1 [minor]
 
-- [ ] Add the shared HipC reduction source and cached HIP module launch for
-      typed sum, min, and max over contiguous buffers, including multi-pass
-      partial outputs and empty-input identities.
-- [ ] Add value-semantic CPU differential contracts for trailing-width,
-      multi-pass, empty, min, max, and invalid-width inputs.
+- [ ] Add the ROCm strided rank-2 operand contract and shared-core axis plan
+      integration, including output shape, stride, alias, empty-axis, and
+      output-storage validation.
+- [ ] Implement real HIP module-launched sum, min, max, and mean axis kernels
+      with typed caller-owned and allocating APIs.
+- [ ] Add value-semantic CPU differential contracts for both axes, trailing
+      output coverage, and invalid layout/alias/empty-axis inputs.
 - [ ] Synchronize the ROCm ADR, README, changelog, and CI evidence.
 - [ ] Pass format, locked feature checks, warning-denied Clippy, Nextest,
       doctest, and rustdoc for the affected packages; commit and publish the
       verified increment.
 
-Execution owner: Codex on `codex/hephaestus-rocm-reduction`; claimed files are
-the ROCm crate and the synchronized documentation artifacts above.
+Execution owner: Codex on `codex/hephaestus-rocm-axis-reduction`; claimed files
+are the ROCm crate and the synchronized documentation artifacts above.
+
+## HEPH-ROCM-PARITY-REDUCTION-1 [minor]
+
+- [x] Add the shared HipC reduction source and cached HIP module launch for
+      typed sum, min, and max over contiguous buffers, including multi-pass
+      partial outputs and empty-input identities.
+- [x] Add value-semantic CPU differential contracts for trailing-width,
+      multi-pass, empty, min, max, and invalid-width inputs.
+- [x] Synchronize the ROCm ADR, README, changelog, and CI evidence.
+- [x] Pass format, locked feature checks, warning-denied Clippy, Nextest,
+      doctest, and rustdoc for the affected packages; commit and publish the
+      verified increment.
+
+Execution owner: Codex on `codex/hephaestus-rocm-reduction`; completed
+evidence: local package check, warning-denied Clippy, Nextest 10/10, doctest,
+rustdoc, format, and diff checks pass. ROCm container run `30106758162` passed
+the real feature build, warning-denied Clippy, Nextest (10/10), doctest, and
+rustdoc at PR head `621bbf2`; PR #68 merged as `1146ee4`. The required-device
+lane was skipped for the PR event.
 
 ## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor]
 

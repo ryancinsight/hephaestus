@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend ROCm reduction parity with rank-2 axis sum/min/max/mean
+  operations over shared Leto layouts. The HIP kernels consume the shared
+  axis planner for shape, stride, storage, alias, and empty-axis validation and
+  are covered by CPU differential contracts for both axes and invalid layouts.
+
 - [minor] Extend the ROCm backend with hipRTC/module-launched contiguous
   sum/min/max reductions. The multi-pass HIP tree keeps partial buffers on the
   device, returns typed identities for empty inputs, and is covered by CPU
