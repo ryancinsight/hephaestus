@@ -64,16 +64,18 @@ mod native {
     use crate::RocmDevice;
     use crate::infrastructure::device::{HIP_SUCCESS, RocmContext, check_status};
     use core::ffi::{c_char, c_void};
+    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::ffi::{CStr, CString};
     use std::ptr;
-    use std::sync::{Arc, Mutex, OnceLock};
+    use std::rc::Rc;
+    use std::sync::Arc;
 
-    pub(crate) type PipelineCache =
-        Arc<Mutex<HashMap<PipelineKey, Arc<OnceLock<Arc<RocmKernel>>>>>>;
+    /// Cache confined to the thread that owns the HIP current-device binding.
+    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Rc<RocmKernel>>>>;
 
     pub(crate) fn new_cache() -> PipelineCache {
-        Arc::new(Mutex::new(HashMap::new()))
+        Rc::new(RefCell::new(HashMap::new()))
     }
 
     /// A loaded HIP module and its entry point, owned by the device cache.
@@ -237,17 +239,8 @@ mod native {
         key: PipelineKey,
         func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
-        let cell = device
-            .pipeline_cache
-            .lock()
-            .map_err(|error| hephaestus_core::HephaestusError::DispatchFailed {
-                message: format!("ROCm pipeline cache mutex poisoned: {error}"),
-            })?
-            .entry(key)
-            .or_insert_with(|| Arc::new(OnceLock::new()))
-            .clone();
-        if let Some(kernel) = cell.get() {
+    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
+        if let Some(kernel) = device.pipeline_cache.borrow().get(&key) {
             return Ok(kernel.clone());
         }
 
@@ -287,12 +280,14 @@ mod native {
                 ),
             });
         }
-        let compiled = Arc::new(RocmKernel {
+        let compiled = Rc::new(RocmKernel {
             module,
             function,
             context: device.context.clone(),
         });
-        Ok(cell.get_or_init(|| compiled).clone())
+        let mut cache = device.pipeline_cache.borrow_mut();
+        let kernel = cache.entry(key).or_insert_with(|| compiled.clone());
+        Ok(kernel.clone())
     }
 
     pub(crate) fn launch_kernel(

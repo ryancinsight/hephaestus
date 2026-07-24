@@ -39,7 +39,9 @@ and topology are queried from HIP attributes and memory information;
 unsupported acquisition is surfaced as a typed error. Elementwise sources use
 the shared `HipC` dialect and compile through hipRTC, then load one cached HIP
 module entry point per `(operation, scalar, block width)` key. Output buffers
-must be distinct from inputs, matching the CUDA/WGPU elementwise contract.
+must be distinct from inputs, matching the CUDA/WGPU elementwise contract. The
+module cache is thread-confined with the HIP current-device binding because
+HIP module handles and device pointers are not cross-thread Rust values.
 
 ## Alternatives rejected
 
