@@ -25,7 +25,7 @@ pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
 };
-pub use domain::dialect::{CudaC, DialectScalar, KernelDialect, Wgsl};
+pub use domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,

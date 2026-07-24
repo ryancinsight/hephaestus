@@ -21,7 +21,7 @@ kernels are forged for accelerator hardware.
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
-| `hephaestus-rocm` | Native AMD ROCm/HIP device substrate: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, zeroed allocation, host/device transfer, subrange writes, and synchronization. Enable the optional `rocm` feature on a ROCm host; HIP operator authoring is a follow-up increment. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched binary, unary, and scalar elementwise operations. Enable the optional `rocm` feature on a ROCm host. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
 ## Python Releases
@@ -58,11 +58,14 @@ register each package's Trusted Publisher with that environment.
 - Elementwise kernels follow leto-ops' ZST operation-marker pattern on the
   device side: generic allocating APIs delegate to caller-owned `*_into`
   entry points, and the op contributes only its shader combine expression. No
-  type names appear in API identifiers (`WgslScalar::WGSL_TYPE` /
-  `CudaScalar::CUDA_TYPE` substitutes the shader type token).
+  type names appear in API identifiers; `DialectScalar<L>::TYPE_TOKEN`
+  substitutes the shader type token for each backend dialect.
 - The ROCm backend owns native HIP device mechanics through the optional
-  `cubecl-hip-sys` bindings. Its default build has no ROCm linkage and returns
-  a typed unavailable-device error instead of falling back to WGPU or CPU.
+  `cubecl-hip-sys` bindings. Its `HipC` dialect reuses the shared operation
+  vocabulary, while real elementwise sources compile through hipRTC and launch
+  through the HIP module API. Its default build has no ROCm linkage and
+  returns a typed unavailable-device error instead of falling back to WGPU or
+  CPU.
 - Contiguous and strided elementwise callers can supply output buffers, so
   allocation policy stays with the consumer. Contiguous outputs must not alias
   inputs; scalar dispatch reuses the same uniform-buffer pool as strided
@@ -88,8 +91,10 @@ planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
 GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
 expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
-mechanics belong to `hephaestus-rocm`; ROCm kernel families remain separate
-application-layer work with their own differential contracts.
+mechanics and the first elementwise kernel family belong to
+`hephaestus-rocm`; reductions, scans, linalg, sparse, strided, streams,
+storage, and random families remain separate application-layer increments with
+their own differential contracts.
 
 Hermes integration is intentionally indirect for host-delegated Leto parity
 wrappers: Hephaestus depends on `leto-ops` with its `simd` feature enabled, and
@@ -123,8 +128,9 @@ length-mismatch rejection). On hosts without an adapter the tests skip with a
 message rather than fabricate a pass.
 
 The ROCm contract suite runs HIP allocation, zeroing, upload/download,
-subrange-write, length-rejection, capability, and topology checks. The ROCm
-container CI lane validates the feature build and adapterless path; the
+subrange-write, length-rejection, capability, topology, and binary/unary/scalar
+elementwise value checks. The ROCm container CI lane validates the feature build
+and adapterless path; the
 manually enabled self-hosted AMD lane sets
 `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1` so hardware evidence cannot be replaced by
 a skip.

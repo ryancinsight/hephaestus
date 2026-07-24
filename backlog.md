@@ -4,6 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ROCM-PARITY-ELEMENTWISE-1 [minor] — in-progress
+
+- Owner: Codex; scope: shared HIP-C dialect vocabulary, ROCm runtime-compiled
+  elementwise binary/unary/scalar kernels, value-semantic ROCm contracts, and
+  the existing ROCm CI build and hardware lanes. Reductions, scans, sparse,
+  linalg, streams, storage, and random families are non-goals for this
+  increment.
+- Acceptance: ROCm exposes the same elementwise operation contract as CUDA
+  through the shared operation markers; HIP kernels compile through hipRTC,
+  load through the HIP module API, launch over typed device buffers, reject
+  invalid lengths and output aliasing, and return values matching the CPU
+  oracle. The container lane compiles and tests the real feature path, while
+  the required-device lane executes the same tests on AMD hardware.
+- Claimed files: `crates/hephaestus-core/src/domain/{dialect,ops}.rs`,
+  `crates/hephaestus-rocm/**`, `.github/workflows/rocm.yml`,
+  `docs/adr/0012-rocm-backend.md`, `README.md`, `CHANGELOG.md`, `checklist.md`,
+  and this item. Last update: 2026-07-24.
+
 ## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
 
 - Owner: Codex; scope: new `hephaestus-rocm` crate implementing the existing

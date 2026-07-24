@@ -6,9 +6,13 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, HephaestusError,
+    AddOp, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, HephaestusError,
+    MulOp, NegOp,
 };
-use hephaestus_rocm::{Result, RocmDevice};
+use hephaestus_rocm::{
+    Result, RocmDevice, binary_elementwise, binary_elementwise_into, scalar_elementwise,
+    unary_elementwise,
+};
 
 fn device(test: &str) -> Option<RocmDevice> {
     match RocmDevice::try_default() {
@@ -182,4 +186,73 @@ fn empty_buffers_roundtrip_without_hip_allocation() {
     device
         .download(&buffer, &mut output)
         .expect("empty HIP download");
+}
+
+#[test]
+fn elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts() {
+    let Some(device) =
+        device("elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts")
+    else {
+        return;
+    };
+
+    let lhs: Vec<f32> = (0..513).map(|index| index as f32).collect();
+    let rhs: Vec<f32> = (0..513).map(|index| (index % 7) as f32).collect();
+    let lhs_buffer = device.upload(&lhs).expect("HIP lhs upload");
+    let rhs_buffer = device.upload(&rhs).expect("HIP rhs upload");
+
+    let sum = binary_elementwise::<AddOp, _>(&device, &lhs_buffer, &rhs_buffer)
+        .expect("HIP binary elementwise add");
+    let mut sum_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&sum, &mut sum_output)
+        .expect("HIP sum download");
+    let expected_sum: Vec<f32> = lhs.iter().zip(&rhs).map(|(lhs, rhs)| lhs + rhs).collect();
+    assert_eq!(sum_output, expected_sum);
+
+    let negated = unary_elementwise::<NegOp, _>(&device, &lhs_buffer).expect("HIP unary negate");
+    let mut negated_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&negated, &mut negated_output)
+        .expect("HIP negation download");
+    let expected_negated: Vec<f32> = lhs.iter().map(|value| -value).collect();
+    assert_eq!(negated_output, expected_negated);
+
+    let doubled = scalar_elementwise::<MulOp, _>(&device, &lhs_buffer, 2.0)
+        .expect("HIP scalar elementwise multiply");
+    let mut doubled_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&doubled, &mut doubled_output)
+        .expect("HIP scalar multiply download");
+    let expected_doubled: Vec<f32> = lhs.iter().map(|value| value * 2.0).collect();
+    assert_eq!(doubled_output, expected_doubled);
+
+    let mismatch = device
+        .alloc_zeroed::<f32>(lhs.len() - 1)
+        .expect("HIP mismatch buffer");
+    assert!(matches!(
+        binary_elementwise_into::<AddOp, _>(
+            &device,
+            &lhs_buffer,
+            &rhs_buffer,
+            &mismatch,
+            hephaestus_core::BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::LengthMismatch {
+            host_len,
+            device_len,
+        }) if host_len == lhs.len() - 1 && device_len == lhs.len()
+    ));
+
+    assert!(matches!(
+        binary_elementwise_into::<AddOp, _>(
+            &device,
+            &lhs_buffer,
+            &rhs_buffer,
+            &lhs_buffer,
+            hephaestus_core::BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias binary left input"
+    ));
 }

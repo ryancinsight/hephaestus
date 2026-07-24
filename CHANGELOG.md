@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the ROCm backend with the shared `HipC` kernel dialect and
+  real hipRTC/module-launched binary, unary, and scalar elementwise operations.
+  The ROCm contract suite covers CPU-reference values, trailing workgroup
+  coverage, output-alias rejection, and invalid lengths; the remaining CUDA
+  and WGPU operator families remain separate parity increments.
+
 - [arch] Add the Linux `hephaestus-rocm` backend. Its optional `rocm` feature
   maps HIP device acquisition, typed device buffers, zeroed allocation,
   host/device transfer, subrange writes, synchronization, driver-backed

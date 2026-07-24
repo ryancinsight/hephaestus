@@ -5,8 +5,8 @@ use hephaestus_core::{
     ComputeDevice, HephaestusError, Result, validate_buffer_size, validate_slice_alignment,
 };
 
-use super::buffer::{DevicePtr, RocmBuffer};
 use super::device::RocmDevice;
+use super::{DevicePtr, buffer::RocmBuffer};
 
 fn checked_bytes<T>(len: usize) -> Result<usize> {
     validate_buffer_size::<T>(len)?;

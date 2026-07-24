@@ -3,11 +3,12 @@
 //!
 //! A [`KernelDialect`](crate::KernelDialect) is the shading/kernel language a backend compiles —
 //! WGSL for wgpu (native and Metal-pinned), CUDA C++ for the NVRTC-compiled
-//! CUDA backend. Operation markers ([`ops`](crate::domain::ops)) and scalar types
-//! carry their shader tokens per dialect through these traits, so one op
-//! vocabulary serves every backend and a kernel authored for one dialect
-//! simply does not implement the others — dispatching it on the wrong
-//! backend is a compile error, not a runtime failure.
+//! CUDA backend, and HIP C++ for the hipRTC-compiled ROCm backend. Operation
+//! markers ([`ops`](crate::domain::ops)) and scalar types carry their shader
+//! tokens per dialect through these traits, so one op vocabulary serves every
+//! backend and a kernel authored for one dialect simply does not implement the
+//! others — dispatching it on the wrong backend is a compile error, not a
+//! runtime failure.
 //!
 //! The trait is sealed: a new dialect is a deliberate substrate extension
 //! (new backend crate), not a consumer-side extension point.
@@ -18,6 +19,7 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for super::Wgsl {}
     impl Sealed for super::CudaC {}
+    impl Sealed for super::HipC {}
 }
 
 /// A kernel-source dialect a backend can compile.
@@ -36,12 +38,20 @@ pub struct Wgsl;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CudaC;
 
+/// HIP C++ dialect marker (hipRTC runtime compilation).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct HipC;
+
 impl KernelDialect for Wgsl {
     const NAME: &'static str = "wgsl";
 }
 
 impl KernelDialect for CudaC {
     const NAME: &'static str = "cuda-c";
+}
+
+impl KernelDialect for HipC {
+    const NAME: &'static str = "hip-c";
 }
 
 /// Maps a host scalar type to its shader type token in dialect `L` at compile
@@ -54,7 +64,7 @@ impl KernelDialect for CudaC {
 /// API identifiers.
 pub trait DialectScalar<L: KernelDialect>: Pod {
     /// The dialect's scalar type token (e.g. `"f32"` in WGSL, `"float"` in
-    /// CUDA C++).
+    /// CUDA/HIP C++).
     const TYPE_TOKEN: &'static str;
 }
 
@@ -82,6 +92,18 @@ impl DialectScalar<CudaC> for i32 {
     const TYPE_TOKEN: &'static str = "int";
 }
 
+impl DialectScalar<HipC> for f32 {
+    const TYPE_TOKEN: &'static str = "float";
+}
+
+impl DialectScalar<HipC> for u32 {
+    const TYPE_TOKEN: &'static str = "unsigned int";
+}
+
+impl DialectScalar<HipC> for i32 {
+    const TYPE_TOKEN: &'static str = "int";
+}
+
 // ── f64 ──────────────────────────────────────────────────────────────────
 
 impl DialectScalar<Wgsl> for f64 {
@@ -92,35 +114,42 @@ impl DialectScalar<CudaC> for f64 {
     const TYPE_TOKEN: &'static str = "double";
 }
 
+impl DialectScalar<HipC> for f64 {
+    const TYPE_TOKEN: &'static str = "double";
+}
+
 // ── GPU vector types (fixed-size arrays of scalar elements) ──────────────
 
 macro_rules! impl_dialect_vector {
-    ($ty:ty, $wgsl_token:expr, $cuda_token:expr) => {
+    ($ty:ty, $wgsl_token:expr, $cuda_token:expr, $hip_token:expr) => {
         impl DialectScalar<Wgsl> for $ty {
             const TYPE_TOKEN: &'static str = $wgsl_token;
         }
         impl DialectScalar<CudaC> for $ty {
             const TYPE_TOKEN: &'static str = $cuda_token;
         }
+        impl DialectScalar<HipC> for $ty {
+            const TYPE_TOKEN: &'static str = $hip_token;
+        }
     };
 }
 
 // f32 vectors
-impl_dialect_vector!([f32; 2], "vec2<f32>", "float2");
-impl_dialect_vector!([f32; 3], "vec3<f32>", "float3");
-impl_dialect_vector!([f32; 4], "vec4<f32>", "float4");
+impl_dialect_vector!([f32; 2], "vec2<f32>", "float2", "float2");
+impl_dialect_vector!([f32; 3], "vec3<f32>", "float3", "float3");
+impl_dialect_vector!([f32; 4], "vec4<f32>", "float4", "float4");
 // f64 vectors
-impl_dialect_vector!([f64; 2], "vec2<f64>", "double2");
-impl_dialect_vector!([f64; 3], "vec3<f64>", "double3");
-impl_dialect_vector!([f64; 4], "vec4<f64>", "double4");
+impl_dialect_vector!([f64; 2], "vec2<f64>", "double2", "double2");
+impl_dialect_vector!([f64; 3], "vec3<f64>", "double3", "double3");
+impl_dialect_vector!([f64; 4], "vec4<f64>", "double4", "double4");
 // i32 vectors
-impl_dialect_vector!([i32; 2], "vec2<i32>", "int2");
-impl_dialect_vector!([i32; 3], "vec3<i32>", "int3");
-impl_dialect_vector!([i32; 4], "vec4<i32>", "int4");
+impl_dialect_vector!([i32; 2], "vec2<i32>", "int2", "int2");
+impl_dialect_vector!([i32; 3], "vec3<i32>", "int3", "int3");
+impl_dialect_vector!([i32; 4], "vec4<i32>", "int4", "int4");
 // u32 vectors
-impl_dialect_vector!([u32; 2], "vec2<u32>", "uint2");
-impl_dialect_vector!([u32; 3], "vec3<u32>", "uint3");
-impl_dialect_vector!([u32; 4], "vec4<u32>", "uint4");
+impl_dialect_vector!([u32; 2], "vec2<u32>", "uint2", "uint2");
+impl_dialect_vector!([u32; 3], "vec3<u32>", "uint3", "uint3");
+impl_dialect_vector!([u32; 4], "vec4<u32>", "uint4", "uint4");
 
 #[cfg(test)]
 mod tests {
@@ -134,16 +163,21 @@ mod tests {
     fn scalar_tokens_are_dialect_specific() {
         assert_eq!(token_of::<f32, Wgsl>(), "f32");
         assert_eq!(token_of::<f32, CudaC>(), "float");
+        assert_eq!(token_of::<f32, HipC>(), "float");
         assert_eq!(token_of::<u32, Wgsl>(), "u32");
         assert_eq!(token_of::<u32, CudaC>(), "unsigned int");
+        assert_eq!(token_of::<u32, HipC>(), "unsigned int");
         assert_eq!(token_of::<i32, Wgsl>(), "i32");
         assert_eq!(token_of::<i32, CudaC>(), "int");
+        assert_eq!(token_of::<i32, HipC>(), "int");
         // f64
         assert_eq!(token_of::<f64, Wgsl>(), "f64");
         assert_eq!(token_of::<f64, CudaC>(), "double");
+        assert_eq!(token_of::<f64, HipC>(), "double");
         // GPU vector types — f32
         assert_eq!(token_of::<[f32; 2], Wgsl>(), "vec2<f32>");
         assert_eq!(token_of::<[f32; 2], CudaC>(), "float2");
+        assert_eq!(token_of::<[f32; 2], HipC>(), "float2");
         assert_eq!(token_of::<[f32; 3], Wgsl>(), "vec3<f32>");
         assert_eq!(token_of::<[f32; 3], CudaC>(), "float3");
         assert_eq!(token_of::<[f32; 4], Wgsl>(), "vec4<f32>");
