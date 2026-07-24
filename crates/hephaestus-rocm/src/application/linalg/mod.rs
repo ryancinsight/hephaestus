@@ -6,16 +6,20 @@
 //! backends. The batched form dispatches the batch dimension through grid-z
 //! and supports singleton input-batch broadcasting. Map-reduction operations
 //! use the same layout metadata for dot products, traces, and norms.
+//! Kronecker products use the same strided rank-2 metadata and one output
+//! thread per logical element.
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
 use leto::Layout;
 
 mod batched_matmul;
+mod kron;
 mod matmul;
 mod norms;
 
 pub use batched_matmul::{batched_matmul, batched_matmul_into};
+pub use kron::{kron, kron_into};
 pub use matmul::{matmul, matmul_into};
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 
