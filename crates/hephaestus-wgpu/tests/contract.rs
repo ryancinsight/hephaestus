@@ -1115,9 +1115,7 @@ fn axis_scans_match_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{
-        CumProdOp, ScanDirection, StridedOperand, cumsum, scan_axis, scan_axis_into,
-    };
+    use hephaestus_wgpu::{StridedOperand, cumprod, cumprod_into, cumsum};
     use leto::Layout;
 
     let host = vec![1i32, 2, 3, 4, 5, 6];
@@ -1156,11 +1154,10 @@ fn axis_scans_match_leto_reference() {
     assert_eq!(got_cumsum_allocated, expected_cumsum_axis1);
 
     let cumprod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
-    scan_axis_into::<CumProdOp, i32>(
+    cumprod_into(
         &device,
         input_operand,
         0,
-        ScanDirection::Reverse,
         StridedOperand {
             buffer: &cumprod_reverse,
             layout: &layout,
@@ -1181,14 +1178,8 @@ fn axis_scans_match_leto_reference() {
         .unwrap();
     assert_eq!(got_cumprod_reverse, expected_cumprod_reverse);
 
-    let cumprod_reverse_allocated = scan_axis::<CumProdOp, i32>(
-        &device,
-        input_operand,
-        0,
-        ScanDirection::Reverse,
-        BlockWidth::DEFAULT,
-    )
-    .unwrap();
+    let cumprod_reverse_allocated =
+        cumprod(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
     let mut got_cumprod_reverse_allocated = vec![0i32; 6];
     device
         .download(
@@ -1197,6 +1188,82 @@ fn axis_scans_match_leto_reference() {
         )
         .unwrap();
     assert_eq!(got_cumprod_reverse_allocated, expected_cumprod_reverse);
+}
+
+#[test]
+fn cumprod_convenience_preserves_strided_and_empty_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    use hephaestus_wgpu::{StridedOperand, cumprod, cumprod_into};
+    use leto::Layout;
+
+    let physical = vec![1_i32, 2, 3, 4, 5, 6];
+    let input = device.upload(&physical).unwrap();
+    let transposed_layout = Layout::new([2, 3], [1, 2], 0);
+    let output_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let output = device.alloc_zeroed::<i32>(6).unwrap();
+    cumprod_into(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &output,
+            layout: &output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got = [0_i32; 6];
+    device.download(&output, &mut got).unwrap();
+    assert_eq!(got, [15, 15, 5, 48, 24, 6]);
+
+    let allocated = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = [0_i32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, [2, 12, 30, 2, 4, 6]);
+
+    let empty = device.alloc_zeroed::<i32>(0).unwrap();
+    let empty_layout = Layout::c_contiguous([2, 0]).unwrap();
+    let empty_output = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(empty_output.len(), 0);
+
+    let invalid_layout = Layout::new([2, 3], [1, 2], 1);
+    assert!(matches!(
+        cumprod(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &invalid_layout,
+            },
+            1,
+            BlockWidth::DEFAULT,
+        ),
+        Err(hephaestus_core::HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
 }
 
 #[test]

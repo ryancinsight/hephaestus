@@ -20,7 +20,7 @@ use hephaestus_rocm::{
     MulOp, NegOp, PowOp, RecipOp, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection, SinOp,
     SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into, binary_elementwise,
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
-    cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    cumprod_into, cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
     norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
@@ -1248,6 +1248,26 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         .download(&reverse_product, &mut product_output)
         .expect("HIP product scan download");
     assert_eq!(product_output, [24, 24, 12, 4, 1680, 336, 56, 8]);
+
+    let product_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned product output");
+    cumprod_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &product_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned reverse product scan");
+    let mut product_into_output = [0_i32; 8];
+    device
+        .download(&product_into, &mut product_into_output)
+        .expect("HIP caller-owned product download");
+    assert_eq!(product_into_output, [5, 12, 21, 32, 5, 6, 7, 8]);
 
     let long_input: Vec<i32> = (0..1_025).map(|index| index % 7 - 3).collect();
     let long_buffer = device.upload(&long_input).expect("HIP long scan upload");
