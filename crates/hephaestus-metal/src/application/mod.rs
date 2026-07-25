@@ -9,6 +9,8 @@ pub mod elementwise;
 pub mod linalg;
 /// Reusable dot-product and L2-norm map-reduction plans.
 pub mod prepared_map_reduction;
+/// Seeded host-delegated random initializers.
+pub mod random;
 /// Reduction operations.
 pub mod reduction;
 /// Scan operations.
