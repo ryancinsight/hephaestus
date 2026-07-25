@@ -7,7 +7,9 @@ use crate::application::linalg::{
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::Result;
+#[cfg(not(feature = "decomposition"))]
+use hephaestus_core::HephaestusError;
 
 /// Borrow a rank-2 receiver as a read-only Metal strided matrix operand.
 pub trait AsGpuMatrixOperand<'a, T> {
