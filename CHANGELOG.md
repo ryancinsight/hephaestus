@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add reusable prepared scalar reduction plans for sum, min, and max
+  across WGPU, CUDA, ROCm, and Metal. Preparation retains the complete
+  device-resident reduction tree, repeated dispatch reuses output storage, and
+  batch submission preserves the shared value and block-width contracts.
+
 - [minor] Extend the shared 2D Laplacian stencil contract to CUDA, ROCm, and
   Metal. `Laplacian2DParams`, boundary conditions, and polarity now live in
   `hephaestus-core`; CUDA and HIP execute device-resident native kernels,

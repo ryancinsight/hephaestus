@@ -1,6 +1,6 @@
 # ADR 0015 (hephaestus): prepared scalar reduction parity
 
-- Status: proposed
+- Status: accepted
 - Class: [minor]
 - Date: 2026-07-25
 
@@ -38,9 +38,11 @@ launch and buffer ownership stay inside each backend.
 
 ## Verification
 
-Each backend contract will compare prepared sum, min, and max results with the
-CPU operation for empty, singleton, and multi-pass inputs; repeat dispatch and
-batch submission will assert stable output storage and value semantics; and an
-invalid non-power-of-two width will be rejected before preparation. CUDA,
-ROCm, and Metal CI will run the focused contracts with required-device
-enforcement on hardware lanes.
+Each backend contract compares prepared sum, min, and max results with the CPU
+operation for empty, singleton, and multi-pass inputs; repeat dispatch and
+batch submission assert stable output storage and value semantics; and an
+invalid non-power-of-two width is rejected before preparation. At code head
+`4279244`, CUDA run `30171447372` / job `89713176239`, ROCm run `30171447427`
+/ job `89713176460`, and Metal run `30171447381` / job `89713176351` passed.
+Hardware lanes were skipped because hosted GPU labels were unavailable;
+required-device enforcement remains enabled on self-hosted hardware lanes.

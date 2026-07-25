@@ -27,7 +27,7 @@ cuda-oxide + cutile).
   blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
   `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
 
-## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
 - Owner: Codex; scope: prepared scalar reduction plans for WGPU, CUDA, ROCm,
   and Metal, including reusable device-resident scratch/output storage,
@@ -44,7 +44,16 @@ cuda-oxide + cutile).
   focused contracts.
 - Claimed files: CUDA/ROCm prepared-reduction modules and exports/tests,
   Metal delegation and exports/tests, affected CI/docs, and this item. Last
-  update: 2026-07-25.
+  update: 2026-07-25. Hosted feature lanes passed at code head `4279244`:
+  CUDA run `30171447372` / job `89713176239`, ROCm run `30171447427` /
+  job `89713176460`, and Metal run `30171447381` / job `89713176351`.
+  Hardware lanes were skipped because hosted GPU labels were unavailable;
+  required-device enforcement remains enabled for self-hosted GPU runners.
+  Local Windows package compilation remains blocked before source compilation
+  by the locked `cutile-rs` git dependency refresh and the sibling
+  Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch; hosted
+  checkout-graph CI is the accepted source/build gate.
+  Merged through PR #94 after the final documentation-head rerun.
 
 ## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — done
 

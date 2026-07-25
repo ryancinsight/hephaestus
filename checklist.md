@@ -2,19 +2,27 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
-- [ ] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
-- [ ] Delegate the prepared scalar reduction plan through Metal's native WGPU
+- [x] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
+- [x] Delegate the prepared scalar reduction plan through Metal's native WGPU
       device and expose matching public names across backends.
-- [ ] Add value-semantic tests for empty, singleton, multi-pass, repeated,
+- [x] Add value-semantic tests for empty, singleton, multi-pass, repeated,
       batched, and invalid-width prepared reductions.
-- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+- [x] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
       backlog, and checklist with exact hosted evidence.
 
 Execution owner: Codex on `codex/hephaestus-backend-prepared-reduction`.
 Claimed files: prepared reduction modules and exports/tests, affected CI/docs,
 and the matching ADR/backlog/checklist item.
+
+Hosted code-head evidence: CUDA run `30171447372` / job `89713176239`, ROCm
+run `30171447427` / job `89713176460`, and Metal run `30171447381` / job
+`89713176351` passed at `4279244`. Hardware jobs were skipped because hosted
+GPU labels were unavailable; local Windows package compilation remains
+blocked by the locked `cutile-rs` refresh and sibling Leto/Eunomia
+`Quantity<T>::in_unit` / `FloatElement` mismatch. Final documentation-head
+verification and merge are recorded in the delivery commit.
 
 ## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — done
 
