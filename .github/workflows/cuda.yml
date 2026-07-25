@@ -94,6 +94,10 @@ jobs:
               rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
               rustup toolchain install stable --profile minimal
               cargo +stable install cargo-nextest --locked
+              if [ -f /usr/local/cuda/lib64/stubs/libcuda.so ] && [ ! -e /usr/local/cuda/lib64/stubs/libcuda.so.1 ]; then
+                ln -s libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
+              fi
+              export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:/usr/local/cuda/compat:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}
               mkdir -p /workspace/.cargo
               cp /workspace/hephaestus/.github/rocm-cargo-config.toml \
                 /workspace/.cargo/config.toml
