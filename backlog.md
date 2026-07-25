@@ -171,6 +171,26 @@ cuda-oxide + cutile).
   doctest, and rustdoc at implementation head `6ea7a0c`; the required-device
   lane was skipped by the pull-request event. PR #86 is the merge vehicle.
 
+## HEPH-ROCM-PARITY-MATRIX-8 [minor] — done
+
+- Owner: Codex; scope: ROCm pseudoinverse and matrix-exponential surfaces,
+  provider-backed typed result buffers, Moore–Penrose/closed-form contracts,
+  empty/invalid/non-finite validation, decomposition feature CI, and
+  synchronized documentation.
+- Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
+  `pinv` and `matexp` APIs; ROCm uploads shared Leto results into typed device
+  buffers without a backend-selection fallback; diagonal, rectangular,
+  rank-deficient, Moore–Penrose, closed-form, general, empty, square, and
+  non-finite cases are value-tested; and hosted ROCm CI passes build,
+  warning-denied Clippy, Nextest, doctest, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/src/application/linalg/**`,
+  `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
+  and this item. Hosted ROCm run `30136255296` passed the base and
+  `rocm,decomposition` builds, warning-denied Clippy, Nextest (65/65),
+  doctest, and rustdoc at implementation head `f67da57`; the required-device
+  lane was skipped by the pull-request event. PR #87 is the merge vehicle.
+
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 
 - Owner: Codex; scope: ROCm implementations of `KernelDevice`,

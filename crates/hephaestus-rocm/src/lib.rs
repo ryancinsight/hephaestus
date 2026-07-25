@@ -56,6 +56,8 @@ pub use application::linalg::{
     dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
     norm_l1, norm_l2, norm_max, trace,
 };
+#[cfg(feature = "decomposition")]
+pub use application::linalg::{matexp, pinv};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{

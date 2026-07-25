@@ -19,6 +19,8 @@ mod matmul;
 mod matpow;
 mod matrix_rank;
 mod norms;
+#[cfg(feature = "decomposition")]
+mod pinv_matexp;
 
 pub use batched_matmul::{batched_matmul, batched_matmul_into};
 pub use kron::{kron, kron_into};
@@ -26,6 +28,8 @@ pub use matmul::{matmul, matmul_into};
 pub use matpow::{MatrixIdentityScalar, matpow};
 pub use matrix_rank::{MatrixRankScalar, det, matrix_rank, matrix_rank_with_tolerance};
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
+#[cfg(feature = "decomposition")]
+pub use pinv_matexp::{matexp, pinv};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

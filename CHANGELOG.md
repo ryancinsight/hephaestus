@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm matrix-function surface with the common
+  pseudoinverse and matrix-exponential APIs. ROCm uses the shared Leto provider
+  boundary and uploads typed results; contracts cover closed forms, rectangular
+  and rank-deficient Moore–Penrose behavior, general matrix exponentials,
+  empty inputs, and invalid/non-finite cases.
+
 - [minor] Extend the optional ROCm `decomposition` feature with the common
   Hessenberg and real Schur surfaces. ROCm uploads shared Leto Q/H and Q/T
   factors into typed buffers; contracts cover orthogonality, reconstruction,
