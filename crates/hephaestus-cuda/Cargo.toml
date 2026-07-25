@@ -10,9 +10,9 @@ description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded 
 
 [features]
 # Default includes the CUDA toolchain so the crate builds and runs with CUDA
-# support enabled by default. `cuda` pulls the dynamic-loaded cutile-rs driver
-# (no toolkit needed to build — `nvcuda`/`libcuda` is loaded at runtime),
-# mirroring coeus-cuda's gating.
+# support enabled by default. `cuda` pulls cutile-rs and requires a CUDA 13.2+
+# toolkit at build time for its headers; the driver is still loaded dynamically
+# at runtime, so deployment does not require static CUDA linkage.
 default = ["parallel", "mnemosyne-memory", "decomposition", "cuda"]
 parallel = []
 mnemosyne-memory = []

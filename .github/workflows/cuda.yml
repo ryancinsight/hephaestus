@@ -21,6 +21,7 @@ concurrency:
 
 env:
   RUST_TOOLCHAIN: 1.95.0
+  CUDA_IMAGE: nvidia/cuda:13.2.1-devel-ubuntu24.04
 
 jobs:
   cuda-container:
@@ -71,49 +72,45 @@ jobs:
           path: moirai
           persist-credentials: false
 
-      - name: Install the pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: rustfmt, clippy
-
-      - name: Install nextest
-        shell: bash
-        run: cargo install cargo-nextest --locked
-
-      - name: Configure the checkout-local Cargo graph
+      - name: Build and test in the NVIDIA CUDA development image
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/.cargo"
-          sed "s|/workspace|$GITHUB_WORKSPACE|g" \
-            "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
-            > "$GITHUB_WORKSPACE/.cargo/config.toml"
-
-      - name: Check CUDA feature surfaces
-        working-directory: hephaestus
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo "+$RUST_TOOLCHAIN" fmt --check
-          cargo "+$RUST_TOOLCHAIN" check --package hephaestus-cuda \
-            --no-default-features --all-targets
-          cargo "+$RUST_TOOLCHAIN" check --package hephaestus-cuda \
-            --features cuda,decomposition --all-targets
-
-      - name: Run CUDA warning-denied contracts and docs
-        working-directory: hephaestus
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-cuda \
-            --features cuda,decomposition --all-targets --no-deps --locked -- -D warnings
-          cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-cuda \
-            --features cuda,decomposition --locked
-          cargo "+$RUST_TOOLCHAIN" test --package hephaestus-cuda \
-            --features cuda,decomposition --doc --locked
-          cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-cuda \
-            --features cuda,decomposition --no-deps --locked
+          docker pull "$CUDA_IMAGE"
+          docker run --rm --network host \
+            --env "RUST_TOOLCHAIN=$RUST_TOOLCHAIN" \
+            --env CUDA_TOOLKIT_PATH=/usr/local/cuda \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace/hephaestus \
+            "$CUDA_IMAGE" \
+            bash -c '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+              . "$HOME/.cargo/env"
+              rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+              rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
+              rustup toolchain install stable --profile minimal
+              cargo +stable install cargo-nextest --locked
+              mkdir -p /workspace/.cargo
+              cp /workspace/hephaestus/.github/rocm-cargo-config.toml \
+                /workspace/.cargo/config.toml
+              cargo "+$RUST_TOOLCHAIN" fmt --check
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-cuda \
+                --no-default-features --all-targets
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-cuda \
+                --features cuda,decomposition --all-targets
+              cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-cuda \
+                --features cuda,decomposition --all-targets --no-deps --locked -- -D warnings
+              cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-cuda \
+                --features cuda,decomposition --locked
+              cargo "+$RUST_TOOLCHAIN" test --package hephaestus-cuda \
+                --features cuda,decomposition --doc --locked
+              cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-cuda \
+                --features cuda,decomposition --no-deps --locked
+            '
 
   cuda-hardware:
     name: NVIDIA hardware contracts

@@ -84,8 +84,9 @@ impl Drop for CudaContext {
 ///
 /// Holds a cuda-oxide-created context for the selected device ordinal.
 /// `Clone` is cheap (an `Arc` clone). Device acquisition mirrors coeus-cuda's
-/// driver: the CUDA driver is dynamically loaded, so constructing this never
-/// requires a CUDA toolkit at build time, only `nvcuda`/`libcuda` at runtime.
+/// driver: the CUDA driver is dynamically loaded, so constructing this does not
+/// require static CUDA linkage; the `cuda` feature still requires the toolkit
+/// at build time for cutile's headers and runtime compiler.
 #[derive(Clone)]
 pub struct CudaDevice {
     context: Arc<CudaContext>,

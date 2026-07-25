@@ -1,6 +1,8 @@
 //! Metal volume ray-integral delegation.
 
-use hephaestus_core::{BlockWidth, ComputeDevice, Result, validate_ray_line_integrals};
+use hephaestus_core::{
+    BlockWidth, ComputeDevice, DeviceBuffer, Result, validate_ray_line_integrals,
+};
 use hephaestus_wgpu as wgpu_backend;
 
 use crate::infrastructure::buffer::MetalBuffer;
