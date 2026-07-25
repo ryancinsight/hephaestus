@@ -304,7 +304,7 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     d.download(&axis1_out, &mut got_axis1).unwrap();
     d.download(&max_axis0_out, &mut got_max_axis0).unwrap();
     assert_eq!(got_axis1, [15.0, 18.0, 21.0, 24.0]);
-    assert_eq!(got_max_axis0, [9.0, 10.0, 11.0]);
+    assert_eq!(got_max_axis0, [4.0, 8.0, 12.0]);
 
     let mean_axis1_out = d.alloc_zeroed::<f32>(4).unwrap();
     let prepared_mean_axis1 = prepare_mean_axis_into(

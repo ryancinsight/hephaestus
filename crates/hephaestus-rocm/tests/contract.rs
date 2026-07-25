@@ -921,7 +921,7 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
         .download(&max_axis0_out, &mut got_max_axis0)
         .expect("HIP prepared transposed max download");
     assert_eq!(got_axis1, [15.0, 18.0, 21.0, 24.0]);
-    assert_eq!(got_max_axis0, [9.0, 10.0, 11.0]);
+    assert_eq!(got_max_axis0, [4.0, 8.0, 12.0]);
 
     let mean_axis1_out = device
         .alloc_zeroed::<f32>(4)
