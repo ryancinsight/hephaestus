@@ -31,14 +31,15 @@ fn constant_field(value: f32) -> Vec<f32> {
 }
 
 fn affine_field() -> Vec<f32> {
-    (0..9)
-        .flat_map(|ix| {
-            (0..5).flat_map(move |iy| {
-                (0..5)
-                    .map(move |iz| 0.01 * ix as f32 + 0.007 * iy as f32 + 0.003 * iz as f32 + 0.05)
-            })
-        })
-        .collect()
+    let mut field = Vec::with_capacity(9 * 5 * 5);
+    for ix in 0..9 {
+        for _iy in 0..5 {
+            for _iz in 0..5 {
+                field.push(0.01 * ix as f32 + 0.02);
+            }
+        }
+    }
+    field
 }
 
 fn read(device: &CudaDevice, host: &[f32], rays: &[f32], step: f32) -> Vec<f32> {
