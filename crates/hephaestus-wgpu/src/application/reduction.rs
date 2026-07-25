@@ -45,6 +45,10 @@ pub struct PreparedAxisReduction<T> {
     /// underlying buffer alive; without the guard the buffer would escape the
     /// pool permanently).
     _meta_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
+    /// Storage binding used when the reduced input axis is empty. WGPU rejects
+    /// zero-byte storage bindings even though the kernel only needs the output
+    /// identity for that case.
+    _empty_input_buffer: Option<WgpuBuffer<T>>,
     _marker: PhantomData<T>,
 }
 
@@ -588,10 +592,21 @@ fn dispatch_axis_reduction<T>(
     input: StridedOperand<'_, T, 2>,
     output: StridedOperand<'_, T, 2>,
     dispatch: AxisReductionDispatch,
-) -> Result<()> {
+) -> Result<()>
+where
+    T: Pod,
+{
     let raw_meta_buffer =
         device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let empty_input_buffer = if input.buffer.len == 0 {
+        Some(device.alloc_zeroed::<T>(1)?)
+    } else {
+        None
+    };
+    let input_buffer = empty_input_buffer
+        .as_ref()
+        .map_or(&input.buffer.buffer, |buffer| &buffer.buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
@@ -607,7 +622,7 @@ fn dispatch_axis_reduction<T>(
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: input.buffer.buffer.as_entire_binding(),
+                    resource: input_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -640,10 +655,21 @@ fn prepared_axis_reduction<T>(
     output: StridedOperand<'_, T, 2>,
     dispatch: AxisReductionDispatch,
     label: &'static str,
-) -> Result<PreparedAxisReduction<T>> {
+) -> Result<PreparedAxisReduction<T>>
+where
+    T: Pod,
+{
     let raw_meta_buffer =
         device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let empty_input_buffer = if input.buffer.len == 0 {
+        Some(device.alloc_zeroed::<T>(1)?)
+    } else {
+        None
+    };
+    let input_buffer = empty_input_buffer
+        .as_ref()
+        .map_or(&input.buffer.buffer, |buffer| &buffer.buffer);
     device
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
@@ -659,7 +685,7 @@ fn prepared_axis_reduction<T>(
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: input.buffer.buffer.as_entire_binding(),
+                    resource: input_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -672,6 +698,7 @@ fn prepared_axis_reduction<T>(
         bind_group: Some(bind_group),
         groups: dispatch.groups,
         _meta_buffer: Some(meta_buffer),
+        _empty_input_buffer: empty_input_buffer,
         _marker: PhantomData,
     })
 }
@@ -682,6 +709,7 @@ fn empty_prepared_axis_reduction<T>() -> PreparedAxisReduction<T> {
         bind_group: None,
         groups: 0,
         _meta_buffer: None,
+        _empty_input_buffer: None,
         _marker: PhantomData,
     }
 }

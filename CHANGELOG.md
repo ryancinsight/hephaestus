@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add reusable prepared rank-2 axis reduction plans for sum, min, max,
+  and mean across WGPU, CUDA, ROCm, and Metal. Preparation retains the backend
+  pipeline and validated layouts/metadata; repeated and batched dispatches
+  preserve non-contiguous, empty-sum, alias, and invalid-width contracts.
+
 - [minor] Add reusable prepared scalar reduction plans for sum, min, and max
   across WGPU, CUDA, ROCm, and Metal. Preparation retains the complete
   device-resident reduction tree, repeated dispatch reuses output storage, and

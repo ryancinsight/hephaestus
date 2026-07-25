@@ -4,6 +4,33 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
+
+- Owner: Codex; scope: prepared rank-2 axis reduction plans for WGPU, CUDA,
+  ROCm, and Metal, including fixed input/output layouts, retained native
+  pipeline and metadata resources, repeated dispatch, batch submission,
+  value-semantic contracts, existing backend CI lanes, and synchronized
+  documentation. Prepared sparse operations and map-reduction plans are
+  non-goals for this increment.
+- Acceptance: CUDA and ROCm expose the same prepared rank-2 axis capability as
+  WGPU/Metal for sum, min, max, and mean; preparation reuses the shared axis
+  planner and validates axis, shape, layout, width, and alias contracts;
+  dispatch launches only retained device resources without host materialization;
+  repeated dispatch and batch submission preserve value semantics across both
+  axes and non-contiguous layouts; sum preserves its identity on empty
+  reduced axes while min/max/mean reject undefined empty axes; and
+  CUDA/ROCm/Metal CI runs the focused contracts.
+- Claimed files: CUDA/ROCm prepared-axis modules and exports/tests, Metal
+  delegation and exports/tests, WGPU empty-axis binding fix and regression test,
+  affected CI/docs, and this item. Last update: 2026-07-25. Hosted feature
+  lanes passed at code head `7728026`: CUDA run `30173211020` / job
+  `89717642298`, ROCm run `30173211026` / job `89717642411`, and Metal run
+  `30173211021` / job `89717642467`. Hardware lanes were skipped because
+  hosted GPU labels were unavailable; required-device enforcement remains
+  enabled for self-hosted runners. Local Windows package compilation remains
+  blocked before source compilation by the locked `cutile-rs` refresh and the
+  sibling Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
+
 ## HEPH-METAL-CI-1 [patch] — done
 
 - Owner: Codex; scope: existing `hephaestus-metal` WGPU-Metal backend
