@@ -4,6 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — in-progress
+
+- Owner: Codex; scope: expose deterministic seeded uniform and normal
+  initializers through Metal, matching the existing WGPU, CUDA, and ROCm
+  application contract. New random algorithms, device-native PRNG kernels,
+  and fluent matrix traits are non-goals.
+- Acceptance: Metal exports `uniform_with_seed` and `normal_with_seed` for
+  the same real scalar and const-generic rank contract; the implementation
+  delegates deterministic value generation to the existing WGPU application
+  path on Metal's native device and uploads the result into `MetalBuffer<T>`;
+  contracts verify deterministic repeated seeds, uniform bounds, nonzero
+  normal output, and the existing required-device behavior; the Metal CI lane
+  executes the feature, lint, nextest, doctest, and rustdoc gates.
+- Claimed files: Metal random module/export/tests, README, CHANGELOG,
+  `docs/adr/0020-metal-random-parity.md`, `checklist.md`, and this item.
+  Execution owner: Codex on `codex/hephaestus-backend-parity-next-2`; last
+  update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
 
 - Owner: Codex; scope: expose the existing rank-2 cumulative-product scan

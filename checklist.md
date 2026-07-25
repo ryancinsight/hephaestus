@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — in-progress
+
+- [ ] Add Metal-owned `uniform_with_seed` and `normal_with_seed` wrappers over
+      the existing WGPU path selected with Metal.
+- [ ] Add deterministic, range, normal-value, and required-device contract
+      coverage for the Metal random initializer surface.
+- [ ] Run the Metal CI feature, lint, nextest, doctest, and rustdoc gates and
+      synchronize the ADR, README, changelog, backlog, and checklist with
+      exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-2`; claimed
+files: Metal random module/export/tests, affected documentation, ADR 0020, and
+no workflow changes unless the existing Metal lane fails to collect the new
+contracts.
+
 ## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
 
 - [x] Add `cumprod` and `cumprod_into` convenience APIs to WGPU and CUDA by
