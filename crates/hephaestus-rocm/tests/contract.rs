@@ -22,9 +22,10 @@ use hephaestus_rocm::{
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
     cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
-    norm_max, normal_with_seed, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
-    spmv_many_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    norm_max, normal_with_seed, prepare_reduction, prepare_reduction_with_width,
+    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
+    scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
+    submit_prepared_reduction_batch, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
     unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
@@ -640,6 +641,69 @@ fn reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries() {
     let invalid_width = BlockWidth::new(192).expect("test invalid width is non-zero");
     assert!(matches!(
         reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 192 must be a power of two"
+    ));
+}
+
+#[test]
+fn prepared_reduction_reuses_device_outputs_and_batches() {
+    let Some(device) = device("prepared_reduction_reuses_device_outputs_and_batches") else {
+        return;
+    };
+
+    let input: Vec<u32> = (0..1027).map(|index| (index % 17) as u32).collect();
+    let expected_sum: u32 = input.iter().sum();
+    let expected_min = input.iter().copied().min().expect("non-empty input");
+    let expected_max = input.iter().copied().max().expect("non-empty input");
+    let input_buffer = device.upload(&input).expect("HIP prepared input upload");
+    let width = BlockWidth::new(128).expect("prepared reduction width");
+
+    let sum = prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, width)
+        .expect("HIP prepared sum");
+    sum.dispatch().expect("HIP prepared sum dispatch");
+    let mut got_sum = [0_u32];
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP prepared sum download");
+    assert_eq!(got_sum, [expected_sum]);
+    sum.dispatch().expect("HIP prepared sum repeat dispatch");
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP prepared repeated sum download");
+    assert_eq!(got_sum, [expected_sum]);
+
+    let min = prepare_reduction::<MinOp, _>(&device, &input_buffer).expect("HIP prepared min");
+    let max = prepare_reduction::<MaxOp, _>(&device, &input_buffer).expect("HIP prepared max");
+    submit_prepared_reduction_batch(&[&min, &max]).expect("HIP prepared reduction batch");
+    let mut got_min = [0_u32];
+    let mut got_max = [0_u32];
+    device
+        .download(min.output(), &mut got_min)
+        .expect("HIP prepared min download");
+    device
+        .download(max.output(), &mut got_max)
+        .expect("HIP prepared max download");
+    assert_eq!(got_min, [expected_min]);
+    assert_eq!(got_max, [expected_max]);
+
+    let empty = device
+        .upload::<u32>(&[])
+        .expect("HIP prepared empty input upload");
+    let prepared_empty =
+        prepare_reduction::<SumOp, _>(&device, &empty).expect("HIP prepared empty sum");
+    prepared_empty
+        .dispatch()
+        .expect("HIP prepared empty dispatch");
+    let mut got_empty = [u32::MAX];
+    device
+        .download(prepared_empty.output(), &mut got_empty)
+        .expect("HIP prepared empty download");
+    assert_eq!(got_empty, [0]);
+
+    let invalid_width = BlockWidth::new(192).expect("prepared invalid width");
+    assert!(matches!(
+        prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
         Err(HephaestusError::DispatchFailed { message })
             if message == "reduction block width 192 must be a power of two"
     ));

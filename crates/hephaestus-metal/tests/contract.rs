@@ -8,8 +8,9 @@
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_metal::{
-    AddOp, MetalDevice, MulOp, NegOp, SqrtOp, StridedOperand, SumOp, binary_elementwise, matmul,
-    reduction, scalar_elementwise, unary_elementwise, unary_elementwise_into,
+    AddOp, MaxOp, MetalDevice, MinOp, MulOp, NegOp, SqrtOp, StridedOperand, SumOp,
+    binary_elementwise, matmul, prepare_reduction, prepare_reduction_with_width, reduction,
+    scalar_elementwise, submit_prepared_reduction_batch, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -182,6 +183,50 @@ fn reduction_sum_matches_cpu_reference() {
     let mut host_out = [0.0f32; 1];
     d.download(&out, &mut host_out).unwrap();
     assert_eq!(host_out[0], 10.0);
+}
+
+#[test]
+fn prepared_reduction_reuses_device_outputs_and_batches() {
+    let Some(d) = device("prepared_reduction_reuses_device_outputs_and_batches") else {
+        return;
+    };
+    let input = d.upload(&[3.0f32, -2.0, 7.0, 1.0, 4.0]).unwrap();
+    let width = BlockWidth::new(4).unwrap();
+
+    let sum = prepare_reduction_with_width::<SumOp, _>(&d, &input, width).unwrap();
+    sum.dispatch(&d).unwrap();
+    let sum_output = sum.output();
+    let mut got_sum = [0.0f32];
+    d.download(&sum_output, &mut got_sum).unwrap();
+    assert_eq!(got_sum, [13.0]);
+    sum.dispatch(&d).unwrap();
+    d.download(&sum.output(), &mut got_sum).unwrap();
+    assert_eq!(got_sum, [13.0]);
+
+    let min = prepare_reduction::<MinOp, _>(&d, &input).unwrap();
+    let max = prepare_reduction::<MaxOp, _>(&d, &input).unwrap();
+    submit_prepared_reduction_batch(&d, &[&min, &max]).unwrap();
+    let mut got_min = [0.0f32];
+    let mut got_max = [0.0f32];
+    d.download(&min.output(), &mut got_min).unwrap();
+    d.download(&max.output(), &mut got_max).unwrap();
+    assert_eq!(got_min, [-2.0]);
+    assert_eq!(got_max, [7.0]);
+
+    let empty = d.upload::<f32>(&[]).unwrap();
+    let prepared_empty = prepare_reduction::<SumOp, _>(&d, &empty).unwrap();
+    prepared_empty.dispatch(&d).unwrap();
+    let mut got_empty = [f32::NAN];
+    d.download(&prepared_empty.output(), &mut got_empty)
+        .unwrap();
+    assert_eq!(got_empty, [0.0]);
+
+    let invalid_width = BlockWidth::new(3).unwrap();
+    assert!(matches!(
+        prepare_reduction_with_width::<SumOp, _>(&d, &input, invalid_width),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 3 must be a power of two"
+    ));
 }
 
 #[test]

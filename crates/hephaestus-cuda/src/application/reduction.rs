@@ -16,7 +16,9 @@ use leto::Layout;
 
 pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
-fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(width: BlockWidth) -> String {
+pub(crate) fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(
+    width: BlockWidth,
+) -> String {
     format!(
         r#"
 #define max(a,b) ((a) > (b) ? (a) : (b))

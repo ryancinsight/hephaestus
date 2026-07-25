@@ -20,8 +20,9 @@ pub use application::linalg::{
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
 };
 pub use application::reduction::{
-    MaxOp, MinOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
-    min_axis_into, reduce_axis, reduction, reduction_with_width, sum_axis, sum_axis_into,
+    MaxOp, MinOp, PreparedReduction, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into,
+    min_axis, min_axis_into, prepare_reduction, prepare_reduction_with_width, reduce_axis,
+    reduction, reduction_with_width, submit_prepared_reduction_batch, sum_axis, sum_axis_into,
 };
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumsum, cumsum_into, scan_axis, scan_axis_into,

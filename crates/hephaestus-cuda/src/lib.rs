@@ -52,6 +52,10 @@ pub use application::linalg::{
     kron, kron_into, matexp, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
     norm_l1, norm_l2, norm_max, pinv, trace,
 };
+pub use application::prepared_reduction::{
+    PreparedReduction, prepare_reduction, prepare_reduction_with_width,
+    submit_prepared_reduction_batch,
+};
 pub use application::reduction::{
     MaxOp, MinOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
     min_axis_into, reduce_axis, reduce_axis_into, reduction, reduction_with_width, sum_axis,
