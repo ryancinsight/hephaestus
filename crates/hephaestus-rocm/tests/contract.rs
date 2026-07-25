@@ -22,11 +22,12 @@ use hephaestus_rocm::{
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
     cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
-    norm_max, normal_with_seed, prepare_max_axis_into, prepare_mean_axis_into, prepare_reduction,
-    prepare_reduction_with_width, prepare_sum_axis_into, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
-    spmv_many_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
-    sum_axis, trace, unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
+    norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
+    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
+    scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, trace,
+    unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
     uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
@@ -707,6 +708,178 @@ fn prepared_reduction_reuses_device_outputs_and_batches() {
         prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
         Err(HephaestusError::DispatchFailed { message })
             if message == "reduction block width 192 must be a power of two"
+    ));
+}
+
+#[test]
+fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
+    let Some(device) = device("prepared_map_reductions_reuse_resources_and_validate_layouts")
+    else {
+        return;
+    };
+
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP dot lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("HIP dot rhs upload");
+    let contiguous = Layout::c_contiguous([4]).expect("HIP dot layout");
+    let prepared_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+        StridedOperand {
+            buffer: &rhs,
+            layout: &contiguous,
+        },
+    )
+    .expect("HIP prepared dot");
+    let dot_output = prepared_dot.output() as *const _;
+    prepared_dot.dispatch().expect("HIP prepared dot dispatch");
+    let mut got = [0.0_f32];
+    device
+        .download(prepared_dot.output(), &mut got)
+        .expect("HIP prepared dot download");
+    assert_eq!(got, [70.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    device
+        .write_buffer(&lhs, &[2.0_f32, 2.0, 2.0, 2.0])
+        .expect("HIP prepared dot input update");
+    prepared_dot
+        .dispatch()
+        .expect("HIP repeated prepared dot dispatch");
+    device
+        .download(prepared_dot.output(), &mut got)
+        .expect("HIP repeated prepared dot download");
+    assert_eq!(got, [52.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    let reversed = Layout::new([4], [-1], 3);
+    let reversed_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &rhs,
+            layout: &reversed,
+        },
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+    )
+    .expect("HIP prepared reversed dot");
+    reversed_dot
+        .dispatch()
+        .expect("HIP prepared reversed dot dispatch");
+    device
+        .download(reversed_dot.output(), &mut got)
+        .expect("HIP prepared reversed dot download");
+    assert_eq!(got, [52.0]);
+
+    let norm_input = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP norm input upload");
+    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let prepared_norm = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &norm_input,
+            layout: &transposed,
+        },
+    )
+    .expect("HIP prepared L2 norm");
+    let norm_output = prepared_norm.output() as *const _;
+    prepared_norm
+        .dispatch()
+        .expect("HIP prepared L2 norm dispatch");
+    device
+        .download(prepared_norm.output(), &mut got)
+        .expect("HIP prepared L2 norm download");
+    let expected = 30.0_f32.sqrt();
+    assert!((got[0] - expected).abs() <= 2.0 * f32::EPSILON * expected.max(1.0));
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    device
+        .write_buffer(&norm_input, &[4.0_f32; 4])
+        .expect("HIP prepared L2 input update");
+    prepared_norm
+        .dispatch()
+        .expect("HIP repeated prepared L2 norm dispatch");
+    device
+        .download(prepared_norm.output(), &mut got)
+        .expect("HIP repeated prepared L2 norm download");
+    assert_eq!(got, [8.0]);
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    let empty = device.upload::<f32>(&[]).expect("HIP empty map input");
+    let empty_layout = Layout::c_contiguous([0]).expect("HIP empty map layout");
+    let empty_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("HIP prepared empty dot");
+    empty_dot
+        .dispatch()
+        .expect("HIP prepared empty dot dispatch");
+    device
+        .download(empty_dot.output(), &mut got)
+        .expect("HIP prepared empty dot download");
+    assert_eq!(got, [0.0]);
+
+    let empty_norm = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("HIP prepared empty norm");
+    empty_norm
+        .dispatch()
+        .expect("HIP prepared empty norm dispatch");
+    device
+        .download(empty_norm.output(), &mut got)
+        .expect("HIP prepared empty norm download");
+    assert_eq!(got, [0.0]);
+
+    let wrong_shape = Layout::c_contiguous([3]).expect("HIP wrong dot shape");
+    assert!(matches!(
+        prepare_dot(
+            &device,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &contiguous,
+            },
+            StridedOperand {
+                buffer: &rhs,
+                layout: &wrong_shape,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("dot product shape mismatch:")
+    ));
+
+    let invalid_layout = Layout::new([3], [1], 2);
+    assert!(matches!(
+        prepare_norm_l2(
+            &device,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &invalid_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
     ));
 }
 

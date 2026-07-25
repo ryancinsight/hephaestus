@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add reusable prepared dot-product and L2-norm plans to CUDA, ROCm,
+  and Metal with the WGPU contract as the parity baseline. CUDA and ROCm
+  retain fixed map scratch, reduction trees, and scalar outputs; Metal
+  delegates through the native WGPU-Metal path. Contracts cover repeated
+  dispatch, changed inputs, output identity, empty/non-contiguous layouts,
+  and invalid shapes/layouts.
+
 - [minor] Add equivalent CSR sparse products and reusable prepared SpMV/SpMM
   plans with mixed batching across WGPU, CUDA, ROCm, and Metal. CUDA and ROCm
   retain native kernels and validated metadata; Metal delegates through the

@@ -29,10 +29,12 @@
 //!
 //! ## Scope
 //!
-//! This crate currently owns the device substrate (acquisition, typed buffers,
-//! transfer). Monomorphized elementwise/reduction kernel dispatch — mirroring
-//! `hephaestus-wgpu`'s `application` layer — composes cutile PTX authoring on
-//! top of this foundation and lands in a follow-up.
+//! This crate owns the device substrate and monomorphized application kernels,
+//! including elementwise, reduction, axis-reduction, scan, map-reduction,
+//! matrix, stencil, and prepared-dispatch contracts. Prepared dot products and
+//! L2 norms retain their product scratch, reduction tree, and scalar output
+//! across dispatches, matching the reusable resource contract of
+//! `hephaestus-wgpu`.
 
 mod infrastructure;
 
@@ -55,6 +57,9 @@ pub use application::linalg::{
 pub use application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
     prepare_reduce_axis_into, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
+};
+pub use application::prepared_map_reduction::{
+    PreparedDot, PreparedL2Norm, prepare_dot, prepare_norm_l2,
 };
 pub use application::prepared_reduction::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,

@@ -8,6 +8,8 @@ pub mod linalg;
 pub mod pipeline;
 /// Reusable rank-2 axis reduction plans.
 pub mod prepared_axis_reduction;
+/// Reusable dot-product and L2-norm map-reduction plans.
+pub mod prepared_map_reduction;
 /// Reusable multi-pass scalar reduction plans.
 pub mod prepared_reduction;
 /// Multi-pass tree reductions.
