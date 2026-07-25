@@ -27,6 +27,23 @@ Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch. Final
 documentation-head verification and merge are recorded in the delivery
 commit.
 
+## HEPH-BACKEND-PARITY-PREPARED-SPARSE-1 [minor] — in progress
+
+- [ ] Add native preplanned CUDA and ROCm CSR SpMV, SpMM, and multi-RHS SpMV
+      operations with retained metadata, kernels, and fixed buffers.
+- [ ] Add Metal-owned CSR and prepared sparse wrappers over the native
+      WGPU-Metal implementation, with matching operation and batch names.
+- [ ] Add value-semantic repeated, mixed-batch, dense-RHS, non-contiguous,
+      invalid-shape, invalid-layout, and output-length contracts across the
+      four backend surfaces.
+- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+      backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-prepared-sparse`.
+Claimed files: CUDA/ROCm sparse prepared modules and exports/tests, Metal
+sparse wrapper, CSR buffer accessors, affected documentation, ADR 0017, and
+the existing backend CI workflows.
+
 ## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
 - [x] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
