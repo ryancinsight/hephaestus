@@ -27,6 +27,25 @@ cuda-oxide + cutile).
   blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
   `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
 
+## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — in-progress
+
+- Owner: Codex; scope: shared 2D Laplacian contract in `hephaestus-core`,
+  native CUDA and ROCm stencil kernels, Metal delegation, value-semantic
+  backend contracts, existing CUDA/ROCm/Metal CI lanes, and synchronized
+  backend documentation. Prepared reductions, sparse batches, and remaining
+  decomposition or linalg differences are non-goals for this increment.
+- Acceptance: WGPU, CUDA, ROCm, and Metal expose the same
+  `Laplacian2DParams`/`Laplacian2DKernel` contract; native CUDA and HIP
+  execute the device-resident 2D Laplacian with Dirichlet, Neumann, and
+  periodic boundaries plus both polarity conventions; input/output storage
+  and grid validation are typed and value-tested; Metal delegates through
+  its native WGPU-Metal device; and each backend's CI lane runs the focused
+  contracts.
+- Claimed files: `crates/hephaestus-core/src/domain/stencil.rs`, the four
+  backend stencil modules and exports/tests, `Cargo.toml` dependency entries,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0014-backend-stencil-parity.md`,
+  `checklist.md`, and this item. Last update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — done
 
 - Owner: Codex; scope: shared `FieldGeometry`/ray-packing contract in

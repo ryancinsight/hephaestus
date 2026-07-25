@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — in-progress
+
+- [ ] Move the backend-neutral `Laplacian2DParams`, boundary conditions, and
+      polarity contract into `hephaestus-core`.
+- [ ] Implement native CUDA and ROCm device-resident Laplacian kernels for
+      Dirichlet, Neumann, and periodic boundaries without CPU or WGPU routing.
+- [ ] Add the Metal wrapper over the native Metal-selected WGPU kernel.
+- [ ] Add positive, negative, boundary, storage-length, and polarity
+      value-semantic contracts for WGPU, CUDA, ROCm, and Metal.
+- [ ] Run the existing CUDA/ROCm/Metal CI lanes through the new contracts and
+      synchronize the ADR, README, changelog, backlog, and checklist.
+
+Execution owner: Codex on `codex/hephaestus-backend-stencil`. Claimed files:
+shared stencil contract, backend stencil implementations and tests, affected
+dependency entries, and synchronized documentation artifacts.
+
 ## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — done
 
 - [x] Add the backend-neutral `FieldGeometry` and `RAY_STRIDE` contract to
