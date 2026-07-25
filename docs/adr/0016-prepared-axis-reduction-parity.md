@@ -39,8 +39,9 @@ backend-owned so buffer and device lifetimes do not cross the backend boundary.
 
 Backend contracts will compare prepared sum, min, max, and mean results with
 the Leto CPU reference for both axes and non-contiguous layouts. Repeat and
-batch dispatch will assert value semantics; sum empty-axis plans will be
-no-ops, min/max/mean empty-axis plans will return their typed rejection, and
-invalid axis, width, layout, and alias inputs will be rejected before launch.
+batch dispatch will assert value semantics; sum empty-axis plans will write
+their identity, min/max/mean empty-axis plans will return their typed
+rejection, and invalid axis, width, layout, and alias inputs will be rejected
+before launch.
 CUDA, ROCm, and Metal CI will run the focused feature, lint, test, doctest,
 and rustdoc gates.

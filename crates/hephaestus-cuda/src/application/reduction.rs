@@ -1,6 +1,6 @@
 use crate::CudaDevice;
 use crate::application::pipeline::{
-    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
+    LaunchConfig, PipelineKey, SafeCachedKernel, cached_kernel, grid_size, launch_kernel,
 };
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
@@ -166,7 +166,7 @@ where
         .expect("invariant: multi-element reduction allocates a final buffer"))
 }
 
-fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
+pub(crate) fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
     input
         .layout
         .shape
@@ -177,7 +177,7 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Result<()> {
+pub(crate) fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Result<()> {
     if axis_len == 0 {
         return Err(HephaestusError::DispatchFailed {
             message: format!("{op_name} is undefined for empty axis {axis}"),
@@ -186,7 +186,7 @@ fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Res
     Ok(())
 }
 
-fn plan_axis_reduction_dispatch<T>(
+pub(crate) fn plan_axis_reduction_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
@@ -203,7 +203,8 @@ fn plan_axis_reduction_dispatch<T>(
     )
 }
 
-fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>() -> String {
+pub(crate) fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>()
+-> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -253,7 +254,7 @@ extern "C" __global__ void axis_reduction_kernel(
     )
 }
 
-fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
+pub(crate) fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -300,6 +301,34 @@ extern "C" __global__ void mean_axis_kernel(
     )
 }
 
+/// Launch a cached rank-2 axis-reduction kernel with a retained dispatch plan.
+pub(crate) fn launch_axis_dispatch<T>(
+    device: &CudaDevice,
+    kernel: &SafeCachedKernel,
+    dispatch: AxisReductionDispatch,
+    input: StridedOperand<'_, T, 2>,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()> {
+    let mut meta_val = dispatch.meta;
+    let mut in_ptr = input.buffer.raw();
+    let mut out_ptr = output.buffer.raw();
+
+    // Argument list mirrors `axis_reduction_kernel(AxisReductionMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
+
+    launch_kernel(
+        device,
+        kernel,
+        LaunchConfig::linear(dispatch.groups, width),
+        &mut args,
+    )
+}
+
 /// Reduce a rank-2 strided matrix along `axis`, preserving the reduced axis as length one.
 pub fn reduce_axis_into<Op, T>(
     device: &CudaDevice,
@@ -327,23 +356,7 @@ where
         axis_reduction_shader_source::<Op, T>()
     })?;
 
-    let mut meta_val = dispatch.meta;
-    let mut in_ptr = input.buffer.raw();
-    let mut out_ptr = output.buffer.raw();
-
-    // Argument list mirrors `axis_reduction_kernel(AxisReductionMeta, const T*, T*)`.
-    let mut args: [*mut std::ffi::c_void; 3] = [
-        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-    ];
-
-    launch_kernel(
-        device,
-        &kernel,
-        LaunchConfig::linear(dispatch.groups, width),
-        &mut args,
-    )
+    launch_axis_dispatch(device, &kernel, dispatch, input, output, width)
 }
 
 /// Reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
@@ -406,23 +419,7 @@ where
         mean_axis_shader_source::<T>()
     })?;
 
-    let mut meta_val = dispatch.meta;
-    let mut in_ptr = input.buffer.raw();
-    let mut out_ptr = output.buffer.raw();
-
-    // Argument list mirrors `mean_axis_kernel(AxisReductionMeta, const T*, T*)`.
-    let mut args: [*mut std::ffi::c_void; 3] = [
-        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-    ];
-
-    launch_kernel(
-        device,
-        &kernel,
-        LaunchConfig::linear(dispatch.groups, width),
-        &mut args,
-    )
+    launch_axis_dispatch(device, &kernel, dispatch, input, output, width)
 }
 
 /// Mean-reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.

@@ -17,9 +17,9 @@ cuda-oxide + cutile).
   planner and validates axis, shape, layout, width, and alias contracts;
   dispatch launches only retained device resources without host materialization;
   repeated dispatch and batch submission preserve value semantics across both
-  axes and non-contiguous layouts; sum accepts empty-axis no-op plans while
-  min/max/mean reject undefined empty axes; and CUDA/ROCm/Metal CI runs the
-  focused contracts.
+  axes and non-contiguous layouts; sum preserves its identity on empty
+  reduced axes while min/max/mean reject undefined empty axes; and
+  CUDA/ROCm/Metal CI runs the focused contracts.
 - Claimed files: CUDA/ROCm prepared-axis modules and exports/tests, Metal
   delegation and exports/tests, affected CI/docs, and this item. Last update:
   2026-07-25.

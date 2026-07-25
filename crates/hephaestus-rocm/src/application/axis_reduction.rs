@@ -13,7 +13,8 @@ use leto::Layout;
 
 pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
-fn axis_reduction_shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>() -> String {
+pub(crate) fn axis_reduction_shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>()
+-> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -63,7 +64,7 @@ extern "C" __global__ void axis_reduction_kernel(
     )
 }
 
-fn mean_axis_shader_source<T: IdentityToken<SumOp, HipC>>() -> String {
+pub(crate) fn mean_axis_shader_source<T: IdentityToken<SumOp, HipC>>() -> String {
     format!(
         r#"
 struct AxisReductionMeta {{
@@ -110,7 +111,7 @@ extern "C" __global__ void mean_axis_kernel(
     )
 }
 
-fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
+pub(crate) fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
     input
         .layout
         .shape
@@ -121,7 +122,11 @@ fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
         })
 }
 
-fn reject_empty_axis(axis_len: usize, operation: &'static str, axis: usize) -> Result<()> {
+pub(crate) fn reject_empty_axis(
+    axis_len: usize,
+    operation: &'static str,
+    axis: usize,
+) -> Result<()> {
     if axis_len == 0 {
         return Err(HephaestusError::DispatchFailed {
             message: format!("{operation} is undefined for empty axis {axis}"),
@@ -130,7 +135,7 @@ fn reject_empty_axis(axis_len: usize, operation: &'static str, axis: usize) -> R
     Ok(())
 }
 
-fn plan_dispatch<T>(
+pub(crate) fn plan_dispatch<T>(
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     output: StridedOperand<'_, T, 2>,
@@ -216,7 +221,7 @@ where
     )
 }
 
-fn launch_with_meta(
+pub(crate) fn launch_with_meta(
     device: &RocmDevice,
     kernel: &crate::application::pipeline::RocmKernel,
     dispatch: AxisReductionDispatch,
