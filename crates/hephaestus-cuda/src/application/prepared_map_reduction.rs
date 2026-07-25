@@ -2,7 +2,8 @@
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, CudaC, DeviceBuffer, DialectScalar, IdentityToken, OpIdentity, Result, SumOp,
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, IdentityToken, OpIdentity,
+    Result, SumOp,
 };
 use leto::Layout;
 

@@ -2,14 +2,16 @@
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, DeviceBuffer, DialectScalar, HipC, IdentityToken, OpIdentity, Result, SumOp,
+    BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HipC, IdentityToken, OpIdentity,
+    Result, SumOp,
 };
 use leto::Layout;
 
 use crate::RocmDevice;
 use crate::application::elementwise::{MulOp, SqrtOp, unary_elementwise_into};
 use crate::application::prepared_reduction::PreparedReductionPlan;
-use crate::application::strided::{StridedOperand, binary_elementwise_strided_into};
+use crate::application::strided::StridedOperand;
+use crate::application::strided_elementwise::binary_elementwise_strided_into;
 use crate::infrastructure::RocmBuffer;
 
 /// A reusable ROCm vector dot-product plan over fixed strided inputs.
