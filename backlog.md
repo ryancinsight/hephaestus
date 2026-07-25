@@ -31,7 +31,7 @@ cuda-oxide + cutile).
   blocked before source compilation by the locked `cutile-rs` refresh and the
   sibling Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
-## HEPH-BACKEND-PARITY-PREPARED-SPARSE-1 [minor] — in progress
+## HEPH-BACKEND-PARITY-PREPARED-SPARSE-1 [minor] — done
 
 - Owner: Codex; scope: prepared CSR SpMV, SpMM, multi-RHS SpMV, and one-submit
   batching across WGPU, CUDA, ROCm, and Metal, including backend-owned CSR
@@ -50,7 +50,14 @@ cuda-oxide + cutile).
 - Claimed files: CUDA/ROCm sparse prepared modules and exports/tests, Metal
   sparse wrapper, CSR buffer accessors, affected README/changelog, ADR 0017,
   checklist, backlog, and existing backend CI workflows. Last update:
-  2026-07-25.
+  2026-07-25. Hosted feature lanes passed at code head `27bf875`: CUDA run
+  `30175194827` / job `89722726883` (7m17s), ROCm run `30175194823` / job
+  `89722726994` (5m44s), and Metal run `30175194820` / job `89722726870`.
+  NVIDIA and AMD hardware lanes were skipped because hosted GPU labels were
+  unavailable; required-device enforcement remains enabled for self-hosted
+  runners. Local Windows package compilation remains blocked before source
+  compilation by the locked `cutile-rs` refresh and the sibling
+  Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
 ## HEPH-METAL-CI-1 [patch] — done
 

@@ -42,7 +42,11 @@ not cross the public backend boundary.
 Backend contracts compare prepared SpMV, SpMM, and multi-RHS SpMV results with
 the Leto CPU reference for dense and non-contiguous RHS layouts. Repeated and
 mixed batches assert value semantics, and invalid shapes, layouts, output
-lengths, and cross-device batches reject before launch. CUDA, ROCm, and Metal
-CI will run focused feature, warning-denied Clippy, nextest, doctest, and
-rustdoc gates; hardware lanes remain required-device checks when a self-hosted
-GPU label is available.
+lengths, and cross-device batches reject before launch. At code head `27bf875`,
+CUDA run `30175194827` / job `89722726883` passed in 7m17s, ROCm run
+`30175194823` / job `89722726994` passed in 5m44s, and Metal run
+`30175194820` / job `89722726870` passed. Hardware lanes were skipped because
+hosted GPU labels were unavailable; required-device checks remain enabled for
+self-hosted runners. Local Windows package compilation remains blocked before
+source compilation by the locked `cutile-rs` refresh and the sibling
+Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
