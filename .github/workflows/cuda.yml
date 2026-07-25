@@ -87,7 +87,7 @@ jobs:
               set -euo pipefail
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config
+              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config libclang-dev
               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               . "$HOME/.cargo/env"
               rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
