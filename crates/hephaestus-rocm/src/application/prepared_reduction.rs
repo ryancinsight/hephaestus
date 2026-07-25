@@ -1,6 +1,5 @@
 //! Reusable scalar reduction plans for ROCm.
 
-use core::marker::PhantomData;
 use std::rc::Rc;
 
 use bytemuck::Pod;
@@ -22,17 +21,16 @@ struct PreparedPass {
 }
 
 /// A reusable ROCm scalar reduction plan over a fixed input buffer.
-pub struct PreparedReduction<'a, Op, T> {
+pub struct PreparedReduction<'a, T> {
     device: &'a RocmDevice,
     input: &'a RocmBuffer<T>,
     width: BlockWidth,
     shared_bytes: u32,
     passes: Vec<PreparedPass>,
     outputs: Vec<RocmBuffer<T>>,
-    _operation: PhantomData<Op>,
 }
 
-impl<Op, T> PreparedReduction<'_, Op, T> {
+impl<T> PreparedReduction<'_, T> {
     /// Dispatch the prepared reduction and reuse its device-resident outputs.
     ///
     /// # Errors
@@ -79,7 +77,7 @@ impl<Op, T> PreparedReduction<'_, Op, T> {
 ///
 /// Returns the first native launch error encountered.
 pub fn submit_prepared_reduction_batch<Op, T>(
-    reductions: &[&PreparedReduction<'_, Op, T>],
+    reductions: &[&PreparedReduction<'_, T>],
 ) -> Result<()> {
     for reduction in reductions {
         reduction.dispatch()?;
@@ -100,7 +98,7 @@ pub fn prepare_reduction_with_width<'a, Op, T>(
     device: &'a RocmDevice,
     input: &'a RocmBuffer<T>,
     width: BlockWidth,
-) -> Result<PreparedReduction<'a, Op, T>>
+) -> Result<PreparedReduction<'a, T>>
 where
     Op: CombineExpr<HipC>,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op> + IdentityToken<Op, HipC>,
@@ -115,7 +113,6 @@ where
             shared_bytes,
             passes: Vec::new(),
             outputs: vec![device.upload(&[T::IDENTITY])?],
-            _operation: PhantomData,
         });
     }
 
@@ -161,7 +158,6 @@ where
         shared_bytes,
         passes,
         outputs,
-        _operation: PhantomData,
     })
 }
 
@@ -170,7 +166,7 @@ where
 pub fn prepare_reduction<'a, Op, T>(
     device: &'a RocmDevice,
     input: &'a RocmBuffer<T>,
-) -> Result<PreparedReduction<'a, Op, T>>
+) -> Result<PreparedReduction<'a, T>>
 where
     Op: CombineExpr<HipC>,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op> + IdentityToken<Op, HipC>,

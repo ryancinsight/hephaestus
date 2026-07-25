@@ -1,7 +1,5 @@
 //! Reduction operations.
 
-use core::marker::PhantomData;
-
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
 use hephaestus_core::{
@@ -12,12 +10,11 @@ use hephaestus_wgpu as wgpu_backend;
 pub use wgpu_backend::{MaxOp, MinOp, SumOp};
 
 /// A reusable Metal scalar reduction plan delegated to WGPU's native Metal path.
-pub struct PreparedReduction<Op, T> {
+pub struct PreparedReduction<T> {
     inner: wgpu_backend::PreparedReduction<T>,
-    _operation: PhantomData<Op>,
 }
 
-impl<Op, T> PreparedReduction<Op, T> {
+impl<T> PreparedReduction<T> {
     /// Dispatch the prepared reduction and reuse its device-resident outputs.
     ///
     /// # Errors
@@ -47,7 +44,7 @@ impl<Op, T> PreparedReduction<Op, T> {
 /// Returns a typed dispatch error when command encoding or submission fails.
 pub fn submit_prepared_reduction_batch<Op, T>(
     device: &MetalDevice,
-    reductions: &[&PreparedReduction<Op, T>],
+    reductions: &[&PreparedReduction<T>],
 ) -> Result<()> {
     let inner = reductions
         .iter()
@@ -66,17 +63,14 @@ pub fn prepare_reduction_with_width<Op, T>(
     device: &MetalDevice,
     input: &MetalBuffer<T>,
     width: BlockWidth,
-) -> Result<PreparedReduction<Op, T>>
+) -> Result<PreparedReduction<T>>
 where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner =
         wgpu_backend::prepare_reduction_with_width::<Op, T>(&device.inner, &input.inner, width)?;
-    Ok(PreparedReduction {
-        inner,
-        _operation: PhantomData,
-    })
+    Ok(PreparedReduction { inner })
 }
 
 /// Prepare a scalar reduction using the default block width.
@@ -84,7 +78,7 @@ where
 pub fn prepare_reduction<Op, T>(
     device: &MetalDevice,
     input: &MetalBuffer<T>,
-) -> Result<PreparedReduction<Op, T>>
+) -> Result<PreparedReduction<T>>
 where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,

@@ -1,6 +1,5 @@
 //! Reusable scalar reduction plans for CUDA.
 
-use core::marker::PhantomData;
 use std::sync::Arc;
 
 use bytemuck::Pod;
@@ -23,16 +22,15 @@ struct PreparedPass {
 }
 
 /// A reusable CUDA scalar reduction plan over a fixed input buffer.
-pub struct PreparedReduction<'a, Op, T> {
+pub struct PreparedReduction<'a, T> {
     device: &'a CudaDevice,
     input: &'a CudaBuffer<T>,
     width: BlockWidth,
     passes: Vec<PreparedPass>,
     outputs: Vec<CudaBuffer<T>>,
-    _operation: PhantomData<Op>,
 }
 
-impl<Op, T> PreparedReduction<'_, Op, T> {
+impl<T> PreparedReduction<'_, T> {
     /// Dispatch the prepared reduction and reuse its device-resident outputs.
     ///
     /// # Errors
@@ -79,7 +77,7 @@ impl<Op, T> PreparedReduction<'_, Op, T> {
 ///
 /// Returns the first native launch error encountered.
 pub fn submit_prepared_reduction_batch<Op, T>(
-    reductions: &[&PreparedReduction<'_, Op, T>],
+    reductions: &[&PreparedReduction<'_, T>],
 ) -> Result<()> {
     for reduction in reductions {
         reduction.dispatch()?;
@@ -100,7 +98,7 @@ pub fn prepare_reduction_with_width<'a, Op, T>(
     device: &'a CudaDevice,
     input: &'a CudaBuffer<T>,
     width: BlockWidth,
-) -> Result<PreparedReduction<'a, Op, T>>
+) -> Result<PreparedReduction<'a, T>>
 where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
@@ -113,7 +111,6 @@ where
             width,
             passes: Vec::new(),
             outputs: vec![device.upload(&[T::IDENTITY])?],
-            _operation: PhantomData,
         });
     }
 
@@ -158,7 +155,6 @@ where
         width,
         passes,
         outputs,
-        _operation: PhantomData,
     })
 }
 
@@ -167,7 +163,7 @@ where
 pub fn prepare_reduction<'a, Op, T>(
     device: &'a CudaDevice,
     input: &'a CudaBuffer<T>,
-) -> Result<PreparedReduction<'a, Op, T>>
+) -> Result<PreparedReduction<'a, T>>
 where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
