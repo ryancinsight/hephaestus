@@ -3452,7 +3452,8 @@ fn test_cuda_prepared_sparse_dispatch_matches_reference() {
                 "unexpected error: {message}"
             );
         }
-        other => panic!("expected invalid layout rejection, got {other:?}"),
+        Err(error) => panic!("expected invalid layout rejection, got {error:?}"),
+        Ok(_) => panic!("expected invalid layout rejection, got success"),
     }
 }
 

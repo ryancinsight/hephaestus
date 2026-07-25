@@ -1791,7 +1791,8 @@ fn prepared_sparse_dispatch_matches_reference() {
             host_len: 3,
             device_len: 2,
         }) => {}
-        other => panic!("expected SpMV length rejection, got {other:?}"),
+        Err(error) => panic!("expected SpMV length rejection, got {error:?}"),
+        Ok(_) => panic!("expected SpMV length rejection, got success"),
     }
     let bad_layout = Layout::new([3, 2], [2, 1], 5);
     let bad_operand = StridedOperand {
@@ -1808,7 +1809,8 @@ fn prepared_sparse_dispatch_matches_reference() {
                 "unexpected error: {message}"
             );
         }
-        other => panic!("expected invalid layout rejection, got {other:?}"),
+        Err(error) => panic!("expected invalid layout rejection, got {error:?}"),
+        Ok(_) => panic!("expected invalid layout rejection, got success"),
     }
 }
 
