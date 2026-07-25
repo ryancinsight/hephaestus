@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-METAL-CI-1 [patch] — done
+
+- Owner: Codex; scope: existing `hephaestus-metal` WGPU-Metal backend
+  documentation, required-device contract behavior, macOS Metal feature/build/
+  test/doc CI, and synchronized checklist/changelog state. A second native
+  `metal-rs` implementation and new Metal operator families are non-goals for
+  this increment.
+- Acceptance: the public backend inventory names `hephaestus-metal`; its
+  ownership is documented as WGPU configured for native Metal; hardware CI
+  sets `HEPHAESTUS_METAL_REQUIRE_DEVICE=1` so unavailable hardware fails rather
+  than skips; macOS CI checks the default and minimal feature surfaces, runs
+  warning-denied Clippy, required-device Nextest, doctest, and rustdoc; and the
+  Metal contract tests retain value-semantic device/CPU checks.
+- Claimed files: `crates/hephaestus-metal/tests/contract.rs`,
+  `.github/workflows/metal.yml`, `README.md`, `CHANGELOG.md`, `checklist.md`,
+  and this item. Last update: 2026-07-25. Hosted macOS Metal job
+  `89630859643` passed at PR head `9292c20`, including required-device
+  contracts, feature builds, warning-denied Clippy, doctest, and rustdoc.
+  The ROCm container job `89630859765` also passed after the shared
+  `mnemosyne-core` source patch. Local Windows package compilation remains
+  blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
+  `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
+
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - Owner: Codex; scope: ROCm decomposition feature seam, device-resident
@@ -1026,10 +1049,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   tracking is limited to the documented concurrent-device-acquisition case;
   current focused evidence is `cargo nextest run -p hephaestus-cuda
   concurrent_device_acquisition_is_safe` (1/1).
-- [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
-  over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
-  break) or record the alias-crate justification. Status: todo (user decision
-  useful on the break).
+- [KS-9] [minor] `hephaestus-metal` decision: retain the dedicated typed
+  backend crate over wgpu-Metal. Status: **done** (2026-07-24). The crate owns
+  `MetalDevice`/`MetalBuffer`, preserves the backend-neutral application
+  boundary, and selects `wgpu::Backends::METAL` without exposing WGPU types to
+  consumers. Collapsing it to `WgpuDevice::try_metal` would be a breaking
+  public-surface change and would remove the Metal-specific required-device
+  CI contract. The macOS workflow and README now carry the decision evidence.
 
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU

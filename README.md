@@ -20,6 +20,7 @@ kernels are forged for accelerator hardware.
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, and monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation. |
+| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse dispatch via ZST op markers and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
 | `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, pseudoinverses, matrix exponentials, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky, partial/complete-pivot LU, Householder/column-pivoted QR, Golub–Kahan bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, symmetric Jacobi eigen, and general complex eigenvalue decomposition surfaces. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for the factorization surface. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
@@ -60,6 +61,11 @@ register each package's Trusted Publisher with that environment.
   entry points, and the op contributes only its shader combine expression. No
   type names appear in API identifiers; `DialectScalar<L>::TYPE_TOKEN`
   substitutes the shader type token for each backend dialect.
+- The Metal backend selects `wgpu::Backends::METAL` at device acquisition and
+  delegates its supported application families through `hephaestus-wgpu`. This
+  keeps one WGSL kernel implementation while executing through the native
+  Apple Metal path; it does not silently fall back to CPU, Vulkan, or another
+  WGPU adapter.
 - The ROCm backend owns native HIP device mechanics through the optional
   `cubecl-hip-sys` bindings. Its `HipC` dialect reuses the shared operation
   vocabulary, while real contiguous and rank-≤4 strided elementwise, reduction, rank-2 axis-scan,
@@ -198,6 +204,13 @@ validates the feature build and adapterless path; the
 manually enabled self-hosted AMD lane sets
 `HEPHAESTUS_ROCM_REQUIRE_DEVICE=1` so hardware evidence cannot be replaced by
 a skip.
+
+The Metal contract suite runs the typed buffer, transfer, elementwise,
+reduction, and matrix-multiplication value checks through the native Metal
+adapter on macOS. The Metal workflow checks both minimal and default feature
+surfaces, then runs warning-denied Clippy, doctests, rustdoc, and required
+device contracts with `HEPHAESTUS_METAL_REQUIRE_DEVICE=1`; a missing Metal
+adapter fails the hardware lane instead of producing a skip-only result.
 
 The `elementwise_into`, `reduction_width`, and `prepared_map_reduction`
 benchmarks run real WGPU dispatch and validate output values. The prepared

@@ -2,6 +2,25 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-METAL-CI-1 [patch] — done
+
+- [x] Document `hephaestus-metal` in the workspace backend inventory and state
+      that it delegates through `hephaestus-wgpu` with native Metal selected.
+- [x] Make the Metal contract helper honor
+      `HEPHAESTUS_METAL_REQUIRE_DEVICE=1` for hardware CI.
+- [x] Add macOS Metal CI for minimal/default feature checks, warning-denied
+      Clippy, required-device Nextest, doctest, and rustdoc.
+- [x] Synchronize the Unreleased changelog and close this checklist item with
+      exact hosted-run evidence.
+
+Execution owner: Codex on `codex/hephaestus-rocm-export-closeout`. Claimed
+files: Metal contract tests, Metal workflow, README, CHANGELOG, this checklist,
+and the matching backlog item. A second native `metal-rs` backend and new
+operator families are outside this increment. Hosted macOS Metal job
+`89630859643` and ROCm container job `89630859765` passed at head `9292c20`.
+Local Windows package compilation remains blocked by the sibling
+Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
+
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - [x] Add the ROCm decomposition feature seam and common Cholesky exports.
