@@ -20,6 +20,10 @@ pub struct RocmDevice {
 }
 
 impl RocmDevice {
+    pub(crate) fn same_context(&self, other: &Self) -> bool {
+        core::ptr::eq(self, other)
+    }
+
     pub(crate) fn bind(&self) -> Result<()> {
         Err(unavailable())
     }

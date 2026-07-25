@@ -26,6 +26,10 @@ pub struct CudaDevice {
 }
 
 impl CudaDevice {
+    pub(crate) fn same_context(&self, other: &Self) -> bool {
+        core::ptr::eq(self, other)
+    }
+
     /// Report the CUDA backend unavailable in a `cuda`-feature-less build.
     pub fn try_default() -> Result<Self> {
         Err(HephaestusError::AdapterUnavailable {

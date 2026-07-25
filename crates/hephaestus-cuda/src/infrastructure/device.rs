@@ -122,6 +122,10 @@ impl core::fmt::Debug for CudaDevice {
 }
 
 impl CudaDevice {
+    pub(crate) fn same_context(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.context, &other.context)
+    }
+
     /// Acquire the default CUDA device (ordinal 0).
     ///
     /// Returns [`HephaestusError::AdapterUnavailable`] when no CUDA driver or

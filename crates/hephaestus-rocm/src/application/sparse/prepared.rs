@@ -3,9 +3,7 @@
 use std::rc::Rc;
 
 use bytemuck::Pod;
-use hephaestus_core::{
-    BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
-};
+use hephaestus_core::{BlockWidth, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 
 use super::GpuCsrMatrix;
 use crate::RocmDevice;
@@ -126,7 +124,7 @@ pub enum PreparedSparseDispatch<'plan, 'device, T> {
     Spmm(&'plan PreparedSpmm<'device, T>),
 }
 
-impl<T> PreparedSparseDispatch<'_, '_, T> {
+impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSparseDispatch<'_, '_, T> {
     fn device(&self) -> &RocmDevice {
         match self {
             Self::Spmv(operation) => operation.device(),
@@ -148,7 +146,7 @@ impl<T> PreparedSparseDispatch<'_, '_, T> {
 ///
 /// Returns an error when operations belong to different HIP contexts or when
 /// a native launch fails.
-pub fn submit_prepared_sparse_batch<T: DialectScalar<HipC> + Pod>(
+pub fn submit_prepared_sparse_batch<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     operations: &[PreparedSparseDispatch<'_, '_, T>],
 ) -> Result<()> {
     let Some((first, rest)) = operations.split_first() else {

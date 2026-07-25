@@ -3,9 +3,7 @@
 use std::sync::Arc;
 
 use bytemuck::Pod;
-use hephaestus_core::{
-    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
-};
+use hephaestus_core::{BlockWidth, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::GpuCsrMatrix;
 use crate::CudaDevice;
@@ -127,7 +125,7 @@ pub enum PreparedSparseDispatch<'plan, 'device, T> {
     Spmm(&'plan PreparedSpmm<'device, T>),
 }
 
-impl<T> PreparedSparseDispatch<'_, '_, T> {
+impl<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod> PreparedSparseDispatch<'_, '_, T> {
     fn device(&self) -> &CudaDevice {
         match self {
             Self::Spmv(operation) => operation.device(),
@@ -149,18 +147,16 @@ impl<T> PreparedSparseDispatch<'_, '_, T> {
 ///
 /// Returns an error when operations belong to different CUDA contexts or when
 /// a native launch fails.
-pub fn submit_prepared_sparse_batch<T: DialectScalar<CudaC> + Pod>(
+pub fn submit_prepared_sparse_batch<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     operations: &[PreparedSparseDispatch<'_, '_, T>],
 ) -> Result<()> {
     let Some((first, rest)) = operations.split_first() else {
         return Ok(());
     };
-    if rest.iter().any(|operation| {
-        !Arc::ptr_eq(
-            first.device().cuda_context(),
-            operation.device().cuda_context(),
-        )
-    }) {
+    if rest
+        .iter()
+        .any(|operation| !first.device().same_context(operation.device()))
+    {
         return Err(HephaestusError::DispatchFailed {
             message: "prepared sparse batch contains operations from different CUDA contexts"
                 .to_string(),
