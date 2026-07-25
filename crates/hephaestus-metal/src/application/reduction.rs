@@ -42,7 +42,7 @@ impl<T> PreparedReduction<T> {
 /// # Errors
 ///
 /// Returns a typed dispatch error when command encoding or submission fails.
-pub fn submit_prepared_reduction_batch<Op, T>(
+pub fn submit_prepared_reduction_batch<T>(
     device: &MetalDevice,
     reductions: &[&PreparedReduction<T>],
 ) -> Result<()> {

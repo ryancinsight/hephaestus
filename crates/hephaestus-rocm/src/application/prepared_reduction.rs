@@ -12,6 +12,7 @@ use crate::application::pipeline::{
     LaunchConfig, PipelineKey, RocmKernel, cached_kernel, grid_size, launch_kernel,
 };
 use crate::application::reduction::{checked_shared_bytes, shader_source};
+use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
 
 struct PreparedPass {
@@ -48,8 +49,8 @@ impl<T> PreparedReduction<'_, T> {
             let mut output_ptr = output;
             let mut input_len = pass.input_len;
             let mut args: [*mut core::ffi::c_void; 3] = [
-                (&mut input_ptr as *mut _).cast(),
-                (&mut output_ptr as *mut _).cast(),
+                (&mut input_ptr as *mut DevicePtr).cast(),
+                (&mut output_ptr as *mut DevicePtr).cast(),
                 (&mut input_len as *mut u32).cast(),
             ];
             launch_kernel(
@@ -76,9 +77,7 @@ impl<T> PreparedReduction<'_, T> {
 /// # Errors
 ///
 /// Returns the first native launch error encountered.
-pub fn submit_prepared_reduction_batch<Op, T>(
-    reductions: &[&PreparedReduction<'_, T>],
-) -> Result<()> {
+pub fn submit_prepared_reduction_batch<T>(reductions: &[&PreparedReduction<'_, T>]) -> Result<()> {
     for reduction in reductions {
         reduction.dispatch()?;
     }

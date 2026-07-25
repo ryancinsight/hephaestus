@@ -76,9 +76,7 @@ impl<T> PreparedReduction<'_, T> {
 /// # Errors
 ///
 /// Returns the first native launch error encountered.
-pub fn submit_prepared_reduction_batch<Op, T>(
-    reductions: &[&PreparedReduction<'_, T>],
-) -> Result<()> {
+pub fn submit_prepared_reduction_batch<T>(reductions: &[&PreparedReduction<'_, T>]) -> Result<()> {
     for reduction in reductions {
         reduction.dispatch()?;
     }
