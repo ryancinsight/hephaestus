@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Complete rank-2 cumulative-product scan convenience parity across
+  WGPU, CUDA, ROCm, and Metal. Every backend now exposes `cumprod` and
+  `cumprod_into` over strided operands with the established reverse-product
+  direction, and the CUDA/ROCm/Metal CI contracts cover both output forms,
+  non-contiguous layouts, empty inputs, and invalid layouts.
+
 - [minor] Add reusable prepared dot-product and L2-norm plans to CUDA, ROCm,
   and Metal with the WGPU contract as the parity baseline. CUDA and ROCm
   retain fixed map scratch, reduction trees, and scalar outputs; Metal

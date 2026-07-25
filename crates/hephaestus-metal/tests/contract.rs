@@ -9,10 +9,11 @@
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_metal::{
     AddOp, MaxOp, MetalDevice, MinOp, MulOp, NegOp, SqrtOp, StridedOperand, SumOp,
-    binary_elementwise, matmul, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, reduction, scalar_elementwise, submit_prepared_axis_reduction_batch,
-    submit_prepared_reduction_batch, unary_elementwise, unary_elementwise_into,
+    binary_elementwise, cumprod, cumprod_into, matmul, prepare_dot, prepare_max_axis_into,
+    prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2, prepare_reduction,
+    prepare_reduction_with_width, prepare_sum_axis_into, reduction, scalar_elementwise,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, unary_elementwise,
+    unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -168,6 +169,80 @@ fn upload_download_round_trips_values() {
     let mut out = [0.0f32; 4];
     d.download(&buf, &mut out).unwrap();
     assert_eq!(out, host);
+}
+
+#[test]
+fn scan_cumprod_convenience_preserves_strided_and_empty_contract() {
+    let Some(device) = device("scan_cumprod_convenience_preserves_strided_and_empty_contract")
+    else {
+        return;
+    };
+
+    let physical = vec![1_i32, 2, 3, 4, 5, 6];
+    let input = device.upload(&physical).unwrap();
+    let transposed_layout = Layout::new([2, 3], [1, 2], 0);
+    let output_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let output = device.alloc_zeroed::<i32>(6).unwrap();
+    cumprod_into(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &output,
+            layout: &output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got = [0_i32; 6];
+    device.download(&output, &mut got).unwrap();
+    assert_eq!(got, [15, 15, 5, 48, 24, 6]);
+
+    let allocated = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = [0_i32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, [2, 12, 30, 2, 4, 6]);
+
+    let empty = device.alloc_zeroed::<i32>(0).unwrap();
+    let empty_layout = Layout::c_contiguous([2, 0]).unwrap();
+    let empty_output = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(empty_output.len(), 0);
+
+    let invalid_layout = Layout::new([2, 3], [1, 2], 1);
+    assert!(matches!(
+        cumprod(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &invalid_layout,
+            },
+            1,
+            BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
 }
 
 #[test]

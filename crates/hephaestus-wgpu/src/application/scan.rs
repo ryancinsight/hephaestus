@@ -265,6 +265,36 @@ where
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
 }
 
+/// Reverse cumulative product over a rank-2 strided matrix along `axis`.
+#[inline]
+pub fn cumprod_into<T>(
+    device: &WgpuDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+{
+    scan_axis_into::<CumProdOp, T>(device, input, axis, ScanDirection::Reverse, output, width)
+}
+
+/// Reverse cumulative product over a rank-2 strided matrix, allocating a
+/// C-contiguous output buffer.
+#[inline]
+pub fn cumprod<T>(
+    device: &WgpuDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+{
+    scan_axis::<CumProdOp, T>(device, input, axis, ScanDirection::Reverse, width)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

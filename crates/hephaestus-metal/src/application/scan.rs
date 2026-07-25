@@ -96,3 +96,44 @@ where
         width,
     )
 }
+
+/// Reverse cumulative product over a rank-2 strided matrix along `axis`.
+#[inline]
+pub fn cumprod<T>(
+    device: &MetalDevice,
+    input: crate::application::strided::StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<MetalBuffer<T>>
+where
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+{
+    let inner = wgpu_backend::cumprod::<T>(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(input),
+        axis,
+        width,
+    )?;
+    Ok(MetalBuffer { inner })
+}
+
+/// Reverse cumulative product over a rank-2 strided matrix along `axis`.
+#[inline]
+pub fn cumprod_into<T>(
+    device: &MetalDevice,
+    input: crate::application::strided::StridedOperand<'_, T, 2>,
+    axis: usize,
+    out: crate::application::strided::StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+{
+    wgpu_backend::cumprod_into::<T>(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(input),
+        axis,
+        crate::application::strided::to_wgpu_strided(out),
+        width,
+    )
+}
