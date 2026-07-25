@@ -17,7 +17,8 @@
 //! increments with their own value-semantic contracts. The optional
 //! `decomposition` feature adds device-resident Cholesky, LU, and QR
 //! factorization contracts, including complete-pivoted LU, column-pivoted QR,
-//! bidiagonalization, SVD, UDU, and Bunch–Kaufman.
+//! bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, and
+//! eigenvalue decompositions.
 //!
 //! [`hephaestus_core::ComputeDevice`]: hephaestus_core::ComputeDevice
 
@@ -38,11 +39,12 @@ pub use application::axis_reduction::{
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
     GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
-    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition, GpuQrDecomposition,
-    GpuSvdDecomposition, GpuSymmetricEigenDecomposition, GpuUduDecomposition, bidiagonalize,
-    bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked,
-    eigenvalues, full_piv_lu, full_piv_lu_blocked, lu_decompose, lu_decompose_blocked,
-    qr_decompose, qr_decompose_blocked, singular_values, svd_decompose, svd_rank_revealing,
+    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuHessenbergDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur, GpuSvdDecomposition,
+    GpuSymmetricEigenDecomposition, GpuUduDecomposition, bidiagonalize, bunch_kaufman,
+    cholesky_decompose, cholesky_decompose_blocked, col_piv_qr, col_piv_qr_blocked, eigenvalues,
+    full_piv_lu, full_piv_lu_blocked, hessenberg, lu_decompose, lu_decompose_blocked, qr_decompose,
+    qr_decompose_blocked, schur, singular_values, svd_decompose, svd_rank_revealing,
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 pub use application::elementwise::{

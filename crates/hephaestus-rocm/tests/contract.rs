@@ -26,9 +26,10 @@ use hephaestus_rocm::{
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
-    col_piv_qr_blocked, eigenvalues, full_piv_lu, full_piv_lu_blocked, lu_decompose,
-    lu_decompose_blocked, qr_decompose, qr_decompose_blocked, singular_values, svd_decompose,
-    svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
+    col_piv_qr_blocked, eigenvalues, full_piv_lu, full_piv_lu_blocked, hessenberg, lu_decompose,
+    lu_decompose_blocked, qr_decompose, qr_decompose_blocked, schur, singular_values,
+    svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    udu_decompose,
 };
 use leto::Layout;
 use std::borrow::Cow;
@@ -157,6 +158,41 @@ fn reconstruct_svd(
             })
         })
         .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn matmul_square(lhs: &[f32], rhs: &[f32], n: usize) -> Vec<f32> {
+    (0..n)
+        .flat_map(|row| {
+            (0..n).map(move |col| {
+                (0..n)
+                    .map(|index| lhs[row * n + index] * rhs[index * n + col])
+                    .sum()
+            })
+        })
+        .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn transpose_square(matrix: &[f32], n: usize) -> Vec<f32> {
+    (0..n)
+        .flat_map(|row| (0..n).map(move |col| matrix[col * n + row]))
+        .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_orthogonal(matrix: &[f32], n: usize) {
+    let transpose = transpose_square(matrix, n);
+    let product = matmul_square(&transpose, matrix, n);
+    for row in 0..n {
+        for col in 0..n {
+            assert_near(
+                product[row * n + col],
+                if row == col { 1.0 } else { 0.0 },
+                8192.0,
+            );
+        }
+    }
 }
 
 #[test]
@@ -2934,4 +2970,269 @@ fn general_eigenvalues_match_leto_complex_spectrum_and_validate_inputs() {
     )
     .expect("ROCm empty general eigen");
     assert_eq!(empty_general.len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_matches_leto_and_reconstructs_similarity() {
+    let Some(device) = device("hessenberg_matches_leto_and_reconstructs_similarity") else {
+        return;
+    };
+
+    let matrix_values = [
+        4.0_f32, 5.0, -2.0, 2.0, 1.0, 2.0, 0.0, 1.0, -2.0, 0.0, 3.0, -2.0, 2.0, 1.0, -2.0, -1.0,
+    ];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP Hessenberg upload");
+    let layout = Layout::c_contiguous([4, 4]).expect("Hessenberg layout");
+    let factor = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm Hessenberg reduction");
+    let expected = leto_ops::hessenberg(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU Hessenberg reference");
+
+    assert_eq!(factor.n(), 4);
+    let expected_q_matrix = expected.q();
+    let expected_h_matrix = expected.h();
+    let expected_q = leto::Storage::as_slice(expected_q_matrix.storage());
+    let expected_h = leto::Storage::as_slice(expected_h_matrix.storage());
+    let mut actual_q = [0.0_f32; 16];
+    let mut actual_h = [0.0_f32; 16];
+    device
+        .download(factor.q_buffer(), &mut actual_q)
+        .expect("HIP Hessenberg Q download");
+    device
+        .download(factor.h_buffer(), &mut actual_h)
+        .expect("HIP Hessenberg H download");
+    for (actual, expected) in actual_q.iter().zip(expected_q) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+    for (actual, expected) in actual_h.iter().zip(expected_h) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+
+    assert_orthogonal(&actual_q, 4);
+    for row in 0..4 {
+        for col in 0..4 {
+            if row > col + 1 {
+                assert_near(actual_h[row * 4 + col], 0.0, 8192.0);
+            }
+        }
+    }
+    let qh = matmul_square(&actual_q, &actual_h, 4);
+    let reconstructed = matmul_square(&qh, &transpose_square(&actual_q, 4), 4);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 16384.0);
+    }
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty Hessenberg upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Hessenberg layout");
+    let empty_factor = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty Hessenberg");
+    assert_eq!(empty_factor.n(), 0);
+    assert_eq!(empty_factor.q_buffer().len(), 0);
+    assert_eq!(empty_factor.h_buffer().len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_rejects_rectangular_and_nonfinite_inputs() {
+    let Some(device) = device("hessenberg_rejects_rectangular_and_nonfinite_inputs") else {
+        return;
+    };
+
+    let rectangular = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP rectangular Hessenberg upload");
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular Hessenberg layout");
+    assert!(matches!(
+        hessenberg(
+            &device,
+            StridedOperand {
+                buffer: &rectangular,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP nonfinite Hessenberg upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("square Hessenberg layout");
+    assert!(matches!(
+        hessenberg(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_matches_leto_and_reconstructs_real_spectrum() {
+    let Some(device) = device("schur_matches_leto_and_reconstructs_real_spectrum") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, -3.0, 0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 5.0];
+    let matrix = device.upload(&matrix_values).expect("HIP Schur upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("Schur layout");
+    let factor = schur(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm real Schur decomposition");
+    let expected = leto_ops::schur(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU Schur reference");
+
+    assert_eq!(factor.n(), 3);
+    let expected_q_matrix = expected.q();
+    let expected_t_matrix = expected.t();
+    let expected_q = leto::Storage::as_slice(expected_q_matrix.storage());
+    let expected_t = leto::Storage::as_slice(expected_t_matrix.storage());
+    let mut actual_q = [0.0_f32; 9];
+    let mut actual_t = [0.0_f32; 9];
+    device
+        .download(factor.q_buffer(), &mut actual_q)
+        .expect("HIP Schur Q download");
+    device
+        .download(factor.t_buffer(), &mut actual_t)
+        .expect("HIP Schur T download");
+    for (actual, expected) in actual_q.iter().zip(expected_q) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+    for (actual, expected) in actual_t.iter().zip(expected_t) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+
+    assert_orthogonal(&actual_q, 3);
+    for row in 0..3 {
+        for col in 0..3 {
+            if row > col + 1 {
+                assert_near(actual_t[row * 3 + col], 0.0, 8192.0);
+            }
+        }
+    }
+    let subdiagonal = actual_t[3];
+    assert!(subdiagonal.abs() > 8192.0 * f32::EPSILON);
+    let discriminant = (actual_t[0] - actual_t[4]).powi(2) + 4.0 * actual_t[1] * subdiagonal;
+    assert!(
+        discriminant < 0.0,
+        "expected a real Schur 2x2 complex block"
+    );
+
+    let qt = matmul_square(&actual_q, &actual_t, 3);
+    let reconstructed = matmul_square(&qt, &transpose_square(&actual_q, 3), 3);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 16384.0);
+    }
+
+    let t_buffer = device
+        .upload(&actual_t)
+        .expect("HIP Schur T spectrum upload");
+    let t_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &t_buffer,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm Schur T spectrum");
+    let a_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm input spectrum");
+    let mut actual_t_values = [eunomia::Complex::new(0.0_f32, 0.0); 3];
+    let mut actual_a_values = [eunomia::Complex::new(0.0_f32, 0.0); 3];
+    device
+        .download(&t_values, &mut actual_t_values)
+        .expect("HIP Schur T spectrum download");
+    device
+        .download(&a_values, &mut actual_a_values)
+        .expect("HIP input spectrum download");
+    assert_complex_spectrum_close(&actual_t_values, &actual_a_values, 8192.0);
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty Schur upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Schur layout");
+    let empty_factor = schur(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty Schur");
+    assert_eq!(empty_factor.n(), 0);
+    assert_eq!(empty_factor.q_buffer().len(), 0);
+    assert_eq!(empty_factor.t_buffer().len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_rejects_rectangular_and_nonfinite_inputs() {
+    let Some(device) = device("schur_rejects_rectangular_and_nonfinite_inputs") else {
+        return;
+    };
+
+    let rectangular = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP rectangular Schur upload");
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular Schur layout");
+    assert!(matches!(
+        schur(
+            &device,
+            StridedOperand {
+                buffer: &rectangular,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP nonfinite Schur upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("square Schur layout");
+    assert!(matches!(
+        schur(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
 }

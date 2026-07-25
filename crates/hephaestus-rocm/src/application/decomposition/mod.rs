@@ -13,8 +13,10 @@ mod cholesky;
 mod col_piv_qr;
 mod eigen;
 mod full_piv_lu;
+mod hessenberg;
 mod lu;
 mod qr;
+mod schur;
 mod svd;
 mod udu;
 mod validate;
@@ -28,7 +30,9 @@ pub use eigen::{
     symmetric_eigenvalues_jacobi,
 };
 pub use full_piv_lu::{GpuFullPivLuDecomposition, full_piv_lu, full_piv_lu_blocked};
+pub use hessenberg::{GpuHessenbergDecomposition, hessenberg};
 pub use lu::{GpuLuDecomposition, lu_decompose, lu_decompose_blocked};
 pub use qr::{GpuQrDecomposition, qr_decompose, qr_decompose_blocked};
+pub use schur::{GpuRealSchur, schur};
 pub use svd::{GpuSvdDecomposition, singular_values, svd_decompose, svd_rank_revealing};
 pub use udu::{GpuUduDecomposition, udu_decompose};
