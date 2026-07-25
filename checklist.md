@@ -2,6 +2,24 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — in progress
+
+- [ ] Extract reusable CUDA and ROCm reduction plans that can consume owned
+      map scratch buffers without self-referential storage.
+- [ ] Add prepared dot and L2-norm plans with fixed product scratch,
+      reduction-tree, square-root, and scalar output resources.
+- [ ] Delegate the same prepared dot/L2 surface through Metal's native
+      WGPU-Metal path and expose matching names across all backends.
+- [ ] Add repeated, changed-input, output-identity, empty, non-contiguous,
+      invalid-shape, and invalid-layout value-semantic contracts.
+- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+      backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-prepared-map-reduction`.
+Claimed files: CUDA/ROCm prepared reduction and map-reduction modules/exports,
+Metal delegation/exports/tests, affected documentation, ADR 0018, and the
+existing backend CI workflows.
+
 ## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
 
 - [x] Add native preplanned CUDA and ROCm rank-2 prepared axis reductions.
