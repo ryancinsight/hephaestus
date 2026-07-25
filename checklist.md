@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-METAL-CI-1 [patch] — in progress
+
+- [ ] Document `hephaestus-metal` in the workspace backend inventory and state
+      that it delegates through `hephaestus-wgpu` with native Metal selected.
+- [ ] Make the Metal contract helper honor
+      `HEPHAESTUS_METAL_REQUIRE_DEVICE=1` for hardware CI.
+- [ ] Add macOS Metal CI for minimal/default feature checks, warning-denied
+      Clippy, required-device Nextest, doctest, and rustdoc.
+- [ ] Synchronize the Unreleased changelog and close this checklist item with
+      exact hosted-run evidence.
+
+Execution owner: Codex on `codex/hephaestus-rocm-export-closeout`. Claimed
+files: Metal contract tests, Metal workflow, README, CHANGELOG, this checklist,
+and the matching backlog item. A second native `metal-rs` backend and new
+operator families are outside this increment.
+
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - [x] Add the ROCm decomposition feature seam and common Cholesky exports.

@@ -4,6 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-METAL-CI-1 [patch] — in progress
+
+- Owner: Codex; scope: existing `hephaestus-metal` WGPU-Metal backend
+  documentation, required-device contract behavior, macOS Metal feature/build/
+  test/doc CI, and synchronized checklist/changelog state. A second native
+  `metal-rs` implementation and new Metal operator families are non-goals for
+  this increment.
+- Acceptance: the public backend inventory names `hephaestus-metal`; its
+  ownership is documented as WGPU configured for native Metal; hardware CI
+  sets `HEPHAESTUS_METAL_REQUIRE_DEVICE=1` so unavailable hardware fails rather
+  than skips; macOS CI checks the default and minimal feature surfaces, runs
+  warning-denied Clippy, required-device Nextest, doctest, and rustdoc; and the
+  Metal contract tests retain value-semantic device/CPU checks.
+- Claimed files: `crates/hephaestus-metal/tests/contract.rs`,
+  `.github/workflows/metal.yml`, `README.md`, `CHANGELOG.md`, `checklist.md`,
+  and this item. Last update: 2026-07-24.
+
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - Owner: Codex; scope: ROCm decomposition feature seam, device-resident
