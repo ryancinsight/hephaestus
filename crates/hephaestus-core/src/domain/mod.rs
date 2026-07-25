@@ -26,3 +26,5 @@ pub mod reduction;
 pub mod scan;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;
+/// Backend-neutral volume ray-integral geometry and validation.
+pub mod volume;

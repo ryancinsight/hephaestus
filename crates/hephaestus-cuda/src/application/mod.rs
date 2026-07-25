@@ -16,6 +16,8 @@ pub mod storage_kernel;
 pub mod stream;
 /// Layout-aware strided elementwise operations.
 pub mod strided;
+/// Volume ray-integral kernels.
+pub mod volume;
 
 #[cfg(feature = "decomposition")]
 /// Dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.

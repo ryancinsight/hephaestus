@@ -44,9 +44,11 @@ introduced by this one-thread-per-ray implementation.
 
 ## Verification
 
-Each backend gets the same analytical cases: a constant field with a known
-intersection length, a linear field whose trilinear interpolation is exact,
-miss and grazing rays, empty output, invalid step, packed-ray mismatch, field
-length mismatch, and the exact-f32 count boundary. Hosted backend lanes run
-the focused contracts with required-device environment variables; adapterless
-container runs remain compile/test evidence and are not hardware evidence.
+The shared core validator covers positive storage, empty output, invalid step,
+invalid spacing/dimensions, length mismatches, and the exact-f32 count boundary.
+Each device backend contract covers a constant field with a known intersection
+length, a miss, an affine field whose trilinear interpolation is exact, and
+invalid-step handling; CUDA, ROCm, and Metal also exercise packed-ray mismatch
+through their backend entry points. Hosted backend lanes run these focused
+contracts with required-device environment variables; adapterless container
+runs remain compile/test evidence and are not hardware evidence.
