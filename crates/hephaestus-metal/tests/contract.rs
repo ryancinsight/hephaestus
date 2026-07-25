@@ -9,11 +9,11 @@
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_metal::{
     AddOp, MaxOp, MetalDevice, MinOp, MulOp, NegOp, SqrtOp, StridedOperand, SumOp,
-    binary_elementwise, cumprod, cumprod_into, matmul, prepare_dot, prepare_max_axis_into,
-    prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2, prepare_reduction,
-    prepare_reduction_with_width, prepare_sum_axis_into, reduction, scalar_elementwise,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, unary_elementwise,
-    unary_elementwise_into,
+    binary_elementwise, cumprod, cumprod_into, matmul, normal_with_seed, prepare_dot,
+    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduction,
+    scalar_elementwise, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
+    unary_elementwise, unary_elementwise_into, uniform_with_seed,
 };
 use leto::Layout;
 
@@ -169,6 +169,43 @@ fn upload_download_round_trips_values() {
     let mut out = [0.0f32; 4];
     d.download(&buf, &mut out).unwrap();
     assert_eq!(out, host);
+}
+
+#[test]
+fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
+    let Some(device) =
+        device("seeded_random_initializers_match_determinism_and_distribution_contracts")
+    else {
+        return;
+    };
+
+    let shape = [1000];
+    let low = -2.0_f32;
+    let high = 5.0_f32;
+    let uniform = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_uniform = vec![0.0_f32; 1000];
+    device.download(&uniform, &mut got_uniform).unwrap();
+
+    let uniform_again = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_uniform_again = vec![0.0_f32; 1000];
+    device
+        .download(&uniform_again, &mut got_uniform_again)
+        .unwrap();
+    assert_eq!(got_uniform, got_uniform_again);
+    assert!(
+        got_uniform
+            .iter()
+            .all(|&value| value >= low && value < high),
+        "uniform samples must stay in the half-open interval"
+    );
+
+    let normal = normal_with_seed(&device, shape, 0.0_f32, 1.0_f32, 42).unwrap();
+    let mut got_normal = vec![0.0_f32; 1000];
+    device.download(&normal, &mut got_normal).unwrap();
+    assert!(
+        got_normal.iter().any(|&value| value != 0.0),
+        "normal samples must contain a nonzero value"
+    );
 }
 
 #[test]

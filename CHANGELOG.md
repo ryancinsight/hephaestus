@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add Metal seeded `uniform_with_seed` and `normal_with_seed`
+  initializers, matching the deterministic real-scalar and const-generic rank
+  contract already exposed by WGPU, CUDA, and ROCm. Metal delegates through
+  the native Metal-selected WGPU path and returns typed Metal buffers.
+
 - [minor] Complete rank-2 cumulative-product scan convenience parity across
   WGPU, CUDA, ROCm, and Metal. Every backend now exposes `cumprod` and
   `cumprod_into` over strided operands with the established reverse-product
