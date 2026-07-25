@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add Metal-owned fluent rank-2 matrix traits matching the WGPU, CUDA,
+  and ROCm product, norm, decomposition, solve, property, and function
+  contracts. Metal returns typed Metal buffers and retains the existing shared
+  decomposition handles while dispatching through its selected WGPU device.
+
 - [minor] Add Metal seeded `uniform_with_seed` and `normal_with_seed`
   initializers, matching the deterministic real-scalar and const-generic rank
   contract already exposed by WGPU, CUDA, and ROCm. Metal delegates through
