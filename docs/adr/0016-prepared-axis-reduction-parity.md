@@ -1,6 +1,6 @@
 # ADR 0016 (hephaestus): prepared axis reduction parity
 
-- Status: proposed
+- Status: accepted
 - Class: [minor]
 - Date: 2026-07-25
 
@@ -37,11 +37,15 @@ backend-owned so buffer and device lifetimes do not cross the backend boundary.
 
 ## Verification
 
-Backend contracts will compare prepared sum, min, max, and mean results with
+Backend contracts compare prepared sum, min, max, and mean results with
 the Leto CPU reference for both axes and non-contiguous layouts. Repeat and
-batch dispatch will assert value semantics; sum empty-axis plans will write
-their identity, min/max/mean empty-axis plans will return their typed
+batch dispatch asserts value semantics; sum empty-axis plans write
+their identity, min/max/mean empty-axis plans return their typed
 rejection, and invalid axis, width, layout, and alias inputs will be rejected
 before launch.
-CUDA, ROCm, and Metal CI will run the focused feature, lint, test, doctest,
-and rustdoc gates.
+CUDA, ROCm, and Metal CI ran the focused feature, lint, test, doctest, and
+rustdoc gates at code head `7728026`: CUDA run `30173211020` / job
+`89717642298`, ROCm run `30173211026` / job `89717642411`, and Metal run
+`30173211021` / job `89717642467`. Hardware jobs were skipped because hosted
+GPU labels were unavailable. WGPU also carries the empty-sum binding
+regression test that protects the Metal delegation path.

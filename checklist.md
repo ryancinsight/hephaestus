@@ -2,20 +2,30 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
 
-- [ ] Add native preplanned CUDA and ROCm rank-2 prepared axis reductions.
-- [ ] Delegate prepared axis reductions through Metal's native WGPU device
+- [x] Add native preplanned CUDA and ROCm rank-2 prepared axis reductions.
+- [x] Delegate prepared axis reductions through Metal's native WGPU device
       and expose matching public names across backends.
-- [ ] Add value-semantic tests for sum/min/max/mean, both axes, repeated and
+- [x] Add value-semantic tests for sum/min/max/mean, both axes, repeated and
       batched dispatch, non-contiguous layouts, empty-axis, invalid-layout,
       invalid-width, and alias contracts.
-- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+- [x] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
       backlog, and checklist with exact hosted evidence.
 
 Execution owner: Codex on `codex/hephaestus-backend-prepared-axis`.
 Claimed files: prepared axis modules and exports/tests, affected CI/docs, and
 the matching ADR/backlog/checklist item.
+
+Hosted code-head evidence: CUDA run `30173211020` / job `89717642298`, ROCm
+run `30173211026` / job `89717642411`, and Metal run `30173211021` / job
+`89717642467` passed at `7728026`. WGPU also gained a regression test for
+immediate and prepared empty-sum axis identity behavior. Hardware jobs were
+skipped because hosted GPU labels were unavailable; local Windows package
+compilation remains blocked by the locked `cutile-rs` refresh and sibling
+Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch. Final
+documentation-head verification and merge are recorded in the delivery
+commit.
 
 ## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
