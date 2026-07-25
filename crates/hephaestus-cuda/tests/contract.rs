@@ -12,11 +12,11 @@ use hephaestus_cuda::{
     AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp,
     StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into,
     det, dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
-    norm_l2, norm_max, pinv, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduce_axis, reduction,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, trace,
-    unary_elementwise, unary_elementwise_into,
+    norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
+    prepare_sum_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -749,6 +749,141 @@ fn linalg_trace_matches_cpu_reference() {
     let mut got = [0.0f32; 1];
     dev.download(&out_buf, &mut got).unwrap();
     assert_eq!(got[0], expected);
+}
+
+#[test]
+fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
+    let Some(dev) = device("prepared_map_reductions_reuse_resources_and_validate_layouts") else {
+        return;
+    };
+
+    let lhs = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
+    let rhs = dev.upload(&[5.0_f32, 6.0, 7.0, 8.0]).unwrap();
+    let contiguous = Layout::c_contiguous([4]).unwrap();
+    let prepared_dot = prepare_dot(
+        &dev,
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+        StridedOperand {
+            buffer: &rhs,
+            layout: &contiguous,
+        },
+    )
+    .unwrap();
+    let dot_output = prepared_dot.output() as *const _;
+    prepared_dot.dispatch().unwrap();
+    let mut got = [0.0_f32];
+    dev.download(prepared_dot.output(), &mut got).unwrap();
+    assert_eq!(got, [70.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    dev.write_buffer(&lhs, &[2.0_f32, 2.0, 2.0, 2.0]).unwrap();
+    prepared_dot.dispatch().unwrap();
+    dev.download(prepared_dot.output(), &mut got).unwrap();
+    assert_eq!(got, [52.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    let reversed = Layout::new([4], [-1], 3);
+    let reversed_dot = prepare_dot(
+        &dev,
+        StridedOperand {
+            buffer: &rhs,
+            layout: &reversed,
+        },
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+    )
+    .unwrap();
+    reversed_dot.dispatch().unwrap();
+    dev.download(reversed_dot.output(), &mut got).unwrap();
+    assert_eq!(got, [52.0]);
+
+    let norm_input = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
+    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let prepared_norm = prepare_norm_l2(
+        &dev,
+        StridedOperand {
+            buffer: &norm_input,
+            layout: &transposed,
+        },
+    )
+    .unwrap();
+    let norm_output = prepared_norm.output() as *const _;
+    prepared_norm.dispatch().unwrap();
+    dev.download(prepared_norm.output(), &mut got).unwrap();
+    let expected = 30.0_f32.sqrt();
+    assert!((got[0] - expected).abs() <= 2.0 * f32::EPSILON * expected.max(1.0));
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    dev.write_buffer(&norm_input, &[4.0_f32; 4]).unwrap();
+    prepared_norm.dispatch().unwrap();
+    dev.download(prepared_norm.output(), &mut got).unwrap();
+    assert_eq!(got, [8.0]);
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    let empty = dev.upload::<f32>(&[]).unwrap();
+    let empty_layout = Layout::c_contiguous([0]).unwrap();
+    let empty_dot = prepare_dot(
+        &dev,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .unwrap();
+    empty_dot.dispatch().unwrap();
+    dev.download(empty_dot.output(), &mut got).unwrap();
+    assert_eq!(got, [0.0]);
+
+    let empty_norm = prepare_norm_l2(
+        &dev,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .unwrap();
+    empty_norm.dispatch().unwrap();
+    dev.download(empty_norm.output(), &mut got).unwrap();
+    assert_eq!(got, [0.0]);
+
+    let wrong_shape = Layout::c_contiguous([3]).unwrap();
+    assert!(matches!(
+        prepare_dot(
+            &dev,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &contiguous,
+            },
+            StridedOperand {
+                buffer: &rhs,
+                layout: &wrong_shape,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("dot product shape mismatch:")
+    ));
+
+    let invalid_layout = Layout::new([3], [1], 2);
+    assert!(matches!(
+        prepare_norm_l2(
+            &dev,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &invalid_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
 }
 
 #[test]

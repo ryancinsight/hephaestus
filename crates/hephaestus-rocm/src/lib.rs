@@ -65,6 +65,9 @@ pub use application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
     prepare_reduce_axis_into, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
 };
+pub use application::prepared_map_reduction::{
+    PreparedDot, PreparedL2Norm, prepare_dot, prepare_norm_l2,
+};
 pub use application::prepared_reduction::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,
     submit_prepared_reduction_batch,

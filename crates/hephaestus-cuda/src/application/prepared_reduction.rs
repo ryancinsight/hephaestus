@@ -21,30 +21,91 @@ struct PreparedPass {
     input_len: u32,
 }
 
-/// A reusable CUDA scalar reduction plan over a fixed input buffer.
-pub struct PreparedReduction<'a, T> {
+pub(crate) struct PreparedReductionPlan<'a, T> {
     device: &'a CudaDevice,
-    input: &'a CudaBuffer<T>,
     width: BlockWidth,
     passes: Vec<PreparedPass>,
     outputs: Vec<CudaBuffer<T>>,
 }
 
-impl<T> PreparedReduction<'_, T> {
-    /// Dispatch the prepared reduction and reuse its device-resident outputs.
-    ///
-    /// # Errors
-    ///
-    /// Returns a typed dispatch error when a native CUDA launch fails.
-    pub fn dispatch(&self) -> Result<()> {
+/// A reusable CUDA scalar reduction plan over a fixed input buffer.
+pub struct PreparedReduction<'a, T> {
+    input: &'a CudaBuffer<T>,
+    plan: PreparedReductionPlan<'a, T>,
+}
+
+impl<'a, T> PreparedReductionPlan<'a, T> {
+    pub(crate) fn prepare<Op>(
+        device: &'a CudaDevice,
+        input_len: usize,
+        width: BlockWidth,
+    ) -> Result<Self>
+    where
+        Op: CombineExpr<CudaC>,
+        T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
+    {
+        validate_reduction_width(width)?;
+        if input_len == 0 {
+            return Ok(Self {
+                device,
+                width,
+                passes: Vec::new(),
+                outputs: vec![device.upload(&[T::IDENTITY])?],
+            });
+        }
+
+        let pass_count = reduction_pass_count(input_len, width).max(1);
+        let mut passes = Vec::with_capacity(pass_count);
+        let mut outputs = Vec::with_capacity(pass_count);
+        let mut current_len = input_len;
+        let kernel = cached_kernel(
+            device,
+            PipelineKey::Reduction {
+                op: core::any::TypeId::of::<Op>(),
+                scalar: core::any::TypeId::of::<T>(),
+                width: width.get(),
+            },
+            "reduction_kernel",
+            || shader_source::<Op, T>(width),
+        )?;
+
+        loop {
+            let groups = grid_size(current_len, width)?;
+            let output_len = current_len.div_ceil(width.get() as usize);
+            let output = device.alloc_zeroed::<T>(output_len)?;
+            passes.push(PreparedPass {
+                kernel: Arc::clone(&kernel),
+                groups,
+                input_len: u32::try_from(current_len).map_err(|_| {
+                    hephaestus_core::HephaestusError::DispatchFailed {
+                        message: format!("CUDA reduction length {current_len} exceeds u32 range"),
+                    }
+                })?,
+            });
+            outputs.push(output);
+            if output_len == 1 {
+                break;
+            }
+            current_len = output_len;
+        }
+
+        Ok(Self {
+            device,
+            width,
+            passes,
+            outputs,
+        })
+    }
+
+    pub(crate) fn dispatch(&self, input: &CudaBuffer<T>) -> Result<()> {
         for (index, pass) in self.passes.iter().enumerate() {
-            let input = if index == 0 {
-                self.input.raw()
+            let source = if index == 0 {
+                input.raw()
             } else {
                 self.outputs[index - 1].raw()
             };
             let output = self.outputs[index].raw();
-            let mut input_ptr = input;
+            let mut input_ptr = source;
             let mut output_ptr = output;
             let mut input_len = pass.input_len;
             let mut args: [*mut core::ffi::c_void; 3] = [
@@ -62,12 +123,27 @@ impl<T> PreparedReduction<'_, T> {
         Ok(())
     }
 
-    /// Return the one-element output buffer holding the latest result.
-    #[must_use]
-    pub fn output(&self) -> &CudaBuffer<T> {
+    pub(crate) fn output(&self) -> &CudaBuffer<T> {
         self.outputs
             .last()
             .expect("invariant: prepared reduction always owns an output")
+    }
+}
+
+impl<T> PreparedReduction<'_, T> {
+    /// Dispatch the prepared reduction and reuse its device-resident outputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when a native CUDA launch fails.
+    pub fn dispatch(&self) -> Result<()> {
+        self.plan.dispatch(self.input)
+    }
+
+    /// Return the one-element output buffer holding the latest result.
+    #[must_use]
+    pub fn output(&self) -> &CudaBuffer<T> {
+        self.plan.output()
     }
 }
 
@@ -101,59 +177,8 @@ where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + OpIdentity<Op> + IdentityToken<Op, CudaC>,
 {
-    validate_reduction_width(width)?;
-    if input.is_empty() {
-        return Ok(PreparedReduction {
-            device,
-            input,
-            width,
-            passes: Vec::new(),
-            outputs: vec![device.upload(&[T::IDENTITY])?],
-        });
-    }
-
-    let pass_count = reduction_pass_count(input.len(), width).max(1);
-    let mut passes = Vec::with_capacity(pass_count);
-    let mut outputs = Vec::with_capacity(pass_count);
-    let mut current_len = input.len();
-    let kernel = cached_kernel(
-        device,
-        PipelineKey::Reduction {
-            op: core::any::TypeId::of::<Op>(),
-            scalar: core::any::TypeId::of::<T>(),
-            width: width.get(),
-        },
-        "reduction_kernel",
-        || shader_source::<Op, T>(width),
-    )?;
-
-    loop {
-        let groups = grid_size(current_len, width)?;
-        let output_len = current_len.div_ceil(width.get() as usize);
-        let output = device.alloc_zeroed::<T>(output_len)?;
-        passes.push(PreparedPass {
-            kernel: Arc::clone(&kernel),
-            groups,
-            input_len: u32::try_from(current_len).map_err(|_| {
-                hephaestus_core::HephaestusError::DispatchFailed {
-                    message: format!("CUDA reduction length {current_len} exceeds u32 range"),
-                }
-            })?,
-        });
-        outputs.push(output);
-        if output_len == 1 {
-            break;
-        }
-        current_len = output_len;
-    }
-
-    Ok(PreparedReduction {
-        device,
-        input,
-        width,
-        passes,
-        outputs,
-    })
+    let plan = PreparedReductionPlan::prepare::<Op>(device, input.len(), width)?;
+    Ok(PreparedReduction { input, plan })
 }
 
 /// Prepare a scalar reduction using the default block width.

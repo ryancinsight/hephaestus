@@ -7,6 +7,8 @@ pub mod decomposition;
 pub mod elementwise;
 /// Linear algebra operations.
 pub mod linalg;
+/// Reusable dot-product and L2-norm map-reduction plans.
+pub mod prepared_map_reduction;
 /// Reduction operations.
 pub mod reduction;
 /// Scan operations.

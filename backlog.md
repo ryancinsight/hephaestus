@@ -4,6 +4,33 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
+
+- Owner: Codex; scope: prepared dot and L2-norm map-reduction plans across
+  WGPU, CUDA, ROCm, and Metal, including fixed product scratch, reduction
+  trees, scalar outputs, repeated dispatch, non-contiguous layouts, tests,
+  CI, and synchronized documentation. Prepared L1/max/trace plans, new
+  numerical algorithms, and Python API changes are non-goals.
+- Acceptance: CUDA and ROCm expose `PreparedDot`, `prepare_dot`,
+  `PreparedL2Norm`, and `prepare_norm_l2` over fixed strided buffers; plans
+  retain the mapped product scratch, reduction tree, and output allocations;
+  repeated dispatch observes input updates without changing output identity;
+  empty and non-contiguous layouts preserve CPU-reference values; invalid
+  shapes/layouts reject before launch; Metal exposes the same public surface
+  through the native WGPU-Metal path; and CUDA/ROCm/Metal CI runs the focused
+  feature, lint, nextest, doctest, and rustdoc gates.
+- Claimed files: CUDA/ROCm prepared reduction-plan extraction and prepared
+  map-reduction modules/exports/tests, Metal delegation/exports/tests, README,
+  changelog, ADR 0018, checklist, backlog, and existing backend CI workflows.
+  Last update: 2026-07-25. Hosted feature lanes passed at code head `2af0c72`:
+  CUDA run `30176531577` / job `89726109677` (7m44s), ROCm run
+  `30176531572` / job `89726109624` (5m37s), and Metal run `30176531566` /
+  job `89726137236` (4m57s). Hardware lanes were skipped because hosted GPU
+  labels were unavailable; required-device enforcement remains enabled for
+  self-hosted runners. Local Windows package compilation remains blocked before
+  source compilation by the locked `cutile-rs` refresh and the sibling
+  Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
+
 ## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
 
 - Owner: Codex; scope: prepared rank-2 axis reduction plans for WGPU, CUDA,
