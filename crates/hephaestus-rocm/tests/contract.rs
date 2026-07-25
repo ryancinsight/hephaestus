@@ -23,7 +23,7 @@ use hephaestus_rocm::{
     cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
     norm_max, normal_with_seed, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_min_axis_into, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
     reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
     scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, trace,
