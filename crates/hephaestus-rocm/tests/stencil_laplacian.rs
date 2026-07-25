@@ -2,8 +2,7 @@
 
 use aequitas::systems::si::{quantities::Length, units::Meter};
 use hephaestus_core::{
-    BoundaryCondition, ComputeDevice, HephaestusError, Laplacian2DParams,
-    LaplacianPolarity,
+    BoundaryCondition, ComputeDevice, HephaestusError, Laplacian2DParams, LaplacianPolarity,
 };
 use hephaestus_rocm::{Laplacian2DKernel, RocmDevice};
 use leto::{Array1, Laplacian2D};
