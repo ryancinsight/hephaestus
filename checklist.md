@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — in-progress
+
+- [ ] Add `cumprod` and `cumprod_into` convenience APIs to WGPU and CUDA by
+      delegating to the existing generic `CumProdOp` reverse scan path.
+- [ ] Add the same Metal-owned wrappers over the native Metal-selected WGPU
+      path, preserving the shared backend contract.
+- [ ] Add WGPU, CUDA, ROCm, and Metal value-semantic contracts for allocated
+      and caller-owned outputs, both axes, non-contiguous layouts, empty
+      inputs, and invalid layouts.
+- [ ] Run the existing CUDA/ROCm/Metal CI lanes and synchronize the ADR,
+      README, changelog, backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next`; claimed files:
+backend scan modules and exports, backend scan contract tests, affected
+documentation, ADR 0019, and no CI workflow changes unless the existing lanes
+fail to collect the new contracts.
+
 ## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
 - [x] Extract reusable CUDA and ROCm reduction plans that can consume owned

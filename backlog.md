@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — in-progress
+
+- Owner: Codex; scope: expose the existing rank-2 cumulative-product scan
+  contract through WGPU, CUDA, ROCm, and Metal convenience APIs, with
+  value-semantic contracts and synchronized documentation. New scan kernels,
+  alternate product semantics, and unrelated operator families are
+  non-goals.
+- Acceptance: all four backends expose `cumprod` and `cumprod_into` with the
+  same rank-2 strided input/output, axis, width, and reverse-direction
+  contract; WGPU, CUDA, and Metal delegate to their existing generic
+  `CumProdOp` scan paths; tests compare allocated and caller-owned outputs to
+  an independent CPU reference over both axes, non-contiguous storage, empty
+  inputs, and invalid layouts; the existing CUDA, ROCm, and Metal CI lanes
+  execute the contracts and documentation records the public parity surface.
+- Claimed files: backend scan modules and exports, backend scan contract
+  tests, README, CHANGELOG, `docs/adr/0019-scan-product-parity.md`,
+  `checklist.md`, and this item. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next`; last update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
 - Owner: Codex; scope: prepared dot and L2-norm map-reduction plans across
