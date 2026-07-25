@@ -127,13 +127,12 @@ cuda-oxide + cutile).
   doctest, and rustdoc at head `8304d07`; the required-device lane was skipped
   by the pull-request event. Merged through PR #84 at `fce147d`.
 
-## HEPH-ROCM-PARITY-EIGEN-6 [minor] — in progress
+## HEPH-ROCM-PARITY-EIGEN-6 [minor] — done
 
 - Owner: Codex; scope: ROCm symmetric Jacobi eigenpairs/eigenvalues and general
   complex eigenvalues, device-resident typed result buffers, provider-backed
   reconstruction and spectrum contracts, empty/invalid/non-finite validation,
-  decomposition feature CI, and synchronized documentation. Schur and
-  Hessenberg remain non-goals for this increment.
+  decomposition feature CI, and synchronized documentation.
 - Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
   `GpuSymmetricEigenDecomposition`/`symmetric_eigen_jacobi`,
   `symmetric_eigenvalues_jacobi`, and `eigenvalues` APIs; ROCm uploads shared
@@ -145,8 +144,30 @@ cuda-oxide + cutile).
   `crates/hephaestus-rocm/src/application/decomposition/**`,
   `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
   `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24. Branch starts from merged symmetric
-  decomposition parity at `fce147d`.
+  and this item. Hosted ROCm run `30134785595` passed the base and
+  `rocm,decomposition` checks, warning-denied Clippy, Nextest, doctest, and
+  rustdoc at head `8e4eaf8`; the required-device lane was skipped by the
+  pull-request event. Merged through PR #85 at `b122474`.
+
+## HEPH-ROCM-PARITY-SCHUR-7 [minor] — in progress
+
+- Owner: Codex; scope: ROCm Hessenberg reduction and real Schur decomposition,
+  device-resident typed Q/H and Q/T buffers, provider-backed similarity and
+  structure contracts, empty/invalid/non-finite validation, decomposition
+  feature CI, and synchronized documentation. No further common CUDA/WGPU
+  decomposition families are known after this increment.
+- Acceptance: enabling `rocm,decomposition` exposes the common CUDA/WGPU
+  `GpuHessenbergDecomposition`/`hessenberg` and `GpuRealSchur`/`schur` APIs;
+  ROCm uploads shared Leto factors into typed device buffers without a
+  backend-selection fallback; orthogonality, reconstruction, Hessenberg and
+  real-Schur structure, spectra, empty, rectangular, and non-finite cases are
+  value-tested; and hosted ROCm CI passes build, warning-denied Clippy,
+  Nextest, doctest, and rustdoc.
+- Claimed files: `crates/hephaestus-rocm/src/application/decomposition/**`,
+  `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
+  and this item. Last update: 2026-07-24. Branch starts from merged eigen
+  parity at `b122474`.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 

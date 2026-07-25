@@ -102,22 +102,44 @@ was skipped by the pull-request event. Claimed files: ROCm decomposition, ROCm
 contract tests, and synchronized documentation artifacts. Eigen, Schur, and
 Hessenberg were outside this increment.
 
-## HEPH-ROCM-PARITY-EIGEN-6 [minor]
+## HEPH-ROCM-PARITY-EIGEN-6 [minor] — done
 
-- [ ] Add ROCm symmetric Jacobi eigenpair/eigenvalue and general complex
+- [x] Add ROCm symmetric Jacobi eigenpair/eigenvalue and general complex
       eigenvalue surfaces behind `decomposition`.
-- [ ] Mirror the CUDA/WGPU Leto provider boundary into typed f32 and complex
+- [x] Mirror the CUDA/WGPU Leto provider boundary into typed f32 and complex
       ROCm buffers without a backend-selection fallback.
-- [ ] Add symmetric reconstruction, complex-spectrum, empty, non-square,
+- [x] Add symmetric reconstruction, complex-spectrum, empty, non-square,
       non-symmetric, and non-finite value contracts.
-- [ ] Extend hosted ROCm CI and feature hygiene for the eigen code.
-- [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
-- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
-      merge the verified increment.
+- [x] Extend hosted ROCm CI and feature hygiene for the eigen code.
+- [x] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [x] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment with run `30134785595` at head `8e4eaf8`
+      through PR #85 at `b122474`.
 
 Execution owner: Codex on `codex/hephaestus-rocm-eigen-next`. Claimed files:
 ROCm decomposition, ROCm contract tests, and synchronized documentation
-artifacts. Schur and Hessenberg remain outside this increment.
+artifacts. Schur and Hessenberg were outside this increment.
+
+## HEPH-ROCM-PARITY-SCHUR-7 [minor] — in progress
+
+- [ ] Add ROCm Hessenberg and real Schur public surfaces behind
+      `decomposition`.
+- [ ] Mirror the CUDA/WGPU Leto provider boundary into typed Q/H and Q/T ROCm
+      buffers without a backend-selection fallback.
+- [ ] Add orthogonality, similarity reconstruction, Hessenberg, real-Schur
+      quasi-triangular, spectrum, empty, rectangular, and non-finite value
+      contracts.
+- [ ] Extend hosted ROCm CI and feature hygiene for the final decomposition
+      families.
+- [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+      merge the verified increment and re-audit the common backend surface.
+
+Execution owner: Codex on `codex/hephaestus-rocm-schur-next`. Claimed files:
+ROCm decomposition, ROCm contract tests, and synchronized documentation
+artifacts. The local package gate inherits the sibling Leto checkout's
+`Quantity<T>::in_unit` / `FloatElement` mismatch; hosted CI is the supported
+checkout-graph gate.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 

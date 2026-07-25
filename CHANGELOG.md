@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the optional ROCm `decomposition` feature with the common
+  Hessenberg and real Schur surfaces. ROCm uploads shared Leto Q/H and Q/T
+  factors into typed buffers; contracts cover orthogonality, reconstruction,
+  Hessenberg/quasi-triangular structure, spectra, empty inputs, and invalid
+  square/non-finite cases.
+
 - [minor] Extend the optional ROCm `decomposition` feature with symmetric
   Jacobi eigenpairs/eigenvalues and general complex eigenvalues. Shared Leto
   results are uploaded into typed ROCm f32 and complex buffers; contracts cover
