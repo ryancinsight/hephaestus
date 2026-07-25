@@ -25,3 +25,5 @@ pub mod stream;
 pub mod strided;
 /// Rank-≤4 layout-aware elementwise operations.
 pub mod strided_elementwise;
+/// Volume ray-integral kernels.
+pub mod volume;

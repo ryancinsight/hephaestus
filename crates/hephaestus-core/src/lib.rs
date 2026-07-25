@@ -49,3 +49,4 @@ pub use domain::stream::{
     Binding, CommandStream, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };
+pub use domain::volume::{FieldGeometry, RAY_STRIDE, validate_ray_line_integrals};

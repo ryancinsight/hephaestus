@@ -13,3 +13,5 @@ pub mod reduction;
 pub mod scan;
 /// Strided layout wrappers.
 pub mod strided;
+/// Volume ray-integral delegation.
+pub mod volume;

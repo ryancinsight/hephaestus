@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the shared volume ray-integral contract to CUDA, ROCm, and
+  Metal. `FieldGeometry` and `RAY_STRIDE` now live in `hephaestus-core`;
+  CUDA and HIP keep field/ray storage device-resident with native midpoint
+  trilinear kernels, Metal delegates through native WGPU-Metal, and the
+  focused contracts plus required-device CI lanes cover the common validation
+  and analytical value cases.
+
 - [patch] Add the macOS Metal verification lane for the existing
   `hephaestus-metal` backend. The crate remains a typed WGPU-backed adapter
   configured with native `wgpu::Backends::METAL`; its required-device contract

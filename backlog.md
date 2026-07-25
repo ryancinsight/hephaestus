@@ -27,6 +27,33 @@ cuda-oxide + cutile).
   blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
   `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
 
+## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — done
+
+- Owner: Codex; scope: shared `FieldGeometry`/ray-packing contract in
+  `hephaestus-core`, native CUDA and ROCm volume ray-integral kernels, Metal
+  delegation, value-semantic contracts, CUDA/ROCm/Metal CI, and synchronized
+  backend documentation. Prepared reductions, the Laplacian stencil, and
+  other backend-only families are non-goals for this increment.
+- Acceptance: WGPU, CUDA, ROCm, and Metal expose the same
+  `FieldGeometry`/`RAY_STRIDE`/`ray_line_integrals(_into)` contract; CUDA and
+  HIP execute the midpoint trilinear ray integral on device-resident field and
+  ray buffers; misses, empty output, invalid step, length mismatch, field-size
+  mismatch, and exact-f32 count limits are value-tested; Metal delegates the
+  same contract through its native WGPU-Metal device; and each backend's CI
+  lane builds and runs the focused contract with required-device enforcement
+  where hardware is available.
+- Claimed files: `crates/hephaestus-core/src/domain/volume.rs`, the four
+  backend volume modules and exports/tests, CUDA/ROCm/Metal workflow files,
+  `README.md`, `CHANGELOG.md`, `docs/adr/0013-backend-volume-parity.md`,
+  `checklist.md`, and this item. Last update: 2026-07-25. Hosted feature
+  lanes passed at head `b7c81fb`: CUDA run `30167708589` / job
+  `89703450676`, ROCm run `30167708590` / job `89703450758`, and Metal run
+  `30167708592` / job `89703450752`. Hardware lanes were skipped because the
+  hosted runner labels were unavailable; required-device enforcement remains
+  enabled for self-hosted GPU runners. Local Windows package compilation
+  remains blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
+  `FloatElement` mismatch.
+
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
 - Owner: Codex; scope: ROCm decomposition feature seam, device-resident

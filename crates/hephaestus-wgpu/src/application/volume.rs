@@ -12,28 +12,12 @@
 //! graze with `L ≤ 0`) integrate to `0`; samples falling outside the node range
 //! after clipping (floating-point boundary rounding) contribute `0`.
 
-use bytemuck::Pod;
-
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, Result, validate_ray_line_integrals};
 
-/// Number of `f32` lanes per packed ray (`[ox, oy, oz, dx, dy, dz]`).
-pub const RAY_STRIDE: usize = 6;
-
-/// World-space description of the sampled field: C-contiguous `(x, y, z)` order
-/// with `z` fastest (`flat = (ix·ny + iy)·nz + iz`), node `i` at
-/// `origin + i·spacing` per axis.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FieldGeometry {
-    /// Node counts per axis `[nx, ny, nz]`.
-    pub dims: [u32; 3],
-    /// World coordinate of node `(0, 0, 0)` per axis.
-    pub origin: [f32; 3],
-    /// Node pitch per axis (world units, > 0).
-    pub spacing: [f32; 3],
-}
+pub use hephaestus_core::{FieldGeometry, RAY_STRIDE};
 
 fn shader_source(width: BlockWidth) -> String {
     format!(
@@ -141,43 +125,9 @@ pub fn ray_line_integrals_into(
     out: &WgpuBuffer<f32>,
     width: BlockWidth,
 ) -> Result<()> {
-    let n_rays = out.len;
-    if rays.len != n_rays * RAY_STRIDE {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: rays.len,
-            device_len: n_rays * RAY_STRIDE,
-        });
-    }
-    let n_field = geometry.dims.iter().map(|&d| d as usize).product::<usize>();
-    if field.len != n_field {
-        return Err(HephaestusError::LengthMismatch {
-            host_len: field.len,
-            device_len: n_field,
-        });
-    }
-    if !(step.is_finite() && step > 0.0) {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!("ray-march step must be finite and positive, got {step}"),
-        });
-    }
+    let n_rays = validate_ray_line_integrals(field.len, geometry, rays.len, out.len, step)?;
     if n_rays == 0 {
         return Ok(());
-    }
-
-    // Counts travel as f32 lanes (single params buffer, staying within the
-    // 4-storage-buffer per-stage device limit); exactness requires < 2^24.
-    const F32_EXACT_LIMIT: usize = 1 << 24;
-    for (label, count) in [
-        ("dims.x", geometry.dims[0] as usize),
-        ("dims.y", geometry.dims[1] as usize),
-        ("dims.z", geometry.dims[2] as usize),
-        ("n_rays", n_rays),
-    ] {
-        if count >= F32_EXACT_LIMIT {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("{label} = {count} exceeds the exact-f32 limit 2^24"),
-            });
-        }
     }
     let pf = device.upload(&[
         geometry.dims[0] as f32,
@@ -275,10 +225,8 @@ pub fn ray_line_integrals(
     n_rays: usize,
     step: f32,
     width: BlockWidth,
-) -> Result<WgpuBuffer<f32>>
-where
-    f32: Pod,
-{
+) -> Result<WgpuBuffer<f32>> {
+    validate_ray_line_integrals(field.len, geometry, rays.len, n_rays, step)?;
     let out = device.alloc_zeroed::<f32>(n_rays)?;
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
