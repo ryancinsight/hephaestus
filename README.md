@@ -20,7 +20,7 @@ kernels are forged for accelerator hardware.
 | --- | --- |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, shared volume ray geometry/validation, shared 2D Laplacian parameters, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, monomorphized elementwise/reduction/scan dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation, rank-2 cumulative sum/product scans, reusable prepared dot/L2, scalar and rank-2 axis reductions, prepared CSR sparse SpMV/SpMM and mixed batching, and the shared volume/Laplacian contracts. |
-| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including rank-2 cumulative sum/product scans, seeded uniform/normal initializers, prepared dot/L2, CSR sparse products with prepared SpMV/SpMM batching, prepared scalar and rank-2 axis reductions, volume ray integrals, and the 2D Laplacian stencil. |
+| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including rank-2 cumulative sum/product scans, seeded uniform/normal initializers, prepared dot/L2, CSR sparse products with prepared SpMV/SpMM batching, prepared scalar and rank-2 axis reductions, volume ray integrals, the 2D Laplacian stencil, Metal-owned storage kernels, and authored-kernel streams with grouped sequencing. |
 | `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse/volume/Laplacian dispatch via ZST op markers, including rank-2 cumulative sum/product scans, reusable prepared dot/L2, scalar, rank-2 axis, and CSR sparse SpMV/SpMM plans with batching, shared geometry and stencil contracts, and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
 | `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max and reusable prepared dot/L2, scalar, rank-2 axis, and CSR sparse SpMV/SpMM plans with batching, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, pseudoinverses, matrix exponentials, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, native volume ray integrals, native 2D Laplacian stencils, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky, partial/complete-pivot LU, Householder/column-pivoted QR, Golub–Kahan bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, symmetric Jacobi eigen, and general complex eigenvalue decomposition surfaces. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for the factorization surface. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
@@ -146,6 +146,13 @@ register each package's Trusted Publisher with that environment.
   WGPU-backed decomposition handle types while executing through Metal's
   selected WGPU device. The traits delegate to existing Metal application
   operations and do not add a CPU fallback.
+- Metal exports `MetalMultiStorageKernel`, `MetalUnaryStorageKernel`, and
+  `MetalBinaryStorageKernel` with typed `MetalStorageBinding` layouts over the
+  native Metal-selected WGPU path. It also implements the shared
+  `KernelDevice`/`GroupedKernelDevice` seams through Metal-owned prepared and
+  command-stream types; dispatch, ordered copies, zero fill, and grouped
+  sequencing preserve the WGPU, CUDA, and ROCm contracts without exposing WGPU
+  buffers through the Metal API.
 - `RocmMultiStorageKernel` implements the shared `MultiStorageKernel` and
   `MultiStorageDevice` contracts with flat HIP pointer arguments plus a POD
   parameter block. Binding order, arity, block dimensions, and length
@@ -193,7 +200,9 @@ and does not inherit Moirai's optional WGPU backend. Native HIP device
 mechanics, elementwise kernels, reductions, scans, map-reductions, Kronecker
 products, matrix powers, matrix properties, seeded random initializers, tiled
 matrix multiplication, CSR sparse products, multi-storage kernels, and
-authored-kernel streams belong to `hephaestus-rocm`.
+authored-kernel streams belong to their respective backend crates. Metal
+selects the native Metal adapter through `hephaestus-wgpu` while retaining
+Metal-owned buffer and dispatch wrapper types.
 
 Hermes integration is intentionally indirect for host-delegated Leto parity
 wrappers: Hephaestus depends on `leto-ops` with its `simd` feature enabled, and
@@ -253,8 +262,9 @@ manually enabled self-hosted AMD lane sets
 a skip.
 
 The Metal contract suite runs the typed buffer, transfer, elementwise,
-reduction, prepared sum/min/max reduction, and matrix-multiplication value checks through the native Metal
-adapter on macOS. The Metal workflow checks both minimal and default feature
+reduction, prepared sum/min/max reduction, matrix-multiplication,
+storage-kernel, and authored-kernel stream value checks through the native
+Metal adapter on macOS. The Metal workflow checks both minimal and default feature
 surfaces, then runs warning-denied Clippy, doctests, rustdoc, and required
 device contracts with `HEPHAESTUS_METAL_REQUIRE_DEVICE=1`; a missing Metal
 adapter fails the hardware lane instead of producing a skip-only result.
