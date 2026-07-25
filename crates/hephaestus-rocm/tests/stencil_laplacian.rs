@@ -2,7 +2,7 @@
 
 use aequitas::systems::si::{quantities::Length, units::Meter};
 use hephaestus_core::{
-    BoundaryCondition, ComputeDevice, DeviceBuffer, HephaestusError, Laplacian2DParams,
+    BoundaryCondition, ComputeDevice, HephaestusError, Laplacian2DParams,
     LaplacianPolarity,
 };
 use hephaestus_rocm::{Laplacian2DKernel, RocmDevice};
@@ -100,7 +100,7 @@ fn storage_length_mismatch_is_rejected_before_launch() {
     let Some(device) = device("storage_length_mismatch_is_rejected_before_launch") else {
         return;
     };
-    let input = device.upload(&vec![0.0f32; 29]).expect("input upload");
+    let input = device.upload(&[0.0f32; 29]).expect("input upload");
     let output = device.alloc_zeroed::<f32>(30).expect("output allocation");
     let params = Laplacian2DParams::new(
         6,
