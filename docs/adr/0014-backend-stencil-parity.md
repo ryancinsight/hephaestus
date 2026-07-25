@@ -1,6 +1,6 @@
 # ADR 0014 (hephaestus): backend-neutral 2D Laplacian stencil parity
 
-- Status: proposed
+- Status: accepted
 - Class: [minor]
 - Date: 2026-07-25
 
