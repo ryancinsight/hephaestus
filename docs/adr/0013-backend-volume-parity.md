@@ -1,6 +1,6 @@
 # ADR 0013 (hephaestus): backend-neutral volume ray-integral parity
 
-- Status: proposed
+- Status: accepted
 - Class: [minor]
 - Date: 2026-07-25
 

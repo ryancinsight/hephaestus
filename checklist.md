@@ -2,24 +2,30 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — done
 
-- [ ] Add the backend-neutral `FieldGeometry` and `RAY_STRIDE` contract to
+- [x] Add the backend-neutral `FieldGeometry` and `RAY_STRIDE` contract to
       `hephaestus-core` and preserve the WGPU public path.
-- [ ] Implement native CUDA and ROCm midpoint trilinear ray-integral kernels;
+- [x] Implement native CUDA and ROCm midpoint trilinear ray-integral kernels;
       do not route the operation through CPU, WGPU, or host materialization.
-- [ ] Add Metal wrappers over the native Metal-selected WGPU implementation.
-- [ ] Add positive, negative, boundary, empty, and exact-count value contracts
+- [x] Add Metal wrappers over the native Metal-selected WGPU implementation.
+- [x] Add positive, negative, boundary, empty, and exact-count value contracts
       for WGPU, CUDA, ROCm, and Metal.
-- [ ] Extend CUDA/ROCm/Metal CI feature and required-device lanes through the
+- [x] Extend CUDA/ROCm/Metal CI feature and required-device lanes through the
       focused contracts, warning-denied Clippy, doctest, and rustdoc.
-- [ ] Synchronize the ADR, README, changelog, backlog, and checklist; run the
+- [x] Synchronize the ADR, README, changelog, backlog, and checklist; run the
       hosted gates, merge the verified increment, and re-audit the remaining
       backend capability matrix.
 
 Execution owner: Codex on `codex/hephaestus-backend-parity`. Claimed files:
 shared volume contract, backend volume implementations and tests, affected CI,
-and synchronized documentation artifacts.
+and synchronized documentation artifacts. Hosted feature lanes passed at head
+`b7c81fb`: CUDA run `30167708589` / job `89703450676`, ROCm run
+`30167708590` / job `89703450758`, and Metal run `30167708592` / job
+`89703450752`. Hardware lanes were skipped because hosted GPU labels were
+unavailable; required-device enforcement remains enabled for self-hosted GPU
+runners. Local Windows package compilation remains blocked by the sibling
+Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
 ## HEPH-METAL-CI-1 [patch] — done
 
