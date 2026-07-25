@@ -107,8 +107,9 @@ The module cache is thread-confined with the HIP current-device binding because
 HIP module handles and device pointers are not cross-thread Rust values.
 The optional decomposition feature adds the common `GpuCholesky`,
 `GpuLuDecomposition`, `GpuFullPivLuDecomposition`, `GpuQrDecomposition`,
-`GpuColPivQrDecomposition`, `GpuBidiagonalDecomposition`, and
-`GpuSvdDecomposition` surfaces. ROCm validates all logical input values on the
+`GpuColPivQrDecomposition`, `GpuBidiagonalDecomposition`, `GpuSvdDecomposition`,
+`GpuHessenbergDecomposition`, and `GpuRealSchur` surfaces. ROCm validates all
+logical input values on the
 device, materializes strided inputs through the native identity kernel, and
 executes Cholesky diagonal/column recurrences, partial/complete-pivot LU, and
 Householder/column-pivoted QR as ordered HIP module launches. Bidiagonalization
@@ -123,7 +124,8 @@ and permutations are authoritative; the common scalar solve, determinant,
 inverse, and least-squares methods retain the established host-side provider
 contract, with no backend-selection fallback to CPU or WGPU.
 Symmetric Jacobi eigenpairs/eigenvalues and general complex eigenvalues use the
-same provider boundary and upload typed f32/complex result buffers.
+same provider boundary and upload typed f32/complex result buffers. Hessenberg
+and real Schur use that boundary to upload typed Q/H and Q/T factors.
 
 ## Alternatives rejected
 
@@ -158,7 +160,9 @@ QR, and column-pivoted QR are covered behind the `decomposition` feature with
 HIP factorization and common host-operation contracts. Bidiagonalization and
 SVD, UDU, Bunch–Kaufman, symmetric eigen, and general complex eigenvalues are
 covered through the shared Leto provider boundary with ROCm-resident result
-buffers and value-semantic contracts. Schur and Hessenberg remain open.
+buffers and value-semantic contracts. Hessenberg and real Schur are covered by
+the same provider-backed typed-factor contract; the common decomposition
+surface is complete.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches, with Hermes pinned to `v0.4.1` because Leto main currently
