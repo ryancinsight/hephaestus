@@ -139,7 +139,12 @@ pub fn ray_line_integrals_into(
     if n_rays == 0 {
         return Ok(());
     }
-    let groups = n_rays.div_ceil(width.get());
+    let width_usize = usize::try_from(width.get()).map_err(|_| {
+        hephaestus_core::HephaestusError::DispatchFailed {
+            message: format!("volume block width {} exceeds usize range", width.get()),
+        }
+    })?;
+    let groups = n_rays.div_ceil(width_usize);
     let grid = DispatchGrid::new(
         u32::try_from(groups).map_err(|_| hephaestus_core::HephaestusError::DispatchFailed {
             message: format!("volume ray grid {groups} exceeds u32 range"),
