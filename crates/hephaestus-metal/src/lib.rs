@@ -19,6 +19,11 @@ pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
 };
+#[cfg(feature = "decomposition")]
+pub use application::linalg_traits::MatrixDecompose;
+pub use application::linalg_traits::{
+    AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
+};
 pub use application::prepared_map_reduction::{
     PreparedDot, PreparedL2Norm, prepare_dot, prepare_norm_l2,
 };

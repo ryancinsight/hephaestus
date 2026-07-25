@@ -7,13 +7,16 @@
 //! instead of being reported as device evidence.
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
+#[cfg(feature = "decomposition")]
+use hephaestus_metal::MatrixDecompose;
 use hephaestus_metal::{
-    AddOp, MaxOp, MetalDevice, MinOp, MulOp, NegOp, SqrtOp, StridedOperand, SumOp,
-    binary_elementwise, cumprod, cumprod_into, matmul, normal_with_seed, prepare_dot,
-    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduction,
-    scalar_elementwise, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
-    unary_elementwise, unary_elementwise_into, uniform_with_seed,
+    AddOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve, MaxOp,
+    MetalDevice, MinOp, MulOp, NegOp, SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod,
+    cumprod_into, matmul, normal_with_seed, prepare_dot, prepare_max_axis_into,
+    prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2, prepare_reduction,
+    prepare_reduction_with_width, prepare_sum_axis_into, reduction, scalar_elementwise,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, unary_elementwise,
+    unary_elementwise_into, uniform_with_seed,
 };
 use leto::Layout;
 
@@ -635,6 +638,100 @@ fn linalg_matmul_matches_cpu_reference() {
     let mut host_out = [0.0f32; 4];
     d.download(&out, &mut host_out).unwrap();
     assert_eq!(host_out, [19.0, 22.0, 43.0, 50.0,]);
+}
+
+#[test]
+fn fluent_linalg_traits_match_value_contracts() {
+    let Some(device) = device("fluent_linalg_traits_match_value_contracts") else {
+        return;
+    };
+
+    let matrix = device.upload(&[4.0_f32, 1.0, 1.0, 3.0]).unwrap();
+    let matrix_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let operand = StridedOperand {
+        buffer: &matrix,
+        layout: &matrix_layout,
+    };
+
+    let product = operand.matmul(&device, &operand).unwrap();
+    let mut got_product = [0.0_f32; 4];
+    device.download(&product, &mut got_product).unwrap();
+    assert_eq!(got_product, [17.0, 7.0, 7.0, 10.0]);
+
+    let l1 = operand.norm_l1(&device).unwrap();
+    let l2 = operand.norm_l2(&device).unwrap();
+    let max = operand.norm_max(&device).unwrap();
+    let trace = operand.trace(&device).unwrap();
+    let det = operand.det(&device).unwrap();
+    let mut got_scalar = [0.0_f32];
+    device.download(&l1, &mut got_scalar).unwrap();
+    assert_eq!(got_scalar, [9.0]);
+    device.download(&l2, &mut got_scalar).unwrap();
+    assert!((got_scalar[0] - 27.0_f32.sqrt()).abs() <= 8.0 * f32::EPSILON);
+    device.download(&max, &mut got_scalar).unwrap();
+    assert_eq!(got_scalar, [4.0]);
+    device.download(&trace, &mut got_scalar).unwrap();
+    assert_eq!(got_scalar, [7.0]);
+    device.download(&det, &mut got_scalar).unwrap();
+    assert_eq!(got_scalar, [11.0]);
+    assert_eq!(operand.rank(&device).unwrap(), 2);
+    assert_eq!(operand.rank_with_tolerance(&device, 1.0e-6).unwrap(), 2);
+
+    let power = operand.matpow(&device, 2).unwrap();
+    let mut got_power = [0.0_f32; 4];
+    device.download(&power, &mut got_power).unwrap();
+    assert_eq!(got_power, got_product);
+
+    let rhs = device.upload(&[5.0_f32, 7.0]).unwrap();
+    let solution = operand.solve(&device, &rhs).unwrap();
+    let mut got_solution = [0.0_f32; 2];
+    device.download(&solution, &mut got_solution).unwrap();
+    assert!((got_solution[0] - 8.0 / 11.0).abs() <= 8.0 * f32::EPSILON);
+    assert!((got_solution[1] - 23.0 / 11.0).abs() <= 8.0 * f32::EPSILON);
+
+    let inverse = operand.inv(&device).unwrap();
+    let pseudoinverse = operand.pinv(&device).unwrap();
+    let mut got_inverse = [0.0_f32; 4];
+    let mut got_pseudoinverse = [0.0_f32; 4];
+    device.download(&inverse, &mut got_inverse).unwrap();
+    device
+        .download(&pseudoinverse, &mut got_pseudoinverse)
+        .unwrap();
+    let expected_inverse = [3.0 / 11.0, -1.0 / 11.0, -1.0 / 11.0, 4.0 / 11.0];
+    for (got, expected) in got_inverse.iter().zip(expected_inverse) {
+        assert!((got - expected).abs() <= 16.0 * f32::EPSILON);
+    }
+    for (got, expected) in got_pseudoinverse.iter().zip(expected_inverse) {
+        assert!((got - expected).abs() <= 16.0 * f32::EPSILON);
+    }
+
+    let diagonal = device.upload(&[1.0_f32, 0.0, 0.0, 2.0]).unwrap();
+    let diagonal_operand = StridedOperand {
+        buffer: &diagonal,
+        layout: &matrix_layout,
+    };
+    let exponential = diagonal_operand.matexp(&device).unwrap();
+    let mut got_exponential = [0.0_f32; 4];
+    device.download(&exponential, &mut got_exponential).unwrap();
+    assert!((got_exponential[0] - 1.0_f32.exp()).abs() <= 16.0 * f32::EPSILON);
+    assert!((got_exponential[3] - 2.0_f32.exp()).abs() <= 16.0 * f32::EPSILON);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn fluent_matrix_decomposition_uses_metal_selected_device() {
+    let Some(device) = device("fluent_matrix_decomposition_uses_metal_selected_device") else {
+        return;
+    };
+
+    let matrix = device.upload(&[4.0_f32, 1.0, 1.0, 3.0]).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let operand = StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+    let lu = operand.lu(&device).unwrap();
+    assert!((lu.det() - 11.0).abs() <= 8.0 * f32::EPSILON);
 }
 
 #[test]

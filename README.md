@@ -140,6 +140,12 @@ register each package's Trusted Publisher with that environment.
   binary elementwise operation markers. These traits and markers delegate to
   the same validated ROCm operation entry points and do not add an adapter or
   backend fallback.
+- Metal exports the same fluent rank-2 matrix trait names and method families
+  as WGPU, CUDA, and ROCm. Product, norm, property, solve, and function
+  methods return Metal-owned buffers; `MatrixDecompose` retains the shared
+  WGPU-backed decomposition handle types while executing through Metal's
+  selected WGPU device. The traits delegate to existing Metal application
+  operations and do not add a CPU fallback.
 - `RocmMultiStorageKernel` implements the shared `MultiStorageKernel` and
   `MultiStorageDevice` contracts with flat HIP pointer arguments plus a POD
   parameter block. Binding order, arity, block dimensions, and length
