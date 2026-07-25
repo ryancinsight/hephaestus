@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — in-progress
+
+- [ ] Add Metal-owned fluent matrix traits for operand conversion, products,
+      norms, decomposition, solves, matrix properties, and matrix functions,
+      returning Metal buffers while retaining shared decomposition handles.
+- [ ] Add value-semantic Metal contracts for representative fluent product,
+      norm, property, function, solve, and decomposition calls.
+- [ ] Synchronize the ADR, README, changelog, backlog, and checklist, then
+      run the Metal feature, lint, Nextest, doctest, and rustdoc gates.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-3`; claimed
+files: Metal linalg traits and exports, Metal contract tests, affected
+documentation, ADR 0021, and no workflow changes unless the existing Metal
+lane fails to collect the new contracts.
+
 ## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — done
 
 - [x] Add Metal-owned `uniform_with_seed` and `normal_with_seed` wrappers over

@@ -4,6 +4,26 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — in-progress
+
+- Owner: Codex; scope: expose Metal-owned fluent dense-matrix traits matching
+  the existing WGPU, CUDA, and ROCm method families for operand conversion,
+  products, norms, decomposition, solves, matrix properties, and matrix
+  functions. New Metal kernels, shared-algorithm rewrites, and dynamic-rank
+  helpers are non-goals.
+- Acceptance: Metal exports `AsGpuMatrixOperand`, `MatrixProduct`,
+  `MatrixNorm`, `MatrixDecompose`, `MatrixSolve`, `MatrixProperties`, and
+  `MatrixFunction` with Metal device and buffer contracts; every method
+  delegates to an existing Metal-selected operation; decomposition handles
+  retain the existing shared WGPU-backed result types; value-semantic Metal
+  tests cover representative product, norm, property, function, solve, and
+  decomposition calls; and the Metal CI lane passes its feature, lint,
+  Nextest, doctest, and rustdoc gates.
+- Claimed files: Metal linalg traits and exports, Metal contract tests,
+  README, CHANGELOG, `docs/adr/0021-metal-fluent-linalg-parity.md`,
+  `checklist.md`, and this item. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next-3`; last update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — done
 
 - Owner: Codex; scope: expose deterministic seeded uniform and normal
