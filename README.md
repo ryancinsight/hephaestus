@@ -18,11 +18,11 @@ kernels are forged for accelerator hardware.
 
 | Crate | Responsibility |
 | --- | --- |
-| `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, shared volume ray geometry/validation, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
-| `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation, and the shared volume ray-integral contract. |
-| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including volume ray integrals. |
-| `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse/volume dispatch via ZST op markers, the shared volume geometry contract, and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
-| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, pseudoinverses, matrix exponentials, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, native volume ray integrals, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky, partial/complete-pivot LU, Householder/column-pivoted QR, Golub–Kahan bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, symmetric Jacobi eigen, and general complex eigenvalue decomposition surfaces. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for the factorization surface. |
+| `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, shared volume ray geometry/validation, shared 2D Laplacian parameters, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
+| `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, monomorphized elementwise/reduction dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation, and the shared volume/Laplacian contracts. |
+| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including volume ray integrals and the 2D Laplacian stencil. |
+| `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse/volume/Laplacian dispatch via ZST op markers, shared geometry and stencil contracts, and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, contiguous sum/min/max, rank-2 axis sum/min/max/mean reductions, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, pseudoinverses, matrix exponentials, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, native volume ray integrals, native 2D Laplacian stencils, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky, partial/complete-pivot LU, Householder/column-pivoted QR, Golub–Kahan bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, symmetric Jacobi eigen, and general complex eigenvalue decomposition surfaces. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for the factorization surface. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
 
 ## Python Releases
@@ -95,6 +95,12 @@ register each package's Trusted Publisher with that environment.
   and packed rays on their selected device, while Metal delegates through its
   native Metal-selected WGPU device. All providers share the same validation
   and midpoint/trilinear value contract.
+- The 2D Laplacian stencil contract is backend-neutral:
+  `Laplacian2DParams`, `BoundaryCondition`, and `LaplacianPolarity` live in
+  `hephaestus-core`; WGPU, CUDA, and ROCm execute device-resident kernels for
+  Dirichlet, Neumann, and periodic boundaries, while Metal delegates through
+  its native Metal-selected WGPU device. All providers validate the same grid
+  and storage contract.
 - Sparse ROCm storage owns CSR values, column indices, and row pointers in
   typed device buffers. HIP SpMV and SpMM kernels consume that representation
   directly in `O(nnz)` and `O(nnz * rhs_columns)` work; multi-RHS SpMV reuses
@@ -186,6 +192,10 @@ cargo bench --bench reduction_width
 cargo run -p hephaestus-wgpu --example prepared_map_reduction
 cargo bench -p hephaestus-wgpu --bench prepared_map_reduction
 ```
+
+The CUDA, ROCm, and Metal lanes include the focused volume and 2D Laplacian
+contracts; hardware lanes set `HEPHAESTUS_*_REQUIRE_DEVICE=1` so unavailable
+required devices fail rather than silently pass.
 
 Contract tests run real device dispatch differentially against CPU references
 (upload/download round-trip, partial trailing workgroup add, integral mul,

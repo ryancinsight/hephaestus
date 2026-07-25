@@ -2,6 +2,29 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — done
+
+- [x] Move the backend-neutral `Laplacian2DParams`, boundary conditions, and
+      polarity contract into `hephaestus-core`.
+- [x] Implement native CUDA and ROCm device-resident Laplacian kernels for
+      Dirichlet, Neumann, and periodic boundaries without CPU or WGPU routing.
+- [x] Add the Metal wrapper over the native Metal-selected WGPU kernel.
+- [x] Add positive, negative, boundary, storage-length, and polarity
+      value-semantic contracts for WGPU, CUDA, ROCm, and Metal.
+- [x] Run the existing CUDA/ROCm/Metal CI lanes through the new contracts and
+      synchronize the ADR, README, changelog, backlog, and checklist.
+
+Execution owner: Codex on `codex/hephaestus-backend-stencil`. Claimed files:
+shared stencil contract, backend stencil implementations and tests, affected
+dependency entries, and synchronized documentation artifacts.
+Hosted feature lanes passed at head `0718d6a`: CUDA run `30170135462` / job
+`89709752625`, ROCm run `30170135447` / job `89709752628`, and Metal run
+`30170135476` / job `89709752732`. Hardware lanes were skipped because hosted
+GPU labels were unavailable; required-device enforcement remains enabled for
+self-hosted GPU runners. Local Windows package compilation remains blocked by
+the sibling Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
+Merged through PR #93.
+
 ## HEPH-BACKEND-PARITY-VOLUME-1 [minor] — done
 
 - [x] Add the backend-neutral `FieldGeometry` and `RAY_STRIDE` contract to

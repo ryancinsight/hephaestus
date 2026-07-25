@@ -5,7 +5,7 @@
 //! stencil, including Dirichlet/Neumann/Periodic boundary handling.
 
 use aequitas::systems::si::{quantities::Length, units::Meter};
-use hephaestus_core::ComputeDevice;
+use hephaestus_core::{ComputeDevice, HephaestusError};
 use hephaestus_wgpu::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity, WgpuDevice,
 };
@@ -217,6 +217,29 @@ fn laplacian_large_periodic_16x16_matches_cpu_reference() {
     };
     let expected = leto_laplacian_2d(&field, n, n, 0.125, 0.25, BoundaryCondition::Periodic);
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
+}
+
+#[test]
+fn laplacian_storage_length_mismatch_is_rejected_before_launch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let input = device.upload(&vec![0.0f32; 29]).expect("input upload");
+    let output = device.alloc_zeroed::<f32>(30).expect("output allocation");
+    let params = Laplacian2DParams::new(
+        6,
+        5,
+        Length::from_unit::<Meter>(1.0),
+        Length::from_unit::<Meter>(1.0),
+        BoundaryCondition::Dirichlet,
+        LaplacianPolarity::Laplacian,
+    )
+    .expect("valid parameters");
+    let kernel = Laplacian2DKernel::new(&device).expect("kernel compile");
+    let error = kernel
+        .dispatch(&device, &input, &output, &params)
+        .expect_err("storage mismatch must fail");
+    assert!(matches!(error, HephaestusError::LengthMismatch { .. }));
 }
 
 fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32) {

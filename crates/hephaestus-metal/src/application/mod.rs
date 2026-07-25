@@ -11,6 +11,8 @@ pub mod linalg;
 pub mod reduction;
 /// Scan operations.
 pub mod scan;
+/// 2D Laplacian stencil delegation.
+pub mod stencil;
 /// Strided layout wrappers.
 pub mod strided;
 /// Volume ray-integral delegation.

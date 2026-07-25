@@ -70,6 +70,9 @@ pub use application::scan::{
 pub use application::sparse::{
     GpuCsrMatrix, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
 };
+pub use application::stencil::{
+    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+};
 pub use application::storage_kernel::{RocmMultiStorageKernel, RocmStorageBinding};
 pub use application::stream::{RocmCommandStream, RocmGroupedPrepared, RocmPrepared};
 pub use application::strided::StridedOperand;

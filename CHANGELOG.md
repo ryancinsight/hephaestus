@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend the shared 2D Laplacian stencil contract to CUDA, ROCm, and
+  Metal. `Laplacian2DParams`, boundary conditions, and polarity now live in
+  `hephaestus-core`; CUDA and HIP execute device-resident native kernels,
+  Metal delegates through native WGPU-Metal, and all backend lanes compare
+  the boundary and polarity results with the Leto CPU reference.
+
 - [minor] Extend the shared volume ray-integral contract to CUDA, ROCm, and
   Metal. `FieldGeometry` and `RAY_STRIDE` now live in `hephaestus-core`;
   CUDA and HIP keep field/ray storage device-resident with native midpoint
