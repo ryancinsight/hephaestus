@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — done
 
 - Owner: Codex; scope: expose deterministic seeded uniform and normal
   initializers through Metal, matching the existing WGPU, CUDA, and ROCm
@@ -21,6 +21,12 @@ cuda-oxide + cutile).
   `docs/adr/0020-metal-random-parity.md`, `checklist.md`, and this item.
   Execution owner: Codex on `codex/hephaestus-backend-parity-next-2`; last
   update: 2026-07-25.
+- Hosted code-head evidence at `96abaac`: CUDA run `30178303257` / job
+  `89730624710` passed in 7m12s, ROCm run `30178303267` / job `89730603655`
+  passed in 5m57s, and Metal run `30178303260` / job `89730601126` passed in
+  6m15s. The AMD and NVIDIA required-device jobs were skipped because hosted
+  GPU labels were unavailable; the provider lanes ran their real feature,
+  warning-denied Clippy, Nextest, doctest, and rustdoc gates.
 
 ## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
 

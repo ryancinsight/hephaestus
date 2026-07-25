@@ -41,4 +41,8 @@ The Metal contract compares repeated same-seed uniform outputs, verifies the
 uniform half-open bounds, and verifies nonzero normal output for a fixed seed.
 The existing macOS Metal CI lane runs the feature, warning-denied Clippy,
 Nextest, doctest, and rustdoc gates; required-device enforcement remains the
-hardware evidence tier.
+hardware evidence tier. At code head `96abaac`, CUDA run `30178303257` / job
+`89730624710` passed in 7m12s, ROCm run `30178303267` / job `89730603655`
+passed in 5m57s, and Metal run `30178303260` / job `89730601126` passed in
+6m15s. The AMD and NVIDIA required-device jobs were skipped because hosted GPU
+labels were unavailable.
