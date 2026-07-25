@@ -17,18 +17,22 @@ mod batched_matmul;
 mod kron;
 mod matmul;
 mod matpow;
+mod matrix;
 mod matrix_rank;
 mod norms;
-#[cfg(feature = "decomposition")]
 mod pinv_matexp;
 
 pub use batched_matmul::{batched_matmul, batched_matmul_into};
 pub use kron::{kron, kron_into};
 pub use matmul::{matmul, matmul_into};
 pub use matpow::{MatrixIdentityScalar, matpow};
+#[cfg(feature = "decomposition")]
+pub use matrix::MatrixDecompose;
+pub use matrix::{
+    AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
+};
 pub use matrix_rank::{MatrixRankScalar, det, matrix_rank, matrix_rank_with_tolerance};
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
-#[cfg(feature = "decomposition")]
 pub use pinv_matexp::{matexp, pinv};
 
 #[repr(C)]

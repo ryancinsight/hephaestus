@@ -166,6 +166,27 @@ artifacts. The local package gate inherits the sibling Leto checkout's
 `Quantity<T>::in_unit` / `FloatElement` mismatch; hosted CI is the supported
 checkout-graph gate.
 
+## HEPH-ROCM-PARITY-FLUENT-9 [minor] — done
+
+- [x] Add ROCm fluent matrix traits matching the CUDA/WGPU public contract.
+- [x] Delegate product, norm, decomposition, solve, property, and matrix
+      function methods to the existing ROCm operation families without a
+      compatibility adapter or backend fallback.
+- [x] Add value-semantic trait-call contracts covering representative dense,
+      strided, decomposition, solve, property, and matrix-function cases.
+- [x] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [x] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc
+      for the affected feature matrix.
+- [x] Publish and merge the verified increment, then re-audit exported common
+      capabilities across CUDA, WGPU, and ROCm.
+
+Execution owner: Codex on `codex/hephaestus-rocm-fluent-parity`. Claimed files:
+ROCm linalg and public exports, ROCm contract tests, and synchronized
+documentation artifacts. Hosted run `30137841431` passed 67/67 tests at
+head `356c610`; the local package gate inherits the sibling Leto
+checkout's `Quantity<T>::in_unit` / `FloatElement` mismatch; hosted CI is the
+supported checkout-graph gate.
+
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
 - [x] Implement ROCm `KernelDevice`/`GroupedKernelDevice` preparation and

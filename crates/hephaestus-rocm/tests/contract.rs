@@ -12,8 +12,11 @@ use hephaestus_core::{
     GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice,
     KernelInterface, KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
 };
+#[cfg(feature = "decomposition")]
+use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
-    CumSumOp, GpuCsrMatrix, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
+    AsGpuMatrixOperand, CumSumOp, GpuCsrMatrix, MatrixFunction, MatrixNorm, MatrixProduct,
+    MatrixProperties, MatrixSolve, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
     StridedOperand, batched_matmul, batched_matmul_into, binary_elementwise,
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
     cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
@@ -27,10 +30,11 @@ use hephaestus_rocm::{
 use hephaestus_rocm::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
     col_piv_qr_blocked, eigenvalues, full_piv_lu, full_piv_lu_blocked, hessenberg, lu_decompose,
-    lu_decompose_blocked, matexp, pinv, qr_decompose, qr_decompose_blocked, schur, singular_values,
+    lu_decompose_blocked, qr_decompose, qr_decompose_blocked, schur, singular_values,
     svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
     udu_decompose,
 };
+use hephaestus_rocm::{matexp, pinv};
 use leto::Layout;
 use std::borrow::Cow;
 
@@ -131,7 +135,6 @@ fn assert_length_mismatch<T>(result: Result<T>, host_len: usize, device_len: usi
     }
 }
 
-#[cfg(feature = "decomposition")]
 fn assert_near(actual: f32, expected: f32, ulps: f32) {
     let tolerance = ulps * f32::EPSILON * expected.abs().max(1.0);
     assert!(
@@ -160,7 +163,6 @@ fn reconstruct_svd(
         .collect()
 }
 
-#[cfg(feature = "decomposition")]
 fn matmul_square(lhs: &[f32], rhs: &[f32], n: usize) -> Vec<f32> {
     (0..n)
         .flat_map(|row| {
@@ -3237,7 +3239,111 @@ fn schur_rejects_rectangular_and_nonfinite_inputs() {
     ));
 }
 
+#[test]
+fn fluent_matrix_traits_match_operation_contracts() {
+    let Some(device) = device("fluent_matrix_traits_match_operation_contracts") else {
+        return;
+    };
+
+    let a_values = [1.0_f32, 2.0, 3.0, 4.0];
+    let b_values = [2.0_f32, 0.0, 1.0, 2.0];
+    let a = device.upload(&a_values).expect("HIP fluent matrix upload");
+    let b = device.upload(&b_values).expect("HIP fluent rhs upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("fluent matrix layout");
+    let a_operand = StridedOperand {
+        buffer: &a,
+        layout: &layout,
+    };
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &layout,
+    };
+    let normalized_operand = a_operand.as_operand();
+    assert_eq!(normalized_operand.layout.shape, [2, 2]);
+
+    let product = a_operand
+        .matmul(&device, &b_operand)
+        .expect("ROCm fluent matmul");
+    let mut product_actual = [0.0_f32; 4];
+    device
+        .download(&product, &mut product_actual)
+        .expect("HIP fluent matmul download");
+    assert_eq!(product_actual, [8.0, 4.0, 18.0, 8.0]);
+
+    let l1 = a_operand.norm_l1(&device).expect("ROCm fluent L1 norm");
+    let mut l1_actual = [0.0_f32; 1];
+    device
+        .download(&l1, &mut l1_actual)
+        .expect("HIP fluent L1 download");
+    assert_eq!(l1_actual, [10.0]);
+
+    let trace = a_operand.trace(&device).expect("ROCm fluent trace");
+    let mut trace_actual = [0.0_f32; 1];
+    device
+        .download(&trace, &mut trace_actual)
+        .expect("HIP fluent trace download");
+    assert_eq!(trace_actual, [5.0]);
+    assert_eq!(a_operand.rank(&device).expect("ROCm fluent rank"), 2);
+
+    let determinant = a_operand.det(&device).expect("ROCm fluent determinant");
+    let mut determinant_actual = [0.0_f32; 1];
+    device
+        .download(&determinant, &mut determinant_actual)
+        .expect("HIP fluent determinant download");
+    assert_eq!(determinant_actual, [-2.0]);
+
+    let power = a_operand
+        .matpow(&device, 0)
+        .expect("ROCm fluent identity power");
+    let mut power_actual = [0.0_f32; 4];
+    device
+        .download(&power, &mut power_actual)
+        .expect("HIP fluent power download");
+    assert_eq!(power_actual, [1.0, 0.0, 0.0, 1.0]);
+
+    let pseudoinverse = a_operand.pinv(&device).expect("ROCm fluent pseudoinverse");
+    let mut pseudoinverse_actual = [0.0_f32; 4];
+    device
+        .download(&pseudoinverse, &mut pseudoinverse_actual)
+        .expect("HIP fluent pseudoinverse download");
+    let expected_pseudoinverse = leto_ops::pinv(&leto::ArrayView::<f32, 2>::new(layout, &a_values))
+        .expect("CPU fluent pseudoinverse reference");
+    let expected_pseudoinverse_slice = leto::Storage::as_slice(expected_pseudoinverse.storage());
+    for (actual, expected) in pseudoinverse_actual
+        .iter()
+        .zip(expected_pseudoinverse_slice)
+    {
+        assert_near(*actual, *expected, 4096.0);
+    }
+}
+
 #[cfg(feature = "decomposition")]
+#[test]
+fn fluent_decomposition_traits_match_solve_contract() {
+    let Some(device) = device("fluent_decomposition_traits_match_solve_contract") else {
+        return;
+    };
+
+    let values = [4.0_f32, 1.0, 2.0, 3.0];
+    let matrix = device.upload(&values).expect("HIP fluent LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("fluent LU layout");
+    let operand = StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+    let factor = operand.lu(&device).expect("ROCm fluent LU");
+    let rhs = device
+        .upload(&[1.0_f32, 2.0])
+        .expect("HIP fluent rhs upload");
+    let solution = factor.solve(&device, &rhs).expect("ROCm fluent LU solve");
+    let mut actual = [0.0_f32; 2];
+    device
+        .download(&solution, &mut actual)
+        .expect("HIP fluent solve download");
+    assert_near(actual[0], 0.1, 4096.0);
+    assert_near(actual[1], 0.6, 4096.0);
+}
+
 #[test]
 fn matrix_functions_match_leto_and_moore_penrose_contracts() {
     let Some(device) = device("matrix_functions_match_leto_and_moore_penrose_contracts") else {
@@ -3325,7 +3431,6 @@ fn matrix_functions_match_leto_and_moore_penrose_contracts() {
     }
 }
 
-#[cfg(feature = "decomposition")]
 #[test]
 fn matrix_exponential_matches_closed_forms_and_leto() {
     let Some(device) = device("matrix_exponential_matches_closed_forms_and_leto") else {
@@ -3422,7 +3527,6 @@ fn matrix_exponential_matches_closed_forms_and_leto() {
     }
 }
 
-#[cfg(feature = "decomposition")]
 #[test]
 fn matrix_functions_reject_invalid_and_handle_empty_inputs() {
     let Some(device) = device("matrix_functions_reject_invalid_and_handle_empty_inputs") else {
