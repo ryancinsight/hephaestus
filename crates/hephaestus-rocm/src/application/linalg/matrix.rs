@@ -13,7 +13,10 @@ pub trait AsGpuMatrixOperand<'a, T> {
 impl<'a, T> AsGpuMatrixOperand<'a, T> for StridedOperand<'a, T, 2> {
     #[inline]
     fn as_operand(&self) -> StridedOperand<'a, T, 2> {
-        *self
+        StridedOperand {
+            buffer: self.buffer,
+            layout: self.layout,
+        }
     }
 }
 
