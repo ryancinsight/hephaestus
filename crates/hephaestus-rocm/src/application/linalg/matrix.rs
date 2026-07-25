@@ -109,7 +109,7 @@ pub trait MatrixDecompose {
     fn singular_values(&self, device: &RocmDevice) -> Result<RocmBuffer<f32>>;
     /// Compute a symmetric eigendecomposition.
     fn symmetric_eigen(&self, device: &RocmDevice)
-        -> Result<crate::GpuSymmetricEigenDecomposition>;
+    -> Result<crate::GpuSymmetricEigenDecomposition>;
     /// Compute only the eigenvalues of a symmetric matrix.
     fn symmetric_eigenvalues(&self, device: &RocmDevice) -> Result<RocmBuffer<f32>>;
     /// Compute all eigenvalues of a general square matrix.

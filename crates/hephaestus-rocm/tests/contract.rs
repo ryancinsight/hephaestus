@@ -15,16 +15,16 @@ use hephaestus_core::{
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
-    batched_matmul, batched_matmul_into, binary_elementwise, binary_elementwise_into,
-    binary_elementwise_strided, binary_elementwise_strided_into, cumprod, cumsum, det, dot, kron,
-    kron_into, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis,
-    mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
-    scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into, sum_axis, trace,
-    unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed, AsGpuMatrixOperand, CumSumOp, GpuCsrMatrix, MatrixFunction, MatrixNorm,
-    MatrixProduct, MatrixProperties, MatrixSolve, Result, RocmDevice, RocmMultiStorageKernel,
-    ScanDirection, StridedOperand,
+    AsGpuMatrixOperand, CumSumOp, GpuCsrMatrix, MatrixFunction, MatrixNorm, MatrixProduct,
+    MatrixProperties, MatrixSolve, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
+    StridedOperand, batched_matmul, batched_matmul_into, binary_elementwise,
+    binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
+    cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
+    norm_max, normal_with_seed, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
+    spmv_many_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
@@ -1346,9 +1346,11 @@ fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
         .download(&uniform_again, &mut uniform_again_values)
         .expect("HIP repeated uniform download");
     assert_eq!(uniform_values, uniform_again_values);
-    assert!(uniform_values
-        .iter()
-        .all(|&value| (-2.0..5.0).contains(&value)));
+    assert!(
+        uniform_values
+            .iter()
+            .all(|&value| (-2.0..5.0).contains(&value))
+    );
 
     let normal =
         normal_with_seed(&device, shape, 0.0_f32, 1.0, 42).expect("HIP normal initializer");
