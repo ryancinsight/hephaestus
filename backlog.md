@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-METAL-CI-1 [patch] — in progress
+## HEPH-METAL-CI-1 [patch] — done
 
 - Owner: Codex; scope: existing `hephaestus-metal` WGPU-Metal backend
   documentation, required-device contract behavior, macOS Metal feature/build/
@@ -19,7 +19,13 @@ cuda-oxide + cutile).
   Metal contract tests retain value-semantic device/CPU checks.
 - Claimed files: `crates/hephaestus-metal/tests/contract.rs`,
   `.github/workflows/metal.yml`, `README.md`, `CHANGELOG.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24.
+  and this item. Last update: 2026-07-25. Hosted macOS Metal job
+  `89630859643` passed at PR head `9292c20`, including required-device
+  contracts, feature builds, warning-denied Clippy, doctest, and rustdoc.
+  The ROCm container job `89630859765` also passed after the shared
+  `mnemosyne-core` source patch. Local Windows package compilation remains
+  blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
+  `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
 
 ## HEPH-ROCM-PARITY-CHOLESKY-1 [minor] — done
 
