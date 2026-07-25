@@ -52,11 +52,13 @@ pub use application::elementwise::{
     unary_elementwise, unary_elementwise_into,
 };
 pub use application::linalg::{
-    L2NormScalar, MatrixIdentityScalar, MatrixRankScalar, batched_matmul, batched_matmul_into, det,
-    dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
-    norm_l1, norm_l2, norm_max, trace,
+    AsGpuMatrixOperand, L2NormScalar, MatrixFunction, MatrixIdentityScalar, MatrixNorm,
+    MatrixProduct, MatrixProperties, MatrixRankScalar, MatrixSolve, batched_matmul,
+    batched_matmul_into, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
 };
 #[cfg(feature = "decomposition")]
+pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{matexp, pinv};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};

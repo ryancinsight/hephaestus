@@ -26,11 +26,16 @@ Target release: 0.18.0.
 
 ### Changed
 
-- [minor] Extend the optional ROCm matrix-function surface with the common
-  pseudoinverse and matrix-exponential APIs. ROCm uses the shared Leto provider
-  boundary and uploads typed results; contracts cover closed forms, rectangular
-  and rank-deficient Moore–Penrose behavior, general matrix exponentials,
-  empty inputs, and invalid/non-finite cases.
+- [minor] Add ROCm fluent matrix traits matching the CUDA/WGPU public contract:
+  operand conversion, products, norms, properties, solves, matrix functions,
+  and decomposition with the `decomposition` feature. Trait calls delegate to
+  the existing validated ROCm operation families and preserve typed buffers.
+
+- [minor] Make ROCm pseudoinverse and matrix-exponential APIs available with
+  the base backend feature. ROCm uses the shared Leto provider boundary and
+  uploads typed results; contracts cover closed forms, rectangular and
+  rank-deficient Moore–Penrose behavior, general matrix exponentials, empty
+  inputs, and invalid/non-finite cases.
 
 - [minor] Extend the optional ROCm `decomposition` feature with the common
   Hessenberg and real Schur surfaces. ROCm uploads shared Leto Q/H and Q/T

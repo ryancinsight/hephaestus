@@ -102,6 +102,11 @@ register each package's Trusted Publisher with that environment.
   CUDA and WGPU. Solve, determinant, inverse, and least-squares methods retain
   the existing host-side scalar contract after HIP factorization; no backend
   selection fallback to CPU or WGPU is used.
+- ROCm exports the same fluent rank-2 matrix traits as CUDA and WGPU:
+  `AsGpuMatrixOperand`, `MatrixProduct`, `MatrixNorm`, `MatrixProperties`,
+  `MatrixSolve`, and `MatrixFunction`, plus `MatrixDecompose` with the
+  `decomposition` feature. These traits delegate to the same validated ROCm
+  operation entry points and do not add an adapter or backend fallback.
 - `RocmMultiStorageKernel` implements the shared `MultiStorageKernel` and
   `MultiStorageDevice` contracts with flat HIP pointer arguments plus a POD
   parameter block. Binding order, arity, block dimensions, and length
@@ -181,12 +186,11 @@ Kronecker products, matrix-power, matrix-rank/determinant, seeded uniform and
 normal initializers, CSR round-trip, SpMV, and SpMM value checks, and strided
 dot/trace/norm value checks, multi-storage HIP binary dispatch, and authored
 kernel stream/grouped-sequence copy/fill/value checks. With
-`rocm,decomposition`, it also runs Cholesky, pivoted-LU, pivoted-QR,
-bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur,
-  symmetric/general eigen, pseudoinverse, matrix-exponential,
-strided-input, blocked-density,
-solve, determinant,
-inverse, empty-input, and failure contracts. The ROCm
+`rocm`, it also runs pseudoinverse, matrix-exponential, and fluent matrix-trait
+contracts. With `rocm,decomposition`, it additionally runs Cholesky,
+pivoted-LU, pivoted-QR, bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg,
+real Schur, symmetric/general eigen, strided-input, blocked-density, solve,
+determinant, inverse, empty-input, and failure contracts. The ROCm
 container CI lane
 validates the feature build and adapterless path; the
 manually enabled self-hosted AMD lane sets
