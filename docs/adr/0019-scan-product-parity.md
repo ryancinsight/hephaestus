@@ -43,6 +43,9 @@ semantics is added.
 WGPU, CUDA, ROCm, and Metal contracts compare both allocating and
 caller-owned outputs over both axes and a transposed strided input against
 independent integer product references. They also cover zero-sized layouts and
-invalid storage layouts. The existing CUDA, ROCm, and Metal feature, lint,
-nextest, doctest, and rustdoc workflows execute these tests; required-device
-lanes remain the hardware evidence tier when registered GPU runners exist.
+invalid storage layouts. At implementation head `f4c74c3`, the CUDA workflow
+passed as run `30177430115` / job `89728432211` in 7m24s, the ROCm workflow
+passed as run `30177430114` / job `89728432299` in 6m04s, and the Metal
+workflow passed as run `30177430125` / job `89728432239` in 6m50s. Required-
+device lanes were skipped because hosted GPU labels were unavailable; they
+remain the hardware evidence tier when registered GPU runners exist.

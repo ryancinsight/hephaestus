@@ -2,22 +2,29 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
 
-- [ ] Add `cumprod` and `cumprod_into` convenience APIs to WGPU and CUDA by
+- [x] Add `cumprod` and `cumprod_into` convenience APIs to WGPU and CUDA by
       delegating to the existing generic `CumProdOp` reverse scan path.
-- [ ] Add the same Metal-owned wrappers over the native Metal-selected WGPU
+- [x] Add the same Metal-owned wrappers over the native Metal-selected WGPU
       path, preserving the shared backend contract.
-- [ ] Add WGPU, CUDA, ROCm, and Metal value-semantic contracts for allocated
+- [x] Add WGPU, CUDA, ROCm, and Metal value-semantic contracts for allocated
       and caller-owned outputs, both axes, non-contiguous layouts, empty
       inputs, and invalid layouts.
-- [ ] Run the existing CUDA/ROCm/Metal CI lanes and synchronize the ADR,
+- [x] Run the existing CUDA/ROCm/Metal CI lanes and synchronize the ADR,
       README, changelog, backlog, and checklist with exact hosted evidence.
 
 Execution owner: Codex on `codex/hephaestus-backend-parity-next`; claimed files:
 backend scan modules and exports, backend scan contract tests, affected
 documentation, ADR 0019, and no CI workflow changes unless the existing lanes
-fail to collect the new contracts.
+fail to collect the new contracts; status: done.
+
+Hosted code-head evidence at `f4c74c3`: CUDA run `30177430115` / job
+`89728432211` passed in 7m24s, ROCm run `30177430114` / job `89728432299`
+passed in 6m04s, and Metal run `30177430125` / job `89728432239` passed in
+6m50s. Required-device jobs were skipped because hosted GPU labels were
+unavailable; the unrelated `recurseml/analysis` check reported its generic
+analysis-service failure.
 
 ## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
