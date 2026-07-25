@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — in progress
+## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
 - Owner: Codex; scope: prepared dot and L2-norm map-reduction plans across
   WGPU, CUDA, ROCm, and Metal, including fixed product scratch, reduction
@@ -22,7 +22,14 @@ cuda-oxide + cutile).
 - Claimed files: CUDA/ROCm prepared reduction-plan extraction and prepared
   map-reduction modules/exports/tests, Metal delegation/exports/tests, README,
   changelog, ADR 0018, checklist, backlog, and existing backend CI workflows.
-  Last update: 2026-07-25.
+  Last update: 2026-07-25. Hosted feature lanes passed at code head `2af0c72`:
+  CUDA run `30176531577` / job `89726109677` (7m44s), ROCm run
+  `30176531572` / job `89726109624` (5m37s), and Metal run `30176531566` /
+  job `89726137236` (4m57s). Hardware lanes were skipped because hosted GPU
+  labels were unavailable; required-device enforcement remains enabled for
+  self-hosted runners. Local Windows package compilation remains blocked before
+  source compilation by the locked `cutile-rs` refresh and the sibling
+  Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch.
 
 ## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
 

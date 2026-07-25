@@ -2,23 +2,32 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — in progress
+## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
-- [ ] Extract reusable CUDA and ROCm reduction plans that can consume owned
+- [x] Extract reusable CUDA and ROCm reduction plans that can consume owned
       map scratch buffers without self-referential storage.
-- [ ] Add prepared dot and L2-norm plans with fixed product scratch,
+- [x] Add prepared dot and L2-norm plans with fixed product scratch,
       reduction-tree, square-root, and scalar output resources.
-- [ ] Delegate the same prepared dot/L2 surface through Metal's native
+- [x] Delegate the same prepared dot/L2 surface through Metal's native
       WGPU-Metal path and expose matching names across all backends.
-- [ ] Add repeated, changed-input, output-identity, empty, non-contiguous,
+- [x] Add repeated, changed-input, output-identity, empty, non-contiguous,
       invalid-shape, and invalid-layout value-semantic contracts.
-- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+- [x] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
       backlog, and checklist with exact hosted evidence.
 
-Execution owner: Codex on `codex/hephaestus-backend-prepared-map-reduction`.
+Execution owner: Codex on `codex/hephaestus-backend-prepared-map-reduction`; status:
+done.
 Claimed files: CUDA/ROCm prepared reduction and map-reduction modules/exports,
 Metal delegation/exports/tests, affected documentation, ADR 0018, and the
 existing backend CI workflows.
+
+Hosted code-head evidence: CUDA run `30176531577` / job `89726109677`, ROCm
+run `30176531572` / job `89726109624`, and Metal run `30176531566` / job
+`89726137236` passed at `2af0c72`. Hardware jobs were skipped because hosted
+GPU labels were unavailable; local Windows package compilation remains blocked
+by the locked `cutile-rs` refresh and sibling Leto/Eunomia
+`Quantity<T>::in_unit` / `FloatElement` mismatch. Final documentation-head
+verification and merge are recorded in the delivery commit.
 
 ## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — done
 
