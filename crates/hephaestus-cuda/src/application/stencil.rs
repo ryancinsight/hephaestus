@@ -1,7 +1,7 @@
 //! CUDA 2D Laplacian stencil dispatch.
 
 pub use hephaestus_core::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
-use hephaestus_core::{DispatchGrid, MultiStorageKernel, Result};
+use hephaestus_core::{DeviceBuffer, DispatchGrid, MultiStorageKernel, Result};
 
 use crate::CudaDevice;
 use crate::application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
