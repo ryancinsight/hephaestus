@@ -3380,6 +3380,82 @@ fn test_cuda_sparse_matrix_spmv_spmm() {
     assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 0.0);
 }
 
+#[test]
+fn test_cuda_prepared_sparse_dispatch_matches_reference() {
+    let Some(dev) = device("test_cuda_prepared_sparse_dispatch_matches_reference") else {
+        return;
+    };
+    use hephaestus_cuda::{
+        GpuCsrMatrix, PreparedSparseDispatch, StridedOperand, prepare_spmm, prepare_spmv,
+        prepare_spmv_many, submit_prepared_sparse_batch,
+    };
+
+    let cpu_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .unwrap();
+    let gpu_csr = GpuCsrMatrix::from_cpu(&dev, &cpu_csr).unwrap();
+    let x = dev.upload(&[1.0_f32, 2.0, 3.0]).unwrap();
+    let mut y = dev.upload(&[77.0_f32; 3]).unwrap();
+    let prepared_spmv = prepare_spmv(&dev, &gpu_csr, &x, &mut y).unwrap();
+    prepared_spmv.dispatch().unwrap();
+    prepared_spmv.dispatch().unwrap();
+
+    let b = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let b_layout = Layout::new([3, 2], [1, 3], 0);
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &b_layout,
+    };
+    let mut c = dev.upload(&[88.0_f32; 6]).unwrap();
+    let prepared_spmm = prepare_spmm(&dev, &gpu_csr, &b_operand, &mut c).unwrap();
+    let mut many = dev.upload(&[99.0_f32; 6]).unwrap();
+    let prepared_many = prepare_spmv_many(&dev, &gpu_csr, &b_operand, &mut many).unwrap();
+    submit_prepared_sparse_batch(&[
+        PreparedSparseDispatch::Spmv(&prepared_spmv),
+        PreparedSparseDispatch::Spmm(&prepared_spmm),
+        PreparedSparseDispatch::Spmm(&prepared_many),
+    ])
+    .unwrap();
+
+    let mut got_y = [0.0_f32; 3];
+    dev.download(&y, &mut got_y).unwrap();
+    assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 0.0);
+    let mut got_c = [0.0_f32; 6];
+    dev.download(&c, &mut got_c).unwrap();
+    assert_close_slice(&got_c, &[-1.0, 2.0, 6.0, 15.0, 12.0, 24.0], 1.0e-4, 0.0);
+    let mut got_many = [0.0_f32; 6];
+    dev.download(&many, &mut got_many).unwrap();
+    assert_eq!(got_many, got_c);
+
+    let wrong_x = dev.upload(&[1.0_f32, 2.0]).unwrap();
+    let mut wrong_output = dev.upload(&[0.0_f32; 3]).unwrap();
+    assert_length_mismatch(
+        prepare_spmv(&dev, &gpu_csr, &wrong_x, &mut wrong_output),
+        3,
+        2,
+    );
+    let bad_layout = Layout::new([3, 2], [2, 1], 5);
+    let bad_operand = StridedOperand {
+        buffer: &b,
+        layout: &bad_layout,
+    };
+    let mut bad_output = dev.upload(&[0.0_f32; 6]).unwrap();
+    match prepare_spmm(&dev, &gpu_csr, &bad_operand, &mut bad_output) {
+        Err(HephaestusError::DispatchFailed { message }) => {
+            assert!(
+                message.contains("layout rejected"),
+                "unexpected error: {message}"
+            );
+        }
+        other => panic!("expected invalid layout rejection, got {other:?}"),
+    }
+}
+
 /// Shared adversarial-layout driver: every non-dense view (transposed,
 /// offset, broadcast/zero-stride) must be rejected by the blocked entry
 /// points with the typed dense-operand error BEFORE any device copy. The

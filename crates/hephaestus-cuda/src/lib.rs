@@ -85,7 +85,9 @@ pub use application::volume::{
 
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::sparse::{
-    GpuCsrMatrix, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+    GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
+    prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+    submit_prepared_sparse_batch,
 };
 pub use infrastructure::buffer::CudaBuffer;
 pub use infrastructure::device::CudaDevice;

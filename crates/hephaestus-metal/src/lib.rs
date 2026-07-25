@@ -30,6 +30,11 @@ pub use application::reduction::{
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumsum, cumsum_into, scan_axis, scan_axis_into,
 };
+pub use application::sparse::{
+    GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
+    prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+    submit_prepared_sparse_batch,
+};
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };

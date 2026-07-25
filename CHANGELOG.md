@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add equivalent CSR sparse products and reusable prepared SpMV/SpMM
+  plans with mixed batching across WGPU, CUDA, ROCm, and Metal. CUDA and ROCm
+  retain native kernels and validated metadata; Metal delegates through the
+  native WGPU-Metal path. Contracts cover repeated dispatch, dense and
+  non-contiguous RHS layouts, CPU-reference values, and invalid shapes/layouts.
+
 - [minor] Add reusable prepared rank-2 axis reduction plans for sum, min, max,
   and mean across WGPU, CUDA, ROCm, and Metal. Preparation retains the backend
   pipeline and validated layouts/metadata; repeated and batched dispatches

@@ -11,6 +11,8 @@ pub mod linalg;
 pub mod reduction;
 /// Scan operations.
 pub mod scan;
+/// GPU-resident CSR sparse matrix operations.
+pub mod sparse;
 /// 2D Laplacian stencil delegation.
 pub mod stencil;
 /// Strided layout wrappers.
