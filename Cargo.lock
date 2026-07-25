@@ -20,17 +20,9 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "aequitas"
 version = "0.1.0"
-dependencies = [
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
- "typenum",
-]
-
-[[package]]
-name = "aequitas"
-version = "0.1.0"
 source = "git+https://github.com/ryancinsight/aequitas#262b3e09c19d844f57765d3e4ea6ab2336653d6d"
 dependencies = [
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "typenum",
 ]
 
@@ -485,10 +477,8 @@ dependencies = [
 [[package]]
 name = "cuda-async"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "anyhow",
- "cuda-bindings",
  "cuda-core",
  "dashmap",
  "futures",
@@ -500,7 +490,6 @@ dependencies = [
 [[package]]
 name = "cuda-bindings"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "bindgen",
  "libloading",
@@ -513,7 +502,6 @@ dependencies = [
 [[package]]
 name = "cuda-core"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "anyhow",
  "cuda-bindings",
@@ -532,7 +520,6 @@ dependencies = [
 [[package]]
 name = "cutile"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "anyhow",
  "cuda-async",
@@ -551,7 +538,6 @@ dependencies = [
 [[package]]
 name = "cutile-compiler"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "anyhow",
  "cuda-async",
@@ -571,7 +557,6 @@ dependencies = [
 [[package]]
 name = "cutile-ir"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "half",
  "indexmap",
@@ -581,7 +566,6 @@ dependencies = [
 [[package]]
 name = "cutile-macro"
 version = "0.2.0"
-source = "git+https://github.com/NVlabs/cutile-rs#01757b1ef1a36431701fb1d24578f0aa26459c15"
 dependencies = [
  "convert_case",
  "cutile-compiler",
@@ -661,21 +645,13 @@ dependencies = [
 [[package]]
 name = "eunomia"
 version = "0.7.0"
-dependencies = [
- "bytemuck",
- "libm",
- "rkyv",
-]
-
-[[package]]
-name = "eunomia"
-version = "0.7.0"
 source = "git+https://github.com/ryancinsight/eunomia#7021628fe8eb3637c297105f626ee5df78abda84"
 dependencies = [
  "bytemuck",
  "libm",
  "numpy",
  "pyo3",
+ "rkyv",
 ]
 
 [[package]]
@@ -898,10 +874,10 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "hephaestus-core"
 version = "0.18.0"
 dependencies = [
- "aequitas 0.1.0 (git+https://github.com/ryancinsight/aequitas)",
+ "aequitas",
  "bytemuck",
  "leto",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
  "thiserror 2.0.18",
 ]
 
@@ -909,11 +885,10 @@ dependencies = [
 name = "hephaestus-cuda"
 version = "0.18.0"
 dependencies = [
- "aequitas 0.1.0 (git+https://github.com/ryancinsight/aequitas)",
  "bytemuck",
  "cuda-oxide",
  "cutile",
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "hephaestus-core",
  "leto",
  "leto-ops",
@@ -921,16 +896,15 @@ dependencies = [
  "mnemosyne-core 0.2.0",
  "moirai-gpu",
  "moirai-sync",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
 name = "hephaestus-metal"
 version = "0.18.0"
 dependencies = [
- "aequitas 0.1.0 (git+https://github.com/ryancinsight/aequitas)",
  "bytemuck",
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "hephaestus-core",
  "hephaestus-wgpu",
  "leto",
@@ -938,7 +912,7 @@ dependencies = [
  "mnemosyne-core 0.2.0",
  "moirai-gpu",
  "moirai-sync",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
  "wgpu",
 ]
 
@@ -947,7 +921,7 @@ name = "hephaestus-python"
 version = "0.18.0"
 dependencies = [
  "bytemuck",
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "hephaestus-core",
  "hephaestus-cuda",
  "hephaestus-wgpu",
@@ -962,24 +936,21 @@ dependencies = [
 name = "hephaestus-rocm"
 version = "0.18.0"
 dependencies = [
- "aequitas 0.1.0 (git+https://github.com/ryancinsight/aequitas)",
  "bytemuck",
  "cubecl-hip-sys",
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
  "hephaestus-core",
  "leto",
- "leto-ops",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
 name = "hephaestus-wgpu"
 version = "0.18.0"
 dependencies = [
- "aequitas 0.1.0 (git+https://github.com/ryancinsight/aequitas)",
+ "aequitas",
  "bytemuck",
  "criterion",
- "eunomia 0.7.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "hephaestus-core",
  "hephaestus-cuda",
  "leto",
@@ -989,45 +960,45 @@ dependencies = [
  "moirai-gpu",
  "moirai-sync",
  "pollster",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
  "wgpu",
  "windows 0.62.2",
 ]
 
 [[package]]
 name = "hermes-simd"
-version = "0.5.0"
+version = "0.4.1"
 dependencies = [
- "eunomia 0.7.0",
+ "eunomia",
  "hermes-simd-core",
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
 name = "hermes-simd-core"
-version = "0.5.0"
+version = "0.4.1"
 dependencies = [
  "bytemuck",
- "eunomia 0.7.0",
+ "eunomia",
  "mnemosyne 0.5.0",
  "rkyv",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
 name = "hermes-simd-intrinsics"
-version = "0.5.0"
+version = "0.4.1"
 dependencies = [
- "eunomia 0.7.0",
+ "eunomia",
  "hermes-simd-core",
 ]
 
 [[package]]
 name = "hermes-simd-macros"
-version = "0.5.0"
+version = "0.4.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1036,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "hermes-simd-types"
-version = "0.5.0"
+version = "0.4.1"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -1136,9 +1107,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 name = "leto"
 version = "0.40.0"
 dependencies = [
- "aequitas 0.1.0",
+ "aequitas",
  "bytemuck",
- "eunomia 0.7.0",
+ "eunomia",
  "mnemosyne 0.6.0",
  "serde",
  "thiserror 2.0.18",
@@ -1149,12 +1120,12 @@ name = "leto-ops"
 version = "0.40.0"
 dependencies = [
  "bytemuck",
- "eunomia 0.7.0",
+ "eunomia",
  "hermes-simd",
  "leto",
  "moirai",
  "serde",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
  "thiserror 2.0.18",
 ]
 
@@ -1240,10 +1211,6 @@ dependencies = [
 [[package]]
 name = "melinoe"
 version = "0.9.0"
-
-[[package]]
-name = "melinoe"
-version = "0.9.0"
 source = "git+https://github.com/ryancinsight/melinoe.git#159b71ac3c1d59b5bbdcbe0121248c7c451aa77a"
 
 [[package]]
@@ -1285,7 +1252,7 @@ dependencies = [
 name = "mnemosyne"
 version = "0.6.0"
 dependencies = [
- "eunomia 0.7.0",
+ "eunomia",
  "mnemosyne-arena 0.3.0",
  "mnemosyne-backend 0.5.0",
  "mnemosyne-core 0.2.0",
@@ -1300,10 +1267,10 @@ dependencies = [
 name = "mnemosyne-arena"
 version = "0.3.0"
 dependencies = [
- "eunomia 0.7.0",
+ "eunomia",
  "mnemosyne-backend 0.5.0",
  "mnemosyne-core 0.2.0",
- "themis 0.10.1",
+ "themis",
 ]
 
 [[package]]
@@ -1313,7 +1280,7 @@ source = "git+https://github.com/ryancinsight/Mnemosyne.git#5c7ee954b0d4fbda159e
 dependencies = [
  "mnemosyne-backend 0.4.0",
  "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
@@ -1387,13 +1354,13 @@ dependencies = [
 name = "mnemosyne-heap"
 version = "0.3.0"
 dependencies = [
- "melinoe 0.9.0",
+ "melinoe",
  "mnemosyne-arena 0.3.0",
  "mnemosyne-backend 0.5.0",
  "mnemosyne-core 0.2.0",
  "mnemosyne-local 0.3.0",
  "mnemosyne-prof 0.2.0",
- "themis 0.10.1",
+ "themis",
 ]
 
 [[package]]
@@ -1401,28 +1368,28 @@ name = "mnemosyne-local"
 version = "0.2.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#5c7ee954b0d4fbda159e581e94f23fdcb4785492"
 dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
  "mnemosyne-arena 0.3.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "mnemosyne-backend 0.4.0",
  "mnemosyne-build-util 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "mnemosyne-decay 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "mnemosyne-prof 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
 name = "mnemosyne-local"
 version = "0.3.0"
 dependencies = [
- "melinoe 0.9.0",
+ "melinoe",
  "mnemosyne-arena 0.3.0",
  "mnemosyne-backend 0.5.0",
  "mnemosyne-build-util 0.2.0",
  "mnemosyne-core 0.2.0",
  "mnemosyne-decay 0.2.0",
  "mnemosyne-prof 0.2.0",
- "themis 0.10.1",
+ "themis",
 ]
 
 [[package]]
@@ -1448,7 +1415,7 @@ dependencies = [
 name = "moirai"
 version = "0.4.0"
 dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
  "moirai-async",
  "moirai-core",
  "moirai-executor",
@@ -1498,7 +1465,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.4.0"
 dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
  "mnemosyne 0.6.0",
  "moirai-core",
  "moirai-pal",
@@ -1513,7 +1480,7 @@ dependencies = [
  "mnemosyne-core 0.2.0",
  "moirai-core",
  "moirai-utils",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
@@ -1527,7 +1494,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
  "thiserror 1.0.69",
 ]
 
@@ -1537,7 +1504,7 @@ version = "0.4.0"
 dependencies = [
  "js-sys",
  "libc",
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1549,7 +1516,7 @@ dependencies = [
 name = "moirai-parallel"
 version = "0.4.0"
 dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
  "moirai-core",
  "moirai-executor",
 ]
@@ -1562,7 +1529,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis 0.10.1 (git+https://github.com/ryancinsight/themis)",
+ "themis",
 ]
 
 [[package]]
@@ -2486,16 +2453,9 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 [[package]]
 name = "themis"
 version = "0.10.1"
-dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
-]
-
-[[package]]
-name = "themis"
-version = "0.10.1"
 source = "git+https://github.com/ryancinsight/themis#0ad45de04cf515e4726d4efcc35e9d038943caef"
 dependencies = [
- "melinoe 0.9.0 (git+https://github.com/ryancinsight/melinoe.git)",
+ "melinoe",
 ]
 
 [[package]]
