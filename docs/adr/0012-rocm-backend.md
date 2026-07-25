@@ -131,6 +131,9 @@ boundary and upload typed ROCm result buffers with the base ROCm feature. The
 public rank-2 linalg surface also exports the CUDA/WGPU fluent operand,
 product, norm, property, solve, function, and optional decomposition traits;
 each trait delegates directly to the corresponding validated ROCm operation.
+The crate root re-exports the shared unary and binary elementwise operation
+markers so operation selection has the same public path across the three
+backends.
 
 ## Alternatives rejected
 

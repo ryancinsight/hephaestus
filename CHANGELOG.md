@@ -26,6 +26,9 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Re-export the shared unary and binary elementwise operation markers
+  from the ROCm crate root, matching the CUDA and WGPU public surfaces.
+
 - [minor] Add ROCm fluent matrix traits matching the CUDA/WGPU public contract:
   operand conversion, products, norms, properties, solves, matrix functions,
   and decomposition with the `decomposition` feature. Trait calls delegate to

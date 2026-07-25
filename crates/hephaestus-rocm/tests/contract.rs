@@ -6,18 +6,19 @@
 //! fails that lane instead of being reported as device evidence.
 
 use hephaestus_core::{
-    AddOp, BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
+    BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
     ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
     GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
-    GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, IdentityOp, KernelDevice,
-    KernelInterface, KernelSource, MaxOp, MinOp, MulOp, NegOp, SumOp,
+    GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, KernelDevice,
+    KernelInterface, KernelSource, MaxOp, MinOp, SumOp,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
-    AsGpuMatrixOperand, CumSumOp, GpuCsrMatrix, MatrixFunction, MatrixNorm, MatrixProduct,
-    MatrixProperties, MatrixSolve, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection,
-    StridedOperand, batched_matmul, batched_matmul_into, binary_elementwise,
+    AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, ExpNegOp, ExpOp, GpuCsrMatrix,
+    IdentityOp, LnOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
+    MulOp, NegOp, PowOp, RecipOp, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection, SinOp,
+    SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into, binary_elementwise,
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
     cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
@@ -133,6 +134,29 @@ fn assert_length_mismatch<T>(result: Result<T>, host_len: usize, device_len: usi
         Err(error) => panic!("expected length mismatch, got {error:?}"),
         Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
     }
+}
+
+#[test]
+fn elementwise_marker_types_are_exported_from_rocm_root() {
+    let markers = [
+        std::any::TypeId::of::<AbsOp>(),
+        std::any::TypeId::of::<AddOp>(),
+        std::any::TypeId::of::<CosOp>(),
+        std::any::TypeId::of::<DivOp>(),
+        std::any::TypeId::of::<ExpNegOp>(),
+        std::any::TypeId::of::<ExpOp>(),
+        std::any::TypeId::of::<IdentityOp>(),
+        std::any::TypeId::of::<LnOp>(),
+        std::any::TypeId::of::<MulOp>(),
+        std::any::TypeId::of::<NegOp>(),
+        std::any::TypeId::of::<PowOp>(),
+        std::any::TypeId::of::<RecipOp>(),
+        std::any::TypeId::of::<SinOp>(),
+        std::any::TypeId::of::<SqrtOp>(),
+        std::any::TypeId::of::<SubOp>(),
+    ];
+    let unique_markers = markers.iter().collect::<std::collections::HashSet<_>>();
+    assert_eq!(unique_markers.len(), markers.len());
 }
 
 fn assert_near(actual: f32, expected: f32, ulps: f32) {

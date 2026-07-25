@@ -48,8 +48,9 @@ pub use application::decomposition::{
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 pub use application::elementwise::{
-    binary_elementwise, binary_elementwise_into, scalar_elementwise, scalar_elementwise_into,
-    unary_elementwise, unary_elementwise_into,
+    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp,
+    SinOp, SqrtOp, SubOp, binary_elementwise, binary_elementwise_into, scalar_elementwise,
+    scalar_elementwise_into, unary_elementwise, unary_elementwise_into,
 };
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;

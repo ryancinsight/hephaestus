@@ -222,7 +222,8 @@ cuda-oxide + cutile).
   marker types as CUDA and wgpu; the contract compiles through the public
   root path; hosted ROCm CI passes the affected feature matrix and tests.
 - Claimed files: `crates/hephaestus-rocm/src/lib.rs`,
-  `crates/hephaestus-rocm/tests/contract.rs`, `checklist.md`, and this item.
+  `crates/hephaestus-rocm/tests/contract.rs`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item.
   Last update: 2026-07-25. Post-merge capability audit identified the root
   re-export gap; implementation and hosted evidence are pending.
 

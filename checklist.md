@@ -197,8 +197,8 @@ supported checkout-graph gate.
 - [ ] Publish, merge, and re-audit the common CUDA, wgpu, and ROCm exports.
 
 Execution owner: Codex on `codex/hephaestus-rocm-export-parity`. Claimed
-files: ROCm root exports, ROCm contract tests, and synchronized tracking
-artifacts.
+files: ROCm root exports, ROCm contract tests, and synchronized documentation
+and tracking artifacts.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 

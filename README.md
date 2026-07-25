@@ -105,8 +105,10 @@ register each package's Trusted Publisher with that environment.
 - ROCm exports the same fluent rank-2 matrix traits as CUDA and WGPU:
   `AsGpuMatrixOperand`, `MatrixProduct`, `MatrixNorm`, `MatrixProperties`,
   `MatrixSolve`, and `MatrixFunction`, plus `MatrixDecompose` with the
-  `decomposition` feature. These traits delegate to the same validated ROCm
-  operation entry points and do not add an adapter or backend fallback.
+  `decomposition` feature. The crate root also re-exports the shared unary and
+  binary elementwise operation markers. These traits and markers delegate to
+  the same validated ROCm operation entry points and do not add an adapter or
+  backend fallback.
 - `RocmMultiStorageKernel` implements the shared `MultiStorageKernel` and
   `MultiStorageDevice` contracts with flat HIP pointer arguments plus a POD
   parameter block. Binding order, arity, block dimensions, and length
