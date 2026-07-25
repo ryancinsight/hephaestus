@@ -191,14 +191,14 @@ cuda-oxide + cutile).
   doctest, and rustdoc at implementation head `f67da57`; the required-device
   lane was skipped by the pull-request event. PR #87 is the merge vehicle.
 
-## HEPH-ROCM-PARITY-FLUENT-9 [minor] — in-progress
+## HEPH-ROCM-PARITY-FLUENT-9 [minor] — done
 
 - Owner: Codex; scope: ROCm fluent matrix traits for operand conversion,
   products, norms, decomposition, solves, matrix properties, and matrix
   functions, plus value-semantic contract coverage and synchronized backend
   documentation. Backend-specific prepared kernels and dynamic-rank helpers
   remain non-goals unless the common CUDA/WGPU public surface requires them.
-- Acceptance: enabling `rocm,decomposition` exports the same fluent
+- Acceptance: enabling `rocm` and `rocm,decomposition` exports the same fluent
   `AsGpuMatrixOperand`, `MatrixProduct`, `MatrixNorm`, `MatrixDecompose`,
   `MatrixSolve`, `MatrixProperties`, and `MatrixFunction` contracts as CUDA
   and WGPU; each method delegates to the already-parity-tested ROCm operation
@@ -209,8 +209,10 @@ cuda-oxide + cutile).
 - Claimed files: `crates/hephaestus-rocm/src/application/linalg/**`,
   `crates/hephaestus-rocm/src/lib.rs`, `crates/hephaestus-rocm/tests/contract.rs`,
   `README.md`, `CHANGELOG.md`, `docs/adr/0012-rocm-backend.md`, `checklist.md`,
-  and this item. Last update: 2026-07-24. Implementation follows the
-  post-matrix-functions public-surface audit; hosted evidence is pending.
+  and this item. Hosted ROCm run `30137841431` passed the base and
+  `rocm,decomposition` builds, warning-denied Clippy, Nextest (67/67),
+  doctest, and rustdoc at implementation head `356c610`; the required-device
+  lane was skipped by the pull-request event. PR #88 is the merge vehicle.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 
