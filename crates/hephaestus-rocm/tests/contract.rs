@@ -135,7 +135,6 @@ fn assert_length_mismatch<T>(result: Result<T>, host_len: usize, device_len: usi
     }
 }
 
-#[cfg(feature = "decomposition")]
 fn assert_near(actual: f32, expected: f32, ulps: f32) {
     let tolerance = ulps * f32::EPSILON * expected.abs().max(1.0);
     assert!(
@@ -164,7 +163,6 @@ fn reconstruct_svd(
         .collect()
 }
 
-#[cfg(feature = "decomposition")]
 fn matmul_square(lhs: &[f32], rhs: &[f32], n: usize) -> Vec<f32> {
     (0..n)
         .flat_map(|row| {
