@@ -27,6 +27,25 @@ cuda-oxide + cutile).
   blocked by the sibling Leto/Eunomia `Quantity<T>::in_unit` /
   `FloatElement` mismatch; hosted checkout-graph CI is the accepted gate.
 
+## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — in-progress
+
+- Owner: Codex; scope: prepared scalar reduction plans for WGPU, CUDA, ROCm,
+  and Metal, including reusable device-resident scratch/output storage,
+  repeated dispatch, batch submission, value-semantic contracts, existing
+  backend CI lanes, and synchronized documentation. Prepared axis reductions,
+  prepared sparse operations, and map-reduction plans are non-goals for this
+  increment.
+- Acceptance: CUDA and ROCm expose the same prepared scalar reduction
+  capability as WGPU/Metal for sum, min, and max; preparation validates the
+  block width and allocates the complete reduction tree; dispatch launches
+  only the prepared device kernels without host materialization; repeated
+  dispatch reuses the output allocation; empty, singleton, multi-pass, and
+  invalid-width contracts are value-tested; and CUDA/ROCm/Metal CI runs the
+  focused contracts.
+- Claimed files: CUDA/ROCm prepared-reduction modules and exports/tests,
+  Metal delegation and exports/tests, affected CI/docs, and this item. Last
+  update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — done
 
 - Owner: Codex; scope: shared 2D Laplacian contract in `hephaestus-core`,

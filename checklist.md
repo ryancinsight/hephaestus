@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — in-progress
+
+- [ ] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
+- [ ] Delegate the prepared scalar reduction plan through Metal's native WGPU
+      device and expose matching public names across backends.
+- [ ] Add value-semantic tests for empty, singleton, multi-pass, repeated,
+      batched, and invalid-width prepared reductions.
+- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+      backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-prepared-reduction`.
+Claimed files: prepared reduction modules and exports/tests, affected CI/docs,
+and the matching ADR/backlog/checklist item.
+
 ## HEPH-BACKEND-PARITY-STENCIL-1 [minor] — done
 
 - [x] Move the backend-neutral `Laplacian2DParams`, boundary conditions, and
