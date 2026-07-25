@@ -2,20 +2,27 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — done
 
-- [ ] Add Metal-owned fluent matrix traits for operand conversion, products,
+- [x] Add Metal-owned fluent matrix traits for operand conversion, products,
       norms, decomposition, solves, matrix properties, and matrix functions,
       returning Metal buffers while retaining shared decomposition handles.
-- [ ] Add value-semantic Metal contracts for representative fluent product,
+- [x] Add value-semantic Metal contracts for representative fluent product,
       norm, property, function, solve, and decomposition calls.
-- [ ] Synchronize the ADR, README, changelog, backlog, and checklist, then
+- [x] Synchronize the ADR, README, changelog, backlog, and checklist, then
       run the Metal feature, lint, Nextest, doctest, and rustdoc gates.
 
 Execution owner: Codex on `codex/hephaestus-backend-parity-next-3`; claimed
 files: Metal linalg traits and exports, Metal contract tests, affected
 documentation, ADR 0021, and no workflow changes unless the existing Metal
-lane fails to collect the new contracts.
+lane fails to collect the new contracts; status: done.
+
+Hosted code-head evidence at `8491592`: CUDA run `30179437377` / job
+`89733458943` passed in 7m24s, ROCm run `30179437392` / job `89733459927`
+passed in 6m01s, and Metal run `30179437384` / job `89733463248` passed in
+5m09s. Required-device jobs were skipped because hosted GPU labels were
+unavailable. The final head includes fixes for the private module export and
+the default-feature unused import reported by earlier Metal runs.
 
 ## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — done
 

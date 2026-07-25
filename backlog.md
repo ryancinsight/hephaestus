@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — done
 
 - Owner: Codex; scope: expose Metal-owned fluent dense-matrix traits matching
   the existing WGPU, CUDA, and ROCm method families for operand conversion,
@@ -23,6 +23,14 @@ cuda-oxide + cutile).
   README, CHANGELOG, `docs/adr/0021-metal-fluent-linalg-parity.md`,
   `checklist.md`, and this item. Execution owner: Codex on
   `codex/hephaestus-backend-parity-next-3`; last update: 2026-07-25.
+- Hosted code-head evidence at `8491592`: CUDA run `30179437377` / job
+  `89733458943` passed in 7m24s, ROCm run `30179437392` / job `89733459927`
+  passed in 6m01s, and Metal run `30179437384` / job `89733463248` passed in
+  5m09s. The AMD and NVIDIA required-device jobs were skipped because hosted
+  GPU labels were unavailable; provider lanes ran their real feature,
+  warning-denied Clippy, Nextest, doctest, and rustdoc gates. Earlier Metal
+  failures were fixed at their causes: the private module export at
+  `5b83626`, then the default-feature unused import at `8491592`.
 
 ## HEPH-BACKEND-PARITY-METAL-RANDOM-1 [minor] — done
 

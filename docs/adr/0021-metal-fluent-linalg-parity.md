@@ -41,5 +41,10 @@ adapter.
 The Metal contract exercises fluent product, norm, property, function, solve,
 inverse, determinant, pseudoinverse, and LU decomposition calls against closed
 form values. The macOS Metal CI lane runs the feature, warning-denied Clippy,
-Nextest, doctest, and rustdoc gates; final hosted evidence is recorded when the
-delivery head is green.
+Nextest, doctest, and rustdoc gates. At code head `8491592`, CUDA run
+`30179437377` / job `89733458943` passed in 7m24s, ROCm run `30179437392` /
+job `89733459927` passed in 6m01s, and Metal run `30179437384` / job
+`89733463248` passed in 5m09s. The AMD and NVIDIA required-device jobs were
+skipped because hosted GPU labels were unavailable. Earlier Metal failures
+were corrected at the private module export and default-feature unused import
+diagnostics before this evidence was accepted.
