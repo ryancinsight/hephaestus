@@ -9,6 +9,8 @@ pub mod elementwise;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 pub(crate) mod pipeline;
+/// Reusable multi-pass scalar reduction plans.
+pub mod prepared_reduction;
 /// Seeded host-delegated random initializers.
 pub mod random;
 /// Contiguous multi-pass tree reductions.

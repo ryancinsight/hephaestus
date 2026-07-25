@@ -4,11 +4,11 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 #[cfg(feature = "cuda")]
-use crate::infrastructure::compiler::SafeCachedKernel;
+pub(crate) use crate::infrastructure::compiler::SafeCachedKernel;
 
 #[cfg(not(feature = "cuda"))]
 /// Stub cached kernel.
-pub struct SafeCachedKernel;
+pub(crate) struct SafeCachedKernel;
 
 /// Pipeline-cache key for a compiled CUDA kernel.
 ///

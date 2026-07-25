@@ -61,6 +61,10 @@ pub use application::linalg::{
     matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
 };
 pub use application::linalg::{matexp, pinv};
+pub use application::prepared_reduction::{
+    PreparedReduction, prepare_reduction, prepare_reduction_with_width,
+    submit_prepared_reduction_batch,
+};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{

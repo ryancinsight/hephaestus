@@ -12,8 +12,9 @@ use hephaestus_cuda::{
     AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp,
     StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into,
     det, dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
-    norm_l2, norm_max, pinv, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_into, scan_axis, trace, unary_elementwise, unary_elementwise_into,
+    norm_l2, norm_max, pinv, prepare_reduction, prepare_reduction_with_width, reduce_axis,
+    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
+    submit_prepared_reduction_batch, trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -500,6 +501,55 @@ fn reduction_width_is_part_of_dispatch_contract() {
     let non_power = BlockWidth::new(192).unwrap();
     assert_dispatch_message(
         reduction_with_width::<SumOp, u32>(&dev, &input, non_power),
+        "reduction block width 192 must be a power of two",
+    );
+}
+
+#[test]
+fn prepared_reduction_reuses_device_outputs_and_batches() {
+    let Some(dev) = device("prepared_reduction_reuses_device_outputs_and_batches") else {
+        return;
+    };
+
+    let host: Vec<u32> = (0..1027).map(|index| (index % 17) as u32).collect();
+    let expected_sum: u32 = host.iter().sum();
+    let expected_min = host.iter().copied().min().expect("non-empty input");
+    let expected_max = host.iter().copied().max().expect("non-empty input");
+    let input = dev.upload(&host).unwrap();
+    let width = BlockWidth::new(128).unwrap();
+
+    let sum = prepare_reduction_with_width::<SumOp, _>(&dev, &input, width).unwrap();
+    let output_ptr = sum.output().raw();
+    sum.dispatch().unwrap();
+    let mut got = [0_u32];
+    dev.download(sum.output(), &mut got).unwrap();
+    assert_eq!(got, [expected_sum]);
+    sum.dispatch().unwrap();
+    dev.download(sum.output(), &mut got).unwrap();
+    assert_eq!(got, [expected_sum]);
+    assert_eq!(sum.output().raw(), output_ptr);
+
+    let min = prepare_reduction::<MinOp, _>(&dev, &input).unwrap();
+    let max = prepare_reduction::<MaxOp, _>(&dev, &input).unwrap();
+    submit_prepared_reduction_batch(&[&min, &max]).unwrap();
+    let mut got_min = [0_u32];
+    let mut got_max = [0_u32];
+    dev.download(min.output(), &mut got_min).unwrap();
+    dev.download(max.output(), &mut got_max).unwrap();
+    assert_eq!(got_min, [expected_min]);
+    assert_eq!(got_max, [expected_max]);
+
+    let empty = dev.upload::<u32>(&[]).unwrap();
+    let prepared_empty = prepare_reduction::<SumOp, _>(&dev, &empty).unwrap();
+    prepared_empty.dispatch().unwrap();
+    let mut got_empty = [u32::MAX];
+    dev.download(prepared_empty.output(), &mut got_empty)
+        .unwrap();
+    assert_eq!(got_empty, [0]);
+
+    let invalid_width = BlockWidth::new(192).unwrap();
+    assert_dispatch_message(
+        prepare_reduction_with_width::<SumOp, _>(&dev, &input, invalid_width),
         "reduction block width 192 must be a power of two",
     );
 }

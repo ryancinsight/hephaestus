@@ -13,7 +13,9 @@ use hephaestus_core::{
 
 pub use hephaestus_core::{MaxOp, MinOp, SumOp};
 
-fn shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>(width: BlockWidth) -> String {
+pub(crate) fn shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>(
+    width: BlockWidth,
+) -> String {
     format!(
         r#"
 extern "C" __global__ void reduction_kernel(
@@ -55,7 +57,7 @@ fn checked_work_items(len: usize) -> Result<u32> {
     })
 }
 
-fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
+pub(crate) fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
     let width_elements =
         usize::try_from(width.get()).map_err(|_| HephaestusError::DispatchFailed {
             message: format!(

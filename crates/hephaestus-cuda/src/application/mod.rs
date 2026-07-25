@@ -6,6 +6,8 @@ pub mod elementwise;
 pub mod linalg;
 /// Pipeline compilation and launch helpers.
 pub mod pipeline;
+/// Reusable multi-pass scalar reduction plans.
+pub mod prepared_reduction;
 /// Multi-pass tree reductions.
 pub mod reduction;
 /// Prefix/suffix scan operations.
