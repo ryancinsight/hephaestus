@@ -187,6 +187,19 @@ head `356c610`; the local package gate inherits the sibling Leto
 checkout's `Quantity<T>::in_unit` / `FloatElement` mismatch; hosted CI is the
 supported checkout-graph gate.
 
+## HEPH-ROCM-PARITY-EXPORTS-10 [minor] — in-progress
+
+- [ ] Re-export the shared unary and binary elementwise operation marker
+      types from the ROCm crate root.
+- [ ] Add a public-root compile contract covering the shared marker set.
+- [ ] Pass hosted ROCm build, warning-denied Clippy, Nextest, doctest, and
+      rustdoc for the affected feature matrix.
+- [ ] Publish, merge, and re-audit the common CUDA, wgpu, and ROCm exports.
+
+Execution owner: Codex on `codex/hephaestus-rocm-export-parity`. Claimed
+files: ROCm root exports, ROCm contract tests, and synchronized documentation
+and tracking artifacts.
+
 ## HEPH-ROCM-PARITY-STREAM-1 [minor]
 
 - [x] Implement ROCm `KernelDevice`/`GroupedKernelDevice` preparation and

@@ -214,6 +214,19 @@ cuda-oxide + cutile).
   doctest, and rustdoc at implementation head `356c610`; the required-device
   lane was skipped by the pull-request event. PR #88 is the merge vehicle.
 
+## HEPH-ROCM-PARITY-EXPORTS-10 [minor] — in-progress
+
+- Owner: Codex; scope: ROCm crate-root exports for the shared elementwise
+  operation marker types and their compile-time public-surface contract.
+- Acceptance: ROCm root exports the same shared unary and binary operation
+  marker types as CUDA and wgpu; the contract compiles through the public
+  root path; hosted ROCm CI passes the affected feature matrix and tests.
+- Claimed files: `crates/hephaestus-rocm/src/lib.rs`,
+  `crates/hephaestus-rocm/tests/contract.rs`, `README.md`, `CHANGELOG.md`,
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item.
+  Last update: 2026-07-25. Post-merge capability audit identified the root
+  re-export gap; implementation and hosted evidence are pending.
+
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 
 - Owner: Codex; scope: ROCm implementations of `KernelDevice`,
