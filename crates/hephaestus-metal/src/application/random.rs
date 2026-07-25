@@ -3,7 +3,7 @@
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, DialectScalar, Result, Wgsl};
+use hephaestus_core::{DialectScalar, Result, Wgsl};
 use hephaestus_wgpu as wgpu_backend;
 use leto_ops::RealScalar;
 
