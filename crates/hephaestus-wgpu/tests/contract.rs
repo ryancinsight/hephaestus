@@ -1013,6 +1013,46 @@ fn axis_reductions_match_leto_reference() {
         .download(&prepared_mean_axis0_out, &mut got_prepared_mean_axis0)
         .unwrap();
     assert_eq!(got_prepared_mean_axis0, expected_mean_axis0);
+
+    let empty_input = device.upload::<f32>(&[]).unwrap();
+    let empty_input_layout = Layout::c_contiguous([2, 0]).unwrap();
+    let empty_output = device.upload(&[7.0f32; 2]).unwrap();
+    let empty_output_layout = Layout::c_contiguous([2, 1]).unwrap();
+    sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty = [7.0f32; 2];
+    device.download(&empty_output, &mut got_empty).unwrap();
+    assert_eq!(got_empty, [0.0, 0.0]);
+
+    let prepared_empty_sum = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_empty_sum.dispatch(&device).unwrap();
+    device.download(&empty_output, &mut got_empty).unwrap();
+    assert_eq!(got_empty, [0.0, 0.0]);
 }
 
 /// Pins the WG-P5 grid-stride fix at the scale it targets: an axis longer

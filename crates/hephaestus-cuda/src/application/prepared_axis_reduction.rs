@@ -39,8 +39,8 @@ impl<T> PreparedAxisReduction<'_, T> {
             device,
             kernel,
             dispatch,
-            self.input,
-            self.output,
+            &self.input,
+            &self.output,
             self.width,
         )
     }

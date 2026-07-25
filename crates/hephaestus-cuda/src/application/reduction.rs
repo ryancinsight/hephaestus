@@ -306,8 +306,8 @@ pub(crate) fn launch_axis_dispatch<T>(
     device: &CudaDevice,
     kernel: &SafeCachedKernel,
     dispatch: AxisReductionDispatch,
-    input: StridedOperand<'_, T, 2>,
-    output: StridedOperand<'_, T, 2>,
+    input: &StridedOperand<'_, T, 2>,
+    output: &StridedOperand<'_, T, 2>,
     width: BlockWidth,
 ) -> Result<()> {
     let mut meta_val = dispatch.meta;
@@ -356,7 +356,7 @@ where
         axis_reduction_shader_source::<Op, T>()
     })?;
 
-    launch_axis_dispatch(device, &kernel, dispatch, input, output, width)
+    launch_axis_dispatch(device, &kernel, dispatch, &input, &output, width)
 }
 
 /// Reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
@@ -419,7 +419,7 @@ where
         mean_axis_shader_source::<T>()
     })?;
 
-    launch_axis_dispatch(device, &kernel, dispatch, input, output, width)
+    launch_axis_dispatch(device, &kernel, dispatch, &input, &output, width)
 }
 
 /// Mean-reduce a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.
