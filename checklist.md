@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-PREPARED-AXIS-1 [minor] — in-progress
+
+- [ ] Add native preplanned CUDA and ROCm rank-2 prepared axis reductions.
+- [ ] Delegate prepared axis reductions through Metal's native WGPU device
+      and expose matching public names across backends.
+- [ ] Add value-semantic tests for sum/min/max/mean, both axes, repeated and
+      batched dispatch, non-contiguous layouts, empty-axis, invalid-layout,
+      invalid-width, and alias contracts.
+- [ ] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+      backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-prepared-axis`.
+Claimed files: prepared axis modules and exports/tests, affected CI/docs, and
+the matching ADR/backlog/checklist item.
+
 ## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
 - [x] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
