@@ -214,7 +214,7 @@ cuda-oxide + cutile).
   doctest, and rustdoc at implementation head `356c610`; the required-device
   lane was skipped by the pull-request event. PR #88 is the merge vehicle.
 
-## HEPH-ROCM-PARITY-EXPORTS-10 [minor] — in-progress
+## HEPH-ROCM-PARITY-EXPORTS-10 [minor] — done
 
 - Owner: Codex; scope: ROCm crate-root exports for the shared elementwise
   operation marker types and their compile-time public-surface contract.
@@ -223,9 +223,13 @@ cuda-oxide + cutile).
   root path; hosted ROCm CI passes the affected feature matrix and tests.
 - Claimed files: `crates/hephaestus-rocm/src/lib.rs`,
   `crates/hephaestus-rocm/tests/contract.rs`, `README.md`, `CHANGELOG.md`,
-  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item.
-  Last update: 2026-07-25. Post-merge capability audit identified the root
-  re-export gap; implementation and hosted evidence are pending.
+  `docs/adr/0012-rocm-backend.md`, `checklist.md`, and this item. Hosted ROCm
+  run `30138469322` passed the base and `rocm,decomposition` builds,
+  warning-denied Clippy, Nextest (68/68), doctest, and rustdoc at
+  implementation head `5031196`; the required-device lane was skipped by the
+  pull-request event. PR #89 merged as `496ff8c`. The external
+  `recurseml/analysis` check reported an analyzer-side error and was not a
+  required check.
 
 ## HEPH-ROCM-PARITY-STREAM-1 [minor] — done
 
