@@ -2,7 +2,9 @@
 //!
 //! These run real device dispatch differentially against host references.
 //! On a host without macOS or without a Metal device, [`MetalDevice::try_default`]
-//! returns `Err` and each test skips.
+//! returns `Err` and each test skips. Hardware CI sets
+//! `HEPHAESTUS_METAL_REQUIRE_DEVICE=1` so an unavailable device fails that lane
+//! instead of being reported as device evidence.
 
 use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use hephaestus_metal::{
@@ -16,6 +18,9 @@ fn device(test: &str) -> Option<MetalDevice> {
     match MetalDevice::try_default() {
         Ok(d) => Some(d),
         Err(e) => {
+            if std::env::var_os("HEPHAESTUS_METAL_REQUIRE_DEVICE").is_some() {
+                panic!("Metal device required for {test}: {e}");
+            }
             eprintln!("skip {test}: Metal device unavailable ({e})");
             None
         }

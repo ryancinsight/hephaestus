@@ -1043,10 +1043,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   tracking is limited to the documented concurrent-device-acquisition case;
   current focused evidence is `cargo nextest run -p hephaestus-cuda
   concurrent_device_acquisition_is_safe` (1/1).
-- [KS-9] [minor] `hephaestus-metal` decision: 1,276-line pure-forwarding crate
-  over wgpu-Metal — reduce to `WgpuDevice::try_metal` constructor ([major]
-  break) or record the alias-crate justification. Status: todo (user decision
-  useful on the break).
+- [KS-9] [minor] `hephaestus-metal` decision: retain the dedicated typed
+  backend crate over wgpu-Metal. Status: **done** (2026-07-24). The crate owns
+  `MetalDevice`/`MetalBuffer`, preserves the backend-neutral application
+  boundary, and selects `wgpu::Backends::METAL` without exposing WGPU types to
+  consumers. Collapsing it to `WgpuDevice::try_metal` would be a breaking
+  public-surface change and would remove the Metal-specific required-device
+  CI contract. The macOS workflow and README now carry the decision evidence.
 
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU

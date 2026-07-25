@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Add the macOS Metal verification lane for the existing
+  `hephaestus-metal` backend. The crate remains a typed WGPU-backed adapter
+  configured with native `wgpu::Backends::METAL`; its required-device contract
+  tests now fail when CI cannot acquire Metal instead of silently skipping.
+  The workflow checks minimal/default feature builds, warning-denied Clippy,
+  Nextest, doctests, and rustdoc.
+
 - [minor] Re-export the shared unary and binary elementwise operation markers
   from the ROCm crate root, matching the CUDA and WGPU public surfaces.
 
