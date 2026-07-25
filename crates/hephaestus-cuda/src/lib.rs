@@ -60,6 +60,9 @@ pub use application::reduction::{
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumsum, cumsum_into, scan_axis, scan_axis_into,
 };
+pub use application::stencil::{
+    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+};
 pub use application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
 pub use application::stream::{CudaCommandStream, CudaGroupedPrepared, CudaPrepared};
 pub use application::strided::{

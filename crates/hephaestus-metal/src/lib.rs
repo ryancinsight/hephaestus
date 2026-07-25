@@ -26,6 +26,9 @@ pub use application::reduction::{
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumsum, cumsum_into, scan_axis, scan_axis_into,
 };
+pub use application::stencil::{
+    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+};
 pub use application::strided::{
     MAX_STRIDED_RANK, StridedOperand, binary_elementwise_strided, binary_elementwise_strided_into,
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,

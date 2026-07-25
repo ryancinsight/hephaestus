@@ -24,6 +24,8 @@ pub(crate) mod planning;
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
+/// Backend-neutral two-dimensional Laplacian stencil parameters.
+pub mod stencil;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;
 /// Backend-neutral volume ray-integral geometry and validation.

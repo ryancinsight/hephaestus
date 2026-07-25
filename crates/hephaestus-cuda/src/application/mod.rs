@@ -10,6 +10,8 @@ pub mod pipeline;
 pub mod reduction;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Two-dimensional Laplacian stencil kernels.
+pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.
 pub mod storage_kernel;
 /// Backend-neutral command stream implementation for authored CUDA C kernels.

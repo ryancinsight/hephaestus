@@ -17,6 +17,8 @@ pub mod reduction;
 pub mod scan;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
+/// Two-dimensional Laplacian stencil kernels.
+pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.
 pub mod storage_kernel;
 /// Backend-neutral authored-kernel command streams.

@@ -5,11 +5,8 @@
 //! kernel is intentionally f32-only: WGSL does not guarantee f64 storage
 //! support, and exposing a generic scalar would be a falsely generic boundary.
 
-use aequitas::systems::si::quantities::Length;
-use bytemuck::{Pod, Zeroable};
+pub use hephaestus_core::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
 use hephaestus_core::{DispatchGrid, HephaestusError, MultiStorageKernel, Result};
-use leto::Laplacian2D;
-pub use leto::{BoundaryCondition, LaplacianPolarity};
 
 use crate::application::storage_kernel::{
     WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
@@ -18,54 +15,6 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 const WORKGROUP: [usize; 3] = [8, 8, 1];
-
-/// Uniform parameters for the 2D Laplacian dispatch.
-///
-/// The layout is kept 16-byte aligned to match WGSL uniform buffer layout
-/// expectations.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct Laplacian2DParams {
-    /// `(nx, ny, bc_type, pad)`
-    pub dims_bc: [u32; 4],
-    /// `(dx_inv2, dy_inv2, 0.0, 0.0)`
-    pub inv2: [f32; 4],
-}
-
-impl Laplacian2DParams {
-    /// Build parameters for a uniform Cartesian grid.
-    ///
-    /// # Errors
-    /// Returns `HephaestusError::InvalidConfiguration` when `dx` or `dy` is not
-    /// finite and positive, or when `nx` or `ny` is less than 2.
-    pub fn new(
-        nx: u32,
-        ny: u32,
-        dx: Length<f32>,
-        dy: Length<f32>,
-        bc: BoundaryCondition,
-        polarity: LaplacianPolarity,
-    ) -> Result<Self> {
-        let nx_usize =
-            usize::try_from(nx).map_err(|error| HephaestusError::InvalidConfiguration {
-                message: format!("Laplacian nx does not fit usize: nx={nx}, error={error}"),
-            })?;
-        let ny_usize =
-            usize::try_from(ny).map_err(|error| HephaestusError::InvalidConfiguration {
-                message: format!("Laplacian ny does not fit usize: ny={ny}, error={error}"),
-            })?;
-        let contract = Laplacian2D::new(nx_usize, ny_usize, dx, dy, bc)
-            .map_err(|error| HephaestusError::InvalidConfiguration {
-                message: error.to_string(),
-            })?
-            .with_polarity(polarity);
-        let [dx_inv2, dy_inv2] = contract.signed_inverse_spacing_squared();
-        Ok(Self {
-            dims_bc: [nx, ny, u32::from(bc), 0],
-            inv2: [dx_inv2, dy_inv2, 0.0, 0.0],
-        })
-    }
-}
 
 /// Compiled 2D Laplacian stencil kernel.
 ///
@@ -110,12 +59,7 @@ impl Laplacian2DKernel {
         output: &WgpuBuffer<f32>,
         params: &Laplacian2DParams,
     ) -> Result<()> {
-        if input.len != output.len {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: input.len,
-                device_len: output.len,
-            });
-        }
+        params.validate_storage(input.len, output.len)?;
         let nx = usize::try_from(params.dims_bc[0]).map_err(|error| {
             HephaestusError::InvalidConfiguration {
                 message: format!(
