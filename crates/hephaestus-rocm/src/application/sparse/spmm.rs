@@ -25,27 +25,27 @@ struct SpmmMeta {
 
 const _: () = assert!(core::mem::size_of::<SpmmMeta>() == 20);
 
-struct SparseSpmmKernel<T>(PhantomData<T>);
+pub(crate) struct SparseSpmmKernel<T>(pub(crate) PhantomData<T>);
 
-fn to_u32(value: usize, what: &str) -> Result<u32> {
+pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds u32 range"),
     })
 }
 
-fn to_i32(value: isize, what: &str) -> Result<i32> {
+pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
     i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds i32 range"),
     })
 }
 
-fn map_layout_error(error: leto::LetoError) -> HephaestusError {
+pub(crate) fn map_layout_error(error: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
         message: format!("layout rejected: {error}"),
     }
 }
 
-fn shader_source<T: DialectScalar<HipC>>() -> String {
+pub(crate) fn shader_source<T: DialectScalar<HipC>>() -> String {
     format!(
         r#"
 struct SpmmMeta {{

@@ -12,9 +12,9 @@ use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
 };
 
-struct SparseSpmvKernel<T>(PhantomData<T>);
+pub(crate) struct SparseSpmvKernel<T>(pub(crate) PhantomData<T>);
 
-fn shader_source<T: DialectScalar<HipC>>() -> String {
+pub(crate) fn shader_source<T: DialectScalar<HipC>>() -> String {
     format!(
         r#"
 extern "C" __global__ void spmv_kernel(

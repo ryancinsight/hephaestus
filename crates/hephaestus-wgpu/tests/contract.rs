@@ -4735,10 +4735,6 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
 
     let mut y_batched = device.upload(&[55.0f32, 55.0, 55.0]).unwrap();
     let batched_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &mut y_batched).unwrap();
-    submit_prepared_sparse_batch(&[PreparedSparseDispatch::Spmv(&batched_spmv)]).unwrap();
-    let mut got_y_batched = vec![0.0f32; 3];
-    device.download(&y_batched, &mut got_y_batched).unwrap();
-    assert_close_slice(&got_y_batched, &got_y, 1.0e-4, 1.0e-4);
 
     // SpMM: C = A * B, B = [ 1.0  2.0 ]
     //                      [ 3.0  4.0 ]
@@ -4795,7 +4791,14 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
 
     let mut c_batched = device.upload(&[55.0f32; 6]).unwrap();
     let batched_spmm = prepare_spmm(&device, &gpu_csr, &b_op, &mut c_batched).unwrap();
-    submit_prepared_sparse_batch(&[PreparedSparseDispatch::Spmm(&batched_spmm)]).unwrap();
+    submit_prepared_sparse_batch(&[
+        PreparedSparseDispatch::Spmv(&batched_spmv),
+        PreparedSparseDispatch::Spmm(&batched_spmm),
+    ])
+    .unwrap();
+    let mut got_y_batched = vec![0.0f32; 3];
+    device.download(&y_batched, &mut got_y_batched).unwrap();
+    assert_close_slice(&got_y_batched, &got_y, 1.0e-4, 1.0e-4);
     let mut got_c_batched = vec![0.0f32; 6];
     device.download(&c_batched, &mut got_c_batched).unwrap();
     assert_close_slice(&got_c_batched, &got_c, 1.0e-4, 1.0e-4);

@@ -14,7 +14,7 @@ parallel = []
 mnemosyne-memory = []
 metal = []
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
-decomposition = ["dep:leto-ops"]
+decomposition = []
 
 [dependencies]
 aequitas = { workspace = true }
@@ -22,7 +22,7 @@ hephaestus-core = { workspace = true }
 hephaestus-wgpu = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
-leto-ops = { workspace = true, optional = true }
+leto-ops = { workspace = true }
 bytemuck = { workspace = true }
 themis = { workspace = true }
 mnemosyne-core = { workspace = true }

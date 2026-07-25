@@ -80,6 +80,10 @@ impl core::fmt::Debug for RocmDevice {
 }
 
 impl RocmDevice {
+    pub(crate) fn same_context(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.context, &other.context)
+    }
+
     pub(crate) fn bind(&self) -> Result<()> {
         self.context.set_current()
     }

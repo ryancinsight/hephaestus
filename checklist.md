@@ -27,6 +27,32 @@ Leto/Eunomia `Quantity<T>::in_unit` / `FloatElement` mismatch. Final
 documentation-head verification and merge are recorded in the delivery
 commit.
 
+## HEPH-BACKEND-PARITY-PREPARED-SPARSE-1 [minor] — done
+
+- [x] Add native preplanned CUDA and ROCm CSR SpMV, SpMM, and multi-RHS SpMV
+      operations with retained metadata, kernels, and fixed buffers.
+- [x] Add Metal-owned CSR and prepared sparse wrappers over the native
+      WGPU-Metal implementation, with matching operation and batch names.
+- [x] Add value-semantic repeated, mixed-batch, dense-RHS, non-contiguous,
+      invalid-shape, invalid-layout, and output-length contracts across the
+      four backend surfaces.
+- [x] Run CUDA/ROCm/Metal CI and synchronize the ADR, README, changelog,
+      backlog, and checklist with exact hosted evidence.
+
+Execution owner: Codex on `codex/hephaestus-backend-prepared-sparse`; status:
+done.
+Claimed files: CUDA/ROCm sparse prepared modules and exports/tests, Metal
+sparse wrapper, CSR buffer accessors, affected documentation, ADR 0017, and
+the existing backend CI workflows.
+
+Hosted code-head evidence: CUDA run `30175194827` / job `89722726883`
+(7m17s), ROCm run `30175194823` / job `89722726994` (5m44s), and Metal run
+`30175194820` / job `89722726870` passed at `27bf875`. Hardware jobs were
+skipped because hosted GPU labels were unavailable; local Windows package
+compilation remains blocked before source compilation by the locked
+`cutile-rs` refresh and sibling Leto/Eunomia `Quantity<T>::in_unit` /
+`FloatElement` mismatch.
+
 ## HEPH-BACKEND-PARITY-PREPARED-REDUCE-1 [minor] — done
 
 - [x] Add native preallocated CUDA and ROCm prepared scalar reduction plans.
