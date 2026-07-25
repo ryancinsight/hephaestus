@@ -1,7 +1,6 @@
 //! Reusable ROCm CSR sparse products.
 
 use std::rc::Rc;
-use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -29,7 +28,7 @@ pub struct PreparedSpmv<'a, T> {
     nrows: u32,
 }
 
-impl<T> PreparedSpmv<'_, T> {
+impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSpmv<'_, T> {
     /// Dispatch the prepared CSR matrix-vector product.
     ///
     /// # Errors
@@ -85,7 +84,7 @@ pub struct PreparedSpmm<'a, T> {
     meta: SpmmMeta,
 }
 
-impl<T> PreparedSpmm<'_, T> {
+impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSpmm<'_, T> {
     /// Dispatch the prepared CSR matrix-matrix product.
     ///
     /// # Errors
@@ -157,7 +156,7 @@ pub fn submit_prepared_sparse_batch<T: DialectScalar<HipC> + Pod>(
     };
     if rest
         .iter()
-        .any(|operation| !Arc::ptr_eq(&first.device().context, &operation.device().context))
+        .any(|operation| !first.device().same_context(operation.device()))
     {
         return Err(HephaestusError::DispatchFailed {
             message: "prepared sparse batch contains operations from different HIP contexts"

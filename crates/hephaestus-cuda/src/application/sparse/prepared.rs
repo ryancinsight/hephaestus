@@ -29,7 +29,7 @@ pub struct PreparedSpmv<'a, T> {
     nrows: u32,
 }
 
-impl<T> PreparedSpmv<'_, T> {
+impl<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod> PreparedSpmv<'_, T> {
     /// Dispatch the prepared CSR matrix-vector product.
     ///
     /// # Errors
@@ -85,7 +85,7 @@ pub struct PreparedSpmm<'a, T> {
     meta: SpmmMeta,
 }
 
-impl<T> PreparedSpmm<'_, T> {
+impl<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod> PreparedSpmm<'_, T> {
     /// Dispatch the prepared CSR matrix-matrix product.
     ///
     /// # Errors
