@@ -126,6 +126,9 @@ contract, with no backend-selection fallback to CPU or WGPU.
 Symmetric Jacobi eigenpairs/eigenvalues and general complex eigenvalues use the
 same provider boundary and upload typed f32/complex result buffers. Hessenberg
 and real Schur use that boundary to upload typed Q/H and Q/T factors.
+The common pseudoinverse and matrix-exponential APIs use the same provider
+boundary and upload typed ROCm result buffers; they are available with the
+optional `decomposition` feature.
 
 ## Alternatives rejected
 
@@ -162,7 +165,8 @@ SVD, UDU, Bunch–Kaufman, symmetric eigen, and general complex eigenvalues are
 covered through the shared Leto provider boundary with ROCm-resident result
 buffers and value-semantic contracts. Hessenberg and real Schur are covered by
 the same provider-backed typed-factor contract; the common decomposition
-surface is complete.
+surface is complete. Pseudoinverse and matrix exponential are also covered
+through the provider-backed matrix-function contract.
 
 The hosted job checks out the sibling Atlas path repositories at their current
 default branches, with Hermes pinned to `v0.4.1` because Leto main currently

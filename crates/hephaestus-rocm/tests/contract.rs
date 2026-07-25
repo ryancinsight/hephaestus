@@ -27,7 +27,7 @@ use hephaestus_rocm::{
 use hephaestus_rocm::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_decompose_blocked, col_piv_qr,
     col_piv_qr_blocked, eigenvalues, full_piv_lu, full_piv_lu_blocked, hessenberg, lu_decompose,
-    lu_decompose_blocked, qr_decompose, qr_decompose_blocked, schur, singular_values,
+    lu_decompose_blocked, matexp, pinv, qr_decompose, qr_decompose_blocked, schur, singular_values,
     svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
     udu_decompose,
 };
@@ -3235,4 +3235,263 @@ fn schur_rejects_rectangular_and_nonfinite_inputs() {
         Err(HephaestusError::DispatchFailed { message })
             if message.contains("non-finite")
     ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn matrix_functions_match_leto_and_moore_penrose_contracts() {
+    let Some(device) = device("matrix_functions_match_leto_and_moore_penrose_contracts") else {
+        return;
+    };
+
+    let diagonal_values = [2.0_f32, 0.0, 0.0, 4.0];
+    let diagonal = device.upload(&diagonal_values).expect("HIP pinv upload");
+    let diagonal_layout = Layout::c_contiguous([2, 2]).expect("pinv layout");
+    let diagonal_output = pinv(
+        &device,
+        StridedOperand {
+            buffer: &diagonal,
+            layout: &diagonal_layout,
+        },
+    )
+    .expect("ROCm diagonal pseudoinverse");
+    let mut diagonal_actual = [0.0_f32; 4];
+    device
+        .download(&diagonal_output, &mut diagonal_actual)
+        .expect("HIP diagonal pseudoinverse download");
+    assert_eq!(diagonal_actual, [0.5, 0.0, 0.0, 0.25]);
+
+    let rank_deficient_values = [1.0_f32, 2.0, 2.0, 4.0];
+    let rank_deficient = device
+        .upload(&rank_deficient_values)
+        .expect("HIP rank-deficient pinv upload");
+    let rank_output = pinv(
+        &device,
+        StridedOperand {
+            buffer: &rank_deficient,
+            layout: &diagonal_layout,
+        },
+    )
+    .expect("ROCm rank-deficient pseudoinverse");
+    let mut rank_actual = [0.0_f32; 4];
+    device
+        .download(&rank_output, &mut rank_actual)
+        .expect("HIP rank-deficient pseudoinverse download");
+    let rank_expected = leto_ops::pinv(&leto::ArrayView::<f32, 2>::new(
+        diagonal_layout,
+        &rank_deficient_values,
+    ))
+    .expect("CPU rank-deficient pseudoinverse reference");
+    let rank_expected_slice = leto::Storage::as_slice(rank_expected.storage());
+    for (actual, expected) in rank_actual.iter().zip(rank_expected_slice) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    let a_ap = matmul_square(&rank_deficient_values, &rank_actual, 2);
+    let a_ap_a = matmul_square(&a_ap, &rank_deficient_values, 2);
+    for (actual, expected) in a_ap_a.iter().zip(rank_deficient_values) {
+        assert_near(*actual, expected, 8192.0);
+    }
+    let ap_a = matmul_square(&rank_actual, &rank_deficient_values, 2);
+    let ap_a_ap = matmul_square(&ap_a, &rank_actual, 2);
+    for (actual, expected) in ap_a_ap.iter().zip(rank_actual) {
+        assert_near(*actual, expected, 8192.0);
+    }
+
+    let rectangular_values = [1.0_f32, 2.0, 0.0, 1.0, 2.0, 1.0];
+    let rectangular = device
+        .upload(&rectangular_values)
+        .expect("HIP rectangular pinv upload");
+    let rectangular_layout = Layout::c_contiguous([3, 2]).expect("rectangular pinv layout");
+    let rectangular_output = pinv(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    )
+    .expect("ROCm rectangular pseudoinverse");
+    let mut rectangular_actual = [0.0_f32; 6];
+    device
+        .download(&rectangular_output, &mut rectangular_actual)
+        .expect("HIP rectangular pseudoinverse download");
+    let rectangular_expected = leto_ops::pinv(&leto::ArrayView::<f32, 2>::new(
+        rectangular_layout,
+        &rectangular_values,
+    ))
+    .expect("CPU rectangular pseudoinverse reference");
+    let rectangular_expected_slice = leto::Storage::as_slice(rectangular_expected.storage());
+    for (actual, expected) in rectangular_actual.iter().zip(rectangular_expected_slice) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn matrix_exponential_matches_closed_forms_and_leto() {
+    let Some(device) = device("matrix_exponential_matches_closed_forms_and_leto") else {
+        return;
+    };
+
+    let layout = Layout::c_contiguous([2, 2]).expect("matrix exponential layout");
+    let diagonal_values = [0.0_f32, 0.0, 0.0, 1.0];
+    let diagonal = device
+        .upload(&diagonal_values)
+        .expect("HIP diagonal matrix exponential upload");
+    let diagonal_output = matexp(
+        &device,
+        StridedOperand {
+            buffer: &diagonal,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm diagonal matrix exponential");
+    let mut diagonal_actual = [0.0_f32; 4];
+    device
+        .download(&diagonal_output, &mut diagonal_actual)
+        .expect("HIP diagonal matrix exponential download");
+    assert_near(diagonal_actual[0], 1.0, 256.0);
+    assert_near(diagonal_actual[3], 1.0_f32.exp(), 256.0);
+
+    let nilpotent_values = [0.0_f32, 1.0, 0.0, 0.0];
+    let nilpotent = device
+        .upload(&nilpotent_values)
+        .expect("HIP nilpotent matrix exponential upload");
+    let nilpotent_output = matexp(
+        &device,
+        StridedOperand {
+            buffer: &nilpotent,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm nilpotent matrix exponential");
+    let mut nilpotent_actual = [0.0_f32; 4];
+    device
+        .download(&nilpotent_output, &mut nilpotent_actual)
+        .expect("HIP nilpotent matrix exponential download");
+    for (actual, expected) in nilpotent_actual.iter().zip([1.0, 1.0, 0.0, 1.0]) {
+        assert_near(*actual, expected, 256.0);
+    }
+
+    let theta = 0.9_f32;
+    let rotation_values = [0.0_f32, -theta, theta, 0.0];
+    let rotation = device
+        .upload(&rotation_values)
+        .expect("HIP rotation matrix exponential upload");
+    let rotation_output = matexp(
+        &device,
+        StridedOperand {
+            buffer: &rotation,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm rotation matrix exponential");
+    let mut rotation_actual = [0.0_f32; 4];
+    device
+        .download(&rotation_output, &mut rotation_actual)
+        .expect("HIP rotation matrix exponential download");
+    let rotation_expected = [theta.cos(), -theta.sin(), theta.sin(), theta.cos()];
+    for (actual, expected) in rotation_actual.iter().zip(rotation_expected) {
+        assert_near(*actual, expected, 4096.0);
+    }
+
+    let general_values = [1.2_f32, -0.7, 0.4, 0.3, 2.1, -1.5, -0.6, 0.8, 0.5];
+    let general = device
+        .upload(&general_values)
+        .expect("HIP general matexp upload");
+    let general_layout = Layout::c_contiguous([3, 3]).expect("general matexp layout");
+    let general_output = matexp(
+        &device,
+        StridedOperand {
+            buffer: &general,
+            layout: &general_layout,
+        },
+    )
+    .expect("ROCm general matrix exponential");
+    let mut general_actual = [0.0_f32; 9];
+    device
+        .download(&general_output, &mut general_actual)
+        .expect("HIP general matrix exponential download");
+    let general_expected = leto_ops::matexp(&leto::ArrayView::<f32, 2>::new(
+        general_layout,
+        &general_values,
+    ))
+    .expect("CPU general matrix exponential reference");
+    let general_expected_slice = leto::Storage::as_slice(general_expected.storage());
+    for (actual, expected) in general_actual.iter().zip(general_expected_slice) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn matrix_functions_reject_invalid_and_handle_empty_inputs() {
+    let Some(device) = device("matrix_functions_reject_invalid_and_handle_empty_inputs") else {
+        return;
+    };
+
+    let nonfinite = device
+        .upload(&[1.0_f32, f32::NAN, 0.0, 1.0])
+        .expect("HIP nonfinite matrix-function upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("square matrix-function layout");
+    assert!(matches!(
+        pinv(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Pseudoinverse failed")
+    ));
+    assert!(matches!(
+        matexp(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential failed")
+    ));
+
+    let rectangular = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP rectangular matrix-function upload");
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular matexp layout");
+    assert!(matches!(
+        matexp(
+            &device,
+            StridedOperand {
+                buffer: &rectangular,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("requires square matrix")
+    ));
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty matrix-function upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty matrix-function layout");
+    let empty_pinv = pinv(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty pseudoinverse");
+    assert_eq!(empty_pinv.len(), 0);
+    let empty_matexp = matexp(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty matrix exponential");
+    assert_eq!(empty_matexp.len(), 0);
 }
