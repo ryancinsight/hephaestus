@@ -90,6 +90,7 @@ jobs:
           sed "s|/workspace|$GITHUB_WORKSPACE|g" \
             "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
             > "$GITHUB_WORKSPACE/.cargo/config.toml"
+          cargo "+$RUST_TOOLCHAIN" update --workspace
 
       - name: Check WGPU feature surfaces
         working-directory: hephaestus

@@ -6,5 +6,8 @@ hermes-simd-macros = { path = "/workspace/hermes/crates/hermes-simd-macros" }
 hermes-simd-types = { path = "/workspace/hermes/crates/hermes-simd-types" }
 
 [patch."https://github.com/ryancinsight/Mnemosyne.git"]
+# The committed lock can retain the pre-migration 0.5 package graph. CI
+# refreshes its checkout-local lock after this patch so all consumers use the
+# checked-out 0.6 workspace package and its 0.5 backend dependency.
 mnemosyne = { path = "/workspace/mnemosyne/crates/mnemosyne" }
 mnemosyne-core = { path = "/workspace/mnemosyne/crates/mnemosyne-core" }
