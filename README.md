@@ -61,6 +61,10 @@ register each package's Trusted Publisher with that environment.
   entry points, and the op contributes only its shader combine expression. No
   type names appear in API identifiers; `DialectScalar<L>::TYPE_TOKEN`
   substitutes the shader type token for each backend dialect.
+- All four backend roots export the fused `ExpNegOp` marker (`exp(-x)`) with
+  the same unary dispatch contract; Metal routes it through its native
+  Metal-selected WGPU device and tests it against both CPU and composed
+  `NegOp`/`ExpOp` references.
 - The Metal backend selects `wgpu::Backends::METAL` at device acquisition and
   delegates its supported application families through `hephaestus-wgpu`. This
   keeps one WGSL kernel implementation while executing through the native

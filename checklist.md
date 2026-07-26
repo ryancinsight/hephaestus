@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-METAL-EXP-NEG-1 [minor] — in-progress
+
+- [ ] Export `ExpNegOp` from the Metal elementwise surface.
+- [ ] Add a value-semantic contract against the CPU `(-x).exp()` oracle and
+      the `NegOp` then `ExpOp` composition.
+- [ ] Synchronize the ADR, README, changelog, backlog, and checklist, then run
+      the CUDA, ROCm, and macOS Metal CI gates.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-5`; claimed
+files: Metal elementwise export and contract test, affected documentation,
+ADR 0023, and no workflow changes; status: in-progress.
+
 ## HEPH-BACKEND-PARITY-METAL-AUTHORED-1 [minor] — done
 
 - [x] Add Metal-owned authored-kernel command streams for ordinary and grouped

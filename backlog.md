@@ -4,6 +4,22 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-METAL-EXP-NEG-1 [minor] — in-progress
+
+- Owner: Codex; scope: expose the existing fused `ExpNegOp` (`exp(-x)`) marker
+  through Metal and add its value-semantic contract. New unary kernels,
+  alternate exponential semantics, and unrelated operator families are
+  non-goals.
+- Acceptance: Metal exports `ExpNegOp` alongside the other unary markers; the
+  existing Metal generic unary path dispatches it through the native
+  Metal-selected WGPU device; the contract compares the fused output with an
+  independent CPU `(-x).exp()` oracle and the `NegOp` then `ExpOp` composition;
+  and the existing CUDA, ROCm, and macOS Metal CI lanes pass.
+- Claimed files: Metal elementwise exports and contract test, README,
+  CHANGELOG, `docs/adr/0023-metal-exp-neg-parity.md`, `checklist.md`, and this
+  item. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next-5`; last update: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-METAL-AUTHORED-1 [minor] — done
 
 - Owner: Codex; scope: expose Metal-owned authored-kernel command streams and

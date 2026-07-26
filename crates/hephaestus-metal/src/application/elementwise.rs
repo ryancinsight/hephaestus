@@ -6,8 +6,8 @@ use hephaestus_core::{BinaryExpr, BlockWidth, DialectScalar, Result, UnaryExpr, 
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::{
-    AbsOp, AddOp, CosOp, DivOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp,
-    SqrtOp, SubOp,
+    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp,
+    SinOp, SqrtOp, SubOp,
 };
 
 /// Run binary elementwise operation, allocating a new buffer.

@@ -18,13 +18,13 @@ use hephaestus_core::{
 #[cfg(feature = "decomposition")]
 use hephaestus_metal::MatrixDecompose;
 use hephaestus_metal::{
-    AddOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve, MaxOp,
-    MetalBinaryStorageKernel, MetalDevice, MetalMultiStorageKernel, MetalStorageBinding,
-    MetalStorageBindingLayout, MetalUnaryStorageKernel, MinOp, MulOp, NegOp, SqrtOp,
-    StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul, normal_with_seed,
-    prepare_dot, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
-    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
-    reduction, scalar_elementwise, submit_prepared_axis_reduction_batch,
+    AddOp, ExpNegOp, ExpOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
+    MatrixSolve, MaxOp, MetalBinaryStorageKernel, MetalDevice, MetalMultiStorageKernel,
+    MetalStorageBinding, MetalStorageBindingLayout, MetalUnaryStorageKernel, MinOp, MulOp, NegOp,
+    SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
+    normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
+    prepare_sum_axis_into, reduction, scalar_elementwise, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, unary_elementwise, unary_elementwise_into, uniform_with_seed,
 };
 use leto::Layout;
@@ -711,6 +711,38 @@ fn elementwise_unary_matches_cpu_reference() {
     let mut host_out = [0.0f32; 3];
     d.download(&out, &mut host_out).unwrap();
     assert_eq!(host_out, [2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn elementwise_exp_neg_matches_cpu_and_composed_references() {
+    let Some(d) = device("elementwise_exp_neg_matches_cpu_and_composed_references") else {
+        return;
+    };
+    let host = [-4.0f32, -1.0, 0.0, 2.0, 16.0];
+    let input = d.upload(&host).unwrap();
+    let fused = unary_elementwise::<ExpNegOp, f32>(&d, &input).unwrap();
+    let negated = unary_elementwise::<NegOp, f32>(&d, &input).unwrap();
+    let composed = unary_elementwise::<ExpOp, f32>(&d, &negated).unwrap();
+    let mut fused_host = [0.0f32; 5];
+    let mut composed_host = [0.0f32; 5];
+    d.download(&fused, &mut fused_host).unwrap();
+    d.download(&composed, &mut composed_host).unwrap();
+
+    for (index, &x) in host.iter().enumerate() {
+        let expected = (-x).exp();
+        let tolerance = 1e-5 * expected.abs().max(1.0);
+        assert!(
+            (fused_host[index] - expected).abs() < tolerance,
+            "fused ExpNeg mismatch at index {index}: got {}, expected {expected}, tolerance {tolerance}",
+            fused_host[index]
+        );
+        assert!(
+            (fused_host[index] - composed_host[index]).abs() < tolerance,
+            "fused/composed ExpNeg mismatch at index {index}: fused {}, composed {}, tolerance {tolerance}",
+            fused_host[index],
+            composed_host[index]
+        );
+    }
 }
 
 #[test]
