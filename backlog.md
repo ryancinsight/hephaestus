@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch] — in-progress
+## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch] — done
 
 - Owner: Codex; scope: standalone WGPU provider CI, CUDA decomposition feature
   wiring, and synchronized verification artifacts.
@@ -18,10 +18,17 @@ cuda-oxide + cutile).
 - Verification: local format, metadata, feature-graph, and focused package
   gates where the checkout-local dependency graph permits; WGPU, CUDA, ROCm,
   and Metal workflow results recorded on the final head.
+- Evidence: final head `6d9e96f` passed WGPU run `30187568513` / job
+  `89754890646` (6m10s), CUDA run `30187568521` / job `89754910876`
+  (7m11s), ROCm run `30187568515` / job `89754890592` (5m40s), and macOS
+  Metal run `30187568510` / job `89754890620` (6m57s). NVIDIA hardware job
+  `89754911060` and AMD hardware job `89754890775` were skipped because
+  hosted hardware labels were unavailable; no hardware execution claim is
+  made.
 - Claimed files: `crates/hephaestus-cuda/Cargo.toml`,
   `.github/workflows/wgpu.yml`, `README.md`, `CHANGELOG.md`, `backlog.md`,
   `checklist.md`, and `gap_audit.md`. Execution owner: Codex on
-  `codex/hephaestus-backend-parity-next-9`.
+  `codex/hephaestus-backend-parity-next-9`; completed: 2026-07-26.
 
 ## HEPH-BACKEND-PARITY-MATRIX-1 [patch] — done
 
