@@ -1,5 +1,5 @@
 use super::*;
-use aequitas::systems::si::units::Meter;
+use aequitas::systems::si::{quantities::Length, units::Meter};
 
 #[test]
 fn params_valid_grid() {

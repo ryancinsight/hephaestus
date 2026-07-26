@@ -115,14 +115,25 @@ architectural decision or a tracked future-work item:
 
 ## Open feature hygiene
 
-- [HEPH-CUDA-DECOMPOSITION-FEATURE-1] [patch] `decomposition` without `cuda`
-  currently compiles decomposition modules that import CUDA-only byte-count
-  machinery. The supported `decomposition,cuda` combination passes. Re-open
-  by defining whether non-CUDA decomposition is a real backend contract, then
-  either encode `decomposition = ["cuda"]` or separate the host-only surface;
-  this baseline defect is not caused by the Eunomia cutover.
+No open feature-combination defect is currently recorded in the backend scope.
 
 ## Resolved
+
+- [HEPH-BACKEND-CI-FEATURE-MATRIX-1] [patch] CUDA's `decomposition` feature
+  now enables `cuda` because its decomposition modules launch CUDA kernels and
+  use CUDA-only byte-count and pinned-host infrastructure. A standalone Linux
+  WGPU workflow checks the minimal and default feature surfaces with the same
+  warning-denied, Nextest, doctest, and rustdoc gates used by the provider
+  lanes. The existing CUDA, ROCm, and Metal workflows remain the provider
+  feature and contract lanes. The new WGPU lane exposed and fixed its
+  Laplacian test's missing `Length` import and a redundant test allocation.
+  Final head `6d9e96f` passed WGPU run `30187568513` / job `89754890646`
+  (6m10s), CUDA run `30187568521` / job `89754910876` (7m11s), ROCm run
+  `30187568515` / job `89754890592` (5m40s), and macOS Metal run
+  `30187568510` / job `89754890620` (6m57s). NVIDIA hardware job
+  `89754911060` and AMD hardware job `89754890775` were skipped because
+  hosted hardware labels were unavailable; no hardware execution claim is
+  made.
 
 - [HEPH-BACKEND-PARITY-MATRIX-1] [patch] The four backend crate roots now
   expose the same 93-operation common baseline across elementwise, fixed-rank

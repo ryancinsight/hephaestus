@@ -224,7 +224,7 @@ fn laplacian_storage_length_mismatch_is_rejected_before_launch() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let input = device.upload(&vec![0.0f32; 29]).expect("input upload");
+    let input = device.upload(&[0.0f32; 29]).expect("input upload");
     let output = device.alloc_zeroed::<f32>(30).expect("output allocation");
     let params = Laplacian2DParams::new(
         6,
