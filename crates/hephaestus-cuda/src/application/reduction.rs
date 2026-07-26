@@ -14,7 +14,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-pub use hephaestus_core::{MaxOp, MinOp, SumOp};
+pub use hephaestus_core::{MaxOp, MinOp, ProdOp, SumOp};
 
 pub(crate) fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>(
     width: BlockWidth,
@@ -478,6 +478,37 @@ where
     T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, preserving the reduced
+/// axis as length one.
+#[inline]
+pub fn prod_axis_into<T>(
+    device: &CudaDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<CudaC> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, CudaC>,
+{
+    reduce_axis_into::<ProdOp, T>(device, input, axis, output, width)
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, allocating a
+/// C-contiguous output buffer.
+#[inline]
+pub fn prod_axis<T>(
+    device: &CudaDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<CudaBuffer<T>>
+where
+    T: DialectScalar<CudaC> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, CudaC>,
+{
+    reduce_axis::<ProdOp, T>(device, input, axis, width)
 }
 
 /// Min-reduce a rank-2 strided matrix along `axis`, preserving the reduced axis as length one.

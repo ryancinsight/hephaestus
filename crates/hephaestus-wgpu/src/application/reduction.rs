@@ -13,7 +13,7 @@ use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-pub use hephaestus_core::{MaxOp, MinOp, SumOp};
+pub use hephaestus_core::{MaxOp, MinOp, ProdOp, SumOp};
 
 mod prepared;
 pub use prepared::{
@@ -988,6 +988,37 @@ where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, preserving the reduced
+/// axis as length one.
+#[inline]
+pub fn prod_axis_into<T>(
+    device: &WgpuDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
+{
+    reduce_axis_into::<ProdOp, T>(device, input, axis, output, width)
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, allocating a
+/// C-contiguous output buffer.
+#[inline]
+pub fn prod_axis<T>(
+    device: &WgpuDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    T: DialectScalar<Wgsl> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
+{
+    reduce_axis::<ProdOp, T>(device, input, axis, width)
 }
 
 fn reject_empty_axis(axis_len: usize, op_name: &'static str, axis: usize) -> Result<()> {

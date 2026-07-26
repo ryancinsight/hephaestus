@@ -223,6 +223,10 @@ impl BinaryExpr<CudaC> for PowOp {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SumOp;
 
+/// Product-reduction operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ProdOp;
+
 /// Minimum-reduction operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MinOp;
@@ -236,6 +240,13 @@ impl CombineExpr<Wgsl> for SumOp {
 }
 impl CombineExpr<CudaC> for SumOp {
     const EXPR: &'static str = "lhs + rhs";
+}
+
+impl CombineExpr<Wgsl> for ProdOp {
+    const EXPR: &'static str = "lhs * rhs";
+}
+impl CombineExpr<CudaC> for ProdOp {
+    const EXPR: &'static str = "lhs * rhs";
 }
 
 impl CombineExpr<Wgsl> for MinOp {
@@ -329,6 +340,7 @@ macro_rules! impl_hip_combine_exprs {
 
 impl_hip_combine_exprs!(
     (SumOp, "lhs + rhs"),
+    (ProdOp, "lhs * rhs"),
     (MinOp, "min(lhs, rhs)"),
     (MaxOp, "max(lhs, rhs)"),
     (CumSumOp, "lhs + rhs"),
@@ -348,6 +360,16 @@ impl OpIdentity<SumOp> for u32 {
 }
 impl OpIdentity<SumOp> for i32 {
     const IDENTITY: Self = 0;
+}
+
+impl OpIdentity<ProdOp> for f32 {
+    const IDENTITY: Self = 1.0;
+}
+impl OpIdentity<ProdOp> for u32 {
+    const IDENTITY: Self = 1;
+}
+impl OpIdentity<ProdOp> for i32 {
+    const IDENTITY: Self = 1;
 }
 
 impl OpIdentity<MinOp> for f32 {
@@ -407,6 +429,25 @@ impl IdentityToken<SumOp, CudaC> for u32 {
 }
 impl IdentityToken<SumOp, CudaC> for i32 {
     const TOKEN: &'static str = "0";
+}
+
+impl IdentityToken<ProdOp, Wgsl> for f32 {
+    const TOKEN: &'static str = "1.0";
+}
+impl IdentityToken<ProdOp, Wgsl> for u32 {
+    const TOKEN: &'static str = "1u";
+}
+impl IdentityToken<ProdOp, Wgsl> for i32 {
+    const TOKEN: &'static str = "1";
+}
+impl IdentityToken<ProdOp, CudaC> for f32 {
+    const TOKEN: &'static str = "1.0f";
+}
+impl IdentityToken<ProdOp, CudaC> for u32 {
+    const TOKEN: &'static str = "1u";
+}
+impl IdentityToken<ProdOp, CudaC> for i32 {
+    const TOKEN: &'static str = "1";
 }
 
 impl IdentityToken<MinOp, Wgsl> for f32 {
@@ -503,6 +544,7 @@ macro_rules! impl_hip_identity_tokens {
 
 impl_hip_identity_tokens!(
     (SumOp, "0.0f", "0u", "0"),
+    (ProdOp, "1.0f", "1u", "1"),
     (MinOp, "3.402823466e+38f", "4294967295u", "2147483647"),
     (MaxOp, "-3.402823466e+38f", "0u", "-2147483648"),
     (CumSumOp, "0.0f", "0u", "0"),
@@ -518,12 +560,14 @@ mod tests {
         assert_eq!(<SumOp as CombineExpr<Wgsl>>::EXPR, "lhs + rhs");
         assert_eq!(<SumOp as CombineExpr<CudaC>>::EXPR, "lhs + rhs");
         assert_eq!(<SumOp as CombineExpr<HipC>>::EXPR, "lhs + rhs");
+        assert_eq!(<ProdOp as CombineExpr<HipC>>::EXPR, "lhs * rhs");
         assert_eq!(<AddOp as BinaryExpr<HipC>>::EXPR, "lhs + rhs");
         assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
         assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
         assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as OpIdentity<MinOp>>::IDENTITY, f32::MAX);
+        assert_eq!(<f32 as OpIdentity<ProdOp>>::IDENTITY, 1.0);
         assert_eq!(<u32 as OpIdentity<MaxOp>>::IDENTITY, u32::MIN);
     }
 

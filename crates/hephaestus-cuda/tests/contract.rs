@@ -14,8 +14,8 @@ use hephaestus_cuda::{
     cumprod, cumprod_into, det, dot, kron, matexp, matmul, matmul_into, matrix_rank,
     matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
     prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduce_axis, reduction,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis,
+    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
     unary_elementwise_into,
@@ -1074,6 +1074,20 @@ fn reduction_axis_reduction_generic_matches_cpu() {
     let mut got = vec![0.0f32; 3];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![5.0, 7.0, 9.0]);
+
+    let product = prod_axis::<f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product = vec![0.0f32; 2];
+    dev.download(&product, &mut got_product).unwrap();
+    assert_eq!(got_product, vec![6.0, 120.0]);
 }
 
 #[test]
@@ -1191,6 +1205,21 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     let mut got_empty = [7.0f32; 3];
     dev.download(&empty_output, &mut got_empty).unwrap();
     assert_eq!(got_empty, [0.0, 0.0, 0.0]);
+
+    let empty_product = prod_axis::<f32>(
+        &dev,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        width,
+    )
+    .unwrap();
+    let mut got_empty_product = [0.0f32; 3];
+    dev.download(&empty_product, &mut got_empty_product)
+        .unwrap();
+    assert_eq!(got_empty_product, [1.0, 1.0, 1.0]);
 
     let empty_min = prepare_min_axis_into(
         &dev,

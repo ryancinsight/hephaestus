@@ -36,12 +36,12 @@ pub use application::linalg::{matexp, pinv};
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{
-    MaxOp, MinOp, PreparedAxisReduction, PreparedReduction, SumOp, max_axis, max_axis_into,
+    MaxOp, MinOp, PreparedAxisReduction, PreparedReduction, ProdOp, SumOp, max_axis, max_axis_into,
     mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduce_axis_into, prepare_reduction,
-    prepare_reduction_with_width, prepare_sum_axis_into, reduce_axis, reduce_axis_into, reduction,
-    reduction_with_width, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
-    sum_axis, sum_axis_into,
+    prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis,
+    reduce_axis_into, reduction, reduction_with_width, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, sum_axis, sum_axis_into,
 };
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,

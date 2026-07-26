@@ -24,8 +24,8 @@ use hephaestus_rocm::{
     matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
     norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
-    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
-    scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
+    prod_axis, reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into,
+    scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into, sum_axis, trace, unary_elementwise,
     unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
@@ -924,6 +924,13 @@ fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
     assert_eq!(min_rows_output, [1, 10, 5]);
     assert_eq!(max_rows_output, [4, 40, 11]);
 
+    let product_rows = prod_axis(&device, input_operand, 1, width).expect("HIP axis row product");
+    let mut product_rows_output = [0_u32; 3];
+    device
+        .download(&product_rows, &mut product_rows_output)
+        .expect("HIP row product download");
+    assert_eq!(product_rows_output, [24, 240_000, 3465]);
+
     let mean_input: Vec<f32> = (1..=12).map(|value| value as f32).collect();
     let mean_buffer = device.upload(&mean_input).expect("HIP mean input upload");
     let mean_layout = Layout::c_contiguous([3, 4]).expect("mean input layout");
@@ -1146,6 +1153,22 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
         .download(&empty_output, &mut got_empty)
         .expect("HIP prepared empty sum download");
     assert_eq!(got_empty, [0.0, 0.0, 0.0]);
+
+    let empty_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP empty product");
+    let mut got_empty_product = [0.0f32; 3];
+    device
+        .download(&empty_product, &mut got_empty_product)
+        .expect("HIP empty product download");
+    assert_eq!(got_empty_product, [1.0, 1.0, 1.0]);
 
     let empty_mean = prepare_mean_axis_into(
         &device,

@@ -11,7 +11,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-pub use hephaestus_core::{MaxOp, MinOp, SumOp};
+pub use hephaestus_core::{MaxOp, MinOp, ProdOp, SumOp};
 
 pub(crate) fn axis_reduction_shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>()
 -> String {
@@ -327,6 +327,33 @@ where
     T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
 {
     reduce_axis::<SumOp, T>(device, input, axis, width)
+}
+
+/// Product-reduce a rank-2 operand along `axis` into caller-owned storage.
+pub fn prod_axis_into<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: hephaestus_core::BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, HipC>,
+{
+    reduce_axis_into::<ProdOp, T>(device, input, axis, output, width)
+}
+
+/// Product-reduce a rank-2 operand along `axis` into a C-contiguous buffer.
+pub fn prod_axis<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: hephaestus_core::BlockWidth,
+) -> Result<RocmBuffer<T>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, HipC>,
+{
+    reduce_axis::<ProdOp, T>(device, input, axis, width)
 }
 
 /// Min-reduce a rank-2 operand along `axis` into caller-owned storage.

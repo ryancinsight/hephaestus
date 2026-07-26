@@ -10,7 +10,7 @@ use hephaestus_wgpu::{
     binary_elementwise_into, cumsum_into, matrix_rank, matrix_rank_with_tolerance, max_axis,
     max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
+    prod_axis, reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, sum_axis_into,
     unary_elementwise, unary_elementwise_into,
 };
@@ -816,6 +816,13 @@ fn axis_reductions_match_leto_reference() {
     device.download(&out_axis1, &mut got_axis1).unwrap();
     assert_eq!(got_axis1, expected_axis1);
 
+    let product_axis1 = prod_axis(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_product_axis1 = vec![0.0f32; 2];
+    device
+        .download(&product_axis1, &mut got_product_axis1)
+        .unwrap();
+    assert_eq!(got_product_axis1, [6.0, 120.0]);
+
     let narrow_axis1 = sum_axis(&device, input_operand, 1, BlockWidth::new(2).unwrap()).unwrap();
     let mut got_narrow_axis1 = vec![0.0f32; 2];
     device
@@ -1035,6 +1042,22 @@ fn axis_reductions_match_leto_reference() {
     let mut got_empty = [7.0f32; 2];
     device.download(&empty_output, &mut got_empty).unwrap();
     assert_eq!(got_empty, [0.0, 0.0]);
+
+    let empty_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty_product = [0.0f32; 2];
+    device
+        .download(&empty_product, &mut got_empty_product)
+        .unwrap();
+    assert_eq!(got_empty_product, [1.0, 1.0]);
 
     let prepared_empty_sum = prepare_sum_axis_into(
         &device,

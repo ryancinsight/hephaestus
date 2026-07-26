@@ -7,7 +7,7 @@ use hephaestus_core::{
 };
 use hephaestus_wgpu as wgpu_backend;
 
-pub use wgpu_backend::{MaxOp, MinOp, SumOp};
+pub use wgpu_backend::{MaxOp, MinOp, ProdOp, SumOp};
 
 /// A reusable Metal scalar reduction plan delegated to WGPU's native Metal path.
 pub struct PreparedReduction<T> {
@@ -346,6 +346,49 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
     wgpu_backend::sum_axis_into::<T>(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(input),
+        axis,
+        crate::application::strided::to_wgpu_strided(out),
+        width,
+    )
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, allocating a
+/// C-contiguous output buffer.
+#[inline]
+pub fn prod_axis<T>(
+    device: &MetalDevice,
+    input: crate::application::strided::StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<MetalBuffer<T>>
+where
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
+{
+    let inner = wgpu_backend::prod_axis::<T>(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(input),
+        axis,
+        width,
+    )?;
+    Ok(MetalBuffer { inner })
+}
+
+/// Product-reduce a rank-2 strided matrix along `axis`, preserving the reduced
+/// axis as length one.
+#[inline]
+pub fn prod_axis_into<T>(
+    device: &MetalDevice,
+    input: crate::application::strided::StridedOperand<'_, T, 2>,
+    axis: usize,
+    out: crate::application::strided::StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
+{
+    wgpu_backend::prod_axis_into::<T>(
         &device.inner,
         crate::application::strided::to_wgpu_strided(input),
         axis,
