@@ -11,7 +11,7 @@ use hephaestus_wgpu::application::stream::{
 };
 use hephaestus_wgpu::infrastructure::device::WgpuDevice;
 
-use crate::infrastructure::{MetalBuffer, MetalDevice};
+use crate::{MetalBuffer, MetalDevice};
 
 /// Prepared Metal-selected pipeline for an authored kernel source type `K`.
 pub struct MetalPrepared<K> {
@@ -205,13 +205,7 @@ impl<'s> GroupedKernelSequence<'s, MetalDevice> for MetalGroupedSequence<'s> {
             .iter()
             .map(to_wgpu_grouped_binding)
             .collect::<Vec<_>>();
-        GroupedKernelSequence::encode_grouped(
-            &mut self.inner,
-            &prepared.inner,
-            &mapped,
-            params,
-            grid,
-        )
+        GroupedKernelSequence::encode_grouped(self.inner, &prepared.inner, &mapped, params, grid)
     }
 }
 

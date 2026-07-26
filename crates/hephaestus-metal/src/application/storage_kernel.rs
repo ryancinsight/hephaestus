@@ -2,15 +2,15 @@
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    BinaryStorageKernel, DispatchGrid, HephaestusError, MultiStorageDevice, MultiStorageKernel,
-    Result, UnaryStorageKernel,
+    BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, Result,
+    UnaryStorageKernel,
 };
 use hephaestus_wgpu::{
-    WgpuDevice, WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding,
-    WgslStorageBindingLayout, WgslUnaryStorageKernel,
+    WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
+    WgslUnaryStorageKernel,
 };
 
-use crate::infrastructure::{MetalBuffer, MetalDevice};
+use crate::{MetalBuffer, MetalDevice};
 
 /// Storage-buffer access declared in a Metal-selected WGSL layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
