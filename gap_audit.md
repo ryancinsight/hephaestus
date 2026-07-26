@@ -115,14 +115,18 @@ architectural decision or a tracked future-work item:
 
 ## Open feature hygiene
 
-- [HEPH-CUDA-DECOMPOSITION-FEATURE-1] [patch] `decomposition` without `cuda`
-  currently compiles decomposition modules that import CUDA-only byte-count
-  machinery. The supported `decomposition,cuda` combination passes. Re-open
-  by defining whether non-CUDA decomposition is a real backend contract, then
-  either encode `decomposition = ["cuda"]` or separate the host-only surface;
-  this baseline defect is not caused by the Eunomia cutover.
+No open feature-combination defect is currently recorded in the backend scope.
 
 ## Resolved
+
+- [HEPH-BACKEND-CI-FEATURE-MATRIX-1] [patch] CUDA's `decomposition` feature
+  now enables `cuda` because its decomposition modules launch CUDA kernels and
+  use CUDA-only byte-count and pinned-host infrastructure. A standalone Linux
+  WGPU workflow checks the minimal and default feature surfaces with the same
+  warning-denied, Nextest, doctest, and rustdoc gates used by the provider
+  lanes. The existing CUDA, ROCm, and Metal workflows remain the provider
+  feature and contract lanes; no hardware execution claim is made for hosted
+  lanes without registered devices.
 
 - [HEPH-BACKEND-PARITY-MATRIX-1] [patch] The four backend crate roots now
   expose the same 93-operation common baseline across elementwise, fixed-rank

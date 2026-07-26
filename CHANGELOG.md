@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Add a standalone Linux WGPU feature-and-contract CI lane covering
+  minimal and default surfaces; make CUDA's `decomposition` feature include
+  the CUDA substrate required by its decomposition kernels.
+
 - [minor] Export Metal's existing rank-2 `reduce_axis_into` output-buffer
   operation at the crate root, matching WGPU, CUDA, and ROCm with a direct
   CPU-reference contract.

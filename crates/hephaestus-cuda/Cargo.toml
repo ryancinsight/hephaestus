@@ -18,7 +18,9 @@ parallel = []
 mnemosyne-memory = []
 cuda = ["dep:cutile", "dep:cuda-oxide", "dep:libloading"]
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
-decomposition = []
+## The decomposition modules launch CUDA kernels and therefore require the
+## CUDA device substrate as part of the same feature contract.
+decomposition = ["cuda"]
 
 [dependencies]
 aequitas = { workspace = true }
