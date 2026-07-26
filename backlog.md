@@ -212,32 +212,28 @@ cuda-oxide + cutile).
   GPU labels were unavailable; the provider lanes ran their real feature,
   warning-denied Clippy, Nextest, doctest, and rustdoc gates.
 
-## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — in progress
 
 - Owner: Codex; scope: expose the existing rank-2 cumulative-product scan
   contract through WGPU, CUDA, ROCm, and Metal convenience APIs, with
-  value-semantic contracts and synchronized documentation. New scan kernels,
-  alternate product semantics, and unrelated operator families are
-  non-goals.
-- Acceptance: all four backends expose `cumprod` and `cumprod_into` with the
-  same rank-2 strided input/output, axis, width, and reverse-direction
-  contract; WGPU, CUDA, and Metal delegate to their existing generic
-  `CumProdOp` scan paths; tests compare allocated and caller-owned outputs to
-  an independent CPU reference over both axes, non-contiguous storage, empty
-  inputs, and invalid layouts; the existing CUDA, ROCm, and Metal CI lanes
-  execute the contracts and documentation records the public parity surface.
+  value-semantic contracts and synchronized documentation. New scan kernels
+  and unrelated operator families are non-goals.
+- Acceptance: all four backends expose forward `cumprod`/`cumprod_into` and
+  reverse `suffix_prod`/`suffix_prod_into` with the same rank-2 strided
+  input/output, axis, and width contract; each provider delegates to its
+  generic `CumProdOp` scan path; tests compare allocated and caller-owned
+  outputs to the Leto CPU oracle over both directions, both axes,
+  non-contiguous storage, empty inputs, and invalid layouts; the provider CI
+  lanes execute the contracts and documentation records the public parity
+  surface.
 - Claimed files: backend scan modules and exports, backend scan contract
-  tests, README, CHANGELOG, `docs/adr/0019-scan-product-parity.md`,
+  tests, CHANGELOG, `docs/adr/0019-scan-product-parity.md`,
   `checklist.md`, and this item. Execution owner: Codex on
-  `codex/hephaestus-backend-parity-next`; last update: 2026-07-25.
-- Hosted code-head evidence at `f4c74c3`: CUDA run `30177430115` / job
-  `89728432211` passed in 7m24s, ROCm run `30177430114` / job `89728432299`
-  passed in 6m04s, and Metal run `30177430125` / job `89728432239` passed in
-  6m50s. The AMD and NVIDIA required-device jobs were skipped because hosted
-  GPU labels were unavailable for the pull request; the provider lanes still
-  ran their real feature, warning-denied Clippy, Nextest, doctest, and rustdoc
-  gates. The unrelated `recurseml/analysis` check reported its generic
-  analysis-service failure.
+  `codex/hephaestus-leto-coeus-parity-next`; last update: 2026-07-26.
+- Hosted evidence for the corrected semantics is pending on the final
+  implementation head. The AMD and NVIDIA required-device jobs remain
+  skipped when hosted GPU labels are unavailable; no hardware execution claim
+  is made without those runners.
 
 ## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 

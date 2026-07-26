@@ -1116,7 +1116,7 @@ fn axis_scans_match_leto_reference() {
         return;
     };
     use hephaestus_wgpu::{
-        StridedOperand, cumprod, cumprod_into, cumsum, suffix_sum, suffix_sum_into,
+        StridedOperand, cumsum, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
     };
     use leto::Layout;
 
@@ -1194,41 +1194,44 @@ fn axis_scans_match_leto_reference() {
     .into_vec();
     assert_eq!(got_suffix_sum_allocated, expected_suffix_sum_axis0);
 
-    let cumprod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
-    cumprod_into(
+    let suffix_prod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
+    suffix_prod_into(
         &device,
         input_operand,
         0,
         StridedOperand {
-            buffer: &cumprod_reverse,
+            buffer: &suffix_prod_reverse,
             layout: &layout,
         },
         BlockWidth::DEFAULT,
     )
     .unwrap();
-    let expected_cumprod_reverse = leto_ops::scan_axis::<leto_ops::CumProdOp, _, 2>(
+    let expected_suffix_prod_reverse = leto_ops::scan_axis::<leto_ops::CumProdOp, _, 2>(
         &leto_input.view(),
         0,
         leto_ops::ScanDirection::Reverse,
     )
     .unwrap()
     .into_vec();
-    let mut got_cumprod_reverse = vec![0i32; 6];
+    let mut got_suffix_prod_reverse = vec![0i32; 6];
     device
-        .download(&cumprod_reverse, &mut got_cumprod_reverse)
+        .download(&suffix_prod_reverse, &mut got_suffix_prod_reverse)
         .unwrap();
-    assert_eq!(got_cumprod_reverse, expected_cumprod_reverse);
+    assert_eq!(got_suffix_prod_reverse, expected_suffix_prod_reverse);
 
-    let cumprod_reverse_allocated =
-        cumprod(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
-    let mut got_cumprod_reverse_allocated = vec![0i32; 6];
+    let suffix_prod_reverse_allocated =
+        suffix_prod(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_suffix_prod_reverse_allocated = vec![0i32; 6];
     device
         .download(
-            &cumprod_reverse_allocated,
-            &mut got_cumprod_reverse_allocated,
+            &suffix_prod_reverse_allocated,
+            &mut got_suffix_prod_reverse_allocated,
         )
         .unwrap();
-    assert_eq!(got_cumprod_reverse_allocated, expected_cumprod_reverse);
+    assert_eq!(
+        got_suffix_prod_reverse_allocated,
+        expected_suffix_prod_reverse
+    );
 }
 
 #[test]
@@ -1261,7 +1264,7 @@ fn cumprod_convenience_preserves_strided_and_empty_contract() {
     .unwrap();
     let mut got = [0_i32; 6];
     device.download(&output, &mut got).unwrap();
-    assert_eq!(got, [15, 15, 5, 48, 24, 6]);
+    assert_eq!(got, [1, 3, 15, 2, 8, 48]);
 
     let allocated = cumprod(
         &device,
@@ -1275,7 +1278,7 @@ fn cumprod_convenience_preserves_strided_and_empty_contract() {
     .unwrap();
     let mut got_allocated = [0_i32; 6];
     device.download(&allocated, &mut got_allocated).unwrap();
-    assert_eq!(got_allocated, [2, 12, 30, 2, 4, 6]);
+    assert_eq!(got_allocated, [1, 3, 5, 2, 12, 30]);
 
     let empty = device.alloc_zeroed::<i32>(0).unwrap();
     let empty_layout = Layout::c_contiguous([2, 0]).unwrap();

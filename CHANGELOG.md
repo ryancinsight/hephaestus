@@ -65,10 +65,11 @@ Target release: 0.18.0.
   the native Metal-selected WGPU path and returns typed Metal buffers.
 
 - [minor] Complete rank-2 cumulative-product scan convenience parity across
-  WGPU, CUDA, ROCm, and Metal. Every backend now exposes `cumprod` and
-  `cumprod_into` over strided operands with the established reverse-product
-  direction, and the CUDA/ROCm/Metal CI contracts cover both output forms,
-  non-contiguous layouts, empty inputs, and invalid layouts.
+  WGPU, CUDA, ROCm, and Metal. Every backend exposes forward `cumprod` and
+  `cumprod_into` plus reverse `suffix_prod` and `suffix_prod_into` over
+  strided operands, matching the Leto direction contract; provider contracts
+  cover both output forms, both directions, non-contiguous layouts, empty
+  inputs, and invalid layouts.
 
 - [minor] Add reusable prepared dot-product and L2-norm plans to CUDA, ROCm,
   and Metal with the WGPU contract as the parity baseline. CUDA and ROCm
