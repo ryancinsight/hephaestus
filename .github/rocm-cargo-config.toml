@@ -6,4 +6,5 @@ hermes-simd-macros = { path = "/workspace/hermes/crates/hermes-simd-macros" }
 hermes-simd-types = { path = "/workspace/hermes/crates/hermes-simd-types" }
 
 [patch."https://github.com/ryancinsight/Mnemosyne.git"]
+mnemosyne = { path = "/workspace/mnemosyne/crates/mnemosyne" }
 mnemosyne-core = { path = "/workspace/mnemosyne/crates/mnemosyne-core" }
