@@ -2,6 +2,7 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
+use crate::application::decomposition::validate::validate_dense_operand;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -134,4 +135,17 @@ pub fn col_piv_qr(
         m: rows,
         n: cols,
     })
+}
+
+/// Compute column-pivoted QR for a dense C-contiguous matrix.
+///
+/// This entry point preserves the blocked decomposition contract shared by
+/// the provider backends. WGPU reuses the existing column-pivoted
+/// implementation after validating the dense bulk-copy precondition.
+pub fn col_piv_qr_blocked(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<GpuColPivQrDecomposition> {
+    validate_dense_operand("column-pivoted QR", &matrix)?;
+    col_piv_qr(device, matrix)
 }

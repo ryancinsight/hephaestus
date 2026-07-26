@@ -2,6 +2,8 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
+#[cfg(feature = "cuda")]
+use crate::application::decomposition::validate::validate_dense_operand;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -114,4 +116,31 @@ pub fn col_piv_qr(
         m: rows,
         n: cols,
     })
+}
+
+/// Compute column-pivoted QR for a dense C-contiguous matrix.
+///
+/// CUDA reuses the existing column-pivoted implementation after enforcing
+/// the dense bulk-copy precondition used by the blocked provider contract.
+pub fn col_piv_qr_blocked(
+    device: &CudaDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<GpuColPivQrDecomposition> {
+    #[cfg(feature = "cuda")]
+    {
+        matrix
+            .layout
+            .validate_storage_len(matrix.buffer.len())
+            .map_err(map_layout_err)?;
+        validate_dense_operand("column-pivoted QR", &matrix)?;
+        col_piv_qr(device, matrix)
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (device, matrix);
+        Err(HephaestusError::AdapterUnavailable {
+            message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+        })
+    }
 }

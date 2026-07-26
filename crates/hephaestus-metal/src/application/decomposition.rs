@@ -120,6 +120,18 @@ pub fn col_piv_qr(
     )
 }
 
+/// Blocked column-pivoted QR decomposition for a dense C-contiguous matrix.
+#[inline]
+pub fn col_piv_qr_blocked(
+    device: &MetalDevice,
+    matrix: crate::application::strided::StridedOperand<'_, f32, 2>,
+) -> Result<GpuColPivQrDecomposition> {
+    wgpu_backend::col_piv_qr_blocked(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(matrix),
+    )
+}
+
 /// Full-pivoted LU decomposition.
 #[inline]
 pub fn full_piv_lu(
@@ -127,6 +139,18 @@ pub fn full_piv_lu(
     matrix: crate::application::strided::StridedOperand<'_, f32, 2>,
 ) -> Result<GpuFullPivLuDecomposition> {
     wgpu_backend::full_piv_lu(
+        &device.inner,
+        crate::application::strided::to_wgpu_strided(matrix),
+    )
+}
+
+/// Blocked complete-pivoted LU decomposition for a dense C-contiguous matrix.
+#[inline]
+pub fn full_piv_lu_blocked(
+    device: &MetalDevice,
+    matrix: crate::application::strided::StridedOperand<'_, f32, 2>,
+) -> Result<GpuFullPivLuDecomposition> {
+    wgpu_backend::full_piv_lu_blocked(
         &device.inner,
         crate::application::strided::to_wgpu_strided(matrix),
     )

@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-BLOCKED-PIVOTED-1 [minor] — in-progress
+
+- [ ] Add blocked complete-pivot LU and blocked column-pivoted QR exports to
+      WGPU and CUDA with the dense C-contiguous validation contract.
+- [ ] Add Metal-owned delegation wrappers and crate-root exports for both
+      blocked pivoted decomposition operations.
+- [ ] Add WGPU, CUDA, ROCm, and Metal value-semantic contracts for dense
+      factor parity and non-dense rejection.
+- [ ] Synchronize the ADR, README, changelog, backlog, and checklist, then
+      run the CUDA, ROCm, and macOS Metal CI gates.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-6`; claimed
+files: backend decomposition modules and exports, provider contract tests,
+affected documentation, ADR 0024, and no workflow changes unless the
+existing provider lanes fail to collect the new contracts; status:
+in-progress.
+
 ## HEPH-BACKEND-PARITY-METAL-EXP-NEG-1 [minor] — done
 
 - [x] Export `ExpNegOp` from the Metal elementwise surface.

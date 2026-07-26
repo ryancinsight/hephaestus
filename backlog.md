@@ -4,6 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-BLOCKED-PIVOTED-1 [minor] — in-progress
+
+- Owner: Codex; scope: expose blocked complete-pivot LU and blocked
+  column-pivoted QR with the same dense C-contiguous contract on WGPU, CUDA,
+  ROCm, and Metal. New pivoting algorithms, fallback paths, and unrelated
+  decomposition families are non-goals.
+- Acceptance: all four backend roots export `full_piv_lu_blocked` and
+  `col_piv_qr_blocked`; dense inputs produce the same factor values,
+  permutations, ranks, and solve contracts as the corresponding ordinary
+  entry points; non-dense inputs are rejected with the typed dense-layout
+  error; WGPU, CUDA, ROCm, and macOS Metal provider CI passes.
+- Claimed files: backend decomposition modules and exports, provider contract
+  tests, README, CHANGELOG, `docs/adr/0024-blocked-pivoted-parity.md`,
+  `checklist.md`, and this item. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next-6`; status: in-progress; started:
+  2026-07-25.
+
 ## HEPH-BACKEND-PARITY-METAL-EXP-NEG-1 [minor] — done
 
 - Owner: Codex; scope: expose the existing fused `ExpNegOp` (`exp(-x)`) marker

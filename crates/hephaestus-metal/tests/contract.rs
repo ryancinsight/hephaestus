@@ -15,8 +15,6 @@ use hephaestus_core::{
     HephaestusError, KernelDevice, KernelInterface, KernelSource, MultiStorageKernel, Result,
     UnaryStorageKernel, Wgsl,
 };
-#[cfg(feature = "decomposition")]
-use hephaestus_metal::MatrixDecompose;
 use hephaestus_metal::{
     AddOp, ExpNegOp, ExpOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
     MatrixSolve, MaxOp, MetalBinaryStorageKernel, MetalDevice, MetalMultiStorageKernel,
@@ -26,6 +24,10 @@ use hephaestus_metal::{
     prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
     prepare_sum_axis_into, reduction, scalar_elementwise, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, unary_elementwise, unary_elementwise_into, uniform_with_seed,
+};
+#[cfg(feature = "decomposition")]
+use hephaestus_metal::{
+    MatrixDecompose, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
 };
 use leto::Layout;
 
@@ -1112,6 +1114,80 @@ fn fluent_matrix_decomposition_uses_metal_selected_device() {
     };
     let lu = operand.lu(&device).unwrap();
     assert!((lu.det() - 11.0).abs() <= 8.0 * f32::EPSILON);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_pivoted_decompositions_match_ordinary_contracts() {
+    let Some(device) = device("blocked_pivoted_decompositions_match_ordinary_contracts") else {
+        return;
+    };
+
+    let square = device.upload(&[2.0f32, 5.0, 1.0, 2.0]).unwrap();
+    let square_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let square_operand = StridedOperand {
+        buffer: &square,
+        layout: &square_layout,
+    };
+    let ordinary_lu = full_piv_lu(&device, square_operand).unwrap();
+    let blocked_lu = full_piv_lu_blocked(&device, square_operand).unwrap();
+    assert_eq!(blocked_lu.rank(), ordinary_lu.rank());
+    assert_eq!(blocked_lu.row_permutation(), ordinary_lu.row_permutation());
+    assert_eq!(blocked_lu.col_permutation(), ordinary_lu.col_permutation());
+    assert!((blocked_lu.det() - ordinary_lu.det()).abs() <= 1.0e-5);
+
+    let tall = device.upload(&[1.0f32, 0.0, 0.0, 2.0, 0.0, 0.0]).unwrap();
+    let tall_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let tall_operand = StridedOperand {
+        buffer: &tall,
+        layout: &tall_layout,
+    };
+    let ordinary_qr = col_piv_qr(&device, tall_operand).unwrap();
+    let blocked_qr = col_piv_qr_blocked(&device, tall_operand).unwrap();
+    assert_eq!(blocked_qr.rank(), ordinary_qr.rank());
+    assert_eq!(blocked_qr.permutation(), ordinary_qr.permutation());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+    let Some(device) = device("blocked_pivoted_decompositions_reject_non_dense_operands") else {
+        return;
+    };
+    let dense = device.upload(&[1.0f32; 16]).unwrap();
+    let small = device.upload(&[1.0f32; 4]).unwrap();
+    let transposed = Layout::new([4, 4], [1, 4], 0);
+    let broadcast = Layout::new([4, 4], [0, 1], 0);
+
+    for (name, result) in [
+        (
+            "complete-pivoted LU",
+            full_piv_lu_blocked(
+                &device,
+                StridedOperand {
+                    buffer: &dense,
+                    layout: &transposed,
+                },
+            ),
+        ),
+        (
+            "column-pivoted QR",
+            col_piv_qr_blocked(
+                &device,
+                StridedOperand {
+                    buffer: &small,
+                    layout: &broadcast,
+                },
+            ),
+        ),
+    ] {
+        assert!(matches!(
+            result,
+            Err(HephaestusError::DispatchFailed { message })
+                if message.contains("dense C-contiguous"),
+            "{name} must reject non-dense operands"
+        ));
+    }
 }
 
 #[test]
