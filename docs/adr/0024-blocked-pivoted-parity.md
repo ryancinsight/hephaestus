@@ -46,3 +46,11 @@ assert typed dense-layout rejection for transposed, offset, and broadcast
 views. CUDA, ROCm, and macOS Metal CI run the feature, warning-denied Clippy,
 Nextest, doctest, and rustdoc gates; hosted NVIDIA and AMD jobs remain
 hardware evidence only when their labels are available.
+
+The implementation head `5314522` passed the CUDA feature and adapterless
+contracts (run `30182486511`, job `89741393411`, 7m35s), ROCm feature and
+adapterless contracts (run `30182486506`, job `89741368781`, 5m53s), and
+macOS Metal contracts (run `30182486494`, job `89741368870`, 6m14s).
+NVIDIA hardware (job `89741391064`) and AMD hardware (job `89741368976`)
+were skipped because hosted hardware labels were unavailable; no hardware
+execution claim is made.
