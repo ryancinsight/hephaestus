@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-METAL-REDUCE-INTO-1 [minor] — in-progress
+
+- [ ] Export Metal's existing `reduce_axis_into` operation from the crate
+      root.
+- [ ] Add a Metal direct output-buffer contract against the CPU axis-sum
+      reference.
+- [ ] Synchronize the ADR, README, changelog, backlog, and checklist, then
+      run the CUDA, ROCm, and macOS Metal CI gates.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-7`; claimed
+files: Metal root export and contract test, affected documentation, ADR 0025,
+and no workflow changes; status: in-progress.
+
 ## HEPH-BACKEND-PARITY-BLOCKED-PIVOTED-1 [minor] — done
 
 - [x] Add blocked complete-pivot LU and blocked column-pivoted QR exports to
