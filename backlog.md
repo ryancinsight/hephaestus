@@ -4,6 +4,28 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-METAL-REDUCE-INTO-1 [minor] — done
+
+- Owner: Codex; scope: export Metal's existing `reduce_axis_into` operation
+  from the crate root and add a direct value-semantic rank-2 axis-reduction
+  contract matching WGPU, CUDA, and ROCm. New reduction kernels, fallback
+  paths, and unrelated reduction APIs are non-goals.
+- Acceptance: the four backend roots export `reduce_axis_into`; Metal's
+  output-buffer path produces the CPU-reference axis result; Metal provider
+  CI passes.
+- Verification: implementation head `a8ad020` passed CUDA feature and
+  adapterless contracts (run `30183081825`, job `89742932396`, 7m31s), ROCm
+  feature and adapterless contracts (run `30183081834`, job `89742932370`,
+  5m53s), and macOS Metal contracts (run `30183081848`, job `89742932459`,
+  4m57s). NVIDIA hardware (job `89742932642`) and AMD hardware (job
+  `89742932594`) were skipped because hosted hardware labels were unavailable;
+  no hardware execution claim is made. RecurseML reported a generic analysis
+  service error without a source diagnostic.
+- Claimed files: Metal root export and contract test, README, CHANGELOG,
+  `docs/adr/0025-metal-reduce-into-parity.md`, `checklist.md`, and this item.
+  Execution owner: Codex on `codex/hephaestus-backend-parity-next-7`;
+  completed: 2026-07-26.
+
 ## HEPH-BACKEND-PARITY-BLOCKED-PIVOTED-1 [minor] — done
 
 - Owner: Codex; scope: expose blocked complete-pivot LU and blocked

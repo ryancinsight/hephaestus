@@ -22,8 +22,9 @@ use hephaestus_metal::{
     SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
     normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, reduction, scalar_elementwise, submit_prepared_axis_reduction_batch,
-    submit_prepared_reduction_batch, unary_elementwise, unary_elementwise_into, uniform_with_seed,
+    prepare_sum_axis_into, reduce_axis_into, reduction, scalar_elementwise,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, unary_elementwise,
+    unary_elementwise_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_metal::{
@@ -783,6 +784,37 @@ fn reduction_sum_matches_cpu_reference() {
     let mut host_out = [0.0f32; 1];
     d.download(&out, &mut host_out).unwrap();
     assert_eq!(host_out[0], 10.0);
+}
+
+#[test]
+fn reduction_axis_into_matches_cpu_reference() {
+    let Some(d) = device("reduction_axis_into_matches_cpu_reference") else {
+        return;
+    };
+
+    let input = d.upload(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let input_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let output = d.alloc_zeroed::<f32>(3).unwrap();
+    let output_layout = Layout::c_contiguous([1, 3]).unwrap();
+
+    reduce_axis_into::<SumOp, f32>(
+        &d,
+        StridedOperand {
+            buffer: &input,
+            layout: &input_layout,
+        },
+        0,
+        StridedOperand {
+            buffer: &output,
+            layout: &output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = [0.0f32; 3];
+    d.download(&output, &mut got).unwrap();
+    assert_eq!(got, [5.0, 7.0, 9.0]);
 }
 
 #[test]
