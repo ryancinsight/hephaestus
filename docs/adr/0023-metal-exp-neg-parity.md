@@ -31,6 +31,10 @@ do not add a Metal-specific shader or duplicate the WGPU operation family.
 ## Verification
 
 The Metal contract compares `ExpNegOp` with the CPU `(-x).exp()` oracle and the
-`NegOp` then `ExpOp` composition. CUDA, ROCm, and macOS Metal provider CI run
-the feature, warning-denied, Nextest, doctest, and rustdoc gates for the
-resulting public surface.
+`NegOp` then `ExpOp` composition. Code head `f8abf64` passed the CUDA feature
+and adapterless lane (run `30181256267`, job `89738055998`, 8m07s), ROCm
+feature and adapterless lane (run `30181256264`, job `89738055911`, 5m50s),
+and macOS Metal lane (run `30181256288`, job `89738056078`, 4m59s). NVIDIA
+hardware job `89738056588` and AMD hardware job `89738056328` were skipped
+because hosted hardware labels were unavailable; those skips remain an
+explicit hardware evidence limitation.
