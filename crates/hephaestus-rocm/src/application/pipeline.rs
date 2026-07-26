@@ -235,18 +235,16 @@ mod native {
     use crate::RocmDevice;
     use crate::infrastructure::device::{HIP_SUCCESS, RocmContext, check_status};
     use core::ffi::{c_char, c_void};
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::ffi::{CStr, CString};
     use std::ptr;
-    use std::rc::Rc;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
-    /// Cache confined to the thread that owns the HIP current-device binding.
-    pub(crate) type PipelineCache = Rc<RefCell<HashMap<PipelineKey, Rc<RocmKernel>>>>;
+    /// Synchronized cache of kernels compiled for one HIP device context.
+    pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, Arc<RocmKernel>>>>;
 
     pub(crate) fn new_cache() -> PipelineCache {
-        Rc::new(RefCell::new(HashMap::new()))
+        Arc::new(Mutex::new(HashMap::new()))
     }
 
     /// A loaded HIP module and its entry point, owned by the device cache.
@@ -255,6 +253,15 @@ mod native {
         function: cubecl_hip_sys::hipFunction_t,
         context: Arc<RocmContext>,
     }
+
+    // SAFETY: HIP module and function handles are process-owned opaque
+    // handles. Every operation binds `context` on the calling thread before
+    // using them, and destruction performs the same rebinding.
+    unsafe impl Send for RocmKernel {}
+    // SAFETY: Kernel launches use the thread-local HIP device binding and the
+    // immutable handles are safe to share; cache mutation is guarded by its
+    // surrounding `Mutex`.
+    unsafe impl Sync for RocmKernel {}
 
     impl Drop for RocmKernel {
         fn drop(&mut self) {
@@ -410,8 +417,13 @@ mod native {
         key: PipelineKey,
         func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
-        if let Some(kernel) = device.pipeline_cache.borrow().get(&key) {
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+        if let Some(kernel) = device
+            .pipeline_cache
+            .lock()
+            .expect("ROCm pipeline cache mutex is not poisoned")
+            .get(&key)
+        {
             return Ok(kernel.clone());
         }
 
@@ -451,12 +463,15 @@ mod native {
                 ),
             });
         }
-        let compiled = Rc::new(RocmKernel {
+        let compiled = Arc::new(RocmKernel {
             module,
             function,
             context: device.context.clone(),
         });
-        let mut cache = device.pipeline_cache.borrow_mut();
+        let mut cache = device
+            .pipeline_cache
+            .lock()
+            .expect("ROCm pipeline cache mutex is not poisoned");
         let kernel = cache.entry(key).or_insert_with(|| compiled.clone());
         Ok(kernel.clone())
     }
@@ -497,14 +512,14 @@ pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel,
 mod unavailable {
     use super::{LaunchConfig, PipelineKey};
     use crate::RocmDevice;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     pub(crate) fn cached_kernel(
         _device: &RocmDevice,
         _key: PipelineKey,
         _func_name: &str,
         source: impl FnOnce() -> String,
-    ) -> hephaestus_core::Result<Rc<RocmKernel>> {
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
         let _ = (source,);
         Err(hephaestus_core::HephaestusError::AdapterUnavailable {
             message:

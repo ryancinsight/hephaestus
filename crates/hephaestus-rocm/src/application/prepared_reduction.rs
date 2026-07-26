@@ -1,6 +1,6 @@
 //! Reusable scalar reduction plans for ROCm.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -16,7 +16,7 @@ use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
 
 struct PreparedPass {
-    kernel: Rc<RocmKernel>,
+    kernel: Arc<RocmKernel>,
     groups: u32,
     input_len: u32,
 }
@@ -77,7 +77,7 @@ impl<'a, T> PreparedReductionPlan<'a, T> {
             let output_len = current_len.div_ceil(width.get() as usize);
             let output = device.alloc_zeroed::<T>(output_len)?;
             passes.push(PreparedPass {
-                kernel: Rc::clone(&kernel),
+                kernel: Arc::clone(&kernel),
                 groups,
                 input_len: u32::try_from(current_len).map_err(|_| {
                     hephaestus_core::HephaestusError::DispatchFailed {
