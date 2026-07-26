@@ -2,6 +2,24 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-PARITY-MATRIX-1 [patch] — done
+
+- [x] Audit lowercase application-operation exports from the WGPU, CUDA, ROCm,
+      and Metal crate roots.
+- [x] Confirm every WGPU baseline operation is exported by CUDA, ROCm, and
+      Metal, while retaining CUDA's intentional dynamic-rank consumer helpers
+      as provider-specific extras.
+- [x] Record the exact public-surface scan and final provider CI evidence in
+      `gap_audit.md`, then close the parity task.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-8`; claimed
+files: `gap_audit.md`, this checklist item, and no source changes; status:
+done. Fresh `origin/master` at `0350838` exposes 93 common lowercase
+operations. Final docs-head `2b9f162` passed CUDA run `30183321092` / job
+`89743580678` (7m25s), ROCm run `30183321132` / job `89743580809` (5m08s),
+and macOS Metal run `30183321100` / job `89743580707` (5m30s). NVIDIA and AMD
+hardware jobs were skipped because hosted hardware labels were unavailable.
+
 ## HEPH-BACKEND-PARITY-METAL-REDUCE-INTO-1 [minor] — done
 
 - [x] Export Metal's existing `reduce_axis_into` operation from the crate
