@@ -11,8 +11,8 @@ pub mod application;
 pub mod infrastructure;
 
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp, SinOp,
-    SqrtOp, SubOp, binary_elementwise, binary_elementwise_into, scalar_elementwise,
+    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp,
+    SinOp, SqrtOp, SubOp, binary_elementwise, binary_elementwise_into, scalar_elementwise,
     scalar_elementwise_into, unary_elementwise, unary_elementwise_into,
 };
 pub use application::linalg::{

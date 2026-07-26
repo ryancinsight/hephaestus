@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Export Metal's existing generic unary dispatch for the shared fused
+  `ExpNegOp` (`exp(-x)`) marker, with CPU and composed-kernel differential
+  contracts matching WGPU, CUDA, and ROCm.
+
 - [minor] Add Metal-owned storage-kernel and authored-kernel stream wrappers,
   including grouped sequencing, device copies, prefix copies, and zero fill.
   The wrappers preserve the WGPU, CUDA, and ROCm core contracts while
