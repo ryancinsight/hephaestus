@@ -248,6 +248,35 @@ where
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
 }
 
+/// Reverse cumulative sum over a rank-2 strided operand along `axis`.
+#[inline]
+pub fn suffix_sum_into<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, HipC>,
+{
+    scan_axis_into::<CumSumOp, T>(device, input, axis, ScanDirection::Reverse, output, width)
+}
+
+/// Reverse cumulative sum over a rank-2 strided operand, allocating output.
+#[inline]
+pub fn suffix_sum<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<RocmBuffer<T>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, HipC>,
+{
+    scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Reverse, width)
+}
+
 /// Reverse cumulative product over a rank-2 strided operand along `axis`.
 #[inline]
 pub fn cumprod_into<T>(

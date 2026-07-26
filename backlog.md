@@ -4,6 +4,20 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: rank-2 `suffix_sum`/`suffix_sum_into` exports and
+  provider contracts in WGPU, CUDA, ROCm, and Metal. Coeus consumer routing is
+  tracked in `ATLAS-HEPHAESTUS-SCAN-001` in the Coeus repository.
+- Non-goals: dynamic-rank scan expansion and unrelated Leto operation families.
+- Acceptance: all four roots expose the same suffix-sum API, each provider
+  delegates to the shared reverse cumulative-sum kernel, and each contract
+  compares allocated and caller-owned outputs with the Leto CPU oracle.
+- Risk/change class: `[minor]` additive provider surface.
+- Status: implementation and local formatting complete; provider compilation
+  is blocked by the current checkout's Leto/Hermes source-identity mismatch;
+  hosted provider CI is required for closure.
+
 ## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch] — done
 
 - Owner: Codex; scope: standalone WGPU provider CI, CUDA decomposition feature

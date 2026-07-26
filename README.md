@@ -71,10 +71,11 @@ register each package's Trusted Publisher with that environment.
   Apple Metal path; it does not silently fall back to CPU, Vulkan, or another
   WGPU adapter.
 - The four backends expose one rank-2 scan convenience surface: `cumsum` and
-  `cumsum_into` use forward accumulation, while `cumprod` and `cumprod_into`
-  use the established reverse-product convention. WGPU, CUDA, and ROCm use
-  their backend-native scan kernels; Metal delegates the same contract through
-  its native Metal-selected WGPU device.
+  `cumsum_into` use forward accumulation, `suffix_sum` and `suffix_sum_into`
+  use reverse cumulative addition, and `cumprod` and `cumprod_into` use the
+  established reverse-product convention. WGPU, CUDA, and ROCm use their
+  backend-native scan kernels; Metal delegates the same contract through its
+  native Metal-selected WGPU device.
 - Seeded uniform and normal initializers use one deterministic `leto-ops`
   value contract across all four backends. Metal delegates generation through
   its native Metal-selected WGPU device and owns the returned `MetalBuffer<T>`.

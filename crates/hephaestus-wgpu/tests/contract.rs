@@ -1115,7 +1115,9 @@ fn axis_scans_match_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{StridedOperand, cumprod, cumprod_into, cumsum};
+    use hephaestus_wgpu::{
+        StridedOperand, cumprod, cumprod_into, cumsum, suffix_sum, suffix_sum_into,
+    };
     use leto::Layout;
 
     let host = vec![1i32, 2, 3, 4, 5, 6];
@@ -1152,6 +1154,45 @@ fn axis_scans_match_leto_reference() {
         .download(&cumsum_allocated, &mut got_cumsum_allocated)
         .unwrap();
     assert_eq!(got_cumsum_allocated, expected_cumsum_axis1);
+
+    let suffix_sum_axis1 = device.alloc_zeroed::<i32>(6).unwrap();
+    suffix_sum_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &suffix_sum_axis1,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_suffix_sum_axis1 = leto_ops::scan_axis::<leto_ops::CumSumOp, _, 2>(
+        &leto_input.view(),
+        1,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    let mut got_suffix_sum_axis1 = vec![0i32; 6];
+    device
+        .download(&suffix_sum_axis1, &mut got_suffix_sum_axis1)
+        .unwrap();
+    assert_eq!(got_suffix_sum_axis1, expected_suffix_sum_axis1);
+
+    let suffix_sum_allocated = suffix_sum(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_suffix_sum_allocated = vec![0i32; 6];
+    device
+        .download(&suffix_sum_allocated, &mut got_suffix_sum_allocated)
+        .unwrap();
+    let expected_suffix_sum_axis0 = leto_ops::scan_axis::<leto_ops::CumSumOp, _, 2>(
+        &leto_input.view(),
+        0,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    assert_eq!(got_suffix_sum_allocated, expected_suffix_sum_axis0);
 
     let cumprod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
     cumprod_into(

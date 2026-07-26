@@ -26,9 +26,9 @@ use hephaestus_rocm::{
     prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
     reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
     scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, trace,
-    unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_sum,
+    suffix_sum_into, sum_axis, trace, unary_elementwise, unary_elementwise_strided,
+    unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
@@ -1233,6 +1233,33 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         .download(&reverse, &mut reverse_output)
         .expect("HIP reverse scan download");
     assert_eq!(reverse_output, [10, 9, 7, 4, 26, 21, 15, 8]);
+
+    let suffix = suffix_sum(&device, input_operand, 1, width).expect("HIP suffix sum");
+    let mut suffix_output = [0_i32; 8];
+    device
+        .download(&suffix, &mut suffix_output)
+        .expect("HIP suffix sum download");
+    assert_eq!(suffix_output, reverse_output);
+
+    let suffix_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned suffix output");
+    suffix_sum_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &suffix_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned suffix sum");
+    let mut suffix_into_output = [0_i32; 8];
+    device
+        .download(&suffix_into, &mut suffix_into_output)
+        .expect("HIP caller-owned suffix download");
+    assert_eq!(suffix_into_output, [6, 8, 10, 12, 5, 6, 7, 8]);
 
     let column_scan = cumsum(&device, input_operand, 0, width).expect("HIP column scan");
     let mut column_output = [0_i32; 8];

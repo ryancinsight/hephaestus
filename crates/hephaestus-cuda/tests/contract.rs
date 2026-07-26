@@ -16,8 +16,8 @@ use hephaestus_cuda::{
     prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
     prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduce_axis, reduction,
     reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, trace,
-    unary_elementwise, unary_elementwise_into,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_sum,
+    suffix_sum_into, trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -1269,6 +1269,58 @@ fn scan_scan_axis_matches_cpu() {
     let mut got = vec![0.0f32; 4];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![1.0, 3.0, 3.0, 7.0]);
+}
+
+#[test]
+fn scan_suffix_sum_matches_leto_for_allocated_and_caller_owned_outputs() {
+    let Some(dev) = device("scan_suffix_sum_matches_leto_for_allocated_and_caller_owned_outputs")
+    else {
+        return;
+    };
+
+    let host = vec![1i32, 2, 3, 4, 5, 6];
+    let input = dev.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let expected = leto_ops::scan_axis::<leto_ops::CumSumOp, _, 2>(
+        &leto::Array::from_shape_vec([2, 3], host).unwrap().view(),
+        1,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+
+    let allocated = suffix_sum(
+        &dev,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = vec![0i32; expected.len()];
+    dev.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, expected);
+
+    let output = dev.alloc_zeroed::<i32>(expected.len()).unwrap();
+    suffix_sum_into(
+        &dev,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &output,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_into = vec![0i32; expected.len()];
+    dev.download(&output, &mut got_into).unwrap();
+    assert_eq!(got_into, expected);
 }
 
 #[test]

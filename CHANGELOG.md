@@ -26,6 +26,9 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add allocated and caller-owned rank-2 `suffix_sum` operations to
+  WGPU, CUDA, ROCm, and Metal over the shared reverse `CumSumOp` scan kernel.
+
 - [patch] Add a standalone Linux WGPU feature-and-contract CI lane covering
   minimal and default surfaces; make CUDA's `decomposition` feature include
   the CUDA substrate required by its decomposition kernels.
