@@ -2,13 +2,13 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-BACKEND-PARITY-METAL-AUTHORED-1 [minor] — in-progress
+## HEPH-BACKEND-PARITY-METAL-AUTHORED-1 [minor] — done
 
-- [ ] Add Metal-owned authored-kernel command streams for ordinary and grouped
+- [x] Add Metal-owned authored-kernel command streams for ordinary and grouped
       dispatch, device copies, prefix copies, zero fill, and grouped sequences.
-- [ ] Add Metal-owned multi-storage, unary, and binary storage-kernel wrappers
+- [x] Add Metal-owned multi-storage, unary, and binary storage-kernel wrappers
       with typed binding-layout validation over Metal buffers.
-- [ ] Add value-semantic Metal contracts for stream ordering, grouped output,
+- [x] Add value-semantic Metal contracts for stream ordering, grouped output,
       storage output, and invalid buffer lengths; synchronize the ADR, README,
       changelog, backlog, and checklist before running the Metal CI gates.
 
@@ -16,7 +16,10 @@ Execution owner: Codex on `codex/hephaestus-backend-parity-next-4`; claimed
 files: Metal authored-kernel and storage-kernel modules/exports, Metal
 contract tests, affected documentation, ADR 0022, and no workflow changes
 unless the existing Metal lane fails to collect the new contracts; status:
-in-progress.
+done. Implementation head `d200879` passed CUDA run `30180682356` / job
+`89736582959` (7m39s), ROCm run `30180682371` / job `89736559954` (5m52s),
+and macOS Metal run `30180682365` / job `89736559801` (5m17s). NVIDIA and AMD
+hardware jobs were skipped because hosted hardware labels were unavailable.
 
 ## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — done
 

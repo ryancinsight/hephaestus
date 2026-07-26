@@ -39,8 +39,12 @@ WGPU buffer types through a Metal API.
 
 ## Verification
 
-Metal contract tests will compare authored-kernel and storage-kernel outputs
-with explicit value assertions, including grouped ordering and invalid-length
-rejection. The Metal CI lane will run the real feature build, warning-denied
-Clippy, Nextest, doctest, and rustdoc; unavailable hosted hardware remains a
-hardware-evidence limitation rather than a provider-lane pass claim.
+Metal contract tests compare authored-kernel and storage-kernel outputs with
+explicit value assertions, including grouped ordering and invalid-length
+rejection. Implementation head `d200879` passed the CUDA feature and
+adapterless lane (run `30180682356`, job `89736582959`, 7m39s), ROCm feature
+and adapterless lane (run `30180682371`, job `89736559954`, 5m52s), and macOS
+Metal lane (run `30180682365`, job `89736559801`, 5m17s). NVIDIA hardware job
+`89736583231` and AMD hardware job `89736560290` were skipped because hosted
+hardware labels were unavailable; those skips remain an explicit hardware
+evidence limitation.
