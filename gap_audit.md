@@ -124,6 +124,22 @@ architectural decision or a tracked future-work item:
 
 ## Resolved
 
+- [HEPH-BACKEND-PARITY-MATRIX-1] [patch] The four backend crate roots now
+  expose the same 93-operation common baseline across elementwise, fixed-rank
+  strided, reduction, scan, linalg, sparse, volume, stencil, seeded-random,
+  and decomposition families. The scan ran against fresh `origin/master`
+  `0350838` and compared lowercase operation exports from each root's
+  `pub use application` surface. CUDA's
+  `binary_elementwise_strided_dyn_into` and
+  `unary_elementwise_strided_dyn_into` remain intentional provider-specific
+  runtime-shaped consumer helpers, not missing common operations. No WGPU
+  baseline operation is absent from CUDA, ROCm, or Metal. Final docs-head
+  `2b9f162` passed CUDA run `30183321092` / job `89743580678` (7m25s), ROCm
+  run `30183321132` / job `89743580809` (5m08s), and macOS Metal run
+  `30183321100` / job `89743580707` (5m30s). NVIDIA and AMD hardware jobs
+  were skipped because hosted hardware labels were unavailable; no hardware
+  execution claim is made.
+
 - [HEPH-DOWNLEVEL-ACQUISITION-2] [patch] Typed device acquisition now uses
   WGPU's downlevel descriptor as the baseline before applying mapped
   `DeviceLimits`. Raising a mapped field therefore retains every unmapped

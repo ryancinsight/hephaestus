@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-MATRIX-1 [patch] — done
+
+- Owner: Codex; scope: audit the four backend crate-root operation surfaces
+  after the Metal output-buffer reduction closure. Common capability is
+  defined by lowercase operation exports from the application modules;
+  provider-specific types and CUDA runtime-shaped consumer helpers are
+  excluded from the common baseline.
+- Acceptance: WGPU, CUDA, ROCm, and Metal share every operation in the common
+  baseline; the scan reports no missing WGPU baseline operation; provider CI
+  passes on the exact documented head.
+- Verification: fresh `origin/master` at `0350838` exposes 93 common lowercase
+  operations across all four roots. CUDA additionally exposes the intentional
+  dynamic-rank helpers `binary_elementwise_strided_dyn_into` and
+  `unary_elementwise_strided_dyn_into`; no WGPU baseline operation is missing
+  from CUDA, ROCm, or Metal. Final docs-head `2b9f162` passed CUDA run
+  `30183321092` / job `89743580678` (7m25s), ROCm run `30183321132` / job
+  `89743580809` (5m08s), and macOS Metal run `30183321100` / job
+  `89743580707` (5m30s). NVIDIA and AMD hardware jobs were skipped because
+  hosted hardware labels were unavailable.
+- Claimed files: `gap_audit.md`, `checklist.md`, and this item. Execution
+  owner: Codex on `codex/hephaestus-backend-parity-next-8`; completed:
+  2026-07-26.
+
 ## HEPH-BACKEND-PARITY-METAL-REDUCE-INTO-1 [minor] — done
 
 - Owner: Codex; scope: export Metal's existing `reduce_axis_into` operation
