@@ -2,7 +2,7 @@
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
-use crate::application::decomposition::validate::validate_square;
+use crate::application::decomposition::validate::{validate_dense_operand, validate_square};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -151,4 +151,20 @@ pub fn full_piv_lu(
         rank,
         n,
     })
+}
+
+/// Compute complete-pivoted LU for a dense C-contiguous matrix.
+///
+/// This entry point preserves the blocked decomposition contract shared by
+/// the provider backends. The current WGPU complete-pivot implementation is
+/// host-delegated, so the dense validation is the only additional contract;
+/// the returned factors and host-side solve methods are identical to
+/// [`full_piv_lu`].
+pub fn full_piv_lu_blocked(
+    device: &WgpuDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<GpuFullPivLuDecomposition> {
+    validate_square(&matrix)?;
+    validate_dense_operand("complete-pivoted LU", &matrix)?;
+    full_piv_lu(device, matrix)
 }

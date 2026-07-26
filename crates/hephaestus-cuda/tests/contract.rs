@@ -3432,6 +3432,61 @@ fn full_piv_lu_matches_leto_reference() {
 
 #[cfg(feature = "decomposition")]
 #[test]
+fn blocked_pivoted_decompositions_match_ordinary_contracts() {
+    let Some(dev) = device("blocked_pivoted_decompositions_match_ordinary_contracts") else {
+        return;
+    };
+    use hephaestus_cuda::{
+        StridedOperand, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
+    };
+    use leto::Layout;
+
+    let square_host = [2.0f32, 5.0, -2.0, 1.0, 2.0, 3.0, -2.0, 4.0, 3.0];
+    let square = dev.upload(&square_host).unwrap();
+    let square_layout = Layout::c_contiguous([3, 3]).unwrap();
+    let square_operand = StridedOperand {
+        buffer: &square,
+        layout: &square_layout,
+    };
+    let ordinary_lu = full_piv_lu(&dev, square_operand).unwrap();
+    let blocked_lu = full_piv_lu_blocked(&dev, square_operand).unwrap();
+    assert_eq!(blocked_lu.rank(), ordinary_lu.rank());
+    assert_eq!(blocked_lu.row_permutation(), ordinary_lu.row_permutation());
+    assert_eq!(blocked_lu.col_permutation(), ordinary_lu.col_permutation());
+    assert_close(blocked_lu.det(), ordinary_lu.det(), 1.0e-5);
+    let mut ordinary_factors = vec![0.0f32; 9];
+    let mut blocked_factors = vec![0.0f32; 9];
+    dev.download(ordinary_lu.lu_buffer(), &mut ordinary_factors)
+        .unwrap();
+    dev.download(blocked_lu.lu_buffer(), &mut blocked_factors)
+        .unwrap();
+    assert_close_slice(&blocked_factors, &ordinary_factors, 1.0e-5, 0.0);
+
+    let tall_host = [1.0f32, 0.0, 0.0, 2.0, 0.0, 0.0];
+    let tall = dev.upload(&tall_host).unwrap();
+    let tall_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let tall_operand = StridedOperand {
+        buffer: &tall,
+        layout: &tall_layout,
+    };
+    let ordinary_qr = col_piv_qr(&dev, tall_operand).unwrap();
+    let blocked_qr = col_piv_qr_blocked(&dev, tall_operand).unwrap();
+    assert_eq!(blocked_qr.rank(), ordinary_qr.rank());
+    assert_eq!(blocked_qr.permutation(), ordinary_qr.permutation());
+    let mut ordinary_q = vec![0.0f32; 9];
+    let mut blocked_q = vec![0.0f32; 9];
+    let mut ordinary_r = vec![0.0f32; 6];
+    let mut blocked_r = vec![0.0f32; 6];
+    dev.download(ordinary_qr.q(), &mut ordinary_q).unwrap();
+    dev.download(blocked_qr.q(), &mut blocked_q).unwrap();
+    dev.download(ordinary_qr.r(), &mut ordinary_r).unwrap();
+    dev.download(blocked_qr.r(), &mut blocked_r).unwrap();
+    assert_close_slice(&blocked_q, &ordinary_q, 1.0e-5, 0.0);
+    assert_close_slice(&blocked_r, &ordinary_r, 1.0e-5, 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
 fn udu_decompose_matches_leto_reference() {
     let Some(dev) = device("udu_decompose_matches_leto_reference") else {
         return;
@@ -3736,6 +3791,24 @@ fn blocked_qr_rejects_non_dense_operands() {
     };
     use hephaestus_cuda::qr_decompose_blocked;
     assert_blocked_rejects_non_dense(&dev, qr_decompose_blocked, "QR");
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+    let Some(dev) = device("blocked_pivoted_decompositions_reject_non_dense_operands") else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(
+        &dev,
+        hephaestus_cuda::full_piv_lu_blocked,
+        "complete-pivoted LU",
+    );
+    assert_blocked_rejects_non_dense(
+        &dev,
+        hephaestus_cuda::col_piv_qr_blocked,
+        "column-pivoted QR",
+    );
 }
 
 #[cfg(feature = "decomposition")]

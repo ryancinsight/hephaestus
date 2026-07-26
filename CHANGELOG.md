@@ -26,6 +26,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Complete blocked complete-pivot LU and blocked column-pivoted QR
+  capability parity across WGPU, CUDA, ROCm, and Metal. Each backend exposes
+  the same dense C-contiguous validation contract and preserves its existing
+  factor, permutation, rank, and host-side solve behavior; provider contracts
+  cover dense value parity and typed rejection of transposed, offset, and
+  broadcast views.
+
 - [minor] Export Metal's existing generic unary dispatch for the shared fused
   `ExpNegOp` (`exp(-x)`) marker, with CPU and composed-kernel differential
   contracts matching WGPU, CUDA, and ROCm.

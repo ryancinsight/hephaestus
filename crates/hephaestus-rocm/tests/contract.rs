@@ -2926,6 +2926,48 @@ fn col_piv_qr_reports_rank_and_rejects_nonfinite_values() {
 
 #[cfg(feature = "decomposition")]
 #[test]
+fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+    let Some(device) = device("blocked_pivoted_decompositions_reject_non_dense_operands") else {
+        return;
+    };
+    let dense = device
+        .upload(&[1.0_f32; 16])
+        .expect("HIP dense blocked pivoted input upload");
+    let small = device
+        .upload(&[1.0_f32; 4])
+        .expect("HIP broadcast blocked pivoted input upload");
+    let transposed = Layout::new([4, 4], [1, 4], 0);
+    let broadcast = Layout::new([4, 4], [0, 1], 0);
+
+    let lu_result = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &dense,
+            layout: &transposed,
+        },
+    );
+    assert!(matches!(
+        lu_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let qr_result = col_piv_qr_blocked(
+        &device,
+        StridedOperand {
+            buffer: &small,
+            layout: &broadcast,
+        },
+    );
+    assert!(matches!(
+        qr_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
 fn bidiagonalization_matches_leto_factors_and_validates_shapes() {
     let Some(device) = device("bidiagonalization_matches_leto_factors_and_validates_shapes") else {
         return;

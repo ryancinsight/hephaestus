@@ -2,6 +2,8 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
+#[cfg(feature = "cuda")]
+use crate::application::decomposition::validate::validate_dense_operand;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -140,4 +142,33 @@ pub fn full_piv_lu(
         rank,
         n: rows,
     })
+}
+
+/// Compute complete-pivoted LU for a dense C-contiguous matrix.
+///
+/// The CUDA complete-pivot implementation remains host-delegated. This
+/// entry point adds the shared blocked-path dense validation and then reuses
+/// the existing factor, permutation, rank, solve, determinant, and inverse
+/// contract.
+pub fn full_piv_lu_blocked(
+    device: &CudaDevice,
+    matrix: StridedOperand<'_, f32, 2>,
+) -> Result<GpuFullPivLuDecomposition> {
+    #[cfg(feature = "cuda")]
+    {
+        matrix
+            .layout
+            .validate_storage_len(matrix.buffer.len())
+            .map_err(map_layout_err)?;
+        validate_dense_operand("complete-pivoted LU", &matrix)?;
+        full_piv_lu(device, matrix)
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (device, matrix);
+        Err(HephaestusError::AdapterUnavailable {
+            message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+        })
+    }
 }
