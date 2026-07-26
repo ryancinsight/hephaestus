@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch]
+
+- [ ] Add a standalone Linux WGPU workflow covering minimal and default
+      feature surfaces with warning-denied Clippy, Nextest, doctests, and
+      rustdoc.
+- [ ] Make CUDA `decomposition` require the CUDA substrate and close the
+      invalid feature combination in the audit.
+- [ ] Synchronize README, changelog, backlog, and checklist evidence.
+- [ ] Run local gates, then all provider workflows on the exact final head.
+
+Execution owner: Codex on `codex/hephaestus-backend-parity-next-9`; claimed
+files: CUDA manifest, WGPU workflow, and affected documentation; status:
+in-progress.
+
 ## HEPH-BACKEND-PARITY-MATRIX-1 [patch] — done
 
 - [x] Audit lowercase application-operation exports from the WGPU, CUDA, ROCm,

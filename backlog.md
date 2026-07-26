@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch] — in-progress
+
+- Owner: Codex; scope: standalone WGPU provider CI, CUDA decomposition feature
+  wiring, and synchronized verification artifacts.
+- Non-goals: new numerical kernels, provider-specific fallbacks, or changes to
+  the established common operation surface.
+- Acceptance: WGPU's default and minimal feature surfaces run the committed
+  warning-denied, Nextest, doctest, and rustdoc gates in CI; CUDA's
+  `decomposition` feature necessarily enables its `cuda` substrate; the four
+  backend operation matrix remains complete; provider CI passes on the exact
+  head.
+- Verification: local format, metadata, feature-graph, and focused package
+  gates where the checkout-local dependency graph permits; WGPU, CUDA, ROCm,
+  and Metal workflow results recorded on the final head.
+- Claimed files: `crates/hephaestus-cuda/Cargo.toml`,
+  `.github/workflows/wgpu.yml`, `README.md`, `CHANGELOG.md`, `backlog.md`,
+  `checklist.md`, and `gap_audit.md`. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next-9`.
+
 ## HEPH-BACKEND-PARITY-MATRIX-1 [patch] — done
 
 - Owner: Codex; scope: audit the four backend crate-root operation surfaces
