@@ -1,6 +1,6 @@
 //! Reusable rank-2 axis reduction plans for ROCm.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{
@@ -22,7 +22,7 @@ pub struct PreparedAxisReduction<'a, T> {
     output: StridedOperand<'a, T, 2>,
     width: BlockWidth,
     dispatch: Option<AxisReductionDispatch>,
-    kernel: Option<Rc<RocmKernel>>,
+    kernel: Option<Arc<RocmKernel>>,
 }
 
 impl<T> PreparedAxisReduction<'_, T> {
@@ -65,7 +65,7 @@ fn prepared_axis_reduction<'a, T>(
     output: StridedOperand<'a, T, 2>,
     width: BlockWidth,
     dispatch: AxisReductionDispatch,
-    kernel: Rc<RocmKernel>,
+    kernel: Arc<RocmKernel>,
 ) -> PreparedAxisReduction<'a, T> {
     PreparedAxisReduction {
         input,

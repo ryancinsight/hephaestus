@@ -1,6 +1,6 @@
 //! Reusable ROCm CSR sparse products.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use bytemuck::Pod;
 use hephaestus_core::{BlockWidth, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
@@ -20,7 +20,7 @@ pub struct PreparedSpmv<'a, T> {
     matrix: &'a GpuCsrMatrix<T>,
     x: &'a RocmBuffer<T>,
     output: &'a RocmBuffer<T>,
-    kernel: Rc<RocmKernel>,
+    kernel: Arc<RocmKernel>,
     width: BlockWidth,
     grid: u32,
     nrows: u32,
@@ -76,7 +76,7 @@ pub struct PreparedSpmm<'a, T> {
     matrix: &'a GpuCsrMatrix<T>,
     rhs: StridedOperand<'a, T, 2>,
     output: &'a RocmBuffer<T>,
-    kernel: Rc<RocmKernel>,
+    kernel: Arc<RocmKernel>,
     width: BlockWidth,
     grid: u32,
     meta: SpmmMeta,
