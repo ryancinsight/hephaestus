@@ -21,6 +21,10 @@ pub mod scan;
 pub mod sparse;
 /// 2D Laplacian stencil delegation.
 pub mod stencil;
+/// Metal-selected storage-kernel dispatch.
+pub mod storage_kernel;
+/// Metal-selected authored-kernel command streams.
+pub mod stream;
 /// Strided layout wrappers.
 pub mod strided;
 /// Volume ray-integral delegation.

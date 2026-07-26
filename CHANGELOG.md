@@ -26,6 +26,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add Metal-owned storage-kernel and authored-kernel stream wrappers,
+  including grouped sequencing, device copies, prefix copies, and zero fill.
+  The wrappers preserve the WGPU, CUDA, and ROCm core contracts while
+  delegating real execution through the native Metal-selected WGPU path, with
+  value-semantic Metal contracts for storage output and stream ordering.
+
 - [minor] Add Metal-owned fluent rank-2 matrix traits matching the WGPU, CUDA,
   and ROCm product, norm, decomposition, solve, property, and function
   contracts. Metal returns typed Metal buffers and retains the existing shared

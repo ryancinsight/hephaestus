@@ -4,6 +4,31 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-BACKEND-PARITY-METAL-AUTHORED-1 [minor] — done
+
+- Owner: Codex; scope: expose Metal-owned authored-kernel command streams and
+  storage-kernel dispatch matching the existing WGPU, CUDA, and ROCm provider
+  seams. New kernel algorithms, a second native `metal-rs` implementation, and
+  unrelated operator families are non-goals.
+- Acceptance: Metal implements `KernelDevice` and
+  `GroupedKernelDevice` with ordered dispatch, copy, prefix-copy, zero-fill,
+  and grouped sequence behavior; Metal exports multi-storage, unary, and
+  binary storage-kernel wrappers with typed binding validation; value-semantic
+  Metal contracts cover dispatch, copy/fill, grouped output, storage output,
+  and invalid lengths; and the existing Metal CI lane runs feature, lint,
+  Nextest, doctest, and rustdoc gates.
+- Verification: implementation head `d200879` passed CUDA feature and
+  adapterless contracts (run `30180682356`, job `89736582959`, 7m39s), ROCm
+  feature and adapterless contracts (run `30180682371`, job `89736559954`,
+  5m52s), and macOS Metal contracts (run `30180682365`, job `89736559801`,
+  5m17s). NVIDIA hardware (job `89736583231`) and AMD hardware (job
+  `89736560290`) were skipped because hosted hardware labels were unavailable;
+  no hardware execution claim is made.
+- Claimed files: Metal authored-kernel and storage-kernel modules/exports,
+  Metal contract tests, README, CHANGELOG, `docs/adr/0022-metal-authored-kernel-parity.md`,
+  `checklist.md`, and this item. Execution owner: Codex on
+  `codex/hephaestus-backend-parity-next-4`; completed: 2026-07-25.
+
 ## HEPH-BACKEND-PARITY-METAL-FLUENT-LINALG-1 [minor] — done
 
 - Owner: Codex; scope: expose Metal-owned fluent dense-matrix traits matching
