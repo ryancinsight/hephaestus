@@ -2939,35 +2939,31 @@ fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     let transposed = Layout::new([4, 4], [1, 4], 0);
     let broadcast = Layout::new([4, 4], [0, 1], 0);
 
-    for (name, result) in [
-        (
-            "complete-pivoted LU",
-            full_piv_lu_blocked(
-                &device,
-                StridedOperand {
-                    buffer: &dense,
-                    layout: &transposed,
-                },
-            ),
-        ),
-        (
-            "column-pivoted QR",
-            col_piv_qr_blocked(
-                &device,
-                StridedOperand {
-                    buffer: &small,
-                    layout: &broadcast,
-                },
-            ),
-        ),
-    ] {
-        assert!(matches!(
-            result,
-            Err(HephaestusError::DispatchFailed { message })
-                if message.contains("dense") || message.contains("contiguous"),
-            "{name} must reject non-dense operands"
-        ));
-    }
+    let lu_result = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &dense,
+            layout: &transposed,
+        },
+    );
+    assert!(matches!(
+        lu_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let qr_result = col_piv_qr_blocked(
+        &device,
+        StridedOperand {
+            buffer: &small,
+            layout: &broadcast,
+        },
+    );
+    assert!(matches!(
+        qr_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
 }
 
 #[cfg(feature = "decomposition")]
