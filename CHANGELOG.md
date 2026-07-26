@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Export Metal's existing rank-2 `reduce_axis_into` output-buffer
+  operation at the crate root, matching WGPU, CUDA, and ROCm with a direct
+  CPU-reference contract.
+
 - [minor] Complete blocked complete-pivot LU and blocked column-pivoted QR
   capability parity across WGPU, CUDA, ROCm, and Metal. Each backend exposes
   the same dense C-contiguous validation contract and preserves its existing
