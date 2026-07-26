@@ -1181,12 +1181,14 @@ fn blocked_pivoted_decompositions_reject_non_dense_operands() {
             ),
         ),
     ] {
-        assert!(matches!(
-            result,
-            Err(HephaestusError::DispatchFailed { message })
-                if message.contains("dense C-contiguous"),
+        assert!(
+            matches!(
+                result,
+                Err(HephaestusError::DispatchFailed { message })
+                    if message.contains("dense C-contiguous")
+            ),
             "{name} must reject non-dense operands"
-        ));
+        );
     }
 }
 
