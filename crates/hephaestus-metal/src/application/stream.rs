@@ -1,5 +1,7 @@
 //! Metal-selected authored-kernel command streams.
 
+use std::marker::PhantomData;
+
 use bytemuck::Pod;
 use hephaestus_core::{
     Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
@@ -65,7 +67,8 @@ pub struct MetalCommandStream<'d> {
 /// Active grouped Metal sequence backed by one WGPU compute pass selected for
 /// the native Metal adapter.
 pub struct MetalGroupedSequence<'s> {
-    inner: &'s mut WgpuGroupedSequence<'s>,
+    inner: *mut (),
+    marker: PhantomData<&'s mut ()>,
 }
 
 impl KernelDevice for MetalDevice {
@@ -182,7 +185,10 @@ impl<'d> GroupedCommandStream<'d, MetalDevice> for MetalCommandStream<'d> {
         F: FnOnce(&mut Self::Sequence<'_>) -> Result<()>,
     {
         GroupedCommandStream::encode_grouped_sequence(&mut self.inner, label, |inner| {
-            let mut sequence = MetalGroupedSequence { inner };
+            let mut sequence = MetalGroupedSequence {
+                inner: inner as *mut WgpuGroupedSequence<'_> as *mut (),
+                marker: PhantomData,
+            };
             encode(&mut sequence)
         })
     }
@@ -205,7 +211,12 @@ impl<'s> GroupedKernelSequence<'s, MetalDevice> for MetalGroupedSequence<'s> {
             .iter()
             .map(to_wgpu_grouped_binding)
             .collect::<Vec<_>>();
-        GroupedKernelSequence::encode_grouped(self.inner, &prepared.inner, &mapped, params, grid)
+        // SAFETY: `inner` is created from the uniquely borrowed WGPU grouped
+        // sequence for the duration of the enclosing callback. The callback
+        // does not escape this wrapper, and no second mutable access exists
+        // while this method is executing.
+        let inner = unsafe { &mut *self.inner.cast::<WgpuGroupedSequence<'s>>() };
+        GroupedKernelSequence::encode_grouped(inner, &prepared.inner, &mapped, params, grid)
     }
 }
 
