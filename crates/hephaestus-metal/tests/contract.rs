@@ -22,7 +22,7 @@ use hephaestus_metal::{
     SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
     normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, reduce_axis_into, reduction, scalar_elementwise,
+    prepare_sum_axis_into, prod_axis, reduce_axis_into, reduction, scalar_elementwise,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into, unary_elementwise, unary_elementwise_into,
     uniform_with_seed,
@@ -886,6 +886,20 @@ fn reduction_axis_into_matches_cpu_reference() {
     let mut got = [0.0f32; 3];
     d.download(&output, &mut got).unwrap();
     assert_eq!(got, [5.0, 7.0, 9.0]);
+
+    let product = prod_axis(
+        &d,
+        StridedOperand {
+            buffer: &input,
+            layout: &input_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product = [0.0f32; 2];
+    d.download(&product, &mut got_product).unwrap();
+    assert_eq!(got_product, [6.0, 120.0]);
 }
 
 #[test]
@@ -1046,6 +1060,20 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     let mut got_empty = [7.0f32; 3];
     d.download(&empty_output, &mut got_empty).unwrap();
     assert_eq!(got_empty, [0.0, 0.0, 0.0]);
+
+    let empty_product = prod_axis(
+        &d,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        width,
+    )
+    .unwrap();
+    let mut got_empty_product = [0.0f32; 3];
+    d.download(&empty_product, &mut got_empty_product).unwrap();
+    assert_eq!(got_empty_product, [1.0, 1.0, 1.0]);
 
     let empty_min = prepare_min_axis_into(
         &d,

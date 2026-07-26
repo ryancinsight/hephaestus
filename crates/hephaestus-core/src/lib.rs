@@ -37,8 +37,8 @@ pub use domain::kernel::{
 pub use domain::launch::BlockWidth;
 pub use domain::ops::{
     AbsOp, AddOp, BinaryExpr, CombineExpr, CosOp, CumProdOp, CumSumOp, DivOp, ExpNegOp, ExpOp,
-    IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, RecipOp, SinOp,
-    SqrtOp, SubOp, SumOp, UnaryExpr,
+    IdentityOp, IdentityToken, LnOp, MaxOp, MinOp, MulOp, NegOp, OpIdentity, PowOp, ProdOp,
+    RecipOp, SinOp, SqrtOp, SubOp, SumOp, UnaryExpr,
 };
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, plan_axis_reduction, reduction_pass_count,

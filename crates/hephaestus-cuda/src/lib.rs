@@ -66,9 +66,9 @@ pub use application::prepared_reduction::{
     submit_prepared_reduction_batch,
 };
 pub use application::reduction::{
-    MaxOp, MinOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
-    min_axis_into, reduce_axis, reduce_axis_into, reduction, reduction_with_width, sum_axis,
-    sum_axis_into,
+    MaxOp, MinOp, ProdOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
+    min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,
+    reduction_with_width, sum_axis, sum_axis_into,
 };
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
