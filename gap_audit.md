@@ -11,6 +11,19 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-SCAN-SUFFIX-PARITY-1] Reverse cumulative-sum convenience surface
+
+- Finding: Leto exposes reverse cumulative sum, but the four Hephaestus roots
+  exposed only the generic reverse scan and reverse cumulative product helpers.
+- Resolution: add one provider-owned `suffix_sum`/`suffix_sum_into` wrapper over
+  the existing `CumSumOp` reverse scan. Metal delegates through its WGPU
+  substrate; no duplicate kernel body is introduced.
+- Evidence target: each provider contract compares both output forms with
+  `leto_ops::scan_axis::<CumSumOp, _, 2>(..., ScanDirection::Reverse)` and the
+  hosted WGPU, CUDA, ROCm, and Metal workflows pass on one commit head.
+- Status: implementation complete; local compilation remains blocked by the
+  checkout-local Leto/Hermes provider graph, so no local build claim is made.
+
 ## [HEPH-LAPLACIAN-CONTRACT-1] Shared typed stencil (2026-07-20)
 
 - Finding: the WGPU provider duplicated boundary codes and host validation,

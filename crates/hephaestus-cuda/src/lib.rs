@@ -72,7 +72,7 @@ pub use application::reduction::{
 };
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
-    scan_axis_into,
+    scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,

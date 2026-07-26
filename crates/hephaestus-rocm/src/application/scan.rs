@@ -248,9 +248,67 @@ where
     scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Forward, width)
 }
 
-/// Reverse cumulative product over a rank-2 strided operand along `axis`.
+/// Reverse cumulative sum over a rank-2 strided operand along `axis`.
+#[inline]
+pub fn suffix_sum_into<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, HipC>,
+{
+    scan_axis_into::<CumSumOp, T>(device, input, axis, ScanDirection::Reverse, output, width)
+}
+
+/// Reverse cumulative sum over a rank-2 strided operand, allocating output.
+#[inline]
+pub fn suffix_sum<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<RocmBuffer<T>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, HipC>,
+{
+    scan_axis::<CumSumOp, T>(device, input, axis, ScanDirection::Reverse, width)
+}
+
+/// Forward cumulative product over a rank-2 strided operand along `axis`.
 #[inline]
 pub fn cumprod_into<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, HipC>,
+{
+    scan_axis_into::<CumProdOp, T>(device, input, axis, ScanDirection::Forward, output, width)
+}
+
+/// Forward cumulative product over a rank-2 strided operand, allocating output.
+#[inline]
+pub fn cumprod<T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    width: BlockWidth,
+) -> Result<RocmBuffer<T>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, HipC>,
+{
+    scan_axis::<CumProdOp, T>(device, input, axis, ScanDirection::Forward, width)
+}
+
+/// Reverse cumulative product over a rank-2 strided operand along `axis`.
+#[inline]
+pub fn suffix_prod_into<T>(
     device: &RocmDevice,
     input: StridedOperand<'_, T, 2>,
     axis: usize,
@@ -265,7 +323,7 @@ where
 
 /// Reverse cumulative product over a rank-2 strided operand, allocating output.
 #[inline]
-pub fn cumprod<T>(
+pub fn suffix_prod<T>(
     device: &RocmDevice,
     input: StridedOperand<'_, T, 2>,
     axis: usize,

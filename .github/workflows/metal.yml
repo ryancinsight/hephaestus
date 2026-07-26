@@ -85,6 +85,7 @@ jobs:
           sed "s|/workspace|$GITHUB_WORKSPACE|g" \
             "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
             > "$GITHUB_WORKSPACE/.cargo/config.toml"
+          cargo "+$RUST_TOOLCHAIN" update --manifest-path "$GITHUB_WORKSPACE/hephaestus/Cargo.toml" --workspace
 
       - name: Check Metal feature surfaces
         working-directory: hephaestus

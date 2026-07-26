@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
+
+- [x] Add allocated and caller-owned `suffix_sum` to WGPU, CUDA, ROCm, and
+      Metal over the existing reverse `CumSumOp` scan kernel.
+- [x] Add Leto differential contract coverage for all four providers.
+- [ ] Run the four provider workflows on the exact implementation head.
+- [ ] Record final CI evidence and close the backlog item.
+
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor]
+
+- [x] Correct `cumprod` to the forward Leto/Coeus direction and expose
+      reverse `suffix_prod` on WGPU, CUDA, ROCm, and Metal.
+- [x] Update provider contracts against the independent Leto scan oracle for
+      both product directions.
+- [ ] Run the four provider workflows on the corrected semantic head.
+- [ ] Record final CI evidence and close the backlog item.
+
 ## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch]
 
 - [x] Add a standalone Linux WGPU workflow covering minimal and default

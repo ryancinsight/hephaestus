@@ -26,9 +26,9 @@ use hephaestus_rocm::{
     prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
     reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
     scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, trace,
-    unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
+    suffix_prod_into, suffix_sum, suffix_sum_into, sum_axis, trace, unary_elementwise,
+    unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
@@ -1234,6 +1234,33 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         .expect("HIP reverse scan download");
     assert_eq!(reverse_output, [10, 9, 7, 4, 26, 21, 15, 8]);
 
+    let suffix = suffix_sum(&device, input_operand, 1, width).expect("HIP suffix sum");
+    let mut suffix_output = [0_i32; 8];
+    device
+        .download(&suffix, &mut suffix_output)
+        .expect("HIP suffix sum download");
+    assert_eq!(suffix_output, reverse_output);
+
+    let suffix_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned suffix output");
+    suffix_sum_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &suffix_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned suffix sum");
+    let mut suffix_into_output = [0_i32; 8];
+    device
+        .download(&suffix_into, &mut suffix_into_output)
+        .expect("HIP caller-owned suffix download");
+    assert_eq!(suffix_into_output, [6, 8, 10, 12, 5, 6, 7, 8]);
+
     let column_scan = cumsum(&device, input_operand, 0, width).expect("HIP column scan");
     let mut column_output = [0_i32; 8];
     device
@@ -1241,13 +1268,13 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         .expect("HIP column scan download");
     assert_eq!(column_output, [1, 2, 3, 4, 6, 8, 10, 12]);
 
-    let reverse_product =
-        cumprod(&device, input_operand, 1, width).expect("HIP reverse cumulative product");
+    let forward_product =
+        cumprod(&device, input_operand, 1, width).expect("HIP forward cumulative product");
     let mut product_output = [0_i32; 8];
     device
-        .download(&reverse_product, &mut product_output)
+        .download(&forward_product, &mut product_output)
         .expect("HIP product scan download");
-    assert_eq!(product_output, [24, 24, 12, 4, 1680, 336, 56, 8]);
+    assert_eq!(product_output, [1, 2, 6, 24, 5, 30, 210, 1680]);
 
     let product_into = device
         .alloc_zeroed::<i32>(8)
@@ -1262,12 +1289,40 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         },
         width,
     )
-    .expect("HIP caller-owned reverse product scan");
+    .expect("HIP caller-owned forward product scan");
     let mut product_into_output = [0_i32; 8];
     device
         .download(&product_into, &mut product_into_output)
         .expect("HIP caller-owned product download");
-    assert_eq!(product_into_output, [5, 12, 21, 32, 5, 6, 7, 8]);
+    assert_eq!(product_into_output, [1, 2, 3, 4, 5, 12, 21, 32]);
+
+    let reverse_product =
+        suffix_prod(&device, input_operand, 1, width).expect("HIP reverse cumulative product");
+    let mut reverse_product_output = [0_i32; 8];
+    device
+        .download(&reverse_product, &mut reverse_product_output)
+        .expect("HIP reverse product download");
+    assert_eq!(reverse_product_output, [24, 24, 12, 4, 1680, 336, 56, 8]);
+
+    let reverse_product_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned reverse product output");
+    suffix_prod_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &reverse_product_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned reverse product scan");
+    let mut reverse_product_into_output = [0_i32; 8];
+    device
+        .download(&reverse_product_into, &mut reverse_product_into_output)
+        .expect("HIP caller-owned reverse product download");
+    assert_eq!(reverse_product_into_output, [5, 12, 21, 32, 5, 6, 7, 8]);
 
     let long_input: Vec<i32> = (0..1_025).map(|index| index % 7 - 3).collect();
     let long_buffer = device.upload(&long_input).expect("HIP long scan upload");
