@@ -101,7 +101,7 @@ jobs:
               mkdir -p /workspace/.cargo
               cp /workspace/hephaestus/.github/rocm-cargo-config.toml \
                 /workspace/.cargo/config.toml
-              cargo "+$RUST_TOOLCHAIN" update --workspace
+              cargo "+$RUST_TOOLCHAIN" update --manifest-path /workspace/hephaestus/Cargo.toml --workspace
               cargo "+$RUST_TOOLCHAIN" fmt --check
               cargo "+$RUST_TOOLCHAIN" check --package hephaestus-cuda \
                 --no-default-features --all-targets
@@ -189,7 +189,7 @@ jobs:
           sed "s|/workspace|$GITHUB_WORKSPACE|g" \
             "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
             > "$GITHUB_WORKSPACE/.cargo/config.toml"
-          cargo "+$RUST_TOOLCHAIN" update --workspace
+          cargo "+$RUST_TOOLCHAIN" update --manifest-path "$GITHUB_WORKSPACE/hephaestus/Cargo.toml" --workspace
 
       - name: Run required-device CUDA contracts
         working-directory: hephaestus

@@ -111,7 +111,7 @@ jobs:
               # workspace so path resolution remains valid in CI.
               mkdir -p /workspace/.cargo
               cp /workspace/hephaestus/.github/rocm-cargo-config.toml /workspace/.cargo/config.toml
-              cargo "+$RUST_TOOLCHAIN" update --workspace
+              cargo "+$RUST_TOOLCHAIN" update --manifest-path /workspace/hephaestus/Cargo.toml --workspace
               cargo "+$RUST_TOOLCHAIN" fmt --check
               # Hephaestus currently consumes sibling Atlas path crates while
               # their migration versions are unpublished. Resolve that
@@ -199,7 +199,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/.cargo"
           cp "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
             "$GITHUB_WORKSPACE/.cargo/config.toml"
-          cargo "+$RUST_TOOLCHAIN" update --workspace
+          cargo "+$RUST_TOOLCHAIN" update --manifest-path "$GITHUB_WORKSPACE/hephaestus/Cargo.toml" --workspace
 
       - name: Run required-device contracts
         working-directory: hephaestus
