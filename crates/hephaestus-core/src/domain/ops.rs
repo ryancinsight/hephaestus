@@ -90,6 +90,54 @@ pub struct RecipOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct IdentityOp;
 
+/// Rectified linear unit operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReluOp;
+
+/// Rectified linear unit gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReluGradOp;
+
+/// Logistic sigmoid operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SigmoidOp;
+
+/// Logistic sigmoid gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SigmoidGradOp;
+
+/// Hyperbolic tangent operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TanhOp;
+
+/// Hyperbolic tangent gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TanhGradOp;
+
+/// Tanh-approximated Gaussian Error Linear Unit operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GeluTanhOp;
+
+/// Tanh-approximated Gaussian Error Linear Unit gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GeluTanhGradOp;
+
+/// Sigmoid Linear Unit operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SiluOp;
+
+/// Sigmoid Linear Unit gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SiluGradOp;
+
+/// Softplus operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftplusOp;
+
+/// Softplus gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftplusGradOp;
+
 impl UnaryExpr<Wgsl> for ExpOp {
     const EXPR: &'static str = "exp(x)";
 }
@@ -159,6 +207,58 @@ impl UnaryExpr<Wgsl> for IdentityOp {
 impl UnaryExpr<CudaC> for IdentityOp {
     const EXPR: &'static str = "x";
 }
+
+macro_rules! impl_activation_unary_exprs {
+    ($(($op:ty, $wgsl:literal, $cuda:literal)),+ $(,)?) => {
+        $(
+            impl UnaryExpr<Wgsl> for $op {
+                const EXPR: &'static str = $wgsl;
+            }
+            impl UnaryExpr<CudaC> for $op {
+                const EXPR: &'static str = $cuda;
+            }
+        )+
+    };
+}
+
+impl_activation_unary_exprs!(
+    (ReluOp, "max(x, 0.0)", "max(x, 0.0f)"),
+    (
+        ReluGradOp,
+        "select(0.0, 1.0, x > 0.0)",
+        "x > 0.0f ? 1.0f : 0.0f"
+    ),
+    (
+        SigmoidOp,
+        "1.0 / (1.0 + exp(-x))",
+        "1.0f / (1.0f + exp(-x))"
+    ),
+    (SigmoidGradOp, "x * (1.0 - x)", "x * (1.0f - x)"),
+    (TanhOp, "tanh(x)", "tanh(x)"),
+    (TanhGradOp, "1.0 - x * x", "1.0f - x * x"),
+    (
+        GeluTanhOp,
+        "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))",
+        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
+    ),
+    (
+        GeluTanhGradOp,
+        "0.5 * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x))) + 0.5 * x * (1.0 - tanh(0.7978845608 * (x + 0.044715 * x * x * x)) * tanh(0.7978845608 * (x + 0.044715 * x * x * x))) * 0.7978845608 * (1.0 + 0.134145 * x * x)",
+        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+    ),
+    (SiluOp, "x / (1.0 + exp(-x))", "x / (1.0f + exp(-x))"),
+    (
+        SiluGradOp,
+        "(1.0 / (1.0 + exp(-x))) * (1.0 + x * (1.0 - (1.0 / (1.0 + exp(-x)))))",
+        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
+    ),
+    (SoftplusOp, "log(1.0 + exp(x))", "log(1.0f + exp(x))"),
+    (
+        SoftplusGradOp,
+        "1.0 / (1.0 + exp(-x))",
+        "1.0f / (1.0f + exp(-x))"
+    ),
+);
 
 // ── Binary markers ───────────────────────────────────────────────────────
 
@@ -308,6 +408,27 @@ impl_hip_unary_exprs!(
     (NegOp, "-x"),
     (RecipOp, "1.0 / x"),
     (IdentityOp, "x"),
+    (ReluOp, "max(x, 0.0f)"),
+    (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
+    (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
+    (SigmoidGradOp, "x * (1.0f - x)"),
+    (TanhOp, "tanh(x)"),
+    (TanhGradOp, "1.0f - x * x"),
+    (
+        GeluTanhOp,
+        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
+    ),
+    (
+        GeluTanhGradOp,
+        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+    ),
+    (SiluOp, "x / (1.0f + exp(-x))"),
+    (
+        SiluGradOp,
+        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
+    ),
+    (SoftplusOp, "log(1.0f + exp(x))"),
+    (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
 );
 
 macro_rules! impl_hip_binary_exprs {
@@ -563,6 +684,12 @@ mod tests {
         assert_eq!(<ProdOp as CombineExpr<HipC>>::EXPR, "lhs * rhs");
         assert_eq!(<AddOp as BinaryExpr<HipC>>::EXPR, "lhs + rhs");
         assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
+        assert_eq!(
+            <GeluTanhOp as UnaryExpr<Wgsl>>::EXPR,
+            "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))"
+        );
+        assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
+        assert!(<SoftplusOp as UnaryExpr<HipC>>::EXPR.contains("exp(x)"));
         assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
         assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");

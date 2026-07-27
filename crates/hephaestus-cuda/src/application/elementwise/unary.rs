@@ -11,7 +11,9 @@ use hephaestus_core::{
 };
 
 pub use hephaestus_core::{
-    AbsOp, CosOp, ExpNegOp, ExpOp, IdentityOp, LnOp, NegOp, RecipOp, SinOp, SqrtOp,
+    AbsOp, CosOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp, NegOp, RecipOp,
+    ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp,
+    SoftplusOp, SqrtOp, TanhGradOp, TanhOp,
 };
 
 fn shader_source<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
