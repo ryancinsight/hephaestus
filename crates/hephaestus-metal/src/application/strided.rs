@@ -2,7 +2,9 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BinaryExpr, BlockWidth, DialectScalar, Result, UnaryExpr, Wgsl};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, DialectScalar, Result, TypedBinaryExpr, UnaryExpr, Wgsl,
+};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::MAX_STRIDED_RANK;
@@ -63,6 +65,53 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::binary_elementwise_strided_into::<Op, T, N>(
+        &device.inner,
+        to_wgpu_strided(lhs),
+        to_wgpu_strided(rhs),
+        to_wgpu_strided(out),
+        width,
+    )
+}
+
+/// Run a scalar-aware binary operation on strided operands, allocating a new
+/// buffer.
+#[inline]
+pub fn binary_elementwise_strided_typed<'a, Op, T, const N: usize>(
+    device: &MetalDevice,
+    lhs: StridedOperand<'a, T, N>,
+    rhs: StridedOperand<'a, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<MetalBuffer<T>>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
+{
+    let inner = wgpu_backend::binary_elementwise_strided_typed::<Op, T, N>(
+        &device.inner,
+        to_wgpu_strided(lhs),
+        to_wgpu_strided(rhs),
+        output_shape,
+        width,
+    )?;
+    Ok(MetalBuffer { inner })
+}
+
+/// Run a scalar-aware binary operation on strided operands into an existing
+/// buffer.
+#[inline]
+pub fn binary_elementwise_strided_typed_into<'a, Op, T, const N: usize>(
+    device: &MetalDevice,
+    lhs: StridedOperand<'a, T, N>,
+    rhs: StridedOperand<'a, T, N>,
+    out: StridedOperand<'a, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
+{
+    wgpu_backend::binary_elementwise_strided_typed_into::<Op, T, N>(
         &device.inner,
         to_wgpu_strided(lhs),
         to_wgpu_strided(rhs),

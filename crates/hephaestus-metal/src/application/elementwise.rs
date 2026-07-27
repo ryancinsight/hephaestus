@@ -2,13 +2,16 @@
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
-use hephaestus_core::{BinaryExpr, BlockWidth, DialectScalar, Result, UnaryExpr, Wgsl};
+use hephaestus_core::{
+    BinaryExpr, BlockWidth, DialectScalar, Result, TypedBinaryExpr, UnaryExpr, Wgsl,
+};
 use hephaestus_wgpu as wgpu_backend;
 
 pub use wgpu_backend::{
-    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp,
-    MulOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
-    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanhGradOp, TanhOp,
+    AbsOp, AddOp, CosOp, DivOp, EqOp, ExpNegOp, ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
+    IdentityOp, LeOp, LnOp, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp,
+    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
+    TanhGradOp, TanhOp,
 };
 
 /// Run binary elementwise operation, allocating a new buffer.
@@ -40,6 +43,44 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     wgpu_backend::binary_elementwise_into::<Op, T>(
+        &device.inner,
+        &lhs.inner,
+        &rhs.inner,
+        &out.inner,
+        width,
+    )
+}
+
+/// Run a scalar-aware binary operation, allocating a new buffer.
+#[inline]
+pub fn binary_elementwise_typed<Op, T>(
+    device: &MetalDevice,
+    lhs: &MetalBuffer<T>,
+    rhs: &MetalBuffer<T>,
+) -> Result<MetalBuffer<T>>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
+{
+    let inner =
+        wgpu_backend::binary_elementwise_typed::<Op, T>(&device.inner, &lhs.inner, &rhs.inner)?;
+    Ok(MetalBuffer { inner })
+}
+
+/// Run a scalar-aware binary operation into an existing buffer.
+#[inline]
+pub fn binary_elementwise_typed_into<Op, T>(
+    device: &MetalDevice,
+    lhs: &MetalBuffer<T>,
+    rhs: &MetalBuffer<T>,
+    out: &MetalBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + bytemuck::Pod,
+{
+    wgpu_backend::binary_elementwise_typed_into::<Op, T>(
         &device.inner,
         &lhs.inner,
         &rhs.inner,

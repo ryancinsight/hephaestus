@@ -11,10 +11,11 @@ pub mod application;
 pub mod infrastructure;
 
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp,
-    MulOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
-    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanhGradOp, TanhOp, binary_elementwise,
-    binary_elementwise_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
+    AbsOp, AddOp, CosOp, DivOp, EqOp, ExpNegOp, ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
+    IdentityOp, LeOp, LnOp, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp,
+    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
+    TanhGradOp, TanhOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
 pub use application::linalg::{
@@ -57,6 +58,7 @@ pub use application::storage_kernel::{
 pub use application::stream::{MetalCommandStream, MetalGroupedPrepared, MetalPrepared};
 pub use application::strided::{
     MAX_STRIDED_RANK, StridedOperand, binary_elementwise_strided, binary_elementwise_strided_into,
+    binary_elementwise_strided_typed, binary_elementwise_strided_typed_into,
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };

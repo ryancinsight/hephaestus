@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: typed comparison expressions and WGPU, CUDA, ROCm, and
+  Metal binary/strided provider exports used by Coeus.
+- Outcome: provide native equality, inequality, ordering, and inclusive-order
+  comparisons for f32, i32, and u32 with scalar-correct WGSL, CUDA C++, and
+  HIP C++ mask expressions.
+- Non-goals: f64/vector comparison result contracts, parameterized activations,
+  exact-erf GELU, and unrelated higher-rank or matrix operation families.
+- Acceptance: Hephaestus core expression tests pass; Coeus ROCm and Metal
+  providers route all six comparisons through typed Hephaestus kernels; Leto
+  differential tests cover f32 broadcast plus i32/u32 values; exact-head
+  WGPU, CUDA, ROCm, and Metal CI passes.
+- Risk/change class: `[minor]` additive typed operation vocabulary.
+- Status: implementation and local provider gates pass; hosted verification
+  remains open.
+- Decision: ADR 0027 selects `TypedBinaryExpr<L, T>` over f32-only markers or
+  per-backend comparison kernels.
+
 ## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor] — in progress
 
 - Owner: Codex; scope: `hephaestus-core` activation expression vocabulary and

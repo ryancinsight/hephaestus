@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add scalar-aware equality, inequality, and ordering expression
+  markers for f32, i32, and u32 across WGPU, CUDA, ROCm, and Metal, including
+  contiguous and strided provider entry points.
+
 - [minor] Add shared dialect-specific ZST markers for ReLU, sigmoid, tanh,
   tanh-GELU, SiLU, and softplus forward and gradient elementwise expressions;
   WGPU, CUDA, ROCm, and Metal export the common vocabulary.

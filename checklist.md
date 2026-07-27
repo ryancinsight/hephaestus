@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add scalar-aware comparison expressions for f32, i32, and u32 across
+      WGSL, CUDA C++, and HIP C++.
+- [x] Reuse shared contiguous and strided validation/launch paths and export
+      typed comparison entry points through WGPU, CUDA, ROCm, and Metal.
+- [x] Add Hephaestus expression tests and Coeus ROCm/Metal Leto differential
+      coverage for all six comparisons, including integer scalar results.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record the terminal
+      workflow evidence.
+
+Implementation owner: Codex on `codex/comparison-expression-parity`.
+
 ## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add dialect-specific Hephaestus activation and gradient expression
