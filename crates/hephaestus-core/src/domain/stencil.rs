@@ -75,6 +75,12 @@ impl Laplacian2DParams {
         self.nx() * self.ny()
     }
 
+    /// Whether the validated grid has no storage elements.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
     /// Validate input and output storage before a backend launch.
     pub fn validate_storage(self, input_len: usize, output_len: usize) -> Result<()> {
         if input_len != output_len {

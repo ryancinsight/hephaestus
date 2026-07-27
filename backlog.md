@@ -4,6 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: shared `LgammaOp` marker and WGPU, CUDA, ROCm, and Metal
+  exports consumed by Coeus.
+- Outcome: expose Leto's `ln|Gamma(x)|` operation through one provider-owned
+  accelerator vocabulary without a host fallback.
+- Non-goals: digamma gradients, f64/reduced/vector result contracts, and
+  unrelated operation families.
+- Acceptance: native CUDA/HIP expressions and a WGSL Lanczos/reflection
+  expression are exported by all four providers; Coeus routes f32 `lgamma`
+  through every backend and compares positive, reflected, and pole inputs with
+  the Leto CPU oracle; exact-head provider CI passes.
+- Risk/change class: `[minor]` additive operation vocabulary; ADR 0031 owns the
+  mathematical and expression-contract decision.
+- Status: Hephaestus provider marker and exports are implemented; Coeus routing
+  and exact-head verification remain open.
+
 ## HEPH-GELU-EXPRESSION-PARITY-1 [minor] — in progress
 
 - Owner: Codex; scope: shared exact `GeluOp` and `GeluGradOp` markers and WGPU,

@@ -13,8 +13,8 @@ use hephaestus_core::{
 pub use hephaestus_core::{
     AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, ErfOp, ErfcOp,
     Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp,
-    IdentityOp, LnOp, Log1pOp, Log2Op, Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
+    IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp,
+    RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
     SoftplusOp, SqrtOp, TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 
