@@ -4,6 +4,30 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — provider complete / consumer open
+
+- Owner: Codex on `codex/hephaestus-erf-erfc-parity`; scope: shared `ErfOp` and
+  `ErfcOp` markers and WGPU, CUDA, ROCm, and Metal exports consumed by Coeus.
+- Outcome: expose one provider-owned expression vocabulary for the Leto CPU
+  `erf` and `erfc` operations.
+- Non-goals: `lgamma`, tail-stable `erfc`, parameterized activations, f64 or
+  vector result contracts, and unrelated unary or higher-rank operation
+  families.
+- Acceptance: each marker has the existing WGPU approximation or native CUDA
+  C++/HIP C++ expression; all four backend application modules export both
+  markers; core expression tests pass; exact-head WGPU, CUDA, ROCm, and Metal
+  CI passes; Coeus routes the f32 operations through ROCm and Metal and
+  compares them with the Leto CPU oracle.
+- Risk/change class: `[minor]` additive operation vocabulary; ADR 0029 owns the
+  expression and numerical-contract decision.
+- Status: Hephaestus implementation and exact-head provider evidence are
+  complete; Coeus consumer routing remains open in the Coeus parity item.
+- Evidence: code head `9fc20947` passed WGPU run `30280525008` job
+  `90025442312`, CUDA run `30280524996` job `90025442377`, ROCm run
+  `30280524846` job `90025441726`, and Metal run `30280521250` job
+  `90025429875`. AMD hardware job `90025442537` and NVIDIA hardware job
+  `90025443574` skipped because no registered device runner was selected.
+
 ## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor] — in progress
 
 - Owner: Codex on `codex/hephaestus-unary-math-parity`; scope: shared

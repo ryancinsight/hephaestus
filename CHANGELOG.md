@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add shared `ErfOp` and `ErfcOp` expression markers for WGPU, CUDA,
+  ROCm, and Metal. WGPU uses the existing approximation contract; CUDA and
+  HIP use native device intrinsics. Exact-head provider CI passed on WGPU,
+  CUDA, ROCm, and Metal; physical-device jobs were skipped.
+
 - [minor] Add shared dialect-specific unary math expression markers for the
   unparameterized f32 tangent, inverse/hyperbolic, logarithm/exponential, sign,
   and rounding operations across WGPU, CUDA, ROCm, and Metal.
