@@ -9,9 +9,9 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
 pub use hephaestus_core::{
-    AbsOp, AcosOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, Exp2Op, ExpNegOp,
-    ExpOp, Expm1Op, FloorOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp, Log1pOp, Log2Op,
-    Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp,
+    AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, Exp2Op,
+    ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp,
     SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, TanOp, TanhGradOp,
     TanhOp, TruncOp,
 };
