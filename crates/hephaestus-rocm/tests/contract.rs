@@ -17,15 +17,16 @@ use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
     AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, ExpNegOp, ExpOp, GpuCsrMatrix,
     IdentityOp, LnOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
-    MulOp, NegOp, PowOp, RecipOp, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection, SinOp,
-    SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into, binary_elementwise,
-    binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
-    cumprod_into, cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
-    matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
-    norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
-    prod_axis, reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into,
-    scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
+    MulOp, NegOp, PowOp, ProdOp, RecipOp, Result, RocmDevice, RocmMultiStorageKernel,
+    ScanDirection, SinOp, SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into,
+    binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
+    binary_elementwise_strided_into, cumprod, cumprod_into, cumsum, det, dot, kron, kron_into,
+    matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
+    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, prepare_dot,
+    prepare_max_axis_into, prepare_mean_axis_into, prepare_norm_l2, prepare_reduction,
+    prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis,
+    reduction_with_width, scalar_elementwise, scalar_elementwise_strided_into, scan_axis,
+    scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into, sum_axis, trace, unary_elementwise,
     unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
@@ -931,6 +932,53 @@ fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
         .expect("HIP row product download");
     assert_eq!(product_rows_output, [24, 240_000, 3465]);
 
+    let product_columns = reduce_axis::<ProdOp, u32>(&device, input_operand, 0, width)
+        .expect("HIP axis column product");
+    let mut product_columns_output = [0_u32; 4];
+    device
+        .download(&product_columns, &mut product_columns_output)
+        .expect("HIP column product download");
+    assert_eq!(product_columns_output, [50, 280, 810, 17_600]);
+
+    let product_rows_into = device
+        .alloc_zeroed::<u32>(3)
+        .expect("HIP caller-owned product output");
+    let product_rows_into_layout =
+        Layout::c_contiguous([3, 1]).expect("HIP caller-owned product layout");
+    prod_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &product_rows_into,
+            layout: &product_rows_into_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned row product");
+    let mut product_rows_into_output = [0_u32; 3];
+    device
+        .download(&product_rows_into, &mut product_rows_into_output)
+        .expect("HIP caller-owned product download");
+    assert_eq!(product_rows_into_output, [24, 240_000, 3465]);
+
+    let transposed_layout = Layout::new([4, 3], [1, 4], 0);
+    let transposed_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &input_buffer,
+            layout: &transposed_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP strided product");
+    let mut transposed_product_output = [0_u32; 4];
+    device
+        .download(&transposed_product, &mut transposed_product_output)
+        .expect("HIP strided product download");
+    assert_eq!(transposed_product_output, [50, 280, 810, 17_600]);
+
     let mean_input: Vec<f32> = (1..=12).map(|value| value as f32).collect();
     let mean_buffer = device.upload(&mean_input).expect("HIP mean input upload");
     let mean_layout = Layout::c_contiguous([3, 4]).expect("mean input layout");
@@ -954,6 +1002,21 @@ fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
     let wrong_buffer = device.alloc_zeroed::<u32>(6).expect("wrong output buffer");
     assert!(matches!(
         hephaestus_rocm::sum_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_buffer,
+                layout: &wrong_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    assert!(matches!(
+        prod_axis_into(
             &device,
             input_operand,
             1,
@@ -1004,6 +1067,23 @@ fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
         Err(HephaestusError::DispatchFailed { message })
             if message == "mean_axis is undefined for empty axis 1"
     ));
+
+    let empty_axis0_input_layout = Layout::c_contiguous([0, 3]).expect("empty axis-0 layout");
+    let empty_axis0_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_axis0_input_layout,
+        },
+        0,
+        width,
+    )
+    .expect("HIP empty axis-0 product");
+    let mut got_empty_axis0_product = [0_u32; 3];
+    device
+        .download(&empty_axis0_product, &mut got_empty_axis0_product)
+        .expect("HIP empty axis-0 product download");
+    assert_eq!(got_empty_axis0_product, [1, 1, 1]);
 }
 
 #[test]

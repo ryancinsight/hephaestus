@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-REDUCTION-PRODUCT-AXIS-PARITY-1 [minor]
+
+- [x] Strengthen the shared `ProdOp` identity and dialect-token regression
+      coverage for WGSL, CUDA C++, and HIP C++.
+- [x] Export `ProdOp` from the ROCm crate root so the four public provider
+      surfaces expose the same product-axis vocabulary.
+- [x] Extend WGPU, CUDA, ROCm, and Metal contracts to cover allocated and
+      caller-owned product outputs on both axes, a non-contiguous input,
+      empty-axis identity, and invalid output layouts.
+- [x] Add ADR 0028 plus synchronized README, CHANGELOG, backlog, checklist,
+      and gap-audit entries.
+- [x] Run the focused core and provider gates; record their results and the
+      default-CUDA linker and pre-existing local Cargo patch limitations.
+
+Execution owner: Codex; claimed files:
+core product vocabulary, ROCm root export, four provider contract tests, ADR
+0028, README, CHANGELOG, backlog, checklist, and gap audit.
 ## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add documented shared markers for the unparameterized unary math

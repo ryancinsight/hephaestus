@@ -6,13 +6,13 @@
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
     AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp,
-    MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
+    MulOp, NegOp, ProdOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
     binary_elementwise_into, cumsum_into, matrix_rank, matrix_rank_with_tolerance, max_axis,
     max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
-    prod_axis, reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, sum_axis, sum_axis_into,
-    unary_elementwise, unary_elementwise_into,
+    prod_axis, prod_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
+    sum_axis, sum_axis_into, unary_elementwise, unary_elementwise_into,
 };
 
 fn device_or_skip() -> Option<WgpuDevice> {
@@ -796,6 +796,15 @@ fn axis_reductions_match_leto_reference() {
         .unwrap();
     assert_eq!(got_allocated_axis0, expected_axis0);
 
+    let product_axis0 =
+        reduce_axis::<ProdOp, f32>(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let expected_product_axis0 = [4.0, 10.0, 18.0];
+    let mut got_product_axis0 = vec![0.0f32; 3];
+    device
+        .download(&product_axis0, &mut got_product_axis0)
+        .unwrap();
+    assert_eq!(got_product_axis0, expected_product_axis0);
+
     let out_axis1 = device.alloc_zeroed::<f32>(2).unwrap();
     let out_axis1_layout = Layout::c_contiguous([2, 1]).unwrap();
     sum_axis_into(
@@ -822,6 +831,55 @@ fn axis_reductions_match_leto_reference() {
         .download(&product_axis1, &mut got_product_axis1)
         .unwrap();
     assert_eq!(got_product_axis1, [6.0, 120.0]);
+
+    let product_axis1_out = device.alloc_zeroed::<f32>(2).unwrap();
+    let product_axis1_out_layout = Layout::c_contiguous([2, 1]).unwrap();
+    prod_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &product_axis1_out,
+            layout: &product_axis1_out_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product_axis1_into = [0.0f32; 2];
+    device
+        .download(&product_axis1_out, &mut got_product_axis1_into)
+        .unwrap();
+    assert_eq!(got_product_axis1_into, [6.0, 120.0]);
+
+    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed = StridedOperand {
+        buffer: &input,
+        layout: &transposed_layout,
+    };
+    let expected_transposed_product = [4.0, 10.0, 18.0];
+    let transposed_product = prod_axis(&device, transposed, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_transposed_product = vec![0.0f32; 3];
+    device
+        .download(&transposed_product, &mut got_transposed_product)
+        .unwrap();
+    assert_eq!(got_transposed_product, expected_transposed_product);
+
+    let wrong_product_output = device.alloc_zeroed::<f32>(6).unwrap();
+    let wrong_product_layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert!(matches!(
+        prod_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_product_output,
+                layout: &wrong_product_layout,
+            },
+            BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
 
     let narrow_axis1 = sum_axis(&device, input_operand, 1, BlockWidth::new(2).unwrap()).unwrap();
     let mut got_narrow_axis1 = vec![0.0f32; 2];
@@ -1058,6 +1116,23 @@ fn axis_reductions_match_leto_reference() {
         .download(&empty_product, &mut got_empty_product)
         .unwrap();
     assert_eq!(got_empty_product, [1.0, 1.0]);
+
+    let empty_axis0_input_layout = Layout::c_contiguous([0, 2]).unwrap();
+    let empty_axis0_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_axis0_input_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty_axis0_product = [0.0f32; 2];
+    device
+        .download(&empty_axis0_product, &mut got_empty_axis0_product)
+        .unwrap();
+    assert_eq!(got_empty_axis0_product, [1.0, 1.0]);
 
     let prepared_empty_sum = prepare_sum_axis_into(
         &device,

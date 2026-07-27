@@ -11,6 +11,27 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-REDUCTION-PRODUCT-AXIS-PARITY-1] Product-axis reduction surface
+
+- Finding: PR #108 added allocated product-axis wrappers to all four providers,
+  but ROCm did not re-export `ProdOp` and the contracts did not consistently
+  cover caller-owned output, both axes, strided input, empty-axis identity, or
+  invalid output layouts.
+- Resolution: export the shared marker from ROCm, retain the existing generic
+  axis-reduction kernels and Metal delegation, and add the missing
+  value-semantic contracts. The locked Leto release has no product-axis oracle,
+  so product expectations use independent closed-form fixture values; WGPU
+  sum expectations continue to use the Leto differential path.
+- Evidence tier: shared core expression/token tests, provider value-semantic
+  contracts, warning-denied feature gates, Nextest, and doctests. Local focused
+  results are core 3/3, WGPU 1/1, CUDA no-default 1/1, ROCm no-default 1/1,
+  Metal no-default 1/1, clippy clean across all five crates, and doctests
+  clean. Default CUDA linking is blocked by missing `-lcuda`; rustdoc is
+  blocked by the pre-existing duplicate Moirai patch key in the local Coeus
+  manifest. Hosted exact-head feature and hardware workflows remain the merge
+  evidence.
+- Status: implementation and local focused verification complete; hosted
+  exact-head evidence pending.
 ## [HEPH-UNARY-MATH-EXPRESSION-PARITY-1] Unparameterized unary math vocabulary
 
 - Finding: Leto and Coeus define a broader f32 unary math vocabulary than the
