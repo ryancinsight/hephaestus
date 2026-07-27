@@ -117,11 +117,16 @@ open in peer-owned backend scopes.
       f32 CPU formulas.
 - [ ] Route the four f32 operations through Coeus and compare with the Leto
       CPU oracle on the exact consumer head.
-- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record final
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record final
       evidence.
 
 Implementation owner: Codex; ADR 0032. Coeus routing remains in peer-owned
 backend scopes.
+
+Provider evidence: merged PR #123 at `23f9662` passed WGPU job `90115184352`,
+CUDA job `90115253352`, ROCm job `90115183816`, and Metal job `90115184178`.
+AMD and NVIDIA hardware jobs were skipped because no hosted device runners
+were selected; no physical-device execution claim is made.
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
 

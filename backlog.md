@@ -54,8 +54,13 @@ cuda-oxide + cutile).
   WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0032 owns
   the mathematical and expression-contract decision.
-- Status: Hephaestus provider implementation and local contracts are complete;
-  Coeus routing and exact-head provider verification remain open.
+- Status: Hephaestus provider implementation, local contracts, and exact-head
+  provider verification are complete; Coeus routing remains open in peer-owned
+  backend scopes.
+- Evidence: merged Hephaestus PR #123 at `23f9662`; WGPU job `90115184352`
+  (pass), CUDA job `90115253352` (pass), ROCm job `90115183816` (pass), and
+  Metal job `90115184178` (pass). AMD and NVIDIA hardware jobs were skipped;
+  no physical-device execution claim is made.
 
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — done
 
