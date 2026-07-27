@@ -5,8 +5,9 @@
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, LgammaOp, MaxOp,
-    MinOp, MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
+    AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp,
+    HephaestusError, LgammaOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp,
+    SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
     binary_elementwise_into, cumsum_into, matrix_rank, matrix_rank_with_tolerance, max_axis,
     max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
@@ -564,6 +565,84 @@ fn elementwise_lgamma_matches_cpu_reference() {
             "lgamma[{index}] expected {reference}, got {actual}, tolerance {tolerance}"
         );
     }
+}
+
+#[test]
+fn elementwise_activation_markers_match_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
+    let input = device.upload(&host).unwrap();
+    let gelu_scale = 0.7978845608_f32;
+    let gelu_cubic = 0.044715_f32;
+
+    macro_rules! check {
+        ($label:literal, $operation:ty, $expected:expr) => {{
+            let expected = $expected;
+            let output = unary_elementwise::<$operation, f32>(&device, &input).unwrap();
+            let mut actual = [0.0_f32; 5];
+            device.download(&output, &mut actual).unwrap();
+            for (index, (&got, &reference)) in actual.iter().zip(expected.iter()).enumerate() {
+                let tolerance = f32::EPSILON * 512.0 * reference.abs().max(1.0);
+                assert!(
+                    (got - reference).abs() <= tolerance,
+                    "{}[{index}] got {got}, expected {reference}, tolerance {tolerance}",
+                    $label
+                );
+            }
+        }};
+    }
+
+    check!(
+        "gelu_tanh",
+        GeluTanhOp,
+        host.iter()
+            .map(|&x| 0.5 * x * (1.0 + (gelu_scale * (x + gelu_cubic * x * x * x)).tanh()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "gelu_tanh_grad",
+        GeluTanhGradOp,
+        host.iter()
+            .map(|&x| {
+                let tanh = (gelu_scale * (x + gelu_cubic * x * x * x)).tanh();
+                0.5 * (1.0 + tanh)
+                    + 0.5 * x * (1.0 - tanh * tanh) * gelu_scale * (1.0 + 3.0 * gelu_cubic * x * x)
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu",
+        SiluOp,
+        host.iter()
+            .map(|&x| x / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu_grad",
+        SiluGradOp,
+        host.iter()
+            .map(|&x| {
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                sigmoid * (1.0 + x * (1.0 - sigmoid))
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus",
+        SoftplusOp,
+        host.iter()
+            .map(|&x| (1.0 + x.exp()).ln())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus_grad",
+        SoftplusGradOp,
+        host.iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
