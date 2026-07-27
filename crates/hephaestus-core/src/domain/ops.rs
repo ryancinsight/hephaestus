@@ -188,6 +188,10 @@ pub struct ErfOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ErfcOp;
 
+/// Natural logarithm of the absolute gamma function operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LgammaOp;
+
 /// Exact Gaussian Error Linear Unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GeluOp;
@@ -380,6 +384,55 @@ impl UnaryExpr<Wgsl> for ErfcOp {
 }
 impl UnaryExpr<CudaC> for ErfcOp {
     const EXPR: &'static str = "erfc(x)";
+}
+
+macro_rules! wgsl_lgamma_positive_expr {
+    ($value:literal) => {
+        concat!(
+            "(0.9189385332046727 + ((",
+            $value,
+            ") - 0.5) * log((",
+            $value,
+            ") + 6.5) - ((",
+            $value,
+            ") + 6.5) + log(0.9999999999998099 + 676.5203681218851 / (",
+            $value,
+            ") - 1259.1392167224028 / ((",
+            $value,
+            ") + 1.0) + 771.3234287776531 / ((",
+            $value,
+            ") + 2.0) - 176.6150291621406 / ((",
+            $value,
+            ") + 3.0) + 12.5073432786869 / ((",
+            $value,
+            ") + 4.0) - 0.13857109526572 / ((",
+            $value,
+            ") + 5.0) + 9.98436957801957e-6 / ((",
+            $value,
+            ") + 6.0) + 1.50563273514931e-7 / ((",
+            $value,
+            ") + 7.0)))"
+        )
+    };
+}
+
+macro_rules! wgsl_lgamma_expr {
+    () => {
+        concat!(
+            "select(select(",
+            wgsl_lgamma_positive_expr!("x"),
+            ", (1.1447298858494002 - log(abs(sin(3.141592653589793 * x))) - ",
+            wgsl_lgamma_positive_expr!("(1.0 - x)"),
+            "), x >= 0.5), select(1.0 / abs(x - trunc(x)), abs(x), isInf(x)), ((x <= 0.0) && (x == trunc(x))) || isInf(x))"
+        )
+    };
+}
+
+impl UnaryExpr<Wgsl> for LgammaOp {
+    const EXPR: &'static str = wgsl_lgamma_expr!();
+}
+impl UnaryExpr<CudaC> for LgammaOp {
+    const EXPR: &'static str = "lgamma(x)";
 }
 
 macro_rules! wgsl_gelu_erf_expr {
@@ -746,6 +799,7 @@ impl_hip_unary_exprs!(
     (TruncOp, "trunc(x)"),
     (ErfOp, "erf(x)"),
     (ErfcOp, "erfc(x)"),
+    (LgammaOp, "lgamma(x)"),
     (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
     (
         GeluGradOp,
@@ -1041,8 +1095,12 @@ mod tests {
         assert_eq!(<RoundOp as UnaryExpr<HipC>>::EXPR, "rint(x)");
         assert_eq!(<ErfOp as UnaryExpr<CudaC>>::EXPR, "erf(x)");
         assert_eq!(<ErfcOp as UnaryExpr<HipC>>::EXPR, "erfc(x)");
+        assert_eq!(<LgammaOp as UnaryExpr<CudaC>>::EXPR, "lgamma(x)");
+        assert_eq!(<LgammaOp as UnaryExpr<HipC>>::EXPR, "lgamma(x)");
         assert!(<ErfOp as UnaryExpr<Wgsl>>::EXPR.contains("1.061405429"));
         assert!(<ErfcOp as UnaryExpr<Wgsl>>::EXPR.starts_with("(1.0 - "));
+        assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("676.5203681218851"));
+        assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("isInf(x)"));
         assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("0.7071067811865476"));
         assert!(<GeluGradOp as UnaryExpr<CudaC>>::EXPR.contains("erff(x *"));
         assert!(<GeluGradOp as UnaryExpr<HipC>>::EXPR.contains("expf(-0.5f * x * x)"));

@@ -11,6 +11,18 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-LGAMMA-EXPRESSION-PARITY-1] Log-gamma vocabulary
+
+- Finding: Leto and Coeus expose `lgamma`, but Hephaestus had no shared marker;
+  Coeus WGPU explicitly rejected it.
+- Resolution: add `LgammaOp`; CUDA and HIP use native `lgamma`, while WGPU and
+  Metal use the provider-owned Lanczos/reflection expression.
+- Residual: Coeus consumer routing, exact-head provider CI, f64/reduced/vector
+  contracts, and digamma gradients remain open.
+- Evidence target: core expression tests, Coeus differential tests for positive,
+  reflected, and pole inputs, and exact-head WGPU, CUDA, ROCm, and Metal jobs.
+- Status: provider implementation in progress.
+
 ## [HEPH-GELU-EXPRESSION-PARITY-1] Exact GELU vocabulary
 
 - Finding: Leto and Coeus expose exact `Gelu` and `GeluGrad`, and WGPU/CUDA

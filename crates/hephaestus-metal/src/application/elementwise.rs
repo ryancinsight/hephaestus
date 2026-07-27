@@ -10,10 +10,10 @@ use hephaestus_wgpu as wgpu_backend;
 pub use wgpu_backend::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp,
-    GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, LeOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
-    MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp,
-    SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanOp,
-    TanhGradOp, TanhOp, TruncOp,
+    GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op,
+    LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp,
+    SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp,
+    SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 
 /// Run binary elementwise operation, allocating a new buffer.

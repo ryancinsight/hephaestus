@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add the shared `LgammaOp` marker with CUDA, HIP, and WGSL expressions.
+- [x] Export the marker through WGPU, CUDA, ROCm, and Metal.
+- [x] Add core expression tests for native forms, Lanczos coefficients, and
+      pole/infinity selection.
+- [ ] Route f32 `lgamma` through Coeus's WGPU, CUDA, ROCm, and Metal backends
+      and compare with the Leto CPU oracle.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record exact evidence.
+
+Implementation owner: Codex on `codex/hephaestus-lgamma-parity`; ADR 0031.
+
 ## HEPH-GELU-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add shared exact `GeluOp` and `GeluGradOp` markers using the existing

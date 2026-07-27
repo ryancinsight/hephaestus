@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add `LgammaOp` to the shared unary vocabulary with native CUDA/HIP
+  expressions and a WGPU/Metal Lanczos/reflection expression. Coeus consumer
+  routing and provider CI remain open.
+
 - [minor] Add shared exact `GeluOp` and `GeluGradOp` expression markers for
   WGPU, CUDA, ROCm, and Metal. The forward operation uses the existing
   Abramowitz–Stegun `erf` composition and the gradient uses the analytic normal
