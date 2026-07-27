@@ -4,6 +4,32 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-REDUCTION-PRODUCT-AXIS-PARITY-1 [minor] — complete locally; hosted CI pending
+
+- Owner: Codex; scope: complete rank-2 `prod_axis` and `prod_axis_into`
+  parity across WGPU, CUDA, ROCm, and Metal, including the shared `ProdOp`
+  identity/dialect contract, public exports, value-semantic tests, and
+  synchronized documentation.
+- Non-goals: scalar product reductions, prepared product plans, new kernels,
+  higher-rank reductions, and unrelated provider operation families.
+- Acceptance: every backend exports both product-axis forms with the existing
+  strided rank-2 validation and empty-axis multiplicative identity; contracts
+  cover both axes, caller-owned and allocated outputs, a non-contiguous input,
+  empty-axis identity, and invalid output layouts; core tests pin all provider
+  dialect identity tokens; the four provider gates pass on the exact head.
+- Risk/change class: `[minor]` additive provider surface and contract closure.
+- Status: implementation and local focused verification complete; hosted
+  exact-head feature and hardware workflows remain the merge gate.
+- Evidence: core Nextest 3/3; WGPU, CUDA no-default, ROCm no-default, and
+  Metal no-default product contracts 1/1 each; all-provider clippy passed with
+  `-D warnings`; no-default doctests passed. Default CUDA linking is blocked on
+  this Windows host because `ld.exe` cannot find `-lcuda`; rustdoc is blocked
+  by the pre-existing duplicate Moirai patch key in the local Coeus manifest.
+- Claimed files: product operation vocabulary/export, four product-axis
+  provider contract tests, ADR 0028, README, CHANGELOG, checklist, and this
+  item. Execution owner: Codex; follow-up branch is prepared from the merged
+  comparison-expression base.
+
 ## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — in progress
 
 - Owner: Codex; scope: typed comparison expressions and WGPU, CUDA, ROCm, and

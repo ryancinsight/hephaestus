@@ -19,13 +19,13 @@ use hephaestus_metal::{
     AddOp, ExpNegOp, ExpOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
     MatrixSolve, MaxOp, MetalBinaryStorageKernel, MetalDevice, MetalMultiStorageKernel,
     MetalStorageBinding, MetalStorageBindingLayout, MetalUnaryStorageKernel, MinOp, MulOp, NegOp,
-    SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
+    ProdOp, SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
     normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, prod_axis, reduce_axis_into, reduction, scalar_elementwise,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, unary_elementwise, unary_elementwise_into,
-    uniform_with_seed,
+    prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis_into, reduction,
+    scalar_elementwise, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
+    suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into, unary_elementwise,
+    unary_elementwise_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_metal::{
@@ -887,6 +887,27 @@ fn reduction_axis_into_matches_cpu_reference() {
     d.download(&output, &mut got).unwrap();
     assert_eq!(got, [5.0, 7.0, 9.0]);
 
+    let product_output = d.alloc_zeroed::<f32>(3).unwrap();
+    let product_output_layout = Layout::c_contiguous([1, 3]).unwrap();
+    reduce_axis_into::<ProdOp, f32>(
+        &d,
+        StridedOperand {
+            buffer: &input,
+            layout: &input_layout,
+        },
+        0,
+        StridedOperand {
+            buffer: &product_output,
+            layout: &product_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product_output = [0.0f32; 3];
+    d.download(&product_output, &mut got_product_output)
+        .unwrap();
+    assert_eq!(got_product_output, [4.0, 10.0, 18.0]);
+
     let product = prod_axis(
         &d,
         StridedOperand {
@@ -900,6 +921,42 @@ fn reduction_axis_into_matches_cpu_reference() {
     let mut got_product = [0.0f32; 2];
     d.download(&product, &mut got_product).unwrap();
     assert_eq!(got_product, [6.0, 120.0]);
+
+    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed_product = prod_axis(
+        &d,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_transposed_product = [0.0f32; 3];
+    d.download(&transposed_product, &mut got_transposed_product)
+        .unwrap();
+    assert_eq!(got_transposed_product, [4.0, 10.0, 18.0]);
+
+    let wrong_product_output = d.alloc_zeroed::<f32>(6).unwrap();
+    let wrong_product_layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert!(matches!(
+        prod_axis_into(
+            &d,
+            StridedOperand {
+                buffer: &input,
+                layout: &input_layout,
+            },
+            1,
+            StridedOperand {
+                buffer: &wrong_product_output,
+                layout: &wrong_product_layout,
+            },
+            BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
 }
 
 #[test]
@@ -1074,6 +1131,22 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     let mut got_empty_product = [0.0f32; 3];
     d.download(&empty_product, &mut got_empty_product).unwrap();
     assert_eq!(got_empty_product, [1.0, 1.0, 1.0]);
+
+    let empty_axis0_input_layout = Layout::c_contiguous([0, 3]).unwrap();
+    let empty_axis0_product = prod_axis(
+        &d,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_axis0_input_layout,
+        },
+        0,
+        width,
+    )
+    .unwrap();
+    let mut got_empty_axis0_product = [0.0f32; 3];
+    d.download(&empty_axis0_product, &mut got_empty_axis0_product)
+        .unwrap();
+    assert_eq!(got_empty_axis0_product, [1.0, 1.0, 1.0]);
 
     let empty_min = prepare_min_axis_into(
         &d,

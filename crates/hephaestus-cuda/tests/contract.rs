@@ -9,16 +9,16 @@ use hephaestus_core::{
     HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp,
+    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, ProdOp, RecipOp, SqrtOp,
     StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into,
     cumprod, cumprod_into, det, dot, kron, matexp, matmul, matmul_into, matrix_rank,
     matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
     prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
-    unary_elementwise_into,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis,
+    prod_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+    trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -1075,6 +1075,21 @@ fn reduction_axis_reduction_generic_matches_cpu() {
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![5.0, 7.0, 9.0]);
 
+    let product_columns = reduce_axis::<ProdOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product_columns = [0.0f32; 3];
+    dev.download(&product_columns, &mut got_product_columns)
+        .unwrap();
+    assert_eq!(got_product_columns, [4.0, 10.0, 18.0]);
+
     let product = prod_axis::<f32>(
         &dev,
         StridedOperand {
@@ -1088,6 +1103,80 @@ fn reduction_axis_reduction_generic_matches_cpu() {
     let mut got_product = vec![0.0f32; 2];
     dev.download(&product, &mut got_product).unwrap();
     assert_eq!(got_product, vec![6.0, 120.0]);
+
+    let product_output = dev.alloc_zeroed::<f32>(2).unwrap();
+    let product_output_layout = Layout::c_contiguous([2, 1]).unwrap();
+    prod_axis_into(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &product_output,
+            layout: &product_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product_into = [0.0f32; 2];
+    dev.download(&product_output, &mut got_product_into)
+        .unwrap();
+    assert_eq!(got_product_into, [6.0, 120.0]);
+
+    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed_product = prod_axis(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &transposed_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_transposed_product = [0.0f32; 3];
+    dev.download(&transposed_product, &mut got_transposed_product)
+        .unwrap();
+    assert_eq!(got_transposed_product, [4.0, 10.0, 18.0]);
+
+    let wrong_product_output = dev.alloc_zeroed::<f32>(6).unwrap();
+    let wrong_product_layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert!(matches!(
+        prod_axis_into(
+            &dev,
+            StridedOperand {
+                buffer: &a,
+                layout: &a_layout,
+            },
+            1,
+            StridedOperand {
+                buffer: &wrong_product_output,
+                layout: &wrong_product_layout,
+            },
+            BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    let empty = dev.upload::<f32>(&[]).unwrap();
+    let empty_layout = Layout::c_contiguous([0, 2]).unwrap();
+    let empty_product = prod_axis(
+        &dev,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty_product = [0.0f32; 2];
+    dev.download(&empty_product, &mut got_empty_product)
+        .unwrap();
+    assert_eq!(got_empty_product, [1.0, 1.0]);
 }
 
 #[test]

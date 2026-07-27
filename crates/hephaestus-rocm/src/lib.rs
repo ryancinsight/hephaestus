@@ -33,7 +33,7 @@ pub mod application;
 pub use infrastructure::{RocmBuffer, RocmDevice};
 
 pub use application::axis_reduction::{
-    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
+    ProdOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
     prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
 #[cfg(feature = "decomposition")]

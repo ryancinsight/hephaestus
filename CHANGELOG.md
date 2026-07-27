@@ -37,6 +37,12 @@ Target release: 0.18.0.
 - [minor] Add allocated and caller-owned rank-2 `suffix_sum` operations to
   WGPU, CUDA, ROCm, and Metal over the shared reverse `CumSumOp` scan kernel.
 
+- [minor] Complete rank-2 product-axis reduction parity across WGPU, CUDA,
+  ROCm, and Metal. Every backend exports allocated and caller-owned
+  `prod_axis` forms over the shared `ProdOp` identity contract, including
+  strided input validation and multiplicative identities for empty reduced
+  axes.
+
 - [patch] Add a standalone Linux WGPU feature-and-contract CI lane covering
   minimal and default surfaces; make CUDA's `decomposition` feature include
   the CUDA substrate required by its decomposition kernels.
