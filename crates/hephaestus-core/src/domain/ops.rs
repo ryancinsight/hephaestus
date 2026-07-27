@@ -1122,6 +1122,8 @@ mod tests {
         assert_eq!(<SumOp as CombineExpr<Wgsl>>::EXPR, "lhs + rhs");
         assert_eq!(<SumOp as CombineExpr<CudaC>>::EXPR, "lhs + rhs");
         assert_eq!(<SumOp as CombineExpr<HipC>>::EXPR, "lhs + rhs");
+        assert_eq!(<ProdOp as CombineExpr<Wgsl>>::EXPR, "lhs * rhs");
+        assert_eq!(<ProdOp as CombineExpr<CudaC>>::EXPR, "lhs * rhs");
         assert_eq!(<ProdOp as CombineExpr<HipC>>::EXPR, "lhs * rhs");
         assert_eq!(<AddOp as BinaryExpr<HipC>>::EXPR, "lhs + rhs");
         assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
@@ -1165,8 +1167,19 @@ mod tests {
         assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
         assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
+        assert_eq!(<f32 as IdentityToken<ProdOp, Wgsl>>::TOKEN, "1.0");
+        assert_eq!(<f32 as IdentityToken<ProdOp, CudaC>>::TOKEN, "1.0f");
+        assert_eq!(<f32 as IdentityToken<ProdOp, HipC>>::TOKEN, "1.0f");
+        assert_eq!(<u32 as IdentityToken<ProdOp, Wgsl>>::TOKEN, "1u");
+        assert_eq!(<u32 as IdentityToken<ProdOp, CudaC>>::TOKEN, "1u");
+        assert_eq!(<u32 as IdentityToken<ProdOp, HipC>>::TOKEN, "1u");
+        assert_eq!(<i32 as IdentityToken<ProdOp, Wgsl>>::TOKEN, "1");
+        assert_eq!(<i32 as IdentityToken<ProdOp, CudaC>>::TOKEN, "1");
+        assert_eq!(<i32 as IdentityToken<ProdOp, HipC>>::TOKEN, "1");
         assert_eq!(<f32 as OpIdentity<MinOp>>::IDENTITY, f32::MAX);
         assert_eq!(<f32 as OpIdentity<ProdOp>>::IDENTITY, 1.0);
+        assert_eq!(<u32 as OpIdentity<ProdOp>>::IDENTITY, 1);
+        assert_eq!(<i32 as OpIdentity<ProdOp>>::IDENTITY, 1);
         assert_eq!(<u32 as OpIdentity<MaxOp>>::IDENTITY, u32::MIN);
     }
 
