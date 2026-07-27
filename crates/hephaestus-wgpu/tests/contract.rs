@@ -5,8 +5,8 @@
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
-    AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, MaxOp, MinOp,
-    MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
+    AbsOp, AddOp, ComputeDevice, DeviceBuffer, ExpNegOp, ExpOp, HephaestusError, LgammaOp, MaxOp,
+    MinOp, MulOp, NegOp, RecipOp, SqrtOp, SubOp, SumOp, WgpuDevice, binary_elementwise,
     binary_elementwise_into, cumsum_into, matrix_rank, matrix_rank_with_tolerance, max_axis,
     max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,
     prepare_mean_axis_into, prepare_min_axis_into, prepare_reduction, prepare_sum_axis_into,
@@ -530,6 +530,40 @@ fn elementwise_unary_matches_cpu_reference() {
     let mut got_recip = vec![0.0f32; host_recip.len()];
     device.download(&out_recip, &mut got_recip).unwrap();
     assert_eq!(got_recip, vec![1.0f32, 0.5, 0.25, 0.125]);
+}
+
+#[test]
+fn elementwise_lgamma_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = [0.5_f32, 1.0, 4.0, 0.0, -1.0];
+    let input = device.upload(&host).unwrap();
+    let output = unary_elementwise::<LgammaOp, f32>(&device, &input).unwrap();
+    let mut got = [0.0_f32; 5];
+    device.download(&output, &mut got).unwrap();
+
+    let expected = [
+        0.572_364_94_f32,
+        0.0,
+        6.0_f32.ln(),
+        f32::INFINITY,
+        f32::INFINITY,
+    ];
+    for (index, (&actual, &reference)) in got.iter().zip(expected.iter()).enumerate() {
+        if reference.is_infinite() {
+            assert!(
+                actual.is_infinite() && actual.is_sign_positive(),
+                "lgamma[{index}] expected positive infinity, got {actual}"
+            );
+            continue;
+        }
+        let tolerance = f32::EPSILON * 2048.0 * reference.abs().max(1.0);
+        assert!(
+            (actual - reference).abs() <= tolerance,
+            "lgamma[{index}] expected {reference}, got {actual}, tolerance {tolerance}"
+        );
+    }
 }
 
 #[test]

@@ -419,11 +419,12 @@ macro_rules! wgsl_lgamma_positive_expr {
 macro_rules! wgsl_lgamma_expr {
     () => {
         concat!(
-            "select(select(",
-            wgsl_lgamma_positive_expr!("x"),
-            ", (1.1447298858494002 - log(abs(sin(3.141592653589793 * x))) - ",
-            wgsl_lgamma_positive_expr!("(1.0 - x)"),
-            "), x >= 0.5), select(1.0 / abs(x - trunc(x)), abs(x), abs(x) > 3.402823466e+38), ((x <= 0.0) && (x == trunc(x))) || abs(x) > 3.402823466e+38)"
+            "select(select(select(",
+            "(1.1447298858494002 - log(abs(sin(3.141592653589793 * x))) - ",
+            wgsl_lgamma_positive_expr!("max(abs(1.0 - x), 0.5)"),
+            "), ",
+            wgsl_lgamma_positive_expr!("max(abs(x), 0.5)"),
+            ", x >= 0.5), 1.0 / abs(x - trunc(x)), ((x <= 0.0) && (x == trunc(x)))), abs(x), abs(x) > 3.402823466e+38)"
         )
     };
 }
