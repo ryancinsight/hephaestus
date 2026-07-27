@@ -11,7 +11,10 @@ Sprint target: 0.18.0. Phase: Closure.
       rounding semantics.
 - [ ] Route the f32 operations through Coeus ROCm and Metal and compare with
       the Leto CPU oracle.
-- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence:
+      head `b088a2f`; WGPU `89997918070`, CUDA `89997916944`, ROCm
+      `89997920644`, and Metal `89997917574` passed. Required AMD and NVIDIA
+      hardware jobs were skipped.
 
 Implementation owner: Codex on `codex/hephaestus-unary-math-parity`.
 

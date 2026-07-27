@@ -24,8 +24,10 @@ architectural decision or a tracked future-work item:
 - Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
   tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
   runner execution is reported separately from adapterless provider CI.
-- Status: implementation is in progress; consumer routing and hosted evidence
-  remain open.
+- Status: Hephaestus implementation and exact-head provider evidence are
+  complete at `b088a2f`; WGPU `89997918070`, CUDA `89997916944`, ROCm
+  `89997920644`, and Metal `89997917574` passed. Coeus consumer routing and
+  differential verification remain open in the downstream repository.
 
 ## [HEPH-SCAN-SUFFIX-PARITY-1] Reverse cumulative-sum convenience surface
 

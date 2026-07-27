@@ -22,8 +22,10 @@ cuda-oxide + cutile).
   oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0028 owns the
   f32 expression and residual-capability decision.
-- Status: Hephaestus implementation is in progress; Coeus routing and hosted
-  verification remain open.
+- Status: Hephaestus implementation is complete at `b088a2f`; WGPU job
+  `89997918070`, CUDA job `89997916944`, ROCm job `89997920644`, and Metal job
+  `89997917574` all passed. Required AMD and NVIDIA hardware jobs were skipped;
+  Coeus routing and consumer verification remain open in Coeus.
 
 ## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — done
 
