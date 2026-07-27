@@ -53,7 +53,9 @@ Target release: 0.18.0.
 
 - [minor] Add shared dialect-specific ZST markers for ReLU, sigmoid, tanh,
   tanh-GELU, SiLU, and softplus forward and gradient elementwise expressions;
-  WGPU, CUDA, ROCm, and Metal export the common vocabulary.
+  WGPU, CUDA, ROCm, and Metal export the common vocabulary. Provider CI passed
+  the value-semantic f32 contracts on all four backends; Coeus consumer
+  routing remains in progress.
 
 - [minor] Add allocated and caller-owned rank-2 `suffix_sum` operations to
   WGPU, CUDA, ROCm, and Metal over the shared reverse `CumSumOp` scan kernel.

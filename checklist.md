@@ -94,11 +94,18 @@ and ROCm `89986120026`; required AMD hardware remained skipped.
 - [x] Export the markers through the WGPU, CUDA, ROCm, and Metal elementwise
       surfaces.
 - [x] Verify formatting and the focused `hephaestus-core` Nextest suite.
-- [ ] Merge the provider vocabulary increment and run the Coeus ROCm/Metal
-      differential contracts on the exact consumer head.
+- [x] Add f32 provider contracts that compare tanh-GELU, SiLU, and Softplus
+      forward and gradient dispatch with bounded CPU references.
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI.
+- [ ] Route the f32 operations through Coeus and compare with the Leto CPU
+      oracle on the exact consumer head.
 
 Implementation owner: Codex on `codex/activation-expression-parity`;
-provider/consumer integration remains open in the Coeus repository.
+provider PR #120 merged at `9f8416c`. Exact-head provider jobs passed WGPU
+`90101823245` (160/160), CUDA `90101823086` (123/123), ROCm `90101823407`
+(79/79), and Metal `90101822854` (33/33); NVIDIA `90101823835` and AMD
+`90101824100` hardware jobs were skipped. Coeus consumer integration remains
+open in peer-owned backend scopes.
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
 
