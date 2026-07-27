@@ -589,15 +589,15 @@ increment.
 
 ## HEPH-ROCM-PARITY-SYMMETRIC-5 [minor] — done
 
-- [ ] Add ROCm UDU and Bunch–Kaufman public surfaces behind `decomposition`.
-- [ ] Mirror the CUDA/WGPU shared Leto factor boundary into typed ROCm U/D and
+- [x] Add ROCm UDU and Bunch–Kaufman public surfaces behind `decomposition`.
+- [x] Mirror the CUDA/WGPU shared Leto factor boundary into typed ROCm U/D and
       L/D/permutation results without a backend-selection fallback.
-- [ ] Add square, empty, non-symmetric, non-finite, reconstruction, solve,
+- [x] Add square, empty, non-symmetric, non-finite, reconstruction, solve,
       determinant, inverse, and permutation value contracts.
-- [ ] Extend hosted ROCm CI and feature hygiene for the symmetric-indefinite
+- [x] Extend hosted ROCm CI and feature hygiene for the symmetric-indefinite
       decomposition code.
-- [ ] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
-- [ ] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
+- [x] Synchronize the ROCm README, changelog, ADR, backlog, and checklist.
+- [x] Pass hosted build, warning-denied Clippy, Nextest, doctest, and rustdoc;
       merge the verified increment.
 
 Execution owner: Codex on `codex/hephaestus-rocm-factorization-next`. Hosted ROCm
