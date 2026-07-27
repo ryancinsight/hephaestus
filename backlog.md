@@ -4,10 +4,10 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — provider complete / consumer open
+## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — done
 
-- Owner: Codex on `codex/hephaestus-erf-erfc-parity`; scope: shared `ErfOp` and
-  `ErfcOp` markers and WGPU, CUDA, ROCm, and Metal exports consumed by Coeus.
+- Owner: Codex; scope: shared `ErfOp` and `ErfcOp` markers and WGPU, CUDA, ROCm,
+  and Metal exports consumed by Coeus.
 - Outcome: expose one provider-owned expression vocabulary for the Leto CPU
   `erf` and `erfc` operations.
 - Non-goals: `lgamma`, tail-stable `erfc`, parameterized activations, f64 or
@@ -20,13 +20,14 @@ cuda-oxide + cutile).
   compares them with the Leto CPU oracle.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0029 owns the
   expression and numerical-contract decision.
-- Status: Hephaestus implementation and exact-head provider evidence are
-  complete; Coeus consumer routing remains open in the Coeus parity item.
-- Evidence: code head `9fc20947` passed WGPU run `30280525008` job
-  `90025442312`, CUDA run `30280524996` job `90025442377`, ROCm run
-  `30280524846` job `90025441726`, and Metal run `30280521250` job
-  `90025429875`. AMD hardware job `90025442537` and NVIDIA hardware job
-  `90025443574` skipped because no registered device runner was selected.
+- Status: complete. Hephaestus implementation and exact-head provider evidence
+  are complete, and Coeus routes the f32 operations through ROCm and Metal.
+- Evidence: provider docs head `df8a896` passed WGPU job `90028947591`, CUDA
+  job `90028946846`, ROCm job `90028946770`, and Metal job `90028947450`.
+  Coeus PR #228 merged at `aca9a5a8`; its final docs head `08614299` passed
+  run `30283857017` with CUDA job `90036655765`, ROCm job `90036655656`, Metal
+  job `90036655618`, and WGPU job `90036655846`. AMD/NVIDIA hardware jobs
+  skipped because no registered device runner was selected.
 
 ## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor] — in progress
 

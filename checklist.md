@@ -8,17 +8,18 @@ Sprint target: 0.18.0. Phase: Closure.
       CUDA C++/HIP C++ native expressions.
 - [x] Export both markers through WGPU, CUDA, ROCm, and Metal.
 - [x] Add core expression tests for native forms and WGSL composition.
-- [ ] Route the f32 operations through Coeus ROCm and Metal and compare with
+- [x] Route the f32 operations through Coeus ROCm and Metal and compare with
       the Leto CPU oracle.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
 
-Implementation owner: Codex on `codex/hephaestus-erf-erfc-parity`.
+Implementation owner: Codex. Coeus PR #228 merged at `aca9a5a8`.
 
 Provider evidence: code head `9fc20947` passed WGPU run `30280525008` job
 `90025442312`, CUDA run `30280524996` job `90025442377`, ROCm run
 `30280524846` job `90025441726`, and Metal run `30280521250` job `90025429875`.
 The AMD and NVIDIA hardware jobs skipped because no physical device runner was
-selected. Coeus routing remains open in the consumer repository.
+selected. Coeus final docs head `08614299` passed run `30283857017`: CUDA
+`90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU `90036655846`.
 
 ## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor]
 
