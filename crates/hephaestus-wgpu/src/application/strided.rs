@@ -17,7 +17,8 @@ use std::any::TypeId;
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
-    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
+    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, TypedBinaryExpr,
+    UnaryExpr, Wgsl,
 };
 use leto::Layout;
 
@@ -197,7 +198,7 @@ fn encode_strided(
     Ok(())
 }
 
-fn binary_shader<Op: BinaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
+fn binary_shader<T: DialectScalar<Wgsl>>(width: BlockWidth, expr: &'static str) -> String {
     format!(
         r#"{meta}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
@@ -220,7 +221,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         decode = WGSL_DECODE,
-        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
+        expr = expr,
     )
 }
 
@@ -290,15 +291,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// control stays with the consumer); zero-stride aliasing in the output
 /// layout is rejected because concurrent invocations would race on one
 /// physical element. Rank is capped at [`MAX_STRIDED_RANK`] at compile time.
-pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+fn binary_elementwise_strided_into_expression<T, const N: usize>(
     device: &WgpuDevice,
     a: StridedOperand<'_, T, N>,
     b: StridedOperand<'_, T, N>,
     out: StridedOperand<'_, T, N>,
     width: BlockWidth,
+    operation: TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
@@ -339,13 +341,9 @@ where
     };
     let pipeline = cached_pipeline(
         device,
-        (
-            TypeId::of::<StridedBinaryKernel<Op>>(),
-            TypeId::of::<T>(),
-            width.get(),
-        ),
+        (operation, TypeId::of::<T>(), width.get()),
         "hephaestus-strided-binary",
-        || binary_shader::<Op, T>(width),
+        || binary_shader::<T>(width, expr),
     );
     encode_strided(
         device,
@@ -355,6 +353,84 @@ where
         len,
         width,
         "hephaestus-strided-binary",
+    )
+}
+
+/// Run a scalar-aware binary operation over broadcastable strided operands.
+pub fn binary_elementwise_strided_typed_into<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        TypeId::of::<StridedBinaryKernel<Op>>(),
+        <Op as TypedBinaryExpr<Wgsl, T>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation over strided operands, allocating a
+/// contiguous output buffer.
+pub fn binary_elementwise_strided_typed<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    binary_elementwise_strided_typed_into::<Op, T, N>(
+        device,
+        a,
+        b,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
+/// Run `out[idx] = op(a[idx], b[idx])` over logical indices of `out_layout`.
+pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        TypeId::of::<StridedBinaryKernel<Op>>(),
+        <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
 

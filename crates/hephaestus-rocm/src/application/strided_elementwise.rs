@@ -8,7 +8,7 @@
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
-    Result, UnaryExpr,
+    Result, TypedBinaryExpr, UnaryExpr,
 };
 use leto::Layout;
 
@@ -59,7 +59,7 @@ const HIP_DECODE: &str = r#"
     }
 "#;
 
-fn binary_shader<Op: BinaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
+fn binary_shader<T: DialectScalar<HipC>>(expr: &'static str) -> String {
     format!(
         r#"
 {meta}
@@ -82,7 +82,7 @@ extern "C" __global__ void binary_strided_kernel(
         meta = HIP_META,
         decode = HIP_DECODE,
         ty = T::TYPE_TOKEN,
-        expr = Op::EXPR,
+        expr = expr,
     )
 }
 
@@ -198,26 +198,41 @@ fn map_layout_err(error: leto::LetoError) -> HephaestusError {
     }
 }
 
-fn launch_binary<Op, T>(
-    device: &RocmDevice,
-    lhs: &RocmBuffer<T>,
-    rhs: &RocmBuffer<T>,
-    output: &RocmBuffer<T>,
+struct BinaryKernelLaunch<'a, T> {
+    lhs: &'a RocmBuffer<T>,
+    rhs: &'a RocmBuffer<T>,
+    output: &'a RocmBuffer<T>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
+    operation: core::any::TypeId,
+    expr: &'static str,
+}
+
+fn launch_binary_expression<T>(
+    device: &RocmDevice,
+    request: BinaryKernelLaunch<'_, T>,
 ) -> Result<()>
 where
-    Op: BinaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
+    let BinaryKernelLaunch {
+        lhs,
+        rhs,
+        output,
+        meta,
+        width,
+        len,
+        operation,
+        expr,
+    } = request;
     let key = PipelineKey::StridedBinary {
-        op: core::any::TypeId::of::<Op>(),
+        op: operation,
         scalar: core::any::TypeId::of::<T>(),
         width: width.get(),
     };
     let kernel = cached_kernel(device, key, "binary_strided_kernel", || {
-        binary_shader::<Op, T>()
+        binary_shader::<T>(expr)
     })?;
     let mut meta = meta;
     let mut lhs_ptr: DevicePtr = lhs.raw();
@@ -313,15 +328,16 @@ where
 }
 
 /// Run `out[idx] = op(lhs[idx], rhs[idx])` over a strided rank-`N` output.
-pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+fn binary_elementwise_strided_into_expression<T, const N: usize>(
     device: &RocmDevice,
     lhs: StridedOperand<'_, T, N>,
     rhs: StridedOperand<'_, T, N>,
     output: StridedOperand<'_, T, N>,
     width: BlockWidth,
+    operation: core::any::TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
     const {
@@ -368,14 +384,64 @@ where
             dispatch_len(len)?,
         ],
     };
-    launch_binary::<Op, T>(
+    launch_binary_expression(
         device,
-        lhs.buffer,
-        rhs.buffer,
-        output.buffer,
-        meta,
+        BinaryKernelLaunch {
+            lhs: lhs.buffer,
+            rhs: rhs.buffer,
+            output: output.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
+    )
+}
+
+/// Run `out[idx] = op(lhs[idx], rhs[idx])` over a strided rank-`N` output.
+pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+    device: &RocmDevice,
+    lhs: StridedOperand<'_, T, N>,
+    rhs: StridedOperand<'_, T, N>,
+    output: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<HipC>,
+    T: DialectScalar<HipC> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        lhs,
+        rhs,
+        output,
         width,
-        len,
+        core::any::TypeId::of::<Op>(),
+        <Op as BinaryExpr<HipC>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation over a strided rank-`N` output.
+pub fn binary_elementwise_strided_typed_into<Op, T, const N: usize>(
+    device: &RocmDevice,
+    lhs: StridedOperand<'_, T, N>,
+    rhs: StridedOperand<'_, T, N>,
+    output: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<HipC, T>,
+    T: DialectScalar<HipC> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        lhs,
+        rhs,
+        output,
+        width,
+        core::any::TypeId::of::<Op>(),
+        <Op as TypedBinaryExpr<HipC, T>>::EXPR,
     )
 }
 
@@ -394,6 +460,34 @@ where
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     binary_elementwise_strided_into::<Op, T, N>(
+        device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output,
+            layout: &output_layout,
+        },
+        width,
+    )?;
+    Ok(output)
+}
+
+/// Allocate a C-contiguous output and run a scalar-aware strided binary
+/// operation.
+pub fn binary_elementwise_strided_typed<Op, T, const N: usize>(
+    device: &RocmDevice,
+    lhs: StridedOperand<'_, T, N>,
+    rhs: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<RocmBuffer<T>>
+where
+    Op: TypedBinaryExpr<HipC, T>,
+    T: DialectScalar<HipC> + Pod,
+{
+    let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    binary_elementwise_strided_typed_into::<Op, T, N>(
         device,
         lhs,
         rhs,
@@ -571,7 +665,7 @@ mod tests {
 
     #[test]
     fn sources_share_rank_four_decode_and_operation_contracts() {
-        let binary = binary_shader::<hephaestus_core::AddOp, i32>();
+        let binary = binary_shader::<i32>("lhs + rhs");
         let unary = unary_shader::<hephaestus_core::IdentityOp, i32>();
         let scalar = scalar_shader::<hephaestus_core::MulOp, i32>();
         for source in [&binary, &unary, &scalar] {

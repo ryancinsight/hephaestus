@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    Result, UnaryExpr,
+    Result, TypedBinaryExpr, UnaryExpr,
 };
 use leto::Layout;
 
@@ -285,7 +285,7 @@ fn broadcast_dyn_layout(layout: StridedLayout<'_>, out_shape: &[usize]) -> Resul
     })
 }
 
-fn binary_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+fn binary_shader<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
         r#"
 {meta}
@@ -308,7 +308,7 @@ extern "C" __global__ void binary_strided_kernel(
         meta = CUDA_META,
         ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
-        expr = Op::EXPR,
+        expr = expr,
     )
 }
 
@@ -364,29 +364,44 @@ extern "C" __global__ void scalar_strided_kernel(
     )
 }
 
-fn launch_binary_strided<Op, T>(
-    device: &CudaDevice,
-    a: &CudaBuffer<T>,
-    b: &CudaBuffer<T>,
-    out: &CudaBuffer<T>,
+struct BinaryStridedLaunch<'a, T> {
+    a: &'a CudaBuffer<T>,
+    b: &'a CudaBuffer<T>,
+    out: &'a CudaBuffer<T>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
+    operation: std::any::TypeId,
+    expr: &'static str,
+}
+
+fn launch_binary_strided_expression<T>(
+    device: &CudaDevice,
+    request: BinaryStridedLaunch<'_, T>,
 ) -> Result<()>
 where
-    Op: BinaryExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod,
 {
+    let BinaryStridedLaunch {
+        a,
+        b,
+        out,
+        meta,
+        width,
+        len,
+        operation,
+        expr,
+    } = request;
     let grid_size_val = grid_size(len, width)?;
 
     let key = PipelineKey::StridedBinary {
-        op: std::any::TypeId::of::<Op>(),
+        op: operation,
         scalar: std::any::TypeId::of::<T>(),
         width: width.get(),
     };
 
     let kernel = cached_kernel(device, key, "binary_strided_kernel", || {
-        binary_shader::<Op, T>()
+        binary_shader::<T>(expr)
     })?;
 
     let mut meta_val = meta;
@@ -499,16 +514,16 @@ where
     )
 }
 
-/// Run `out[idx] = op(a[idx], b[idx])` over dynamic-rank logical output indices.
-pub fn binary_elementwise_strided_dyn_into<Op, T>(
+fn binary_elementwise_strided_dyn_into_expression<T>(
     device: &CudaDevice,
     a: StridedOperandDyn<'_, T>,
     b: StridedOperandDyn<'_, T>,
     out: StridedOperandDyn<'_, T>,
     width: BlockWidth,
+    operation: std::any::TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod,
 {
     validate_dyn_layout("binary left", a.buffer, a.layout)?;
@@ -533,7 +548,66 @@ where
         ],
     };
 
-    launch_binary_strided::<Op, T>(device, a.buffer, b.buffer, out.buffer, meta, width, len)
+    launch_binary_strided_expression(
+        device,
+        BinaryStridedLaunch {
+            a: a.buffer,
+            b: b.buffer,
+            out: out.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
+    )
+}
+
+/// Run `out[idx] = op(a[idx], b[idx])` over dynamic-rank logical output indices.
+pub fn binary_elementwise_strided_dyn_into<Op, T>(
+    device: &CudaDevice,
+    a: StridedOperandDyn<'_, T>,
+    b: StridedOperandDyn<'_, T>,
+    out: StridedOperandDyn<'_, T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_strided_dyn_into_expression::<T>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as BinaryExpr<CudaC>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation over dynamic-rank logical output
+/// indices.
+pub fn binary_elementwise_strided_dyn_typed_into<Op, T>(
+    device: &CudaDevice,
+    a: StridedOperandDyn<'_, T>,
+    b: StridedOperandDyn<'_, T>,
+    out: StridedOperandDyn<'_, T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<CudaC, T>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_strided_dyn_into_expression::<T>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as TypedBinaryExpr<CudaC, T>>::EXPR,
+    )
 }
 
 /// Run `out[idx] = op(a[idx])` over dynamic-rank logical output indices.
@@ -570,16 +644,16 @@ where
     launch_unary_strided::<Op, T>(device, a.buffer, out.buffer, meta, width, len)
 }
 
-/// Run `out[idx] = op(a[idx], b[idx])` over logical indices of `out_layout`.
-pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+fn binary_elementwise_strided_into_expression<T, const N: usize>(
     device: &CudaDevice,
     a: StridedOperand<'_, T, N>,
     b: StridedOperand<'_, T, N>,
     out: StridedOperand<'_, T, N>,
     width: BlockWidth,
+    operation: std::any::TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod,
 {
     const {
@@ -619,7 +693,65 @@ where
         ],
     };
 
-    launch_binary_strided::<Op, T>(device, a.buffer, b.buffer, out.buffer, meta, width, len)
+    launch_binary_strided_expression(
+        device,
+        BinaryStridedLaunch {
+            a: a.buffer,
+            b: b.buffer,
+            out: out.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
+    )
+}
+
+/// Run `out[idx] = op(a[idx], b[idx])` over logical indices of `out_layout`.
+pub fn binary_elementwise_strided_into<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as BinaryExpr<CudaC>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation over logical indices of `out_layout`.
+pub fn binary_elementwise_strided_typed_into<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    out: StridedOperand<'_, T, N>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<CudaC, T>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_strided_into_expression::<T, N>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as TypedBinaryExpr<CudaC, T>>::EXPR,
+    )
 }
 
 /// Run `out = op(a, b)` over `output_shape`, allocating a C-contiguous output buffer.
@@ -645,6 +777,39 @@ where
     let len = out_layout.checked_size().map_err(map_layout_err)?;
     let out = device.alloc_zeroed::<T>(len)?;
     binary_elementwise_strided_into::<Op, T, N>(
+        device,
+        a,
+        b,
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+        width,
+    )?;
+    Ok(out)
+}
+
+/// Run a scalar-aware binary operation over `output_shape`, allocating a
+/// contiguous output buffer.
+pub fn binary_elementwise_strided_typed<Op, T, const N: usize>(
+    device: &CudaDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+    output_shape: [usize; N],
+    width: BlockWidth,
+) -> Result<CudaBuffer<T>>
+where
+    Op: TypedBinaryExpr<CudaC, T>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    const {
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+    }
+
+    let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
+    let len = out_layout.checked_size().map_err(map_layout_err)?;
+    let out = device.alloc_zeroed::<T>(len)?;
+    binary_elementwise_strided_typed_into::<Op, T, N>(
         device,
         a,
         b,

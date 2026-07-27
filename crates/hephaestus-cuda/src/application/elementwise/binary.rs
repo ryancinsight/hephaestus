@@ -7,12 +7,12 @@ use crate::infrastructure::buffer::CudaBuffer;
 use bytemuck::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    Result,
+    Result, TypedBinaryExpr,
 };
 
-pub use hephaestus_core::{AddOp, DivOp, MulOp, PowOp, SubOp};
+pub use hephaestus_core::{AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp};
 
-fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+fn shader_source<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
         r#"
 extern "C" __global__ void binary_kernel(
@@ -30,20 +30,21 @@ extern "C" __global__ void binary_kernel(
 }}
 "#,
         ty = T::TYPE_TOKEN,
-        expr = Op::EXPR,
+        expr = expr,
     )
 }
 
 /// Run `out[i] = op(lhs[i], rhs[i])` on the CUDA device into distinct caller-owned storage.
-pub fn binary_elementwise_into<Op, T>(
+fn binary_elementwise_into_expression<T>(
     device: &CudaDevice,
     lhs: &CudaBuffer<T>,
     rhs: &CudaBuffer<T>,
     out: &CudaBuffer<T>,
     width: BlockWidth,
+    operation: std::any::TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod,
 {
     if lhs.len() != rhs.len() {
@@ -67,12 +68,12 @@ where
     let grid_size_val = grid_size(out.len(), width)?;
 
     let key = PipelineKey::Binary {
-        op: std::any::TypeId::of::<Op>(),
+        op: operation,
         scalar: std::any::TypeId::of::<T>(),
         width: width.get(),
     };
 
-    let kernel = cached_kernel(device, key, "binary_kernel", || shader_source::<Op, T>())?;
+    let kernel = cached_kernel(device, key, "binary_kernel", || shader_source::<T>(expr))?;
 
     let mut lhs_ptr = lhs.raw();
     let mut rhs_ptr = rhs.raw();
@@ -92,6 +93,67 @@ where
         &kernel,
         LaunchConfig::linear(grid_size_val, width),
         &mut args,
+    )
+}
+
+/// Run a scalar-aware binary operation into caller-owned storage.
+pub fn binary_elementwise_typed_into<Op, T>(
+    device: &CudaDevice,
+    lhs: &CudaBuffer<T>,
+    rhs: &CudaBuffer<T>,
+    out: &CudaBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<CudaC, T>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_into_expression::<T>(
+        device,
+        lhs,
+        rhs,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as TypedBinaryExpr<CudaC, T>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation, allocating the output buffer.
+pub fn binary_elementwise_typed<Op, T>(
+    device: &CudaDevice,
+    lhs: &CudaBuffer<T>,
+    rhs: &CudaBuffer<T>,
+) -> Result<CudaBuffer<T>>
+where
+    Op: TypedBinaryExpr<CudaC, T>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    let out = device.alloc_zeroed::<T>(lhs.len())?;
+    binary_elementwise_typed_into::<Op, T>(device, lhs, rhs, &out, BlockWidth::DEFAULT)?;
+    Ok(out)
+}
+
+/// Run `out[i] = op(lhs[i], rhs[i])` into caller-owned storage.
+pub fn binary_elementwise_into<Op, T>(
+    device: &CudaDevice,
+    lhs: &CudaBuffer<T>,
+    rhs: &CudaBuffer<T>,
+    out: &CudaBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod,
+{
+    binary_elementwise_into_expression::<T>(
+        device,
+        lhs,
+        rhs,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as BinaryExpr<CudaC>>::EXPR,
     )
 }
 

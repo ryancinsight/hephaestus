@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{
-    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl,
+    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, TypedBinaryExpr,
+    Wgsl,
 };
 
 use super::reject_output_alias;
@@ -8,9 +9,9 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-pub use hephaestus_core::{AddOp, DivOp, MulOp, PowOp, SubOp};
+pub use hephaestus_core::{AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp};
 
-fn shader_source<Op: BinaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
+fn shader_source<T: DialectScalar<Wgsl>>(width: BlockWidth, expr: &'static str) -> String {
     format!(
         r#"@group(0) @binding(0) var<storage, read> a: array<{ty}>;
 @group(0) @binding(1) var<storage, read> b: array<{ty}>;
@@ -29,7 +30,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 "#,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
-        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
+        expr = expr,
     )
 }
 
@@ -38,15 +39,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// Inputs and output must have equal length. The kernel is generated from the
 /// `(Op, T, width)` monomorphization and dispatched in enough workgroups to
 /// cover `out.len()`. The output buffer must not alias either input buffer.
-pub fn binary_elementwise_into<Op, T>(
+fn binary_elementwise_into_expression<T>(
     device: &WgpuDevice,
     a: &WgpuBuffer<T>,
     b: &WgpuBuffer<T>,
     out: &WgpuBuffer<T>,
     width: BlockWidth,
+    operation: std::any::TypeId,
+    expr: &'static str,
 ) -> Result<()>
 where
-    Op: BinaryExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod,
 {
     if a.len != b.len {
@@ -68,13 +70,9 @@ where
     }
     let groups = workgroups(out.len, width)?;
 
-    let key = (
-        std::any::TypeId::of::<Op>(),
-        std::any::TypeId::of::<T>(),
-        width.get(),
-    );
+    let key = (operation, std::any::TypeId::of::<T>(), width.get());
     let pipeline = cached_pipeline(device, key, "hephaestus-elementwise", || {
-        shader_source::<Op, T>(width)
+        shader_source::<T>(width, expr)
     });
 
     super::encode_elementwise(
@@ -96,6 +94,69 @@ where
             },
         ],
         groups,
+    )
+}
+
+/// Run `out[i] = op(a[i], b[i])` for a scalar-aware expression on caller-owned
+/// storage. The typed expression selects representation-correct literals for
+/// the result mask.
+pub fn binary_elementwise_typed_into<Op, T>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    b: &WgpuBuffer<T>,
+    out: &WgpuBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    binary_elementwise_into_expression::<T>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as TypedBinaryExpr<Wgsl, T>>::EXPR,
+    )
+}
+
+/// Run a scalar-aware binary operation, allocating the output buffer.
+pub fn binary_elementwise_typed<Op, T>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    b: &WgpuBuffer<T>,
+) -> Result<WgpuBuffer<T>>
+where
+    Op: TypedBinaryExpr<Wgsl, T>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    let out = device.alloc_zeroed::<T>(a.len)?;
+    binary_elementwise_typed_into::<Op, T>(device, a, b, &out, BlockWidth::DEFAULT)?;
+    Ok(out)
+}
+
+/// Run `out[i] = op(a[i], b[i])` on caller-owned storage.
+pub fn binary_elementwise_into<Op, T>(
+    device: &WgpuDevice,
+    a: &WgpuBuffer<T>,
+    b: &WgpuBuffer<T>,
+    out: &WgpuBuffer<T>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: BinaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl> + Pod,
+{
+    binary_elementwise_into_expression::<T>(
+        device,
+        a,
+        b,
+        out,
+        width,
+        std::any::TypeId::of::<Op>(),
+        <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
 

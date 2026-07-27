@@ -42,10 +42,11 @@ mod infrastructure;
 pub mod application;
 
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp,
-    MulOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
-    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanhGradOp, TanhOp, binary_elementwise,
-    binary_elementwise_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
+    AbsOp, AddOp, CosOp, DivOp, EqOp, ExpNegOp, ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
+    IdentityOp, LeOp, LnOp, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp,
+    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
+    TanhGradOp, TanhOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
 #[cfg(feature = "decomposition")]
@@ -83,9 +84,11 @@ pub use application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding
 pub use application::stream::{CudaCommandStream, CudaGroupedPrepared, CudaPrepared};
 pub use application::strided::{
     MAX_STRIDED_RANK, StridedLayout, StridedOperand, StridedOperandDyn, binary_elementwise_strided,
-    binary_elementwise_strided_dyn_into, binary_elementwise_strided_into,
-    scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
-    unary_elementwise_strided_dyn_into, unary_elementwise_strided_into,
+    binary_elementwise_strided_dyn_into, binary_elementwise_strided_dyn_typed_into,
+    binary_elementwise_strided_into, binary_elementwise_strided_typed,
+    binary_elementwise_strided_typed_into, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_dyn_into,
+    unary_elementwise_strided_into,
 };
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,

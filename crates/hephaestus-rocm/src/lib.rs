@@ -48,10 +48,11 @@ pub use application::decomposition::{
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp,
-    MulOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
-    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanhGradOp, TanhOp, binary_elementwise,
-    binary_elementwise_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
+    AbsOp, AddOp, CosOp, DivOp, EqOp, ExpNegOp, ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
+    IdentityOp, LeOp, LnOp, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp,
+    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
+    TanhGradOp, TanhOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
 #[cfg(feature = "decomposition")]
@@ -93,6 +94,7 @@ pub use application::stream::{RocmCommandStream, RocmGroupedPrepared, RocmPrepar
 pub use application::strided::StridedOperand;
 pub use application::strided_elementwise::{
     MAX_STRIDED_RANK, binary_elementwise_strided, binary_elementwise_strided_into,
+    binary_elementwise_strided_typed, binary_elementwise_strided_typed_into,
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };

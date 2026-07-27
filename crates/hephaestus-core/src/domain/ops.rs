@@ -28,6 +28,20 @@ pub trait BinaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
     const EXPR: &'static str;
 }
 
+/// Scalar-aware binary expression over the canonical operands `lhs`, `rhs`.
+///
+/// This seam is required when the result expression depends on the scalar
+/// representation. Comparisons are the current example: WGSL and CUDA/HIP
+/// require different zero/one literal tokens for floating-point and integer
+/// masks. Arithmetic operations should use [`BinaryExpr`] when one expression
+/// is valid for every scalar supported by the operation.
+pub trait TypedBinaryExpr<L: KernelDialect, T: DialectScalar<L>>:
+    Copy + Send + Sync + 'static
+{
+    /// Expression combining `lhs` and `rhs` for scalar `T` in dialect `L`.
+    const EXPR: &'static str;
+}
+
 /// Associative combine expression over `lhs`, `rhs` in dialect `L`, used by
 /// reductions and scans.
 pub trait CombineExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
@@ -282,6 +296,30 @@ pub struct DivOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PowOp;
 
+/// Element-wise equality comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EqOp;
+
+/// Element-wise inequality comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NeOp;
+
+/// Element-wise less-than comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LtOp;
+
+/// Element-wise greater-than comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GtOp;
+
+/// Element-wise less-than-or-equal comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LeOp;
+
+/// Element-wise greater-than-or-equal comparison marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GeOp;
+
 impl BinaryExpr<Wgsl> for AddOp {
     const EXPR: &'static str = "lhs + rhs";
 }
@@ -316,6 +354,102 @@ impl BinaryExpr<Wgsl> for PowOp {
 impl BinaryExpr<CudaC> for PowOp {
     const EXPR: &'static str = "pow(lhs, rhs)";
 }
+
+macro_rules! impl_typed_comparison_exprs {
+    (
+        $(
+            ($op:ty, $wgsl_f32:literal, $wgsl_u32:literal, $wgsl_i32:literal,
+                $cuda_f32:literal, $cuda_u32:literal, $cuda_i32:literal)
+        ),+ $(,)?
+    ) => {
+        $(
+            impl TypedBinaryExpr<Wgsl, f32> for $op {
+                const EXPR: &'static str = $wgsl_f32;
+            }
+            impl TypedBinaryExpr<Wgsl, u32> for $op {
+                const EXPR: &'static str = $wgsl_u32;
+            }
+            impl TypedBinaryExpr<Wgsl, i32> for $op {
+                const EXPR: &'static str = $wgsl_i32;
+            }
+            impl TypedBinaryExpr<CudaC, f32> for $op {
+                const EXPR: &'static str = $cuda_f32;
+            }
+            impl TypedBinaryExpr<CudaC, u32> for $op {
+                const EXPR: &'static str = $cuda_u32;
+            }
+            impl TypedBinaryExpr<CudaC, i32> for $op {
+                const EXPR: &'static str = $cuda_i32;
+            }
+            impl TypedBinaryExpr<HipC, f32> for $op {
+                const EXPR: &'static str = $cuda_f32;
+            }
+            impl TypedBinaryExpr<HipC, u32> for $op {
+                const EXPR: &'static str = $cuda_u32;
+            }
+            impl TypedBinaryExpr<HipC, i32> for $op {
+                const EXPR: &'static str = $cuda_i32;
+            }
+        )+
+    };
+}
+
+impl_typed_comparison_exprs!(
+    (
+        EqOp,
+        "select(0.0, 1.0, lhs == rhs)",
+        "select(0u, 1u, lhs == rhs)",
+        "select(0, 1, lhs == rhs)",
+        "lhs == rhs ? 1.0f : 0.0f",
+        "lhs == rhs ? 1u : 0u",
+        "lhs == rhs ? 1 : 0"
+    ),
+    (
+        NeOp,
+        "select(0.0, 1.0, lhs != rhs)",
+        "select(0u, 1u, lhs != rhs)",
+        "select(0, 1, lhs != rhs)",
+        "lhs != rhs ? 1.0f : 0.0f",
+        "lhs != rhs ? 1u : 0u",
+        "lhs != rhs ? 1 : 0"
+    ),
+    (
+        LtOp,
+        "select(0.0, 1.0, lhs < rhs)",
+        "select(0u, 1u, lhs < rhs)",
+        "select(0, 1, lhs < rhs)",
+        "lhs < rhs ? 1.0f : 0.0f",
+        "lhs < rhs ? 1u : 0u",
+        "lhs < rhs ? 1 : 0"
+    ),
+    (
+        GtOp,
+        "select(0.0, 1.0, lhs > rhs)",
+        "select(0u, 1u, lhs > rhs)",
+        "select(0, 1, lhs > rhs)",
+        "lhs > rhs ? 1.0f : 0.0f",
+        "lhs > rhs ? 1u : 0u",
+        "lhs > rhs ? 1 : 0"
+    ),
+    (
+        LeOp,
+        "select(0.0, 1.0, lhs <= rhs)",
+        "select(0u, 1u, lhs <= rhs)",
+        "select(0, 1, lhs <= rhs)",
+        "lhs <= rhs ? 1.0f : 0.0f",
+        "lhs <= rhs ? 1u : 0u",
+        "lhs <= rhs ? 1 : 0"
+    ),
+    (
+        GeOp,
+        "select(0.0, 1.0, lhs >= rhs)",
+        "select(0u, 1u, lhs >= rhs)",
+        "select(0, 1, lhs >= rhs)",
+        "lhs >= rhs ? 1.0f : 0.0f",
+        "lhs >= rhs ? 1u : 0u",
+        "lhs >= rhs ? 1 : 0"
+    ),
+);
 
 // ── Reduction markers ────────────────────────────────────────────────────
 
@@ -696,6 +830,34 @@ mod tests {
         assert_eq!(<f32 as OpIdentity<MinOp>>::IDENTITY, f32::MAX);
         assert_eq!(<f32 as OpIdentity<ProdOp>>::IDENTITY, 1.0);
         assert_eq!(<u32 as OpIdentity<MaxOp>>::IDENTITY, u32::MIN);
+    }
+
+    #[test]
+    fn comparisons_use_scalar_correct_mask_literals() {
+        assert_eq!(
+            <EqOp as TypedBinaryExpr<Wgsl, f32>>::EXPR,
+            "select(0.0, 1.0, lhs == rhs)"
+        );
+        assert_eq!(
+            <EqOp as TypedBinaryExpr<Wgsl, u32>>::EXPR,
+            "select(0u, 1u, lhs == rhs)"
+        );
+        assert_eq!(
+            <EqOp as TypedBinaryExpr<Wgsl, i32>>::EXPR,
+            "select(0, 1, lhs == rhs)"
+        );
+        assert_eq!(
+            <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
+            "lhs >= rhs ? 1.0f : 0.0f"
+        );
+        assert_eq!(
+            <GeOp as TypedBinaryExpr<CudaC, u32>>::EXPR,
+            "lhs >= rhs ? 1u : 0u"
+        );
+        assert_eq!(
+            <GeOp as TypedBinaryExpr<HipC, i32>>::EXPR,
+            "lhs >= rhs ? 1 : 0"
+        );
     }
 
     #[test]
