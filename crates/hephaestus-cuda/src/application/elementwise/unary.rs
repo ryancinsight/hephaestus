@@ -11,9 +11,11 @@ use hephaestus_core::{
 };
 
 pub use hephaestus_core::{
-    AbsOp, CosOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp, NegOp, RecipOp,
-    ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp,
-    SoftplusOp, SqrtOp, TanhGradOp, TanhOp,
+    AbsOp, AcosOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, Exp2Op, ExpNegOp,
+    ExpOp, Expm1Op, FloorOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp, Log1pOp, Log2Op,
+    Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp,
+    SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, TanOp, TanhGradOp,
+    TanhOp, TruncOp,
 };
 
 fn shader_source<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {

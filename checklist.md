@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add documented shared markers for the unparameterized unary math
+      vocabulary and dialect-specific WGSL, CUDA C++, and HIP C++ expressions.
+- [x] Export the vocabulary through WGPU, CUDA, ROCm, and Metal.
+- [x] Add core tests for composed logarithm/exponential forms, sign, and
+      rounding semantics.
+- [ ] Route the f32 operations through Coeus ROCm and Metal and compare with
+      the Leto CPU oracle.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
+
+Implementation owner: Codex on `codex/hephaestus-unary-math-parity`.
+
 ## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add scalar-aware comparison expressions for f32, i32, and u32 across
@@ -10,10 +23,15 @@ Sprint target: 0.18.0. Phase: Closure.
       typed comparison entry points through WGPU, CUDA, ROCm, and Metal.
 - [x] Add Hephaestus expression tests and Coeus ROCm/Metal Leto differential
       coverage for all six comparisons, including integer scalar results.
-- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record the terminal
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record the terminal
       workflow evidence.
 
-Implementation owner: Codex on `codex/comparison-expression-parity`.
+Implementation owner: Codex on `codex/comparison-expression-parity`; merged
+Hephaestus PR #111 and Coeus PR #224. Hephaestus final implementation head
+`50713d8` passed WGPU job `89867844717`, CUDA job `89867844583`, ROCm job
+`89867844846`, and Metal job `89867844633`. Coeus exact-head run
+`30268824209` passed CUDA `89986119939`, WGPU `89986119972`, Metal `89986119988`,
+and ROCm `89986120026`; required AMD hardware remained skipped.
 
 ## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor]
 

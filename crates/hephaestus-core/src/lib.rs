@@ -36,11 +36,13 @@ pub use domain::kernel::{
 };
 pub use domain::launch::BlockWidth;
 pub use domain::ops::{
-    AbsOp, AddOp, BinaryExpr, CombineExpr, CosOp, CumProdOp, CumSumOp, DivOp, EqOp, ExpNegOp,
-    ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, IdentityToken, LeOp, LnOp, LtOp,
-    MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp, ReluGradOp, ReluOp,
-    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
-    SumOp, TanhGradOp, TanhOp, TypedBinaryExpr, UnaryExpr,
+    AbsOp, AcosOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, CeilOp, CombineExpr, CosOp,
+    CoshOp, CumProdOp, CumSumOp, DivOp, EqOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
+    GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, IdentityToken, LeOp, LnOp, Log1pOp, Log2Op,
+    Log10Op, LtOp, MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp,
+    TypedBinaryExpr, UnaryExpr,
 };
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, plan_axis_reduction, reduction_pass_count,
