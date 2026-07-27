@@ -27,8 +27,9 @@ Target release: 0.18.0.
 ### Changed
 
 - [minor] Add `LgammaOp` to the shared unary vocabulary with native CUDA/HIP
-  expressions and a WGPU/Metal Lanczos/reflection expression. Coeus consumer
-  routing and provider CI remain open.
+  expressions and a WGPU/Metal Lanczos/reflection expression. Coeus routes
+  f32 `lgamma` through WGPU, CUDA, ROCm, and Metal with Leto CPU differential
+  coverage; provider and consumer CI passed on all four adapterless lanes.
 
 - [minor] Add shared exact `GeluOp` and `GeluGradOp` expression markers for
   WGPU, CUDA, ROCm, and Metal. The forward operation uses the existing

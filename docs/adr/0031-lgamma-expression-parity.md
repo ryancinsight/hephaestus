@@ -40,9 +40,11 @@ asymptotics ([Cephes documentation](https://netlib.org/cephes/doubldoc.html#lgam
 ## Verification
 
 Core expression tests pin the native CUDA/HIP forms and the WGSL Lanczos and
-pole-selection terms. Coeus provider tests will compare f32 outputs against
-the Leto CPU oracle for positive, reflected, and pole inputs. Exact-head WGPU,
-CUDA, ROCm, and Metal workflows are required before the consumer item closes.
+pole-selection terms. Coeus provider tests compare f32 outputs against the
+Leto CPU oracle for positive, reflected, and pole inputs. Provider PR #118
+passed exact-head WGPU, CUDA, ROCm, and Metal adapterless workflows; Coeus PR
+#231 passed the matching consumer workflows. Physical-device jobs remained
+skipped and are not claimed as execution evidence.
 
 ## Revisit trigger
 

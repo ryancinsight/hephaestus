@@ -8,11 +8,18 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Export the marker through WGPU, CUDA, ROCm, and Metal.
 - [x] Add core expression tests for native forms, Lanczos coefficients, and
       pole/infinity selection.
-- [ ] Route f32 `lgamma` through Coeus's WGPU, CUDA, ROCm, and Metal backends
+- [x] Route f32 `lgamma` through Coeus's WGPU, CUDA, ROCm, and Metal backends
       and compare with the Leto CPU oracle.
-- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record exact evidence.
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record exact evidence.
 
-Implementation owner: Codex on `codex/hephaestus-lgamma-parity`; ADR 0031.
+Implementation owner: Codex; ADR 0031.
+
+Provider PR #118 merged at `d4508ac1`. Its exact-head adapterless jobs passed:
+WGPU `90086428952`, CUDA `90086430178`, ROCm `90086430143`, and Metal
+`90086428160`; NVIDIA and AMD hardware jobs skipped. Coeus PR #231 merged at
+`971fab9614b97bd708a716d01684da58fd1331ba`; its exact-head consumer jobs
+passed WGPU `90088836682`, CUDA `90088836688`, ROCm `90088836731`, and Metal
+`90088836675`; required-device ROCm `90088837591` skipped.
 
 ## HEPH-GELU-EXPRESSION-PARITY-1 [minor]
 
