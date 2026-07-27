@@ -544,7 +544,7 @@ fn elementwise_lgamma_matches_cpu_reference() {
     device.download(&output, &mut got).unwrap();
 
     let expected = [
-        0.572_364_94_f32,
+        0.572_364_9_f32,
         0.0,
         6.0_f32.ln(),
         f32::INFINITY,
