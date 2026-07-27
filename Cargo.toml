@@ -68,3 +68,73 @@ moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features 
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
 
+# Coeus defense-in-depth (PATH-DEP-AUDIT-2 hygiene): hephaestus currently
+# has zero coeus-* consumers in this root crate or its workspace member
+# sub-crates (verified by ssot inventory 2026-07-26 -- no
+# `coeus-{core,tensor,leto}` refs in `repos/hephaestus/{,crates/*/}Cargo.toml`).
+# The overlay is added forward-defensively so any future direct coeus-*
+# consumer (e.g. an in-flight coeus-hephaestus integration that surfaces
+# typed coeus tensors on GPU, or a leto-style typed-indexing path through
+# coeus-leto) resolves to the local working copy in `repos/coeus`
+# regardless of gitlink state. Mirrors the CFDrs/Cargo.toml,
+# ritk/Cargo.toml, and kwavers/Cargo.toml pattern.
+# Scope: git+https URL redirection only -- does NOT auto-rewrite
+# currently-locked `Cargo.lock` entries; requires `cargo update -p <name>`
+# per consumer. The capital-C `Coeus.git` parallel overlay is provided
+# IMMEDIATELY BELOW this block; empirical capital-C resolver:
+# `repos/asclepius/Cargo.lock` (all-6 capital-C crates).
+
+# ATLAS-PATH-DEP-AUDIT-2 round-4 closure
+
+# ATLAS-PATH-DEP-AUDIT-2 round-6a closure
+
+[patch."https://github.com/ryancinsight/Mnemosyne.git"]
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
+mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
+mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
+mnemosyne-build-util = { path = "../mnemosyne/crates/mnemosyne-build-util" }
+mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+mnemosyne-decay = { path = "../mnemosyne/crates/mnemosyne-decay" }
+mnemosyne-hardened = { path = "../mnemosyne/crates/mnemosyne-hardened" }
+mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
+mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
+mnemosyne-prof = { path = "../mnemosyne/crates/mnemosyne-prof" }
+
+[patch."https://github.com/ryancinsight/Moirai.git"]
+moirai = { path = "../moirai/moirai" }
+moirai-async = { path = "../moirai/moirai-async" }
+moirai-async-macros = { path = "../moirai/moirai-async-macros" }
+moirai-core = { path = "../moirai/moirai-core" }
+moirai-executor = { path = "../moirai/moirai-executor" }
+moirai-gpu = { path = "../moirai/moirai-gpu" }
+moirai-iter = { path = "../moirai/moirai-iter" }
+moirai-pal = { path = "../moirai/moirai-pal" }
+moirai-parallel = { path = "../moirai/moirai-parallel" }
+moirai-scheduler = { path = "../moirai/moirai-scheduler" }
+moirai-sync = { path = "../moirai/moirai-sync" }
+moirai-transport = { path = "../moirai/moirai-transport" }
+moirai-utils = { path = "../moirai/moirai-utils" }
+
+[patch."https://github.com/ryancinsight/aequitas"]
+aequitas = { path = "../aequitas" }
+
+[patch."https://github.com/ryancinsight/eunomia"]
+eunomia = { path = "../eunomia/crates/eunomia" }
+
+[patch."https://github.com/ryancinsight/hermes.git"]
+hermes-simd = { path = "../hermes/crates/hermes-simd" }
+hermes-simd-core = { path = "../hermes/crates/hermes-simd-core" }
+hermes-simd-intrinsics = { path = "../hermes/crates/hermes-simd-intrinsics" }
+hermes-simd-macros = { path = "../hermes/crates/hermes-simd-macros" }
+hermes-simd-types = { path = "../hermes/crates/hermes-simd-types" }
+
+[patch."https://github.com/ryancinsight/leto.git"]
+leto = { path = "../leto/crates/leto" }
+leto-ops = { path = "../leto/crates/leto-ops" }
+
+[patch."https://github.com/ryancinsight/melinoe.git"]
+melinoe = { path = "../melinoe" }
+
+[patch."https://github.com/ryancinsight/themis"]
+themis = { path = "../themis" }
+
