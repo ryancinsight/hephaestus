@@ -4,6 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-GELU-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: shared exact `GeluOp` and `GeluGradOp` markers and WGPU,
+  CUDA, ROCm, and Metal exports consumed by Coeus.
+- Outcome: expose the Leto CPU exact GELU forward and gradient vocabulary to
+  every accelerator provider without a host fallback.
+- Non-goals: tanh-approximated GELU, parameterized activations, `lgamma`,
+  tail-stable `erfc`, f64/vector result contracts, and unrelated operation
+  families.
+- Acceptance: markers implement `0.5*x*(1+erf(x/sqrt(2)))` and its analytic
+  derivative in WGSL, CUDA C++, and HIP C++; all four provider roots export
+  both markers; Coeus ROCm and Metal route both operations and compare them
+  with the Leto CPU oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
+- Risk/change class: `[minor]` additive operation vocabulary; ADR 0030 owns the
+  mathematical and expression-contract decision.
+- Status: provider implementation in progress; Coeus routing and exact-head
+  verification remain open.
+
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared `ErfOp` and `ErfcOp` markers and WGPU, CUDA, ROCm,

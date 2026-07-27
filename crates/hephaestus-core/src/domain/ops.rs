@@ -188,6 +188,14 @@ pub struct ErfOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ErfcOp;
 
+/// Exact Gaussian Error Linear Unit operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GeluOp;
+
+/// Exact Gaussian Error Linear Unit gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GeluGradOp;
+
 /// Rectified linear unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReluOp;
@@ -372,6 +380,29 @@ impl UnaryExpr<Wgsl> for ErfcOp {
 }
 impl UnaryExpr<CudaC> for ErfcOp {
     const EXPR: &'static str = "erfc(x)";
+}
+
+macro_rules! wgsl_gelu_erf_expr {
+    () => {
+        "(sign((x * 0.7071067811865476)) * (1.0 - (((((1.061405429 * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) - 1.453152027) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) + 1.421413741) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) - 0.284496736) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) + 0.254829592) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476))))) * exp(-(x * 0.7071067811865476) * (x * 0.7071067811865476))))"
+    };
+}
+
+impl UnaryExpr<Wgsl> for GeluOp {
+    const EXPR: &'static str = concat!("(0.5 * x * (1.0 + ", wgsl_gelu_erf_expr!(), "))");
+}
+impl UnaryExpr<CudaC> for GeluOp {
+    const EXPR: &'static str = "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))";
+}
+impl UnaryExpr<Wgsl> for GeluGradOp {
+    const EXPR: &'static str = concat!(
+        "(0.5 * (1.0 + ",
+        wgsl_gelu_erf_expr!(),
+        ") + x * exp(-0.5 * x * x) * 0.3989422804014327)"
+    );
+}
+impl UnaryExpr<CudaC> for GeluGradOp {
+    const EXPR: &'static str = "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f";
 }
 
 macro_rules! impl_activation_unary_exprs {
@@ -715,6 +746,11 @@ impl_hip_unary_exprs!(
     (TruncOp, "trunc(x)"),
     (ErfOp, "erf(x)"),
     (ErfcOp, "erfc(x)"),
+    (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
+    (
+        GeluGradOp,
+        "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f"
+    ),
     (ReluOp, "max(x, 0.0f)"),
     (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
     (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
@@ -1007,6 +1043,9 @@ mod tests {
         assert_eq!(<ErfcOp as UnaryExpr<HipC>>::EXPR, "erfc(x)");
         assert!(<ErfOp as UnaryExpr<Wgsl>>::EXPR.contains("1.061405429"));
         assert!(<ErfcOp as UnaryExpr<Wgsl>>::EXPR.starts_with("(1.0 - "));
+        assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("0.7071067811865476"));
+        assert!(<GeluGradOp as UnaryExpr<CudaC>>::EXPR.contains("erff(x *"));
+        assert!(<GeluGradOp as UnaryExpr<HipC>>::EXPR.contains("expf(-0.5f * x * x)"));
         assert_eq!(
             <SignOp as UnaryExpr<Wgsl>>::EXPR,
             "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)"

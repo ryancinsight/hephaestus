@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-GELU-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add shared exact `GeluOp` and `GeluGradOp` markers using the existing
+      A&S `erf` expression contract and analytic Gaussian derivative.
+- [x] Export both markers through WGPU, CUDA, ROCm, and Metal.
+- [x] Add core expression tests for the scaled-error-function and derivative
+      forms.
+- [ ] Route both f32 operations through Coeus ROCm and Metal and compare with
+      the Leto CPU oracle.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
+
+Implementation owner: Codex on `codex/hephaestus-gelu-parity`; ADR 0030.
+
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add shared `ErfOp` and `ErfcOp` markers with the WGPU approximation and
