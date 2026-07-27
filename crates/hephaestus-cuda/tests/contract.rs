@@ -9,16 +9,17 @@ use hephaestus_core::{
     HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MaxOp, MinOp, MulOp,
-    NegOp, RecipOp, SiluGradOp, SiluOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp,
-    SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into,
-    det, dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
-    norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, prod_axis, reduce_axis, reduction, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
-    submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
-    trace, unary_elementwise, unary_elementwise_into,
+    AbsOp, AddOp, CudaDevice, CumSumOp, EluGradOp, EluOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MaxOp,
+    MinOp, MishGradOp, MishOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp, SoftplusGradOp,
+    SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise,
+    binary_elementwise_into, cumprod, cumprod_into, det, dot, kron, matexp, matmul, matmul_into,
+    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
+    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis,
+    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
+    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
+    suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
+    unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -446,6 +447,37 @@ fn elementwise_activation_markers_match_cpu_reference() {
         SoftplusGradOp,
         host.iter()
             .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish",
+        MishOp,
+        host.iter()
+            .map(|&x| x * (1.0 + x.exp()).ln().tanh())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish_grad",
+        MishGradOp,
+        host.iter()
+            .map(|&x| {
+                let softplus = (1.0 + x.exp()).ln();
+                softplus.tanh() + x * (1.0 - softplus.tanh().powi(2)) / (1.0 + (-x).exp())
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu",
+        EluOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { x } else { x.exp() - 1.0 })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu_grad",
+        EluGradOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { 1.0 } else { x.exp() })
             .collect::<Vec<_>>()
     );
 }

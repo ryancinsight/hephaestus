@@ -26,6 +26,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add shared `Mish`, `MishGrad`, `Elu`, and `EluGrad` expression
+  markers with WGSL, CUDA C++, and HIP C++ forms, exported through WGPU,
+  CUDA, ROCm, and Metal. Provider contracts compare forward and gradient
+  values with the f32 CPU formulas; Coeus consumer routing remains open.
+
 - [minor] Add `LgammaOp` to the shared unary vocabulary with native CUDA/HIP
   expressions and a WGPU/Metal Lanczos/reflection expression. Coeus routes
   f32 `lgamma` through WGPU, CUDA, ROCm, and Metal with Leto CPU differential

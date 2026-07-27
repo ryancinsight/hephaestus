@@ -37,13 +37,13 @@ pub use domain::kernel::{
 pub use domain::launch::BlockWidth;
 pub use domain::ops::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, CeilOp,
-    CombineExpr, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp,
-    ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp,
-    IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp, MaxOp, MinOp,
-    MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
-    SoftplusOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr,
-    UnaryExpr,
+    CombineExpr, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ErfOp, ErfcOp,
+    Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp, GeluTanhGradOp,
+    GeluTanhOp, GtOp, IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op,
+    LtOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp,
+    TypedBinaryExpr, UnaryExpr,
 };
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, plan_axis_reduction, reduction_pass_count,
