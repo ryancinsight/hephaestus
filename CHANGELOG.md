@@ -26,6 +26,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add shared dialect-specific unary math expression markers for the
+  unparameterized f32 tangent, inverse/hyperbolic, logarithm/exponential, sign,
+  and rounding operations across WGPU, CUDA, ROCm, and Metal.
+
 - [minor] Add scalar-aware equality, inequality, and ordering expression
   markers for f32, i32, and u32 across WGPU, CUDA, ROCm, and Metal, including
   contiguous and strided provider entry points.

@@ -104,6 +104,82 @@ pub struct RecipOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct IdentityOp;
 
+/// Tangent operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TanOp;
+
+/// Arcsine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AsinOp;
+
+/// Arccosine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AcosOp;
+
+/// Arctangent operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AtanOp;
+
+/// Hyperbolic sine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SinhOp;
+
+/// Hyperbolic cosine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CoshOp;
+
+/// Base-two logarithm operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Log2Op;
+
+/// Base-ten logarithm operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Log10Op;
+
+/// Base-two exponential operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Exp2Op;
+
+/// Inverse hyperbolic tangent operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AtanhOp;
+
+/// Inverse hyperbolic sine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AsinhOp;
+
+/// Inverse hyperbolic cosine operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AcoshOp;
+
+/// Exponential-minus-one operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Expm1Op;
+
+/// Logarithm-of-one-plus operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Log1pOp;
+
+/// Sign operation marker, returning `-1`, `0`, or `1`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SignOp;
+
+/// Floor operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FloorOp;
+
+/// Ceiling operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CeilOp;
+
+/// Round-to-nearest-even operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RoundOp;
+
+/// Truncation-toward-zero operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TruncOp;
+
 /// Rectified linear unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReluOp;
@@ -221,6 +297,49 @@ impl UnaryExpr<Wgsl> for IdentityOp {
 impl UnaryExpr<CudaC> for IdentityOp {
     const EXPR: &'static str = "x";
 }
+
+macro_rules! impl_math_unary_exprs {
+    ($(($op:ty, $wgsl:literal, $cuda:literal)),+ $(,)?) => {
+        $(
+            impl UnaryExpr<Wgsl> for $op {
+                const EXPR: &'static str = $wgsl;
+            }
+            impl UnaryExpr<CudaC> for $op {
+                const EXPR: &'static str = $cuda;
+            }
+        )+
+    };
+}
+
+impl_math_unary_exprs!(
+    (TanOp, "tan(x)", "tan(x)"),
+    (AsinOp, "asin(x)", "asin(x)"),
+    (AcosOp, "acos(x)", "acos(x)"),
+    (AtanOp, "atan(x)", "atan(x)"),
+    (SinhOp, "sinh(x)", "sinh(x)"),
+    (CoshOp, "cosh(x)", "cosh(x)"),
+    (Log2Op, "log2(x)", "log2(x)"),
+    (
+        Log10Op,
+        "log(x) * 0.43429448190325182f",
+        "log(x) * 0.43429448190325182f"
+    ),
+    (Exp2Op, "exp2(x)", "exp2(x)"),
+    (AtanhOp, "atanh(x)", "atanh(x)"),
+    (AsinhOp, "asinh(x)", "asinh(x)"),
+    (AcoshOp, "acosh(x)", "acosh(x)"),
+    (Expm1Op, "(exp(x) - 1.0)", "(exp(x) - 1.0f)"),
+    (Log1pOp, "log(1.0 + (x))", "log(1.0f + (x))"),
+    (
+        SignOp,
+        "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)",
+        "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"
+    ),
+    (FloorOp, "floor(x)", "floor(x)"),
+    (CeilOp, "ceil(x)", "ceil(x)"),
+    (RoundOp, "round(x)", "rint(x)"),
+    (TruncOp, "trunc(x)", "trunc(x)"),
+);
 
 macro_rules! impl_activation_unary_exprs {
     ($(($op:ty, $wgsl:literal, $cuda:literal)),+ $(,)?) => {
@@ -542,6 +661,25 @@ impl_hip_unary_exprs!(
     (NegOp, "-x"),
     (RecipOp, "1.0 / x"),
     (IdentityOp, "x"),
+    (TanOp, "tan(x)"),
+    (AsinOp, "asin(x)"),
+    (AcosOp, "acos(x)"),
+    (AtanOp, "atan(x)"),
+    (SinhOp, "sinh(x)"),
+    (CoshOp, "cosh(x)"),
+    (Log2Op, "log2(x)"),
+    (Log10Op, "log(x) * 0.43429448190325182f"),
+    (Exp2Op, "exp2(x)"),
+    (AtanhOp, "atanh(x)"),
+    (AsinhOp, "asinh(x)"),
+    (AcoshOp, "acosh(x)"),
+    (Expm1Op, "(exp(x) - 1.0f)"),
+    (Log1pOp, "log(1.0f + (x))"),
+    (SignOp, "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"),
+    (FloorOp, "floor(x)"),
+    (CeilOp, "ceil(x)"),
+    (RoundOp, "rint(x)"),
+    (TruncOp, "trunc(x)"),
     (ReluOp, "max(x, 0.0f)"),
     (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
     (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
@@ -826,6 +964,16 @@ mod tests {
         );
         assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
         assert!(<SoftplusOp as UnaryExpr<HipC>>::EXPR.contains("exp(x)"));
+        assert_eq!(
+            <Log10Op as UnaryExpr<Wgsl>>::EXPR,
+            "log(x) * 0.43429448190325182f"
+        );
+        assert_eq!(<Expm1Op as UnaryExpr<CudaC>>::EXPR, "(exp(x) - 1.0f)");
+        assert_eq!(<RoundOp as UnaryExpr<HipC>>::EXPR, "rint(x)");
+        assert_eq!(
+            <SignOp as UnaryExpr<Wgsl>>::EXPR,
+            "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)"
+        );
         assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
         assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
         assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
