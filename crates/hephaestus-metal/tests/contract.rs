@@ -827,7 +827,7 @@ fn elementwise_activation_markers_match_cpu_reference() {
     };
     let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
     let input = device.upload(&host).unwrap();
-    let gelu_scale = 0.7978845608_f32;
+    let gelu_scale = 0.797_884_6_f32;
     let gelu_cubic = 0.044715_f32;
 
     macro_rules! check {
