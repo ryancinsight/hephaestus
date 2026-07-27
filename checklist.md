@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add shared `ErfOp` and `ErfcOp` markers with the WGPU approximation and
+      CUDA C++/HIP C++ native expressions.
+- [x] Export both markers through WGPU, CUDA, ROCm, and Metal.
+- [x] Add core expression tests for native forms and WGSL composition.
+- [ ] Route the f32 operations through Coeus ROCm and Metal and compare with
+      the Leto CPU oracle.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
+
+Implementation owner: Codex on `codex/hephaestus-erf-erfc-parity`.
+
 ## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add documented shared markers for the unparameterized unary math

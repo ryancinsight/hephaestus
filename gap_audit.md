@@ -11,6 +11,20 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1] Error-function vocabulary
+
+- Finding: Leto and Coeus expose f32 `erf` and `erfc`, but the shared
+  Hephaestus unary marker seam did not expose either operation to ROCm or
+  Metal.
+- Resolution: add `ErfOp` and `ErfcOp`; WGPU uses the existing
+  Abramowitz–Stegun expression, CUDA and HIP use native intrinsics, and Metal
+  delegates through WGPU.
+- Residual: Coeus consumer routing, Leto differential coverage, exact-head
+  provider CI, tail-stable `erfc`, `lgamma`, and non-f32 contracts remain open.
+- Evidence target: core expression tests plus exact-head WGPU, CUDA, ROCm, and
+  Metal workflows, followed by Coeus ROCm/Metal differential tests.
+- Status: implementation is in progress.
+
 ## [HEPH-UNARY-MATH-EXPRESSION-PARITY-1] Unparameterized unary math vocabulary
 
 - Finding: Leto and Coeus define a broader f32 unary math vocabulary than the
@@ -19,8 +33,9 @@ architectural decision or a tracked future-work item:
   it through WGPU, CUDA, ROCm, and Metal. The current implementation covers
   tangent, inverse and hyperbolic functions, logarithm/exponential bases,
   `expm1`, `log1p`, sign, and rounding.
-- Residual: `erf`, `erfc`, and `lgamma` remain outside the common baseline;
-  parameterized activations and f64/vector contracts remain separate slices.
+- Residual: `lgamma`, parameterized activations, and f64/vector contracts
+  remain outside the current common baseline; `erf`/`erfc` are tracked by
+  `HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1`.
 - Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
   tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
   runner execution is reported separately from adapterless provider CI.
