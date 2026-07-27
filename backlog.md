@@ -4,7 +4,30 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex on `codex/hephaestus-unary-math-parity`; scope: shared
+  unparameterized f32 unary math expression markers and WGPU, CUDA, ROCm, and
+  Metal exports consumed by Coeus.
+- Outcome: expose one dialect-specific marker for tangent, inverse and
+  hyperbolic functions, logarithm/exponential bases, sign, and rounding
+  operations so the four providers share one monomorphized operation
+  vocabulary.
+- Non-goals: `erf`, `erfc`, `lgamma`, parameterized activations, f64 or vector
+  result contracts, and unrelated unary or higher-rank operation families.
+- Acceptance: each marker has WGSL, CUDA C++, and HIP C++ expressions; all four
+  backend application modules export the same markers; core expression tests
+  pin direct, composed, sign, and rounding forms; Coeus routes the f32
+  operations through ROCm and Metal and compares them with the Leto CPU
+  oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
+- Risk/change class: `[minor]` additive operation vocabulary; ADR 0028 owns the
+  f32 expression and residual-capability decision.
+- Status: Hephaestus implementation is complete at `b088a2f`; WGPU job
+  `89997918070`, CUDA job `89997916944`, ROCm job `89997920644`, and Metal job
+  `89997917574` all passed. Required AMD and NVIDIA hardware jobs were skipped;
+  Coeus routing and consumer verification remain open in Coeus.
+
+## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: typed comparison expressions and WGPU, CUDA, ROCm, and
   Metal binary/strided provider exports used by Coeus.
@@ -18,8 +41,13 @@ cuda-oxide + cutile).
   differential tests cover f32 broadcast plus i32/u32 values; exact-head
   WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive typed operation vocabulary.
-- Status: implementation and local provider gates pass; hosted verification
-  remains open.
+- Status: merged in Hephaestus PR #111 at `14f8972`; final implementation head
+  `50713d8` passed WGPU job `89867844717`, CUDA job `89867844583`, ROCm job
+  `89867844846`, and Metal job `89867844633`. Coeus PR #224 merged at
+  `84b5bcc`; exact-head run `30268824209` passed CUDA job `89986119939`, WGPU
+  job `89986119972`, Metal job `89986119988`, and ROCm job `89986120026`.
+  Required-device AMD and NVIDIA lanes were skipped because hosted hardware
+  runners were unavailable; no physical-device execution claim is made.
 - Decision: ADR 0027 selects `TypedBinaryExpr<L, T>` over f32-only markers or
   per-backend comparison kernels.
 
@@ -37,8 +65,11 @@ cuda-oxide + cutile).
   expression tests pass; Coeus ROCm and Metal providers consume the markers
   without host fallback.
 - Risk/change class: `[minor]` additive operation vocabulary.
-- Status: implementation complete locally; provider integration and hosted
-  verification remain in progress.
+- Status: merged in Hephaestus PR #110; the exact code head passed WGPU job
+  `89857349160`, CUDA job `89857348956`, ROCm job `89857348904`, and Metal job
+  `89857349033`. Coeus consumer routing remains part of the provider parity
+  slices and is not counted as a complete activation-specific hardware
+  verification here.
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
 

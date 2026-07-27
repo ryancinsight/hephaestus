@@ -48,10 +48,12 @@ pub use application::decomposition::{
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, EqOp, ExpNegOp, ExpOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
-    IdentityOp, LeOp, LnOp, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp,
-    SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp,
-    TanhGradOp, TanhOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
+    EqOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluTanhGradOp, GeluTanhOp, GtOp,
+    IdentityOp, LeOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
+    binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };

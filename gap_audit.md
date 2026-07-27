@@ -11,6 +11,24 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-UNARY-MATH-EXPRESSION-PARITY-1] Unparameterized unary math vocabulary
+
+- Finding: Leto and Coeus define a broader f32 unary math vocabulary than the
+  Hephaestus expression markers consumed by the four accelerator providers.
+- Resolution: add one shared dialect-specific marker per operation and export
+  it through WGPU, CUDA, ROCm, and Metal. The current implementation covers
+  tangent, inverse and hyperbolic functions, logarithm/exponential bases,
+  `expm1`, `log1p`, sign, and rounding.
+- Residual: `erf`, `erfc`, and `lgamma` remain outside the common baseline;
+  parameterized activations and f64/vector contracts remain separate slices.
+- Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
+  tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
+  runner execution is reported separately from adapterless provider CI.
+- Status: Hephaestus implementation and exact-head provider evidence are
+  complete at `b088a2f`; WGPU `89997918070`, CUDA `89997916944`, ROCm
+  `89997920644`, and Metal `89997917574` passed. Coeus consumer routing and
+  differential verification remain open in the downstream repository.
+
 ## [HEPH-SCAN-SUFFIX-PARITY-1] Reverse cumulative-sum convenience surface
 
 - Finding: Leto exposes reverse cumulative sum, but the four Hephaestus roots
