@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add dialect-specific Hephaestus activation and gradient expression
+      markers for ReLU, sigmoid, tanh, tanh-GELU, SiLU, and softplus.
+- [x] Export the markers through the WGPU, CUDA, ROCm, and Metal elementwise
+      surfaces.
+- [x] Verify formatting and the focused `hephaestus-core` Nextest suite.
+- [ ] Merge the provider vocabulary increment and run the Coeus ROCm/Metal
+      differential contracts on the exact consumer head.
+
+Implementation owner: Codex on `codex/activation-expression-parity`;
+provider/consumer integration remains open in the Coeus repository.
+
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
 
 - [x] Add allocated and caller-owned `suffix_sum` to WGPU, CUDA, ROCm, and

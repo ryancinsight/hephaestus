@@ -11,9 +11,11 @@ pub mod application;
 pub mod infrastructure;
 
 pub use application::elementwise::{
-    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, IdentityOp, LnOp, MulOp, NegOp, PowOp, RecipOp,
-    SinOp, SqrtOp, SubOp, binary_elementwise, binary_elementwise_into, scalar_elementwise,
-    scalar_elementwise_into, unary_elementwise, unary_elementwise_into,
+    AbsOp, AddOp, CosOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, IdentityOp, LnOp,
+    MulOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
+    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanhGradOp, TanhOp, binary_elementwise,
+    binary_elementwise_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
+    unary_elementwise_into,
 };
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,

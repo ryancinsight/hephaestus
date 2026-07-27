@@ -4,6 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: `hephaestus-core` activation expression vocabulary and
+  WGPU, CUDA, ROCm, and Metal exports used by Coeus native providers.
+- Outcome: provide one dialect-specific ZST marker for each common activation
+  forward and gradient operation, preserving monomorphized dispatch across
+  WGSL, CUDA C++, and HIP C++.
+- Non-goals: parameterized activations, exact-erf GELU, comparisons, and
+  unrelated higher-rank or matrix operation families.
+- Acceptance: ReLU, sigmoid, tanh, tanh-GELU, SiLU, and softplus forward and
+  gradient markers compile for all three kernel dialects; Hephaestus core
+  expression tests pass; Coeus ROCm and Metal providers consume the markers
+  without host fallback.
+- Risk/change class: `[minor]` additive operation vocabulary.
+- Status: implementation complete locally; provider integration and hosted
+  verification remain in progress.
+
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
 
 - Owner: Codex; scope: rank-2 `suffix_sum`/`suffix_sum_into` exports and
