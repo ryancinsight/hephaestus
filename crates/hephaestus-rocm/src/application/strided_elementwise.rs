@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn sources_share_rank_four_decode_and_operation_contracts() {
-        let binary = binary_shader::<hephaestus_core::AddOp, i32>();
+        let binary = binary_shader::<i32>("lhs + rhs");
         let unary = unary_shader::<hephaestus_core::IdentityOp, i32>();
         let scalar = scalar_shader::<hephaestus_core::MulOp, i32>();
         for source in [&binary, &unary, &scalar] {
