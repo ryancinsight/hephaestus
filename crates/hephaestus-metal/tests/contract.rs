@@ -16,17 +16,17 @@ use hephaestus_core::{
     UnaryStorageKernel, Wgsl,
 };
 use hephaestus_metal::{
-    AddOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MatrixFunction, MatrixNorm, MatrixProduct,
-    MatrixProperties, MatrixSolve, MaxOp, MetalBinaryStorageKernel, MetalDevice,
-    MetalMultiStorageKernel, MetalStorageBinding, MetalStorageBindingLayout,
-    MetalUnaryStorageKernel, MinOp, MulOp, NegOp, SiluGradOp, SiluOp, SoftplusGradOp, SoftplusOp,
-    SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod, cumprod_into, matmul,
-    normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, prod_axis, reduce_axis_into, reduction, scalar_elementwise,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, unary_elementwise, unary_elementwise_into,
-    uniform_with_seed,
+    AddOp, EluGradOp, EluOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MatrixFunction,
+    MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve, MaxOp, MetalBinaryStorageKernel,
+    MetalDevice, MetalMultiStorageKernel, MetalStorageBinding, MetalStorageBindingLayout,
+    MetalUnaryStorageKernel, MinOp, MishGradOp, MishOp, MulOp, NegOp, SiluGradOp, SiluOp,
+    SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SumOp, binary_elementwise, cumprod,
+    cumprod_into, matmul, normal_with_seed, prepare_dot, prepare_max_axis_into,
+    prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2, prepare_reduction,
+    prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis_into, reduction,
+    scalar_elementwise, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
+    suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into, unary_elementwise,
+    unary_elementwise_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_metal::{
@@ -894,6 +894,37 @@ fn elementwise_activation_markers_match_cpu_reference() {
         SoftplusGradOp,
         host.iter()
             .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish",
+        MishOp,
+        host.iter()
+            .map(|&x| x * (1.0 + x.exp()).ln().tanh())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish_grad",
+        MishGradOp,
+        host.iter()
+            .map(|&x| {
+                let softplus = (1.0 + x.exp()).ln();
+                softplus.tanh() + x * (1.0 - softplus.tanh().powi(2)) / (1.0 + (-x).exp())
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu",
+        EluOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { x } else { x.exp() - 1.0 })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu_grad",
+        EluGradOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { 1.0 } else { x.exp() })
             .collect::<Vec<_>>()
     );
 }

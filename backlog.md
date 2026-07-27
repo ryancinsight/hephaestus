@@ -39,6 +39,24 @@ cuda-oxide + cutile).
 - Status: provider implementation in progress; Coeus routing and exact-head
   verification remain open.
 
+## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor] — in progress
+
+- Owner: Codex; scope: shared `MishOp`, `MishGradOp`, `EluOp`, and `EluGradOp`
+  markers and WGPU, CUDA, ROCm, and Metal exports consumed by Coeus.
+- Outcome: expose the remaining parameter-free activation expressions in one
+  provider-owned vocabulary without a host fallback.
+- Non-goals: parameterized activations, alternate stabilized softplus forms,
+  f64/reduced/vector result contracts, and unrelated operation families.
+- Acceptance: each marker has WGSL, CUDA C++, and HIP C++ expressions; all
+  four provider roots export the markers; provider contracts compare forward
+  and gradient results with the f32 CPU formulas; Coeus routes the operations
+  through every backend and compares them with the Leto CPU oracle; exact-head
+  WGPU, CUDA, ROCm, and Metal CI passes.
+- Risk/change class: `[minor]` additive operation vocabulary; ADR 0032 owns
+  the mathematical and expression-contract decision.
+- Status: Hephaestus provider implementation and local contracts are complete;
+  Coeus routing and exact-head provider verification remain open.
+
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared `ErfOp` and `ErfcOp` markers and WGPU, CUDA, ROCm,

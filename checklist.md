@@ -107,6 +107,22 @@ provider PR #120 merged at `9f8416c`. Exact-head provider jobs passed WGPU
 `90101824100` hardware jobs were skipped. Coeus consumer integration remains
 open in peer-owned backend scopes.
 
+## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor]
+
+- [x] Add shared `Mish`, `MishGrad`, `Elu`, and `EluGrad` expression markers
+      with WGSL, CUDA C++, and HIP C++ forms.
+- [x] Export the four markers through WGPU, CUDA, ROCm, and Metal.
+- [x] Add core expression assertions for the dialect-specific forms.
+- [x] Add provider contracts comparing forward and gradient results with the
+      f32 CPU formulas.
+- [ ] Route the four f32 operations through Coeus and compare with the Leto
+      CPU oracle on the exact consumer head.
+- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record final
+      evidence.
+
+Implementation owner: Codex; ADR 0032. Coeus routing remains in peer-owned
+backend scopes.
+
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
 
 - [x] Add allocated and caller-owned `suffix_sum` to WGPU, CUDA, ROCm, and

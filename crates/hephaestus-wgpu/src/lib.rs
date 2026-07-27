@@ -19,13 +19,14 @@ pub mod infrastructure;
 
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
-    EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp,
-    GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op,
-    LtOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp,
-    SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp,
-    SubOp, TanOp, TanhGradOp, TanhOp, TruncOp, binary_elementwise, binary_elementwise_into,
-    binary_elementwise_typed, binary_elementwise_typed_into, scalar_elementwise,
-    scalar_elementwise_into, unary_elementwise, unary_elementwise_into,
+    EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
+    GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, LeOp, LgammaOp, LnOp,
+    Log1pOp, Log2Op, Log10Op, LtOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
+    binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
+    unary_elementwise_into,
 };
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;

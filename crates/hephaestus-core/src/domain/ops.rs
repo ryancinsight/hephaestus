@@ -248,6 +248,22 @@ pub struct SoftplusOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SoftplusGradOp;
 
+/// Mish activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MishOp;
+
+/// Mish activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MishGradOp;
+
+/// Exponential linear unit operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EluOp;
+
+/// Exponential linear unit gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EluGradOp;
+
 impl UnaryExpr<Wgsl> for ExpOp {
     const EXPR: &'static str = "exp(x)";
 }
@@ -508,6 +524,26 @@ impl_activation_unary_exprs!(
         SoftplusGradOp,
         "1.0 / (1.0 + exp(-x))",
         "1.0f / (1.0f + exp(-x))"
+    ),
+    (
+        MishOp,
+        "x * tanh(log(1.0 + exp(x)))",
+        "x * tanhf(logf(1.0f + expf(x)))"
+    ),
+    (
+        MishGradOp,
+        "tanh(log(1.0 + exp(x))) + x * (1.0 - tanh(log(1.0 + exp(x))) * tanh(log(1.0 + exp(x)))) * (1.0 / (1.0 + exp(-x)))",
+        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
+    ),
+    (
+        EluOp,
+        "select(exp(x) - 1.0, x, x >= 0.0)",
+        "x >= 0.0f ? x : expf(x) - 1.0f"
+    ),
+    (
+        EluGradOp,
+        "select(exp(x), 1.0, x >= 0.0)",
+        "x >= 0.0f ? 1.0f : expf(x)"
     ),
 );
 
@@ -827,6 +863,13 @@ impl_hip_unary_exprs!(
     ),
     (SoftplusOp, "log(1.0f + exp(x))"),
     (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
+    (MishOp, "x * tanhf(logf(1.0f + expf(x)))"),
+    (
+        MishGradOp,
+        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
+    ),
+    (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
+    (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
 );
 
 macro_rules! impl_hip_binary_exprs {
@@ -1088,6 +1131,16 @@ mod tests {
         );
         assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
         assert!(<SoftplusOp as UnaryExpr<HipC>>::EXPR.contains("exp(x)"));
+        assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("tanh(log(1.0 + exp(x)))"));
+        assert!(<MishGradOp as UnaryExpr<CudaC>>::EXPR.contains("tanhf(logf(1.0f + expf(x)))"));
+        assert_eq!(
+            <EluOp as UnaryExpr<HipC>>::EXPR,
+            "x >= 0.0f ? x : expf(x) - 1.0f"
+        );
+        assert_eq!(
+            <EluGradOp as UnaryExpr<Wgsl>>::EXPR,
+            "select(exp(x), 1.0, x >= 0.0)"
+        );
         assert_eq!(
             <Log10Op as UnaryExpr<Wgsl>>::EXPR,
             "log(x) * 0.43429448190325182f"
