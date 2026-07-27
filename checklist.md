@@ -112,8 +112,14 @@ open in peer-owned backend scopes.
 - [x] Add allocated and caller-owned `suffix_sum` to WGPU, CUDA, ROCm, and
       Metal over the existing reverse `CumSumOp` scan kernel.
 - [x] Add Leto differential contract coverage for all four providers.
-- [ ] Run the four provider workflows on the exact implementation head.
-- [ ] Record final CI evidence and close the backlog item.
+- [x] Run the four provider workflows on the merged implementation head.
+- [x] Record final CI evidence and close the backlog item.
+
+Provider matrix evidence: docs head `52fb7e7` contained the merged scan
+implementation and passed WGPU `90105468997` (160/160), CUDA `90105468456`
+(123/123), ROCm `90105468727` (79/79), and Metal `90105468786` (33/33).
+Hardware jobs were skipped because no hosted NVIDIA/AMD device labels were
+selected.
 
 ## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor]
 
@@ -121,8 +127,14 @@ open in peer-owned backend scopes.
       reverse `suffix_prod` on WGPU, CUDA, ROCm, and Metal.
 - [x] Update provider contracts against the independent Leto scan oracle for
       both product directions.
-- [ ] Run the four provider workflows on the corrected semantic head.
-- [ ] Record final CI evidence and close the backlog item.
+- [x] Run the four provider workflows on the corrected semantic head.
+- [x] Record final CI evidence and close the backlog item.
+
+Provider matrix evidence: docs head `52fb7e7` contained the corrected scan
+semantics and passed WGPU `90105468997` (160/160), CUDA `90105468456`
+(123/123), ROCm `90105468727` (79/79), and Metal `90105468786` (33/33).
+Hardware jobs were skipped because no hosted NVIDIA/AMD device labels were
+selected.
 
 ## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch]
 
