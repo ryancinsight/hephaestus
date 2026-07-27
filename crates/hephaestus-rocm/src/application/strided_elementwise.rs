@@ -198,20 +198,34 @@ fn map_layout_err(error: leto::LetoError) -> HephaestusError {
     }
 }
 
-fn launch_binary_expression<T>(
-    device: &RocmDevice,
-    lhs: &RocmBuffer<T>,
-    rhs: &RocmBuffer<T>,
-    output: &RocmBuffer<T>,
+struct BinaryKernelLaunch<'a, T> {
+    lhs: &'a RocmBuffer<T>,
+    rhs: &'a RocmBuffer<T>,
+    output: &'a RocmBuffer<T>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
     operation: core::any::TypeId,
     expr: &'static str,
+}
+
+fn launch_binary_expression<T>(
+    device: &RocmDevice,
+    request: BinaryKernelLaunch<'_, T>,
 ) -> Result<()>
 where
     T: DialectScalar<HipC> + Pod,
 {
+    let BinaryKernelLaunch {
+        lhs,
+        rhs,
+        output,
+        meta,
+        width,
+        len,
+        operation,
+        expr,
+    } = request;
     let key = PipelineKey::StridedBinary {
         op: operation,
         scalar: core::any::TypeId::of::<T>(),
@@ -370,16 +384,18 @@ where
             dispatch_len(len)?,
         ],
     };
-    launch_binary_expression::<T>(
+    launch_binary_expression(
         device,
-        lhs.buffer,
-        rhs.buffer,
-        output.buffer,
-        meta,
-        width,
-        len,
-        operation,
-        expr,
+        BinaryKernelLaunch {
+            lhs: lhs.buffer,
+            rhs: rhs.buffer,
+            output: output.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
     )
 }
 
