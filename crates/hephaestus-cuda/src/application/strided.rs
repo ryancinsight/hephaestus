@@ -364,20 +364,34 @@ extern "C" __global__ void scalar_strided_kernel(
     )
 }
 
-fn launch_binary_strided_expression<T>(
-    device: &CudaDevice,
-    a: &CudaBuffer<T>,
-    b: &CudaBuffer<T>,
-    out: &CudaBuffer<T>,
+struct BinaryStridedLaunch<'a, T> {
+    a: &'a CudaBuffer<T>,
+    b: &'a CudaBuffer<T>,
+    out: &'a CudaBuffer<T>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
     operation: std::any::TypeId,
     expr: &'static str,
+}
+
+fn launch_binary_strided_expression<T>(
+    device: &CudaDevice,
+    request: BinaryStridedLaunch<'_, T>,
 ) -> Result<()>
 where
     T: DialectScalar<CudaC> + Pod,
 {
+    let BinaryStridedLaunch {
+        a,
+        b,
+        out,
+        meta,
+        width,
+        len,
+        operation,
+        expr,
+    } = request;
     let grid_size_val = grid_size(len, width)?;
 
     let key = PipelineKey::StridedBinary {
@@ -534,8 +548,18 @@ where
         ],
     };
 
-    launch_binary_strided_expression::<T>(
-        device, a.buffer, b.buffer, out.buffer, meta, width, len, operation, expr,
+    launch_binary_strided_expression(
+        device,
+        BinaryStridedLaunch {
+            a: a.buffer,
+            b: b.buffer,
+            out: out.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
     )
 }
 
@@ -669,8 +693,18 @@ where
         ],
     };
 
-    launch_binary_strided_expression::<T>(
-        device, a.buffer, b.buffer, out.buffer, meta, width, len, operation, expr,
+    launch_binary_strided_expression(
+        device,
+        BinaryStridedLaunch {
+            a: a.buffer,
+            b: b.buffer,
+            out: out.buffer,
+            meta,
+            width,
+            len,
+            operation,
+            expr,
+        },
     )
 }
 
