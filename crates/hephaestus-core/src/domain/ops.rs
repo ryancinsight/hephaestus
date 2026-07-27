@@ -419,11 +419,12 @@ macro_rules! wgsl_lgamma_positive_expr {
 macro_rules! wgsl_lgamma_expr {
     () => {
         concat!(
-            "select(select(",
-            wgsl_lgamma_positive_expr!("x"),
-            ", (1.1447298858494002 - log(abs(sin(3.141592653589793 * x))) - ",
-            wgsl_lgamma_positive_expr!("(1.0 - x)"),
-            "), x >= 0.5), select(1.0 / abs(x - trunc(x)), abs(x), isInf(x)), ((x <= 0.0) && (x == trunc(x))) || isInf(x))"
+            "select(select(select(",
+            "(1.1447298858494002 - log(abs(sin(3.141592653589793 * x))) - ",
+            wgsl_lgamma_positive_expr!("max(abs(1.0 - x), 0.5)"),
+            "), ",
+            wgsl_lgamma_positive_expr!("max(abs(x), 0.5)"),
+            ", x >= 0.5), 1.0 / abs(x - trunc(x)), ((x <= 0.0) && (x == trunc(x)))), abs(x), abs(x) > 3.402823466e+38)"
         )
     };
 }
@@ -1100,7 +1101,7 @@ mod tests {
         assert!(<ErfOp as UnaryExpr<Wgsl>>::EXPR.contains("1.061405429"));
         assert!(<ErfcOp as UnaryExpr<Wgsl>>::EXPR.starts_with("(1.0 - "));
         assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("676.5203681218851"));
-        assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("isInf(x)"));
+        assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) > 3.402823466e+38"));
         assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("0.7071067811865476"));
         assert!(<GeluGradOp as UnaryExpr<CudaC>>::EXPR.contains("erff(x *"));
         assert!(<GeluGradOp as UnaryExpr<HipC>>::EXPR.contains("expf(-0.5f * x * x)"));
