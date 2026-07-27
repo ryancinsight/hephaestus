@@ -11,6 +11,21 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-GELU-EXPRESSION-PARITY-1] Exact GELU vocabulary
+
+- Finding: Leto and Coeus expose exact `Gelu` and `GeluGrad`, and WGPU/CUDA
+  already carry equivalent local expressions, but the shared Hephaestus
+  provider seam did not expose the operations to ROCm or Metal.
+- Resolution: add provider-owned `GeluOp` and `GeluGradOp` markers. WGPU uses
+  the existing Abramowitz–Stegun `erf` composition; CUDA and HIP use `erff`
+  with the exact `x/sqrt(2)` contract; Metal delegates through WGPU.
+- Residual: Coeus consumer routing, exact-head provider CI, `lgamma`,
+  tail-stable `erfc`, and non-f32 contracts remain open.
+- Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
+  tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
+  execution is reported separately from adapterless provider CI.
+- Status: provider implementation in progress.
+
 ## [HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1] Error-function vocabulary
 
 - Finding: Leto and Coeus expose f32 `erf` and `erfc`, but the shared
