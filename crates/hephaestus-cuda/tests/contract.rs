@@ -9,16 +9,16 @@ use hephaestus_core::{
     HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, MaxOp, MinOp, MulOp, NegOp, RecipOp, SqrtOp,
-    StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into,
-    cumprod, cumprod_into, det, dot, kron, matexp, matmul, matmul_into, matrix_rank,
-    matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
-    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
-    unary_elementwise_into,
+    AbsOp, AddOp, CudaDevice, CumSumOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MaxOp, MinOp, MulOp,
+    NegOp, RecipOp, SiluGradOp, SiluOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp,
+    SumOp, batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into,
+    det, dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
+    norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
+    prepare_sum_axis_into, prod_axis, reduce_axis, reduction, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+    trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -370,6 +370,84 @@ fn elementwise_unary_matches_cpu_reference() {
     let mut got_recip = vec![0.0f32; host_recip.len()];
     dev.download(&out_recip, &mut got_recip).unwrap();
     assert_eq!(got_recip, vec![1.0f32, 0.5, 0.25, 0.125]);
+}
+
+#[test]
+fn elementwise_activation_markers_match_cpu_reference() {
+    let Some(device) = device("elementwise_activation_markers_match_cpu_reference") else {
+        return;
+    };
+    let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
+    let input = device.upload(&host).unwrap();
+    let gelu_scale = 0.797_884_6_f32;
+    let gelu_cubic = 0.044715_f32;
+
+    macro_rules! check {
+        ($label:literal, $operation:ty, $expected:expr) => {{
+            let expected = $expected;
+            let output = unary_elementwise::<$operation, f32>(&device, &input).unwrap();
+            let mut actual = [0.0_f32; 5];
+            device.download(&output, &mut actual).unwrap();
+            for (index, (&got, &reference)) in actual.iter().zip(expected.iter()).enumerate() {
+                let tolerance = f32::EPSILON * 512.0 * reference.abs().max(1.0);
+                assert!(
+                    (got - reference).abs() <= tolerance,
+                    "{}[{index}] got {got}, expected {reference}, tolerance {tolerance}",
+                    $label
+                );
+            }
+        }};
+    }
+
+    check!(
+        "gelu_tanh",
+        GeluTanhOp,
+        host.iter()
+            .map(|&x| 0.5 * x * (1.0 + (gelu_scale * (x + gelu_cubic * x * x * x)).tanh()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "gelu_tanh_grad",
+        GeluTanhGradOp,
+        host.iter()
+            .map(|&x| {
+                let tanh = (gelu_scale * (x + gelu_cubic * x * x * x)).tanh();
+                0.5 * (1.0 + tanh)
+                    + 0.5 * x * (1.0 - tanh * tanh) * gelu_scale * (1.0 + 3.0 * gelu_cubic * x * x)
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu",
+        SiluOp,
+        host.iter()
+            .map(|&x| x / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu_grad",
+        SiluGradOp,
+        host.iter()
+            .map(|&x| {
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                sigmoid * (1.0 + x * (1.0 - sigmoid))
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus",
+        SoftplusOp,
+        host.iter()
+            .map(|&x| (1.0 + x.exp()).ln())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus_grad",
+        SoftplusGradOp,
+        host.iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

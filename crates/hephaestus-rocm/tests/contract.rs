@@ -15,9 +15,10 @@ use hephaestus_core::{
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
-    AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, ExpNegOp, ExpOp, GpuCsrMatrix,
-    IdentityOp, LnOp, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
-    MulOp, NegOp, PowOp, RecipOp, Result, RocmDevice, RocmMultiStorageKernel, ScanDirection, SinOp,
+    AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, ExpNegOp, ExpOp, GeluTanhGradOp,
+    GeluTanhOp, GpuCsrMatrix, IdentityOp, LnOp, MatrixFunction, MatrixNorm, MatrixProduct,
+    MatrixProperties, MatrixSolve, MulOp, NegOp, PowOp, RecipOp, Result, RocmDevice,
+    RocmMultiStorageKernel, ScanDirection, SiluGradOp, SiluOp, SinOp, SoftplusGradOp, SoftplusOp,
     SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into, binary_elementwise,
     binary_elementwise_into, binary_elementwise_strided, binary_elementwise_strided_into, cumprod,
     cumprod_into, cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
@@ -438,6 +439,84 @@ fn elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts() {
         Err(HephaestusError::DispatchFailed { message })
             if message == "output buffer must not alias binary left input"
     ));
+}
+
+#[test]
+fn elementwise_activation_markers_match_cpu_reference() {
+    let Some(device) = device("elementwise_activation_markers_match_cpu_reference") else {
+        return;
+    };
+    let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
+    let input = device.upload(&host).unwrap();
+    let gelu_scale = 0.797_884_6_f32;
+    let gelu_cubic = 0.044715_f32;
+
+    macro_rules! check {
+        ($label:literal, $operation:ty, $expected:expr) => {{
+            let expected = $expected;
+            let output = unary_elementwise::<$operation, f32>(&device, &input).unwrap();
+            let mut actual = [0.0_f32; 5];
+            device.download(&output, &mut actual).unwrap();
+            for (index, (&got, &reference)) in actual.iter().zip(expected.iter()).enumerate() {
+                let tolerance = f32::EPSILON * 512.0 * reference.abs().max(1.0);
+                assert!(
+                    (got - reference).abs() <= tolerance,
+                    "{}[{index}] got {got}, expected {reference}, tolerance {tolerance}",
+                    $label
+                );
+            }
+        }};
+    }
+
+    check!(
+        "gelu_tanh",
+        GeluTanhOp,
+        host.iter()
+            .map(|&x| 0.5 * x * (1.0 + (gelu_scale * (x + gelu_cubic * x * x * x)).tanh()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "gelu_tanh_grad",
+        GeluTanhGradOp,
+        host.iter()
+            .map(|&x| {
+                let tanh = (gelu_scale * (x + gelu_cubic * x * x * x)).tanh();
+                0.5 * (1.0 + tanh)
+                    + 0.5 * x * (1.0 - tanh * tanh) * gelu_scale * (1.0 + 3.0 * gelu_cubic * x * x)
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu",
+        SiluOp,
+        host.iter()
+            .map(|&x| x / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu_grad",
+        SiluGradOp,
+        host.iter()
+            .map(|&x| {
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                sigmoid * (1.0 + x * (1.0 - sigmoid))
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus",
+        SoftplusOp,
+        host.iter()
+            .map(|&x| (1.0 + x.exp()).ln())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus_grad",
+        SoftplusGradOp,
+        host.iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
