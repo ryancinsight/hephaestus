@@ -30,9 +30,14 @@ passed WGPU `90088836682`, CUDA `90088836688`, ROCm `90088836731`, and Metal
       forms.
 - [ ] Route both f32 operations through Coeus ROCm and Metal and compare with
       the Leto CPU oracle.
-- [ ] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
 
 Implementation owner: Codex on `codex/hephaestus-gelu-parity`; ADR 0030.
+
+Provider evidence: merged Hephaestus PR #123 at `23f9662` passed WGPU job
+`90115184352`, CUDA job `90115253352`, ROCm job `90115183816`, and Metal job
+`90115184178`. AMD and NVIDIA hardware jobs were skipped; no physical-device
+execution claim is made.
 
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor]
 

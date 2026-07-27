@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared `LgammaOp` marker and WGPU, CUDA, ROCm, and Metal
   exports consumed by Coeus.
@@ -18,8 +18,15 @@ cuda-oxide + cutile).
   the Leto CPU oracle; exact-head provider CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0031 owns the
   mathematical and expression-contract decision.
-- Status: Hephaestus provider marker and exports are implemented; Coeus routing
-  and exact-head verification remain open.
+- Status: complete. Hephaestus provider implementation and exact-head provider
+  verification are complete; Coeus routing and Leto differential verification
+  merged in Coeus PR #231.
+- Evidence: Hephaestus PR #118 provider jobs passed WGPU `90086428952`, CUDA
+  `90086430178`, ROCm `90086430143`, and Metal `90086428160`. Coeus PR #231
+  merged at `971fab9614b97bd708a716d01684da58fd1331ba`; its consumer jobs
+  passed WGPU `90088836682`, CUDA `90088836688`, ROCm `90088836731`, and
+  Metal `90088836675`. Required-device ROCm job `90088837591` was skipped;
+  no physical-device execution claim is made.
 
 ## HEPH-GELU-EXPRESSION-PARITY-1 [minor] — in progress
 
@@ -36,8 +43,13 @@ cuda-oxide + cutile).
   with the Leto CPU oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0030 owns the
   mathematical and expression-contract decision.
-- Status: provider implementation in progress; Coeus routing and exact-head
-  verification remain open.
+- Status: Hephaestus provider implementation and exact-head provider
+  verification are complete; Coeus routing and Leto differential verification
+  remain open in peer-owned backend scopes.
+- Evidence: merged Hephaestus PR #123 at `23f9662` passed WGPU job
+  `90115184352`, CUDA job `90115253352`, ROCm job `90115183816`, and Metal job
+  `90115184178`. AMD and NVIDIA hardware jobs were skipped; no physical-device
+  execution claim is made.
 
 ## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor] — in progress
 
