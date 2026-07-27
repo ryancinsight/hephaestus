@@ -19,11 +19,15 @@ architectural decision or a tracked future-work item:
 - Resolution: add `ErfOp` and `ErfcOp`; WGPU uses the existing
   Abramowitz–Stegun expression, CUDA and HIP use native intrinsics, and Metal
   delegates through WGPU.
-- Residual: Coeus consumer routing, Leto differential coverage, exact-head
-  provider CI, tail-stable `erfc`, `lgamma`, and non-f32 contracts remain open.
+- Residual: Coeus consumer routing, tail-stable `erfc`, `lgamma`, and non-f32
+  contracts remain open.
 - Evidence target: core expression tests plus exact-head WGPU, CUDA, ROCm, and
   Metal workflows, followed by Coeus ROCm/Metal differential tests.
-- Status: implementation is in progress.
+- Status: provider implementation resolved; Coeus consumer routing remains open.
+- Evidence: code head `9fc20947` passed WGPU run `30280525008`, CUDA run
+  `30280524996`, ROCm run `30280524846`, and Metal run `30280521250`. The
+  required hardware jobs skipped because no physical device runner was
+  selected.
 
 ## [HEPH-UNARY-MATH-EXPRESSION-PARITY-1] Unparameterized unary math vocabulary
 
