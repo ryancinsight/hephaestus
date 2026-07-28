@@ -11,7 +11,7 @@ use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer};
 use hephaestus_wgpu::{
     AddOp, StridedOperand, SumOp, WgpuDevice, binary_elementwise_into, matmul_into,
     prepare_reduction, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
-    submit_prepared_reduction_batch, sum_axis_into,
+    submit_prepared_mixed_reduction_batch, submit_prepared_reduction_batch, sum_axis_into,
 };
 
 const ELEMENTWISE_LEN: usize = 1 << 20;
@@ -250,6 +250,51 @@ fn benchmark_reduction(device: &WgpuDevice) {
         .unwrap();
     println!(
         "WGPU prepared scalar-sum batch ({SCALAR_BATCH_REDUCTIONS}): {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+
+    submit_prepared_mixed_reduction_batch(device, &scalar_batch, &prepared_batch).unwrap();
+    for reduction in &scalar_batch {
+        let mut scalar_actual = [0u32; 1];
+        device
+            .download(reduction.output(), &mut scalar_actual)
+            .unwrap();
+        assert_eq!(scalar_actual, [scalar_expected]);
+    }
+    for output in &batch_outputs {
+        device.download(output, &mut actual).unwrap();
+        assert_close(&actual, expected, 1.0e-5);
+    }
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        submit_prepared_reduction_batch(device, black_box(&scalar_batch)).unwrap();
+        submit_prepared_axis_reduction_batch(device, black_box(&prepared_batch)).unwrap();
+    }
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    println!(
+        "WGPU separate scalar + axis batches ({SCALAR_BATCH_REDUCTIONS} + {AXIS_BATCH_REDUCTIONS}): {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        submit_prepared_mixed_reduction_batch(
+            device,
+            black_box(&scalar_batch),
+            black_box(&prepared_batch),
+        )
+        .unwrap();
+    }
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    println!(
+        "WGPU mixed scalar + axis batch ({SCALAR_BATCH_REDUCTIONS} + {AXIS_BATCH_REDUCTIONS}): {} ns/iter",
         per_iteration(start.elapsed()).as_nanos()
     );
 

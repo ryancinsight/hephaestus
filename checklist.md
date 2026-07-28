@@ -2,6 +2,29 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf]
+
+- [x] Add one submission path for independent prepared scalar and axis
+      reductions without changing scalar tree-stage ordering.
+- [x] Add exact mixed-batch, singleton, empty, and no-active-work contracts.
+- [x] Record matched baseline/result host-latency measurements for the unchanged
+      mixed workload, validating every output.
+- [x] Run focused local gates and exact-head WGPU, CUDA, ROCm, and Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-mixed-reduction-batch`.
+
+Local evidence: the focused mixed/scalar/axis Nextest contracts pass 3/3 in
+3.498 seconds. Three matched benchmark samples reduce the separate-call median
+from 117.468 µs to 106.640 µs while eliminating one encoder and one submission.
+The shared Atlas overlay currently prevents locked local metadata because a
+peer-edited Gaia manifest resolves `mnemosyne` from target-specific paths;
+standalone Hephaestus metadata and the shared target directory supplied the
+focused evidence without modifying Gaia.
+
+Exact implementation-head jobs passed WGPU `90427454090`, CUDA `90427454188`,
+ROCm `90427454307`, and macOS Metal `90427454254`. AMD and NVIDIA
+hardware-only jobs skipped because no physical-device runners were dispatched.
+
 ## HEPH-DEVICE-LOCAL-COW-2 [minor] [perf]
 
 - [x] Add the explicit `ComputeDevice::alloc_uninitialized_with_hint` seam

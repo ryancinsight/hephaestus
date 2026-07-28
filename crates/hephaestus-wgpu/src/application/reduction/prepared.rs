@@ -9,7 +9,8 @@ use hephaestus_core::{
 };
 
 use super::{
-    ReductionFinalOpWrapper, ReductionOpWrapper, final_reduction_shader_source, shader_source,
+    PreparedAxisReduction, ReductionFinalOpWrapper, ReductionOpWrapper,
+    final_reduction_shader_source, shader_source,
 };
 use crate::application::pipeline::{cached_pipeline, encode_compute_pass, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -112,8 +113,48 @@ pub fn submit_prepared_reduction_batch<T>(
     device: &WgpuDevice,
     reductions: &[&PreparedReduction<T>],
 ) -> Result<()> {
-    let (has_singleton_copy, tree_depth) =
-        reductions
+    submit_prepared_mixed_reduction_batch::<T, T>(device, reductions, &[])
+}
+
+/// Submit prepared scalar and axis reductions in one command buffer.
+///
+/// All reductions must be independent: no reduction may consume another
+/// reduction's output. Singleton scalar copies are encoded before compute
+/// work. Active axis reductions share the first compute pass with the first
+/// stage of each scalar reduction tree; later scalar stages retain one pass per
+/// dependency depth. Scalar and axis element types may differ because each
+/// prepared plan owns its typed pipeline and bindings.
+///
+/// A batch with no singleton copy or active compute dispatch returns without
+/// allocating a command encoder or submitting an empty command buffer.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use hephaestus_wgpu::{
+/// #     PreparedAxisReduction, PreparedReduction, Result, WgpuDevice,
+/// #     submit_prepared_mixed_reduction_batch,
+/// # };
+/// # fn submit<ScalarT, AxisT>(
+/// #     device: &WgpuDevice,
+/// #     scalar: &[&PreparedReduction<ScalarT>],
+/// #     axis: &[&PreparedAxisReduction<AxisT>],
+/// # ) -> Result<()> {
+/// submit_prepared_mixed_reduction_batch(device, scalar, axis)
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns a typed dispatch error if command encoding or submission cannot be
+/// completed by the backend.
+pub fn submit_prepared_mixed_reduction_batch<ScalarT, AxisT>(
+    device: &WgpuDevice,
+    scalar_reductions: &[&PreparedReduction<ScalarT>],
+    axis_reductions: &[&PreparedAxisReduction<AxisT>],
+) -> Result<()> {
+    let (has_singleton_copy, scalar_tree_depth) =
+        scalar_reductions
             .iter()
             .fold((false, 0), |(has_singleton, max_depth), reduction| {
                 (
@@ -121,7 +162,10 @@ pub fn submit_prepared_reduction_batch<T>(
                     max_depth.max(reduction.passes.len()),
                 )
             });
-    if !has_singleton_copy && tree_depth == 0 {
+    let has_axis_dispatch = axis_reductions
+        .iter()
+        .any(|reduction| reduction.pipeline.is_some());
+    if !has_singleton_copy && scalar_tree_depth == 0 && !has_axis_dispatch {
         return Ok(());
     }
 
@@ -131,24 +175,38 @@ pub fn submit_prepared_reduction_batch<T>(
             label: Some("hephaestus-prepared-reduction-batch"),
         });
 
-    for reduction in reductions {
+    for reduction in scalar_reductions {
         if let Some(source) = reduction.singleton_source.as_ref() {
             encoder.copy_buffer_to_buffer(
                 source,
                 0,
                 &reduction.output().buffer,
                 0,
-                WgpuDevice::byte_size::<T>(1)?,
+                WgpuDevice::byte_size::<ScalarT>(1)?,
             );
         }
     }
 
-    for stage in 0..tree_depth {
+    let compute_pass_count = scalar_tree_depth.max(usize::from(has_axis_dispatch));
+    for stage in 0..compute_pass_count {
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-prepared-reduction-batch-stage"),
+            label: Some("hephaestus-prepared-mixed-reduction-batch-stage"),
             timestamp_writes: None,
         });
-        for reduction in reductions {
+        if stage == 0 {
+            for reduction in axis_reductions {
+                let Some(pipeline) = reduction.pipeline.as_ref() else {
+                    continue;
+                };
+                let Some(bind_group) = reduction.bind_group.as_ref() else {
+                    continue;
+                };
+                compute_pass.set_pipeline(pipeline);
+                compute_pass.set_bind_group(0, bind_group, &[]);
+                compute_pass.dispatch_workgroups(reduction.groups, 1, 1);
+            }
+        }
+        for reduction in scalar_reductions {
             let Some(prepared_pass) = reduction.passes.get(stage) else {
                 continue;
             };

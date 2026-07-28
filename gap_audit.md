@@ -844,14 +844,16 @@ host before uploading device buffers.
 - [patch] WGPU axis reductions still carry fixed dispatch/synchronization
   overhead against CPU backends on small workloads after the short-axis
   workgroup reduction path, axis-0 tiling, prepared dispatch, batched axis
-  submission, scalar final-pass collapse, and Leto's row-major rank-2 axis-0 CPU
-  fast path. Current residual: scalar sum beats `ndarray` on the latest run, but
-  Leto CPU axis reductions remain faster than WGPU for 256x256 axis 0. Definition
-  of ready for the next reduction slice: prototype a measured small-axis routing
-  policy or fuse multiple axis statistics into one WGPU pass; do not target
-  Hermes SIMD arithmetic until a CPU-profile shows the arithmetic loop rather
-  than layout/launch overhead is dominant. Evidence tier: value-semantic
-  contract plus empirical comparative benchmark.
+  submission, mixed scalar/axis submission, scalar final-pass collapse, and
+  Leto's row-major rank-2 axis-0 CPU fast path. Mixed scalar/axis batches now
+  remove one command encoder and queue submission without adding scratch
+  buffers. Current residual: scalar sum beats `ndarray` on the latest run, but
+  Leto CPU axis reductions remain faster than WGPU for 256x256 axis 0.
+  Definition of ready for the next reduction slice: prototype a measured
+  small-axis routing policy or fuse multiple axis statistics into one WGPU pass;
+  do not target Hermes SIMD arithmetic until a CPU profile shows the arithmetic
+  loop rather than layout/launch overhead is dominant. Evidence tier:
+  value-semantic contract plus empirical comparative benchmark.
 - [minor] WGPU Cholesky/LU/QR provide device-resident factors and Leto-matching
   solve/inverse/determinant surfaces, but factorization delegates to Leto on the
   host before uploading the factors (API parity, not GPU-kernel parity). Evidence

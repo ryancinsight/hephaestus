@@ -18,7 +18,7 @@ pub use hephaestus_core::{MaxOp, MinOp, ProdOp, SumOp};
 mod prepared;
 pub use prepared::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,
-    submit_prepared_reduction_batch,
+    submit_prepared_mixed_reduction_batch, submit_prepared_reduction_batch,
 };
 
 /// ZST wrapper to generate a unique TypeId in the pipeline cache for reduction operations.
@@ -103,37 +103,7 @@ pub fn submit_prepared_axis_reduction_batch<T>(
     device: &WgpuDevice,
     reductions: &[&PreparedAxisReduction<T>],
 ) -> Result<()> {
-    let Some(first_active) = reductions
-        .iter()
-        .position(|reduction| reduction.pipeline.is_some())
-    else {
-        return Ok(());
-    };
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-prepared-axis-reduction-batch"),
-        });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-prepared-axis-reduction-batch-pass"),
-            timestamp_writes: None,
-        });
-        for reduction in &reductions[first_active..] {
-            let Some(pipeline) = reduction.pipeline.as_ref() else {
-                continue;
-            };
-            let Some(bind_group) = reduction.bind_group.as_ref() else {
-                continue;
-            };
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, bind_group, &[]);
-            pass.dispatch_workgroups(reduction.groups, 1, 1);
-        }
-    }
-    device.queue().submit(Some(encoder.finish()));
-    Ok(())
+    prepared::submit_prepared_mixed_reduction_batch::<T, T>(device, &[], reductions)
 }
 
 fn shader_source<Op: CombineExpr<Wgsl>, T: IdentityToken<Op, Wgsl>>(width: BlockWidth) -> String {
