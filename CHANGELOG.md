@@ -36,6 +36,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add unified prepared WGPU scalar- and axis-reduction submission.
+  Independent plans share one command encoder and queue submission while
+  scalar tree stages retain their dependency boundaries and no scratch buffers
+  are added. The matched mixed-batch median decreases from 117.468 µs to
+  106.640 µs.
+
 - [patch] Return early from all-no-op prepared WGPU scalar- and axis-reduction
   batches instead of allocating command encoders and submitting empty command
   buffers. Exact empty identities and mixed-batch execution remain unchanged;

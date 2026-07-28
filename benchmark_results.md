@@ -8,6 +8,28 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## Prepared Mixed-Reduction Batch Submission
+
+The mixed workload combines eight independent 1,048,576-element `u32` scalar
+sums with eight independent 256x256 `f32` axis-0 sums. Every scalar output is
+checked against the exact host sum and every axis output against the Leto
+result before timing. The timed region performs 50 call pairs or unified calls
+and one final device poll. Matched runs use the same GNU nightly release
+executable and resolved dependency graph.
+
+| Submission | Samples | Median | Relative throughput |
+| --- | --- | --- | --- |
+| Separate scalar and axis command buffers | 115.766 µs, 128.888 µs, 117.468 µs | 117.468 µs | 1.00x |
+| Unified scalar and axis command buffer | 107.462 µs, 101.488 µs, 106.640 µs | 106.640 µs | **1.10x** |
+
+Unified submission lowers the observed median host latency by 9.2%. It removes
+one transient command encoder and one queue submission per call pair while
+retaining scalar tree-stage pass boundaries and adding no scratch buffers.
+This is a local host/GPU result from three matched samples, not a Criterion
+confidence interval or a cross-device claim. Concurrent package-cache
+contention was present, so the structural encoder/submission reduction is
+stronger evidence than the exact latency ratio.
+
 ## Prepared No-Op Batch Submission
 
 The no-op batch workload prepares eight empty scalar sums and eight zero-output
