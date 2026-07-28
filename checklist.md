@@ -12,7 +12,7 @@ Sprint target: 0.18.0. Phase: Closure.
       buffer before reading it.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record the
       terminal workflow evidence.
-- [ ] Cut Coeus shared-storage replacement allocation over to the seam after
+- [x] Cut Coeus shared-storage replacement allocation over to the seam after
       the Hephaestus provider merge.
 
 Implementation owner: Codex on `codex/uninitialized-device-copy`; ADR 0037.
@@ -32,6 +32,11 @@ run `30343728174` passed WGPU job `90224950173`, run `30343728133` passed ROCm
 job `90224950310`, and run `30343728161` passed Metal job `90224950041`.
 NVIDIA job `90224951166` and AMD job `90224950902` were skipped because no
 physical-device runners were dispatched.
+
+Coeus PR #235 merged at `c7fcdc1`. Its final docs-head run `30346488092`
+passed CUDA job `90233799719`, WGPU job `90233799768`, ROCm job `90233799650`,
+and Metal job `90233799737`; required-device ROCm job `90233800152` was
+skipped because no hosted AMD runner was dispatched.
 
 ## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor]
 

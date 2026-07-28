@@ -22,10 +22,9 @@ architectural decision or a tracked future-work item:
   ROCm uses `hipMalloc` without memset; WGPU and Metal share the seam while
   retaining their platform allocation behavior. Ordinary defined-content
   callers continue using `alloc_zeroed_with_hint`.
-- Residual: the Coeus replacement path still needs its consumer cutover after
-  this provider change merges. Exact-head provider CI is required for hosted
-  verification. No runtime bandwidth, latency, or resident-memory delta is
-  claimed without a controlled benchmark.
+- Residual: no source cutover remains in the authorized provider/consumer
+  scope. No runtime bandwidth, latency, or resident-memory delta is claimed
+  without a controlled benchmark.
 - Environment: the ROCm feature build requires Linux ROCm and cannot execute
   in the current Windows checkout; the no-default-features ROCm stub build is
   available locally. The CUDA focused nextest build reaches test-binary
@@ -36,8 +35,11 @@ architectural decision or a tracked future-work item:
   `30343728133` passed ROCm job `90224950310`, and run `30343728161` passed
   Metal job `90224950041`. NVIDIA `90224951166` and AMD `90224950902` skipped
   because no physical-device runner was dispatched.
-- Status: provider implementation complete; Coeus consumer cutover remains
-  open.
+- Status: complete. Coeus PR #235 merged at `c7fcdc1`; final docs-head run
+  `30346488092` passed CUDA `90233799719`, WGPU `90233799768`, ROCm `90233799650`,
+  and Metal `90233799737`. Required-device ROCm `90233800152` skipped because
+  no hosted AMD runner was dispatched; physical-device execution is not
+  claimed.
 
 ## [HEPH-LGAMMA-EXPRESSION-PARITY-1] Log-gamma vocabulary
 
