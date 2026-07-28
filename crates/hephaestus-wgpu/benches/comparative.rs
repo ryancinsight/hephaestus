@@ -9,14 +9,17 @@ use std::time::{Duration, Instant};
 
 use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_wgpu::{
-    AddOp, StridedOperand, WgpuDevice, binary_elementwise_into, matmul_into, prepare_sum_axis_into,
-    submit_prepared_axis_reduction_batch, sum_axis_into,
+    AddOp, StridedOperand, SumOp, WgpuDevice, binary_elementwise_into, matmul_into,
+    prepare_reduction, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, sum_axis_into,
 };
 
 const ELEMENTWISE_LEN: usize = 1 << 20;
 const MATRIX_DIMENSION: usize = 256;
 const ITERATIONS: usize = 50;
 const AXIS_BATCH_REDUCTIONS: usize = 8;
+const SCALAR_BATCH_REDUCTIONS: usize = 8;
+const SCALAR_REDUCTION_LEN: usize = 1 << 20;
 
 fn per_iteration(elapsed: Duration) -> Duration {
     elapsed / u32::try_from(ITERATIONS).expect("invariant: benchmark iterations fit u32")
@@ -217,6 +220,35 @@ fn benchmark_reduction(device: &WgpuDevice) {
         .unwrap();
     println!(
         "WGPU prepared sum-axis batch ({AXIS_BATCH_REDUCTIONS}): {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+
+    let scalar_host: Vec<u32> = (0..SCALAR_REDUCTION_LEN)
+        .map(|index| u32::try_from(index % 17).unwrap())
+        .collect();
+    let scalar_expected: u32 = scalar_host.iter().sum();
+    let scalar_input = device.upload(&scalar_host).unwrap();
+    let scalar_batch: Vec<_> = (0..SCALAR_BATCH_REDUCTIONS)
+        .map(|_| prepare_reduction::<SumOp, u32>(device, &scalar_input).unwrap())
+        .collect();
+    let scalar_batch: Vec<_> = scalar_batch.iter().collect();
+    submit_prepared_reduction_batch(device, &scalar_batch).unwrap();
+    for reduction in &scalar_batch {
+        let mut actual = [0u32; 1];
+        device.download(reduction.output(), &mut actual).unwrap();
+        assert_eq!(actual[0], scalar_expected);
+    }
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        submit_prepared_reduction_batch(device, black_box(&scalar_batch)).unwrap();
+    }
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    println!(
+        "WGPU prepared scalar-sum batch ({SCALAR_BATCH_REDUCTIONS}): {} ns/iter",
         per_iteration(start.elapsed()).as_nanos()
     );
 }

@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-scalar-batch-pass`; scope:
+  `hephaestus-wgpu` prepared scalar-reduction batch encoding, its differential
+  contract, comparative benchmark, and synchronized performance artifacts.
+- Outcome: encode independent reduction trees stage-major so a batch opens one
+  compute pass per tree depth instead of one pass per tree stage, without
+  changing arithmetic order or scratch/output allocation.
+- Non-goals: combining dependent tree stages in one pass, shader fusion, CPU
+  fallback, backend API changes, and performance claims without a controlled
+  before/after run of the unchanged batch workload.
+- Acceptance: singleton and multi-pass batches preserve exact integer values;
+  the benchmark validates every output and reports matched baseline/result
+  measurements; formatting, warning-denied package checks, focused Nextest,
+  doctests, benchmark smoke, and exact-head provider CI pass.
+- Risk/change class: `[patch]` internal command-encoding optimization.
+- Status: complete in PR #139. Three matched samples reduce the
+  eight-reduction median from 234.206 µs to 100.918 µs; focused Nextest,
+  warning-denied all-target Clippy, doctests, formatting, and benchmark
+  execution pass. Exact implementation-head provider jobs passed WGPU
+  `90372903175`, CUDA `90372915738`, ROCm `90372903296`, and macOS Metal
+  `90372902759`; AMD and NVIDIA hardware-only jobs were skipped as designed.
+
 ## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-axis-batch-pass`; scope:

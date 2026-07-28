@@ -36,6 +36,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Encode independent prepared WGPU scalar-reduction trees stage-major,
+  preserving pass boundaries between dependent stages while sharing each
+  batch stage. Mixed singleton and multi-pass contracts preserve exact values
+  without additional buffers; the matched eight-reduction local benchmark
+  median decreases from 234.206 µs to 100.918 µs.
+
 - [patch] Encode independent prepared WGPU axis-reduction batches in one
   compute pass instead of opening one pass per reduction. Mixed-operation
   contracts preserve output values without additional buffers; the matched

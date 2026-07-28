@@ -2849,3 +2849,16 @@ Execution owner: Codex on `codex/hephaestus-axis-batch-pass`. Claimed files:
 - [x] Collapse independent prepared-axis batch encoding to one compute pass.
 - [x] Add mixed-operation value-semantic regression coverage.
 - [x] Record the matched result and run affected package gates.
+# HEPH-WGPU-SCALAR-BATCH-PASS-1
+
+Execution owner: Codex on `codex/hephaestus-scalar-batch-pass`. Claimed files:
+`crates/hephaestus-wgpu/src/application/reduction/prepared.rs`,
+`crates/hephaestus-wgpu/tests/contract.rs`,
+`crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
+`CHANGELOG.md`, `backlog.md`, and this section.
+
+- [x] Add and value-check the fixed prepared scalar-batch benchmark.
+- [x] Record the unchanged tree-major implementation baseline.
+- [x] Encode independent reduction trees stage-major.
+- [x] Cover mixed singleton and multi-pass batches.
+- [x] Record the matched result and run affected gates.
