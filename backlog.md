@@ -1501,6 +1501,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     instrument. Local evidence: no-feature Nextest 78/78, CUDA feature check,
     CUDA/decomposition all-target check, feature-gated clippy, formatting, and
     doctests. Physical CUDA execution remains CI/self-hosted evidence.
+  - **CU-P12 in progress**: prepared CUDA dot and L2-norm plans still retain
+    full logical-length product/square buffers even though their direct paths
+    now use fused first-pass map-reductions. The next slice will reuse the
+    fused partial-output plan across dispatches, preserving stable outputs and
+    strided-view semantics while reducing prepared scratch to workgroup
+    partials. ROCm will receive the same plan shape in this increment so the
+    CUDA and ROCm prepared capabilities remain equivalent.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/
