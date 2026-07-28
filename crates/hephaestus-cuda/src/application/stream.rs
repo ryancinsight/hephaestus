@@ -90,11 +90,38 @@ impl<K> Clone for CudaPrepared<K> {
 /// order, while completion is observed through [`ComputeDevice::synchronize`](hephaestus_core::ComputeDevice::synchronize).
 pub struct CudaCommandStream<'d> {
     device: &'d CudaDevice,
+    launch_scratch: CudaLaunchScratch,
 }
 
 /// Active CUDA grouped-kernel sequence encoded as ordered launches.
 pub struct CudaGroupedSequence<'s> {
     device: &'s CudaDevice,
+    launch_scratch: &'s mut CudaLaunchScratch,
+}
+
+#[derive(Default)]
+struct CudaLaunchScratch {
+    device_ptrs: Vec<DevicePtr>,
+    args: Vec<*mut core::ffi::c_void>,
+}
+
+impl CudaLaunchScratch {
+    fn prepare<T, I>(&mut self, handles: I, params: &mut T) -> &mut [*mut core::ffi::c_void]
+    where
+        I: IntoIterator<Item = DevicePtr>,
+    {
+        self.device_ptrs.clear();
+        self.device_ptrs.extend(handles);
+        self.args.clear();
+        self.args.reserve(self.device_ptrs.len() + 1);
+        self.args.extend(
+            self.device_ptrs
+                .iter_mut()
+                .map(|ptr| ptr as *mut DevicePtr as *mut core::ffi::c_void),
+        );
+        self.args.push((params as *mut T).cast());
+        &mut self.args
+    }
 }
 
 impl KernelDevice for CudaDevice {
@@ -122,7 +149,10 @@ impl KernelDevice for CudaDevice {
 
     fn stream(&self) -> Result<Self::Stream<'_>> {
         self.bind()?;
-        Ok(CudaCommandStream { device: self })
+        Ok(CudaCommandStream {
+            device: self,
+            launch_scratch: CudaLaunchScratch::default(),
+        })
     }
 }
 
@@ -168,15 +198,10 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
             return Ok(());
         }
 
-        let mut device_ptrs: Vec<DevicePtr> = bindings.iter().map(|bound| bound.handle).collect();
         let mut params_value = *params;
-        let mut args = Vec::with_capacity(device_ptrs.len() + 1);
-        args.extend(
-            device_ptrs
-                .iter_mut()
-                .map(|ptr| ptr as *mut DevicePtr as *mut core::ffi::c_void),
-        );
-        args.push(&mut params_value as *mut K::Params as *mut core::ffi::c_void);
+        let args = self
+            .launch_scratch
+            .prepare(bindings.iter().map(|bound| bound.handle), &mut params_value);
 
         launch_kernel(
             self.device,
@@ -186,7 +211,7 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
                 block: (K::WORKGROUP[0], K::WORKGROUP[1], K::WORKGROUP[2]),
                 shared_bytes: K::SHARED_BYTES,
             },
-            &mut args,
+            args,
         )
     }
 
@@ -318,7 +343,14 @@ impl<'d> GroupedCommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
             return Ok(());
         }
 
-        launch_grouped(self.device, prepared, bindings, params, grid)
+        launch_grouped(
+            self.device,
+            &mut self.launch_scratch,
+            prepared,
+            bindings,
+            params,
+            grid,
+        )
     }
 
     fn encode_grouped_sequence<F>(&mut self, _label: &str, encode: F) -> Result<()>
@@ -327,6 +359,7 @@ impl<'d> GroupedCommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
     {
         let mut sequence = CudaGroupedSequence {
             device: self.device,
+            launch_scratch: &mut self.launch_scratch,
         };
         encode(&mut sequence)
     }
@@ -348,26 +381,27 @@ impl<'s> GroupedKernelSequence<'s, CudaDevice> for CudaGroupedSequence<'s> {
         if grid.x == 0 || grid.y == 0 || grid.z == 0 {
             return Ok(());
         }
-        launch_grouped(self.device, prepared, bindings, params, grid)
+        launch_grouped(
+            self.device,
+            self.launch_scratch,
+            prepared,
+            bindings,
+            params,
+            grid,
+        )
     }
 }
 
 fn launch_grouped<K: GroupedKernelSource<CudaC>>(
     device: &CudaDevice,
+    launch_scratch: &mut CudaLaunchScratch,
     prepared: &CudaGroupedPrepared<K>,
     bindings: &[GroupedBinding<'_, CudaDevice>],
     params: &K::Params,
     grid: DispatchGrid,
 ) -> Result<()> {
-    let mut device_ptrs: Vec<DevicePtr> = bindings.iter().map(|bound| bound.handle).collect();
     let mut params_value = *params;
-    let mut args = Vec::with_capacity(device_ptrs.len() + 1);
-    args.extend(
-        device_ptrs
-            .iter_mut()
-            .map(|ptr| ptr as *mut DevicePtr as *mut core::ffi::c_void),
-    );
-    args.push(&mut params_value as *mut K::Params as *mut core::ffi::c_void);
+    let args = launch_scratch.prepare(bindings.iter().map(|bound| bound.handle), &mut params_value);
 
     launch_kernel(
         device,
@@ -377,7 +411,7 @@ fn launch_grouped<K: GroupedKernelSource<CudaC>>(
             block: (K::WORKGROUP[0], K::WORKGROUP[1], K::WORKGROUP[2]),
             shared_bytes: K::SHARED_BYTES,
         },
-        &mut args,
+        args,
     )
 }
 
@@ -503,6 +537,39 @@ extern "C" __global__ void scale_kernel(
 "#,
             )
         }
+    }
+
+    #[test]
+    fn launch_scratch_reuses_capacity_for_steady_state_encodes() {
+        let mut scratch = CudaLaunchScratch::default();
+        let mut params = 7_u32;
+
+        assert_eq!(
+            scratch
+                .prepare([1_u64 as DevicePtr, 2_u64 as DevicePtr], &mut params)
+                .len(),
+            3
+        );
+        scratch.prepare(
+            [
+                1_u64 as DevicePtr,
+                2_u64 as DevicePtr,
+                3_u64 as DevicePtr,
+                4_u64 as DevicePtr,
+            ],
+            &mut params,
+        );
+        let pointer_capacity = scratch.device_ptrs.capacity();
+        let argument_capacity = scratch.args.capacity();
+
+        assert_eq!(
+            scratch
+                .prepare([1_u64 as DevicePtr, 2_u64 as DevicePtr], &mut params)
+                .len(),
+            3
+        );
+        assert_eq!(scratch.device_ptrs.capacity(), pointer_capacity);
+        assert_eq!(scratch.args.capacity(), argument_capacity);
     }
 
     #[test]

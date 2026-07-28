@@ -1513,6 +1513,15 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     Nextest 49/49. The ROCm feature build remains a Linux-only CI gate because
     this Windows checkout intentionally rejects it without a ROCm installation;
     physical CUDA/ROCm execution remains CI/self-hosted evidence.
+  - **CU-P13 closed locally**: CUDA authored command streams now retain one
+    bounded launch-scratch pair per command stream and reuse it across direct
+    encodes, grouped encodes, and grouped sequences. The backend-neutral stream
+    contract and legacy-null-stream ordering are unchanged. The new unit
+    contract verifies capacity reuse after growth; adapterless Nextest is
+    79/79, feature/all-target check and feature Clippy are warning-clean,
+    no-feature doctests and formatting pass. Feature Nextest cannot link in
+    this Windows GNU checkout because `-lcuda` is unavailable; CI remains the
+    feature-linked and physical-device gate. No runtime speedup claim is made.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/
