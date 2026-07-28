@@ -33,5 +33,7 @@ pub mod stream;
 pub mod strided;
 /// Rank-≤4 layout-aware elementwise operations.
 pub mod strided_elementwise;
+/// Dense vector recurrences and prepared reductions.
+pub mod vector;
 /// Volume ray-integral kernels.
 pub mod volume;

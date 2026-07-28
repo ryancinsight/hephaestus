@@ -8,6 +8,10 @@ Target release: 0.18.0.
 
 ### Breaking
 
+- [arch] `DenseVectorOps` prepared dot and L2-norm handles now use operand
+  lifetime generic associated types. CUDA and ROCm implementations borrow the
+  fixed device allocations instead of requiring cloneable buffer handles.
+
 - [arch] General-eigenvalue device buffers now expose
   `eunomia::Complex<f32>` instead of `num_complex::Complex<f32>`.
 
@@ -16,6 +20,12 @@ Target release: 0.18.0.
   at parameter construction.
 
 ### Migration
+
+- Update `DenseVectorOps` implementations to define `PreparedDot<'a>` and
+  `PreparedNorm<'a>` and to return handles borrowing the input buffers. The
+  existing WGPU implementation remains source-compatible at call sites; CUDA
+  and ROCm now expose `CudaVectorOps` and `RocmVectorOps` for the complete f32
+  operation contract.
 
 - Import `eunomia::Complex` for WGPU, CUDA, Metal, and Python complex buffer
   APIs. The layout remains `repr(C)` real/imaginary pairs and is pinned by

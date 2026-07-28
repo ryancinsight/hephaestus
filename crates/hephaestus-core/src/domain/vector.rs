@@ -46,9 +46,13 @@ use super::error::Result;
 /// memory.
 pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     /// Prepared resources for a dot product over a fixed operand pair.
-    type PreparedDot;
+    type PreparedDot<'a>
+    where
+        Self: 'a;
     /// Prepared resources for a Euclidean norm over a fixed operand.
-    type PreparedNorm;
+    type PreparedNorm<'a>
+    where
+        Self: 'a;
 
     /// Copy `source` into `target` device-to-device.
     ///
@@ -114,22 +118,22 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     /// # Errors
     ///
     /// Returns a length mismatch or the backend preparation failure.
-    fn prepare_dot(
+    fn prepare_dot<'a>(
         &self,
         device: &D,
-        left: &D::Buffer<T>,
-        right: &D::Buffer<T>,
-    ) -> Result<Self::PreparedDot>;
+        left: &'a D::Buffer<T>,
+        right: &'a D::Buffer<T>,
+    ) -> Result<Self::PreparedDot<'a>>;
 
     /// Execute a prepared dot product and read the scalar back to the host.
     ///
     /// # Errors
     ///
     /// Returns a prepared-operand mismatch or the backend dispatch failure.
-    fn dot_prepared(
+    fn dot_prepared<'a>(
         &self,
         device: &D,
-        prepared: &Self::PreparedDot,
+        prepared: &Self::PreparedDot<'a>,
         left: &D::Buffer<T>,
         right: &D::Buffer<T>,
     ) -> Result<T>;
@@ -139,17 +143,21 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     /// # Errors
     ///
     /// Returns the backend preparation failure.
-    fn prepare_norm_l2(&self, device: &D, vector: &D::Buffer<T>) -> Result<Self::PreparedNorm>;
+    fn prepare_norm_l2<'a>(
+        &self,
+        device: &D,
+        vector: &'a D::Buffer<T>,
+    ) -> Result<Self::PreparedNorm<'a>>;
 
     /// Execute a prepared Euclidean norm and read the scalar back to the host.
     ///
     /// # Errors
     ///
     /// Returns a prepared-operand mismatch or the backend dispatch failure.
-    fn norm_l2_prepared(
+    fn norm_l2_prepared<'a>(
         &self,
         device: &D,
-        prepared: &Self::PreparedNorm,
+        prepared: &Self::PreparedNorm<'a>,
         vector: &D::Buffer<T>,
     ) -> Result<T>;
 

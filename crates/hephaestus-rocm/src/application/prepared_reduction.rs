@@ -21,8 +21,8 @@ struct PreparedPass {
     input_len: u32,
 }
 
-pub(crate) struct PreparedReductionPlan<'a, T> {
-    device: &'a RocmDevice,
+pub(crate) struct PreparedReductionPlan<T> {
+    device: RocmDevice,
     width: BlockWidth,
     shared_bytes: u32,
     passes: Vec<PreparedPass>,
@@ -32,12 +32,12 @@ pub(crate) struct PreparedReductionPlan<'a, T> {
 /// A reusable ROCm scalar reduction plan over a fixed input buffer.
 pub struct PreparedReduction<'a, T> {
     input: &'a RocmBuffer<T>,
-    plan: PreparedReductionPlan<'a, T>,
+    plan: PreparedReductionPlan<T>,
 }
 
-impl<'a, T> PreparedReductionPlan<'a, T> {
+impl<T> PreparedReductionPlan<T> {
     pub(crate) fn prepare<Op>(
-        device: &'a RocmDevice,
+        device: &RocmDevice,
         input_len: usize,
         width: BlockWidth,
     ) -> Result<Self>
@@ -49,7 +49,7 @@ impl<'a, T> PreparedReductionPlan<'a, T> {
         let shared_bytes = checked_shared_bytes::<T>(width)?;
         if input_len == 0 {
             return Ok(Self {
-                device,
+                device: device.clone(),
                 width,
                 shared_bytes,
                 passes: Vec::new(),
@@ -93,7 +93,7 @@ impl<'a, T> PreparedReductionPlan<'a, T> {
         }
 
         Ok(Self {
-            device,
+            device: device.clone(),
             width,
             shared_bytes,
             passes,
@@ -118,7 +118,7 @@ impl<'a, T> PreparedReductionPlan<'a, T> {
                 (&mut input_len as *mut u32).cast(),
             ];
             launch_kernel(
-                self.device,
+                &self.device,
                 &pass.kernel,
                 LaunchConfig::linear_shared(pass.groups, self.width, self.shared_bytes),
                 &mut args,
@@ -179,7 +179,7 @@ pub fn submit_prepared_reduction_batch<T>(reductions: &[&PreparedReduction<'_, T
 /// Returns a typed error when the width, allocation, shared-memory, or native
 /// kernel compilation contract is invalid.
 pub fn prepare_reduction_with_width<'a, Op, T>(
-    device: &'a RocmDevice,
+    device: &RocmDevice,
     input: &'a RocmBuffer<T>,
     width: BlockWidth,
 ) -> Result<PreparedReduction<'a, T>>

@@ -7,10 +7,10 @@
 
 use hephaestus_core::{
     BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
-    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
-    GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
-    GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC, KernelDevice,
-    KernelInterface, KernelSource, MaxOp, MinOp, SumOp,
+    ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer, DeviceFeature, DispatchGrid,
+    GroupedBinding, GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice,
+    GroupedKernelInterface, GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC,
+    KernelDevice, KernelInterface, KernelSource, MaxOp, MinOp, SumOp,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
@@ -18,9 +18,9 @@ use hephaestus_rocm::{
     AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, EluGradOp, EluOp, ExpNegOp, ExpOp,
     GeluTanhGradOp, GeluTanhOp, GpuCsrMatrix, IdentityOp, LnOp, MatrixFunction, MatrixNorm,
     MatrixProduct, MatrixProperties, MatrixSolve, MishGradOp, MishOp, MulOp, NegOp, PowOp, RecipOp,
-    Result, RocmDevice, RocmMultiStorageKernel, ScanDirection, SiluGradOp, SiluOp, SinOp,
-    SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, batched_matmul, batched_matmul_into,
-    binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
+    Result, RocmDevice, RocmMultiStorageKernel, RocmVectorOps, ScanDirection, SiluGradOp, SiluOp,
+    SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, batched_matmul,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
     binary_elementwise_strided_into, cumprod, cumprod_into, cumsum, det, dot, kron, kron_into,
     matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
     mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, prepare_dot,
@@ -4407,4 +4407,151 @@ fn matrix_functions_reject_invalid_and_handle_empty_inputs() {
     )
     .expect("ROCm empty matrix exponential");
     assert_eq!(empty_matexp.len(), 0);
+}
+
+fn assert_vector_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+    assert_eq!(actual.len(), expected.len());
+    for (index, (&got, &want)) in actual.iter().zip(expected).enumerate() {
+        assert!(
+            (got - want).abs() <= tolerance * want.abs().max(1.0),
+            "index {index}: got {got}, expected {want}"
+        );
+    }
+}
+
+#[test]
+fn dense_vector_ops_match_cpu_reference() {
+    let Some(dev) = device("dense_vector_ops_match_cpu_reference") else {
+        return;
+    };
+    let ops = RocmVectorOps::new(&dev).expect("ROCm vector kernel descriptors");
+    let len = 257;
+    let left_host: Vec<f32> = (0..len)
+        .map(|index| (index as f32 - 128.0) * 0.03125)
+        .collect();
+    let right_host: Vec<f32> = (0..len).map(|index| (index as f32 * 0.017) - 2.0).collect();
+    let left = dev.upload(&left_host).expect("ROCm left upload");
+    let right = dev.upload(&right_host).expect("ROCm right upload");
+    let tolerance = 8.0 * f32::EPSILON * len as f32;
+
+    let empty = dev.upload(&[] as &[f32]).expect("ROCm empty upload");
+    let empty_output = dev.alloc_zeroed::<f32>(0).expect("ROCm empty allocation");
+    ops.copy_vector(&dev, &empty, &empty_output)
+        .expect("ROCm empty copy");
+    ops.scale_vector(&dev, &empty_output, 2.0)
+        .expect("ROCm empty scale");
+    ops.axpy(&dev, &empty_output, &empty, 2.0)
+        .expect("ROCm empty axpy");
+    ops.xpay(&dev, &empty_output, &empty, 2.0)
+        .expect("ROCm empty xpay");
+    ops.subtract_into(&dev, &empty, &empty, &empty_output)
+        .expect("ROCm empty subtraction");
+    let empty_dot = ops.dot(&dev, &empty, &empty).expect("ROCm empty dot");
+    let empty_norm = ops.norm_l2(&dev, &empty).expect("ROCm empty norm");
+    assert_eq!(empty_dot, 0.0);
+    assert_eq!(empty_norm, 0.0);
+
+    let copy = dev.alloc_zeroed::<f32>(len).expect("ROCm copy allocation");
+    ops.copy_vector(&dev, &left, &copy)
+        .expect("ROCm vector copy");
+    let mut copied = vec![0.0; len];
+    dev.download(&copy, &mut copied)
+        .expect("ROCm copy download");
+    assert_vector_close(&copied, &left_host, 0.0);
+
+    let scaled = dev.upload(&left_host).expect("ROCm scale upload");
+    ops.scale_vector(&dev, &scaled, -1.75)
+        .expect("ROCm vector scale");
+    let expected_scale: Vec<f32> = left_host.iter().map(|&value| value * -1.75).collect();
+    let mut actual = vec![0.0; len];
+    dev.download(&scaled, &mut actual)
+        .expect("ROCm scale download");
+    assert_vector_close(&actual, &expected_scale, 1.0e-6);
+
+    let axpy = dev.upload(&left_host).expect("ROCm axpy upload");
+    ops.axpy(&dev, &axpy, &right, 0.625).expect("ROCm axpy");
+    let expected_axpy: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| 0.625_f32.mul_add(right, left))
+        .collect();
+    dev.download(&axpy, &mut actual)
+        .expect("ROCm axpy download");
+    assert_vector_close(&actual, &expected_axpy, 1.0e-6);
+
+    let xpay = dev.upload(&left_host).expect("ROCm xpay upload");
+    ops.xpay(&dev, &xpay, &right, -0.375).expect("ROCm xpay");
+    let expected_xpay: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| (-0.375_f32).mul_add(left, right))
+        .collect();
+    dev.download(&xpay, &mut actual)
+        .expect("ROCm xpay download");
+    assert_vector_close(&actual, &expected_xpay, 1.0e-6);
+
+    let difference = dev
+        .alloc_zeroed::<f32>(len)
+        .expect("ROCm subtraction allocation");
+    ops.subtract_into(&dev, &left, &right, &difference)
+        .expect("ROCm subtraction");
+    let expected_difference: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left - right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("ROCm subtraction download");
+    assert_vector_close(&actual, &expected_difference, 1.0e-6);
+
+    let prepared_dot = ops
+        .prepare_dot(&dev, &left, &right)
+        .expect("ROCm dot preparation");
+    let dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("ROCm prepared dot");
+    let expected_dot: f32 = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!((dot - expected_dot).abs() <= tolerance * expected_dot.abs().max(1.0));
+
+    let prepared_norm = ops
+        .prepare_norm_l2(&dev, &left)
+        .expect("ROCm norm preparation");
+    let norm = ops
+        .norm_l2_prepared(&dev, &prepared_norm, &left)
+        .expect("ROCm prepared norm");
+    let expected_norm = left_host
+        .iter()
+        .map(|&value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    assert!((norm - expected_norm).abs() <= tolerance * expected_norm.abs().max(1.0));
+
+    let replacement_host: Vec<f32> = right_host.iter().map(|&value| value * 0.5).collect();
+    let replacement = dev
+        .upload(&replacement_host)
+        .expect("ROCm replacement upload");
+    ops.copy_vector(&dev, &replacement, &left)
+        .expect("ROCm prepared-input update");
+    let updated_dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("ROCm repeated prepared dot");
+    let expected_updated_dot: f32 = replacement_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!(
+        (updated_dot - expected_updated_dot).abs()
+            <= tolerance * expected_updated_dot.abs().max(1.0)
+    );
+
+    let short = dev.upload(&vec![0.0; len - 1]).expect("ROCm short upload");
+    assert!(matches!(
+        ops.axpy(&dev, &left, &short, 1.0),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
 }

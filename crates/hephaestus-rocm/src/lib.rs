@@ -101,11 +101,14 @@ pub use application::strided_elementwise::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::vector::{
+    PreparedDot as RocmPreparedDot, PreparedL2Norm as RocmPreparedNorm, RocmVectorOps,
+};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
 
 pub use hephaestus_core::{
-    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceBuffer,
-    DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, Result,
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DenseVectorOps,
+    DeviceBuffer, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, Result,
 };

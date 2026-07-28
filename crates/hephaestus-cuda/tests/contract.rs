@@ -5,21 +5,21 @@
 //! [`CudaDevice::try_default`] returns `Err` and each test skips.
 
 use hephaestus_core::{
-    BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature,
-    HephaestusError, Result,
+    BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer,
+    DeviceFeature, HephaestusError, Result,
 };
 use hephaestus_cuda::{
-    AbsOp, AddOp, CudaDevice, CumSumOp, EluGradOp, EluOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MaxOp,
-    MinOp, MishGradOp, MishOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp, SoftplusGradOp,
-    SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul_into, binary_elementwise,
-    binary_elementwise_into, cumprod, cumprod_into, det, dot, kron, matexp, matmul, matmul_into,
-    matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
-    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
-    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduce_axis,
-    reduction, reduction_with_width, scalar_elementwise, scalar_elementwise_into, scan_axis,
-    submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
-    unary_elementwise_into,
+    AbsOp, AddOp, CudaDevice, CudaVectorOps, CumSumOp, EluGradOp, EluOp, ExpOp, GeluTanhGradOp,
+    GeluTanhOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp,
+    SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul_into,
+    binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, det, dot, kron, matexp,
+    matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv,
+    prepare_dot, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
+    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
+    prod_axis, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+    trace, unary_elementwise, unary_elementwise_into,
 };
 use leto::Layout;
 
@@ -4142,4 +4142,148 @@ fn empty_decompositions_preserve_shapes_and_identities() {
     assert_eq!(h.n(), 0);
     assert_eq!(h.q_buffer().len(), 0);
     assert_eq!(h.h_buffer().len(), 0);
+}
+
+fn assert_vector_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+    assert_eq!(actual.len(), expected.len());
+    for (index, (&got, &want)) in actual.iter().zip(expected).enumerate() {
+        assert!(
+            (got - want).abs() <= tolerance * want.abs().max(1.0),
+            "index {index}: got {got}, expected {want}"
+        );
+    }
+}
+
+#[test]
+fn dense_vector_ops_match_cpu_reference() {
+    let Some(dev) = device("dense_vector_ops_match_cpu_reference") else {
+        return;
+    };
+    let ops = CudaVectorOps::new(&dev).expect("CUDA vector kernel descriptors");
+    let len = 257;
+    let left_host: Vec<f32> = (0..len)
+        .map(|index| (index as f32 - 128.0) * 0.03125)
+        .collect();
+    let right_host: Vec<f32> = (0..len).map(|index| (index as f32 * 0.017) - 2.0).collect();
+    let left = dev.upload(&left_host).expect("CUDA left upload");
+    let right = dev.upload(&right_host).expect("CUDA right upload");
+    let tolerance = 8.0 * f32::EPSILON * len as f32;
+
+    let empty = dev.upload(&[] as &[f32]).expect("CUDA empty upload");
+    let empty_output = dev.alloc_zeroed::<f32>(0).expect("CUDA empty allocation");
+    ops.copy_vector(&dev, &empty, &empty_output)
+        .expect("CUDA empty copy");
+    ops.scale_vector(&dev, &empty_output, 2.0)
+        .expect("CUDA empty scale");
+    ops.axpy(&dev, &empty_output, &empty, 2.0)
+        .expect("CUDA empty axpy");
+    ops.xpay(&dev, &empty_output, &empty, 2.0)
+        .expect("CUDA empty xpay");
+    ops.subtract_into(&dev, &empty, &empty, &empty_output)
+        .expect("CUDA empty subtraction");
+    let empty_dot = ops.dot(&dev, &empty, &empty).expect("CUDA empty dot");
+    let empty_norm = ops.norm_l2(&dev, &empty).expect("CUDA empty norm");
+    assert_eq!(empty_dot, 0.0);
+    assert_eq!(empty_norm, 0.0);
+
+    let copy = dev.alloc_zeroed::<f32>(len).expect("CUDA copy allocation");
+    ops.copy_vector(&dev, &left, &copy)
+        .expect("CUDA vector copy");
+    let mut copied = vec![0.0; len];
+    dev.download(&copy, &mut copied)
+        .expect("CUDA copy download");
+    assert_vector_close(&copied, &left_host, 0.0);
+
+    let scaled = dev.upload(&left_host).expect("CUDA scale upload");
+    ops.scale_vector(&dev, &scaled, -1.75)
+        .expect("CUDA vector scale");
+    let expected_scale: Vec<f32> = left_host.iter().map(|&value| value * -1.75).collect();
+    let mut actual = vec![0.0; len];
+    dev.download(&scaled, &mut actual)
+        .expect("CUDA scale download");
+    assert_vector_close(&actual, &expected_scale, 1.0e-6);
+
+    let axpy = dev.upload(&left_host).expect("CUDA axpy upload");
+    ops.axpy(&dev, &axpy, &right, 0.625).expect("CUDA axpy");
+    let expected_axpy: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| 0.625_f32.mul_add(right, left))
+        .collect();
+    dev.download(&axpy, &mut actual)
+        .expect("CUDA axpy download");
+    assert_vector_close(&actual, &expected_axpy, 1.0e-6);
+
+    let xpay = dev.upload(&left_host).expect("CUDA xpay upload");
+    ops.xpay(&dev, &xpay, &right, -0.375).expect("CUDA xpay");
+    let expected_xpay: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| (-0.375_f32).mul_add(left, right))
+        .collect();
+    dev.download(&xpay, &mut actual)
+        .expect("CUDA xpay download");
+    assert_vector_close(&actual, &expected_xpay, 1.0e-6);
+
+    let difference = dev
+        .alloc_zeroed::<f32>(len)
+        .expect("CUDA subtraction allocation");
+    ops.subtract_into(&dev, &left, &right, &difference)
+        .expect("CUDA subtraction");
+    let expected_difference: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left - right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("CUDA subtraction download");
+    assert_vector_close(&actual, &expected_difference, 1.0e-6);
+
+    let prepared_dot = ops
+        .prepare_dot(&dev, &left, &right)
+        .expect("CUDA dot preparation");
+    let dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("CUDA prepared dot");
+    let expected_dot: f32 = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!((dot - expected_dot).abs() <= tolerance * expected_dot.abs().max(1.0));
+
+    let prepared_norm = ops
+        .prepare_norm_l2(&dev, &left)
+        .expect("CUDA norm preparation");
+    let norm = ops
+        .norm_l2_prepared(&dev, &prepared_norm, &left)
+        .expect("CUDA prepared norm");
+    let expected_norm = left_host
+        .iter()
+        .map(|&value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    assert!((norm - expected_norm).abs() <= tolerance * expected_norm.abs().max(1.0));
+
+    let replacement_host: Vec<f32> = right_host.iter().map(|&value| value * 0.5).collect();
+    let replacement = dev
+        .upload(&replacement_host)
+        .expect("CUDA replacement upload");
+    ops.copy_vector(&dev, &replacement, &left)
+        .expect("CUDA prepared-input update");
+    let updated_dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("CUDA repeated prepared dot");
+    let expected_updated_dot: f32 = replacement_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!(
+        (updated_dot - expected_updated_dot).abs()
+            <= tolerance * expected_updated_dot.abs().max(1.0)
+    );
+
+    let short = dev.upload(&vec![0.0; len - 1]).expect("CUDA short upload");
+    assert_length_mismatch(ops.axpy(&dev, &left, &short, 1.0), len, len - 1);
 }

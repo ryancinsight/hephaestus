@@ -97,8 +97,9 @@ pub use application::decomposition::{
 
 pub use hephaestus_core::{
     BinaryExpr, BinaryStorageKernel, CombineExpr, ComputeDevice, ComputeDeviceAcquisition,
-    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DeviceLimits, DevicePreference,
-    DialectScalar, DispatchGrid, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
-    GroupedKernelInterface, GroupedKernelSource, HephaestusError, IdentityToken, KernelDialect,
-    MultiStorageKernel, OpIdentity, Result, UnaryExpr, UnaryStorageKernel, Wgsl,
+    ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer, DeviceFeature, DeviceLimits,
+    DevicePreference, DialectScalar, DispatchGrid, GroupedBinding, GroupedCommandStream,
+    GroupedKernelDevice, GroupedKernelInterface, GroupedKernelSource, HephaestusError,
+    IdentityToken, KernelDialect, MultiStorageKernel, OpIdentity, Result, UnaryExpr,
+    UnaryStorageKernel, Wgsl,
 };
