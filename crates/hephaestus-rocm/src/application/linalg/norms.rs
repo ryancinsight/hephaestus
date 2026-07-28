@@ -208,16 +208,16 @@ fn map_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
 }
 
 pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
-    device: &'a RocmDevice,
-    a: StridedOperand<'a, T, N>,
-    b: StridedOperand<'a, T, N>,
+    device: RocmDevice,
+    a: &'a RocmBuffer<T>,
+    b: &'a RocmBuffer<T>,
     meta: MapReductionMeta,
     partial: RocmBuffer<T>,
     kernel: Option<Arc<RocmKernel>>,
     groups: u32,
     width: BlockWidth,
     shared_bytes: u32,
-    reduction: Option<PreparedReductionPlan<'a, T>>,
+    reduction: Option<PreparedReductionPlan<T>>,
     _operation: PhantomData<Op>,
 }
 
@@ -229,8 +229,8 @@ where
     pub(crate) fn dispatch(&self) -> Result<()> {
         if let Some(kernel) = &self.kernel {
             let mut meta = self.meta;
-            let mut a_ptr: DevicePtr = self.a.buffer.raw();
-            let mut b_ptr: DevicePtr = self.b.buffer.raw();
+            let mut a_ptr: DevicePtr = self.a.raw();
+            let mut b_ptr: DevicePtr = self.b.raw();
             let mut output_ptr: DevicePtr = self.partial.raw();
             let mut args: [*mut core::ffi::c_void; 4] = [
                 (&mut meta as *mut MapReductionMeta).cast(),
@@ -239,7 +239,7 @@ where
                 (&mut output_ptr as *mut DevicePtr).cast(),
             ];
             launch_kernel(
-                self.device,
+                &self.device,
                 kernel,
                 LaunchConfig::linear_shared(self.groups, self.width, self.shared_bytes),
                 &mut args,
@@ -266,7 +266,7 @@ where
 }
 
 pub(crate) fn prepare_map_reduction<'a, Op, T, const N: usize>(
-    device: &'a RocmDevice,
+    device: &RocmDevice,
     a: StridedOperand<'a, T, N>,
     b: StridedOperand<'a, T, N>,
 ) -> Result<PreparedMapReduction<'a, Op, T, N>>
@@ -274,10 +274,24 @@ where
     Op: MapReductionOp,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
 {
-    let len = a.layout.checked_size().map_err(map_layout_err)?;
+    prepare_map_reduction_with_layouts::<Op, T, N>(device, a.buffer, a.layout, b.buffer, b.layout)
+}
+
+pub(crate) fn prepare_map_reduction_with_layouts<'a, Op, T, const N: usize>(
+    device: &RocmDevice,
+    a: &'a RocmBuffer<T>,
+    a_layout: &Layout<N>,
+    b: &'a RocmBuffer<T>,
+    b_layout: &Layout<N>,
+) -> Result<PreparedMapReduction<'a, Op, T, N>>
+where
+    Op: MapReductionOp,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
+{
+    let len = a_layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
         return Ok(PreparedMapReduction {
-            device,
+            device: device.clone(),
             a,
             b,
             meta: MapReductionMeta {
@@ -295,11 +309,11 @@ where
             _operation: PhantomData,
         });
     }
-    a.layout
-        .validate_storage_len(a.buffer.len())
+    a_layout
+        .validate_storage_len(a.len())
         .map_err(map_layout_err)?;
-    b.layout
-        .validate_storage_len(b.buffer.len())
+    b_layout
+        .validate_storage_len(b.len())
         .map_err(map_layout_err)?;
 
     let width = BlockWidth::DEFAULT;
@@ -309,15 +323,15 @@ where
     })?;
     let partial = device.alloc_zeroed::<T>(partial_len)?;
     let meta = MapReductionMeta {
-        shape: map_shape(a.layout.shape)?,
-        a_strides: map_strides(a.layout.strides)?,
-        b_strides: map_strides(b.layout.strides)?,
+        shape: map_shape(a_layout.shape)?,
+        a_strides: map_strides(a_layout.strides)?,
+        b_strides: map_strides(b_layout.strides)?,
         offsets: [
-            u32::try_from(a.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("input offset {} exceeds u32 range", a.layout.offset),
+            u32::try_from(a_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("input offset {} exceeds u32 range", a_layout.offset),
             })?,
-            u32::try_from(b.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("input offset {} exceeds u32 range", b.layout.offset),
+            u32::try_from(b_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("input offset {} exceeds u32 range", b_layout.offset),
             })?,
             0,
             u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
@@ -345,7 +359,7 @@ where
     };
 
     Ok(PreparedMapReduction {
-        device,
+        device: device.clone(),
         a,
         b,
         meta,

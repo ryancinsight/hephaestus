@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DENSE-VECTOR-OPS-PARITY-1 [arch] [minor] — in progress
+
+- Owner: Codex on `codex/cuda-rocm-vector-ops-parity`; scope: the shared
+  `DenseVectorOps` GAT contract plus CUDA and ROCm provider implementations.
+- Outcome: expose one value-semantic dense-vector operation seam across the
+  current WGPU, CUDA, and ROCm providers without CPU fallback or cloned
+  consumer algorithms.
+- Non-goals: Metal implementation, non-f32 vector scalars, and Coeus routing;
+  Metal is the next backend increment after this provider slice.
+- Acceptance: CUDA and ROCm implement copy, scale, AXPY, XPAY, subtraction,
+  prepared dot, and prepared L2 norm; prepared plans borrow fixed allocations
+  while owning only cheap device handles; provider contracts compare values
+  with CPU formulas and exercise workgroup tails; exact-head WGPU, CUDA, ROCm,
+  and Metal CI passes.
+- Risk/change class: `[arch]`/`[minor]` public GAT lifetime change; ADR 0033
+  owns the ownership and memory-efficiency decision.
+- Status: implementation and adapterless compile/test targets are in progress;
+  vendor execution remains a CI acceptance gate.
+
 ## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared `LgammaOp` marker and WGPU, CUDA, ROCm, and Metal

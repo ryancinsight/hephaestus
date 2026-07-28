@@ -94,6 +94,9 @@ pub use application::strided::{
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_dyn_into,
     unary_elementwise_strided_into,
 };
+pub use application::vector::{
+    CudaVectorOps, PreparedDot as CudaPreparedDot, PreparedL2Norm as CudaPreparedNorm,
+};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
@@ -121,8 +124,9 @@ pub use application::decomposition::{
 
 pub use hephaestus_core::{
     BinaryExpr, BinaryStorageKernel, BlockWidth, CombineExpr, ComputeDevice,
-    ComputeDeviceAcquisition, ComputeDeviceCapabilities, CudaC, DeviceBuffer, DeviceFeature,
-    DeviceLimits, DialectScalar, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
-    GroupedKernelInterface, GroupedKernelSource, HephaestusError, IdentityToken, KernelDevice,
-    MultiStorageDevice, MultiStorageKernel, OpIdentity, Result, UnaryExpr, UnaryStorageKernel,
+    ComputeDeviceAcquisition, ComputeDeviceCapabilities, CudaC, DenseVectorOps, DeviceBuffer,
+    DeviceFeature, DeviceLimits, DialectScalar, GroupedBinding, GroupedCommandStream,
+    GroupedKernelDevice, GroupedKernelInterface, GroupedKernelSource, HephaestusError,
+    IdentityToken, KernelDevice, MultiStorageDevice, MultiStorageKernel, OpIdentity, Result,
+    UnaryExpr, UnaryStorageKernel,
 };

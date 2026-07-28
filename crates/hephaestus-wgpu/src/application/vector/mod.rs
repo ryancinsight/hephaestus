@@ -117,8 +117,14 @@ impl WgpuVectorOps {
 }
 
 impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
-    type PreparedDot = WgpuPreparedDot<f32>;
-    type PreparedNorm = WgpuPreparedNorm<f32>;
+    type PreparedDot<'a>
+        = WgpuPreparedDot<f32>
+    where
+        Self: 'a;
+    type PreparedNorm<'a>
+        = WgpuPreparedNorm<f32>
+    where
+        Self: 'a;
 
     fn copy_vector(
         &self,
@@ -200,12 +206,12 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         binary_elementwise_into::<SubOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
-    fn prepare_dot(
+    fn prepare_dot<'a>(
         &self,
         device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-    ) -> Result<Self::PreparedDot> {
+        left: &'a WgpuBuffer<f32>,
+        right: &'a WgpuBuffer<f32>,
+    ) -> Result<Self::PreparedDot<'a>> {
         Self::require_equal_lengths(left.len(), right.len())?;
         let layout = Self::layout(left.len())?;
         Ok(WgpuPreparedDot {
@@ -225,10 +231,10 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         })
     }
 
-    fn dot_prepared(
+    fn dot_prepared<'a>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedDot,
+        prepared: &Self::PreparedDot<'a>,
         left: &WgpuBuffer<f32>,
         right: &WgpuBuffer<f32>,
     ) -> Result<f32> {
@@ -238,11 +244,11 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         Self::download_scalar(device, prepared.operation.output())
     }
 
-    fn prepare_norm_l2(
+    fn prepare_norm_l2<'a>(
         &self,
         device: &WgpuDevice,
-        vector: &WgpuBuffer<f32>,
-    ) -> Result<Self::PreparedNorm> {
+        vector: &'a WgpuBuffer<f32>,
+    ) -> Result<Self::PreparedNorm<'a>> {
         let layout = Self::layout(vector.len())?;
         Ok(WgpuPreparedNorm {
             operation: prepare_norm_l2(
@@ -256,10 +262,10 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         })
     }
 
-    fn norm_l2_prepared(
+    fn norm_l2_prepared<'a>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedNorm,
+        prepared: &Self::PreparedNorm<'a>,
         vector: &WgpuBuffer<f32>,
     ) -> Result<f32> {
         Self::require_same_allocation("norm operand", &prepared.input, vector)?;

@@ -24,6 +24,8 @@ pub mod storage_kernel;
 pub mod stream;
 /// Layout-aware strided elementwise operations.
 pub mod strided;
+/// Dense vector recurrences and prepared reductions.
+pub mod vector;
 /// Volume ray-integral kernels.
 pub mod volume;
 
