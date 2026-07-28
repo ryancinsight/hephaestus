@@ -2836,3 +2836,16 @@ In-flight item: none. Next concrete increment: strided-layout-aware dispatch (ba
 - [x] Gates: `cargo fmt --check`, `clippy --all-targets -- -D warnings`,
   `cargo test`, `cargo doc --no-deps` — all clean.
 - [x] Pushed to GitHub; apollo delegation integration (see backlog Phase 4).
+# HEPH-WGPU-AXIS-BATCH-PASS-1
+
+Execution owner: Codex on `codex/hephaestus-axis-batch-pass`. Claimed files:
+`crates/hephaestus-wgpu/src/application/reduction.rs`,
+`crates/hephaestus-wgpu/tests/contract.rs`,
+`crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
+`CHANGELOG.md`, `backlog.md`, and this section.
+
+- [ ] Add and value-check the fixed prepared-axis batch benchmark workload.
+- [ ] Record the unchanged implementation baseline.
+- [ ] Collapse independent prepared-axis batch encoding to one compute pass.
+- [ ] Add mixed-operation value-semantic regression coverage.
+- [ ] Record the matched result and run affected package gates.
