@@ -65,6 +65,7 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
@@ -83,4 +84,4 @@ pub use application::decomposition::{
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 
-pub use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+pub use hephaestus_core::{ComputeDevice, DenseVectorOps, DeviceBuffer, HephaestusError, Result};
