@@ -4,10 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DENSE-VECTOR-OPS-METAL-1 [arch] [minor] — in progress
+## HEPH-DENSE-VECTOR-ELEMENTWISE-1 [minor] — in progress
 
-- Owner: Codex on `codex/metal-vector-ops-parity`; scope: the Metal provider
-  implementation and its value-semantic contract tests.
+- Owner: Codex on `codex/dense-vector-elementwise-parity`; scope: the shared
+  `DenseVectorOps` elementwise contract plus WGPU, CUDA, ROCm, and Metal
+  implementations and value-semantic tests.
+- Outcome: expose the remaining Leto dense-slice arithmetic operations through
+  one caller-owned-output seam without per-operation result allocation or
+  provider-local algorithm copies.
+- Non-goals: non-f32 vector scalars, reductions beyond the existing prepared
+  dot/L2 contract, Coeus routing, and new kernels where existing provider
+  elementwise paths already satisfy the operation.
+- Acceptance: all four providers implement `add_into`, `subtract_into`,
+  `multiply_into`, and `divide_into`; tests cover CPU values, empty inputs,
+  output-buffer reuse, workgroup tails, and typed length rejection; exact-head
+  WGPU, CUDA, ROCm, and Metal CI passes.
+- Risk/change class: `[minor]` additive consumer-facing vector capability.
+- Status: implementation and local feature checks are in progress; provider
+  CI remains the acceptance gate.
+
+## HEPH-DENSE-VECTOR-OPS-METAL-1 [arch] [minor] — done
+
+- Owner: Codex; scope: the Metal provider implementation and its
+  value-semantic contract tests.
 - Outcome: expose the complete dense-vector operation seam through the
   native-Metal-selected dispatch substrate without cloned consumer algorithms
   or host fallback.
@@ -20,8 +39,9 @@ cuda-oxide + cutile).
   passes.
 - Risk/change class: `[arch]`/`[minor]` provider seam completion; ADR 0034
   owns the delegation and prepared-resource decision.
-- Status: implementation is in progress; local compile/test and macOS Metal
-  execution remain acceptance gates.
+- Status: merged in PR #131 at `36021feac2dd05e8a1b4e3621804a05456f8ff39`.
+- Evidence: WGPU, CUDA, ROCm, and macOS Metal repository-owned checks passed;
+  NVIDIA and AMD hardware jobs were skipped by workflow inputs.
 
 ## HEPH-DENSE-VECTOR-OPS-PARITY-1 [arch] [minor] — done
 

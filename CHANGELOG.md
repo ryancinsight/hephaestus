@@ -36,6 +36,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Extend `DenseVectorOps` with caller-owned-output `add_into`,
+  `multiply_into`, and `divide_into` operations so the shared f32 vector seam
+  covers Leto's dense scalar-slice arithmetic across WGPU, CUDA, ROCm, and
+  Metal without result-buffer allocation.
+
 - [minor] Add `MetalVectorOps` for the complete f32 `DenseVectorOps` seam.
   Metal reuses the native-Metal-selected WGPU dispatch bundle and retains the
   prepared reduction allocation contract without extra buffer clones.

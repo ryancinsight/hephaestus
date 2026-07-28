@@ -8,7 +8,7 @@ use hephaestus_core::{
     HephaestusError, KernelDevice, Result,
 };
 
-use hephaestus_core::{BlockWidth, SubOp};
+use hephaestus_core::{AddOp, BlockWidth, DivOp, MulOp, SubOp};
 use leto::Layout;
 
 use crate::{
@@ -204,6 +204,51 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
             return Ok(());
         }
         binary_elementwise_into::<SubOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn add_into(
+        &self,
+        device: &WgpuDevice,
+        left: &WgpuBuffer<f32>,
+        right: &WgpuBuffer<f32>,
+        output: &WgpuBuffer<f32>,
+    ) -> Result<()> {
+        Self::require_equal_lengths(left.len(), right.len())?;
+        Self::require_equal_lengths(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<AddOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn multiply_into(
+        &self,
+        device: &WgpuDevice,
+        left: &WgpuBuffer<f32>,
+        right: &WgpuBuffer<f32>,
+        output: &WgpuBuffer<f32>,
+    ) -> Result<()> {
+        Self::require_equal_lengths(left.len(), right.len())?;
+        Self::require_equal_lengths(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<MulOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn divide_into(
+        &self,
+        device: &WgpuDevice,
+        left: &WgpuBuffer<f32>,
+        right: &WgpuBuffer<f32>,
+        output: &WgpuBuffer<f32>,
+    ) -> Result<()> {
+        Self::require_equal_lengths(left.len(), right.len())?;
+        Self::require_equal_lengths(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<DivOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_dot<'a>(

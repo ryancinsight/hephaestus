@@ -3,7 +3,7 @@
 pub use crate::application::prepared_map_reduction::{PreparedDot, PreparedL2Norm};
 use crate::application::prepared_map_reduction::{prepare_dense_dot, prepare_dense_norm_l2};
 use crate::application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
-use crate::{CudaBuffer, CudaDevice, binary_elementwise_into};
+use crate::{AddOp, CudaBuffer, CudaDevice, DivOp, MulOp, binary_elementwise_into};
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
@@ -252,6 +252,51 @@ impl DenseVectorOps<CudaDevice, f32> for CudaVectorOps {
             return Ok(());
         }
         binary_elementwise_into::<SubOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn add_into(
+        &self,
+        device: &CudaDevice,
+        left: &CudaBuffer<f32>,
+        right: &CudaBuffer<f32>,
+        output: &CudaBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<AddOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn multiply_into(
+        &self,
+        device: &CudaDevice,
+        left: &CudaBuffer<f32>,
+        right: &CudaBuffer<f32>,
+        output: &CudaBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<MulOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn divide_into(
+        &self,
+        device: &CudaDevice,
+        left: &CudaBuffer<f32>,
+        right: &CudaBuffer<f32>,
+        output: &CudaBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<DivOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_dot<'a>(

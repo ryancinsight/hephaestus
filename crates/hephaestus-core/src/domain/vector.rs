@@ -33,6 +33,9 @@ use super::error::Result;
 /// implementation returns [`crate::HephaestusError::LengthMismatch`] otherwise.
 /// Operations naming a `target` write it in place, which is what keeps a solver
 /// iteration free of scratch allocation and of round trips through host memory.
+/// The binary elementwise methods write into caller-owned output buffers so
+/// they preserve the same allocation-free shape as the Leto `Scalar` slice
+/// operations.
 /// A zero-length operand is a no-op, not an error.
 ///
 /// # Prepared reductions
@@ -106,6 +109,48 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     /// Returns a length mismatch, an aliased output, or the backend dispatch
     /// failure.
     fn subtract_into(
+        &self,
+        device: &D,
+        left: &D::Buffer<T>,
+        right: &D::Buffer<T>,
+        output: &D::Buffer<T>,
+    ) -> Result<()>;
+
+    /// Compute `output = left + right` into distinct caller-owned storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch, an aliased output, or the backend dispatch
+    /// failure.
+    fn add_into(
+        &self,
+        device: &D,
+        left: &D::Buffer<T>,
+        right: &D::Buffer<T>,
+        output: &D::Buffer<T>,
+    ) -> Result<()>;
+
+    /// Compute `output = left * right` into distinct caller-owned storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch, an aliased output, or the backend dispatch
+    /// failure.
+    fn multiply_into(
+        &self,
+        device: &D,
+        left: &D::Buffer<T>,
+        right: &D::Buffer<T>,
+        output: &D::Buffer<T>,
+    ) -> Result<()>;
+
+    /// Compute `output = left / right` into distinct caller-owned storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch, an aliased output, or the backend dispatch
+    /// failure.
+    fn divide_into(
         &self,
         device: &D,
         left: &D::Buffer<T>,
