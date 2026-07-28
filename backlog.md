@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-EMPTY-BATCH-NOOP-1 [patch] [perf] — in progress
+## HEPH-WGPU-EMPTY-BATCH-NOOP-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-empty-batch-noop`; scope: all-no-op
   prepared scalar- and axis-reduction batch submission, exact contracts,
@@ -18,11 +18,13 @@ cuda-oxide + cutile).
   focused Nextest, formatting, warning-denied package checks, doctests,
   benchmark smoke, and exact-head provider CI pass.
 - Risk/change class: `[patch]` internal no-op fast path.
-- Status: local implementation and matched measurement complete. Three samples
-  reduce the scalar-plus-axis call-pair median from 27.794 µs to 46 ns;
+- Status: complete in PR #140. Three samples reduce the scalar-plus-axis
+  call-pair median from 27.794 µs to 46 ns;
   focused scalar and axis Nextest contracts, warning-denied all-target Clippy,
-  doctests, formatting, and benchmark execution pass. Exact-head provider CI
-  remains pending.
+  doctests, formatting, and benchmark execution pass. Exact implementation-head
+  jobs passed WGPU `90391984817`, CUDA `90391983972`, ROCm `90391984432`, and
+  macOS Metal `90391985267`; AMD and NVIDIA hardware-only jobs were skipped as
+  designed.
 
 ## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — done
 
