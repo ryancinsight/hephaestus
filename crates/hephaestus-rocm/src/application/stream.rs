@@ -78,11 +78,38 @@ impl<K> Clone for RocmGroupedPrepared<K> {
 /// observed through [`ComputeDevice::synchronize`](hephaestus_core::ComputeDevice::synchronize).
 pub struct RocmCommandStream<'d> {
     device: &'d RocmDevice,
+    launch_scratch: RocmLaunchScratch,
 }
 
 /// Active grouped ROCm sequence encoded as ordered HIP launches.
 pub struct RocmGroupedSequence<'s> {
     device: &'s RocmDevice,
+    launch_scratch: &'s mut RocmLaunchScratch,
+}
+
+#[derive(Default)]
+struct RocmLaunchScratch {
+    device_ptrs: Vec<DevicePtr>,
+    args: Vec<*mut core::ffi::c_void>,
+}
+
+impl RocmLaunchScratch {
+    fn prepare<P, I>(&mut self, handles: I, params: &mut P) -> &mut [*mut core::ffi::c_void]
+    where
+        I: IntoIterator<Item = DevicePtr>,
+    {
+        self.device_ptrs.clear();
+        self.device_ptrs.extend(handles);
+        self.args.clear();
+        self.args.reserve(self.device_ptrs.len() + 1);
+        self.args.extend(
+            self.device_ptrs
+                .iter_mut()
+                .map(|ptr| ptr as *mut DevicePtr as *mut core::ffi::c_void),
+        );
+        self.args.push((params as *mut P).cast());
+        &mut self.args
+    }
 }
 
 impl KernelDevice for RocmDevice {
@@ -110,7 +137,10 @@ impl KernelDevice for RocmDevice {
 
     fn stream(&self) -> Result<Self::Stream<'_>> {
         self.bind()?;
-        Ok(RocmCommandStream { device: self })
+        Ok(RocmCommandStream {
+            device: self,
+            launch_scratch: RocmLaunchScratch::default(),
+        })
     }
 }
 
@@ -158,12 +188,15 @@ impl<'d> CommandStream<'d, RocmDevice> for RocmCommandStream<'d> {
 
         launch_bindings(
             self.device,
+            &mut self.launch_scratch,
             &prepared.kernel,
-            K::WORKGROUP,
-            K::SHARED_BYTES,
+            LaunchConfig {
+                grid: (grid.x, grid.y, grid.z),
+                block: (K::WORKGROUP[0], K::WORKGROUP[1], K::WORKGROUP[2]),
+                shared_bytes: K::SHARED_BYTES,
+            },
             bindings.iter().map(|binding| binding.handle),
             params,
-            grid,
         )
     }
 
@@ -221,12 +254,15 @@ impl<'d> GroupedCommandStream<'d, RocmDevice> for RocmCommandStream<'d> {
 
         launch_bindings(
             self.device,
+            &mut self.launch_scratch,
             &prepared.kernel,
-            K::WORKGROUP,
-            K::SHARED_BYTES,
+            LaunchConfig {
+                grid: (grid.x, grid.y, grid.z),
+                block: (K::WORKGROUP[0], K::WORKGROUP[1], K::WORKGROUP[2]),
+                shared_bytes: K::SHARED_BYTES,
+            },
             bindings.iter().map(|binding| binding.handle),
             params,
-            grid,
         )
     }
 
@@ -236,6 +272,7 @@ impl<'d> GroupedCommandStream<'d, RocmDevice> for RocmCommandStream<'d> {
     {
         let mut sequence = RocmGroupedSequence {
             device: self.device,
+            launch_scratch: &mut self.launch_scratch,
         };
         encode(&mut sequence)
     }
@@ -260,48 +297,34 @@ impl<'s> GroupedKernelSequence<'s, RocmDevice> for RocmGroupedSequence<'s> {
 
         launch_bindings(
             self.device,
+            self.launch_scratch,
             &prepared.kernel,
-            K::WORKGROUP,
-            K::SHARED_BYTES,
+            LaunchConfig {
+                grid: (grid.x, grid.y, grid.z),
+                block: (K::WORKGROUP[0], K::WORKGROUP[1], K::WORKGROUP[2]),
+                shared_bytes: K::SHARED_BYTES,
+            },
             bindings.iter().map(|binding| binding.handle),
             params,
-            grid,
         )
     }
 }
 
 fn launch_bindings<P, I>(
     device: &RocmDevice,
+    launch_scratch: &mut RocmLaunchScratch,
     kernel: &crate::application::pipeline::RocmKernel,
-    block: [u32; 3],
-    shared_bytes: u32,
+    config: LaunchConfig,
     bindings: I,
     params: &P,
-    grid: DispatchGrid,
 ) -> Result<()>
 where
     P: Pod,
     I: IntoIterator<Item = DevicePtr>,
 {
-    let mut device_ptrs: Vec<DevicePtr> = bindings.into_iter().collect();
     let mut params_value = *params;
-    let mut args = Vec::with_capacity(device_ptrs.len() + 1);
-    args.extend(
-        device_ptrs
-            .iter_mut()
-            .map(|ptr| ptr as *mut DevicePtr as *mut core::ffi::c_void),
-    );
-    args.push(&mut params_value as *mut P as *mut core::ffi::c_void);
-    launch_kernel(
-        device,
-        kernel,
-        LaunchConfig {
-            grid: (grid.x, grid.y, grid.z),
-            block: (block[0], block[1], block[2]),
-            shared_bytes,
-        },
-        &mut args,
-    )
+    let args = launch_scratch.prepare(bindings, &mut params_value);
+    launch_kernel(device, kernel, config, args)
 }
 
 fn copy_device(device: &RocmDevice, src: DevicePtr, dst: DevicePtr, bytes: usize) -> Result<()> {
@@ -389,6 +412,39 @@ fn byte_len<T>(len: usize) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_scratch_reuses_capacity_for_steady_state_encodes() {
+        let mut scratch = RocmLaunchScratch::default();
+        let mut params = 7_u32;
+
+        assert_eq!(
+            scratch
+                .prepare([1_u64 as DevicePtr, 2_u64 as DevicePtr], &mut params)
+                .len(),
+            3
+        );
+        scratch.prepare(
+            [
+                1_u64 as DevicePtr,
+                2_u64 as DevicePtr,
+                3_u64 as DevicePtr,
+                4_u64 as DevicePtr,
+            ],
+            &mut params,
+        );
+        let pointer_capacity = scratch.device_ptrs.capacity();
+        let argument_capacity = scratch.args.capacity();
+
+        assert_eq!(
+            scratch
+                .prepare([1_u64 as DevicePtr, 2_u64 as DevicePtr], &mut params)
+                .len(),
+            3
+        );
+        assert_eq!(scratch.device_ptrs.capacity(), pointer_capacity);
+        assert_eq!(scratch.args.capacity(), argument_capacity);
+    }
 
     #[test]
     fn byte_len_reports_checked_element_sizes() {

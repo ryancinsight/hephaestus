@@ -1522,6 +1522,12 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     no-feature doctests and formatting pass. Feature Nextest cannot link in
     this Windows GNU checkout because `-lcuda` is unavailable; CI remains the
     feature-linked and physical-device gate. No runtime speedup claim is made.
+  - **RC-P1 closed locally**: ROCm authored command streams now retain and
+    reuse one bounded launch-scratch pair for direct, grouped, and
+    grouped-sequence encodes, matching CU-P13's CUDA path. The new capacity
+    contract passes; local no-feature Clippy, all-target check, Nextest 50/50,
+    doctests, formatting, and diff checks pass. The ROCm feature-linked lane
+    remains a Linux ROCm CI gate from this Windows checkout.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/
