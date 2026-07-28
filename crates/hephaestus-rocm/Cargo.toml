@@ -17,6 +17,7 @@ decomposition = []
 aequitas = { workspace = true }
 hephaestus-core = { workspace = true }
 bytemuck = { workspace = true }
+smallvec = { workspace = true }
 themis = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }

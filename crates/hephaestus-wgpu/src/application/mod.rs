@@ -1,5 +1,6 @@
 //! Monomorphized compute dispatch over the wgpu device.
 
+pub(crate) mod bindings;
 /// Dense matrix decompositions (Cholesky, LU, QR).
 #[cfg(feature = "decomposition")]
 pub mod decomposition;

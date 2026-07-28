@@ -1462,7 +1462,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   (CU-P1/P6/M3), batched-matmul `blockIdx.z` (CU-P5), typed CUDA cache keys
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
   (WG-P3), rank/det serial-kernel fix (WG-P1), axis-1 grid-stride reduction
-  (WG-P5). Status: todo; criterion baselines before/after each.
+  (WG-P5). Status: in-progress (owner codex; scope `hephaestus-wgpu/src/
+  application/{bindings,stream,strided,storage_kernel}.rs`, CUDA/ROCm
+  `application/storage_kernel.rs`, and manifests); criterion baselines
+  before/after each.
   - **CU-P9/P10 done** (commit `8c5d022`, 2026-07-07): replaced the
     per-dispatch `format!()` + `type_name::<Op/T>()` `String` pipeline-cache
     key (15 call sites across `elementwise/{binary,scalar,unary}.rs`,
@@ -1528,6 +1531,19 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     contract passes; local no-feature Clippy, all-target check, Nextest 50/50,
     doctests, formatting, and diff checks pass. The ROCm feature-linked lane
     remains a Linux ROCm CI gate from this Windows checkout.
+  - **WG-P6/CU-P14/RC-P2 closed locally**: WGPU strided, authored-stream, and
+    multi-storage dispatches, plus direct CUDA and ROCm multi-storage
+    dispatches, currently allocate host descriptor/argument vectors on every
+    submission. Replace those vectors with inline-capacity storage that spills
+    for larger kernels, preserving the existing binding and argument order.
+    Acceptance: common one-to-four-resource WGPU descriptors and one-to-four
+    pointer CUDA/ROCm launches remain heap-free at the container layer; larger
+    binding counts retain the existing dynamic behavior; backend contract
+    suites and adapterless checks remain green. Evidence: WGPU default-feature
+    Nextest 160/160, CUDA/ROCm adapterless Nextest 129/129, WGPU/CUDA/ROCm
+    clippy `-D warnings`, CUDA feature all-target check, doctests, formatting,
+    and the inline-capacity regression all pass. No runtime speedup claim is
+    made without a device benchmark.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/

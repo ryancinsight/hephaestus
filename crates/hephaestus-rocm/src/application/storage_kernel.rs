@@ -8,6 +8,7 @@ use hephaestus_core::{
     BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageDevice,
     MultiStorageKernel, Result, UnaryStorageKernel,
 };
+use smallvec::SmallVec;
 
 use crate::RocmDevice;
 use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
@@ -140,9 +141,11 @@ impl<'a, P: Pod, const N: usize> MultiStorageKernel<RocmDevice, P, [RocmStorageB
             || self.source.to_string(),
         )?;
 
-        let mut device_ptrs: Vec<DevicePtr> = bindings.iter().map(|binding| binding.ptr).collect();
+        let mut device_ptrs: SmallVec<[DevicePtr; 4]> =
+            bindings.iter().map(|binding| binding.ptr).collect();
         let mut params_value = *params;
-        let mut args = Vec::with_capacity(device_ptrs.len() + 1);
+        let mut args: SmallVec<[*mut core::ffi::c_void; 5]> =
+            SmallVec::with_capacity(device_ptrs.len() + 1);
         args.extend(
             device_ptrs
                 .iter_mut()

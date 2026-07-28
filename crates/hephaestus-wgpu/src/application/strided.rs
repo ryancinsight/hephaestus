@@ -22,6 +22,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+use crate::application::bindings::BindGroupEntries;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -163,7 +164,7 @@ fn encode_strided(
         .queue()
         .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(meta));
 
-    let mut entries = Vec::with_capacity(buffers.len() + 1);
+    let mut entries = BindGroupEntries::with_capacity(buffers.len() + 1);
     entries.push(wgpu::BindGroupEntry {
         binding: 0,
         resource: meta_buffer.as_entire_binding(),
