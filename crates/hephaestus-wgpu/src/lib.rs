@@ -72,6 +72,7 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };

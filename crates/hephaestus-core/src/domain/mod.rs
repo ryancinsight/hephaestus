@@ -29,4 +29,7 @@ pub mod stencil;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;
 /// Backend-neutral volume ray-integral geometry and validation.
+/// Dense vector-operation contracts.
+pub mod vector;
+/// Volume contracts.
 pub mod volume;

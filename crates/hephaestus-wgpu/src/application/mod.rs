@@ -28,4 +28,6 @@ pub mod stream;
 /// Strided-layout-aware dispatch over leto layout metadata.
 pub mod strided;
 /// Volume ray-integral kernels (CT/dose ray-trace primitive).
+/// Dense vector-operation seam implementation.
+pub mod vector;
 pub mod volume;
