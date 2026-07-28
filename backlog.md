@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — in progress
+## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-scalar-batch-pass`; scope:
   `hephaestus-wgpu` prepared scalar-reduction batch encoding, its differential
@@ -20,10 +20,12 @@ cuda-oxide + cutile).
   measurements; formatting, warning-denied package checks, focused Nextest,
   doctests, benchmark smoke, and exact-head provider CI pass.
 - Risk/change class: `[patch]` internal command-encoding optimization.
-- Status: local implementation complete. Three matched samples reduce the
+- Status: complete in PR #139. Three matched samples reduce the
   eight-reduction median from 234.206 µs to 100.918 µs; focused Nextest,
   warning-denied all-target Clippy, doctests, formatting, and benchmark
-  execution pass. Exact-head provider CI remains pending.
+  execution pass. Exact implementation-head provider jobs passed WGPU
+  `90372903175`, CUDA `90372915738`, ROCm `90372903296`, and macOS Metal
+  `90372902759`; AMD and NVIDIA hardware-only jobs were skipped as designed.
 
 ## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — done
 
