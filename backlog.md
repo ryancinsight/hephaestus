@@ -4,6 +4,21 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-EMPTY-BATCH-NOOP-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-empty-batch-noop`; scope: all-no-op
+  prepared scalar- and axis-reduction batch submission, exact contracts,
+  comparative host-latency evidence, and synchronized performance artifacts.
+- Outcome: return before command-encoder allocation and queue submission when
+  a batch contains no singleton copy or compute dispatch.
+- Non-goals: skipping mixed batches with real work, changing empty-reduction
+  identities, shader changes, backend API changes, and cross-device claims.
+- Acceptance: empty batch slices and all-empty prepared batches preserve exact
+  outputs; mixed batches still execute; matched baseline/result measurements,
+  focused Nextest, formatting, warning-denied package checks, doctests,
+  benchmark smoke, and exact-head provider CI pass.
+- Risk/change class: `[patch]` internal no-op fast path.
+
 ## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-scalar-batch-pass`; scope:
