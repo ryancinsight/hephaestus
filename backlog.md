@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DENSE-VECTOR-ELEMENTWISE-1 [minor] — in progress
+## HEPH-DENSE-VECTOR-ELEMENTWISE-1 [minor] — done
 
 - Owner: Codex on `codex/dense-vector-elementwise-parity`; scope: the shared
   `DenseVectorOps` elementwise contract plus WGPU, CUDA, ROCm, and Metal
@@ -20,8 +20,12 @@ cuda-oxide + cutile).
   output-buffer reuse, workgroup tails, and typed length rejection; exact-head
   WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive consumer-facing vector capability.
-- Status: implementation and local feature checks are in progress; provider
-  CI remains the acceptance gate.
+- Status: complete. Merged in Hephaestus PR #132 at `7c481b2`. The exact-head
+  provider matrix passed CUDA job `90190923765`, ROCm job `90190923670`, WGPU
+  job `90190923733`, and macOS Metal job `90190923914`; required-device CUDA
+  and ROCm jobs were skipped because hosted hardware runners were unavailable.
+  The external `recurseml/analysis` check returned its recurring analysis-
+  service error and is not repository-owned verification.
 
 ## HEPH-DENSE-VECTOR-OPS-METAL-1 [arch] [minor] — done
 
@@ -431,7 +435,7 @@ cuda-oxide + cutile).
   GPU labels were unavailable; the provider lanes ran their real feature,
   warning-denied Clippy, Nextest, doctest, and rustdoc gates.
 
-## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — in progress
+## HEPH-BACKEND-PARITY-SCAN-PRODUCT-1 [minor] — done
 
 - Owner: Codex; scope: expose the existing rank-2 cumulative-product scan
   contract through WGPU, CUDA, ROCm, and Metal convenience APIs, with
@@ -449,10 +453,11 @@ cuda-oxide + cutile).
   tests, CHANGELOG, `docs/adr/0019-scan-product-parity.md`,
   `checklist.md`, and this item. Execution owner: Codex on
   `codex/hephaestus-leto-coeus-parity-next`; last update: 2026-07-26.
-- Hosted evidence for the corrected semantics is pending on the final
-  implementation head. The AMD and NVIDIA required-device jobs remain
-  skipped when hosted GPU labels are unavailable; no hardware execution claim
-  is made without those runners.
+- Hosted evidence is closed by the exact merged PR #132 head `7c481b2`:
+  CUDA job `90190923765`, ROCm job `90190923670`, WGPU job `90190923733`, and
+  macOS Metal job `90190923914` passed their complete provider suites. The
+  required-device CUDA and ROCm jobs were skipped because hosted hardware
+  runners were unavailable; no hardware execution claim is made.
 
 ## HEPH-BACKEND-PARITY-PREPARED-MAP-REDUCTION-1 [minor] — done
 
