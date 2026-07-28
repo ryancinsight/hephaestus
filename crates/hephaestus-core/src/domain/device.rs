@@ -146,6 +146,20 @@ pub trait ComputeDevice {
         host: &[T],
     ) -> Result<()>;
 
+    /// Copy a complete device buffer into equal-length device storage.
+    ///
+    /// The copy stays on the selected device: backends must not stage through
+    /// host memory. The operation is complete before this method returns, so
+    /// callers can immediately mutate or read `dst` without an additional
+    /// synchronization step.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::LengthMismatch`] when the buffers have
+    /// different element counts, or the backend's typed transfer error when
+    /// allocation context, encoding, submission, or synchronization fails.
+    fn copy_buffer<T: Pod>(&self, src: &Self::Buffer<T>, dst: &Self::Buffer<T>) -> Result<()>;
+
     /// Wait until previously submitted work and transfers visible to this
     /// device context have completed.
     ///

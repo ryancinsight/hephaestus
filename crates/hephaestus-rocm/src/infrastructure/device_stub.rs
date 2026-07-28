@@ -126,6 +126,10 @@ impl ComputeDevice for RocmDevice {
         Err(unavailable())
     }
 
+    fn copy_buffer<T: Pod>(&self, _src: &Self::Buffer<T>, _dst: &Self::Buffer<T>) -> Result<()> {
+        Err(unavailable())
+    }
+
     fn synchronize(&self) -> Result<()> {
         Err(unavailable())
     }

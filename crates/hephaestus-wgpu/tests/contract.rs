@@ -264,6 +264,28 @@ fn upload_download_round_trips_values() {
 }
 
 #[test]
+fn device_local_copy_preserves_values_and_rejects_mismatch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|index| index as f32 * 0.25 - 17.0).collect();
+    let source = device.upload(&host).unwrap();
+    let destination = device.alloc_zeroed::<f32>(host.len()).unwrap();
+
+    device.copy_buffer(&source, &destination).unwrap();
+    let mut copied = vec![0.0_f32; host.len()];
+    device.download(&destination, &mut copied).unwrap();
+    assert_eq!(copied, host);
+
+    let short = device.alloc_zeroed::<f32>(host.len() - 1).unwrap();
+    assert_length_mismatch(
+        device.copy_buffer(&source, &short),
+        source.len(),
+        short.len(),
+    );
+}
+
+#[test]
 fn odd_u16_storage_preserves_logical_values_when_device_exists() {
     let Some(device) = device_or_skip() else {
         return;

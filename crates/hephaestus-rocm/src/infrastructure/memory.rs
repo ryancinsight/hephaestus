@@ -2,7 +2,8 @@ use core::{ffi::c_void, ptr};
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    ComputeDevice, HephaestusError, Result, validate_buffer_size, validate_slice_alignment,
+    CommandStream, ComputeDevice, HephaestusError, KernelDevice, Result, validate_buffer_size,
+    validate_slice_alignment,
 };
 
 use super::device::RocmDevice;
@@ -200,6 +201,13 @@ impl ComputeDevice for RocmDevice {
                 message: super::device::status_message(status, "hipMemcpy host-to-device subrange"),
             })
         }
+    }
+
+    fn copy_buffer<T: Pod>(&self, src: &RocmBuffer<T>, dst: &RocmBuffer<T>) -> Result<()> {
+        let mut stream = self.stream()?;
+        stream.copy(src, dst)?;
+        stream.submit()?;
+        self.synchronize()
     }
 
     fn synchronize(&self) -> Result<()> {

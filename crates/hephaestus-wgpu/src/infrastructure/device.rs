@@ -3,9 +3,9 @@ use std::{borrow::Cow, sync::Arc};
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
-    DeviceLimits, DevicePreference, HephaestusError, Result, validate_buffer_size,
-    validate_slice_alignment,
+    CommandStream, ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities,
+    DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, KernelDevice, Result,
+    validate_buffer_size, validate_slice_alignment,
 };
 use std::any::TypeId;
 use wgpu::util::DeviceExt;
@@ -1125,6 +1125,13 @@ impl ComputeDevice for WgpuDevice {
         host: &[T],
     ) -> Result<()> {
         WgpuDevice::write_sub_buffer(self, buffer, offset, host)
+    }
+
+    fn copy_buffer<T: Pod>(&self, src: &WgpuBuffer<T>, dst: &WgpuBuffer<T>) -> Result<()> {
+        let mut stream = self.stream()?;
+        stream.copy(src, dst)?;
+        stream.submit()?;
+        self.synchronize()
     }
 
     fn synchronize(&self) -> Result<()> {

@@ -296,6 +296,36 @@ fn upload_download_roundtrip_preserves_values() {
 }
 
 #[test]
+fn device_local_copy_preserves_values_and_rejects_mismatch() {
+    let Some(device) = device("device_local_copy_preserves_values_and_rejects_mismatch") else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|index| index as f32 * 0.25 - 17.0).collect();
+    let source = device.upload(&host).expect("HIP source upload");
+    let destination = device
+        .alloc_zeroed::<f32>(host.len())
+        .expect("HIP destination allocation");
+
+    device
+        .copy_buffer(&source, &destination)
+        .expect("HIP device-local copy");
+    let mut copied = vec![0.0_f32; host.len()];
+    device
+        .download(&destination, &mut copied)
+        .expect("HIP copied-value download");
+    assert_eq!(copied, host);
+
+    let short = device
+        .alloc_zeroed::<f32>(host.len() - 1)
+        .expect("HIP short destination allocation");
+    assert_length_mismatch(
+        device.copy_buffer(&source, &short),
+        source.len(),
+        short.len(),
+    );
+}
+
+#[test]
 fn alloc_zeroed_produces_zero_values() {
     let Some(device) = device("alloc_zeroed_produces_zero_values") else {
         return;

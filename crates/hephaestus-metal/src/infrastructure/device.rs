@@ -87,6 +87,11 @@ impl ComputeDevice for MetalDevice {
     }
 
     #[inline]
+    fn copy_buffer<T: Pod>(&self, src: &Self::Buffer<T>, dst: &Self::Buffer<T>) -> Result<()> {
+        self.inner.copy_buffer(&src.inner, &dst.inner)
+    }
+
+    #[inline]
     fn synchronize(&self) -> Result<()> {
         self.inner.synchronize()
     }
