@@ -129,6 +129,22 @@ fn device_local_copy_preserves_values_and_rejects_mismatch() {
 }
 
 #[test]
+fn uninitialized_allocation_is_fully_overwritten_before_read() {
+    let Some(dev) = device("uninitialized_allocation_is_fully_overwritten_before_read") else {
+        return;
+    };
+    let expected = [1.0_f32, -2.5, 3.25, 8.0];
+    let buffer = dev
+        .alloc_uninitialized::<f32>(expected.len())
+        .expect("uninitialized allocation");
+    dev.write_buffer(&buffer, &expected)
+        .expect("full-buffer initialization");
+    let mut actual = [0.0_f32; 4];
+    dev.download(&buffer, &mut actual).expect("download");
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn test_placement_aware_allocation() {
     let Some(dev) = device("test_placement_aware_allocation") else {
         return;

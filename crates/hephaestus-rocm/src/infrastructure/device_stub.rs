@@ -101,6 +101,14 @@ impl ComputeDevice for RocmDevice {
         Err(unavailable())
     }
 
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        _len: usize,
+        _hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
+        Err(unavailable())
+    }
+
     fn upload_with_hint<T: Pod>(
         &self,
         _host: &[T],

@@ -11,6 +11,28 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
+
+- Finding: device-local Coeus COW now allocates a replacement and copies the
+  complete source buffer into it, but the generic allocation contract only
+  exposed zero-initialized storage. CUDA and ROCm therefore performed a full
+  initialization pass immediately before a full device-to-device overwrite.
+- Resolution: add `ComputeDevice::alloc_uninitialized_with_hint` with an
+  explicit overwrite-before-read contract. CUDA uses raw device allocation and
+  ROCm uses `hipMalloc` without memset; WGPU and Metal share the seam while
+  retaining their platform allocation behavior. Ordinary defined-content
+  callers continue using `alloc_zeroed_with_hint`.
+- Residual: the Coeus replacement path still needs its consumer cutover after
+  this provider change merges. Exact-head provider CI is required for hosted
+  verification. No runtime bandwidth, latency, or resident-memory delta is
+  claimed without a controlled benchmark.
+- Environment: the ROCm feature build requires Linux ROCm and cannot execute
+  in the current Windows checkout; the no-default-features ROCm stub build is
+  available locally. The CUDA focused nextest build reaches test-binary
+  linking but the local `x86_64-w64-mingw32-gcc` linker exits 1; CUDA feature
+  compilation and hosted CUDA CI remain the applicable gates.
+- Status: provider implementation in progress.
+
 ## [HEPH-LGAMMA-EXPRESSION-PARITY-1] Log-gamma vocabulary
 
 - Finding: Leto and Coeus expose `lgamma`, but Hephaestus had no shared marker;
