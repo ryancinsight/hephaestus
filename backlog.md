@@ -4,6 +4,31 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-axis-batch-pass`; scope:
+  `hephaestus-wgpu` prepared axis-reduction batch encoding, its focused
+  contract, comparative benchmark, and synchronized performance artifacts.
+- Outcome: encode independent prepared axis reductions in one WGPU compute
+  pass so a batch pays one pass-construction boundary without adding buffers or
+  changing any reduction's arithmetic.
+- Non-goals: CPU fallback, shader fusion, cross-reduction dependencies,
+  backend API changes, and performance claims without a controlled before/after
+  run of the unchanged batch workload.
+- Acceptance: the existing value-semantic batch contract passes; a mixed
+  prepared-operation batch is covered; the comparative harness validates every
+  output and reports matched baseline/result measurements; formatting,
+  warning-denied package checks, focused Nextest, doctests, and benchmark smoke
+  pass.
+- Risk/change class: `[patch]` internal command-encoding optimization.
+- Status: complete in PR #138. Three matched samples reduce the
+  eight-reduction median from 105.092 µs to 32.250 µs; focused Nextest,
+  warning-denied all-target Clippy, doctests, formatting, and benchmark
+  execution pass. Exact-head provider jobs passed WGPU `90360294443`, CUDA
+  `90360306102`, ROCm `90360292050`, and macOS Metal `90360324163`. Local
+  MSVC verification remains independently blocked by `backtrace 0.3.76`
+  missing COFF/Gimli optional dependencies.
+
 ## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — done
 
 - Owner: Codex on `codex/uninitialized-device-copy`; scope: the shared

@@ -87,10 +87,11 @@ impl<T> PreparedAxisReduction<T> {
 
 /// Submit multiple prepared axis reductions in one command buffer.
 ///
-/// Each prepared reduction keeps its own output buffer. This API is intended for
-/// repeated independent reductions where the caller can consume results after the
-/// whole batch completes, amortizing WGPU submit/poll overhead without sharing
-/// scratch state between reductions.
+/// Each prepared reduction keeps its own output buffer. The reductions must be
+/// independent: no reduction in the batch may consume another reduction's
+/// output. The encoder records every dispatch in one compute pass and submits
+/// one command buffer, amortizing pass construction and WGPU submit/poll
+/// overhead without sharing scratch state between reductions.
 ///
 /// # Errors
 ///
@@ -105,20 +106,22 @@ pub fn submit_prepared_axis_reduction_batch<T>(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("hephaestus-prepared-axis-reduction-batch"),
         });
-    for reduction in reductions {
-        let Some(pipeline) = reduction.pipeline.as_ref() else {
-            continue;
-        };
-        let Some(bind_group) = reduction.bind_group.as_ref() else {
-            continue;
-        };
+    {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("hephaestus-prepared-axis-reduction-batch-pass"),
             timestamp_writes: None,
         });
-        pass.set_pipeline(pipeline);
-        pass.set_bind_group(0, bind_group, &[]);
-        pass.dispatch_workgroups(reduction.groups, 1, 1);
+        for reduction in reductions {
+            let Some(pipeline) = reduction.pipeline.as_ref() else {
+                continue;
+            };
+            let Some(bind_group) = reduction.bind_group.as_ref() else {
+                continue;
+            };
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, bind_group, &[]);
+            pass.dispatch_workgroups(reduction.groups, 1, 1);
+        }
     }
     device.queue().submit(Some(encoder.finish()));
     Ok(())
