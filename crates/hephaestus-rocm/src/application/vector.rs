@@ -3,7 +3,7 @@
 pub use crate::application::prepared_map_reduction::{PreparedDot, PreparedL2Norm};
 use crate::application::prepared_map_reduction::{prepare_dense_dot, prepare_dense_norm_l2};
 use crate::application::storage_kernel::{RocmMultiStorageKernel, RocmStorageBinding};
-use crate::{RocmBuffer, RocmDevice, binary_elementwise_into};
+use crate::{AddOp, DivOp, MulOp, RocmBuffer, RocmDevice, binary_elementwise_into};
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
@@ -243,6 +243,51 @@ impl DenseVectorOps<RocmDevice, f32> for RocmVectorOps {
             return Ok(());
         }
         binary_elementwise_into::<SubOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn add_into(
+        &self,
+        device: &RocmDevice,
+        left: &RocmBuffer<f32>,
+        right: &RocmBuffer<f32>,
+        output: &RocmBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<AddOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn multiply_into(
+        &self,
+        device: &RocmDevice,
+        left: &RocmBuffer<f32>,
+        right: &RocmBuffer<f32>,
+        output: &RocmBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<MulOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+    }
+
+    fn divide_into(
+        &self,
+        device: &RocmDevice,
+        left: &RocmBuffer<f32>,
+        right: &RocmBuffer<f32>,
+        output: &RocmBuffer<f32>,
+    ) -> Result<()> {
+        Self::lengths_match(left.len(), right.len())?;
+        Self::lengths_match(left.len(), output.len())?;
+        if left.is_empty() {
+            return Ok(());
+        }
+        binary_elementwise_into::<DivOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_dot<'a>(

@@ -105,6 +105,51 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
         )
     }
 
+    fn add_into(
+        &self,
+        device: &MetalDevice,
+        left: &MetalBuffer<f32>,
+        right: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+    ) -> Result<()> {
+        self.inner.add_into(
+            device.wgpu_device(),
+            &left.inner,
+            &right.inner,
+            &output.inner,
+        )
+    }
+
+    fn multiply_into(
+        &self,
+        device: &MetalDevice,
+        left: &MetalBuffer<f32>,
+        right: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+    ) -> Result<()> {
+        self.inner.multiply_into(
+            device.wgpu_device(),
+            &left.inner,
+            &right.inner,
+            &output.inner,
+        )
+    }
+
+    fn divide_into(
+        &self,
+        device: &MetalDevice,
+        left: &MetalBuffer<f32>,
+        right: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+    ) -> Result<()> {
+        self.inner.divide_into(
+            device.wgpu_device(),
+            &left.inner,
+            &right.inner,
+            &output.inner,
+        )
+    }
+
     fn prepare_dot<'a>(
         &self,
         device: &MetalDevice,

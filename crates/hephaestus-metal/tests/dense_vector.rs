@@ -48,8 +48,10 @@ fn dense_vector_ops_match_cpu_reference() {
         .map(|index| (index as f32 - 128.0) * 0.03125)
         .collect();
     let right_host: Vec<f32> = (0..len).map(|index| index as f32 * 0.017 - 2.0).collect();
+    let divisor_host: Vec<f32> = right_host.iter().map(|&value| value.abs() + 7.0).collect();
     let left = device.upload(&left_host).expect("Metal left upload");
     let right = device.upload(&right_host).expect("Metal right upload");
+    let divisor = device.upload(&divisor_host).expect("Metal divisor upload");
     let tolerance = 8.0 * f32::EPSILON * len as f32;
 
     let empty = device.upload(&[] as &[f32]).expect("Metal empty upload");
@@ -66,6 +68,12 @@ fn dense_vector_ops_match_cpu_reference() {
         .expect("Metal empty xpay");
     ops.subtract_into(&device, &empty, &empty, &empty_output)
         .expect("Metal empty subtraction");
+    ops.add_into(&device, &empty, &empty, &empty_output)
+        .expect("Metal empty addition");
+    ops.multiply_into(&device, &empty, &empty, &empty_output)
+        .expect("Metal empty multiplication");
+    ops.divide_into(&device, &empty, &empty, &empty_output)
+        .expect("Metal empty division");
     assert_eq!(
         ops.dot(&device, &empty, &empty).expect("Metal empty dot"),
         0.0
@@ -119,6 +127,33 @@ fn dense_vector_ops_match_cpu_reference() {
         &expected_difference,
         1.0e-6,
     );
+
+    ops.add_into(&device, &left, &right, &difference)
+        .expect("Metal addition");
+    let expected_sum: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left + right)
+        .collect();
+    assert_close(&read_back(&device, &difference), &expected_sum, 1.0e-6);
+
+    ops.multiply_into(&device, &left, &right, &difference)
+        .expect("Metal multiplication");
+    let expected_product: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left * right)
+        .collect();
+    assert_close(&read_back(&device, &difference), &expected_product, 1.0e-6);
+
+    ops.divide_into(&device, &left, &divisor, &difference)
+        .expect("Metal division");
+    let expected_quotient: Vec<f32> = left_host
+        .iter()
+        .zip(&divisor_host)
+        .map(|(&left, &divisor)| left / divisor)
+        .collect();
+    assert_close(&read_back(&device, &difference), &expected_quotient, 1.0e-6);
 
     let prepared_dot = ops
         .prepare_dot(&device, &left, &right)
@@ -180,6 +215,18 @@ fn dense_vector_ops_match_cpu_reference() {
         .expect("Metal short upload");
     assert!(matches!(
         ops.axpy(&device, &left, &short, 1.0),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.add_into(&device, &left, &short, &difference),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.multiply_into(&device, &left, &short, &difference),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.divide_into(&device, &left, &short, &difference),
         Err(HephaestusError::LengthMismatch { .. })
     ));
 }

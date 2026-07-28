@@ -135,8 +135,10 @@ fn subtract_matches_the_cpu_reference() {
     for len in LENGTHS {
         let left_host = ascending(len);
         let right_host = descending(len);
+        let divisor_host: Vec<f32> = right_host.iter().map(|&value| value.abs() + 7.0).collect();
         let left = device.upload(&left_host).expect("invariant: upload");
         let right = device.upload(&right_host).expect("invariant: upload");
+        let divisor = device.upload(&divisor_host).expect("invariant: upload");
         let output = device
             .alloc_zeroed::<f32>(len)
             .expect("invariant: allocation");
@@ -148,6 +150,36 @@ fn subtract_matches_the_cpu_reference() {
             .iter()
             .zip(right_host.iter())
             .map(|(&l, &r)| l - r)
+            .collect();
+        assert_close(&read_back(&device, &output), &expected, 1e-6);
+
+        device
+            .write_buffer(&output, &vec![0.0; len])
+            .expect("invariant: output reset");
+        ops.add_into(&device, &left, &right, &output)
+            .expect("invariant: add dispatch");
+        let expected: Vec<f32> = left_host
+            .iter()
+            .zip(right_host.iter())
+            .map(|(&l, &r)| l + r)
+            .collect();
+        assert_close(&read_back(&device, &output), &expected, 1e-6);
+
+        ops.multiply_into(&device, &left, &right, &output)
+            .expect("invariant: multiply dispatch");
+        let expected: Vec<f32> = left_host
+            .iter()
+            .zip(right_host.iter())
+            .map(|(&l, &r)| l * r)
+            .collect();
+        assert_close(&read_back(&device, &output), &expected, 1e-6);
+
+        ops.divide_into(&device, &left, &divisor, &output)
+            .expect("invariant: divide dispatch");
+        let expected: Vec<f32> = left_host
+            .iter()
+            .zip(divisor_host.iter())
+            .map(|(&l, &r)| l / r)
             .collect();
         assert_close(&read_back(&device, &output), &expected, 1e-6);
     }
@@ -249,6 +281,18 @@ fn mismatched_lengths_are_rejected() {
     ));
     assert!(matches!(
         ops.subtract_into(&device, &short, &long, &short),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.add_into(&device, &short, &long, &short),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.multiply_into(&device, &short, &long, &short),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.divide_into(&device, &short, &long, &short),
         Err(HephaestusError::LengthMismatch { .. })
     ));
 }

@@ -4165,8 +4165,10 @@ fn dense_vector_ops_match_cpu_reference() {
         .map(|index| (index as f32 - 128.0) * 0.03125)
         .collect();
     let right_host: Vec<f32> = (0..len).map(|index| (index as f32 * 0.017) - 2.0).collect();
+    let divisor_host: Vec<f32> = right_host.iter().map(|&value| value.abs() + 7.0).collect();
     let left = dev.upload(&left_host).expect("CUDA left upload");
     let right = dev.upload(&right_host).expect("CUDA right upload");
+    let divisor = dev.upload(&divisor_host).expect("CUDA divisor upload");
     let tolerance = 8.0 * f32::EPSILON * len as f32;
 
     let empty = dev.upload(&[] as &[f32]).expect("CUDA empty upload");
@@ -4181,6 +4183,12 @@ fn dense_vector_ops_match_cpu_reference() {
         .expect("CUDA empty xpay");
     ops.subtract_into(&dev, &empty, &empty, &empty_output)
         .expect("CUDA empty subtraction");
+    ops.add_into(&dev, &empty, &empty, &empty_output)
+        .expect("CUDA empty addition");
+    ops.multiply_into(&dev, &empty, &empty, &empty_output)
+        .expect("CUDA empty multiplication");
+    ops.divide_into(&dev, &empty, &empty, &empty_output)
+        .expect("CUDA empty division");
     let empty_dot = ops.dot(&dev, &empty, &empty).expect("CUDA empty dot");
     let empty_norm = ops.norm_l2(&dev, &empty).expect("CUDA empty norm");
     assert_eq!(empty_dot, 0.0);
@@ -4239,6 +4247,39 @@ fn dense_vector_ops_match_cpu_reference() {
         .expect("CUDA subtraction download");
     assert_vector_close(&actual, &expected_difference, 1.0e-6);
 
+    ops.add_into(&dev, &left, &right, &difference)
+        .expect("CUDA addition");
+    let expected_sum: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left + right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("CUDA addition download");
+    assert_vector_close(&actual, &expected_sum, 1.0e-6);
+
+    ops.multiply_into(&dev, &left, &right, &difference)
+        .expect("CUDA multiplication");
+    let expected_product: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left * right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("CUDA multiplication download");
+    assert_vector_close(&actual, &expected_product, 1.0e-6);
+
+    ops.divide_into(&dev, &left, &divisor, &difference)
+        .expect("CUDA division");
+    let expected_quotient: Vec<f32> = left_host
+        .iter()
+        .zip(&divisor_host)
+        .map(|(&left, &divisor)| left / divisor)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("CUDA division download");
+    assert_vector_close(&actual, &expected_quotient, 1.0e-6);
+
     let prepared_dot = ops
         .prepare_dot(&dev, &left, &right)
         .expect("CUDA dot preparation");
@@ -4286,4 +4327,15 @@ fn dense_vector_ops_match_cpu_reference() {
 
     let short = dev.upload(&vec![0.0; len - 1]).expect("CUDA short upload");
     assert_length_mismatch(ops.axpy(&dev, &left, &short, 1.0), len, len - 1);
+    assert_length_mismatch(ops.add_into(&dev, &left, &short, &difference), len, len - 1);
+    assert_length_mismatch(
+        ops.multiply_into(&dev, &left, &short, &difference),
+        len,
+        len - 1,
+    );
+    assert_length_mismatch(
+        ops.divide_into(&dev, &left, &short, &difference),
+        len,
+        len - 1,
+    );
 }
