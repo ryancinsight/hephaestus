@@ -16,6 +16,12 @@ pub(crate) const INLINE_BIND_GROUPS: usize = 4;
 /// Bind groups with inline storage for the common grouped dispatch shapes.
 pub(crate) type BindGroups = SmallVec<[(u32, wgpu::BindGroup); INLINE_BIND_GROUPS]>;
 
+/// Common command streams retain at most four uniform buffers before submit.
+pub(crate) const INLINE_UNIFORM_BUFFERS: usize = 4;
+
+/// Uniform-buffer lifetime guards with inline storage for short command streams.
+pub(crate) type UniformBuffers = SmallVec<[wgpu::Buffer; INLINE_UNIFORM_BUFFERS]>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -29,5 +35,9 @@ mod tests {
         let groups = BindGroups::new();
         assert_eq!(groups.capacity(), INLINE_BIND_GROUPS);
         assert!(!groups.spilled());
+
+        let buffers = UniformBuffers::new();
+        assert_eq!(buffers.capacity(), INLINE_UNIFORM_BUFFERS);
+        assert!(!buffers.spilled());
     }
 }

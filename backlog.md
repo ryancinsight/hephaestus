@@ -1531,6 +1531,12 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     contract passes; local no-feature Clippy, all-target check, Nextest 50/50,
     doctests, formatting, and diff checks pass. The ROCm feature-linked lane
     remains a Linux ROCm CI gate from this Windows checkout.
+  - **WG-P7 closed locally**: WGPU command streams retain uniform-buffer
+    lifetime guards in inline-capacity storage for the common one-to-four
+    dispatch case, spilling for longer streams without changing submission
+    order or buffer recycling. Acceptance: common streams remain heap-free at
+    the container layer; grouped and direct stream tests plus WGPU CI remain
+    green. No runtime speedup claim is made without a device benchmark.
   - **WG-P6/CU-P14/RC-P2 closed locally**: WGPU strided, authored-stream, and
     multi-storage dispatches, plus direct CUDA and ROCm multi-storage
     dispatches, currently allocate host descriptor/argument vectors on every

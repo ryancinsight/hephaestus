@@ -9,7 +9,7 @@ use hephaestus_core::{
     KernelSource, Result, Wgsl, validate_bindings, validate_grouped_bindings,
 };
 
-use crate::application::bindings::{BindGroupEntries, BindGroups};
+use crate::application::bindings::{BindGroupEntries, BindGroups, UniformBuffers};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -84,14 +84,14 @@ impl<K> Clone for WgpuPrepared<K> {
 pub struct WgpuCommandStream<'d> {
     device: &'d WgpuDevice,
     encoder: wgpu::CommandEncoder,
-    uniform_buffers: Vec<wgpu::Buffer>,
+    uniform_buffers: UniformBuffers,
 }
 
 /// Active WGPU grouped-kernel sequence encoded into one compute pass.
 pub struct WgpuGroupedSequence<'s> {
     device: &'s WgpuDevice,
     pass: wgpu::ComputePass<'s>,
-    uniform_buffers: &'s mut Vec<wgpu::Buffer>,
+    uniform_buffers: &'s mut UniformBuffers,
 }
 
 impl KernelDevice for WgpuDevice {
@@ -193,7 +193,7 @@ impl KernelDevice for WgpuDevice {
         Ok(WgpuCommandStream {
             device: self,
             encoder,
-            uniform_buffers: Vec::new(),
+            uniform_buffers: UniformBuffers::new(),
         })
     }
 }
@@ -453,7 +453,7 @@ impl<'s> GroupedKernelSequence<'s, WgpuDevice> for WgpuGroupedSequence<'s> {
 
 fn encode_grouped_on_pass<K: GroupedKernelSource<Wgsl>>(
     device: &WgpuDevice,
-    uniform_buffers: &mut Vec<wgpu::Buffer>,
+    uniform_buffers: &mut UniformBuffers,
     pass: &mut wgpu::ComputePass<'_>,
     prepared: &WgpuGroupedPrepared<K>,
     bindings: &[GroupedBinding<'_, WgpuDevice>],
