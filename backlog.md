@@ -19,9 +19,11 @@ cuda-oxide + cutile).
   warning-denied package checks, focused Nextest, doctests, benchmark smoke,
   and exact-head provider CI pass.
 - Risk/change class: `[minor]` additive WGPU batching surface.
-- Status: implementation and local evidence complete. The mixed exact contract,
-  all-target package check, and three matched benchmark runs pass; exact-head
-  provider CI remains pending.
+- Status: provider-complete in PR #141. The mixed exact contract, all-target
+  package check, and three matched benchmark runs pass. Exact implementation-
+  head jobs passed WGPU `90427454090`, CUDA `90427454188`, ROCm `90427454307`,
+  and macOS Metal `90427454254`; AMD and NVIDIA hardware-only jobs skipped as
+  designed.
 
 ## HEPH-WGPU-EMPTY-BATCH-NOOP-1 [patch] [perf] — done
 
