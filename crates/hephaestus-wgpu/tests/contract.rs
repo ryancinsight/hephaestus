@@ -1108,7 +1108,7 @@ fn axis_reductions_match_leto_reference() {
     assert_eq!(got_prepared_sum_axis0, expected_axis0);
 
     let batch_sum_axis0_out_a = device.alloc_zeroed::<f32>(3).unwrap();
-    let batch_sum_axis0_out_b = device.alloc_zeroed::<f32>(3).unwrap();
+    let batch_min_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
     let batch_sum_axis0_a = prepare_sum_axis_into(
         &device,
         input_operand,
@@ -1120,29 +1120,28 @@ fn axis_reductions_match_leto_reference() {
         BlockWidth::DEFAULT,
     )
     .unwrap();
-    let batch_sum_axis0_b = prepare_sum_axis_into(
+    let batch_min_axis0 = prepare_min_axis_into(
         &device,
         input_operand,
         0,
         StridedOperand {
-            buffer: &batch_sum_axis0_out_b,
+            buffer: &batch_min_axis0_out,
             layout: &out_axis0_layout,
         },
         BlockWidth::DEFAULT,
     )
     .unwrap();
-    submit_prepared_axis_reduction_batch(&device, &[&batch_sum_axis0_a, &batch_sum_axis0_b])
-        .unwrap();
+    submit_prepared_axis_reduction_batch(&device, &[&batch_sum_axis0_a, &batch_min_axis0]).unwrap();
     let mut got_batch_sum_axis0_a = vec![0.0f32; 3];
-    let mut got_batch_sum_axis0_b = vec![0.0f32; 3];
+    let mut got_batch_min_axis0 = vec![0.0f32; 3];
     device
         .download(&batch_sum_axis0_out_a, &mut got_batch_sum_axis0_a)
         .unwrap();
     device
-        .download(&batch_sum_axis0_out_b, &mut got_batch_sum_axis0_b)
+        .download(&batch_min_axis0_out, &mut got_batch_min_axis0)
         .unwrap();
     assert_eq!(got_batch_sum_axis0_a, expected_axis0);
-    assert_eq!(got_batch_sum_axis0_b, expected_axis0);
+    assert_eq!(got_batch_min_axis0, expected_min_axis0);
 
     let prepared_min_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
     let prepared_min_axis0 = prepare_min_axis_into(

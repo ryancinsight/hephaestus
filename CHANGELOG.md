@@ -36,6 +36,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Encode independent prepared WGPU axis-reduction batches in one
+  compute pass instead of opening one pass per reduction. Mixed-operation
+  contracts preserve output values without additional buffers; the matched
+  eight-reduction local benchmark median decreases from 105.092 µs to
+  32.250 µs.
+
 - [minor] Add `ComputeDevice::alloc_uninitialized_with_hint` for producers
   that fully overwrite device storage before reading it. CUDA and ROCm avoid
   the redundant memset used by device-local COW replacement; WGPU and Metal

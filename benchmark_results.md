@@ -8,6 +8,25 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## Prepared Axis-Reduction Batch Encoding
+
+The prepared axis batch uses eight independent 256x256 axis-0 sums, with all
+eight device outputs downloaded and compared with the Leto result before the
+timed loop. The timed region performs 50 batch submissions and one final device
+poll. Interleaved old/new runs used the same GNU nightly release profile and
+resolved dependency graph.
+
+| Encoding | Samples | Median | Relative throughput |
+| --- | --- | --- | --- |
+| One compute pass per reduction | 105.092 µs, 105.458 µs, 103.420 µs | 105.092 µs | 1.00x |
+| One compute pass per batch | 37.726 µs, 25.902 µs, 32.250 µs | 32.250 µs | **3.26x** |
+
+The single-pass encoder lowers the observed median batch latency by 69.3%.
+This is a local host/GPU result from three matched samples, not a Criterion
+confidence interval or a cross-device claim. Concurrent package-cache
+contention was present, so the structural reduction from eight compute-pass
+constructions to one is stronger evidence than the exact latency ratio.
+
 ## Comparative Results
 
 | Benchmark | GPU (WGPU) | Leto CPU | ndarray CPU | nalgebra CPU | GPU Speedup (vs Leto) | GPU Speedup (vs ndarray) | GPU Speedup (vs nalgebra) |

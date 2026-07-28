@@ -2844,8 +2844,8 @@ Execution owner: Codex on `codex/hephaestus-axis-batch-pass`. Claimed files:
 `crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
 `CHANGELOG.md`, `backlog.md`, and this section.
 
-- [ ] Add and value-check the fixed prepared-axis batch benchmark workload.
-- [ ] Record the unchanged implementation baseline.
-- [ ] Collapse independent prepared-axis batch encoding to one compute pass.
-- [ ] Add mixed-operation value-semantic regression coverage.
+- [x] Add and value-check the fixed prepared-axis batch benchmark workload.
+- [x] Record the unchanged implementation baseline.
+- [x] Collapse independent prepared-axis batch encoding to one compute pass.
+- [x] Add mixed-operation value-semantic regression coverage.
 - [ ] Record the matched result and run affected package gates.
