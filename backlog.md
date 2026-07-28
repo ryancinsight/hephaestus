@@ -4,15 +4,32 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DENSE-VECTOR-OPS-PARITY-1 [arch] [minor] — in progress
+## HEPH-DENSE-VECTOR-OPS-METAL-1 [arch] [minor] — in progress
 
-- Owner: Codex on `codex/cuda-rocm-vector-ops-parity`; scope: the shared
-  `DenseVectorOps` GAT contract plus CUDA and ROCm provider implementations.
-- Outcome: expose one value-semantic dense-vector operation seam across the
-  current WGPU, CUDA, and ROCm providers without CPU fallback or cloned
-  consumer algorithms.
-- Non-goals: Metal implementation, non-f32 vector scalars, and Coeus routing;
-  Metal is the next backend increment after this provider slice.
+- Owner: Codex on `codex/metal-vector-ops-parity`; scope: the Metal provider
+  implementation and its value-semantic contract tests.
+- Outcome: expose the complete dense-vector operation seam through the
+  native-Metal-selected dispatch substrate without cloned consumer algorithms
+  or host fallback.
+- Non-goals: non-f32 vector scalars, Coeus routing, and new Metal-specific
+  kernels where the canonical WGPU kernels already execute on Metal.
+- Acceptance: Metal implements copy, scale, AXPY, XPAY, subtraction, prepared
+  dot, and prepared L2 norm; prepared handles retain no additional buffer
+  clones; contracts compare CPU values, cover empty vectors and workgroup
+  tails, and exercise prepared reuse; exact-head Metal and sibling backend CI
+  passes.
+- Risk/change class: `[arch]`/`[minor]` provider seam completion; ADR 0034
+  owns the delegation and prepared-resource decision.
+- Status: implementation is in progress; local compile/test and macOS Metal
+  execution remain acceptance gates.
+
+## HEPH-DENSE-VECTOR-OPS-PARITY-1 [arch] [minor] — done
+
+- Owner: Codex; scope: the shared `DenseVectorOps` GAT contract plus CUDA and
+  ROCm provider implementations.
+- Outcome: expose one value-semantic dense-vector operation seam across WGPU,
+  CUDA, and ROCm without CPU fallback or cloned consumer algorithms.
+- Non-goals: Metal implementation, non-f32 vector scalars, and Coeus routing.
 - Acceptance: CUDA and ROCm implement copy, scale, AXPY, XPAY, subtraction,
   prepared dot, and prepared L2 norm; prepared plans borrow fixed allocations
   while owning only cheap device handles; provider contracts compare values
@@ -20,8 +37,9 @@ cuda-oxide + cutile).
   and Metal CI passes.
 - Risk/change class: `[arch]`/`[minor]` public GAT lifetime change; ADR 0033
   owns the ownership and memory-efficiency decision.
-- Status: implementation and adapterless compile/test targets are in progress;
-  vendor execution remains a CI acceptance gate.
+- Status: merged in PR #130 at `cf28aa594f1348f39c6510fc2bb30edf943a3f37`.
+- Evidence: WGPU, CUDA, ROCm, and Metal repository-owned PR checks passed;
+  NVIDIA and AMD hardware jobs were skipped by workflow input.
 
 ## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor] — done
 

@@ -27,5 +27,7 @@ pub mod storage_kernel;
 pub mod stream;
 /// Strided layout wrappers.
 pub mod strided;
+/// Dense vector recurrence operations.
+pub mod vector;
 /// Volume ray-integral delegation.
 pub mod volume;

@@ -36,6 +36,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add `MetalVectorOps` for the complete f32 `DenseVectorOps` seam.
+  Metal reuses the native-Metal-selected WGPU dispatch bundle and retains the
+  prepared reduction allocation contract without extra buffer clones.
+
 - [minor] Add shared `Mish`, `MishGrad`, `Elu`, and `EluGrad` expression
   markers with WGSL, CUDA C++, and HIP C++ forms, exported through WGPU,
   CUDA, ROCm, and Metal. Provider contracts compare forward and gradient
