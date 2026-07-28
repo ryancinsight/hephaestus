@@ -4,6 +4,23 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-mixed-reduction-batch`; scope: unified
+  submission of independent prepared scalar and axis reductions, exact WGPU
+  contracts, comparative host-latency evidence, and synchronized artifacts.
+- Outcome: encode both prepared reduction families into one command encoder and
+  submit one command buffer while preserving scalar tree-stage dependencies.
+- Non-goals: sharing scratch buffers, changing arithmetic order, dependent
+  reductions, shader fusion, CPU fallback, and cross-device performance claims.
+- Acceptance: mixed scalar/axis batches preserve exact outputs, singleton and
+  empty plans retain their contracts, the unchanged two-call baseline and
+  unified result workload validate every output, and formatting,
+  warning-denied package checks, focused Nextest, doctests, benchmark smoke,
+  and exact-head provider CI pass.
+- Risk/change class: `[minor]` additive WGPU batching surface.
+- Status: implementation in progress.
+
 ## HEPH-WGPU-EMPTY-BATCH-NOOP-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-empty-batch-noop`; scope: all-no-op

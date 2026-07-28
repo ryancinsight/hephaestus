@@ -2,6 +2,17 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf]
+
+- [ ] Add one submission path for independent prepared scalar and axis
+      reductions without changing scalar tree-stage ordering.
+- [ ] Add exact mixed-batch, singleton, empty, and no-active-work contracts.
+- [ ] Record matched baseline/result host-latency measurements for the unchanged
+      mixed workload, validating every output.
+- [ ] Run focused local gates and exact-head WGPU, CUDA, ROCm, and Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-mixed-reduction-batch`.
+
 ## HEPH-DEVICE-LOCAL-COW-2 [minor] [perf]
 
 - [x] Add the explicit `ComputeDevice::alloc_uninitialized_with_hint` seam
