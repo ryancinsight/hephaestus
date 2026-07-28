@@ -32,10 +32,10 @@
 //! This crate owns the device substrate and monomorphized application kernels,
 //! including elementwise, reduction, axis-reduction, scan, map-reduction,
 //! matrix, stencil, and prepared-dispatch contracts. Prepared dot products and
-//! L2 norms retain their product scratch, reduction tree, and scalar output
-//! across prepared dispatches, matching the reusable resource contract of
-//! `hephaestus-wgpu`; direct linalg reductions fuse the map with their first
-//! reduction pass and retain only workgroup partials.
+//! L2 norms retain their fused map-reduction partials, reduction tree, and
+//! scalar output across prepared dispatches, matching the reusable resource
+//! contract of `hephaestus-wgpu`; direct linalg reductions use the same plan
+//! shape for one-shot execution.
 
 mod infrastructure;
 

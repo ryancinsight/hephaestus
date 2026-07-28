@@ -132,6 +132,12 @@ impl<'a, T> PreparedReductionPlan<'a, T> {
             .last()
             .expect("invariant: prepared reduction always owns an output")
     }
+
+    pub(crate) fn into_output(mut self) -> RocmBuffer<T> {
+        self.outputs
+            .pop()
+            .expect("invariant: prepared reduction always owns an output")
+    }
 }
 
 impl<T> PreparedReduction<'_, T> {

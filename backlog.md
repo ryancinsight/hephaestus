@@ -1501,13 +1501,18 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     instrument. Local evidence: no-feature Nextest 78/78, CUDA feature check,
     CUDA/decomposition all-target check, feature-gated clippy, formatting, and
     doctests. Physical CUDA execution remains CI/self-hosted evidence.
-  - **CU-P12 in progress**: prepared CUDA dot and L2-norm plans still retain
-    full logical-length product/square buffers even though their direct paths
-    now use fused first-pass map-reductions. The next slice will reuse the
-    fused partial-output plan across dispatches, preserving stable outputs and
-    strided-view semantics while reducing prepared scratch to workgroup
-    partials. ROCm will receive the same plan shape in this increment so the
-    CUDA and ROCm prepared capabilities remain equivalent.
+  - **CU-P12 closed locally**: prepared CUDA and ROCm dot/L2-norm plans now
+    reuse the fused first-pass map-reduction object across dispatches. Each
+    plan retains `ceil(logical_len / BlockWidth::DEFAULT)` workgroup partials,
+    an optional prepared reduction tree, and the stable scalar output instead
+    of allocating a full logical-length product/square buffer. Existing
+    repeated-dispatch, value, layout, and allocation contracts remain in
+    place. Local evidence: CUDA feature/decomposition all-target check,
+    CUDA feature Clippy, CUDA feature doctests, CUDA no-feature Nextest 78/78,
+    ROCm no-feature Clippy, ROCm no-feature doctests, and ROCm no-feature
+    Nextest 49/49. The ROCm feature build remains a Linux-only CI gate because
+    this Windows checkout intentionally rejects it without a ROCm installation;
+    physical CUDA/ROCm execution remains CI/self-hosted evidence.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/

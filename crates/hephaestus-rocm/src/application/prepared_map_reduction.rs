@@ -1,32 +1,29 @@
 //! Reusable ROCm dot-product and L2-norm plans.
+//!
+//! Prepared plans retain the fused first-pass workgroup partials and the
+//! optional reduction tree. They do not allocate a full logical-length
+//! product or square buffer per dispatch.
 
 use bytemuck::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HipC, IdentityToken, OpIdentity,
     Result, SumOp,
 };
-use leto::Layout;
 
 use crate::RocmDevice;
-use crate::application::elementwise::{MulOp, SqrtOp, unary_elementwise_into};
-use crate::application::prepared_reduction::PreparedReductionPlan;
+use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
+use crate::application::linalg::{DotMap, PreparedMapReduction, SquareMap, prepare_map_reduction};
 use crate::application::strided::StridedOperand;
-use crate::application::strided_elementwise::binary_elementwise_strided_into;
 use crate::infrastructure::RocmBuffer;
 
 /// A reusable ROCm vector dot-product plan over fixed strided inputs.
 pub struct PreparedDot<'a, T> {
-    device: &'a RocmDevice,
-    lhs: StridedOperand<'a, T, 1>,
-    rhs: StridedOperand<'a, T, 1>,
-    product: RocmBuffer<T>,
-    product_layout: Layout<1>,
-    reduction: PreparedReductionPlan<'a, T>,
+    inner: PreparedMapReduction<'a, DotMap, T, 1>,
 }
 
 impl<T> PreparedDot<'_, T>
 where
-    T: DialectScalar<HipC> + Pod,
+    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
 {
     /// Dispatch the prepared dot product and reuse its device-resident output.
     ///
@@ -35,24 +32,13 @@ where
     /// Returns a typed error when a native elementwise or reduction launch
     /// fails.
     pub fn dispatch(&self) -> Result<()> {
-        let product = StridedOperand {
-            buffer: &self.product,
-            layout: &self.product_layout,
-        };
-        binary_elementwise_strided_into::<MulOp, T, 1>(
-            self.device,
-            self.lhs,
-            self.rhs,
-            product,
-            BlockWidth::DEFAULT,
-        )?;
-        self.reduction.dispatch(&self.product)
+        self.inner.dispatch()
     }
 
     /// Return the stable one-element output buffer.
     #[must_use]
     pub fn output(&self) -> &RocmBuffer<T> {
-        self.reduction.output()
+        self.inner.output()
     }
 }
 
@@ -84,31 +70,14 @@ where
     rhs.layout
         .validate_storage_len(rhs.buffer.len())
         .map_err(crate::application::linalg::map_layout_err)?;
-    let len = lhs
-        .layout
-        .checked_size()
-        .map_err(crate::application::linalg::map_layout_err)?;
-    let product = device.alloc_zeroed::<T>(len)?;
-    let product_layout =
-        Layout::c_contiguous([len]).map_err(crate::application::linalg::map_layout_err)?;
-    let reduction = PreparedReductionPlan::prepare::<SumOp>(device, len, BlockWidth::DEFAULT)?;
-    Ok(PreparedDot {
-        device,
-        lhs,
-        rhs,
-        product,
-        product_layout,
-        reduction,
-    })
+    let inner = prepare_map_reduction::<DotMap, T, 1>(device, lhs, rhs)?;
+    Ok(PreparedDot { inner })
 }
 
 /// A reusable ROCm L2-norm plan over a fixed strided input.
 pub struct PreparedL2Norm<'a, T, const N: usize> {
     device: &'a RocmDevice,
-    input: StridedOperand<'a, T, N>,
-    squares: RocmBuffer<T>,
-    squares_layout: Layout<N>,
-    reduction: PreparedReductionPlan<'a, T>,
+    inner: PreparedMapReduction<'a, SquareMap, T, N>,
     output: RocmBuffer<T>,
 }
 
@@ -123,21 +92,10 @@ where
     /// Returns a typed error when a native elementwise, reduction, or square
     /// root launch fails.
     pub fn dispatch(&self) -> Result<()> {
-        let squares = StridedOperand {
-            buffer: &self.squares,
-            layout: &self.squares_layout,
-        };
-        binary_elementwise_strided_into::<MulOp, T, N>(
-            self.device,
-            self.input,
-            self.input,
-            squares,
-            BlockWidth::DEFAULT,
-        )?;
-        self.reduction.dispatch(&self.squares)?;
+        self.inner.dispatch()?;
         unary_elementwise_into::<SqrtOp, T>(
             self.device,
-            self.reduction.output(),
+            self.inner.output(),
             &self.output,
             BlockWidth::DEFAULT,
         )
@@ -167,21 +125,11 @@ where
         .layout
         .validate_storage_len(input.buffer.len())
         .map_err(crate::application::linalg::map_layout_err)?;
-    let len = input
-        .layout
-        .checked_size()
-        .map_err(crate::application::linalg::map_layout_err)?;
-    let squares = device.alloc_zeroed::<T>(len)?;
-    let squares_layout = Layout::c_contiguous(input.layout.shape)
-        .map_err(crate::application::linalg::map_layout_err)?;
-    let reduction = PreparedReductionPlan::prepare::<SumOp>(device, len, BlockWidth::DEFAULT)?;
+    let inner = prepare_map_reduction::<SquareMap, T, N>(device, input, input)?;
     let output = device.alloc_zeroed::<T>(1)?;
     Ok(PreparedL2Norm {
         device,
-        input,
-        squares,
-        squares_layout,
-        reduction,
+        inner,
         output,
     })
 }
