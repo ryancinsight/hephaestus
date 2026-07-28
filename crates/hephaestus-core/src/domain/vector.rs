@@ -226,3 +226,76 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
         self.norm_l2_prepared(device, &prepared, vector)
     }
 }
+
+/// Reduction resources a consumer can **retain** across iterations.
+///
+/// [`DenseVectorOps::prepare_dot`] hands back a handle borrowing its operands,
+/// which suits a caller that prepares and dispatches inside one scope. An
+/// iterative solver cannot use that shape: it stores its reductions beside the
+/// vectors they measure for the lifetime of a workspace, and every iteration
+/// mutates the very vector a handle would borrow. Holding the borrow across
+/// that mutation does not borrow-check, and moving the handle to a narrower
+/// scope does not help, because the conflict is the borrow itself rather than
+/// where it lives.
+///
+/// This trait supplies the same reductions with **owned** handles, so a
+/// consumer may store one for as long as it likes and present the operands
+/// again at dispatch. Implementations that bake operand bindings into the
+/// handle keep the operands alive by cloning their buffer handles; a backend
+/// whose buffers are owned allocations rather than shared handles cannot do
+/// that and simply does not implement this trait, keeping the borrowing form
+/// from [`DenseVectorOps`].
+///
+/// A retained handle is valid only for the allocations it was built against;
+/// implementations reject a mismatched operand rather than reducing the wrong
+/// memory.
+pub trait RetainedReductions<D: ComputeDevice, T: Pod>: DenseVectorOps<D, T> {
+    /// Owned dot-product resources.
+    type RetainedDot;
+    /// Owned Euclidean-norm resources.
+    type RetainedNorm;
+
+    /// Build retained dot-product resources bound to `left` and `right`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch or the backend preparation failure.
+    fn retain_dot(
+        &self,
+        device: &D,
+        left: &D::Buffer<T>,
+        right: &D::Buffer<T>,
+    ) -> Result<Self::RetainedDot>;
+
+    /// Execute retained dot-product resources and read the scalar to the host.
+    ///
+    /// # Errors
+    ///
+    /// Returns a retained-operand mismatch or the backend dispatch failure.
+    fn dot_retained(
+        &self,
+        device: &D,
+        retained: &Self::RetainedDot,
+        left: &D::Buffer<T>,
+        right: &D::Buffer<T>,
+    ) -> Result<T>;
+
+    /// Build retained Euclidean-norm resources bound to `vector`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend preparation failure.
+    fn retain_norm_l2(&self, device: &D, vector: &D::Buffer<T>) -> Result<Self::RetainedNorm>;
+
+    /// Execute retained norm resources and read the scalar to the host.
+    ///
+    /// # Errors
+    ///
+    /// Returns a retained-operand mismatch or the backend dispatch failure.
+    fn norm_l2_retained(
+        &self,
+        device: &D,
+        retained: &Self::RetainedNorm,
+        vector: &D::Buffer<T>,
+    ) -> Result<T>;
+}

@@ -3,6 +3,7 @@
 mod kernels;
 
 use bytemuck::Pod;
+use hephaestus_core::RetainedReductions;
 use hephaestus_core::{
     Binding, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
     HephaestusError, KernelDevice, Result,
@@ -316,5 +317,50 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         Self::require_same_allocation("norm operand", &prepared.input, vector)?;
         prepared.operation.dispatch(device)?;
         Self::download_scalar(device, prepared.operation.output())
+    }
+}
+
+impl RetainedReductions<WgpuDevice, f32> for WgpuVectorOps {
+    // The WGPU prepared forms already own their operands: `WgpuBuffer` is a
+    // shared handle, so cloning it keeps the allocation alive without copying
+    // device memory. The retained and borrowing forms are therefore the same
+    // resources reached through different lifetimes.
+    type RetainedDot = WgpuPreparedDot<f32>;
+    type RetainedNorm = WgpuPreparedNorm<f32>;
+
+    fn retain_dot(
+        &self,
+        device: &WgpuDevice,
+        left: &WgpuBuffer<f32>,
+        right: &WgpuBuffer<f32>,
+    ) -> Result<Self::RetainedDot> {
+        self.prepare_dot(device, left, right)
+    }
+
+    fn dot_retained(
+        &self,
+        device: &WgpuDevice,
+        retained: &Self::RetainedDot,
+        left: &WgpuBuffer<f32>,
+        right: &WgpuBuffer<f32>,
+    ) -> Result<f32> {
+        self.dot_prepared(device, retained, left, right)
+    }
+
+    fn retain_norm_l2(
+        &self,
+        device: &WgpuDevice,
+        vector: &WgpuBuffer<f32>,
+    ) -> Result<Self::RetainedNorm> {
+        self.prepare_norm_l2(device, vector)
+    }
+
+    fn norm_l2_retained(
+        &self,
+        device: &WgpuDevice,
+        retained: &Self::RetainedNorm,
+        vector: &WgpuBuffer<f32>,
+    ) -> Result<f32> {
+        self.norm_l2_prepared(device, retained, vector)
     }
 }
