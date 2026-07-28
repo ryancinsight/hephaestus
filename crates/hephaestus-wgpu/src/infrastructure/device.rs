@@ -1025,12 +1025,22 @@ impl ComputeDevice for WgpuDevice {
         len: usize,
         hint: themis::PlacementHint,
     ) -> Result<WgpuBuffer<T>> {
+        // WebGPU guarantees newly created buffers are zero-initialized. Keep
+        // the ordinary zeroed contract explicit while sharing the allocation
+        // path with callers that overwrite every element before reading.
+        self.alloc_uninitialized_with_hint(len, hint)
+    }
+
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<WgpuBuffer<T>> {
         validate_buffer_size::<T>(len)?;
         let tier = Self::device_tier(hint)?;
         let usage = wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_SRC
             | wgpu::BufferUsages::COPY_DST;
-        // WebGPU guarantees newly created buffers are zero-initialized.
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("hephaestus-storage"),
             size: Self::padded_size::<T>(len)?,

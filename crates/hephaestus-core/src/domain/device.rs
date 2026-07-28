@@ -107,6 +107,24 @@ pub trait ComputeDevice {
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>>;
 
+    /// Allocate device storage without writing an initialization pattern.
+    ///
+    /// The returned buffer must be fully overwritten before any read. This
+    /// contract exists for ownership-preserving copies and other producers
+    /// that write every element exactly once; ordinary callers that require
+    /// defined contents must use [`Self::alloc_zeroed_with_hint`] instead.
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>>;
+
+    /// Allocate device storage without an initialization pattern.
+    #[inline]
+    fn alloc_uninitialized<T: Pod>(&self, len: usize) -> Result<Self::Buffer<T>> {
+        self.alloc_uninitialized_with_hint(len, themis::PlacementHint::default())
+    }
+
     /// Allocate a device buffer initialized from a host slice (host→device).
     #[inline]
     fn upload<T: Pod>(&self, host: &[T]) -> Result<Self::Buffer<T>> {

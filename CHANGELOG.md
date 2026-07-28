@@ -36,6 +36,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Add `ComputeDevice::alloc_uninitialized_with_hint` for producers
+  that fully overwrite device storage before reading it. CUDA and ROCm avoid
+  the redundant memset used by device-local COW replacement; WGPU and Metal
+  implement the same contract through their existing allocation substrate.
+
 - [patch] Add a synchronous device-local `ComputeDevice::copy_buffer` seam
   across WGPU, CUDA, ROCm, and Metal so consumers can detach shared device
   storage without a host staging allocation or transfer round-trip.

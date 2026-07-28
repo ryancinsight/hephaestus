@@ -57,6 +57,16 @@ impl ComputeDevice for MetalDevice {
     }
 
     #[inline]
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
+        let inner = self.inner.alloc_uninitialized_with_hint(len, hint)?;
+        Ok(MetalBuffer { inner })
+    }
+
+    #[inline]
     fn upload_with_hint<T: Pod>(
         &self,
         host: &[T],

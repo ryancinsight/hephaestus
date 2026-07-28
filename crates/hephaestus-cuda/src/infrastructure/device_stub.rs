@@ -125,6 +125,14 @@ impl ComputeDevice for CudaDevice {
         Self::unavailable()
     }
 
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        _len: usize,
+        _hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
+        Self::unavailable()
+    }
+
     fn upload_with_hint<T: Pod>(
         &self,
         _host: &[T],

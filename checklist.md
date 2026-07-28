@@ -2,6 +2,37 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-DEVICE-LOCAL-COW-2 [minor] [perf]
+
+- [x] Add the explicit `ComputeDevice::alloc_uninitialized_with_hint` seam
+      with an overwrite-before-read contract.
+- [x] Implement the seam for WGPU, CUDA, ROCm, Metal, and unavailable-provider
+      stubs without duplicating allocation policy.
+- [x] Add value-semantic provider contracts that fully overwrite the returned
+      buffer before reading it.
+- [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record the
+      terminal workflow evidence.
+- [ ] Cut Coeus shared-storage replacement allocation over to the seam after
+      the Hephaestus provider merge.
+
+Implementation owner: Codex on `codex/uninitialized-device-copy`; ADR 0037.
+
+Local evidence: core, WGPU, Metal, and CUDA feature-aware all-target checks
+pass. The ROCm feature check is intentionally unavailable on Windows because
+the checkout requires a Linux ROCm installation; the ROCm stub matrix passes.
+The default-feature WGPU and Metal contract tests and the ROCm stub contract
+test pass. The CUDA focused nextest build reaches the test-binary link step
+but the local `x86_64-w64-mingw32-gcc` linker exits 1; hosted CUDA CI is the
+execution gate. No runtime performance claim is made without a controlled
+benchmark; the structural target is removal of the CUDA/ROCm full-buffer
+initialization before a full overwrite.
+
+Provider PR #136 exact-head run `30343728210` passed CUDA job `90224950226`,
+run `30343728174` passed WGPU job `90224950173`, run `30343728133` passed ROCm
+job `90224950310`, and run `30343728161` passed Metal job `90224950041`.
+NVIDIA job `90224951166` and AMD job `90224950902` were skipped because no
+physical-device runners were dispatched.
+
 ## HEPH-LGAMMA-EXPRESSION-PARITY-1 [minor]
 
 - [x] Add the shared `LgammaOp` marker with CUDA, HIP, and WGSL expressions.

@@ -47,6 +47,28 @@ impl ComputeDevice for RocmDevice {
         len: usize,
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>> {
+        let buffer = self.alloc_uninitialized_with_hint::<T>(len, hint)?;
+        if len == 0 {
+            return Ok(buffer);
+        }
+        let bytes = checked_bytes::<T>(len)?;
+        self.context.set_current()?;
+        // SAFETY: `buffer.raw()` is the live HIP allocation created above and
+        // `bytes` is its checked size.
+        let status = unsafe { cubecl_hip_sys::hipMemset(buffer.raw(), 0, bytes) };
+        if status != super::device::HIP_SUCCESS {
+            return Err(HephaestusError::AllocationFailed {
+                message: super::device::status_message(status, "hipMemset"),
+            });
+        }
+        Ok(buffer)
+    }
+
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         let tier = Self::allocation_tier(hint)?;
         let bytes = checked_bytes::<T>(len)?;
         self.context.set_current()?;
@@ -60,17 +82,6 @@ impl ComputeDevice for RocmDevice {
             if status != super::device::HIP_SUCCESS {
                 return Err(HephaestusError::AllocationFailed {
                     message: super::device::status_message(status, "hipMalloc"),
-                });
-            }
-            // SAFETY: `ptr` was returned by `hipMalloc` for the current HIP
-            // device and `bytes` is its allocated byte count.
-            let status = unsafe { cubecl_hip_sys::hipMemset(ptr, 0, bytes) };
-            if status != super::device::HIP_SUCCESS {
-                // SAFETY: the allocation was created by this function and is
-                // released exactly once on the failed initialization path.
-                unsafe { cubecl_hip_sys::hipFree(ptr) };
-                return Err(HephaestusError::AllocationFailed {
-                    message: super::device::status_message(status, "hipMemset"),
                 });
             }
             ptr

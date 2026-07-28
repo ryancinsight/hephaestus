@@ -685,6 +685,32 @@ impl ComputeDevice for CudaDevice {
         len: usize,
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>> {
+        let buffer = self.alloc_uninitialized_with_hint::<T>(len, hint)?;
+        if len == 0 {
+            return Ok(buffer);
+        }
+        let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("byte count overflow for {len} elements"),
+            }
+        })?;
+        let byte_count = cuda_byte_count(bytes, "zero-init byte count")?;
+        // SAFETY: `buffer.raw()` addresses `bytes` of device memory owned by
+        // this buffer, and the checked byte count covers the allocation.
+        let res = unsafe { cuda_oxide::sys::cuMemsetD8_v2(buffer.raw(), 0, byte_count) };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("zero-init cuMemsetD8_v2 -> {res}"),
+            });
+        }
+        Ok(buffer)
+    }
+
+    fn alloc_uninitialized_with_hint<T: Pod>(
+        &self,
+        len: usize,
+        hint: themis::PlacementHint,
+    ) -> Result<Self::Buffer<T>> {
         validate_buffer_size::<T>(len)?;
         let tier = Self::allocation_tier(hint)?;
         if len == 0 {
@@ -696,16 +722,7 @@ impl ComputeDevice for CudaDevice {
             }
         })?;
         let ptr = self.alloc_bytes(bytes)?;
-        let byte_count = cuda_byte_count(bytes, "zero-init byte count")?;
-        // SAFETY: `ptr` addresses `bytes` of device memory just allocated.
-        let res = unsafe { cuda_oxide::sys::cuMemsetD8_v2(ptr, 0, byte_count) };
-        let buffer = CudaBuffer::<T>::new(ptr, len, tier, self.context.clone());
-        if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!("zero-init cuMemsetD8_v2 -> {res}"),
-            });
-        }
-        Ok(buffer)
+        Ok(CudaBuffer::new(ptr, len, tier, self.context.clone()))
     }
 
     fn upload_with_hint<T: Pod>(

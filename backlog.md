@@ -4,6 +4,32 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — in progress
+
+- Owner: Codex on `codex/uninitialized-device-copy`; scope: the shared
+  `ComputeDevice` allocation contract and the provider implementations used by
+  device-local Coeus storage detachment.
+- Outcome: expose an explicit overwrite-before-read allocation operation so a
+  consumer that writes every element exactly once does not pay a redundant
+  device-wide zero-initialization pass. CUDA and ROCm allocate without memset;
+  WGPU and Metal preserve their platform allocation semantics through the same
+  seam.
+- Non-goals: uninitialized reads, asynchronous allocation, CPU fallback,
+  provider-specific consumer APIs, and runtime speed or memory claims without
+  controlled measurements.
+- Acceptance: all shipped providers and unavailable stubs implement the seam;
+  provider contracts fully overwrite before reading; exact-head WGPU, CUDA,
+  ROCm, and Metal CI passes; Coeus uses the seam for shared-storage copies
+  after the provider merge; ADR and changelog are synchronized.
+- Risk/change class: `[arch]`/`[minor]` additive provider seam with a strict
+  memory-initialization contract; ADR 0037 owns the decision.
+- Status: provider implementation and exact-head provider evidence complete;
+  the Coeus consumer cutover remains open. PR #136 run `30343728210` passed
+  CUDA job `90224950226`, run `30343728174` passed WGPU job `90224950173`, run
+  `30343728133` passed ROCm job `90224950310`, and run `30343728161` passed
+  Metal job `90224950041`. NVIDIA `90224951166` and AMD `90224950902` skipped
+  because no physical-device runner was dispatched.
+
 ## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — done
 
 - Owner: Codex on `codex/device-local-cow-copy`; scope: the shared
