@@ -21,6 +21,12 @@ cuda-oxide + cutile).
   warning-denied package checks, focused Nextest, doctests, and benchmark smoke
   pass.
 - Risk/change class: `[patch]` internal command-encoding optimization.
+- Status: implementation and local evidence complete in PR #138. Three matched
+  samples reduce the eight-reduction median from 105.092 µs to 32.250 µs;
+  focused Nextest, warning-denied all-target Clippy, doctests, formatting, and
+  benchmark execution pass. Local MSVC verification is independently blocked
+  by `backtrace 0.3.76` missing COFF/Gimli optional dependencies; hosted
+  provider checks are the clean-environment merge gate.
 
 ## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — done
 
