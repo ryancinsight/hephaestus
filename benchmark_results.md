@@ -8,6 +8,27 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## Prepared Scalar-Reduction Batch Encoding
+
+The prepared scalar batch uses eight independent 1,048,576-element `u32`
+sums. Every device output is downloaded and compared with the exact host sum
+before the timed loop. The timed region performs 50 batch submissions and one
+final device poll. Interleaved old/new runs used the same GNU nightly release
+profile and resolved dependency graph.
+
+| Encoding | Samples | Median | Relative throughput |
+| --- | --- | --- | --- |
+| One compute pass per tree stage | 234.206 µs, 228.006 µs, 246.956 µs | 234.206 µs | 1.00x |
+| One compute pass per batch stage | 104.882 µs, 99.060 µs, 100.918 µs | 100.918 µs | **2.32x** |
+
+The stage-major encoder lowers the observed median batch latency by 56.9%.
+It opens one compute pass per maximum tree depth instead of one pass per stage
+of every reduction, without changing buffers, allocations, or arithmetic
+order. This is a local host/GPU result from three matched samples, not a
+Criterion confidence interval or a cross-device claim. Concurrent
+package-cache contention was present, so the structural pass-count reduction
+is stronger evidence than the exact latency ratio.
+
 ## Prepared Axis-Reduction Batch Encoding
 
 The prepared axis batch uses eight independent 256x256 axis-0 sums, with all

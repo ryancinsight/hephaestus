@@ -2857,8 +2857,8 @@ Execution owner: Codex on `codex/hephaestus-scalar-batch-pass`. Claimed files:
 `crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
 `CHANGELOG.md`, `backlog.md`, and this section.
 
-- [ ] Add and value-check the fixed prepared scalar-batch benchmark.
-- [ ] Record the unchanged tree-major implementation baseline.
-- [ ] Encode independent reduction trees stage-major.
-- [ ] Cover mixed singleton and multi-pass batches.
-- [ ] Record the matched result and run affected gates.
+- [x] Add and value-check the fixed prepared scalar-batch benchmark.
+- [x] Record the unchanged tree-major implementation baseline.
+- [x] Encode independent reduction trees stage-major.
+- [x] Cover mixed singleton and multi-pass batches.
+- [x] Record the matched result and run affected gates.

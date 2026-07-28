@@ -791,13 +791,20 @@ fn reduction_sum_matches_cpu_reference() {
         );
         if size == 1027 {
             let batch_a = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+            let singleton_input = device.upload(&[99u32]).unwrap();
+            let singleton = prepare_reduction::<SumOp, u32>(&device, &singleton_input).unwrap();
             let batch_b = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
-            submit_prepared_reduction_batch(&device, &[&batch_a, &batch_b]).unwrap();
+            submit_prepared_reduction_batch(&device, &[&batch_a, &singleton, &batch_b]).unwrap();
             let mut got_batch_a = vec![0u32; 1];
+            let mut got_singleton = vec![0u32; 1];
             let mut got_batch_b = vec![0u32; 1];
             device.download(batch_a.output(), &mut got_batch_a).unwrap();
+            device
+                .download(singleton.output(), &mut got_singleton)
+                .unwrap();
             device.download(batch_b.output(), &mut got_batch_b).unwrap();
             assert_eq!(got_batch_a[0], expected_u32);
+            assert_eq!(got_singleton[0], 99);
             assert_eq!(got_batch_b[0], expected_u32);
         }
 

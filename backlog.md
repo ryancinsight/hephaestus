@@ -20,6 +20,10 @@ cuda-oxide + cutile).
   measurements; formatting, warning-denied package checks, focused Nextest,
   doctests, benchmark smoke, and exact-head provider CI pass.
 - Risk/change class: `[patch]` internal command-encoding optimization.
+- Status: local implementation complete. Three matched samples reduce the
+  eight-reduction median from 234.206 µs to 100.918 µs; focused Nextest,
+  warning-denied all-target Clippy, doctests, formatting, and benchmark
+  execution pass. Exact-head provider CI remains pending.
 
 ## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — done
 

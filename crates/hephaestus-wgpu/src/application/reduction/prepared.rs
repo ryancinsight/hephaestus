@@ -95,9 +95,12 @@ impl<T> PreparedReduction<T> {
 
 /// Submit multiple prepared scalar reductions in one command buffer.
 ///
-/// Each prepared reduction owns independent scratch/output buffers. This avoids
-/// write-after-write hazards while amortizing WGPU submit/poll overhead across a
-/// caller-visible batch of reductions.
+/// Each prepared reduction owns independent scratch/output buffers. The encoder
+/// groups equal-depth tree stages into one compute pass, preserving a pass
+/// boundary between dependent stages while avoiding one pass per tree stage.
+/// Singleton copies remain outside the compute passes. This avoids
+/// write-after-write hazards while amortizing pass construction and WGPU
+/// submit/poll overhead across a caller-visible batch.
 ///
 /// # Errors
 ///
@@ -112,9 +115,39 @@ pub fn submit_prepared_reduction_batch<T>(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("hephaestus-prepared-reduction-batch"),
         });
+
     for reduction in reductions {
-        reduction.encode(&mut encoder)?;
+        if let Some(source) = reduction.singleton_source.as_ref() {
+            encoder.copy_buffer_to_buffer(
+                source,
+                0,
+                &reduction.output().buffer,
+                0,
+                WgpuDevice::byte_size::<T>(1)?,
+            );
+        }
     }
+
+    let tree_depth = reductions
+        .iter()
+        .map(|reduction| reduction.passes.len())
+        .max()
+        .unwrap_or_default();
+    for stage in 0..tree_depth {
+        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-prepared-reduction-batch-stage"),
+            timestamp_writes: None,
+        });
+        for reduction in reductions {
+            let Some(prepared_pass) = reduction.passes.get(stage) else {
+                continue;
+            };
+            compute_pass.set_pipeline(&prepared_pass.pipeline);
+            compute_pass.set_bind_group(0, &prepared_pass.bind_group, &[]);
+            compute_pass.dispatch_workgroups(prepared_pass.groups, 1, 1);
+        }
+    }
+
     device.queue().submit(Some(encoder.finish()));
     Ok(())
 }
