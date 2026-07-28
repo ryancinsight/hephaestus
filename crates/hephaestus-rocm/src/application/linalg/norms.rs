@@ -5,6 +5,9 @@
 //! rank-four representation, so transposed, sliced, and diagonal views use
 //! the same device path as contiguous inputs.
 
+use std::marker::PhantomData;
+use std::sync::Arc;
+
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
@@ -16,9 +19,9 @@ use super::map_layout_err;
 use crate::RocmDevice;
 use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
 use crate::application::pipeline::{
-    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
+    LaunchConfig, PipelineKey, RocmKernel, cached_kernel, grid_size, launch_kernel,
 };
-use crate::application::reduction::reduction;
+use crate::application::prepared_reduction::PreparedReductionPlan;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
 
@@ -26,7 +29,7 @@ const MAX_STRIDED_RANK: usize = 4;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct MapReductionMeta {
+pub(crate) struct MapReductionMeta {
     shape: [u32; 4],
     a_strides: [i32; 4],
     b_strides: [i32; 4],
@@ -35,23 +38,23 @@ struct MapReductionMeta {
 
 const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 64);
 
-trait MapReductionOp: Copy + Send + Sync + 'static {
+pub(crate) trait MapReductionOp: Copy + Send + Sync + 'static {
     type ReduceOp: CombineExpr<HipC>;
 
     const EXPR: &'static str;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct IdentityMap;
+pub(crate) struct IdentityMap;
 
 #[derive(Clone, Copy, Debug, Default)]
-struct DotMap;
+pub(crate) struct DotMap;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct AbsMap;
 
 #[derive(Clone, Copy, Debug, Default)]
-struct SquareMap;
+pub(crate) struct SquareMap;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct MaxAbsMap;
@@ -86,7 +89,7 @@ impl MapReductionOp for MaxAbsMap {
     const EXPR: &'static str = "abs(lhs)";
 }
 
-fn shader_source<Op, T>(width: BlockWidth) -> String
+pub(crate) fn shader_source<Op, T>(width: BlockWidth) -> String
 where
     Op: MapReductionOp,
     T: DialectScalar<HipC> + IdentityToken<Op::ReduceOp, HipC>,
@@ -151,7 +154,7 @@ extern "C" __global__ void map_reduction_kernel(
     )
 }
 
-fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
+pub(crate) fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
     let width = usize::try_from(width.get()).map_err(|_| HephaestusError::DispatchFailed {
         message: format!(
             "ROCm map-reduction width {} exceeds usize range",
@@ -204,18 +207,93 @@ fn map_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     Ok(mapped)
 }
 
-fn map_reduction<Op, T, const N: usize>(
-    device: &RocmDevice,
-    a: StridedOperand<'_, T, N>,
-    b: StridedOperand<'_, T, N>,
-) -> Result<RocmBuffer<T>>
+pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
+    device: &'a RocmDevice,
+    a: StridedOperand<'a, T, N>,
+    b: StridedOperand<'a, T, N>,
+    meta: MapReductionMeta,
+    partial: RocmBuffer<T>,
+    kernel: Option<Arc<RocmKernel>>,
+    groups: u32,
+    width: BlockWidth,
+    shared_bytes: u32,
+    reduction: Option<PreparedReductionPlan<'a, T>>,
+    _operation: PhantomData<Op>,
+}
+
+impl<Op, T, const N: usize> PreparedMapReduction<'_, Op, T, N>
+where
+    Op: MapReductionOp,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
+{
+    pub(crate) fn dispatch(&self) -> Result<()> {
+        if let Some(kernel) = &self.kernel {
+            let mut meta = self.meta;
+            let mut a_ptr: DevicePtr = self.a.buffer.raw();
+            let mut b_ptr: DevicePtr = self.b.buffer.raw();
+            let mut output_ptr: DevicePtr = self.partial.raw();
+            let mut args: [*mut core::ffi::c_void; 4] = [
+                (&mut meta as *mut MapReductionMeta).cast(),
+                (&mut a_ptr as *mut DevicePtr).cast(),
+                (&mut b_ptr as *mut DevicePtr).cast(),
+                (&mut output_ptr as *mut DevicePtr).cast(),
+            ];
+            launch_kernel(
+                self.device,
+                kernel,
+                LaunchConfig::linear_shared(self.groups, self.width, self.shared_bytes),
+                &mut args,
+            )?;
+        }
+        if let Some(reduction) = &self.reduction {
+            reduction.dispatch(&self.partial)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn output(&self) -> &RocmBuffer<T> {
+        self.reduction
+            .as_ref()
+            .map_or(&self.partial, PreparedReductionPlan::output)
+    }
+
+    pub(crate) fn into_output(self) -> RocmBuffer<T> {
+        match self.reduction {
+            Some(reduction) => reduction.into_output(),
+            None => self.partial,
+        }
+    }
+}
+
+pub(crate) fn prepare_map_reduction<'a, Op, T, const N: usize>(
+    device: &'a RocmDevice,
+    a: StridedOperand<'a, T, N>,
+    b: StridedOperand<'a, T, N>,
+) -> Result<PreparedMapReduction<'a, Op, T, N>>
 where
     Op: MapReductionOp,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
 {
     let len = a.layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
-        return device.upload(&[T::IDENTITY]);
+        return Ok(PreparedMapReduction {
+            device,
+            a,
+            b,
+            meta: MapReductionMeta {
+                shape: [1; 4],
+                a_strides: [0; 4],
+                b_strides: [0; 4],
+                offsets: [0; 4],
+            },
+            partial: device.upload(&[T::IDENTITY])?,
+            kernel: None,
+            groups: 0,
+            width: BlockWidth::DEFAULT,
+            shared_bytes: 0,
+            reduction: None,
+            _operation: PhantomData,
+        });
     }
     a.layout
         .validate_storage_len(a.buffer.len())
@@ -256,29 +334,43 @@ where
     let kernel = cached_kernel(device, key, "map_reduction_kernel", || {
         shader_source::<Op, T>(width)
     })?;
-
-    let mut meta = meta;
-    let mut a_ptr: DevicePtr = a.buffer.raw();
-    let mut b_ptr: DevicePtr = b.buffer.raw();
-    let mut output_ptr: DevicePtr = partial.raw();
-    let mut args: [*mut core::ffi::c_void; 4] = [
-        (&mut meta as *mut MapReductionMeta).cast(),
-        (&mut a_ptr as *mut DevicePtr).cast(),
-        (&mut b_ptr as *mut DevicePtr).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
-    ];
-    launch_kernel(
-        device,
-        &kernel,
-        LaunchConfig::linear_shared(groups, width, shared_bytes),
-        &mut args,
-    )?;
-
-    if groups == 1 {
-        Ok(partial)
+    let reduction = if groups > 1 {
+        Some(PreparedReductionPlan::prepare::<Op::ReduceOp>(
+            device,
+            partial_len,
+            width,
+        )?)
     } else {
-        reduction::<Op::ReduceOp, T>(device, &partial)
-    }
+        None
+    };
+
+    Ok(PreparedMapReduction {
+        device,
+        a,
+        b,
+        meta,
+        partial,
+        kernel: Some(kernel),
+        groups,
+        width,
+        shared_bytes,
+        reduction,
+        _operation: PhantomData,
+    })
+}
+
+fn map_reduction<Op, T, const N: usize>(
+    device: &RocmDevice,
+    a: StridedOperand<'_, T, N>,
+    b: StridedOperand<'_, T, N>,
+) -> Result<RocmBuffer<T>>
+where
+    Op: MapReductionOp,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
+{
+    let prepared = prepare_map_reduction::<Op, T, N>(device, a, b)?;
+    prepared.dispatch()?;
+    Ok(prepared.into_output())
 }
 
 /// Compute the vector dot product `Σᵢ a[i] * b[i]` on the ROCm device.

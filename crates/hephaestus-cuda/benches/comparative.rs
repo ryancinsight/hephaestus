@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_cuda::{
     AddOp, CudaDevice, StridedOperand, binary_elementwise_into, dot, matmul_into, norm_l1, norm_l2,
-    norm_max, sum_axis_into,
+    norm_max, prepare_dot, prepare_norm_l2, sum_axis_into,
 };
 
 const ELEMENTWISE_LEN: usize = 1 << 20;
@@ -39,6 +39,7 @@ fn main() {
     benchmark_elementwise(&device);
     benchmark_reduction(&device);
     benchmark_map_reductions(&device);
+    benchmark_prepared_map_reductions(&device);
     benchmark_matmul(&device);
 }
 
@@ -250,6 +251,60 @@ fn benchmark_map_reductions(device: &CudaDevice) {
     device.synchronize().unwrap();
     println!(
         "CUDA norm_max fused map-reduction: {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+}
+
+fn benchmark_prepared_map_reductions(device: &CudaDevice) {
+    let host: Vec<f32> = (0..ELEMENTWISE_LEN)
+        .map(|index| (index % 17) as f32 - 8.0)
+        .collect();
+    let rhs_host: Vec<f32> = (0..ELEMENTWISE_LEN)
+        .map(|index| (index % 11) as f32 - 5.0)
+        .collect();
+    let input = device.upload(&host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = leto::Layout::c_contiguous([ELEMENTWISE_LEN]).unwrap();
+    let operand = StridedOperand {
+        buffer: &input,
+        layout: &layout,
+    };
+    let rhs_operand = StridedOperand {
+        buffer: &rhs,
+        layout: &layout,
+    };
+    let expected_dot: f32 = host.iter().zip(&rhs_host).map(|(&a, &b)| a * b).sum();
+    let expected_l2 = host.iter().map(|value| value * value).sum::<f32>().sqrt();
+
+    let prepared_dot = prepare_dot(device, operand, rhs_operand).unwrap();
+    let prepared_l2 = prepare_norm_l2(device, operand).unwrap();
+    prepared_dot.dispatch().unwrap();
+    prepared_l2.dispatch().unwrap();
+    device.synchronize().unwrap();
+
+    let mut got = [0.0_f32; 1];
+    device.download(prepared_dot.output(), &mut got).unwrap();
+    assert!((got[0] - expected_dot).abs() <= expected_dot.abs().max(1.0) * 1.0e-5);
+    device.download(prepared_l2.output(), &mut got).unwrap();
+    assert!((got[0] - expected_l2).abs() <= expected_l2 * 1.0e-5);
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        prepared_dot.dispatch().unwrap();
+    }
+    device.synchronize().unwrap();
+    println!(
+        "CUDA prepared dot fused map-reduction: {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        prepared_l2.dispatch().unwrap();
+    }
+    device.synchronize().unwrap();
+    println!(
+        "CUDA prepared norm_l2 fused map-reduction: {} ns/iter",
         per_iteration(start.elapsed()).as_nanos()
     );
 }
