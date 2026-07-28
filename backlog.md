@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — in progress
+
+- Owner: Codex on `codex/device-local-cow-copy`; scope: the shared
+  `ComputeDevice` copy contract and the Coeus Hephaestus storage uniqueness
+  consumer.
+- Outcome: detach shared accelerator storage with a provider-native
+  device-to-device copy, retaining the source memory tier and eliminating the
+  full-size temporary host allocation.
+- Non-goals: asynchronous storage mutation, new provider kernels, CPU
+  fallback, and runtime speed or allocation claims without controlled
+  measurements.
+- Acceptance: WGPU, CUDA, ROCm, and Metal implement the shared copy contract;
+  unavailable configurations return typed errors; Coeus `make_unique` uses one
+  device allocation and device-local copy; focused provider and consumer gates
+  pass; ADR and changelog are synchronized.
+- Risk/change class: `[arch]`/`[patch]` additive backend seam with a memory
+  lifetime contract; ADR 0036 owns the decision.
+- Status: in progress.
+
 ## HEPH-DENSE-VECTOR-ELEMENTWISE-1 [minor] — done
 
 - Owner: Codex on `codex/dense-vector-elementwise-parity`; scope: the shared

@@ -36,6 +36,10 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Add a synchronous device-local `ComputeDevice::copy_buffer` seam
+  across WGPU, CUDA, ROCm, and Metal so consumers can detach shared device
+  storage without a host staging allocation or transfer round-trip.
+
 - [minor] Extend `DenseVectorOps` with caller-owned-output `add_into`,
   `multiply_into`, and `divide_into` operations so the shared f32 vector seam
   covers Leto's dense scalar-slice arithmetic across WGPU, CUDA, ROCm, and

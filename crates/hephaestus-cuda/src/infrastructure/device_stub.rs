@@ -150,6 +150,10 @@ impl ComputeDevice for CudaDevice {
         Self::unavailable()
     }
 
+    fn copy_buffer<T: Pod>(&self, _src: &Self::Buffer<T>, _dst: &Self::Buffer<T>) -> Result<()> {
+        Self::unavailable()
+    }
+
     fn synchronize(&self) -> Result<()> {
         Self::unavailable()
     }

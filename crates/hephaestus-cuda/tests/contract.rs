@@ -105,6 +105,30 @@ fn upload_download_roundtrip_f32() {
 }
 
 #[test]
+fn device_local_copy_preserves_values_and_rejects_mismatch() {
+    let Some(dev) = device("device_local_copy_preserves_values_and_rejects_mismatch") else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|index| index as f32 * 0.25 - 17.0).collect();
+    let source = dev.upload(&host).expect("upload source");
+    let destination = dev
+        .alloc_zeroed::<f32>(host.len())
+        .expect("allocate destination");
+
+    dev.copy_buffer(&source, &destination)
+        .expect("device-local copy");
+    let mut copied = vec![0.0_f32; host.len()];
+    dev.download(&destination, &mut copied)
+        .expect("download copied values");
+    assert_eq!(copied, host);
+
+    let short = dev
+        .alloc_zeroed::<f32>(host.len() - 1)
+        .expect("allocate short destination");
+    assert_length_mismatch(dev.copy_buffer(&source, &short), source.len(), short.len());
+}
+
+#[test]
 fn test_placement_aware_allocation() {
     let Some(dev) = device("test_placement_aware_allocation") else {
         return;

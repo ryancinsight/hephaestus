@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use bytemuck::Pod;
 use cuda_oxide::Cuda;
 use hephaestus_core::{
-    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
-    DeviceLimits, DevicePreference, HephaestusError, Result, validate_buffer_size,
-    validate_slice_alignment,
+    CommandStream, ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities,
+    DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, KernelDevice, Result,
+    validate_buffer_size, validate_slice_alignment,
 };
 
 use crate::application::pipeline::PipelineKey;
@@ -811,6 +811,13 @@ impl ComputeDevice for CudaDevice {
         host: &[T],
     ) -> Result<()> {
         CudaDevice::write_sub_buffer(self, buffer, offset, host)
+    }
+
+    fn copy_buffer<T: Pod>(&self, src: &CudaBuffer<T>, dst: &CudaBuffer<T>) -> Result<()> {
+        let mut stream = self.stream()?;
+        stream.copy(src, dst)?;
+        stream.submit()?;
+        self.synchronize()
     }
 
     fn synchronize(&self) -> Result<()> {
