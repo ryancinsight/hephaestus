@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — in progress
+## HEPH-WGPU-AXIS-BATCH-PASS-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-axis-batch-pass`; scope:
   `hephaestus-wgpu` prepared axis-reduction batch encoding, its focused
@@ -21,12 +21,13 @@ cuda-oxide + cutile).
   warning-denied package checks, focused Nextest, doctests, and benchmark smoke
   pass.
 - Risk/change class: `[patch]` internal command-encoding optimization.
-- Status: implementation and local evidence complete in PR #138. Three matched
-  samples reduce the eight-reduction median from 105.092 µs to 32.250 µs;
-  focused Nextest, warning-denied all-target Clippy, doctests, formatting, and
-  benchmark execution pass. Local MSVC verification is independently blocked
-  by `backtrace 0.3.76` missing COFF/Gimli optional dependencies; hosted
-  provider checks are the clean-environment merge gate.
+- Status: complete in PR #138. Three matched samples reduce the
+  eight-reduction median from 105.092 µs to 32.250 µs; focused Nextest,
+  warning-denied all-target Clippy, doctests, formatting, and benchmark
+  execution pass. Exact-head provider jobs passed WGPU `90360294443`, CUDA
+  `90360306102`, ROCm `90360292050`, and macOS Metal `90360324163`. Local
+  MSVC verification remains independently blocked by `backtrace 0.3.76`
+  missing COFF/Gimli optional dependencies.
 
 ## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — done
 
