@@ -5,9 +5,8 @@
 //! - `matmul` / `batched_matmul` (the `matmul` submodule): a bespoke tiled GPU
 //!   kernel, authored as CUDA C and launched directly via `cuLaunchKernel`.
 //! - `dot` / `trace` / `norm_l1` / `norm_l2` / `norm_max` (the `norms`
-//!   submodule): compositions of the elementwise and reduction primitives over
-//!   strided views — no bespoke kernel, so they inherit every backend
-//!   optimization of those primitives.
+//!   submodule): fused strided map-reductions whose first pass reads the
+//!   logical view directly and retains only workgroup partials.
 
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
