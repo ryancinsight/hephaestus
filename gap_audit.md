@@ -31,7 +31,13 @@ architectural decision or a tracked future-work item:
   available locally. The CUDA focused nextest build reaches test-binary
   linking but the local `x86_64-w64-mingw32-gcc` linker exits 1; CUDA feature
   compilation and hosted CUDA CI remain the applicable gates.
-- Status: provider implementation in progress.
+- Provider evidence: PR #136 exact-head run `30343728210` passed CUDA job
+  `90224950226`, run `30343728174` passed WGPU job `90224950173`, run
+  `30343728133` passed ROCm job `90224950310`, and run `30343728161` passed
+  Metal job `90224950041`. NVIDIA `90224951166` and AMD `90224950902` skipped
+  because no physical-device runner was dispatched.
+- Status: provider implementation complete; Coeus consumer cutover remains
+  open.
 
 ## [HEPH-LGAMMA-EXPRESSION-PARITY-1] Log-gamma vocabulary
 

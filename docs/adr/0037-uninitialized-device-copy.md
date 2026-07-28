@@ -1,6 +1,6 @@
 # ADR 0037: Separate overwrite-before-read device allocation
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-07-28
 - Scope: `ComputeDevice` allocation and device-local Coeus COW replacement
 - Change class: `[arch]`/`[minor]`
@@ -47,7 +47,11 @@ blocked by the checkout's `x86_64-w64-mingw32-gcc` linker; feature-aware CUDA
 compilation and hosted CUDA CI remain applicable. The change provides
 structural evidence that CUDA and ROCm no longer call memset on this allocation
 path. Runtime bandwidth, latency, and resident-memory changes require a
-controlled benchmark and are not claimed here.
+controlled benchmark and are not claimed here. Provider PR #136 exact-head
+run `30343728210` passed CUDA job `90224950226`, run `30343728174` passed WGPU
+job `90224950173`, run `30343728133` passed ROCm job `90224950310`, and run
+`30343728161` passed Metal job `90224950041`. NVIDIA `90224951166` and AMD
+`90224950902` skipped because no physical-device runner was dispatched.
 
 ## Revisit trigger
 

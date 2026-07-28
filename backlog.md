@@ -23,8 +23,12 @@ cuda-oxide + cutile).
   after the provider merge; ADR and changelog are synchronized.
 - Risk/change class: `[arch]`/`[minor]` additive provider seam with a strict
   memory-initialization contract; ADR 0037 owns the decision.
-- Status: implementation complete locally; hosted provider evidence and the
-  Coeus consumer cutover remain open.
+- Status: provider implementation and exact-head provider evidence complete;
+  the Coeus consumer cutover remains open. PR #136 run `30343728210` passed
+  CUDA job `90224950226`, run `30343728174` passed WGPU job `90224950173`, run
+  `30343728133` passed ROCm job `90224950310`, and run `30343728161` passed
+  Metal job `90224950041`. NVIDIA `90224951166` and AMD `90224950902` skipped
+  because no physical-device runner was dispatched.
 
 ## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — done
 
