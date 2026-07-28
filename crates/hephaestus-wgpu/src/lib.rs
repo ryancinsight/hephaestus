@@ -55,8 +55,8 @@ pub use application::scan::{
 };
 #[cfg(feature = "sparse")]
 pub use application::sparse::{
-    GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
-    prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+    GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, WgpuSparseOps, prepare_spmm,
+    prepare_spmv, prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
 pub use application::stencil::{

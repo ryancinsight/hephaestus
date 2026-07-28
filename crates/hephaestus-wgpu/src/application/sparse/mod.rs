@@ -1,6 +1,7 @@
 //! GPU-resident Compressed Sparse Row (CSR) matrix representation.
 
 mod batch;
+mod seam;
 mod spmm;
 mod spmv;
 
@@ -28,10 +29,34 @@ pub struct GpuCsrMatrix<T> {
 
 impl<T: DialectScalar<Wgsl> + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
     /// Upload a CPU-side Leto `CsrMatrix` to the GPU.
+    ///
+    /// # Errors
+    ///
+    /// Returns an index-width or transfer failure.
     pub fn from_cpu(device: &WgpuDevice, cpu_matrix: &leto_ops::CsrMatrix<T>) -> Result<Self> {
         let (values, col_indices, row_ptr) = cpu_matrix.as_parts();
         let (nrows, ncols) = cpu_matrix.shape();
+        Self::from_parts(device, values, col_indices, row_ptr, nrows, ncols)
+    }
 
+    /// Upload canonical CSR parts to the GPU.
+    ///
+    /// The structural contract is the caller's: this narrows indices to the
+    /// native width and transfers. `from_cpu` satisfies it by construction,
+    /// and the [`hephaestus_core::SparseOperatorOps`] seam validates raw parts
+    /// before calling here.
+    ///
+    /// # Errors
+    ///
+    /// Returns an index-width or transfer failure.
+    pub fn from_parts(
+        device: &WgpuDevice,
+        values: &[T],
+        col_indices: &[usize],
+        row_ptr: &[usize],
+        nrows: usize,
+        ncols: usize,
+    ) -> Result<Self> {
         let col_indices_u32 = col_indices
             .iter()
             .map(|&j| {
@@ -114,3 +139,4 @@ impl<T> GpuCsrMatrix<T> {
         self.col_indices_len
     }
 }
+pub use seam::WgpuSparseOps;

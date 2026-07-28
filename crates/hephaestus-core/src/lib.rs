@@ -50,6 +50,7 @@ pub use domain::reduction::{
     validate_reduction_width,
 };
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, plan_axis_scan};
+pub use domain::sparse::SparseOperatorOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
 pub use domain::stream::{
     Binding, CommandStream, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
