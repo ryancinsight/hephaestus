@@ -52,6 +52,10 @@ run `30343728210` passed CUDA job `90224950226`, run `30343728174` passed WGPU
 job `90224950173`, run `30343728133` passed ROCm job `90224950310`, and run
 `30343728161` passed Metal job `90224950041`. NVIDIA `90224951166` and AMD
 `90224950902` skipped because no physical-device runner was dispatched.
+Coeus PR #235 merged at `c7fcdc1`; its final docs-head run `30346488092` passed
+CUDA `90233799719`, WGPU `90233799768`, ROCm `90233799650`, and Metal
+`90233799737`. Required-device ROCm `90233800152` skipped because no hosted
+AMD runner was dispatched; physical-device execution is not claimed.
 
 ## Revisit trigger
 

@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — in progress
+## HEPH-DEVICE-LOCAL-COW-2 [arch] [minor] [perf] — done
 
 - Owner: Codex on `codex/uninitialized-device-copy`; scope: the shared
   `ComputeDevice` allocation contract and the provider implementations used by
@@ -23,12 +23,15 @@ cuda-oxide + cutile).
   after the provider merge; ADR and changelog are synchronized.
 - Risk/change class: `[arch]`/`[minor]` additive provider seam with a strict
   memory-initialization contract; ADR 0037 owns the decision.
-- Status: provider implementation and exact-head provider evidence complete;
-  the Coeus consumer cutover remains open. PR #136 run `30343728210` passed
-  CUDA job `90224950226`, run `30343728174` passed WGPU job `90224950173`, run
+- Status: complete. Hephaestus PR #136 and Coeus PR #235 merged after the
+  provider and consumer cutovers. Provider run `30343728210` passed CUDA job
+  `90224950226`, run `30343728174` passed WGPU job `90224950173`, run
   `30343728133` passed ROCm job `90224950310`, and run `30343728161` passed
-  Metal job `90224950041`. NVIDIA `90224951166` and AMD `90224950902` skipped
-  because no physical-device runner was dispatched.
+  Metal job `90224950041`. Coeus final docs-head run `30346488092` passed
+  CUDA `90233799719`, WGPU `90233799768`, ROCm `90233799650`, and Metal
+  `90233799737`; required-device ROCm `90233800152` skipped because no hosted
+  AMD runner was dispatched. NVIDIA `90224951166` and AMD `90224950902` also
+  skipped because no physical-device runner was dispatched.
 
 ## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — done
 
