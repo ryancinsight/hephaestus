@@ -8,6 +8,27 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## Prepared No-Op Batch Submission
+
+The no-op batch workload prepares eight empty scalar sums and eight zero-output
+axis sums. Every scalar output is downloaded and checked against the exact
+additive identity; the axis output has the validated zero-element shape. The
+timed region performs 50 scalar-plus-axis batch call pairs and one final device
+poll. Matched old/new runs used the same GNU nightly release profile and local
+stack dependency graph.
+
+| Submission | Samples | Median |
+| --- | --- | --- |
+| Encode and submit two empty command buffers | 26.860 µs, 33.170 µs, 27.794 µs | 27.794 µs |
+| Return before encoder allocation | 142 ns, 46 ns, 40 ns | 46 ns |
+
+The early-return path lowers the observed median host latency by 99.8% and
+eliminates two transient command encoders and two empty queue submissions per
+call pair. This is a local host/GPU result from three matched samples, not a
+Criterion confidence interval or a cross-device claim. The structural removal
+of command construction and submission is stronger evidence than the exact
+ratio at this sub-microsecond result scale.
+
 ## Prepared Scalar-Reduction Batch Encoding
 
 The prepared scalar batch uses eight independent 1,048,576-element `u32`

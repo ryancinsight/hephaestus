@@ -2872,8 +2872,8 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 `crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
 `CHANGELOG.md`, `backlog.md`, and this section.
 
-- [ ] Add exact all-no-op scalar and axis batch contracts.
-- [ ] Add and value-check the fixed no-op batch benchmark workload.
-- [ ] Record the unchanged command-submission baseline.
-- [ ] Return before encoder allocation when a batch has no GPU work.
-- [ ] Record the matched result and run affected gates.
+- [x] Add exact all-no-op scalar and axis batch contracts.
+- [x] Add and value-check the fixed no-op batch benchmark workload.
+- [x] Record the unchanged command-submission baseline.
+- [x] Return before encoder allocation when a batch has no GPU work.
+- [x] Record the matched result and run affected gates.

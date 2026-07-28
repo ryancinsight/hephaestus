@@ -7,7 +7,7 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use hephaestus_core::{BlockWidth, ComputeDevice};
+use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer};
 use hephaestus_wgpu::{
     AddOp, StridedOperand, SumOp, WgpuDevice, binary_elementwise_into, matmul_into,
     prepare_reduction, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
@@ -20,6 +20,7 @@ const ITERATIONS: usize = 50;
 const AXIS_BATCH_REDUCTIONS: usize = 8;
 const SCALAR_BATCH_REDUCTIONS: usize = 8;
 const SCALAR_REDUCTION_LEN: usize = 1 << 20;
+const NOOP_BATCH_REDUCTIONS: usize = 8;
 
 fn per_iteration(elapsed: Duration) -> Duration {
     elapsed / u32::try_from(ITERATIONS).expect("invariant: benchmark iterations fit u32")
@@ -249,6 +250,57 @@ fn benchmark_reduction(device: &WgpuDevice) {
         .unwrap();
     println!(
         "WGPU prepared scalar-sum batch ({SCALAR_BATCH_REDUCTIONS}): {} ns/iter",
+        per_iteration(start.elapsed()).as_nanos()
+    );
+
+    let empty_scalar_input = device.upload::<u32>(&[]).unwrap();
+    let empty_scalar_batch: Vec<_> = (0..NOOP_BATCH_REDUCTIONS)
+        .map(|_| prepare_reduction::<SumOp, u32>(device, &empty_scalar_input).unwrap())
+        .collect();
+    let empty_scalar_batch: Vec<_> = empty_scalar_batch.iter().collect();
+    let empty_axis_input = device.upload::<f32>(&[]).unwrap();
+    let empty_axis_output = device.alloc_zeroed::<f32>(0).unwrap();
+    let empty_axis_input_layout = leto::Layout::c_contiguous([0, 3]).unwrap();
+    let empty_axis_output_layout = leto::Layout::c_contiguous([0, 1]).unwrap();
+    let empty_axis_batch: Vec<_> = (0..NOOP_BATCH_REDUCTIONS)
+        .map(|_| {
+            prepare_sum_axis_into(
+                device,
+                StridedOperand {
+                    buffer: &empty_axis_input,
+                    layout: &empty_axis_input_layout,
+                },
+                1,
+                StridedOperand {
+                    buffer: &empty_axis_output,
+                    layout: &empty_axis_output_layout,
+                },
+                BlockWidth::DEFAULT,
+            )
+            .unwrap()
+        })
+        .collect();
+    let empty_axis_batch: Vec<_> = empty_axis_batch.iter().collect();
+    submit_prepared_reduction_batch(device, &empty_scalar_batch).unwrap();
+    submit_prepared_axis_reduction_batch(device, &empty_axis_batch).unwrap();
+    for reduction in &empty_scalar_batch {
+        let mut actual = [u32::MAX; 1];
+        device.download(reduction.output(), &mut actual).unwrap();
+        assert_eq!(actual, [0]);
+    }
+    assert_eq!(empty_axis_output.len(), 0);
+
+    let start = Instant::now();
+    for _ in 0..ITERATIONS {
+        submit_prepared_reduction_batch(device, black_box(&empty_scalar_batch)).unwrap();
+        submit_prepared_axis_reduction_batch(device, black_box(&empty_axis_batch)).unwrap();
+    }
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    println!(
+        "WGPU prepared no-op batches ({NOOP_BATCH_REDUCTIONS} scalar + axis): {} ns/iter",
         per_iteration(start.elapsed()).as_nanos()
     );
 }

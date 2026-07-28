@@ -18,6 +18,11 @@ cuda-oxide + cutile).
   focused Nextest, formatting, warning-denied package checks, doctests,
   benchmark smoke, and exact-head provider CI pass.
 - Risk/change class: `[patch]` internal no-op fast path.
+- Status: local implementation and matched measurement complete. Three samples
+  reduce the scalar-plus-axis call-pair median from 27.794 µs to 46 ns;
+  focused scalar and axis Nextest contracts, warning-denied all-target Clippy,
+  doctests, formatting, and benchmark execution pass. Exact-head provider CI
+  remains pending.
 
 ## HEPH-WGPU-SCALAR-BATCH-PASS-1 [patch] [perf] — done
 
