@@ -91,7 +91,9 @@ impl<T> PreparedAxisReduction<T> {
 /// independent: no reduction in the batch may consume another reduction's
 /// output. The encoder records every dispatch in one compute pass and submits
 /// one command buffer, amortizing pass construction and WGPU submit/poll
-/// overhead without sharing scratch state between reductions.
+/// overhead without sharing scratch state between reductions. A batch with no
+/// active dispatch returns without allocating a command encoder or submitting
+/// an empty command buffer.
 ///
 /// # Errors
 ///
@@ -101,6 +103,13 @@ pub fn submit_prepared_axis_reduction_batch<T>(
     device: &WgpuDevice,
     reductions: &[&PreparedAxisReduction<T>],
 ) -> Result<()> {
+    let Some(first_active) = reductions
+        .iter()
+        .position(|reduction| reduction.pipeline.is_some())
+    else {
+        return Ok(());
+    };
+
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -111,7 +120,7 @@ pub fn submit_prepared_axis_reduction_batch<T>(
             label: Some("hephaestus-prepared-axis-reduction-batch-pass"),
             timestamp_writes: None,
         });
-        for reduction in reductions {
+        for reduction in &reductions[first_active..] {
             let Some(pipeline) = reduction.pipeline.as_ref() else {
                 continue;
             };

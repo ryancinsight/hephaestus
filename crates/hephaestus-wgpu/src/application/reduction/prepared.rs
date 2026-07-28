@@ -100,7 +100,9 @@ impl<T> PreparedReduction<T> {
 /// boundary between dependent stages while avoiding one pass per tree stage.
 /// Singleton copies remain outside the compute passes. This avoids
 /// write-after-write hazards while amortizing pass construction and WGPU
-/// submit/poll overhead across a caller-visible batch.
+/// submit/poll overhead across a caller-visible batch. A batch containing only
+/// prepared empty reductions returns without allocating a command encoder or
+/// submitting an empty command buffer.
 ///
 /// # Errors
 ///
@@ -110,6 +112,19 @@ pub fn submit_prepared_reduction_batch<T>(
     device: &WgpuDevice,
     reductions: &[&PreparedReduction<T>],
 ) -> Result<()> {
+    let (has_singleton_copy, tree_depth) =
+        reductions
+            .iter()
+            .fold((false, 0), |(has_singleton, max_depth), reduction| {
+                (
+                    has_singleton || reduction.singleton_source.is_some(),
+                    max_depth.max(reduction.passes.len()),
+                )
+            });
+    if !has_singleton_copy && tree_depth == 0 {
+        return Ok(());
+    }
+
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -128,11 +143,6 @@ pub fn submit_prepared_reduction_batch<T>(
         }
     }
 
-    let tree_depth = reductions
-        .iter()
-        .map(|reduction| reduction.passes.len())
-        .max()
-        .unwrap_or_default();
     for stage in 0..tree_depth {
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("hephaestus-prepared-reduction-batch-stage"),

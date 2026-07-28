@@ -789,6 +789,14 @@ fn reduction_sum_matches_cpu_reference() {
             "prepared u32 sum mismatch at size {}",
             size
         );
+        if size == 0 {
+            submit_prepared_reduction_batch::<u32>(&device, &[]).unwrap();
+            submit_prepared_reduction_batch(&device, &[&prepared_u32]).unwrap();
+            device
+                .download(prepared_u32.output(), &mut got_prepared_u32)
+                .unwrap();
+            assert_eq!(got_prepared_u32, [0]);
+        }
         if size == 1027 {
             let batch_a = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
             let singleton_input = device.upload(&[99u32]).unwrap();
@@ -1262,6 +1270,26 @@ fn axis_reductions_match_leto_reference() {
     prepared_empty_sum.dispatch(&device).unwrap();
     device.download(&empty_output, &mut got_empty).unwrap();
     assert_eq!(got_empty, [0.0, 0.0]);
+
+    let no_output_layout = Layout::c_contiguous([0, 1]).unwrap();
+    let no_output = device.alloc_zeroed::<f32>(0).unwrap();
+    let no_output_prepared = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &Layout::c_contiguous([0, 3]).unwrap(),
+        },
+        1,
+        StridedOperand {
+            buffer: &no_output,
+            layout: &no_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    submit_prepared_axis_reduction_batch::<f32>(&device, &[]).unwrap();
+    submit_prepared_axis_reduction_batch(&device, &[&no_output_prepared]).unwrap();
+    assert_eq!(no_output.len(), 0);
 }
 
 /// Pins the WG-P5 grid-stride fix at the scale it targets: an axis longer

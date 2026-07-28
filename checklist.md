@@ -2862,3 +2862,18 @@ Execution owner: Codex on `codex/hephaestus-scalar-batch-pass`. Claimed files:
 - [x] Encode independent reduction trees stage-major.
 - [x] Cover mixed singleton and multi-pass batches.
 - [x] Record the matched result and run affected gates.
+
+# HEPH-WGPU-EMPTY-BATCH-NOOP-1
+
+Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
+`crates/hephaestus-wgpu/src/application/reduction.rs`,
+`crates/hephaestus-wgpu/src/application/reduction/prepared.rs`,
+`crates/hephaestus-wgpu/tests/contract.rs`,
+`crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
+`CHANGELOG.md`, `backlog.md`, and this section.
+
+- [x] Add exact all-no-op scalar and axis batch contracts.
+- [x] Add and value-check the fixed no-op batch benchmark workload.
+- [x] Record the unchanged command-submission baseline.
+- [x] Return before encoder allocation when a batch has no GPU work.
+- [x] Record the matched result and run affected gates.

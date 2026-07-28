@@ -36,6 +36,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Return early from all-no-op prepared WGPU scalar- and axis-reduction
+  batches instead of allocating command encoders and submitting empty command
+  buffers. Exact empty identities and mixed-batch execution remain unchanged;
+  the matched local call-pair median decreases from 27.794 µs to 46 ns.
+
 - [patch] Encode independent prepared WGPU scalar-reduction trees stage-major,
   preserving pass boundaries between dependent stages while sharing each
   batch stage. Mixed singleton and multi-pass contracts preserve exact values
