@@ -17,6 +17,8 @@ pub mod stencil;
 pub mod random;
 /// Reduction compute operations.
 pub mod reduction;
+/// Device-neutral axis-reduction seam implementation.
+pub mod axis_reduction_seam;
 /// Prefix and suffix scan compute operations.
 pub mod scan;
 #[cfg(feature = "sparse")]

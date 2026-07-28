@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/hephaestus",
+    "crates/hephaestus-conformance",
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
     "crates/hephaestus-cuda",
@@ -20,6 +21,7 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
+hephaestus-conformance = { path = "crates/hephaestus-conformance" }
 hephaestus-core = { path = "crates/hephaestus-core" }
 hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
 hephaestus-cuda = { path = "crates/hephaestus-cuda", default-features = false }

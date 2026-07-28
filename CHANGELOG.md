@@ -34,6 +34,34 @@ Target release: 0.18.0.
   `LaplacianPolarity::NegativeLaplacian` as the final
   `Laplacian2DParams::new` argument.
 
+### Added
+
+- [minor] `AxisReductionOps` gives rank-2 axis reductions a device-neutral seam,
+  completing the set begun by `DenseVectorOps` and `SparseOperatorOps`. Every
+  backend previously exposed `prod_axis_into` and `prepare_reduce_axis_into` as
+  free functions over its own device and operand types, so a consumer had to
+  bind to one device API to reduce along an axis. The combining operator is a
+  type parameter bounded by the implementor's own `Dialect`, keeping one seam
+  across backends whose kernels are written in different shader languages.
+
+- [minor] `StridedView<'a, B, N>` pairs a device buffer with a `leto::Layout`
+  without naming a backend, so a seam can accept a strided operand generically.
+  `WgpuAxisReductionOps` implements the reduction seam for WGPU.
+
+- [minor] `hephaestus-conformance` holds contract clauses generic over
+  `ComputeDevice` and the operation seam, so a backend runs them by
+  instantiating rather than re-authoring. Of the 112 entry points declared by
+  all four backends, only 46 were exercised by all four and six by none; the
+  crate exists so a clause added once is executed by every backend from then on.
+
+- [patch] WGPU now covers the typed comparison dispatch entry points
+  (`binary_elementwise_typed`, `binary_elementwise_typed_into`, and their
+  strided forms), which no backend exercised. These paths carry per-scalar-type
+  shader codegen, so `u32`, `i32`, and `f32` are each instantiated. NaN and
+  infinity operands are deliberately excluded: WGSL permits implementations to
+  assume they are absent, so IEEE ordering is a capability-gated clause rather
+  than a universal one.
+
 ### Changed
 
 - [patch] Route dense WGPU blocked QR matrices of at most four 32-column
