@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/hephaestus",
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
     "crates/hephaestus-cuda",

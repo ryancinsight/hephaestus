@@ -14,10 +14,39 @@ Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**.
 Hephaestus is the god of the forge: the place where the stack's compute
 kernels are forged for accelerator hardware.
 
+## Depend on the facade
+
+`hephaestus` is the entry crate. It re-exports the contract layer and each
+backend, so a consumer names one dependency rather than assembling sub-crates
+(atlas ADR 0037):
+
+```toml
+# contracts only — compiles on a machine with no accelerator
+hephaestus = "0.18"
+
+# portable compute
+hephaestus = { version = "0.18", features = ["wgpu", "decomposition", "sparse"] }
+
+# NVIDIA; needs a CUDA toolkit at build time for headers
+hephaestus = { version = "0.18", features = ["cuda", "decomposition"] }
+```
+
+No backend is enabled by default: a default backend would make every consumer of
+the traits pull a device stack, and `cuda`/`rocm` additionally require vendor
+toolkits present at build time. Enabling a backend feature compiles it in; it
+does not select it, because backend choice stays a runtime decision made by
+probing the actual machine.
+
+Contracts appear at facade paths — `hephaestus::DeviceBuffer` — and backends
+under a module named for the device API: `hephaestus::wgpu`, `hephaestus::cuda`,
+`hephaestus::rocm`, `hephaestus::metal`. Sub-crates remain published so a
+consumer *can* take a narrower dependency; the facade is what it should reach for.
+
 ## Workspace
 
 | Crate | Responsibility |
 | --- | --- |
+| `hephaestus` | Facade and entry point. Re-exports `hephaestus-core` flat and each backend behind a feature (`wgpu`, `cuda`, `rocm`, `metal`); forwards `parallel`, `mnemosyne-memory`, `decomposition`, and `sparse`. Contains no logic. |
 | `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, shared volume ray geometry/validation, shared 2D Laplacian parameters, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, monomorphized elementwise/reduction/scan dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation including common activation expressions, rank-2 cumulative sum/product scans, reusable prepared dot/L2, scalar and rank-2 axis reductions, prepared CSR sparse SpMV/SpMM and mixed batching, blocked and pivoted decomposition contracts, and the shared volume/Laplacian contracts. |
 | `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including common activation expressions, rank-2 cumulative sum/product scans, seeded uniform/normal initializers, prepared dot/L2, CSR sparse products with prepared SpMV/SpMM batching, direct output-buffer and prepared scalar and rank-2 axis reductions, volume ray integrals, the 2D Laplacian stencil, Metal-owned storage kernels, authored-kernel streams with grouped sequencing, and blocked pivoted decomposition wrappers. |

@@ -1,0 +1,77 @@
+[package]
+name = "hephaestus"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Atlas accelerator substrate: device, buffer, transfer, and kernel contracts with optional WGPU, CUDA, ROCm, and Metal backends."
+readme = "../../README.md"
+keywords = ["gpu", "wgpu", "cuda", "compute", "simulation"]
+categories = ["science", "hardware-support"]
+# Ordering guard, not an oversight (ADR 0037 §4): a crate can publish only once
+# its first-party dependencies are on crates.io, and hephaestus-core is not yet
+# published. `scripts/publish-order.py` in the Atlas meta-repo derives the wave
+# this crate belongs to; the flag is removed as the last step of that publish.
+publish = false
+
+[dependencies]
+# Declared directly rather than inherited: `default-features = false` cannot
+# override a workspace dependency, and the facade must be able to strip the
+# contract layer's defaults so `--no-default-features` means what it says.
+hephaestus-core = { path = "../hephaestus-core", version = "0.18.0", default-features = false }
+
+# Backends are optional so a consumer pays for only the devices it targets, and
+# so `cuda`/`rocm` -- which need a vendor toolkit present at build time -- are
+# never pulled in by default. Runtime backend selection still probes the actual
+# machine; these features govern what is compiled in, not what is chosen.
+hephaestus-wgpu = { path = "../hephaestus-wgpu", version = "0.18.0", default-features = false, optional = true }
+hephaestus-cuda = { path = "../hephaestus-cuda", version = "0.18.0", default-features = false, optional = true }
+hephaestus-rocm = { path = "../hephaestus-rocm", version = "0.18.0", default-features = false, optional = true }
+hephaestus-metal = { path = "../hephaestus-metal", version = "0.18.0", default-features = false, optional = true }
+
+[features]
+# No backend by default: the contract layer alone compiles everywhere, and a
+# default backend would make every consumer of the traits pull a device stack.
+default = ["parallel", "mnemosyne-memory"]
+
+# `?/` keeps these from enabling an optional backend that was not requested.
+parallel = [
+    "hephaestus-core/parallel",
+    "hephaestus-wgpu?/parallel",
+    "hephaestus-cuda?/parallel",
+    "hephaestus-metal?/parallel",
+]
+mnemosyne-memory = [
+    "hephaestus-core/mnemosyne-memory",
+    "hephaestus-wgpu?/mnemosyne-memory",
+    "hephaestus-cuda?/mnemosyne-memory",
+    "hephaestus-metal?/mnemosyne-memory",
+]
+
+## Portable compute backend over `wgpu`. The only backend with no vendor
+## toolkit requirement, so it is the usual starting point.
+wgpu = ["dep:hephaestus-wgpu"]
+## NVIDIA backend. Requires a CUDA toolkit at build time for headers; the
+## driver is still loaded dynamically at runtime.
+cuda = ["dep:hephaestus-cuda", "hephaestus-cuda/cuda"]
+## AMD backend. Requires the HIP system libraries at build time.
+rocm = ["dep:hephaestus-rocm", "hephaestus-rocm/rocm"]
+## Apple backend.
+metal = ["dep:hephaestus-metal", "hephaestus-metal/metal"]
+
+## Dense matrix decompositions (Cholesky, LU, QR) on whichever backends are enabled.
+decomposition = [
+    "hephaestus-wgpu?/decomposition",
+    "hephaestus-cuda?/decomposition",
+    "hephaestus-rocm?/decomposition",
+    "hephaestus-metal?/decomposition",
+]
+## CSR sparse upload/download and GPU sparse products.
+sparse = ["hephaestus-wgpu?/sparse"]
+
+[package.metadata.docs.rs]
+# Document the portable backend so the rendered surface is not contract-only,
+# without requiring a vendor toolkit on the docs builder.
+features = ["wgpu", "decomposition", "sparse"]
