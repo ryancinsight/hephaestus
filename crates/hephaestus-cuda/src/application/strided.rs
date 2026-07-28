@@ -99,7 +99,7 @@ fn to_u32(value: usize, what: &str) -> Result<u32> {
 }
 
 #[inline]
-fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
+pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
     let mut out = [1u32; 4];
     for (d, &dim) in shape.iter().enumerate() {
         out[4 - N + d] = to_u32(dim, "dimension")?;
@@ -117,7 +117,7 @@ fn pad_shape_dyn(shape: &[usize]) -> Result<[u32; 4]> {
 }
 
 #[inline]
-fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
+pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     let mut out = [0i32; 4];
     for (d, &stride) in strides.iter().enumerate() {
         out[4 - N + d] = i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {

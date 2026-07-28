@@ -43,6 +43,12 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Strided map-reduction operation keyed by map, scalar, and block width.
+    MapReduction {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
     AxisReduction {
         op: TypeId,
         scalar: TypeId,

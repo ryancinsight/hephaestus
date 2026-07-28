@@ -33,8 +33,9 @@
 //! including elementwise, reduction, axis-reduction, scan, map-reduction,
 //! matrix, stencil, and prepared-dispatch contracts. Prepared dot products and
 //! L2 norms retain their product scratch, reduction tree, and scalar output
-//! across dispatches, matching the reusable resource contract of
-//! `hephaestus-wgpu`.
+//! across prepared dispatches, matching the reusable resource contract of
+//! `hephaestus-wgpu`; direct linalg reductions fuse the map with their first
+//! reduction pass and retain only workgroup partials.
 
 mod infrastructure;
 

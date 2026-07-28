@@ -1493,6 +1493,14 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     shader/entry point) and a `to_i64` stride-conversion helper alongside
     `to_i32`/`to_u32`. Verification: full workspace `cargo nextest run
     --all-features` 297/297 (CUDA + wgpu hardware, up from 295).
+  - **CU-P11 closed locally**: direct CUDA `dot`, `trace`, `norm_l1`,
+    `norm_l2`, and `norm_max` now use a fused strided map-reduction kernel,
+    retaining only `ceil(logical_len / BlockWidth::DEFAULT)` workgroup partials
+    instead of a full-length elementwise scratch result. The direct path has
+    contiguous and reversed-view value tests plus a comparative benchmark
+    instrument. Local evidence: no-feature Nextest 78/78, CUDA feature check,
+    CUDA/decomposition all-target check, feature-gated clippy, formatting, and
+    doctests. Physical CUDA execution remains CI/self-hosted evidence.
   - **WG-P3 already closed** (found 2026-07-07, no code change needed):
     `dot`/`norm_l1`/`norm_l2`/`norm_max` in `hephaestus-wgpu/src/application/
     linalg.rs` already route through the fused `map_reduction`/
