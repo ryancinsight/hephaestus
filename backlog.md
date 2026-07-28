@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — in progress
+## HEPH-DEVICE-LOCAL-COW-1 [arch] [patch] — done
 
 - Owner: Codex on `codex/device-local-cow-copy`; scope: the shared
   `ComputeDevice` copy contract and the Coeus Hephaestus storage uniqueness
@@ -21,7 +21,12 @@ cuda-oxide + cutile).
   pass; ADR and changelog are synchronized.
 - Risk/change class: `[arch]`/`[patch]` additive backend seam with a memory
   lifetime contract; ADR 0036 owns the decision.
-- Status: in progress.
+- Status: complete. Hephaestus PR #134 merged at `24439bf`. The exact-head
+  provider lanes passed CUDA job `90198606004`, ROCm job `90198605585`, WGPU
+  job `90198605775`, and macOS Metal job `90198605623`. AMD and NVIDIA
+  required-device jobs were skipped because hosted hardware runners were not
+  available; no physical-device execution claim is made. The recurring
+  `recurseml/analysis` service error is not repository-owned verification.
 
 ## HEPH-DENSE-VECTOR-ELEMENTWISE-1 [minor] — done
 
