@@ -40,7 +40,8 @@ output contracts. No product-specific kernel is added.
 WGPU, CUDA, ROCm, and Metal contracts compare both allocating and
 caller-owned outputs for forward and reverse product scans over both axes and
 a transposed strided input against independent integer product references.
-They also cover zero-sized layouts and invalid storage layouts. Hosted provider
-CI for this semantic correction is pending on the implementation head;
-required-device lanes remain the hardware evidence tier when registered GPU
-runners exist.
+They also cover zero-sized layouts and invalid storage layouts. The exact
+merged PR #132 head `7c481b2` passed the CUDA, ROCm, WGPU, and macOS Metal
+provider suites (jobs `90190923765`, `90190923670`, `90190923733`, and
+`90190923914`). Required-device CUDA and ROCm lanes were skipped because
+hosted hardware runners were unavailable; no hardware execution claim is made.

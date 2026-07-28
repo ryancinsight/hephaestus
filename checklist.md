@@ -156,11 +156,10 @@ selected.
 - [x] Run the four provider workflows on the corrected semantic head.
 - [x] Record final CI evidence and close the backlog item.
 
-Provider matrix evidence: docs head `52fb7e7` contained the corrected scan
-semantics and passed WGPU `90105468997` (160/160), CUDA `90105468456`
-(123/123), ROCm `90105468727` (79/79), and Metal `90105468786` (33/33).
-Hardware jobs were skipped because no hosted NVIDIA/AMD device labels were
-selected.
+Provider matrix evidence: merged PR #132 head `7c481b2` passed CUDA
+`90190923765`, ROCm `90190923670`, WGPU `90190923733`, and macOS Metal
+`90190923914`. Required-device CUDA and ROCm jobs were skipped because no
+hosted NVIDIA/AMD device labels were selected.
 
 ## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch]
 
