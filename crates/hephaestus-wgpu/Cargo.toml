@@ -32,6 +32,7 @@ moirai-sync = { workspace = true }
 moirai = { workspace = true }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
+smallvec = { workspace = true }
 hephaestus-cuda = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]

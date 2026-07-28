@@ -9,6 +9,7 @@ use hephaestus_core::{
     KernelSource, Result, Wgsl, validate_bindings, validate_grouped_bindings,
 };
 
+use crate::application::bindings::{BindGroupEntries, BindGroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -272,7 +273,7 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
             .queue()
             .write_buffer(&raw_params, 0, bytemuck::bytes_of(params));
 
-        let mut entries = Vec::with_capacity(bindings.len() + 1);
+        let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
         for (binding, bound) in bindings.iter().enumerate() {
             entries.push(wgpu::BindGroupEntry {
                 binding: u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
@@ -294,6 +295,7 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
                 layout: &prepared.bind_group_layout,
                 entries: &entries,
             });
+        drop(entries);
         self.uniform_buffers.push(raw_params);
 
         {
@@ -557,8 +559,8 @@ fn build_grouped_bind_groups<K>(
     prepared: &WgpuGroupedPrepared<K>,
     bindings: &[GroupedBinding<'_, WgpuDevice>],
     params: &wgpu::Buffer,
-) -> Result<Vec<(u32, wgpu::BindGroup)>> {
-    let mut entries = std::collections::BTreeMap::<u32, Vec<wgpu::BindGroupEntry<'_>>>::new();
+) -> Result<BindGroups> {
+    let mut entries = std::collections::BTreeMap::<u32, BindGroupEntries<'_>>::new();
     for bound in bindings {
         entries
             .entry(bound.group)
@@ -576,7 +578,7 @@ fn build_grouped_bind_groups<K>(
             resource: params.as_entire_binding(),
         });
 
-    let mut bind_groups = Vec::with_capacity(prepared.bind_group_layouts.len());
+    let mut bind_groups = BindGroups::with_capacity(prepared.bind_group_layouts.len());
     for (group, layout) in &prepared.bind_group_layouts {
         let Some(group_entries) = entries.get(group) else {
             return Err(HephaestusError::DispatchFailed {

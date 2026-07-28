@@ -905,6 +905,7 @@ dependencies = [
  "mnemosyne-core",
  "moirai-gpu",
  "moirai-sync",
+ "smallvec",
  "themis",
 ]
 
@@ -952,6 +953,7 @@ dependencies = [
  "eunomia",
  "hephaestus-core",
  "leto",
+ "smallvec",
  "leto-ops",
  "themis",
 ]
@@ -971,6 +973,7 @@ dependencies = [
  "mnemosyne-core",
  "moirai",
  "moirai-gpu",
+ "smallvec",
  "moirai-sync",
  "pollster",
  "themis",

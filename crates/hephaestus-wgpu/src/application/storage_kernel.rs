@@ -1,5 +1,6 @@
 //! Generic WGSL storage-kernel dispatch.
 
+use crate::application::bindings::BindGroupEntries;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use bytemuck::Pod;
@@ -218,7 +219,7 @@ impl<'a, P: Pod, const N: usize> MultiStorageKernel<WgpuDevice, P, [WgslStorageB
             .queue()
             .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
 
-        let mut entries = Vec::with_capacity(N + 1);
+        let mut entries = BindGroupEntries::with_capacity(N + 1);
         for binding in bindings {
             entries.push(wgpu::BindGroupEntry {
                 binding: binding.binding,
