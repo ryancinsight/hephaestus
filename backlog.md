@@ -8,6 +8,8 @@ cuda-oxide + cutile).
 
 - Owner: Codex on `codex/hephaestus-qr-wide-transfer`; scope: the retained WGPU
   blocked-QR path at and above the 129-column routing boundary.
+- Governing decision:
+  [`docs/adr/0038-blocked-qr-final-panel-synchronization.md`](docs/adr/0038-blocked-qr-final-panel-synchronization.md).
 - Outcome: identify and remove measured per-panel region-transfer resource
   construction or synchronization overhead while preserving the hybrid GPU
   trailing-update algorithm.
