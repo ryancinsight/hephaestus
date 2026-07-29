@@ -18,8 +18,9 @@ pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
 pub use domain::decomposition::{
-    factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed, panel_lu_packed,
-    panel_qr_packed, require_dense_operand, split_packed_lu, validate_square_operand,
+    apply_packed_qr_panel_left, factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed,
+    panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
+    validate_square_operand,
 };
 pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,

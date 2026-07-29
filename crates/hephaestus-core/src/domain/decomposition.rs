@@ -395,6 +395,105 @@ pub fn panel_qr_packed(a: &mut [f32], m: usize, n: usize) -> Result<(Vec<f32>, V
     Ok((heads, betas))
 }
 
+/// Apply a factored packed QR panel's Householder reflectors to a compact
+/// row-major trailing matrix in place.
+///
+/// `panel` is the `panel_rows × panel_cols` output of [`panel_qr_packed`].
+/// `heads` and `betas` are the corresponding returned reflector metadata, and
+/// `trailing` is a `panel_rows × trailing_cols` compact matrix. Reflectors are
+/// applied in increasing column order, computing
+/// `C ← (I − β v vᵀ) C` in native `f32` precision.
+///
+/// This operation does not allocate. It preserves the packed panel and updates
+/// only `trailing`.
+///
+/// # Examples
+///
+/// ```
+/// use hephaestus_core::{apply_packed_qr_panel_left, panel_qr_packed};
+///
+/// let mut panel = [2.0_f32, 0.0];
+/// let (heads, betas) = panel_qr_packed(&mut panel, 2, 1)?;
+/// let mut trailing = [1.0_f32, 3.0];
+/// apply_packed_qr_panel_left(&panel, 2, 1, &heads, &betas, &mut trailing, 1)?;
+/// assert_eq!(trailing, [-1.0, 3.0]);
+/// # Ok::<(), hephaestus_core::HephaestusError>(())
+/// ```
+///
+/// # Errors
+///
+/// Returns [`HephaestusError::InvalidConfiguration`] when a dimension product
+/// overflows, `panel_rows < panel_cols`, or any slice length does not match its
+/// declared shape. Returns [`HephaestusError::DispatchFailed`] when reflector
+/// metadata or trailing input contains a non-finite value.
+pub fn apply_packed_qr_panel_left(
+    panel: &[f32],
+    panel_rows: usize,
+    panel_cols: usize,
+    heads: &[f32],
+    betas: &[f32],
+    trailing: &mut [f32],
+    trailing_cols: usize,
+) -> Result<()> {
+    let panel_len = panel_rows.checked_mul(panel_cols).ok_or_else(|| {
+        HephaestusError::InvalidConfiguration {
+            message: format!("QR panel shape [{panel_rows}, {panel_cols}] overflows element count"),
+        }
+    })?;
+    let trailing_len = panel_rows.checked_mul(trailing_cols).ok_or_else(|| {
+        HephaestusError::InvalidConfiguration {
+            message: format!(
+                "QR trailing shape [{panel_rows}, {trailing_cols}] overflows element count"
+            ),
+        }
+    })?;
+    if panel_rows < panel_cols {
+        return Err(HephaestusError::InvalidConfiguration {
+            message: format!(
+                "QR packed-panel application requires rows ≥ columns, got \
+                 [{panel_rows}, {panel_cols}]"
+            ),
+        });
+    }
+    for (name, actual, expected) in [
+        ("panel", panel.len(), panel_len),
+        ("heads", heads.len(), panel_cols),
+        ("betas", betas.len(), panel_cols),
+        ("trailing", trailing.len(), trailing_len),
+    ] {
+        if actual != expected {
+            return Err(HephaestusError::InvalidConfiguration {
+                message: format!(
+                    "QR packed-panel {name} length {actual} does not match expected {expected}"
+                ),
+            });
+        }
+    }
+
+    validate_finite(panel, "QR packed panel")?;
+    validate_finite(heads, "QR packed-panel heads")?;
+    validate_finite(betas, "QR packed-panel betas")?;
+    validate_finite(trailing, "QR packed-panel trailing application")?;
+
+    for reflector in 0..panel_cols {
+        let head = heads[reflector];
+        let beta = betas[reflector];
+        for col in 0..trailing_cols {
+            let mut dot = head * trailing[reflector * trailing_cols + col];
+            for row in (reflector + 1)..panel_rows {
+                dot += panel[row * panel_cols + reflector] * trailing[row * trailing_cols + col];
+            }
+            let scale = beta * dot;
+            trailing[reflector * trailing_cols + col] -= scale * head;
+            for row in (reflector + 1)..panel_rows {
+                trailing[row * trailing_cols + col] -= scale * panel[row * panel_cols + reflector];
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Split a packed LU factorisation into explicit dense **L** and **U**
 /// matrices.
 ///
@@ -1026,6 +1125,101 @@ mod tests {
             // guaranteed: β can exceed 2 when ‖v‖ < 1.
             assert!(beta > 0.0, "beta[{k}] = {beta} should be positive");
         }
+    }
+
+    #[test]
+    fn packed_qr_panel_application_matches_full_factorization() {
+        let (rows, panel_cols, trailing_cols) = (5usize, 2usize, 1usize);
+        let cols = panel_cols + trailing_cols;
+        let original = [
+            4.0f32, 1.0, 2.0, 1.0, 5.0, 3.0, 0.5, 1.5, 6.0, 0.25, 0.75, 1.25, 0.1, 0.2, 0.4,
+        ];
+
+        let mut expected = original;
+        let (expected_heads, expected_betas) =
+            panel_qr_packed(&mut expected, rows, cols).expect("full QR factorization");
+
+        let mut panel = vec![0.0; rows * panel_cols];
+        let mut trailing = vec![0.0; rows * trailing_cols];
+        for row in 0..rows {
+            panel[row * panel_cols..(row + 1) * panel_cols]
+                .copy_from_slice(&original[row * cols..row * cols + panel_cols]);
+            trailing[row] = original[row * cols + panel_cols];
+        }
+        let (heads, betas) =
+            panel_qr_packed(&mut panel, rows, panel_cols).expect("first panel factorization");
+        apply_packed_qr_panel_left(
+            &panel,
+            rows,
+            panel_cols,
+            &heads,
+            &betas,
+            &mut trailing,
+            trailing_cols,
+        )
+        .expect("packed panel application");
+        let (tail_heads, tail_betas) = panel_qr_packed(
+            &mut trailing[panel_cols * trailing_cols..],
+            rows - panel_cols,
+            trailing_cols,
+        )
+        .expect("tail factorization");
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let actual = if col < panel_cols {
+                    panel[row * panel_cols + col]
+                } else {
+                    trailing[row]
+                };
+                assert_eq!(
+                    actual,
+                    expected[row * cols + col],
+                    "packed QR value [{row},{col}]"
+                );
+            }
+        }
+        assert_eq!(heads, expected_heads[..panel_cols]);
+        assert_eq!(betas, expected_betas[..panel_cols]);
+        assert_eq!(tail_heads, expected_heads[panel_cols..]);
+        assert_eq!(tail_betas, expected_betas[panel_cols..]);
+    }
+
+    #[test]
+    fn packed_qr_panel_application_validates_shapes_and_values() {
+        let mut trailing = [1.0f32, 2.0];
+        let error = apply_packed_qr_panel_left(
+            &[1.0, 0.0, 0.0, 1.0],
+            2,
+            2,
+            &[1.0],
+            &[1.0, 1.0],
+            &mut trailing,
+            1,
+        )
+        .expect_err("short heads must be rejected");
+        assert!(matches!(
+            error,
+            HephaestusError::InvalidConfiguration { message }
+                if message.contains("heads length 1")
+        ));
+
+        trailing[1] = f32::INFINITY;
+        let error = apply_packed_qr_panel_left(
+            &[1.0, 0.0, 0.0, 1.0],
+            2,
+            2,
+            &[1.0, 1.0],
+            &[1.0, 1.0],
+            &mut trailing,
+            1,
+        )
+        .expect_err("non-finite trailing input must be rejected");
+        assert!(matches!(
+            error,
+            HephaestusError::DispatchFailed { message }
+                if message.contains("non-finite")
+        ));
     }
 
     // ── split_packed_lu ──────────────────────────────────────────────

@@ -36,6 +36,15 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [minor] Finish the final two WGPU blocked-QR panels after one paired
+  readback. The backend-neutral packed-panel operation applies the penultimate
+  Householder reflectors to the compact tail without allocation, then both
+  final regions return in one submission. Complete `R` and solve contracts
+  remain Leto-equivalent across block boundaries. The matched 70×35 Criterion
+  median decreases from 516.58 µs to 346.19 µs (29.612%); persistent compact
+  scratch is unchanged, while the paired map holds one bounded 840-byte
+  transient staging buffer until completion.
+
 - [minor] Add unified prepared WGPU scalar- and axis-reduction submission.
   Independent plans share one command encoder and queue submission while
   scalar tree stages retain their dependency boundaries and no scratch buffers

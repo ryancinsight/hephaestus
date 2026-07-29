@@ -4263,6 +4263,57 @@ fn blocked_qr_matches_leto_reference() {
 }
 
 #[test]
+fn blocked_qr_preserves_panel_boundary_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    for cols in [32usize, 33, 35, 64, 65] {
+        let rows = cols + 9;
+        let mut matrix_host = vec![0.0f32; rows * cols];
+        for row in 0..rows {
+            for col in 0..cols {
+                matrix_host[row * cols + col] = if row == col {
+                    6.0
+                } else {
+                    0.02 / (1.0 + row.abs_diff(col) as f32)
+                };
+            }
+        }
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([rows, cols]).unwrap();
+        let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host).unwrap();
+        let expected = leto_ops::qr_decompose(&leto_matrix.view()).unwrap().r();
+        let expected = leto::Storage::as_slice(expected.storage());
+
+        let qr = qr_decompose_blocked(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+        let mut actual = vec![0.0f32; rows * cols];
+        device.download(qr.r_buffer(), &mut actual).unwrap();
+
+        // Each output accumulates at most `cols` reflector-rounding stages.
+        // The factor 8 covers one multiply-add pair plus norm/scale rounding per
+        // stage, giving the standard O(n·ε) backward-error envelope.
+        for (index, (&actual, &expected)) in actual.iter().zip(expected).enumerate() {
+            let tolerance = 8.0 * cols as f32 * f32::EPSILON * expected.abs().max(1.0);
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "{rows}x{cols} blocked QR R[{index}] = {actual}, expected {expected}, \
+                 tolerance {tolerance}"
+            );
+        }
+    }
+}
+
+#[test]
 fn blocked_qr_identity_yields_identity_r() {
     let Some(device) = device_or_skip() else {
         return;

@@ -4,6 +4,7 @@ Harness: `crates/hephaestus-wgpu/benches/comparative.rs` (`cargo bench --bench c
 Methodology: 50 iterations, wall-time divided by iteration count, including GPU synchronization (`poll(wgpu::PollType::Wait)`) on the host side.
 Reduction rows were refreshed with `HEPHAESTUS_BENCH_DISABLE_CUDA=1` because the CUDA-enabled comparative harness terminates after the first CUDA timing on this host before reaching the reduction section.
 Synchronization profile harness: `crates/hephaestus-wgpu/benches/decomposition_sync.rs` (`cargo bench --bench decomposition_sync -p hephaestus-wgpu`).
+Blocked-QR tail harness: `crates/hephaestus-wgpu/benches/blocked_qr_tail.rs` (`cargo bench --bench blocked_qr_tail -p hephaestus-wgpu`).
 Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (`cargo bench --bench sparse_comparative -p hephaestus-wgpu`).
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
@@ -147,6 +148,26 @@ constructions to one is stronger evidence than the exact latency ratio.
 | **Blocked QR one-pass panel timestamp total** | 7.8 µs |
 | **Blocked QR one-pass panel timestamp median** | 192 ns |
 
+### Blocked-QR final two-panel Criterion A/B
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Both runs use Criterion 0.8.2 defaults, the same 70×35 input,
+device completion inside the timed iteration, and a complete Leto `R`
+differential before timing.
+
+| Schedule | 95% interval | Median |
+| --- | ---: | ---: |
+| Separate final-panel readback (`before`) | 509.34–524.73 µs | 516.58 µs |
+| Paired panel/tail readback | 335.57–359.05 µs | 346.19 µs |
+
+Criterion reports a statistically significant **29.612% median latency
+reduction** (95% change interval **−34.402% to −23.972%**, `p = 0.00`). The
+schedule removes one host/device poll at this shape while preserving the
+complete factorization values. Persistent compact device scratch remains two
+`m × 32` buffers. The paired map holds one additional transient
+`m × tail_cols` staging buffer; at 70×35 this is **840 bytes**, returned to the
+pool immediately after the shared poll.
+
 ## Analysis
 
 1. **Compute vs. Memory Bandwidth & GPU Scaling**:
@@ -176,6 +197,13 @@ constructions to one is stronger evidence than the exact latency ratio.
      avoids placing the full copy on the critical path before the first CPU
      panel factorization. The 70x35 synchronization profile improved to
      **213.2 µs**, but remains transfer-bound.
+   - The final two-panel schedule now gathers the 32-column panel and
+     three-column tail before one poll, finishes the tail with the shared packed
+     Householder operation, and writes both regions in one submission. The
+     matched Criterion median decreases from **516.58 µs** to **346.19 µs**
+     (**29.612%**) without additional persistent compact scratch. The bounded
+     840-byte transient staging increase is reported above rather than treated
+     as free memory.
 
 ---
 

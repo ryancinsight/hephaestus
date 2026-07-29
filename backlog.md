@@ -13,21 +13,24 @@ cuda-oxide + cutile).
   performance artifacts.
 - Outcome: finish the final two QR panels after one paired readback, reusing the
   existing panel and compact device buffers so the blocked path removes one
-  host/device synchronization without adding device scratch.
+  host/device synchronization without adding persistent compact scratch.
 - Non-goals: changing QR block width or arithmetic precision, CPU fallback for
   earlier panels, a second QR algorithm, CUDA/ROCm/Metal decomposition changes,
   benchmark workload reduction, or cross-device speed claims.
 - Acceptance: matrices on both sides of the 32-column block boundary preserve
   reconstruction and least-squares contracts; the final two-panel path performs
   one paired readback and no trailing GPU reflector dispatch; device scratch
-  remains bounded by the existing two `m * block_size` compact buffers; a
-  matched Criterion baseline/result run validates every factorization; formatting,
-  warning-denied checks, focused Nextest, doctests, semver checks, benchmark
-  smoke, and exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+  remains bounded by the existing two `m * block_size` compact buffers; the
+  bounded extra live staging is quantified; a matched Criterion baseline/result
+  run validates every factorization; formatting, warning-denied checks, focused
+  Nextest, doctests, semver checks, benchmark smoke, and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
 - Risk/change class: `[minor]` additive backend-neutral packed-panel operation
   plus a WGPU scheduling optimization. ADR 0038 owns the interface and
   synchronization decision.
-- Status: implementation in progress; claimed 2026-07-28.
+- Status: implementation and matched local evidence complete. Final full local
+  Nextest/doctests are blocked by fresh peer-owned Aequitas `E0119`; hosted
+  locked provider CI is pending.
 
 ## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf] — done
 

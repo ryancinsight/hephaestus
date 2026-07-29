@@ -6,6 +6,9 @@ use std::any::TypeId;
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::pool::{
+    StagingBufferGuard, UniformBufferGuard, staging_guard, uniform_guard,
+};
 
 fn matrix_region_len(rows: usize, cols: usize) -> Result<usize> {
     rows.checked_mul(cols)
@@ -21,6 +24,18 @@ pub(crate) struct MatrixRegion {
     pub(crate) col_start: usize,
     pub(crate) rows: usize,
     pub(crate) cols: usize,
+}
+
+pub(crate) struct MatrixRegionDownload<'a> {
+    pub(crate) temp: &'a WgpuBuffer<f32>,
+    pub(crate) region: MatrixRegion,
+    pub(crate) out: &'a mut Vec<f32>,
+}
+
+pub(crate) struct MatrixRegionUpload<'a> {
+    pub(crate) temp: &'a WgpuBuffer<f32>,
+    pub(crate) host: &'a [f32],
+    pub(crate) region: MatrixRegion,
 }
 
 #[repr(C)]
@@ -127,6 +142,139 @@ fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
 // Core reusable implementation — callers supply the compact device buffer
 // ---------------------------------------------------------------------------
 
+struct GatherTransfer {
+    staging: StagingBufferGuard,
+    staging_size: u64,
+    _meta: UniformBufferGuard,
+    bind_group: wgpu::BindGroup,
+    compact_len: usize,
+    compact_bytes: u64,
+}
+
+fn prepare_gather(
+    device: &WgpuDevice,
+    pipeline: &wgpu::ComputePipeline,
+    buffer: &WgpuBuffer<f32>,
+    temp_compact_buf: &WgpuBuffer<f32>,
+    region: MatrixRegion,
+) -> Result<GatherTransfer> {
+    let compact_len = matrix_region_len(region.rows, region.cols)?;
+    if temp_compact_buf.len < compact_len {
+        return Err(HephaestusError::TransferFailed {
+            message: format!(
+                "reusable temp_compact_buf has insufficient capacity: {}, expected at least {}",
+                temp_compact_buf.len, compact_len
+            ),
+        });
+    }
+    let compact_bytes = WgpuDevice::byte_size::<f32>(compact_len)?;
+    let raw_staging = device.get_staging_buffer(compact_bytes)?;
+    let staging_size = raw_staging.size();
+    let staging = staging_guard(device.clone(), raw_staging);
+    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
+    let meta = uniform_guard(device.clone(), raw_meta);
+    device
+        .queue()
+        .write_buffer(&meta, 0, bytemuck::bytes_of(&region_meta(region)?));
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-region-gather-bind-group"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: temp_compact_buf.raw().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: meta.as_entire_binding(),
+                },
+            ],
+        });
+    Ok(GatherTransfer {
+        staging,
+        staging_size,
+        _meta: meta,
+        bind_group,
+        compact_len,
+        compact_bytes,
+    })
+}
+
+fn encode_gather(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    transfer: &GatherTransfer,
+    temp_compact_buf: &WgpuBuffer<f32>,
+) -> Result<()> {
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-region-gather-pass"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &transfer.bind_group, &[]);
+        pass.dispatch_workgroups(checked_wg_x(transfer.compact_len.div_ceil(256))?, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(
+        temp_compact_buf.raw(),
+        0,
+        &transfer.staging,
+        0,
+        transfer.compact_bytes,
+    );
+    Ok(())
+}
+
+fn copy_mapped_gather(transfer: &GatherTransfer, out: &mut Vec<f32>) -> Result<()> {
+    let mapped = transfer
+        .staging
+        .slice(..transfer.staging_size)
+        .get_mapped_range()
+        .map_err(|error| HephaestusError::TransferFailed {
+            message: format!("mapped-range acquisition failed: {error}"),
+        })?;
+    out.resize(transfer.compact_len, 0.0);
+    let compact_bytes = transfer
+        .compact_len
+        .checked_mul(core::mem::size_of::<f32>())
+        .expect("invariant: compact byte size was validated by WgpuDevice::byte_size");
+    out.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes]));
+    drop(mapped);
+    transfer.staging.unmap();
+    Ok(())
+}
+
+fn wait_for_mappings(
+    device: &WgpuDevice,
+    receivers: impl IntoIterator<
+        Item = std::sync::mpsc::Receiver<core::result::Result<(), wgpu::BufferAsyncError>>,
+    >,
+) -> Result<()> {
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|error| HephaestusError::TransferFailed {
+            message: format!("device poll failed: {error:?}"),
+        })?;
+    for receiver in receivers {
+        receiver
+            .recv()
+            .map_err(|_| HephaestusError::TransferFailed {
+                message: "map_async callback dropped".to_string(),
+            })?
+            .map_err(|error| HephaestusError::TransferFailed {
+                message: format!("buffer mapping failed: {error:?}"),
+            })?;
+    }
+    Ok(())
+}
+
 /// Gather a matrix region from `buffer` into caller-supplied `temp_compact_buf`
 /// and write the result into `out`, resized to `region.rows * region.cols`.
 ///
@@ -148,9 +296,122 @@ pub(crate) fn download_matrix_region_compact_into(
         return Ok(());
     }
 
-    let compact_len = matrix_region_len(region.rows, region.cols)?;
-    let compact_bytes = WgpuDevice::byte_size::<f32>(compact_len)?;
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<RegionCopyKernel>(), TypeId::of::<f32>(), 0),
+        "hephaestus-region-gather",
+        region_gather_shader_source,
+    );
+    let transfer = prepare_gather(device, &pipeline, buffer, temp_compact_buf, region)?;
 
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-region-download-compact"),
+        });
+    encode_gather(&mut encoder, &pipeline, &transfer, temp_compact_buf)?;
+    device.queue().submit(Some(encoder.finish()));
+
+    let (sender, receiver) = std::sync::mpsc::channel();
+    transfer
+        .staging
+        .slice(..transfer.staging_size)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+    wait_for_mappings(device, [receiver])?;
+    copy_mapped_gather(&transfer, out)
+}
+
+/// Gather two matrix regions into two caller-supplied compact buffers and map
+/// both results after one queue submission and one device poll.
+pub(crate) fn download_matrix_region_pair_compact_into(
+    device: &WgpuDevice,
+    buffer: &WgpuBuffer<f32>,
+    first: MatrixRegionDownload<'_>,
+    second: MatrixRegionDownload<'_>,
+) -> Result<()> {
+    if first.region.rows == 0 || first.region.cols == 0 {
+        first.out.clear();
+        return download_matrix_region_compact_into(
+            device,
+            buffer,
+            second.temp,
+            second.region,
+            second.out,
+        );
+    }
+    if second.region.rows == 0 || second.region.cols == 0 {
+        second.out.clear();
+        return download_matrix_region_compact_into(
+            device,
+            buffer,
+            first.temp,
+            first.region,
+            first.out,
+        );
+    }
+
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<RegionCopyKernel>(), TypeId::of::<f32>(), 0),
+        "hephaestus-region-gather",
+        region_gather_shader_source,
+    );
+    let first_transfer = prepare_gather(device, &pipeline, buffer, first.temp, first.region)?;
+    let second_transfer = prepare_gather(device, &pipeline, buffer, second.temp, second.region)?;
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-region-pair-download-compact"),
+        });
+    encode_gather(&mut encoder, &pipeline, &first_transfer, first.temp)?;
+    encode_gather(&mut encoder, &pipeline, &second_transfer, second.temp)?;
+    device.queue().submit(Some(encoder.finish()));
+
+    let (first_sender, first_receiver) = std::sync::mpsc::channel();
+    first_transfer
+        .staging
+        .slice(..first_transfer.staging_size)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            let _ = first_sender.send(result);
+        });
+    let (second_sender, second_receiver) = std::sync::mpsc::channel();
+    second_transfer
+        .staging
+        .slice(..second_transfer.staging_size)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            let _ = second_sender.send(result);
+        });
+    wait_for_mappings(device, [first_receiver, second_receiver])?;
+    copy_mapped_gather(&first_transfer, first.out)?;
+    copy_mapped_gather(&second_transfer, second.out)
+}
+
+struct ScatterTransfer {
+    _meta: UniformBufferGuard,
+    bind_group: wgpu::BindGroup,
+    compact_len: usize,
+}
+
+fn prepare_scatter(
+    device: &WgpuDevice,
+    pipeline: &wgpu::ComputePipeline,
+    buffer: &WgpuBuffer<f32>,
+    temp_compact_buf: &WgpuBuffer<f32>,
+    compact_host: &[f32],
+    region: MatrixRegion,
+) -> Result<ScatterTransfer> {
+    let compact_len = matrix_region_len(region.rows, region.cols)?;
+    if compact_host.len() != compact_len {
+        return Err(HephaestusError::TransferFailed {
+            message: format!(
+                "write_matrix_region_compact length mismatch: compact_host len {}, expected {}",
+                compact_host.len(),
+                compact_len
+            ),
+        });
+    }
     if temp_compact_buf.len < compact_len {
         return Err(HephaestusError::TransferFailed {
             message: format!(
@@ -159,30 +420,16 @@ pub(crate) fn download_matrix_region_compact_into(
             ),
         });
     }
-
-    let raw_staging = device.get_staging_buffer(compact_bytes)?;
-    let staging_size = raw_staging.size();
-    let staging = crate::infrastructure::pool::staging_guard(device.clone(), raw_staging);
-
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
-
-    let meta = region_meta(region)?;
+    device.write_sub_buffer(temp_compact_buf, 0, compact_host)?;
+    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
+    let meta = uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
-
-    let pipeline = cached_pipeline(
-        device,
-        (TypeId::of::<RegionCopyKernel>(), TypeId::of::<f32>(), 0),
-        "hephaestus-region-gather",
-        region_gather_shader_source,
-    );
-
+        .write_buffer(&meta, 0, bytemuck::bytes_of(&region_meta(region)?));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-region-gather-bind-group"),
+            label: Some("hephaestus-region-scatter-bind-group"),
             layout: &pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -195,68 +442,29 @@ pub(crate) fn download_matrix_region_compact_into(
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: meta_buf.as_entire_binding(),
+                    resource: meta.as_entire_binding(),
                 },
             ],
         });
+    Ok(ScatterTransfer {
+        _meta: meta,
+        bind_group,
+        compact_len,
+    })
+}
 
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-matrix-region-download-compact"),
-        });
-
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-region-gather-pass"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        let wg_x = checked_wg_x(compact_len.div_ceil(256))?;
-        pass.dispatch_workgroups(wg_x, 1, 1);
-    }
-
-    encoder.copy_buffer_to_buffer(temp_compact_buf.raw(), 0, &staging, 0, compact_bytes);
-
-    device.queue().submit(Some(encoder.finish()));
-
-    let slice = staging.slice(..staging_size);
-    let (sender, receiver) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |result| {
-        let _ = sender.send(result);
+fn encode_scatter(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    transfer: &ScatterTransfer,
+) -> Result<()> {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("hephaestus-region-scatter-pass"),
+        timestamp_writes: None,
     });
-    device
-        .inner()
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| HephaestusError::TransferFailed {
-            message: format!("device poll failed: {e:?}"),
-        })?;
-    receiver
-        .recv()
-        .map_err(|_| HephaestusError::TransferFailed {
-            message: "map_async callback dropped".to_string(),
-        })?
-        .map_err(|e| HephaestusError::TransferFailed {
-            message: format!("buffer mapping failed: {e:?}"),
-        })?;
-
-    let mapped = slice
-        .get_mapped_range()
-        .map_err(|error| HephaestusError::TransferFailed {
-            message: format!("mapped-range acquisition failed: {error}"),
-        })?;
-    // Reuse `out`'s existing capacity; `resize` only grows when needed.
-    out.resize(compact_len, 0.0);
-    // compact_bytes == compact_len * size_of::<f32>(); compute in usize to avoid the
-    // silent u64-as-usize truncation on 32-bit targets.
-    let compact_bytes_usize = compact_len.checked_mul(core::mem::size_of::<f32>()).expect(
-        "invariant: compact_len * 4 fits usize (compact_len is bounded by matrix_region_len)",
-    );
-    out.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes_usize]));
-    drop(mapped);
-    staging.unmap();
-
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, &transfer.bind_group, &[]);
+    pass.dispatch_workgroups(checked_wg_x(transfer.compact_len.div_ceil(256))?, 1, 1);
     Ok(())
 }
 
@@ -275,35 +483,56 @@ pub(crate) fn write_matrix_region_compact_reusable(
         return Ok(());
     }
 
-    let compact_len = matrix_region_len(region.rows, region.cols)?;
-    if compact_host.len() != compact_len {
-        return Err(HephaestusError::TransferFailed {
-            message: format!(
-                "write_matrix_region_compact length mismatch: compact_host len {}, expected {}",
-                compact_host.len(),
-                compact_len
-            ),
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<RegionCopyKernel>(), TypeId::of::<f32>(), 1),
+        "hephaestus-region-scatter",
+        region_scatter_shader_source,
+    );
+    let transfer = prepare_scatter(
+        device,
+        &pipeline,
+        buffer,
+        temp_compact_buf,
+        compact_host,
+        region,
+    )?;
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-region-upload-compact"),
         });
+    encode_scatter(&mut encoder, &pipeline, &transfer)?;
+    device.queue().submit(Some(encoder.finish()));
+    Ok(())
+}
+
+/// Scatter two compact host matrices into two regions through one encoder and
+/// one queue submission.
+pub(crate) fn write_matrix_region_pair_compact_reusable(
+    device: &WgpuDevice,
+    buffer: &WgpuBuffer<f32>,
+    first: MatrixRegionUpload<'_>,
+    second: MatrixRegionUpload<'_>,
+) -> Result<()> {
+    if first.region.rows == 0 || first.region.cols == 0 {
+        return write_matrix_region_compact_reusable(
+            device,
+            buffer,
+            second.temp,
+            second.host,
+            second.region,
+        );
     }
-
-    if temp_compact_buf.len < compact_len {
-        return Err(HephaestusError::TransferFailed {
-            message: format!(
-                "reusable temp_compact_buf has insufficient capacity: {}, expected at least {}",
-                temp_compact_buf.len, compact_len
-            ),
-        });
+    if second.region.rows == 0 || second.region.cols == 0 {
+        return write_matrix_region_compact_reusable(
+            device,
+            buffer,
+            first.temp,
+            first.host,
+            first.region,
+        );
     }
-
-    device.write_sub_buffer(temp_compact_buf, 0, compact_host)?;
-
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
-
-    let meta = region_meta(region)?;
-    device
-        .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
 
     let pipeline = cached_pipeline(
         device,
@@ -311,46 +540,29 @@ pub(crate) fn write_matrix_region_compact_reusable(
         "hephaestus-region-scatter",
         region_scatter_shader_source,
     );
-
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-region-scatter-bind-group"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffer.raw().as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: temp_compact_buf.raw().as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: meta_buf.as_entire_binding(),
-                },
-            ],
-        });
-
+    let first = prepare_scatter(
+        device,
+        &pipeline,
+        buffer,
+        first.temp,
+        first.host,
+        first.region,
+    )?;
+    let second = prepare_scatter(
+        device,
+        &pipeline,
+        buffer,
+        second.temp,
+        second.host,
+        second.region,
+    )?;
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-matrix-region-upload-compact"),
+            label: Some("hephaestus-matrix-region-pair-upload-compact"),
         });
-
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-region-scatter-pass"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        let wg_x = checked_wg_x(compact_len.div_ceil(256))?;
-        pass.dispatch_workgroups(wg_x, 1, 1);
-    }
-
+    encode_scatter(&mut encoder, &pipeline, &first)?;
+    encode_scatter(&mut encoder, &pipeline, &second)?;
     device.queue().submit(Some(encoder.finish()));
-
     Ok(())
 }

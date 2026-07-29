@@ -2,6 +2,33 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
+
+- [x] Add one backend-neutral allocation-free packed-panel Householder apply.
+- [x] Gather and write the final panel/tail pair through one encoder,
+      submission, and readback poll.
+- [x] Preserve complete `R` and solve contracts across 32/33/35/64/65 columns.
+- [x] Record a matched Criterion before/after result and the bounded staging
+      memory tradeoff.
+- [ ] Run warning-denied, doctest, semver, benchmark-smoke, and exact-head
+      WGPU, CUDA, ROCm, and Metal CI gates.
+
+Implementation owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; ADR 0038.
+
+Local evidence: all-target core/WGPU compilation passes. Focused Nextest passes
+8/8 in 4.976 seconds, including the packed-panel analytical differential and
+all blocked-QR contracts. Criterion 0.8.2 measures the unchanged 70×35 workload
+at 516.58 µs before and 346.19 µs after, a statistically significant 29.612%
+median reduction (95% change interval −34.402% to −23.972%, `p = 0.00`).
+Persistent compact device and host algorithm scratch capacities are unchanged;
+the paired readback holds one extra 840-byte staging buffer until the shared
+poll completes. Warning-denied core/WGPU all-target Clippy and formatting pass.
+The final full package Nextest and doctest attempts are blocked before
+Hephaestus execution by fresh peer-owned Aequitas work: `PerCubicMeter`
+implements both `NumberDensity` and its equivalent `ReciprocalVolume` alias
+(`E0119`). The earlier exact focused run predates that unrelated tree shift;
+hosted locked provider CI is the final execution gate.
+
 ## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf]
 
 - [x] Add one submission path for independent prepared scalar and axis
