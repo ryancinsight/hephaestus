@@ -2,6 +2,28 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-SCAN-OUTPUT-OVERWRITE-1 [patch] [perf]
+
+- [x] Prove each non-empty allocated scan result is fully written before any
+      output read.
+- [x] Preserve zero-length allocation and caller-owned output semantics.
+- [x] Route WGPU, CUDA, and ROCm allocated scan outputs through
+      `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA scan value contracts.
+- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-scan-overwrite`. Each
+valid logical element is written during the kernel's first pass before the
+second pass reads that output; the allocating wrapper provides a contiguous
+layout of exactly the validated input size. WGPU scan Nextest passes 2/2,
+including long-line tiling and Leto allocated/caller-owned comparisons.
+Physical CUDA scan Nextest passes 4/4, covering both directions, sum/product,
+long lines, strided input, empty input, and allocated/caller-owned outputs.
+Warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
+adapterless ROCm. CUDA and ROCm omit one output-sized initialization transfer;
+peak allocation is unchanged and no runtime claim is made.
+
 ## HEPH-ELEMENTWISE-OVERWRITE-1 [patch] [perf]
 
 - [x] Route allocating contiguous and typed elementwise wrappers through the

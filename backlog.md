@@ -21,7 +21,10 @@ cuda-oxide + cutile).
   pass.
 - Risk/change class: `[patch]` internal allocation policy and one avoided
   output-sized device initialization transfer; peak allocation is unchanged.
-- Status: in progress.
+- Status: implementation complete; exact-head provider CI remains required
+  before integration. Rust 1.95 warning-denied WGPU, CUDA, and ROCm package
+  gates pass; WGPU scan Nextest passes 2/2 and physical CUDA scan Nextest
+  passes 4/4.
 
 ## HEPH-COEUS-ACTIVATION-PARITY-RECONCILE-1 [patch] — done
 
