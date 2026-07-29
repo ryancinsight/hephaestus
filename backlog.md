@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf] — in progress
+## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-wide-transfer`; scope: the retained WGPU
   blocked-QR path at and above the 129-column routing boundary.
@@ -22,10 +22,10 @@ cuda-oxide + cutile).
   and reconstruction contracts, and passes warning-denied package gates plus
   exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` internal transfer orchestration and memory reuse.
-- Status: implementation and local verification complete 2026-07-29;
-  exact-head provider CI pending. The retained panel workspace removes two
-  download preparations at 192×129 and five at 384×256 without increasing
-  peak staging.
+- Status: done 2026-07-29. The retained panel workspace removes two download
+  preparations at 192×129 and five at 384×256 without increasing peak staging;
+  local package gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+  Hardware CUDA and ROCm jobs remain runner-gated.
 
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
 

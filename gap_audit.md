@@ -685,7 +685,8 @@ No open feature-combination defect is currently recorded in the backend scope.
   first-position 70×35 control is clock/load-sensitive and is excluded from
   the claim. Evidence tier: complete Leto `R`, solve, and reconstruction
   differential contracts; static resource-lifetime accounting; matched local
-  Criterion A/B. Exact-head provider CI remains pending.
+  Criterion A/B; exact-head WGPU/CUDA/ROCm/macOS-Metal provider CI. Hardware
+  CUDA and ROCm jobs remain runner-gated.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.

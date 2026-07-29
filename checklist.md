@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Record the per-panel live-allocation model at 192×129 and a wider shape.
 - [x] Implement only the evidence-selected transfer-workspace reuse.
 - [x] Verify complete Leto `R`, solve, and reconstruction semantics.
-- [ ] Record matched Criterion A/B and require exact-head provider CI.
+- [x] Record matched Criterion A/B and require exact-head provider CI.
 
 Implementation owner: Codex on `codex/hephaestus-qr-wide-transfer`.
 
@@ -24,7 +24,10 @@ respectively. A back-to-back Criterion run measures central changes of
 unchanged 192×128 control has no detectable change (`p = 0.72`). The
 first-position 70×35 control is clock/load-sensitive and is excluded from the
 claim. Warning-denied all-target Clippy and focused blocked-QR Nextest 6/6
-pass; provider CI remains the merge gate.
+pass. Full package Nextest passes 173/173, doctests pass 2/2, the benchmark
+smoke covers all four shapes, and rustdoc is warning-clean. Exact-head WGPU,
+CUDA, ROCm, and macOS Metal provider CI is green; hardware CUDA and ROCm jobs
+remain runner-gated.
 
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf]
 
