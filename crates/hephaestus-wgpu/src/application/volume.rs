@@ -114,8 +114,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// integrate to `0`.
 ///
 /// # Errors
-/// [`HephaestusError`] if `rays` is not `out.len × RAY_STRIDE` long, the field
-/// length does not match `geometry.dims`, or dispatch fails.
+/// [`hephaestus_core::HephaestusError`] if `rays` is not
+/// `out.len × RAY_STRIDE` long, the field length does not match
+/// `geometry.dims`, or dispatch fails.
 pub fn ray_line_integrals_into(
     device: &WgpuDevice,
     field: &WgpuBuffer<f32>,

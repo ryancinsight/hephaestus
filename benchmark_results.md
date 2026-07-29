@@ -153,6 +153,47 @@ these are distinct profile samples, not one stable benchmark result. The
 production harness no longer duplicates the implementation's private panel
 size after the narrow route made that diagnostic obsolete.
 
+### Retained blocked-QR region-transfer baseline
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Criterion 0.8.2 uses device completion inside every timed
+iteration and validates the complete `R` factor against Leto before timing.
+
+| Retained blocked schedule | 95% interval | Median |
+| --- | ---: | ---: |
+| 192×129 routing boundary | 1.2877–1.3495 ms | 1.3136 ms |
+| 384×256 eight-panel workload | 4.0608–4.5832 ms | 4.2996 ms |
+
+The 192×129 schedule prepares five downloads and five uploads: three single
+panel transfer pairs followed by one paired panel/tail download and upload.
+The 384×256 schedule prepares eight downloads and eight uploads. Each
+preparation checks out pooled staging or uniform storage and constructs a new
+bind group; the matched result run will determine whether retaining those
+resources across panels changes end-to-end latency. These figures are the
+`qr-transfer-before` baseline, not an optimization claim.
+
+### Retained blocked-QR transfer-workspace Criterion A/B
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. The old and new revisions ran back-to-back with the same
+Criterion 0.8.2 instrument, device completion inside every timed iteration,
+and a complete Leto `R` differential before timing.
+
+| Schedule | Before 95% interval | After 95% interval | Central change |
+| --- | ---: | ---: | ---: |
+| 192×128 unchanged direct control | 556.23–640.37 µs | 533.83–625.49 µs | −1.4307%, `p = 0.72` |
+| 192×129 retained blocked route | 1.5530–1.8142 ms | 1.3508–1.5132 ms | −11.796%, `p = 0.00` |
+| 384×256 retained blocked route | 4.1174–4.5282 ms | 3.9127–4.0826 ms | −7.2117%, `p = 0.00` |
+
+The first-position 70×35 direct control shifted with GPU clock or concurrent
+host load and is excluded from the performance claim. The warmed 192×128
+direct control has no detectable change, while both retained blocked routes
+improve. The implementation retains one panel download workspace across
+iterations, reducing download resource preparations from five to three at
+192×129 and from eight to three at 384×256. The final tail remains an exact
+one-shot allocation, so peak staging is unchanged: 25,344 bytes at 192×129
+and 98,304 bytes at 384×256.
+
 ### Blocked-QR four-panel direct-transfer Criterion A/B
 
 Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,

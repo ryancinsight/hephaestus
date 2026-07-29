@@ -1,9 +1,10 @@
 # ADR 0038: Finish the blocked-QR tail after one readback
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-28
 - Scope: backend-neutral packed QR panels and the WGPU blocked-QR schedule
 - Change class: `[minor]`
+- Board: [HEPH-WGPU-QR-TAIL-SYNC-1](../../backlog.md#heph-wgpu-qr-tail-sync-1-minor-perf--done)
 
 ## Context
 
