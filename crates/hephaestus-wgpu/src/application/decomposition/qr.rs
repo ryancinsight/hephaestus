@@ -49,8 +49,9 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    MatrixRegion, MatrixRegionDownload, MatrixRegionUpload, download_matrix_region_compact_into,
-    download_matrix_region_pair_compact_into, write_matrix_region_compact_reusable,
+    MatrixRegion, MatrixRegionDownloadWorkspace, MatrixRegionUpload,
+    download_matrix_region_compact_into, download_matrix_region_workspace_pair_into,
+    matrix_region_len, write_matrix_region_compact_reusable,
     write_matrix_region_pair_compact_reusable,
 };
 use super::validate::validate_dense_operand;
@@ -416,6 +417,7 @@ pub fn qr_decompose_blocked(
 
     // Pre-allocate a single temp_compact_buf to avoid repeated allocations in the loop.
     let temp_compact_buf = device.alloc_zeroed::<f32>(m * block_size)?;
+    let mut panel_download_workspace = None;
 
     let hh_pipeline = cached_pipeline(
         device,
@@ -465,44 +467,54 @@ pub fn qr_decompose_blocked(
             rows: m,
             cols: b,
         };
-        let panel_source = if work_copy_queued {
-            &work_buf
-        } else {
-            matrix.buffer
-        };
         let finish_tail_on_cpu = trail_cols > 0 && trail_cols <= block_size;
-        if finish_tail_on_cpu {
-            let tail_region = MatrixRegion {
-                stride: n,
-                row_start: 0,
-                col_start: k + b,
-                rows: m,
-                cols: trail_cols,
-            };
-            download_matrix_region_pair_compact_into(
-                device,
-                panel_source,
-                MatrixRegionDownload {
-                    temp: &temp_compact_buf,
-                    region: panel_region,
-                    out: &mut panel,
-                },
-                MatrixRegionDownload {
-                    temp: &vectors_dev,
-                    region: tail_region,
-                    out: &mut packed_vectors,
-                },
-            )?;
+        if work_copy_queued {
+            if panel_download_workspace.is_none() {
+                panel_download_workspace = Some(MatrixRegionDownloadWorkspace::new(
+                    device,
+                    &work_buf,
+                    &temp_compact_buf,
+                    m * block_size,
+                )?);
+            }
+            let panel_workspace = panel_download_workspace
+                .as_ref()
+                .expect("invariant: panel workspace was initialized");
+            if finish_tail_on_cpu {
+                let tail_region = MatrixRegion {
+                    stride: n,
+                    row_start: 0,
+                    col_start: k + b,
+                    rows: m,
+                    cols: trail_cols,
+                };
+                let tail_capacity = matrix_region_len(m, trail_cols)?;
+                let tail_workspace = MatrixRegionDownloadWorkspace::new(
+                    device,
+                    &work_buf,
+                    &vectors_dev,
+                    tail_capacity,
+                )?;
+                download_matrix_region_workspace_pair_into(
+                    panel_workspace,
+                    panel_region,
+                    &mut panel,
+                    &tail_workspace,
+                    tail_region,
+                    &mut packed_vectors,
+                )?;
+            } else {
+                panel_workspace.download_into(panel_region, &mut panel)?;
+            }
         } else {
             download_matrix_region_compact_into(
                 device,
-                panel_source,
+                matrix.buffer,
                 &temp_compact_buf,
                 panel_region,
                 &mut panel,
             )?;
         }
-
         if !work_copy_queued {
             let mut encoder =
                 device
