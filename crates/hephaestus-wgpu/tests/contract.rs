@@ -4270,7 +4270,7 @@ fn blocked_qr_preserves_panel_boundary_contracts() {
     use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
-    for cols in [32usize, 33, 35, 64, 65] {
+    for cols in [32usize, 33, 35, 64, 65, 128, 129] {
         let rows = cols + 9;
         let mut matrix_host = vec![0.0f32; rows * cols];
         for row in 0..rows {

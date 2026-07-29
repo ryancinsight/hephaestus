@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-qr-wide-profile`; scope: WGPU blocked-QR
+  matrices wider than two 32-column panels, component profiling, and one
+  evidence-selected production increment.
+- Outcome: identify the latency and live-memory bound in the remaining wide
+  blocked path after PR #143 removed narrow-only orchestration, then optimize
+  that bound without changing QR arithmetic or the measured workload.
+- Non-goals: benchmark-instrument tuning, speculative block-width changes,
+  silent CPU fallback for wide tails, CUDA/ROCm/Metal algorithm changes, or
+  runtime and memory claims without matched evidence.
+- Acceptance: a value-validating component profile covers the 64/65-column
+  legacy boundary and active 128/129-column routing boundary; the selected
+  increment preserves complete Leto `R`, solve, and reconstruction contracts,
+  records a matched Criterion A/B result and live-allocation model, passes
+  warning-denied package gates, and passes exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI.
+- Risk/change class: `[patch]` performance audit until evidence selects a
+  behavior or public-contract change.
+- Status: done 2026-07-29; implementation, matched local evidence, package
+  verification, review-requested 129-column profile coverage, and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI complete.
+
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-post-tail-profile`; scope: WGPU blocked
@@ -21,8 +44,9 @@ cuda-oxide + cutile).
   checks, and exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
-- Status: completed 2026-07-29; review-follow-up exact-head provider rerun
-  required before merge.
+- Status: merged in PR #143 at `6a15e17`. Exact review-follow-up head
+  `60a1843` passed WGPU job `90494790828`, CUDA `90494790688`, ROCm
+  `90494790469`, and macOS Metal `90494791112`; hardware-only jobs skipped.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
 

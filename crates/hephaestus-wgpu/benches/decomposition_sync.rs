@@ -9,12 +9,11 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use hephaestus_core::ComputeDevice;
-use hephaestus_wgpu::{StridedOperand, WgpuDevice, qr_decompose_blocked};
+use hephaestus_wgpu::{StridedOperand, WgpuDevice, qr_decompose, qr_decompose_blocked};
 use leto::Layout;
 
 const ITERS: usize = 100;
-const QR_ROWS: usize = 70;
-const QR_COLS: usize = 35;
+const QR_SHAPES: [[usize; 2]; 4] = [[96, 64], [96, 65], [192, 128], [192, 129]];
 
 fn wait_wgpu(device: &WgpuDevice) {
     device
@@ -90,9 +89,7 @@ fn profile_blocked_lu_sync(device: &WgpuDevice) {
     );
 }
 
-fn qr_source() -> Vec<f32> {
-    let rows = QR_ROWS;
-    let cols = QR_COLS;
+fn qr_source(rows: usize, cols: usize) -> Vec<f32> {
     let mut host = vec![0.0f32; rows * cols];
     for row in 0..rows {
         for col in 0..cols {
@@ -106,11 +103,10 @@ fn qr_source() -> Vec<f32> {
     host
 }
 
-fn profile_blocked_qr_end_to_end(device: &WgpuDevice) {
-    let host = qr_source();
+fn profile_blocked_qr_end_to_end(device: &WgpuDevice, rows: usize, cols: usize) {
+    let host = qr_source(rows, cols);
     let buffer = device.upload(&host).expect("upload QR profile matrix");
-    let layout =
-        Layout::c_contiguous([QR_ROWS, QR_COLS]).expect("invariant: profile shape is valid");
+    let layout = Layout::c_contiguous([rows, cols]).expect("invariant: profile shape is valid");
     let checked = qr_decompose_blocked(
         device,
         StridedOperand {
@@ -119,11 +115,11 @@ fn profile_blocked_qr_end_to_end(device: &WgpuDevice) {
         },
     )
     .expect("factor QR profile validation matrix");
-    let mut actual = vec![0.0f32; QR_ROWS * QR_COLS];
+    let mut actual = vec![0.0f32; rows * cols];
     device
         .download(checked.r_buffer(), &mut actual)
         .expect("download QR profile validation factor");
-    let leto_matrix = leto::Array::from_shape_vec([QR_ROWS, QR_COLS], host.clone())
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], host.clone())
         .expect("invariant: profile shape matches storage");
     let expected = leto_ops::qr_decompose(&leto_matrix.view())
         .expect("factor Leto QR profile matrix")
@@ -155,7 +151,49 @@ fn profile_blocked_qr_end_to_end(device: &WgpuDevice) {
     }
 
     println!(
-        "Blocked QR 70x35 current end-to-end: {} ns/iter",
+        "Blocked QR {rows}x{cols} current end-to-end: {} ns/iter",
+        elapsed_per_iter(start.elapsed()).as_nanos()
+    );
+
+    let checked = qr_decompose(
+        device,
+        StridedOperand {
+            buffer: &buffer,
+            layout: &layout,
+        },
+    )
+    .expect("factor direct QR profile validation matrix");
+    device
+        .download(checked.r_buffer(), &mut actual)
+        .expect("download direct QR profile validation factor");
+    for (index, (&actual, &expected)) in actual
+        .iter()
+        .zip(leto::Storage::as_slice(expected.storage()))
+        .enumerate()
+    {
+        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        assert!(
+            (actual - expected).abs() <= tolerance,
+            "direct QR profile factor mismatch at {index}: got {actual}, expected {expected}"
+        );
+    }
+
+    let start = Instant::now();
+    for _ in 0..ITERS {
+        let decomposition = qr_decompose(
+            device,
+            black_box(StridedOperand {
+                buffer: &buffer,
+                layout: &layout,
+            }),
+        )
+        .expect("factor direct QR profile matrix");
+        wait_wgpu(device);
+        black_box(decomposition);
+    }
+
+    println!(
+        "Direct QR {rows}x{cols} current end-to-end: {} ns/iter",
         elapsed_per_iter(start.elapsed()).as_nanos()
     );
 }
@@ -173,5 +211,7 @@ fn main() {
     println!("Iterations: {ITERS}");
     println!("WGPU GPU Backend: {}", device.backend_name());
     profile_blocked_lu_sync(&device);
-    profile_blocked_qr_end_to_end(&device);
+    for [rows, cols] in QR_SHAPES {
+        profile_blocked_qr_end_to_end(&device, rows, cols);
+    }
 }

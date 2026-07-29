@@ -1,10 +1,11 @@
-//! Criterion benchmark for the final two-panel blocked-QR path.
+//! Criterion benchmarks for measured blocked-QR routing boundaries.
 //!
 //! Local evidence records the machine and driver in `benchmark_results.md`.
 //! The 70×35 workload crosses the fixed 32-column panel boundary with a
-//! three-column tail. Every timed iteration factors the same device-resident
-//! input and waits for completion; a separate value check compares the complete
-//! `R` factor against Leto before measurement.
+//! three-column tail; 192×128 exercises four complete panels. Every timed
+//! iteration factors the same device-resident input and waits for completion;
+//! a separate value check compares the complete `R` factor against Leto before
+//! measurement.
 
 use std::hint::black_box;
 
@@ -12,10 +13,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use hephaestus_wgpu::{ComputeDevice, StridedOperand, WgpuDevice, qr_decompose_blocked};
 use leto::Layout;
 
-const ROWS: usize = 70;
-const COLS: usize = 35;
-
-fn matrix_values() -> Vec<f32> {
+fn matrix_values<const ROWS: usize, const COLS: usize>() -> Vec<f32> {
     let mut matrix = vec![0.0; ROWS * COLS];
     for row in 0..ROWS {
         for col in 0..COLS {
@@ -36,7 +34,7 @@ fn wait(device: &WgpuDevice) {
         .expect("invariant: benchmark device poll succeeds");
 }
 
-fn assert_r_matches_leto(
+fn assert_r_matches_leto<const ROWS: usize, const COLS: usize>(
     device: &WgpuDevice,
     matrix: &hephaestus_wgpu::WgpuBuffer<f32>,
     layout: &Layout<2>,
@@ -74,6 +72,33 @@ fn assert_r_matches_leto(
     }
 }
 
+fn measure_shape<const ROWS: usize, const COLS: usize>(
+    c: &mut Criterion,
+    device: &WgpuDevice,
+    id: &str,
+) {
+    let host = matrix_values::<ROWS, COLS>();
+    let matrix = device.upload(&host).expect("benchmark input upload");
+    let layout = Layout::c_contiguous([ROWS, COLS]).expect("invariant: benchmark shape is valid");
+
+    assert_r_matches_leto::<ROWS, COLS>(device, &matrix, &layout, &host);
+
+    c.bench_function(id, |b| {
+        b.iter(|| {
+            let result = qr_decompose_blocked(
+                device,
+                black_box(StridedOperand {
+                    buffer: &matrix,
+                    layout: &layout,
+                }),
+            )
+            .expect("benchmark blocked QR");
+            wait(device);
+            black_box(result)
+        });
+    });
+}
+
 fn blocked_qr_tail(c: &mut Criterion) {
     let device = match WgpuDevice::try_default("hephaestus-blocked-qr-tail-bench") {
         Ok(device) => device,
@@ -82,26 +107,8 @@ fn blocked_qr_tail(c: &mut Criterion) {
             return;
         }
     };
-    let host = matrix_values();
-    let matrix = device.upload(&host).expect("benchmark input upload");
-    let layout = Layout::c_contiguous([ROWS, COLS]).expect("invariant: benchmark shape is valid");
-
-    assert_r_matches_leto(&device, &matrix, &layout, &host);
-
-    c.bench_function("blocked_qr/final_two_panels_70x35", |b| {
-        b.iter(|| {
-            let result = qr_decompose_blocked(
-                &device,
-                black_box(StridedOperand {
-                    buffer: &matrix,
-                    layout: &layout,
-                }),
-            )
-            .expect("benchmark blocked QR");
-            wait(&device);
-            black_box(result)
-        });
-    });
+    measure_shape::<70, 35>(c, &device, "blocked_qr/final_two_panels_70x35");
+    measure_shape::<192, 128>(c, &device, "blocked_qr/four_panels_192x128");
 }
 
 criterion_group!(benches, blocked_qr_tail);

@@ -153,6 +153,28 @@ these are distinct profile samples, not one stable benchmark result. The
 production harness no longer duplicates the implementation's private panel
 size after the narrow route made that diagnostic obsolete.
 
+### Blocked-QR four-panel direct-transfer Criterion A/B
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Both runs use Criterion 0.8.2 defaults, the same 192×128 input,
+device completion inside the timed iteration, and a complete Leto `R`
+differential before timing.
+
+| Four-panel schedule | 95% interval | Median |
+| --- | ---: | ---: |
+| Blocked region transfers (`before`) | 1.1903–1.2206 ms | 1.2046 ms |
+| One dense download and one `R` upload | 456.32–466.56 µs | 461.24 µs |
+
+The displayed medians differ by **61.710%**. Criterion reports a
+**−62.055% central change estimate** (95% interval **−62.621% to −61.496%**,
+`p = 0.00`). The unchanged 70×35 control has a **−1.1462% central change
+estimate** (95% interval **−3.7574% to +1.1498%**, `p = 0.39`), so the matched
+run detects no control change.
+At 192×128 the direct route removes two 24,576-byte compact device buffers,
+256-byte reflector storage, and one 256-byte pooled uniform allocation:
+**49,664 bytes of device scratch**. The 98,304-byte device `R` output and
+readback staging allocation remain required.
+
 ### Blocked-QR narrow direct-transfer Criterion A/B
 
 Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,

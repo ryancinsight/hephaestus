@@ -2,6 +2,35 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf]
+
+- [x] Add a value-validating profile for the 64/65-column boundary and one
+      multi-panel shape.
+- [x] Measure the wide path's synchronization and live-allocation model.
+- [x] Implement only the evidence-selected production optimization.
+- [x] Verify complete Leto `R`, solve, and reconstruction semantics.
+- [x] Record matched Criterion A/B.
+- [x] Require exact-head provider CI as the merge gate.
+
+Implementation owner: Codex on `codex/hephaestus-qr-wide-profile`.
+
+Local evidence: the committed production profile compares direct and blocked
+schedules at 96×64, 96×65, 192×128, and 192×129 and validates every `R`
+against Leto. An exploratory sweep through 768×512 found no blocked crossover;
+the production change remains bounded to four panels. At 192×128 the matched
+Criterion median decreases from 1.2046 ms to 461.24 µs (61.710%); Criterion's
+central estimate is −62.055% (95% interval −62.621% to −61.496%, `p = 0.00`).
+The unchanged 70×35 control has no detectable change (`p = 0.39`).
+The direct route removes 49,664 bytes of device scratch at 192×128 while
+preserving the 98,304-byte `R` output. The focused blocked-QR Nextest run
+passes 6/6, including the 128-column direct and 129-column GPU-wide boundaries.
+Warning-denied all-target Clippy, full package Nextest 173/173, doctests 2/2,
+formatting, and the two touched benchmark smoke targets are green. The initial
+eight-shape debug profile exceeded the executable budget; the committed
+instrument retains the 64/65 and 128/129 routing boundaries and completes
+within budget. Exact-head WGPU, CUDA, ROCm, and macOS Metal provider CI is
+green; hardware CUDA and ROCm jobs are runner-gated.
+
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]
 
 - [x] Re-run the retained blocked-QR component profile after PR #142.
@@ -29,9 +58,10 @@ Implementation-head provider jobs pass: WGPU `90490216440` (6m16s), CUDA
 `90490216702` (7m10s), ROCm `90490216571` (6m01s), and macOS Metal
 `90490216746` (5m36s). Hardware-only CUDA and ROCm jobs skip on the
 pull-request event as designed. Review follow-up removes the obsolete
-duplicated CPU-tail profile and reconciles its two historical samples. The
-pull request merges only after WGPU, CUDA, ROCm, and macOS Metal pass on the
-delivered head.
+duplicated CPU-tail profile and reconciles its two historical samples. PR #143
+merged at `6a15e17` after exact review-follow-up head `60a1843` passed WGPU
+`90494790828`, CUDA `90494790688`, ROCm `90494790469`, and macOS Metal
+`90494791112`.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 

@@ -7,7 +7,7 @@
 //!
 //! - [`qr_decompose`] — full host delegation (panel + trailing on CPU).
 //! - [`qr_decompose_blocked`] — width-selected hybrid algorithm. Matrices up to
-//!   two panels use one host factorization; wider matrices factor panels on the
+//!   four panels use one host factorization; wider matrices factor panels on the
 //!   CPU, apply wide trailing Householder updates on the GPU, and finish the
 //!   final at-most-one-block tail on the CPU after a paired readback.
 //!
@@ -318,13 +318,18 @@ pub fn qr_decompose(
 /// applied to the trailing columns in one GPU dispatch.
 const QR_BLOCK_SIZE: usize = 32;
 
+/// Bounded measured panel regime where one dense host factorization outperforms
+/// blocked region transfers and per-panel synchronization.
+const QR_DIRECT_PANEL_LIMIT: usize = 4;
+
 /// Blocked QR factorization **A = Q R** with hybrid trailing Householder
 /// application.
 ///
-/// Dense matrices of at most two `QR_BLOCK_SIZE` panels use the canonical
+/// Dense matrices of at most four `QR_BLOCK_SIZE` panels use the canonical
 /// [`qr_decompose`] host factorization directly. This regime has no wide
-/// trailing region for the GPU kernel, so one dense download and one `R` upload
-/// replace the blocked path's region gather/scatter and compact device scratch.
+/// enough trailing work to repay the blocked path's region gather/scatter,
+/// compact device scratch, and per-panel synchronization, so one dense download
+/// and one `R` upload replace that schedule.
 ///
 /// The algorithm processes the matrix in panels of `QR_BLOCK_SIZE` columns.
 /// For wider matrices, each panel *k* performs:
@@ -377,11 +382,10 @@ pub fn qr_decompose_blocked(
     }
 
     let block_size = QR_BLOCK_SIZE.min(n);
-    // Up to two blocks already execute all Householder arithmetic on the CPU.
-    // Use the canonical host implementation directly so this size regime needs
-    // one dense download and one R upload rather than region gather/scatter
-    // kernels and their compact device scratch.
-    if n.saturating_sub(block_size) <= block_size {
+    // Component profiling shows the blocked schedule remains transfer-bound
+    // through four panels. Route that bounded regime directly; wider shapes
+    // keep the GPU path pending their own measured crossover.
+    if n.div_ceil(block_size) <= QR_DIRECT_PANEL_LIMIT {
         return qr_decompose(device, matrix);
     }
 
