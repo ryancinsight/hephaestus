@@ -1,21 +1,20 @@
-//! Synchronization-floor profiling for hybrid blocked decomposition paths.
+//! Component profiling for hybrid blocked decomposition paths.
 //!
 //! The blocked LU/QR algorithms already have end-to-end comparative benchmark
-//! rows. This harness isolates the host/device transfer pattern those paths
-//! impose at the measured benchmark shapes, so follow-up kernel work targets
-//! the synchronization component rather than guessing from total time.
+//! rows. This harness retains LU's transfer floor and validates the current QR
+//! production factorization, so follow-up work targets measured components
+//! rather than stale synthetic transfer models.
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result, panel_qr_packed};
-use hephaestus_wgpu::WgpuDevice;
+use hephaestus_core::ComputeDevice;
+use hephaestus_wgpu::{StridedOperand, WgpuDevice, qr_decompose_blocked};
+use leto::Layout;
 
 const ITERS: usize = 100;
-const QR_REFLECTORS: usize = 32;
 const QR_ROWS: usize = 70;
 const QR_COLS: usize = 35;
-const QR_BLOCK_SIZE: usize = 32;
 
 fn wait_wgpu(device: &WgpuDevice) {
     device
@@ -91,11 +90,10 @@ fn profile_blocked_lu_sync(device: &WgpuDevice) {
     );
 }
 
-fn profile_blocked_qr_sync(device: &WgpuDevice) {
+fn qr_source() -> Vec<f32> {
     let rows = QR_ROWS;
     let cols = QR_COLS;
-    let len = rows * cols;
-    let mut host = vec![0.0f32; len];
+    let mut host = vec![0.0f32; rows * cols];
     for row in 0..rows {
         for col in 0..cols {
             host[row * cols + col] = if row == col {
@@ -105,235 +103,61 @@ fn profile_blocked_qr_sync(device: &WgpuDevice) {
             };
         }
     }
+    host
+}
 
+fn profile_blocked_qr_end_to_end(device: &WgpuDevice) {
+    let host = qr_source();
     let buffer = device.upload(&host).expect("upload QR profile matrix");
-    let mut out = vec![0.0f32; len];
-    let trail_cols = 3usize;
-    let trailing = vec![0.25f32; rows * trail_cols];
-    let trailing_buf = device
-        .upload(&trailing)
-        .expect("upload QR trailing columns");
-    let mut trailing_out = vec![0.0f32; trailing.len()];
-    let vectors: Vec<Vec<f32>> = (0..QR_REFLECTORS)
-        .map(|j| vec![1.0f32 / (1.0 + j as f32); rows - j])
-        .collect();
-    let packed_vectors: Vec<f32> = vectors.iter().flatten().copied().collect();
-
-    let start = Instant::now();
-    for _ in 0..ITERS {
-        device
-            .download(&buffer, &mut out)
-            .expect("download QR input");
-        assert_close_slice(&out, &host);
-
-        device
-            .write_buffer(&trailing_buf, &trailing)
-            .expect("write QR trailing columns");
-        let uploaded_vectors = device
-            .upload(black_box(&packed_vectors))
-            .expect("upload packed QR reflectors");
-        black_box(&uploaded_vectors);
-
-        device
-            .download(&trailing_buf, &mut trailing_out)
-            .expect("download QR trailing columns");
-        assert_close_slice(&trailing_out, &trailing);
-    }
-    wait_wgpu(device);
-
-    println!(
-        "Blocked QR 70x35 sync floor: {} ns/iter",
-        elapsed_per_iter(start.elapsed()).as_nanos()
-    );
-}
-
-fn profile_blocked_qr_cpu_panel_lower_bound() {
-    let mut source = vec![0.0f32; QR_ROWS * QR_COLS];
-    for row in 0..QR_ROWS {
-        for col in 0..QR_COLS {
-            source[row * QR_COLS + col] = if row == col {
-                5.0
-            } else {
-                0.01 / (1.0 + row.abs_diff(col) as f32)
-            };
-        }
-    }
-
-    let start = Instant::now();
-    for _ in 0..ITERS {
-        let mut host = source.clone();
-        for k in (0..QR_COLS).step_by(QR_BLOCK_SIZE) {
-            let b = QR_BLOCK_SIZE.min(QR_COLS - k);
-            let panel_rows = QR_ROWS - k;
-            let mut panel = vec![0.0f32; panel_rows * b];
-            for i in 0..panel_rows {
-                for j in 0..b {
-                    panel[i * b + j] = host[(k + i) * QR_COLS + (k + j)];
-                }
-            }
-            let (heads, betas) =
-                panel_qr_packed(&mut panel, panel_rows, b).expect("factor QR profile panel");
-            black_box((&heads, &betas));
-
-            for i in 0..panel_rows {
-                for j in 0..b {
-                    host[(k + i) * QR_COLS + (k + j)] = if j >= i { panel[i * b + j] } else { 0.0 };
-                }
-            }
-        }
-        black_box(&host);
-    }
-
-    println!(
-        "Blocked QR 70x35 CPU panel lower bound: {} ns/iter",
-        elapsed_per_iter(start.elapsed()).as_nanos()
-    );
-}
-
-fn profile_blocked_qr_timestamp_queries() {
-    let device = match WgpuDevice::try_default_with_features_and_limits(
-        "hephaestus-qr-timestamp-profile",
-        wgpu::Features::TIMESTAMP_QUERY,
-        wgpu::Limits::downlevel_defaults(),
-    ) {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("Skipping QR timestamp profile: timestamp queries unavailable: {error}");
-            return;
-        }
-    };
-    match profile_blocked_qr_launch_timestamps(&device) {
-        Ok(profile) => {
-            println!(
-                "Blocked QR {QR_REFLECTORS}-reflector timestamp launch total: {:.1} ns",
-                profile.total_ns
-            );
-            println!(
-                "Blocked QR reflector timestamp launch median: {:.1} ns",
-                profile.median_ns
-            );
-        }
-        Err(error) => {
-            eprintln!("Skipping QR timestamp profile: {error}");
-        }
-    }
-}
-
-struct TimestampProfile {
-    total_ns: f64,
-    median_ns: f64,
-}
-
-fn profile_blocked_qr_launch_timestamps(device: &WgpuDevice) -> Result<TimestampProfile> {
-    let timestamp_period = f64::from(device.queue().get_timestamp_period());
-    if timestamp_period == 0.0 {
-        return Err(HephaestusError::DispatchFailed {
-            message: "timestamp period is zero; timestamp queries are unsupported".to_string(),
-        });
-    }
-
-    let query_count =
-        u32::try_from(QR_REFLECTORS * 2).expect("invariant: timestamp query count fits u32");
-    let query_set = device.inner().create_query_set(&wgpu::QuerySetDescriptor {
-        label: Some("hephaestus-qr-launch-timestamps"),
-        ty: wgpu::QueryType::Timestamp,
-        count: query_count,
-    });
-    let query_bytes = u64::from(query_count)
-        * u64::try_from(std::mem::size_of::<u64>()).expect("invariant: u64 byte width fits u64");
-    let resolve = device.inner().create_buffer(&wgpu::BufferDescriptor {
-        label: Some("hephaestus-qr-launch-timestamp-resolve"),
-        size: query_bytes,
-        usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-    let staging = device.inner().create_buffer(&wgpu::BufferDescriptor {
-        label: Some("hephaestus-qr-launch-timestamp-staging"),
-        size: query_bytes,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-
-    let module = device
-        .inner()
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("hephaestus-qr-launch-noop"),
-            source: wgpu::ShaderSource::Wgsl("@compute @workgroup_size(1) fn main() {}".into()),
-        });
-    let pipeline = device
-        .inner()
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("hephaestus-qr-launch-noop"),
-            layout: None,
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-qr-launch-timestamps"),
-        });
-    for reflector in 0..QR_REFLECTORS {
-        let start = u32::try_from(reflector * 2).expect("invariant: query index fits u32");
-        let end = start + 1;
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("hephaestus-qr-launch-timestamp-pass"),
-                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
-                    query_set: &query_set,
-                    beginning_of_pass_write_index: Some(start),
-                    end_of_pass_write_index: Some(end),
-                }),
-            });
-            pass.set_pipeline(&pipeline);
-            pass.dispatch_workgroups(1, 1, 1);
-        }
-    }
-    encoder.resolve_query_set(&query_set, 0..query_count, &resolve, 0);
-    encoder.copy_buffer_to_buffer(&resolve, 0, &staging, 0, query_bytes);
-    device.queue().submit(Some(encoder.finish()));
-
-    let slice = staging.slice(..query_bytes);
-    let (sender, receiver) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |result| {
-        let _ = sender.send(result);
-    });
+    let layout =
+        Layout::c_contiguous([QR_ROWS, QR_COLS]).expect("invariant: profile shape is valid");
+    let checked = qr_decompose_blocked(
+        device,
+        StridedOperand {
+            buffer: &buffer,
+            layout: &layout,
+        },
+    )
+    .expect("factor QR profile validation matrix");
+    let mut actual = vec![0.0f32; QR_ROWS * QR_COLS];
     device
-        .inner()
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| HephaestusError::TransferFailed {
-            message: format!("device poll failed: {e:?}"),
-        })?;
-    receiver
-        .recv()
-        .map_err(|_| HephaestusError::TransferFailed {
-            message: "timestamp map_async callback dropped".to_string(),
-        })?
-        .map_err(|e| HephaestusError::TransferFailed {
-            message: format!("timestamp buffer mapping failed: {e:?}"),
-        })?;
+        .download(checked.r_buffer(), &mut actual)
+        .expect("download QR profile validation factor");
+    let leto_matrix = leto::Array::from_shape_vec([QR_ROWS, QR_COLS], host.clone())
+        .expect("invariant: profile shape matches storage");
+    let expected = leto_ops::qr_decompose(&leto_matrix.view())
+        .expect("factor Leto QR profile matrix")
+        .r();
+    for (index, (&actual, &expected)) in actual
+        .iter()
+        .zip(leto::Storage::as_slice(expected.storage()))
+        .enumerate()
+    {
+        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        assert!(
+            (actual - expected).abs() <= tolerance,
+            "QR profile factor mismatch at {index}: got {actual}, expected {expected}"
+        );
+    }
 
-    let mapped = slice
-        .get_mapped_range()
-        .expect("invariant: successful map callback publishes a readable range");
-    let timestamps: &[u64] = bytemuck::cast_slice(&mapped);
-    let mut durations: Vec<f64> = timestamps
-        .chunks_exact(2)
-        .map(|pair| pair[1].saturating_sub(pair[0]) as f64 * timestamp_period)
-        .collect();
-    drop(mapped);
-    staging.unmap();
+    let start = Instant::now();
+    for _ in 0..ITERS {
+        let decomposition = qr_decompose_blocked(
+            device,
+            black_box(StridedOperand {
+                buffer: &buffer,
+                layout: &layout,
+            }),
+        )
+        .expect("factor QR profile matrix");
+        wait_wgpu(device);
+        black_box(decomposition);
+    }
 
-    durations.sort_by(f64::total_cmp);
-    let total_ns = durations.iter().sum();
-    let median_ns = durations[durations.len() / 2];
-    Ok(TimestampProfile {
-        total_ns,
-        median_ns,
-    })
+    println!(
+        "Blocked QR 70x35 current end-to-end: {} ns/iter",
+        elapsed_per_iter(start.elapsed()).as_nanos()
+    );
 }
 
 fn main() {
@@ -349,7 +173,5 @@ fn main() {
     println!("Iterations: {ITERS}");
     println!("WGPU GPU Backend: {}", device.backend_name());
     profile_blocked_lu_sync(&device);
-    profile_blocked_qr_sync(&device);
-    profile_blocked_qr_cpu_panel_lower_bound();
-    profile_blocked_qr_timestamp_queries();
+    profile_blocked_qr_end_to_end(&device);
 }

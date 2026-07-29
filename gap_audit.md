@@ -634,6 +634,28 @@ No open feature-combination defect is currently recorded in the backend scope.
   costs one bounded transient `m × tail_cols` staging buffer (840 bytes at the
   measured shape) until the shared poll completes. Evidence tier:
   value-semantic Nextest 8/8, static allocation audit, and matched Criterion A/B.
+- [patch] Dense blocked QR matrices of at most two panels now use the canonical
+  host QR operation directly. The pre-change selection profile measures the
+  validated 70×35 production path at 347.434 µs while the exact CPU final-tail
+  arithmetic schedule costs 38.189 µs, leaving about 309 µs in region-transfer
+  and resource orchestration. A separate post-change closure run measures the
+  production path at 96.475 µs and the retired CPU-tail diagnostic at
+  30.373 µs. The production profile no longer duplicates the private panel
+  size after the narrow route makes that diagnostic obsolete. One dense
+  download and one `R` upload replace that narrow-only gather/scatter schedule.
+  The matched Criterion median decreases from 353.68 µs to 136.95 µs (61.279%);
+  Criterion's central change estimate is −61.887% (95% interval −63.093% to
+  −60.633%, `p = 0.00`). At 70×35 the path removes 18,432 bytes of device
+  scratch while retaining the required 9,800-byte `R` output. The 32/33/35/64
+  direct boundary and 65-column GPU-wide boundary remain Leto-equivalent for
+  complete `R`, solve, and reconstruction contracts. Evidence tier:
+  value-semantic differential tests, a production-executing component profile,
+  and matched Criterion A/B.
+  Rejected alternative: making only the unused narrow-path Householder
+  resources conditional produced no detectable latency change (Criterion
+  central estimate −1.8495%, 95% interval −10.014% to +6.2324%, `p = 0.69`);
+  removing the complete blocked transfer schedule targets the measured bound
+  and makes those resources unreachable in the narrow regime.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.
@@ -920,11 +942,12 @@ host before uploading device buffers.
   packs Householder vector offsets and beta coefficients into one reflector
   metadata buffer (two storage bindings → one). The 70x35 comparative row did not
   improve after this packing change: WGPU 480.8 µs vs Leto 14.9 µs and `nalgebra`
-  10.0 µs. Remaining risk: blocked QR still trails Leto/`nalgebra`; the next
-  measured lever is reducing the host/device synchronization count, not metadata
-  buffer count or CPU panel arithmetic. Evidence tier: value-semantic blocked QR
-  tests, empirical synchronization/component profiles, comparative benchmark, and
-  GPU-timeline timestamp measurement in `benchmark_results.md`.
+  10.0 µs. The retained profile now executes the production QR path instead of
+  the superseded synthetic transfer schedule. The two-panel regime uses one
+  dense download and one `R` upload; wider matrices retain blocked GPU
+  Householder updates. Evidence tier: value-semantic blocked QR tests,
+  production-executing component profiles, comparative benchmarks, and the
+  historical GPU-timeline measurements in `benchmark_results.md`.
 - [minor] WGPU CSR sparse storage uploads Leto CSR matrices into device-resident
   values plus one packed index buffer and executes SpMV/SpMM in WGSL without
   downloading operands to the host. The kernel layout stays within WGPU's portable
