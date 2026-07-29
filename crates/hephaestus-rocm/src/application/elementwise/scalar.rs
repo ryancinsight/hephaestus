@@ -91,7 +91,7 @@ where
     Op: BinaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
-    let out = device.alloc_zeroed::<T>(a.len())?;
+    let out = device.alloc_uninitialized::<T>(a.len())?;
     scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }

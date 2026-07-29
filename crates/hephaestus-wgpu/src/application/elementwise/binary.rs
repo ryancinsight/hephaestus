@@ -132,7 +132,7 @@ where
     Op: TypedBinaryExpr<Wgsl, T>,
     T: DialectScalar<Wgsl> + Pod,
 {
-    let out = device.alloc_zeroed::<T>(a.len)?;
+    let out = device.alloc_uninitialized::<T>(a.len)?;
     binary_elementwise_typed_into::<Op, T>(device, a, b, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }
@@ -176,7 +176,7 @@ where
     // The length check is performed inside binary_elementwise_into; the output
     // buffer is allocated at a.len and into validates out.len == a.len (always
     // true) and a.len == b.len (our actual guard).
-    let out = device.alloc_zeroed::<T>(a.len)?;
+    let out = device.alloc_uninitialized::<T>(a.len)?;
     binary_elementwise_into::<Op, T>(device, a, b, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }

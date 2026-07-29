@@ -129,7 +129,7 @@ where
     Op: TypedBinaryExpr<CudaC, T>,
     T: DialectScalar<CudaC> + Pod,
 {
-    let out = device.alloc_zeroed::<T>(lhs.len())?;
+    let out = device.alloc_uninitialized::<T>(lhs.len())?;
     binary_elementwise_typed_into::<Op, T>(device, lhs, rhs, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }
@@ -173,7 +173,7 @@ where
             device_len: rhs.len(),
         });
     }
-    let out = device.alloc_zeroed::<T>(lhs.len())?;
+    let out = device.alloc_uninitialized::<T>(lhs.len())?;
     binary_elementwise_into::<Op, T>(device, lhs, rhs, &out, BlockWidth::DEFAULT)?;
     Ok(out)
 }
