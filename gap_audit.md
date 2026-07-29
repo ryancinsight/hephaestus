@@ -621,6 +621,19 @@ No open feature-combination defect is currently recorded in the backend scope.
   resource construction. Evidence tier: value-semantic blocked QR tests
   `cargo nextest run -p hephaestus-wgpu blocked_qr` (4/4), static diagnostics,
   and empirical `cargo bench -p hephaestus-wgpu --bench decomposition_sync`.
+- [minor] Blocked QR final-panel synchronization count is reduced. When the
+  remaining tail is at most one 32-column block, WGPU gathers the current panel
+  and tail into its two existing compact device buffers, maps both after one
+  poll, finishes the tail through the backend-neutral packed-panel Householder
+  operation, and writes both final regions in one submission. Complete `R` and
+  solve contracts match Leto across 32/33/35/64/65 columns. Criterion 0.8.2 on
+  the unchanged 70×35 workload measures 516.58 µs before and 346.19 µs after
+  (32.984% lower median). Criterion's central change estimate is −29.612%
+  (95% interval −34.402% to −23.972%, `p = 0.00`).
+  Persistent compact scratch remains two `m × 32` buffers; the latency reduction
+  costs one bounded transient `m × tail_cols` staging buffer (840 bytes at the
+  measured shape) until the shared poll completes. Evidence tier:
+  value-semantic Nextest 8/8, static allocation audit, and matched Criterion A/B.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.

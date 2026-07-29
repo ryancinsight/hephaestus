@@ -66,6 +66,10 @@ name = "decomposition_sync"
 harness = false
 
 [[bench]]
+name = "blocked_qr_tail"
+harness = false
+
+[[bench]]
 name = "scan_throughput"
 harness = false
 

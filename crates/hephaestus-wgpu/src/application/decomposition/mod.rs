@@ -129,18 +129,20 @@
 //! across columns.  Each block iteration costs:
 //!
 //! - Panel factor: 2b²(m−k) − 2b³/3
-//! - **Trailing apply: 2b(m−k)(n−k−b)** (GPU, *b* kernel launches)
+//! - **Trailing apply: 2b(m−k)(n−k−b)** (GPU while wider than one block;
+//!   final at-most-one-block tail on CPU after a paired readback)
 //!
 //! Summing over all ⌈n/b⌉ blocks recovers 2n²(m − n/3) total
 //! flops. ∎
 //!
 //! The [`crate::application::decomposition::qr::qr_decompose_blocked`] entry point implements this: the panel
 //! factorisation uses the same Householder convention as leto-ops
-//! [`panel_qr_packed`](hephaestus_core::panel_qr_packed), and each
-//! of the *b* reflectors is applied to the trailing columns via a
-//! dedicated 256-thread workgroup kernel that computes
-//! `A[:, col] -= β · v · (vᵀ · A[:, col])` using a parallel
-//! tree reduction for the dot product.
+//! [`panel_qr_packed`](hephaestus_core::panel_qr_packed). Wide trailing
+//! columns use a dedicated 256-thread workgroup kernel computing
+//! `A[:, col] -= β · v · (vᵀ · A[:, col])`; the final panel and tail share one
+//! readback, then
+//! [`apply_packed_qr_panel_left`](hephaestus_core::apply_packed_qr_panel_left)
+//! applies the same reflector sequence before the tail is factored.
 
 pub(crate) mod validate;
 

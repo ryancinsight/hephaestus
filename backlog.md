@@ -4,7 +4,36 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf] — in progress
+## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; scope:
+  `hephaestus-core` packed-panel Householder application, WGPU paired
+  matrix-region transfer, the blocked-QR final two-panel path, value-semantic
+  contracts, a Criterion before/after benchmark, ADR, and synchronized
+  performance artifacts.
+- Outcome: finish the final two QR panels after one paired readback, reusing the
+  existing panel and compact device buffers so the blocked path removes one
+  host/device synchronization without adding persistent compact scratch.
+- Non-goals: changing QR block width or arithmetic precision, CPU fallback for
+  earlier panels, a second QR algorithm, CUDA/ROCm/Metal decomposition changes,
+  benchmark workload reduction, or cross-device speed claims.
+- Acceptance: matrices on both sides of the 32-column block boundary preserve
+  reconstruction and least-squares contracts; the final two-panel path performs
+  one paired readback and no trailing GPU reflector dispatch; device scratch
+  remains bounded by the existing two `m * block_size` compact buffers; the
+  bounded extra live staging is quantified; a matched Criterion baseline/result
+  run validates every factorization; formatting, warning-denied checks, focused
+  Nextest, doctests, semver checks, benchmark smoke, and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[minor]` additive backend-neutral packed-panel operation
+  plus a WGPU scheduling optimization. ADR 0038 owns the interface and
+  synchronization decision.
+- Status: implementation, matched local evidence, semver verification, and
+  exact-head locked provider CI complete in PR #142. CUDA job 90444185125,
+  ROCm job 90444185117, WGPU job 90444185164, and macOS Metal job 90444185226
+  pass. Hardware-only jobs correctly skip on the pull-request event.
+
+## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-mixed-reduction-batch`; scope: unified
   submission of independent prepared scalar and axis reductions, exact WGPU
@@ -19,7 +48,7 @@ cuda-oxide + cutile).
   warning-denied package checks, focused Nextest, doctests, benchmark smoke,
   and exact-head provider CI pass.
 - Risk/change class: `[minor]` additive WGPU batching surface.
-- Status: provider-complete in PR #141. The mixed exact contract, all-target
+- Status: complete in merged PR #141. The mixed exact contract, all-target
   package check, and three matched benchmark runs pass. Exact implementation-
   head jobs passed WGPU `90427454090`, CUDA `90427454188`, ROCm `90427454307`,
   and macOS Metal `90427454254`; AMD and NVIDIA hardware-only jobs skipped as

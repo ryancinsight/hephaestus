@@ -7,8 +7,9 @@
 //!
 //! - [`qr_decompose`] — full host delegation (panel + trailing on CPU).
 //! - [`qr_decompose_blocked`] — blocked algorithm where panel
-//!   factorization runs on the CPU but the trailing Householder application
-//!   runs on the GPU via a dedicated compute kernel.
+//!   factorization runs on the CPU, wide trailing Householder applications run
+//!   on the GPU, and the final at-most-one-block tail finishes on the CPU after
+//!   a paired readback.
 //!
 //! # Mathematical Foundations
 //!
@@ -48,7 +49,9 @@ use std::any::TypeId;
 use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use super::region::{
-    MatrixRegion, download_matrix_region_compact_into, write_matrix_region_compact_reusable,
+    MatrixRegion, MatrixRegionDownload, MatrixRegionUpload, download_matrix_region_compact_into,
+    download_matrix_region_pair_compact_into, write_matrix_region_compact_reusable,
+    write_matrix_region_pair_compact_reusable,
 };
 use super::validate::validate_dense_operand;
 use crate::application::pipeline::cached_pipeline;
@@ -56,7 +59,7 @@ use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-use hephaestus_core::panel_qr_packed;
+use hephaestus_core::{apply_packed_qr_panel_left, panel_qr_packed};
 
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.
@@ -305,7 +308,7 @@ pub fn qr_decompose(
 }
 
 // ---------------------------------------------------------------------------
-// Entry point 2 — blocked with GPU trailing Householder application
+// Entry point 2 — blocked with hybrid trailing Householder application
 // ---------------------------------------------------------------------------
 
 /// Panel block size for the blocked QR algorithm.
@@ -315,8 +318,8 @@ pub fn qr_decompose(
 /// applied to the trailing columns in one GPU dispatch.
 const QR_BLOCK_SIZE: usize = 32;
 
-/// Blocked QR factorization **A = Q R** with GPU-accelerated trailing
-/// Householder application.
+/// Blocked QR factorization **A = Q R** with hybrid trailing Householder
+/// application.
 ///
 /// The algorithm processes the matrix in panels of `QR_BLOCK_SIZE` columns.
 /// For each panel *k*:
@@ -328,7 +331,10 @@ const QR_BLOCK_SIZE: usize = 32;
 ///    scatters the factored upper triangle back into the main matrix and zeroes
 ///    out the sub-diagonal elements.
 /// 4. The *b* Householder reflectors are applied to the trailing columns
-///    `A[k:m, k+b:n]` directly on the **GPU** in-place.
+///    `A[k:m, k+b:n]` directly on the **GPU** in-place while the trailing width
+///    exceeds one block.
+/// 5. The final panel and at-most-one-block tail are gathered together and
+///    finished on the CPU before one paired device write.
 ///
 /// # Errors
 ///
@@ -448,13 +454,38 @@ pub fn qr_decompose_blocked(
         } else {
             matrix.buffer
         };
-        download_matrix_region_compact_into(
-            device,
-            panel_source,
-            &temp_compact_buf,
-            panel_region,
-            &mut panel,
-        )?;
+        let finish_tail_on_cpu = trail_cols > 0 && trail_cols <= block_size;
+        if finish_tail_on_cpu {
+            let tail_region = MatrixRegion {
+                stride: n,
+                row_start: 0,
+                col_start: k + b,
+                rows: m,
+                cols: trail_cols,
+            };
+            download_matrix_region_pair_compact_into(
+                device,
+                panel_source,
+                MatrixRegionDownload {
+                    temp: &temp_compact_buf,
+                    region: panel_region,
+                    out: &mut panel,
+                },
+                MatrixRegionDownload {
+                    temp: &vectors_dev,
+                    region: tail_region,
+                    out: &mut packed_vectors,
+                },
+            )?;
+        } else {
+            download_matrix_region_compact_into(
+                device,
+                panel_source,
+                &temp_compact_buf,
+                panel_region,
+                &mut panel,
+            )?;
+        }
 
         if !work_copy_queued {
             let mut encoder =
@@ -493,8 +524,85 @@ pub fn qr_decompose_blocked(
             }
         }
 
-        // Extract packed vectors for Step 6 before zeroing sub-diagonal elements of panel
         let factored_panel = &mut panel[k * b..];
+        let panel_write_region = MatrixRegion {
+            stride: n,
+            row_start: k,
+            col_start: k,
+            rows: panel_rows,
+            cols: b,
+        };
+
+        if finish_tail_on_cpu {
+            let tail_start = k + b;
+            let tail_rows = m - tail_start;
+            let (tail_heads, tail_betas) = {
+                let active_tail = &mut packed_vectors[k * trail_cols..];
+                apply_packed_qr_panel_left(
+                    factored_panel,
+                    panel_rows,
+                    b,
+                    &heads,
+                    &betas,
+                    active_tail,
+                    trail_cols,
+                )?;
+                panel_qr_packed(&mut active_tail[b * trail_cols..], tail_rows, trail_cols)?
+            };
+            cumulative_heads.extend_from_slice(&tail_heads);
+            cumulative_betas.extend_from_slice(&tail_betas);
+
+            for col in 0..trail_cols {
+                for row in 0..m {
+                    packed[row * n + tail_start + col] = packed_vectors[row * trail_cols + col];
+                }
+            }
+
+            for row in 0..panel_rows {
+                for col in 0..b {
+                    if col < row {
+                        factored_panel[row * b + col] = 0.0;
+                    }
+                }
+            }
+            {
+                let active_tail = &mut packed_vectors[k * trail_cols..];
+                let final_panel = &mut active_tail[b * trail_cols..];
+                for row in 0..tail_rows {
+                    for col in 0..trail_cols {
+                        if col < row {
+                            final_panel[row * trail_cols + col] = 0.0;
+                        }
+                    }
+                }
+
+                let tail_write_region = MatrixRegion {
+                    stride: n,
+                    row_start: k,
+                    col_start: tail_start,
+                    rows: panel_rows,
+                    cols: trail_cols,
+                };
+                write_matrix_region_pair_compact_reusable(
+                    device,
+                    &work_buf,
+                    MatrixRegionUpload {
+                        temp: &temp_compact_buf,
+                        host: factored_panel,
+                        region: panel_write_region,
+                    },
+                    MatrixRegionUpload {
+                        temp: &vectors_dev,
+                        host: active_tail,
+                        region: tail_write_region,
+                    },
+                )?;
+            }
+            break;
+        }
+
+        // Extract packed vectors for the GPU trailing update before zeroing
+        // sub-diagonal panel elements.
         packed_vectors.clear();
         vector_offsets.clear();
         for j in 0..b {
@@ -516,13 +624,6 @@ pub fn qr_decompose_blocked(
         }
 
         // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
-        let panel_write_region = MatrixRegion {
-            stride: n,
-            row_start: k,
-            col_start: k,
-            rows: panel_rows,
-            cols: b,
-        };
         write_matrix_region_compact_reusable(
             device,
             &work_buf,
