@@ -2,6 +2,17 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf]
+
+- [ ] Add a value-validating profile for the 64/65-column boundary and one
+      multi-panel shape.
+- [ ] Measure the wide path's synchronization and live-allocation model.
+- [ ] Implement only the evidence-selected production optimization.
+- [ ] Verify complete Leto `R`, solve, and reconstruction semantics.
+- [ ] Record matched Criterion A/B and require exact-head provider CI.
+
+Implementation owner: Codex on `codex/hephaestus-qr-wide-profile`.
+
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]
 
 - [x] Re-run the retained blocked-QR component profile after PR #142.
@@ -29,9 +40,10 @@ Implementation-head provider jobs pass: WGPU `90490216440` (6m16s), CUDA
 `90490216702` (7m10s), ROCm `90490216571` (6m01s), and macOS Metal
 `90490216746` (5m36s). Hardware-only CUDA and ROCm jobs skip on the
 pull-request event as designed. Review follow-up removes the obsolete
-duplicated CPU-tail profile and reconciles its two historical samples. The
-pull request merges only after WGPU, CUDA, ROCm, and macOS Metal pass on the
-delivered head.
+duplicated CPU-tail profile and reconciles its two historical samples. PR #143
+merged at `6a15e17` after exact review-follow-up head `60a1843` passed WGPU
+`90494790828`, CUDA `90494790688`, ROCm `90494790469`, and macOS Metal
+`90494791112`.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 
