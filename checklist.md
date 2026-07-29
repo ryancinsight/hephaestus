@@ -6,13 +6,25 @@ Sprint target: 0.18.0. Phase: Closure.
 
 - [x] Extend the matched value-validating Criterion instrument across the
       128/129 routing boundary and an eight-panel workload.
-- [ ] Instrument retained blocked-QR region-transfer construction and waits.
-- [ ] Record the per-panel live-allocation model at 192×129 and a wider shape.
-- [ ] Implement only the evidence-selected transfer-workspace reuse.
-- [ ] Verify complete Leto `R`, solve, and reconstruction semantics.
+- [x] Instrument retained blocked-QR region-transfer construction and waits.
+- [x] Record the per-panel live-allocation model at 192×129 and a wider shape.
+- [x] Implement only the evidence-selected transfer-workspace reuse.
+- [x] Verify complete Leto `R`, solve, and reconstruction semantics.
 - [ ] Record matched Criterion A/B and require exact-head provider CI.
 
 Implementation owner: Codex on `codex/hephaestus-qr-wide-transfer`.
+
+Local evidence: the first panel remains a one-shot download, subsequent panels
+reuse one device-bound gather pipeline, bind group, metadata uniform, and
+staging allocation, and the final tail retains its exact one-shot size. This
+reduces download preparation count from five to three at 192×129 and from eight
+to three at 384×256. Peak staging remains 25,344 bytes and 98,304 bytes,
+respectively. A back-to-back Criterion run measures central changes of
+−11.796% at 192×129 and −7.2117% at 384×256 (`p = 0.00`); the warmed,
+unchanged 192×128 control has no detectable change (`p = 0.72`). The
+first-position 70×35 control is clock/load-sensitive and is excluded from the
+claim. Warning-denied all-target Clippy and focused blocked-QR Nextest 6/6
+pass; provider CI remains the merge gate.
 
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf]
 

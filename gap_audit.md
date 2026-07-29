@@ -674,6 +674,18 @@ No open feature-combination defect is currently recorded in the backend scope.
   differential tests, a production-executing component profile, static
   allocation accounting, matched machine-local Criterion A/B, and exact-head
   WGPU/CUDA/ROCm/macOS-Metal provider CI.
+- [patch] Retained wide blocked QR now reuses one device-bound panel download
+  workspace across iterations. The first panel and exact-width final tail stay
+  one-shot, preserving the final-panel decision in ADR 0038 and preventing the
+  192×129 tail from reserving a full 32-column block. Download preparation
+  count decreases from five to three at 192×129 and from eight to three at
+  384×256; peak staging remains 25,344 and 98,304 bytes. Back-to-back Criterion
+  central estimates improve 11.796% and 7.2117% (`p = 0.00`), while the warmed
+  192×128 direct control has no detectable change (`p = 0.72`). The
+  first-position 70×35 control is clock/load-sensitive and is excluded from
+  the claim. Evidence tier: complete Leto `R`, solve, and reconstruction
+  differential contracts; static resource-lifetime accounting; matched local
+  Criterion A/B. Exact-head provider CI remains pending.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.

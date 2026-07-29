@@ -22,7 +22,10 @@ cuda-oxide + cutile).
   and reconstruction contracts, and passes warning-denied package gates plus
   exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` internal transfer orchestration and memory reuse.
-- Status: claimed 2026-07-29; transfer-resource profile pending.
+- Status: implementation and local verification complete 2026-07-29;
+  exact-head provider CI pending. The retained panel workspace removes two
+  download preparations at 192×129 and five at 384×256 without increasing
+  peak staging.
 
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
 
