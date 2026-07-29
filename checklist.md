@@ -7,10 +7,10 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Route allocating contiguous and typed elementwise wrappers through the
       accepted overwrite-before-read allocation seam.
 - [x] Preserve one authoritative caller-owned dispatch path per operation.
-- [ ] Verify WGPU, CUDA, ROCm, and Metal delegation contracts with
+- [x] Verify WGPU, CUDA, ROCm, and Metal delegation contracts with
       value-semantic tests.
 - [x] Record the static device-traffic delta without claiming runtime gains.
-- [ ] Require exact-head provider CI before integration.
+- [x] Require exact-head provider CI before integration.
 
 Implementation owner: Codex on
 `codex/hephaestus-elementwise-overwrite`; production scope is the WGPU, CUDA,
@@ -27,7 +27,11 @@ ROCm feature compilation and macOS Metal delegation remain exact-head CI
 requirements. CUDA and ROCm omit one output-sized initialization write:
 modeled binary traffic decreases from four to three element transfers and
 unary/scalar traffic from three to two. Peak allocation is unchanged; no
-runtime claim is made.
+runtime claim is made. Exact source head `c58ccac` passed CUDA run
+`30489057110` job `90702049648`, ROCm run `30489057158` job `90702049969`,
+WGPU run `30489057150` job `90702049968`, and macOS Metal run `30489057087`
+job `90702049652`. Required-device AMD job `90702050664` and NVIDIA job
+`90702050245` skipped because no hardware runner was dispatched.
 
 ## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf]
 
