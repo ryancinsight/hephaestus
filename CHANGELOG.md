@@ -36,6 +36,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Reuse the WGPU blocked-QR panel download pipeline, bind group,
+  metadata uniform, and staging allocation across retained wide panels while
+  keeping the final tail exact-sized and one-shot. Download preparation count
+  decreases from five to three at 192×129 and from eight to three at 384×256
+  without increasing peak staging. Back-to-back Criterion central estimates
+  improve 11.796% and 7.2117%, respectively; the warmed 192×128 direct control
+  has no detectable change.
+
 - [patch] Route dense WGPU blocked QR matrices of at most four 32-column
   panels through the canonical host factorization. At 192×128 this removes
   49,664 bytes of device scratch and reduces the matched Criterion median from

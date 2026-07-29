@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-qr-wide-transfer`; scope: the retained WGPU
+  blocked-QR path at and above the 129-column routing boundary.
+- Governing decision:
+  [`docs/adr/0038-blocked-qr-final-panel-synchronization.md`](docs/adr/0038-blocked-qr-final-panel-synchronization.md).
+- Outcome: identify and remove measured per-panel region-transfer resource
+  construction or synchronization overhead while preserving the hybrid GPU
+  trailing-update algorithm.
+- Non-goals: widening the direct-host threshold without matched evidence,
+  changing QR arithmetic or block width, backend algorithm changes, weakening
+  workloads, or performance and memory claims without matched measurements.
+- Acceptance: a value-validating production profile covers 128/129 columns and
+  at least one wider multi-panel shape; the selected increment reduces a
+  measured runtime or live-allocation bound, preserves complete Leto `R`, solve,
+  and reconstruction contracts, and passes warning-denied package gates plus
+  exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
+- Risk/change class: `[patch]` internal transfer orchestration and memory reuse.
+- Status: done 2026-07-29. The retained panel workspace removes two download
+  preparations at 192×129 and five at 384×256 without increasing peak staging;
+  local package gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+  Hardware CUDA and ROCm jobs remain runner-gated.
+
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-wide-profile`; scope: WGPU blocked-QR
