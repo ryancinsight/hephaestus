@@ -144,13 +144,14 @@ constructions to one is stronger evidence than the exact latency ratio.
 | --- | --- |
 | **Blocked LU 66x66 transfer/synchronization floor** | 321.4 µs |
 | **Blocked QR 70x35 current end-to-end** | 96.5 µs |
-| **Blocked QR 70x35 exact CPU final-tail reference schedule** | 30.4 µs |
 
 The QR component harness now executes and validates the production
 factorization rather than approximating the superseded pre-PR transfer
-schedule. The CPU row applies the first packed panel to the three-column tail
-and factors that tail, matching the arithmetic schedule that established the
-post-PR transfer bound.
+schedule. The retired CPU-tail diagnostic measured 38.189 µs in the
+pre-change selection run and 30.373 µs in a separate post-change closure run;
+these are distinct profile samples, not one stable benchmark result. The
+production harness no longer duplicates the implementation's private panel
+size after the narrow route made that diagnostic obsolete.
 
 ### Blocked-QR narrow direct-transfer Criterion A/B
 

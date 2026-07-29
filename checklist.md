@@ -8,13 +8,16 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Model the new binding latency and live-memory costs.
 - [x] Implement the evidence-selected production optimization.
 - [x] Verify value-semantic strategy boundaries and live-allocation accounting.
-- [x] Record matched Criterion A/B evidence and implementation-head provider CI.
+- [x] Record matched Criterion A/B evidence.
+- [x] Require exact-head provider CI as the merge gate.
 
 Implementation owner: Codex on `codex/hephaestus-qr-post-tail-profile`.
 
-Local evidence: the production-executing component profile measures the
-pre-change 70×35 path at 347.434 µs against a 38.189 µs exact CPU final-tail
-schedule. The selected direct narrow strategy reduces the matched Criterion
+Local evidence: the pre-change selection profile measures the 70×35 production
+path at 347.434 µs against a 38.189 µs exact CPU final-tail schedule. A
+separate post-change closure run measured the production path at 96.475 µs
+and the retired CPU-tail diagnostic at 30.373 µs. The selected direct narrow
+strategy reduces the matched Criterion
 median from 353.68 µs to 136.95 µs; Criterion's central estimate is −61.887%
 (95% interval −63.093% to −60.633%, `p = 0.00`). Static live-allocation
 accounting removes 18,432 bytes of device scratch while preserving the
@@ -25,9 +28,10 @@ formatting, and semver-checks (196 pass, 57 skip) are green.
 Implementation-head provider jobs pass: WGPU `90490216440` (6m16s), CUDA
 `90490216702` (7m10s), ROCm `90490216571` (6m01s), and macOS Metal
 `90490216746` (5m36s). Hardware-only CUDA and ROCm jobs skip on the
-pull-request event as designed. CodeRabbit completed with no actionable
-findings. The closure documentation commit requires one final exact-head
-provider rerun before merge.
+pull-request event as designed. Review follow-up removes the obsolete
+duplicated CPU-tail profile and reconciles its two historical samples. The
+pull request merges only after WGPU, CUDA, ROCm, and macOS Metal pass on the
+delivered head.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 

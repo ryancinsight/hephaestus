@@ -2,21 +2,19 @@
 //!
 //! The blocked LU/QR algorithms already have end-to-end comparative benchmark
 //! rows. This harness retains LU's transfer floor and validates the current QR
-//! production factorization alongside its exact CPU final-tail schedule, so
-//! follow-up work targets measured components rather than stale synthetic
-//! transfer models.
+//! production factorization, so follow-up work targets measured components
+//! rather than stale synthetic transfer models.
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use hephaestus_core::{ComputeDevice, apply_packed_qr_panel_left, panel_qr_packed};
+use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::{StridedOperand, WgpuDevice, qr_decompose_blocked};
 use leto::Layout;
 
 const ITERS: usize = 100;
 const QR_ROWS: usize = 70;
 const QR_COLS: usize = 35;
-const QR_BLOCK_SIZE: usize = 32;
 
 fn wait_wgpu(device: &WgpuDevice) {
     device
@@ -162,74 +160,6 @@ fn profile_blocked_qr_end_to_end(device: &WgpuDevice) {
     );
 }
 
-fn profile_blocked_qr_cpu_tail() {
-    let source = qr_source();
-    let tail_cols = QR_COLS - QR_BLOCK_SIZE;
-    let mut panel_source = vec![0.0f32; QR_ROWS * QR_BLOCK_SIZE];
-    let mut tail_source = vec![0.0f32; QR_ROWS * tail_cols];
-    for row in 0..QR_ROWS {
-        for col in 0..QR_BLOCK_SIZE {
-            panel_source[row * QR_BLOCK_SIZE + col] = source[row * QR_COLS + col];
-        }
-        for col in 0..tail_cols {
-            tail_source[row * tail_cols + col] = source[row * QR_COLS + QR_BLOCK_SIZE + col];
-        }
-    }
-    let mut panel = panel_source.clone();
-    let mut tail = tail_source.clone();
-
-    let start = Instant::now();
-    for _ in 0..ITERS {
-        panel.copy_from_slice(&panel_source);
-        tail.copy_from_slice(&tail_source);
-        let (heads, betas) =
-            panel_qr_packed(&mut panel, QR_ROWS, QR_BLOCK_SIZE).expect("factor QR profile panel");
-        apply_packed_qr_panel_left(
-            &panel,
-            QR_ROWS,
-            QR_BLOCK_SIZE,
-            &heads,
-            &betas,
-            &mut tail,
-            tail_cols,
-        )
-        .expect("apply QR profile panel");
-        let active_tail = &mut tail[QR_BLOCK_SIZE * tail_cols..];
-        let tail_rows = QR_ROWS - QR_BLOCK_SIZE;
-        let (tail_heads, tail_betas) =
-            panel_qr_packed(active_tail, tail_rows, tail_cols).expect("factor QR profile tail");
-        black_box((&panel, &tail, heads, betas, tail_heads, tail_betas));
-    }
-
-    let leto_matrix = leto::Array::from_shape_vec([QR_ROWS, QR_COLS], source)
-        .expect("invariant: profile shape matches storage");
-    let expected = leto_ops::qr_decompose(&leto_matrix.view())
-        .expect("factor Leto CPU-schedule profile matrix")
-        .r();
-    let expected = leto::Storage::as_slice(expected.storage());
-    for row in 0..QR_ROWS {
-        for col in row..QR_COLS {
-            let actual = if col < QR_BLOCK_SIZE {
-                panel[row * QR_BLOCK_SIZE + col]
-            } else {
-                tail[row * tail_cols + col - QR_BLOCK_SIZE]
-            };
-            let expected = expected[row * QR_COLS + col];
-            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
-            assert!(
-                (actual - expected).abs() <= tolerance,
-                "CPU QR profile factor mismatch at [{row},{col}]: \
-                 got {actual}, expected {expected}"
-            );
-        }
-    }
-
-    println!(
-        "Blocked QR 70x35 exact CPU final-tail schedule: {} ns/iter",
-        elapsed_per_iter(start.elapsed()).as_nanos()
-    );
-}
-
 fn main() {
     let device = match WgpuDevice::try_default("hephaestus-decomposition-sync-bench") {
         Ok(device) => device,
@@ -244,5 +174,4 @@ fn main() {
     println!("WGPU GPU Backend: {}", device.backend_name());
     profile_blocked_lu_sync(&device);
     profile_blocked_qr_end_to_end(&device);
-    profile_blocked_qr_cpu_tail();
 }

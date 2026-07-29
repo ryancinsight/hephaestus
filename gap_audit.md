@@ -635,12 +635,15 @@ No open feature-combination defect is currently recorded in the backend scope.
   measured shape) until the shared poll completes. Evidence tier:
   value-semantic Nextest 8/8, static allocation audit, and matched Criterion A/B.
 - [patch] Dense blocked QR matrices of at most two panels now use the canonical
-  host QR operation directly. The post-PR component profile measures the
-  validated 70×35 production path at 347.434 µs before this change while the
-  exact CPU final-tail arithmetic schedule costs 38.189 µs, leaving about
-  309 µs in region-transfer and resource orchestration. One dense download and
-  one `R` upload replace that narrow-only gather/scatter schedule. The matched
-  Criterion median decreases from 353.68 µs to 136.95 µs (61.279%);
+  host QR operation directly. The pre-change selection profile measures the
+  validated 70×35 production path at 347.434 µs while the exact CPU final-tail
+  arithmetic schedule costs 38.189 µs, leaving about 309 µs in region-transfer
+  and resource orchestration. A separate post-change closure run measures the
+  production path at 96.475 µs and the retired CPU-tail diagnostic at
+  30.373 µs. The production profile no longer duplicates the private panel
+  size after the narrow route makes that diagnostic obsolete. One dense
+  download and one `R` upload replace that narrow-only gather/scatter schedule.
+  The matched Criterion median decreases from 353.68 µs to 136.95 µs (61.279%);
   Criterion's central change estimate is −61.887% (95% interval −63.093% to
   −60.633%, `p = 0.00`). At 70×35 the path removes 18,432 bytes of device
   scratch while retaining the required 9,800-byte `R` output. The 32/33/35/64
