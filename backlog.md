@@ -348,7 +348,7 @@ cuda-oxide + cutile).
   Metal `90088836675`. Required-device ROCm job `90088837591` was skipped;
   no physical-device execution claim is made.
 
-## HEPH-GELU-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-GELU-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared exact `GeluOp` and `GeluGradOp` markers and WGPU,
   CUDA, ROCm, and Metal exports consumed by Coeus.
@@ -363,15 +363,16 @@ cuda-oxide + cutile).
   with the Leto CPU oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0030 owns the
   mathematical and expression-contract decision.
-- Status: Hephaestus provider implementation and exact-head provider
+- Status: complete. Hephaestus provider implementation and exact-head provider
   verification are complete; Coeus routing and Leto differential verification
-  remain open in peer-owned backend scopes.
+  merged in Coeus PR #230 at `e26ba668`.
 - Evidence: merged Hephaestus PR #123 at `23f9662` passed WGPU job
   `90115184352`, CUDA job `90115253352`, ROCm job `90115183816`, and Metal job
   `90115184178`. AMD and NVIDIA hardware jobs were skipped; no physical-device
-  execution claim is made.
+  execution claim is made. Coeus consumer jobs passed WGPU `90061390522`,
+  CUDA `90061390565`, ROCm `90061390546`, and Metal `90061390499`.
 
-## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: shared `MishOp`, `MishGradOp`, `EluOp`, and `EluGradOp`
   markers and WGPU, CUDA, ROCm, and Metal exports consumed by Coeus.
@@ -386,13 +387,15 @@ cuda-oxide + cutile).
   WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0032 owns
   the mathematical and expression-contract decision.
-- Status: Hephaestus provider implementation, local contracts, and exact-head
-  provider verification are complete; Coeus routing remains open in peer-owned
-  backend scopes.
+- Status: complete. Hephaestus provider implementation, local contracts, and
+  exact-head provider verification are complete; Coeus routing and Leto
+  differential verification merged in Coeus PR #237 at `7fef4a2a`.
 - Evidence: merged Hephaestus PR #123 at `23f9662`; WGPU job `90115184352`
   (pass), CUDA job `90115253352` (pass), ROCm job `90115183816` (pass), and
   Metal job `90115184178` (pass). AMD and NVIDIA hardware jobs were skipped;
-  no physical-device execution claim is made.
+  no physical-device execution claim is made. Exact Coeus consumer head
+  `2f04be65` passed WGPU `90262230232`, CUDA `90262230288`, ROCm
+  `90262230238`, and Metal `90262230226`.
 
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor] — done
 
@@ -419,7 +422,7 @@ cuda-oxide + cutile).
   job `90036655618`, and WGPU job `90036655846`. AMD/NVIDIA hardware jobs
   skipped because no registered device runner was selected.
 
-## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-UNARY-MATH-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex on `codex/hephaestus-unary-math-parity`; scope: shared
   unparameterized f32 unary math expression markers and WGPU, CUDA, ROCm, and
@@ -437,10 +440,12 @@ cuda-oxide + cutile).
   oracle; exact-head WGPU, CUDA, ROCm, and Metal CI passes.
 - Risk/change class: `[minor]` additive operation vocabulary; ADR 0028 owns the
   f32 expression and residual-capability decision.
-- Status: Hephaestus implementation is complete at `b088a2f`; WGPU job
+- Status: complete. Hephaestus implementation is complete at `b088a2f`; WGPU job
   `89997918070`, CUDA job `89997916944`, ROCm job `89997920644`, and Metal job
   `89997917574` all passed. Required AMD and NVIDIA hardware jobs were skipped;
-  Coeus routing and consumer verification remain open in Coeus.
+  Coeus PR #226 merged at `383ac51b`; exact consumer head `7c9a1ab2` passed
+  WGPU `90015947922`, CUDA `90015947631`, ROCm `90015947658`, and Metal
+  `90015947762`.
 
 ## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor] — done
 
@@ -466,7 +471,7 @@ cuda-oxide + cutile).
 - Decision: ADR 0027 selects `TypedBinaryExpr<L, T>` over f32-only markers or
   per-backend comparison kernels.
 
-## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor] — in progress
+## HEPH-ACTIVATION-EXPRESSION-PARITY-1 [minor] — done
 
 - Owner: Codex; scope: `hephaestus-core` activation expression vocabulary and
   WGPU, CUDA, ROCm, and Metal exports used by Coeus native providers.
@@ -480,11 +485,11 @@ cuda-oxide + cutile).
   expression tests pass; Coeus ROCm and Metal providers consume the markers
   without host fallback.
 - Risk/change class: `[minor]` additive operation vocabulary.
-- Status: merged in Hephaestus PR #110; the exact code head passed WGPU job
+- Status: complete. Merged in Hephaestus PR #110; the exact code head passed WGPU job
   `89857349160`, CUDA job `89857348956`, ROCm job `89857348904`, and Metal job
-  `89857349033`. Coeus consumer routing remains part of the provider parity
-  slices and is not counted as a complete activation-specific hardware
-  verification here.
+  `89857349033`. Coeus PR #223 merged at `4b807ddd`; exact consumer head
+  `3c53a8ee` passed WGPU `89860389892`, CUDA `89860389857`, ROCm
+  `89860389885`, and Metal `89860389899`.
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
 
