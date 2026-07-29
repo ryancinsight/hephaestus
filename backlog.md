@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-SCAN-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-scan-overwrite`; scope: allocating
+  rank-2 scan wrappers in WGPU, CUDA, and ROCm, with Metal inherited through
+  WGPU, plus exact allocated-output contracts and synchronized evidence.
+- Outcome: remove redundant device-output initialization before scan kernels
+  fully overwrite the contiguous result.
+- Non-goals: scan arithmetic, launch geometry, caller-owned outputs, empty
+  allocation semantics, benchmark workloads, or runtime claims without matched
+  measurements.
+- Acceptance: non-empty allocating cumulative sum/product and suffix
+  sum/product paths allocate uninitialized storage only after layout validation;
+  exact allocated-output Leto contracts pass on applicable local devices;
+  warning-denied package gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI
+  pass.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  output-sized device initialization transfer; peak allocation is unchanged.
+- Status: in progress.
+
 ## HEPH-COEUS-ACTIVATION-PARITY-RECONCILE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-coeus-parity-reconcile`; scope:
