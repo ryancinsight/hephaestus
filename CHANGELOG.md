@@ -36,6 +36,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Route dense WGPU blocked QR matrices of at most two 32-column
+  panels through the canonical host factorization. This regime has no wide
+  GPU trailing update, so one dense download and one `R` upload replace paired
+  region gathers, scatter kernels, and 18,432 bytes of device scratch at
+  70×35. The matched Criterion median decreases from 353.68 µs to 136.95 µs
+  (61.279%); Criterion's central change estimate is −61.887%.
+
 - [minor] Finish the final two WGPU blocked-QR panels after one paired
   readback. The backend-neutral packed-panel operation applies the penultimate
   Householder reflectors to the compact tail without allocation, then both

@@ -21,7 +21,7 @@ cuda-oxide + cutile).
   checks, and exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
-- Status: claimed 2026-07-28; profiling in progress.
+- Status: claimed 2026-07-28; local verification complete, provider CI pending.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
 

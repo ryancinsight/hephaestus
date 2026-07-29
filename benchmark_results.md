@@ -140,13 +140,39 @@ constructions to one is stronger evidence than the exact latency ratio.
 
 ## Synchronization Profile
 
-| Profile | Measured floor |
+| Profile | Measurement |
 | --- | --- |
 | **Blocked LU 66x66 transfer/synchronization floor** | 321.4 µs |
-| **Blocked QR 70x35 transfer/synchronization floor** | 213.2 µs |
-| **Blocked QR 70x35 CPU panel lower bound** | 26.4 µs |
-| **Blocked QR one-pass panel timestamp total** | 7.8 µs |
-| **Blocked QR one-pass panel timestamp median** | 192 ns |
+| **Blocked QR 70x35 current end-to-end** | 96.5 µs |
+| **Blocked QR 70x35 exact CPU final-tail reference schedule** | 30.4 µs |
+
+The QR component harness now executes and validates the production
+factorization rather than approximating the superseded pre-PR transfer
+schedule. The CPU row applies the first packed panel to the three-column tail
+and factors that tail, matching the arithmetic schedule that established the
+post-PR transfer bound.
+
+### Blocked-QR narrow direct-transfer Criterion A/B
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Both runs use Criterion 0.8.2 defaults, the same 70×35 input,
+device completion inside the timed iteration, and a complete Leto `R`
+differential before timing.
+
+| Narrow schedule | 95% interval | Median |
+| --- | ---: | ---: |
+| Paired region gather/scatter (`before`) | 345.10–363.03 µs | 353.68 µs |
+| One dense download and one `R` upload | 130.49–143.77 µs | 136.95 µs |
+
+The displayed medians differ by **61.279%**. Criterion independently reports a
+statistically significant **−61.887% central change estimate** (95% interval
+**−63.093% to −60.633%**, `p = 0.00`). Matrices at or below the two-panel
+boundary have no wide GPU trailing update, so the direct schedule calls the
+existing host QR implementation instead of constructing blocked region
+transfers. At 70×35 this removes two 8,960-byte compact device buffers,
+256-byte reflector storage, and one 256-byte pooled uniform allocation:
+**18,432 bytes of device scratch**. The 9,800-byte device `R` output and
+9,800-byte readback staging allocation remain required.
 
 ### Blocked-QR final two-panel Criterion A/B
 

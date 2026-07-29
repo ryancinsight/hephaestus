@@ -4,13 +4,24 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]
 
-- [ ] Re-run the retained blocked-QR component profile after PR #142.
-- [ ] Model the new binding latency and live-memory costs.
-- [ ] Implement the evidence-selected production optimization.
-- [ ] Add value-semantic differential and allocation contracts.
+- [x] Re-run the retained blocked-QR component profile after PR #142.
+- [x] Model the new binding latency and live-memory costs.
+- [x] Implement the evidence-selected production optimization.
+- [x] Verify value-semantic strategy boundaries and live-allocation accounting.
 - [ ] Record matched Criterion A/B evidence and exact-head provider CI.
 
 Implementation owner: Codex on `codex/hephaestus-qr-post-tail-profile`.
+
+Local evidence: the production-executing component profile measures the
+pre-change 70×35 path at 347.434 µs against a 38.189 µs exact CPU final-tail
+schedule. The selected direct narrow strategy reduces the matched Criterion
+median from 353.68 µs to 136.95 µs; Criterion's central estimate is −61.887%
+(95% interval −63.093% to −60.633%, `p = 0.00`). Static live-allocation
+accounting removes 18,432 bytes of device scratch while preserving the
+9,800-byte `R` output. The 32/33/35/64 direct and 65-column GPU-wide boundary
+contracts pass in the focused 6/6 Nextest run. Warning-denied all-target
+Clippy, full package Nextest 173/173, doctests 2/2, all benchmark smoke targets,
+formatting, and semver-checks (196 pass, 57 skip) are green.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 

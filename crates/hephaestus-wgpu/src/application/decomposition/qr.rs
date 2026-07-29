@@ -6,10 +6,10 @@
 //! Two entry points are provided:
 //!
 //! - [`qr_decompose`] — full host delegation (panel + trailing on CPU).
-//! - [`qr_decompose_blocked`] — blocked algorithm where panel
-//!   factorization runs on the CPU, wide trailing Householder applications run
-//!   on the GPU, and the final at-most-one-block tail finishes on the CPU after
-//!   a paired readback.
+//! - [`qr_decompose_blocked`] — width-selected hybrid algorithm. Matrices up to
+//!   two panels use one host factorization; wider matrices factor panels on the
+//!   CPU, apply wide trailing Householder updates on the GPU, and finish the
+//!   final at-most-one-block tail on the CPU after a paired readback.
 //!
 //! # Mathematical Foundations
 //!
@@ -321,8 +321,13 @@ const QR_BLOCK_SIZE: usize = 32;
 /// Blocked QR factorization **A = Q R** with hybrid trailing Householder
 /// application.
 ///
+/// Dense matrices of at most two `QR_BLOCK_SIZE` panels use the canonical
+/// [`qr_decompose`] host factorization directly. This regime has no wide
+/// trailing region for the GPU kernel, so one dense download and one `R` upload
+/// replace the blocked path's region gather/scatter and compact device scratch.
+///
 /// The algorithm processes the matrix in panels of `QR_BLOCK_SIZE` columns.
-/// For each panel *k*:
+/// For wider matrices, each panel *k* performs:
 ///
 /// 1. The panel `A[k:m, k:k+b]` is gathered into a contiguous device buffer
 ///    and downloaded to the host.
@@ -371,6 +376,15 @@ pub fn qr_decompose_blocked(
         });
     }
 
+    let block_size = QR_BLOCK_SIZE.min(n);
+    // Up to two blocks already execute all Householder arithmetic on the CPU.
+    // Use the canonical host implementation directly so this size regime needs
+    // one dense download and one R upload rather than region gather/scatter
+    // kernels and their compact device scratch.
+    if n.saturating_sub(block_size) <= block_size {
+        return qr_decompose(device, matrix);
+    }
+
     // Create a GPU working buffer for in-place updates. The full input copy is
     // queued after the first panel is downloaded from the original input buffer
     // so the first panel readback does not wait behind an avoidable full-matrix
@@ -378,8 +392,6 @@ pub fn qr_decompose_blocked(
     // the first write/update touches `work_buf`.
     let work_buf = device.alloc_zeroed::<f32>(m * n)?;
     let mut work_copy_queued = false;
-
-    let block_size = QR_BLOCK_SIZE.min(n);
 
     let mut packed = vec![0.0f32; m * n];
     let mut cumulative_heads = Vec::with_capacity(n.min(m));
