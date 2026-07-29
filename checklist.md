@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Preserve complete `R` and solve contracts across 32/33/35/64/65 columns.
 - [x] Record a matched Criterion before/after result and the bounded staging
       memory tradeoff.
-- [ ] Run warning-denied, doctest, semver, benchmark-smoke, and exact-head
+- [x] Run warning-denied, doctest, semver, benchmark-smoke, and exact-head
       WGPU, CUDA, ROCm, and Metal CI gates.
 
 Implementation owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; ADR 0038.
@@ -27,7 +27,12 @@ The final full package Nextest and doctest attempts are blocked before
 Hephaestus execution by fresh peer-owned Aequitas work: `PerCubicMeter`
 implements both `NumberDensity` and its equivalent `ReciprocalVolume` alias
 (`E0119`). The earlier exact focused run predates that unrelated tree shift;
-hosted locked provider CI is the final execution gate.
+hosted locked provider CI supplies the full execution gate. Cargo-semver-checks
+0.48.0 compares `hephaestus-core` with `origin/master`: 196 checks pass and 57
+inapplicable checks skip, with no semver update required. PR #142 exact-head
+provider jobs pass: CUDA 90444185125 (6m21s), ROCm 90444185117 (5m52s), WGPU
+90444185164 (6m39s), and macOS Metal 90444185226 (7m53s). Hardware-only CUDA
+and ROCm jobs correctly skip on the pull-request event.
 
 ## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf]
 

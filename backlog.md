@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — in progress
+## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; scope:
   `hephaestus-core` packed-panel Householder application, WGPU paired
@@ -28,9 +28,10 @@ cuda-oxide + cutile).
 - Risk/change class: `[minor]` additive backend-neutral packed-panel operation
   plus a WGPU scheduling optimization. ADR 0038 owns the interface and
   synchronization decision.
-- Status: implementation and matched local evidence complete. Final full local
-  Nextest/doctests are blocked by fresh peer-owned Aequitas `E0119`; hosted
-  locked provider CI is pending.
+- Status: implementation, matched local evidence, semver verification, and
+  exact-head locked provider CI complete in PR #142. CUDA job 90444185125,
+  ROCm job 90444185117, WGPU job 90444185164, and macOS Metal job 90444185226
+  pass. Hardware-only jobs correctly skip on the pull-request event.
 
 ## HEPH-WGPU-MIXED-REDUCTION-BATCH-1 [minor] [perf] — done
 
