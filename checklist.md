@@ -11,7 +11,7 @@ Sprint target: 0.18.0. Phase: Closure.
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
 - [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
 - [x] Pass exact WGPU and physical CUDA scan value contracts.
-- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-scan-overwrite`. Each
 valid logical element is written during the kernel's first pass before the
@@ -22,7 +22,10 @@ Physical CUDA scan Nextest passes 4/4, covering both directions, sum/product,
 long lines, strided input, empty input, and allocated/caller-owned outputs.
 Warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
 adapterless ROCm. CUDA and ROCm omit one output-sized initialization transfer;
-peak allocation is unchanged and no runtime claim is made.
+peak allocation is unchanged and no runtime claim is made. Exact implementation
+head `ae9d440` passed WGPU `90714878716`, CUDA `90714887588`, ROCm
+`90714879225`, and macOS Metal `90714878623`; hardware-only NVIDIA and AMD
+jobs skipped because no device runner was selected.
 
 ## HEPH-ELEMENTWISE-OVERWRITE-1 [patch] [perf]
 
