@@ -493,9 +493,10 @@ cuda-oxide + cutile).
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
 
-- Owner: Codex; scope: rank-2 `suffix_sum`/`suffix_sum_into` exports and
-  provider contracts in WGPU, CUDA, ROCm, and Metal. Coeus consumer routing is
-  tracked in `ATLAS-HEPHAESTUS-SCAN-001` in the Coeus repository.
+- Owner: Codex on `codex/hephaestus-suffix-scan-reconcile`; scope: rank-2
+  `suffix_sum`/`suffix_sum_into` exports and provider contracts in WGPU, CUDA,
+  ROCm, and Metal. Coeus consumer routing is tracked in
+  `ATLAS-HEPHAESTUS-SCAN-001` in the Coeus repository.
 - Non-goals: dynamic-rank scan expansion and unrelated Leto operation families.
 - Acceptance: all four roots expose the same suffix-sum API, each provider
   delegates to the shared reverse cumulative-sum kernel, and each contract
