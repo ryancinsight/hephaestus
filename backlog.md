@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — in progress
+## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-wide-profile`; scope: WGPU blocked-QR
   matrices wider than two 32-column panels, component profiling, and one
@@ -23,9 +23,9 @@ cuda-oxide + cutile).
   WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
-- Status: implementation, matched local evidence, and package verification
-  complete; review-requested 129-column profile coverage pending fresh
-  exact-head provider CI.
+- Status: done 2026-07-29; implementation, matched local evidence, package
+  verification, review-requested 129-column profile coverage, and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI complete.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — done
 

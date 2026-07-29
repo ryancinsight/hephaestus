@@ -28,7 +28,8 @@ Warning-denied all-target Clippy, full package Nextest 173/173, doctests 2/2,
 formatting, and the two touched benchmark smoke targets are green. The initial
 eight-shape debug profile exceeded the executable budget; the committed
 instrument retains the 64/65 and 128/129 routing boundaries and completes
-within budget.
+within budget. Exact-head WGPU, CUDA, ROCm, and macOS Metal provider CI is
+green; hardware CUDA and ROCm jobs are runner-gated.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]
 

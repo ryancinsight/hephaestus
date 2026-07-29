@@ -672,7 +672,8 @@ No open feature-combination defect is currently recorded in the backend scope.
   and 129-column GPU-wide boundary remain Leto-equivalent for complete `R`,
   solve, and reconstruction contracts. Evidence tier: value-semantic
   differential tests, a production-executing component profile, static
-  allocation accounting, and matched machine-local Criterion A/B.
+  allocation accounting, matched machine-local Criterion A/B, and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal provider CI.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.
