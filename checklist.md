@@ -4,6 +4,8 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf]
 
+- [x] Extend the matched value-validating Criterion instrument across the
+      128/129 routing boundary and an eight-panel workload.
 - [ ] Instrument retained blocked-QR region-transfer construction and waits.
 - [ ] Record the per-panel live-allocation model at 192×129 and a wider shape.
 - [ ] Implement only the evidence-selected transfer-workspace reuse.

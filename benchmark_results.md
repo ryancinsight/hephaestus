@@ -153,6 +153,25 @@ these are distinct profile samples, not one stable benchmark result. The
 production harness no longer duplicates the implementation's private panel
 size after the narrow route made that diagnostic obsolete.
 
+### Retained blocked-QR region-transfer baseline
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Criterion 0.8.2 uses device completion inside every timed
+iteration and validates the complete `R` factor against Leto before timing.
+
+| Retained blocked schedule | 95% interval | Median |
+| --- | ---: | ---: |
+| 192×129 routing boundary | 1.2877–1.3495 ms | 1.3136 ms |
+| 384×256 eight-panel workload | 4.0608–4.5832 ms | 4.2996 ms |
+
+The 192×129 schedule prepares five downloads and five uploads: three single
+panel transfer pairs followed by one paired panel/tail download and upload.
+The 384×256 schedule prepares eight downloads and eight uploads. Each
+preparation checks out pooled staging or uniform storage and constructs a new
+bind group; the matched result run will determine whether retaining those
+resources across panels changes end-to-end latency. These figures are the
+`qr-transfer-before` baseline, not an optimization claim.
+
 ### Blocked-QR four-panel direct-transfer Criterion A/B
 
 Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
