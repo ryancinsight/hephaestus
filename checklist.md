@@ -18,8 +18,9 @@ Implementation owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; ADR 0038.
 Local evidence: all-target core/WGPU compilation passes. Focused Nextest passes
 8/8 in 4.976 seconds, including the packed-panel analytical differential and
 all blocked-QR contracts. Criterion 0.8.2 measures the unchanged 70×35 workload
-at 516.58 µs before and 346.19 µs after, a statistically significant 29.612%
-median reduction (95% change interval −34.402% to −23.972%, `p = 0.00`).
+at 516.58 µs before and 346.19 µs after, a 32.984% median reduction. Criterion's
+central change estimate is −29.612% (95% interval −34.402% to −23.972%,
+`p = 0.00`).
 Persistent compact device and host algorithm scratch capacities are unchanged;
 the paired readback holds one extra 840-byte staging buffer until the shared
 poll completes. Warning-denied core/WGPU all-target Clippy and formatting pass.

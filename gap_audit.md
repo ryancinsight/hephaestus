@@ -628,7 +628,8 @@ No open feature-combination defect is currently recorded in the backend scope.
   operation, and writes both final regions in one submission. Complete `R` and
   solve contracts match Leto across 32/33/35/64/65 columns. Criterion 0.8.2 on
   the unchanged 70×35 workload measures 516.58 µs before and 346.19 µs after
-  (29.612% lower median; 95% change interval −34.402% to −23.972%, `p = 0.00`).
+  (32.984% lower median). Criterion's central change estimate is −29.612%
+  (95% interval −34.402% to −23.972%, `p = 0.00`).
   Persistent compact scratch remains two `m × 32` buffers; the latency reduction
   costs one bounded transient `m × tail_cols` staging buffer (840 bytes at the
   measured shape) until the shared poll completes. Evidence tier:

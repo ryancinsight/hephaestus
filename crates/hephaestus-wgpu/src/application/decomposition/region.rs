@@ -509,6 +509,9 @@ pub(crate) fn write_matrix_region_compact_reusable(
 
 /// Scatter two compact host matrices into two regions through one encoder and
 /// one queue submission.
+///
+/// Non-empty transfers require distinct temporary device buffers because both
+/// host slices are staged before either scatter pass is encoded.
 pub(crate) fn write_matrix_region_pair_compact_reusable(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<f32>,
@@ -532,6 +535,11 @@ pub(crate) fn write_matrix_region_pair_compact_reusable(
             first.host,
             first.region,
         );
+    }
+    if first.temp.aliases(second.temp) {
+        return Err(HephaestusError::TransferFailed {
+            message: "paired region scatter requires distinct temporary buffers".to_string(),
+        });
     }
 
     let pipeline = cached_pipeline(
@@ -565,4 +573,53 @@ pub(crate) fn write_matrix_region_pair_compact_reusable(
     encode_scatter(&mut encoder, &pipeline, &second)?;
     device.queue().submit(Some(encoder.finish()));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use hephaestus_core::ComputeDevice;
+
+    use super::*;
+
+    #[test]
+    fn paired_scatter_rejects_aliased_temporary_buffers() {
+        let Ok(device) = WgpuDevice::try_default("paired-scatter-alias-contract") else {
+            return;
+        };
+        let target = device.alloc_zeroed::<f32>(4).expect("target allocation");
+        let first_temp = device.alloc_zeroed::<f32>(2).expect("temporary allocation");
+        let second_temp = first_temp.clone();
+        let error = write_matrix_region_pair_compact_reusable(
+            &device,
+            &target,
+            MatrixRegionUpload {
+                temp: &first_temp,
+                host: &[1.0, 2.0],
+                region: MatrixRegion {
+                    stride: 2,
+                    row_start: 0,
+                    col_start: 0,
+                    rows: 1,
+                    cols: 2,
+                },
+            },
+            MatrixRegionUpload {
+                temp: &second_temp,
+                host: &[3.0, 4.0],
+                region: MatrixRegion {
+                    stride: 2,
+                    row_start: 1,
+                    col_start: 0,
+                    rows: 1,
+                    cols: 2,
+                },
+            },
+        )
+        .expect_err("aliased paired-scatter temporary buffers must be rejected");
+        assert!(matches!(
+            error,
+            HephaestusError::TransferFailed { message }
+                if message.contains("distinct temporary buffers")
+        ));
+    }
 }

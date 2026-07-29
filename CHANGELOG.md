@@ -41,9 +41,10 @@ Target release: 0.18.0.
   Householder reflectors to the compact tail without allocation, then both
   final regions return in one submission. Complete `R` and solve contracts
   remain Leto-equivalent across block boundaries. The matched 70×35 Criterion
-  median decreases from 516.58 µs to 346.19 µs (29.612%); persistent compact
-  scratch is unchanged, while the paired map holds one bounded 840-byte
-  transient staging buffer until completion.
+  median decreases from 516.58 µs to 346.19 µs (32.984%); Criterion's central
+  change estimate is −29.612%. Persistent compact scratch is unchanged, while
+  the paired map holds one bounded 840-byte transient staging buffer until
+  completion.
 
 - [minor] Add unified prepared WGPU scalar- and axis-reduction submission.
   Independent plans share one command encoder and queue submission while

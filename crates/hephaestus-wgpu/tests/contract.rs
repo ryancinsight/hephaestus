@@ -4284,8 +4284,9 @@ fn blocked_qr_preserves_panel_boundary_contracts() {
         }
         let matrix = device.upload(&matrix_host).unwrap();
         let layout = Layout::c_contiguous([rows, cols]).unwrap();
-        let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host).unwrap();
-        let expected = leto_ops::qr_decompose(&leto_matrix.view()).unwrap().r();
+        let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host.clone()).unwrap();
+        let expected_decomposition = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+        let expected = expected_decomposition.r();
         let expected = leto::Storage::as_slice(expected.storage());
 
         let qr = qr_decompose_blocked(
@@ -4307,7 +4308,52 @@ fn blocked_qr_preserves_panel_boundary_contracts() {
             assert!(
                 (actual - expected).abs() <= tolerance,
                 "{rows}x{cols} blocked QR R[{index}] = {actual}, expected {expected}, \
-                 tolerance {tolerance}"
+                tolerance {tolerance}"
+            );
+        }
+
+        let expected_solution: Vec<f32> = (0..cols)
+            .map(|col| 0.5 + col as f32 / cols as f32)
+            .collect();
+        let rhs_host: Vec<f32> = matrix_host
+            .chunks_exact(cols)
+            .map(|row| {
+                row.iter()
+                    .zip(&expected_solution)
+                    .map(|(&coefficient, &value)| coefficient * value)
+                    .sum()
+            })
+            .collect();
+        let rhs = device.upload(&rhs_host).unwrap();
+        let solution = qr.solve_least_squares(&device, &rhs).unwrap();
+        let mut actual_solution = vec![0.0f32; cols];
+        device.download(&solution, &mut actual_solution).unwrap();
+
+        // Strict diagonal dominance bounds the infinity-norm condition number
+        // near one for this matrix family. The factor 64 covers QR and
+        // triangular-solve rounding over `cols` stages.
+        let solve_tolerance = 64.0 * cols as f32 * f32::EPSILON;
+        for (col, (&actual, &expected)) in
+            actual_solution.iter().zip(&expected_solution).enumerate()
+        {
+            assert!(
+                (actual - expected).abs() <= solve_tolerance,
+                "{rows}x{cols} blocked QR solve x[{col}] = {actual}, expected {expected}, \
+                 tolerance {solve_tolerance}"
+            );
+        }
+        for (row, coefficients) in matrix_host.chunks_exact(cols).enumerate() {
+            let reconstructed: f32 = coefficients
+                .iter()
+                .zip(&actual_solution)
+                .map(|(&coefficient, &value)| coefficient * value)
+                .sum();
+            let tolerance = 64.0 * cols as f32 * f32::EPSILON * rhs_host[row].abs().max(1.0);
+            assert!(
+                (reconstructed - rhs_host[row]).abs() <= tolerance,
+                "{rows}x{cols} blocked QR reconstructed rhs[{row}] = {reconstructed}, \
+                 expected {}, tolerance {tolerance}",
+                rhs_host[row]
             );
         }
     }

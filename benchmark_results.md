@@ -160,11 +160,12 @@ differential before timing.
 | Separate final-panel readback (`before`) | 509.34–524.73 µs | 516.58 µs |
 | Paired panel/tail readback | 335.57–359.05 µs | 346.19 µs |
 
-Criterion reports a statistically significant **29.612% median latency
-reduction** (95% change interval **−34.402% to −23.972%**, `p = 0.00`). The
-schedule removes one host/device poll at this shape while preserving the
-complete factorization values. Persistent compact device scratch remains two
-`m × 32` buffers. The paired map holds one additional transient
+The displayed medians differ by **32.984%**. Criterion independently reports a
+statistically significant **−29.612% central change estimate** (95% interval
+**−34.402% to −23.972%**, `p = 0.00`). The schedule removes one host/device poll
+at this shape while preserving the complete factorization values. Persistent
+compact device scratch remains two `m × 32` buffers. The paired map holds one
+additional transient
 `m × tail_cols` staging buffer; at 70×35 this is **840 bytes**, returned to the
 pool immediately after the shared poll.
 
@@ -201,9 +202,9 @@ pool immediately after the shared poll.
      three-column tail before one poll, finishes the tail with the shared packed
      Householder operation, and writes both regions in one submission. The
      matched Criterion median decreases from **516.58 µs** to **346.19 µs**
-     (**29.612%**) without additional persistent compact scratch. The bounded
-     840-byte transient staging increase is reported above rather than treated
-     as free memory.
+     (**32.984%**); Criterion's central change estimate is **−29.612%**. No
+     persistent compact scratch is added. The bounded 840-byte transient
+     staging increase is reported above rather than treated as free memory.
 
 ---
 
