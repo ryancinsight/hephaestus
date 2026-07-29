@@ -16,14 +16,16 @@ cuda-oxide + cutile).
   silent CPU fallback for wide tails, CUDA/ROCm/Metal algorithm changes, or
   runtime and memory claims without matched evidence.
 - Acceptance: a value-validating component profile covers the 64/65-column
-  strategy boundary and at least one multi-panel shape; the selected increment
-  preserves complete Leto `R`, solve, and reconstruction contracts, records a
-  matched Criterion A/B result and live-allocation model, passes warning-denied
-  package gates, and passes exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
+  legacy boundary and active 128/129-column routing boundary; the selected
+  increment preserves complete Leto `R`, solve, and reconstruction contracts,
+  records a matched Criterion A/B result and live-allocation model, passes
+  warning-denied package gates, and passes exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
 - Status: implementation, matched local evidence, and package verification
-  complete; exact-head provider CI pending.
+  complete; review-requested 129-column profile coverage pending fresh
+  exact-head provider CI.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — done
 

@@ -13,7 +13,7 @@ use hephaestus_wgpu::{StridedOperand, WgpuDevice, qr_decompose, qr_decompose_blo
 use leto::Layout;
 
 const ITERS: usize = 100;
-const QR_SHAPES: [[usize; 2]; 3] = [[96, 64], [96, 65], [192, 128]];
+const QR_SHAPES: [[usize; 2]; 4] = [[96, 64], [96, 65], [192, 128], [192, 129]];
 
 fn wait_wgpu(device: &WgpuDevice) {
     device

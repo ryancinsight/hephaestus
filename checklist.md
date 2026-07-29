@@ -14,19 +14,20 @@ Sprint target: 0.18.0. Phase: Closure.
 
 Implementation owner: Codex on `codex/hephaestus-qr-wide-profile`.
 
-Local evidence: the production profile compares direct and blocked schedules
-from 96×64 through 768×512 and validates every `R` against Leto. At 192×128
-the matched Criterion median decreases from 1.2046 ms to 461.24 µs (61.710%);
-Criterion's central estimate is −62.055% (95% interval −62.621% to −61.496%,
-`p = 0.00`). The unchanged 70×35 control has no detectable change
-(`p = 0.39`).
+Local evidence: the committed production profile compares direct and blocked
+schedules at 96×64, 96×65, 192×128, and 192×129 and validates every `R`
+against Leto. An exploratory sweep through 768×512 found no blocked crossover;
+the production change remains bounded to four panels. At 192×128 the matched
+Criterion median decreases from 1.2046 ms to 461.24 µs (61.710%); Criterion's
+central estimate is −62.055% (95% interval −62.621% to −61.496%, `p = 0.00`).
+The unchanged 70×35 control has no detectable change (`p = 0.39`).
 The direct route removes 49,664 bytes of device scratch at 192×128 while
 preserving the 98,304-byte `R` output. The focused blocked-QR Nextest run
 passes 6/6, including the 128-column direct and 129-column GPU-wide boundaries.
 Warning-denied all-target Clippy, full package Nextest 173/173, doctests 2/2,
 formatting, and the two touched benchmark smoke targets are green. The initial
 eight-shape debug profile exceeded the executable budget; the committed
-instrument retains the 64/65 boundary and four-panel regime and completes
+instrument retains the 64/65 and 128/129 routing boundaries and completes
 within budget.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]

@@ -657,11 +657,12 @@ No open feature-combination defect is currently recorded in the backend scope.
   removing the complete blocked transfer schedule targets the measured bound
   and makes those resources unreachable in the narrow regime.
 - [patch] Dense blocked QR matrices of at most four panels now use the same
-  canonical host route. A production-executing profile validates Leto `R`
-  values while comparing direct and blocked schedules from 96×64 through
-  768×512; no blocked crossover appears in that measured range. The bounded
-  four-panel increment retains the wider GPU path rather than extrapolating
-  beyond its acceptance scope. At 192×128 the matched Criterion median
+  canonical host route. The committed production profile validates Leto `R`
+  values while comparing direct and blocked schedules at 96×64, 96×65,
+  192×128, and 192×129. An exploratory sweep through 768×512 found no blocked
+  crossover; the bounded four-panel increment retains the wider GPU path rather
+  than extrapolating beyond its acceptance scope. At 192×128 the matched
+  Criterion median
   decreases from 1.2046 ms to 461.24 µs (61.710%); Criterion's central change
   estimate is −62.055% (95% interval −62.621% to −61.496%, `p = 0.00`).
   The unchanged 70×35 control has no detectable change (`p = 0.39`). The
