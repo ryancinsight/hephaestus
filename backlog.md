@@ -491,7 +491,7 @@ cuda-oxide + cutile).
   `3c53a8ee` passed WGPU `89860389892`, CUDA `89860389857`, ROCm
   `89860389885`, and Metal `89860389899`.
 
-## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — in progress
+## HEPH-SCAN-SUFFIX-PARITY-1 [minor] — done
 
 - Owner: Codex on `codex/hephaestus-suffix-scan-reconcile`; scope: rank-2
   `suffix_sum`/`suffix_sum_into` exports and provider contracts in WGPU, CUDA,
@@ -502,9 +502,12 @@ cuda-oxide + cutile).
   delegates to the shared reverse cumulative-sum kernel, and each contract
   compares allocated and caller-owned outputs with the Leto CPU oracle.
 - Risk/change class: `[minor]` additive provider surface.
-- Status: implementation and local formatting complete; provider compilation
-  is blocked by the current checkout's Leto/Hermes source-identity mismatch;
-  hosted provider CI is required for closure.
+- Status: complete. PR #107 merged the shared reverse cumulative-sum APIs and
+  Leto differential contracts; PR #122 merged the terminal provider evidence.
+  Exact closeout head `45079f1d` passed WGPU `90109098364`, CUDA
+  `90109098361`, ROCm `90109098296`, and macOS Metal `90109098891`.
+  Hardware-only NVIDIA and AMD jobs skipped because no device runner was
+  selected.
 
 ## HEPH-BACKEND-CI-FEATURE-MATRIX-1 [patch] — done
 
