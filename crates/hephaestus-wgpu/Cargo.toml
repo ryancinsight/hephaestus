@@ -40,6 +40,7 @@ hephaestus-cuda = { workspace = true, optional = true }
 windows = { workspace = true }
 
 [dev-dependencies]
+hephaestus-conformance = { workspace = true }
 criterion = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }

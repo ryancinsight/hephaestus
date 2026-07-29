@@ -33,5 +33,7 @@ pub mod stencil;
 pub mod stream;
 /// Dense vector-operation contracts.
 pub mod vector;
+/// Device-neutral strided views over backend buffers.
+pub mod view;
 /// Volume contracts.
 pub mod volume;

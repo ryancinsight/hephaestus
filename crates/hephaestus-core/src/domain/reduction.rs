@@ -1,4 +1,4 @@
-//! Backend-neutral axis-reduction planning.
+//! Backend-neutral axis-reduction planning and the device-neutral seam.
 //!
 //! Both GPU backends reduce a rank-2 strided operand along one axis with the
 //! identical host-side contract: validate the shapes/strides, pack the launch
@@ -9,12 +9,121 @@
 //!
 //! The one backend-specific input is whether the input and output buffers
 //! alias (a device-pointer identity check); callers compute it and pass it in.
+//!
+//! [`AxisReductionOps`] completes the family: the planning above was already
+//! shared, but every backend still exposed `prod_axis_into` and
+//! `prepare_reduce_axis_into` as free functions over its own device and operand
+//! types, so a consumer — or a conformance suite — had to bind to one device API
+//! to call them. The seam takes the same shape as [`DenseVectorOps`] and
+//! [`SparseOperatorOps`]: generic over the device, monomorphized at every call
+//! site, no `dyn` anywhere.
 
+use crate::domain::device::ComputeDevice;
+use crate::domain::dialect::KernelDialect;
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::launch::BlockWidth;
+use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity, ProdOp};
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
+use crate::domain::vector::DenseVectorOps;
+use crate::domain::view::StridedView;
 use bytemuck::{Pod, Zeroable};
 use leto::Layout;
+
+/// Device-neutral rank-2 axis reductions over strided operands.
+///
+/// Implementors are zero-sized per-backend markers, so a bound of
+/// `R: AxisReductionOps<D, T>` costs nothing at runtime and every call
+/// monomorphizes to the backend's own kernel dispatch.
+///
+/// # Reduced shape
+///
+/// Reducing a rank-2 operand along `axis` preserves that axis at length one, so
+/// a `[3, 4]` input reduced along axis `0` writes a `[1, 4]` output. Keeping the
+/// rank makes the result directly broadcastable against the input, which is why
+/// the reduced axis is not dropped.
+///
+/// # Prepared reductions
+///
+/// [`Self::prepare_reduce_axis_into`] binds dispatch resources to a fixed
+/// operand pair once. The handle observes later writes to the buffers it was
+/// prepared over — it holds the allocations, not a snapshot — so an iterative
+/// consumer re-dispatches without re-planning and without allocating.
+///
+/// # Operator genericity
+///
+/// The combining operator is a type parameter bounded by the implementor's own
+/// [`Self::Dialect`], because the shader expression for a reduction is
+/// dialect-specific (`Wgsl`, `CudaC`, `HipC`) while the reduction contract is
+/// not. That keeps one seam across backends whose kernels are written in
+/// different languages.
+pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
+    /// Kernel dialect this backend authors reductions in.
+    type Dialect: KernelDialect;
+
+    /// Dispatch resources bound to one input/output operand pair.
+    type Prepared;
+
+    /// Product-reduce `input` along `axis` into `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the axis is out of range, the output
+    /// shape does not match the reduced shape, a layout is unsupported, or the
+    /// backend dispatch fails.
+    fn prod_axis_into(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<()>
+    where
+        T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Self::Dialect>;
+
+    /// Bind dispatch resources for reducing `input` along `axis` into `output`
+    /// under the combining operator `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when axis, shape, output-layout, or
+    /// aliasing validation fails.
+    fn prepare_reduce_axis_into<Op>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<Self::Prepared>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
+
+    /// Re-dispatch a prepared reduction over its bound operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend dispatch failure.
+    fn dispatch_prepared(&self, device: &D, prepared: &Self::Prepared) -> Result<()>;
+}
+
+/// Marker asserting that a backend supplies both halves of the accelerator
+/// operand surface a solver needs: dense vector recurrences and axis
+/// reductions over strided views.
+///
+/// Consumers bind to this instead of restating both bounds, and a backend that
+/// implements both acquires it through the blanket implementation below.
+pub trait StridedComputeBackend<D: ComputeDevice, T: Pod>:
+    DenseVectorOps<D, T> + AxisReductionOps<D, T>
+{
+}
+
+impl<B, D, T> StridedComputeBackend<D, T> for B
+where
+    D: ComputeDevice,
+    T: Pod,
+    B: DenseVectorOps<D, T> + AxisReductionOps<D, T>,
+{
+}
 
 /// Validate that a reduction block width can be halved into a workgroup tree.
 ///

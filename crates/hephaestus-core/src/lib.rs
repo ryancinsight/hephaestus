@@ -47,8 +47,8 @@ pub use domain::ops::{
     TypedBinaryExpr, UnaryExpr,
 };
 pub use domain::reduction::{
-    AxisReductionDispatch, AxisReductionMeta, plan_axis_reduction, reduction_pass_count,
-    validate_reduction_width,
+    AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, StridedComputeBackend,
+    plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, plan_axis_scan};
 pub use domain::sparse::SparseOperatorOps;
@@ -58,4 +58,5 @@ pub use domain::stream::{
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
+pub use domain::view::StridedView;
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, validate_ray_line_integrals};
