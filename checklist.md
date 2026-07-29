@@ -2,6 +2,16 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf]
+
+- [ ] Instrument retained blocked-QR region-transfer construction and waits.
+- [ ] Record the per-panel live-allocation model at 192×129 and a wider shape.
+- [ ] Implement only the evidence-selected transfer-workspace reuse.
+- [ ] Verify complete Leto `R`, solve, and reconstruction semantics.
+- [ ] Record matched Criterion A/B and require exact-head provider CI.
+
+Implementation owner: Codex on `codex/hephaestus-qr-wide-transfer`.
+
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf]
 
 - [x] Add a value-validating profile for the 64/65-column boundary and one

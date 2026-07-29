@@ -4,6 +4,24 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-qr-wide-transfer`; scope: the retained WGPU
+  blocked-QR path at and above the 129-column routing boundary.
+- Outcome: identify and remove measured per-panel region-transfer resource
+  construction or synchronization overhead while preserving the hybrid GPU
+  trailing-update algorithm.
+- Non-goals: widening the direct-host threshold without matched evidence,
+  changing QR arithmetic or block width, backend algorithm changes, weakening
+  workloads, or performance and memory claims without matched measurements.
+- Acceptance: a value-validating production profile covers 128/129 columns and
+  at least one wider multi-panel shape; the selected increment reduces a
+  measured runtime or live-allocation bound, preserves complete Leto `R`, solve,
+  and reconstruction contracts, and passes warning-denied package gates plus
+  exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
+- Risk/change class: `[patch]` internal transfer orchestration and memory reuse.
+- Status: claimed 2026-07-29; transfer-resource profile pending.
+
 ## HEPH-WGPU-QR-WIDE-PROFILE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-wide-profile`; scope: WGPU blocked-QR
