@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-qr-post-tail-profile`; scope: WGPU blocked
+  QR component profiling and the next evidence-selected vertical optimization.
+- Outcome: re-establish the 70×35 blocked-QR latency decomposition after PR
+  #142 removed the final-panel synchronization, then optimize the new binding
+  production component without changing arithmetic or benchmark workload.
+- Non-goals: benchmark-instrument tuning, block-width changes, CPU fallback for
+  wide tails, CUDA/ROCm/Metal algorithm changes without provider evidence, or
+  unmeasured runtime and memory claims.
+- Acceptance: a controlled component profile validates every factorization,
+  identifies the new latency bound, and records the measured allocation and
+  synchronization model; the selected production increment has value-semantic
+  Leto differential coverage, a matched Criterion A/B result, warning-denied
+  checks, and exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
+- Risk/change class: `[patch]` performance audit until evidence selects a
+  behavior or public-contract change.
+- Status: claimed 2026-07-28; profiling in progress.
+
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-wgpu-qr-tail-sync`; scope:

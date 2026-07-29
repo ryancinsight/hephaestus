@@ -2,6 +2,16 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf]
+
+- [ ] Re-run the retained blocked-QR component profile after PR #142.
+- [ ] Model the new binding latency and live-memory costs.
+- [ ] Implement the evidence-selected production optimization.
+- [ ] Add value-semantic differential and allocation contracts.
+- [ ] Record matched Criterion A/B evidence and exact-head provider CI.
+
+Implementation owner: Codex on `codex/hephaestus-qr-post-tail-profile`.
+
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 
 - [x] Add one backend-neutral allocation-free packed-panel Householder apply.
