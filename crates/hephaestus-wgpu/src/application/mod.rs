@@ -13,12 +13,12 @@ pub(crate) mod pipeline;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 
+/// Device-neutral axis-reduction seam implementation.
+pub mod axis_reduction_seam;
 /// Seeded host-delegated PRNG initializers.
 pub mod random;
 /// Reduction compute operations.
 pub mod reduction;
-/// Device-neutral axis-reduction seam implementation.
-pub mod axis_reduction_seam;
 /// Prefix and suffix scan compute operations.
 pub mod scan;
 #[cfg(feature = "sparse")]

@@ -10,7 +10,9 @@ use hephaestus_core::{
     Result, StridedView, Wgsl,
 };
 
-use crate::application::reduction::{PreparedAxisReduction, prepare_reduce_axis_into, prod_axis_into};
+use crate::application::reduction::{
+    PreparedAxisReduction, prepare_reduce_axis_into, prod_axis_into,
+};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -85,11 +87,7 @@ where
     }
 
     #[inline]
-    fn dispatch_prepared(
-        &self,
-        device: &WgpuDevice,
-        prepared: &Self::Prepared,
-    ) -> Result<()> {
+    fn dispatch_prepared(&self, device: &WgpuDevice, prepared: &Self::Prepared) -> Result<()> {
         prepared.dispatch(device)
     }
 }

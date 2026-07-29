@@ -17,6 +17,7 @@ pub mod application;
 /// wgpu device, queue, and buffer infrastructure.
 pub mod infrastructure;
 
+pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -74,7 +75,6 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
-pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,

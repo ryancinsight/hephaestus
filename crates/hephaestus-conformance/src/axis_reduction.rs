@@ -156,7 +156,9 @@ where
     .expect("transposed product");
 
     let mut got = [0.0f32; 4];
-    device.download(&out, &mut got).expect("transposed download");
+    device
+        .download(&out, &mut got)
+        .expect("transposed download");
     assert_eq!(
         got,
         [45.0, 120.0, 231.0, 384.0],
@@ -288,7 +290,9 @@ where
         .expect("prepare sum reduction");
     ops.dispatch_prepared(device, &sum).expect("sum dispatch");
     let mut got_sum = [0.0f32; 4];
-    device.download(&sum_out, &mut got_sum).expect("sum download");
+    device
+        .download(&sum_out, &mut got_sum)
+        .expect("sum download");
     assert_eq!(
         got_sum,
         [15.0, 18.0, 21.0, 24.0],
@@ -306,7 +310,8 @@ where
             StridedView::new(&prod_out, &prod_layout),
         )
         .expect("prepare product reduction");
-    ops.dispatch_prepared(device, &prod).expect("product dispatch");
+    ops.dispatch_prepared(device, &prod)
+        .expect("product dispatch");
     let mut got_prod = [0.0f32; 4];
     device
         .download(&prod_out, &mut got_prod)
