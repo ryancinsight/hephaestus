@@ -64,6 +64,15 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate contiguous binary, typed-binary, unary, and scalar
+  elementwise outputs through the overwrite-before-read device seam. CUDA and
+  ROCm omit one full output-buffer initialization before kernels overwrite
+  every element; this reduces modeled device traffic from four to three
+  element transfers for binary operations and from three to two for unary and
+  scalar operations. WGPU and Metal preserve their platform-managed
+  initialization behavior. Peak allocation is unchanged, and no runtime gain
+  is claimed without matched hardware measurements.
+
 - [patch] Reuse the WGPU blocked-QR panel download pipeline, bind group,
   metadata uniform, and staging allocation across retained wide panels while
   keeping the final tail exact-sized and one-shot. Download preparation count
