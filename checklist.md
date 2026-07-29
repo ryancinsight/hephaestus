@@ -239,7 +239,7 @@ passed WGPU `90088836682`, CUDA `90088836688`, ROCm `90088836731`, and Metal
 - [x] Export both markers through WGPU, CUDA, ROCm, and Metal.
 - [x] Add core expression tests for the scaled-error-function and derivative
       forms.
-- [ ] Route both f32 operations through Coeus ROCm and Metal and compare with
+- [x] Route both f32 operations through Coeus ROCm and Metal and compare with
       the Leto CPU oracle.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence.
 
@@ -248,7 +248,9 @@ Implementation owner: Codex on `codex/hephaestus-gelu-parity`; ADR 0030.
 Provider evidence: merged Hephaestus PR #123 at `23f9662` passed WGPU job
 `90115184352`, CUDA job `90115253352`, ROCm job `90115183816`, and Metal job
 `90115184178`. AMD and NVIDIA hardware jobs were skipped; no physical-device
-execution claim is made.
+execution claim is made. Coeus PR #230 merged at `e26ba668`; its consumer
+jobs passed WGPU `90061390522`, CUDA `90061390565`, ROCm `90061390546`, and
+Metal `90061390499` against the Leto CPU oracle.
 
 ## HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1 [minor]
 
@@ -276,7 +278,7 @@ selected. Coeus final docs head `08614299` passed run `30283857017`: CUDA
 - [x] Export the vocabulary through WGPU, CUDA, ROCm, and Metal.
 - [x] Add core tests for composed logarithm/exponential forms, sign, and
       rounding semantics.
-- [ ] Route the f32 operations through Coeus ROCm and Metal and compare with
+- [x] Route the f32 operations through Coeus ROCm and Metal and compare with
       the Leto CPU oracle.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal CI and record final evidence:
       head `b088a2f`; WGPU `89997918070`, CUDA `89997916944`, ROCm
@@ -284,6 +286,10 @@ selected. Coeus final docs head `08614299` passed run `30283857017`: CUDA
       hardware jobs were skipped.
 
 Implementation owner: Codex on `codex/hephaestus-unary-math-parity`.
+Coeus PR #226 merged at `383ac51b`; exact consumer head `7c9a1ab2` passed
+WGPU `90015947922`, CUDA `90015947631`, ROCm `90015947658`, and Metal
+`90015947762`. Required-device ROCm skipped because no AMD runner was
+registered.
 
 ## HEPH-COMPARISON-EXPRESSION-PARITY-1 [minor]
 
@@ -313,15 +319,17 @@ and ROCm `89986120026`; required AMD hardware remained skipped.
 - [x] Add f32 provider contracts that compare tanh-GELU, SiLU, and Softplus
       forward and gradient dispatch with bounded CPU references.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI.
-- [ ] Route the f32 operations through Coeus and compare with the Leto CPU
+- [x] Route the f32 operations through Coeus and compare with the Leto CPU
       oracle on the exact consumer head.
 
 Implementation owner: Codex on `codex/activation-expression-parity`;
 provider PR #120 merged at `9f8416c`. Exact-head provider jobs passed WGPU
 `90101823245` (160/160), CUDA `90101823086` (123/123), ROCm `90101823407`
 (79/79), and Metal `90101822854` (33/33); NVIDIA `90101823835` and AMD
-`90101824100` hardware jobs were skipped. Coeus consumer integration remains
-open in peer-owned backend scopes.
+`90101824100` hardware jobs were skipped. Coeus PR #223 merged at `4b807ddd`;
+exact consumer head `3c53a8ee` passed WGPU `89860389892`, CUDA `89860389857`,
+ROCm `89860389885`, and Metal `89860389899`. Required-device ROCm skipped
+because no AMD runner was registered.
 
 ## HEPH-ACTIVATION-TAIL-EXPRESSION-PARITY-1 [minor]
 
@@ -331,18 +339,21 @@ open in peer-owned backend scopes.
 - [x] Add core expression assertions for the dialect-specific forms.
 - [x] Add provider contracts comparing forward and gradient results with the
       f32 CPU formulas.
-- [ ] Route the four f32 operations through Coeus and compare with the Leto
+- [x] Route the four f32 operations through Coeus and compare with the Leto
       CPU oracle on the exact consumer head.
 - [x] Run exact-head WGPU, CUDA, ROCm, and Metal provider CI and record final
       evidence.
 
-Implementation owner: Codex; ADR 0032. Coeus routing remains in peer-owned
-backend scopes.
+Implementation owner: Codex; ADR 0032. Coeus PR #237 merged at `7fef4a2a`;
+its ROCm and Metal suites call `coeus_leto::elementwise_unary_into` for the
+expected values and dispatch the device results through Hephaestus.
 
 Provider evidence: merged PR #123 at `23f9662` passed WGPU job `90115184352`,
 CUDA job `90115253352`, ROCm job `90115183816`, and Metal job `90115184178`.
 AMD and NVIDIA hardware jobs were skipped because no hosted device runners
-were selected; no physical-device execution claim is made.
+were selected; no physical-device execution claim is made. Exact consumer head
+`2f04be65` passed WGPU `90262230232`, CUDA `90262230288`, ROCm `90262230238`,
+and Metal `90262230226`; required-device ROCm skipped without an AMD runner.
 
 ## HEPH-SCAN-SUFFIX-PARITY-1 [minor]
 
