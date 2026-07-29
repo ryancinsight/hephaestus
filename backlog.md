@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — in progress
+## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-post-tail-profile`; scope: WGPU blocked
   QR component profiling and the next evidence-selected vertical optimization.
@@ -21,7 +21,8 @@ cuda-oxide + cutile).
   checks, and exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
-- Status: claimed 2026-07-28; local verification complete, provider CI pending.
+- Status: completed 2026-07-29; final documentation-head provider rerun
+  required before merge.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf] — done
 

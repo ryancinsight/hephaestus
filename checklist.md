@@ -8,7 +8,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Model the new binding latency and live-memory costs.
 - [x] Implement the evidence-selected production optimization.
 - [x] Verify value-semantic strategy boundaries and live-allocation accounting.
-- [ ] Record matched Criterion A/B evidence and exact-head provider CI.
+- [x] Record matched Criterion A/B evidence and implementation-head provider CI.
 
 Implementation owner: Codex on `codex/hephaestus-qr-post-tail-profile`.
 
@@ -22,6 +22,12 @@ accounting removes 18,432 bytes of device scratch while preserving the
 contracts pass in the focused 6/6 Nextest run. Warning-denied all-target
 Clippy, full package Nextest 173/173, doctests 2/2, all benchmark smoke targets,
 formatting, and semver-checks (196 pass, 57 skip) are green.
+Implementation-head provider jobs pass: WGPU `90490216440` (6m16s), CUDA
+`90490216702` (7m10s), ROCm `90490216571` (6m01s), and macOS Metal
+`90490216746` (5m36s). Hardware-only CUDA and ROCm jobs skip on the
+pull-request event as designed. CodeRabbit completed with no actionable
+findings. The closure documentation commit requires one final exact-head
+provider rerun before merge.
 
 ## HEPH-WGPU-QR-TAIL-SYNC-1 [minor] [perf]
 
