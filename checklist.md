@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ELEMENTWISE-OVERWRITE-1 [patch] [perf]
+
+- [ ] Route allocating contiguous and typed elementwise wrappers through the
+      accepted overwrite-before-read allocation seam.
+- [ ] Preserve one authoritative caller-owned dispatch path per operation.
+- [ ] Verify WGPU, CUDA, ROCm, and Metal delegation contracts with
+      value-semantic tests.
+- [ ] Record the static device-traffic delta without claiming runtime gains.
+- [ ] Require exact-head provider CI before integration.
+
+Implementation owner: Codex on
+`codex/hephaestus-elementwise-overwrite`; production scope is the WGPU, CUDA,
+and ROCm application elementwise allocation wrappers. Metal delegates WGPU.
+ADR 0037 owns the overwrite-before-read contract.
+
 ## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf]
 
 - [x] Extend the matched value-validating Criterion instrument across the
