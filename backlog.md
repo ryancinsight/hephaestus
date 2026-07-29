@@ -4,6 +4,21 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-COEUS-ACTIVATION-PARITY-RECONCILE-1 [patch] — in progress
+
+- Owner: Codex on `codex/hephaestus-coeus-parity-reconcile`; scope:
+  Hephaestus activation-parity checklist state and the already-merged Coeus
+  consumer evidence.
+- Outcome: reconcile the provider checklist with direct Coeus ROCm/Metal
+  routing, Leto CPU differential tests, and exact-head WGPU/CUDA/ROCm/Metal CI.
+- Non-goals: provider source changes, new operation contracts, release/version
+  transitions, or runtime and memory claims.
+- Acceptance: every stale activation, exact-GELU, unary-math, and
+  activation-tail consumer item cites its merged Coeus PR and exact CI jobs;
+  source inspection confirms no local fallback or duplicated formula.
+- Risk/change class: `[patch]` tracking reconciliation only.
+- Status: in progress.
+
 ## HEPH-WGPU-QR-REGION-TRANSFER-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-wide-transfer`; scope: the retained WGPU
