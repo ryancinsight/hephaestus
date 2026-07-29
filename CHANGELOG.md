@@ -36,6 +36,12 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Route dense WGPU blocked QR matrices of at most four 32-column
+  panels through the canonical host factorization. At 192×128 this removes
+  49,664 bytes of device scratch and reduces the matched Criterion median from
+  1.2046 ms to 461.24 µs (61.710%); Criterion's central change estimate is
+  −62.055%, while the unchanged 70×35 control shows no detectable change.
+
 - [patch] Route dense WGPU blocked QR matrices of at most two 32-column
   panels through the canonical host factorization. This regime has no wide
   GPU trailing update, so one dense download and one `R` upload replace paired

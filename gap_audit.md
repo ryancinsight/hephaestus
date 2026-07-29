@@ -656,6 +656,22 @@ No open feature-combination defect is currently recorded in the backend scope.
   central estimate −1.8495%, 95% interval −10.014% to +6.2324%, `p = 0.69`);
   removing the complete blocked transfer schedule targets the measured bound
   and makes those resources unreachable in the narrow regime.
+- [patch] Dense blocked QR matrices of at most four panels now use the same
+  canonical host route. A production-executing profile validates Leto `R`
+  values while comparing direct and blocked schedules from 96×64 through
+  768×512; no blocked crossover appears in that measured range. The bounded
+  four-panel increment retains the wider GPU path rather than extrapolating
+  beyond its acceptance scope. At 192×128 the matched Criterion median
+  decreases from 1.2046 ms to 461.24 µs (61.710%); Criterion's central change
+  estimate is −62.055% (95% interval −62.621% to −61.496%, `p = 0.00`).
+  The unchanged 70×35 control has no detectable change (`p = 0.39`). The
+  direct route removes 49,664 bytes of device scratch at 192×128 while
+  retaining the required 98,304-byte `R` output and readback staging
+  allocation. The 128-column direct boundary
+  and 129-column GPU-wide boundary remain Leto-equivalent for complete `R`,
+  solve, and reconstruction contracts. Evidence tier: value-semantic
+  differential tests, a production-executing component profile, static
+  allocation accounting, and matched machine-local Criterion A/B.
 - [minor] Multi-RHS sparse SpMV is exposed through CUDA and Python. CUDA
   `spmv_many`/`spmv_many_into` delegate to the existing sparse-dense kernel, and
   `hephaestus-python` exposes `hp.spmv_many(...)` for WGPU and CUDA arrays.

@@ -22,7 +22,8 @@ cuda-oxide + cutile).
   package gates, and passes exact-head WGPU/CUDA/ROCm/macOS-Metal CI.
 - Risk/change class: `[patch]` performance audit until evidence selects a
   behavior or public-contract change.
-- Status: claimed 2026-07-29; profile pending.
+- Status: implementation, matched local evidence, and package verification
+  complete; exact-head provider CI pending.
 
 ## HEPH-WGPU-QR-POST-TAIL-PROFILE-1 [patch] [perf] — done
 
