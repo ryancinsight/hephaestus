@@ -42,6 +42,10 @@ pub struct PreparedConvolutionForward<'a, T> {
 }
 
 impl<'a, T> PreparedConvolutionForward<'a, T> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "prepared resources enumerate the complete borrowed forward launch state"
+    )]
     pub(super) const fn new(
         device: &'a RocmDevice,
         kernel: Option<Arc<RocmKernel>>,

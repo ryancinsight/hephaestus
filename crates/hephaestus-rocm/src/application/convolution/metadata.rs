@@ -166,10 +166,6 @@ impl ConvolutionMeta {
         Ok(self)
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the metadata constructor enumerates the complete convolution ABI"
-    )]
     fn new<const R: usize, const S: usize>(
         input: &Layout<R>,
         weight: &Layout<R>,
