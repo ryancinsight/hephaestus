@@ -22,7 +22,8 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal allocation policy and one avoided
   output-sized initialization transfer on CUDA/ROCm; peak allocation is
   unchanged.
-- Status: in progress.
+- Status: implementation and local verification complete; exact-head WGPU,
+  CUDA, ROCm, and macOS Metal CI pending.
 
 ## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 

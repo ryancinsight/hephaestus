@@ -11,13 +11,13 @@ use hephaestus_core::{
 use hephaestus_cuda::{
     AbsOp, AddOp, CudaDevice, CudaVectorOps, CumSumOp, EluGradOp, EluOp, ExpOp, GeluTanhGradOp,
     GeluTanhOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp,
-    SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul_into,
-    binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, det, dot, kron, matexp,
-    matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv,
-    prepare_dot, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
-    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
-    prod_axis, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, det,
+    dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
+    norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
+    prepare_sum_axis_into, prod_axis, reduce_axis, reduction, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
     trace, unary_elementwise, unary_elementwise_into,
 };
@@ -769,6 +769,22 @@ fn linalg_batched_matmul_matches_cpu_reference() {
     let a_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
     let b_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
     let out_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+
+    let allocated = batched_matmul(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let mut allocated_values = vec![0.0f32; 8];
+    dev.download(&allocated, &mut allocated_values).unwrap();
+    assert_eq!(allocated_values, expected);
 
     batched_matmul_into(
         &dev,

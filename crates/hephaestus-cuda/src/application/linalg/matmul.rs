@@ -446,7 +446,8 @@ where
         });
     }
     let out_layout = Layout::c_contiguous([rows, cols]).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    let out =
+        device.alloc_uninitialized::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
     matmul_into(
         device,
         lhs,
@@ -485,7 +486,8 @@ where
         });
     }
     let out_layout = Layout::c_contiguous([batch, m, n]).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    let out =
+        device.alloc_uninitialized::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
     batched_matmul_into(
         device,
         lhs,
