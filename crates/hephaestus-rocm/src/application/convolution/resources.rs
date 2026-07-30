@@ -2,7 +2,7 @@ use hephaestus_core::{
     ConvolutionBackwardOperands, ConvolutionForwardOperands, HephaestusError, Result,
 };
 
-use crate::infrastructure::buffer::RocmBuffer;
+use crate::infrastructure::RocmBuffer;
 use crate::infrastructure::device::RocmDevice;
 
 pub(super) fn validate_forward_device<T, const R: usize>(

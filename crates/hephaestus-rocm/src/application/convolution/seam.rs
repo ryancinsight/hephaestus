@@ -19,7 +19,7 @@ use super::routing::{
     BiasMode, ConvolutionDirection, GradientTarget, forward_label, gradient_label,
     validate_spatial_rank,
 };
-use crate::infrastructure::buffer::RocmBuffer;
+use crate::infrastructure::RocmBuffer;
 use crate::infrastructure::device::RocmDevice;
 
 trait HipConvolutionScalar: DialectScalar<HipC> + Pod + Send + Sync + 'static {}

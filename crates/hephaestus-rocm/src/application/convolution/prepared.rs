@@ -8,7 +8,7 @@ use super::resources::same_device;
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, RocmKernel, cached_kernel, grid_size, launch_kernel,
 };
-use crate::infrastructure::buffer::RocmBuffer;
+use crate::infrastructure::RocmBuffer;
 use crate::infrastructure::device::RocmDevice;
 
 const BLOCK_WIDTH: BlockWidth = BlockWidth::DEFAULT;
