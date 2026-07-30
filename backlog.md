@@ -130,8 +130,9 @@ cuda-oxide + cutile).
   merged through parameter-SSOT promotion at `f896c43`; WGPU, CUDA, ROCm, and
   Coeus closure audits identify the exact kernels, fallbacks, missing ranks,
   and safety contracts to migrate. The core seam and shared planner now pass
-  package check, six focused value-semantic Nextest contracts, and doctests;
-  writable plans reject arbitrary overlapping strided layouts before dispatch.
+  package check, seven focused value-semantic Nextest contracts, and doctests;
+  writable plans reject arbitrary overlapping strided layouts, and backend
+  address checks cover convolution projection intermediates before dispatch.
   Warning-denied Clippy remains blocked by mixed rustup/MSYS2 compiler identity
   artifacts in the shared cache (`E0514`); no cache fork or clean is used.
 

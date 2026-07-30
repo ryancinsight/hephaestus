@@ -215,3 +215,33 @@ fn writable_layout_must_prove_nonoverlap() {
         .expect("transposed output layout is injective");
     assert_eq!(safe_plan.output_elements, 4);
 }
+
+#[test]
+fn address_limit_covers_projection_intermediates() {
+    let input_buffer = Buffer { len: 4 };
+    let weight_buffer = Buffer { len: 3 };
+    let output_buffer = Buffer { len: 3 };
+    let input = layout([1, 1, 4]);
+    let weight = layout([1, 1, 3]);
+    let output = layout([1, 1, 3]);
+    let operands = ConvolutionForwardOperands {
+        input: StridedView::new(&input_buffer, &input),
+        weight: StridedView::new(&weight_buffer, &weight),
+        bias: None,
+        output: StridedView::new(&output_buffer, &output),
+    };
+    let parameters =
+        ConvolutionParameters::new([3], [4], [2]).expect("valid convolution parameters");
+    let plan = plan_convolution_forward::<f32, _, 3, 1>(&operands, parameters, false)
+        .expect("valid convolution");
+
+    plan.validate_address_limit(10)
+        .expect("projection maximum equals address limit");
+    let error = plan
+        .validate_address_limit(9)
+        .expect_err("projection exceeds address limit");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: convolution projection exceeds backend address limit 9"
+    );
+}
