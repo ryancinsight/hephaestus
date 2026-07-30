@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-strided-overwrite`; scope: allocating
   binary, typed-binary, unary, and scalar strided elementwise wrappers in
@@ -23,8 +23,9 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal allocation policy and one avoided
   output-sized initialization transfer on CUDA/ROCm; peak allocation is
   unchanged.
-- Status: implementation and local verification complete; exact-head WGPU,
-  CUDA, ROCm, and macOS Metal CI pending.
+- Status: done. Implementation head `8ca789c` passed CUDA job `90742542272`,
+  ROCm job `90742542268`, WGPU job `90742542220`, and macOS Metal job
+  `90742542356`.
 
 ## HEPH-SCAN-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
