@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — in review
 
 - Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the
   full-matrix startup-copy destinations for blocked Cholesky, LU, and QR in
@@ -24,9 +24,16 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal allocation policy and one avoided
   matrix-sized initialization transfer per decomposition call on CUDA/ROCm;
   peak allocation is unchanged.
-- Status: in progress 2026-07-30. Claimed files: WGPU/CUDA/ROCm Cholesky, LU,
-  and QR implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
-  `checklist.md`.
+- Evidence: WGPU blocked-decomposition contracts pass 17/17 and physical CUDA
+  contracts pass 16/16 before and after the allocation change. Rust 1.95
+  warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
+  adapterless ROCm. Each dense whole-buffer copy and strided identity dispatch
+  covers the destination's validated matrix extent before decomposition reads.
+  Adapterless ROCm exposes no decomposition tests, so feature-enabled ROCm
+  behavioral coverage remains an explicit hosted-CI requirement.
+- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+  WGPU/CUDA/ROCm Cholesky, LU, and QR implementations and contracts,
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
 ## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 

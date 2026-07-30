@@ -4,13 +4,13 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
-- [ ] Prove each full-matrix destination is completely copied before first
+- [x] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
+- [x] Prove each full-matrix destination is completely copied before first
       decomposition read.
-- [ ] Route only the nine WGPU, CUDA, and ROCm startup-copy destinations
+- [x] Route only the nine WGPU, CUDA, and ROCm startup-copy destinations
       through `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
-- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
-- [ ] Pass exact WGPU and physical CUDA blocked-decomposition contracts.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA blocked-decomposition contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-decomposition-overwrite`.

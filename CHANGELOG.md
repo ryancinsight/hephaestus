@@ -64,6 +64,16 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate blocked Cholesky, LU, and QR full-matrix startup copies
+  through the overwrite-before-read device seam. CUDA and ROCm omit one
+  matrix-sized initialization transfer before a dense copy or canonical
+  strided identity dispatch overwrites the validated destination extent; WGPU
+  and Metal preserve platform-managed initialization behavior. Partial panel,
+  reflector, status, rank, threshold, and metadata buffers retain their
+  required initialization. Decomposition arithmetic, layouts, and peak
+  allocation are unchanged; no runtime gain is claimed without matched
+  hardware measurements.
+
 - [patch] Allocate matrix-power base copies and multiplication scratches
   through the overwrite-before-read device seam. CUDA and ROCm omit up to
   three matrix-sized initialization transfers because the strided identity
