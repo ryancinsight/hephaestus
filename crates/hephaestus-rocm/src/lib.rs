@@ -51,6 +51,10 @@ pub use application::decomposition::{
     qr_decompose_blocked, schur, singular_values, svd_decompose, svd_rank_revealing,
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::elementwise_seam::{
+    RocmElementwiseOps, RocmPreparedElementwise,
+};
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -83,7 +87,13 @@ pub use application::prepared_reduction::{
     submit_prepared_reduction_batch,
 };
 pub use application::random::{normal_with_seed, uniform_with_seed};
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::full_reduction_seam::{
+    RocmFullReductionOps, RocmPreparedFullReduction,
+};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::scan_seam::{RocmPreparedScan, RocmScanOps};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
