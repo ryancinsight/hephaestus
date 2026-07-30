@@ -11,7 +11,7 @@ Sprint target: 0.18.0. Phase: Closure.
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
 - [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
 - [x] Pass exact WGPU and physical CUDA sparse value contracts.
-- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-sparse-overwrite`. Claimed
 files are the WGPU, CUDA, and ROCm sparse SpMV/SpMM allocating wrappers and
@@ -23,6 +23,10 @@ passes for WGPU, feature-enabled CUDA, and adapterless ROCm. CUDA and ROCm
 omit one output-sized initialization transfer; WGPU and Metal preserve
 platform-managed initialization behavior. Peak allocation is unchanged and no
 runtime claim is made.
+PR #153 head `3499245` passed WGPU job `90789708535`, CUDA job
+`90789708499`, ROCm job `90789708424`, and macOS Metal job `90789709223`.
+Required-device AMD job `90789708965` and NVIDIA job `90789708841` skipped
+because no hardware runner was dispatched; no physical ROCm CI claim is made.
 
 ## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf]
 
