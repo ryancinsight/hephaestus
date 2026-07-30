@@ -64,6 +64,15 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate sparse matrix-vector and sparse matrix-dense-matrix results
+  through the overwrite-before-read device seam. CUDA and ROCm omit one
+  output-sized initialization transfer before kernels overwrite every row or
+  output cell; WGPU and Metal preserve platform-managed initialization
+  behavior. Structurally empty CSR rows are explicitly covered and produce
+  zero. Caller-owned outputs, arithmetic, sparse layouts, and peak allocation
+  are unchanged; no runtime gain is claimed without matched hardware
+  measurements.
+
 - [patch] Allocate Kronecker-product, matrix-multiply, and batched-matrix-
   multiply results through the overwrite-before-read device seam. CUDA and
   ROCm omit one output-sized initialization transfer before kernels overwrite

@@ -382,7 +382,7 @@ pub fn spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand
         .ok_or_else(|| HephaestusError::DispatchFailed {
             message: format!("spmm output size {nrows}×{bcols} overflows usize"),
         })?;
-    let mut c = device.alloc_zeroed::<T>(c_len)?;
+    let mut c = device.alloc_uninitialized::<T>(c_len)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)
 }

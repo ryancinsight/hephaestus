@@ -2175,6 +2175,30 @@ fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
         .expect("reused batched SpMV download");
     assert_eq!(many_reused_values, c_values);
 
+    let empty_row_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 4.0],
+        vec![0, 2, 2],
+        vec![0, 2, 2, 3],
+        3,
+        3,
+    )
+    .expect("valid empty-row CSR fixture");
+    let empty_row_gpu =
+        GpuCsrMatrix::from_cpu(&device, &empty_row_csr).expect("empty-row HIP CSR upload");
+    let empty_row_y = spmv(&device, &empty_row_gpu, &x).expect("empty-row HIP SpMV");
+    let mut empty_row_y_values = [0.0_f32; 3];
+    device
+        .download(&empty_row_y, &mut empty_row_y_values)
+        .expect("empty-row SpMV download");
+    assert_eq!(empty_row_y_values, [-1.0, 0.0, 12.0]);
+
+    let empty_row_c = spmm(&device, &empty_row_gpu, b_operand).expect("empty-row HIP SpMM");
+    let mut empty_row_c_values = [0.0_f32; 6];
+    device
+        .download(&empty_row_c, &mut empty_row_c_values)
+        .expect("empty-row SpMM download");
+    assert_eq!(empty_row_c_values, [-3.0, -2.0, 0.0, 0.0, 20.0, 24.0]);
+
     let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
     assert_length_mismatch(spmv(&device, &gpu_csr, &wrong_x), 3, 2);
 }

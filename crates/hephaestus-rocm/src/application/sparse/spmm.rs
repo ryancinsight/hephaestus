@@ -190,7 +190,7 @@ pub fn spmm<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
         .ok_or_else(|| HephaestusError::DispatchFailed {
             message: format!("SpMM output length overflows usize: {nrows} * {bcols}"),
         })?;
-    let mut c = device.alloc_zeroed::<T>(output_len)?;
+    let mut c = device.alloc_uninitialized::<T>(output_len)?;
     spmm_into(device, matrix, b, &mut c)?;
     Ok(c)
 }

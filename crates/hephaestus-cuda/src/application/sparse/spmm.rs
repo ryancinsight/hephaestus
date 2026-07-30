@@ -192,7 +192,7 @@ pub fn spmm<'a, T: DialectScalar<CudaC> + leto_ops::Scalar + Pod, B: AsGpuMatrix
     let b_op = b.as_operand();
     let [_, bcols] = b_op.layout.shape;
 
-    let mut c = device.alloc_zeroed::<T>(nrows * bcols)?;
+    let mut c = device.alloc_uninitialized::<T>(nrows * bcols)?;
     spmm_into(device, a, b, &mut c)?;
     Ok(c)
 }
