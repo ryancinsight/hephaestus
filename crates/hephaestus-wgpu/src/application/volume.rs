@@ -228,7 +228,7 @@ pub fn ray_line_integrals(
     width: BlockWidth,
 ) -> Result<WgpuBuffer<f32>> {
     validate_ray_line_integrals(field.len, geometry, rays.len, n_rays, step)?;
-    let out = device.alloc_zeroed::<f32>(n_rays)?;
+    let out = device.alloc_uninitialized::<f32>(n_rays)?;
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
 }
