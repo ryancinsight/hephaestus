@@ -2,12 +2,16 @@
 
 /// Typed device-buffer contract.
 pub mod buffer;
+/// Device-neutral convolution operands, planning, and dispatch seam.
+pub mod convolution;
 /// Shared CPU-side panel factorisation routines for blocked decomposition.
 pub mod decomposition;
 /// Compute-device acquisition and transfer seam.
 pub mod device;
 /// Kernel-dialect markers and per-dialect scalar tokens.
 pub mod dialect;
+/// Backend-neutral elementwise operations over strided n-D views.
+pub mod elementwise;
 /// Error contracts shared by all backends.
 pub mod error;
 /// Backend-neutral kernel authoring: interface and source declarations.

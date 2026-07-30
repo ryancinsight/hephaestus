@@ -15,12 +15,21 @@ pub mod stencil;
 
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
+/// Native WGSL regular and transposed convolution.
+pub mod convolution;
+/// Device-neutral elementwise seam implementation.
+pub mod elementwise_seam;
+/// Device-neutral full-reduction seam implementation.
+pub mod full_reduction_seam;
+pub(crate) mod prepared;
 /// Seeded host-delegated PRNG initializers.
 pub mod random;
 /// Reduction compute operations.
 pub mod reduction;
 /// Prefix and suffix scan compute operations.
 pub mod scan;
+/// Device-neutral prefix/scan seam implementation.
+pub mod scan_seam;
 #[cfg(feature = "sparse")]
 /// GPU Compressed Sparse Row (CSR) sparse matrix operations.
 pub mod sparse;

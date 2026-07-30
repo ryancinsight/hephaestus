@@ -106,6 +106,49 @@ cuda-oxide + cutile).
 - Status: done 2026-07-30; delivered through PR #156. Claimed files:
   WGPU/CUDA/ROCm volume implementations and contracts, `CHANGELOG.md`,
   `backlog.md`, and `checklist.md`.
+## HEPH-CONVOLUTION-PROVIDER-1 [minor] [arch] — in progress
+
+- Owner: Codex on `codex/hephaestus-compute-seams`; claimed scope:
+  `crates/hephaestus-core/src/domain/convolution/`,
+  backend `application/convolution/` modules, focused provider contracts,
+  ADR 0039, and this item. The scope also absorbs the stale WGPU elementwise,
+  scan, and full-reduction seam increment required to keep the shared backend
+  exports warning-clean and device-safe.
+- Outcome: one fallible, monomorphized accelerator convolution seam with
+  regular and transposed forward/additive-backward implementations for WGPU,
+  CUDA, ROCm, and Metal, using Leto parameters as the SSOT.
+- Non-goals: Coeus caller migration, release/version transitions, dynamic
+  dispatch, host fallback, and runtime or memory claims without matched
+  measurements.
+- Acceptance: ranks 1 through 3 validate and dispatch through borrowed strided
+  device views; each backend differentially matches Leto for supported scalars;
+  invalid shape/storage/alias/address contracts fail before mutation; selected
+  provider failures return typed errors without host transfer or provider
+  change; focused package gates and exact-head provider CI pass.
+- Risk/change class: `[arch] [minor]`; additive provider surface with
+  cross-backend kernel, address-width, and device-failure risk.
+- Status: done 2026-07-30; delivered through PR #159. Leto
+  regular/transposed forward/backward ownership is
+  merged through parameter-SSOT promotion at `f896c43`; WGPU, CUDA, ROCm, and
+  Coeus closure audits identify the exact kernels, fallbacks, missing ranks,
+  and safety contracts to migrate. The core seam and shared planner now pass
+  package check, seven focused value-semantic Nextest contracts, and doctests.
+  CUDA passes the shared rank-one through rank-three `f32`/`f64`
+  regular/transposed forward/backward conformance matrix on physical hardware
+  in 4.6 seconds. WGPU passes the shared rank-one through rank-three `f32`
+  matrix in 0.8 seconds. Its combined convolution and compute-seam lane passes
+  18/18 tests in 8.4 seconds, including invalid shader compilation, arbitrary
+  writable overlap, device identity, and foreign-buffer rejection before
+  mutation. ROCm now owns native HIP kernels and passes its adapterless
+  feature-off build; feature-enabled Linux compilation and device execution
+  remain hosted gates. Writable plans reject arbitrary overlapping strided
+  layouts, and backend address checks cover convolution projection
+  intermediates before dispatch. Warning-denied Clippy passes for
+  core/conformance/WGPU/Metal, CUDA with its native feature, and ROCm's
+  feature-off configuration under one coherent rustup toolchain and the shared
+  target directory. Exact-head hosted CI passes the CUDA, ROCm, WGPU, and macOS
+  Metal feature and adapterless contract jobs; hardware-only NVIDIA and AMD
+  jobs skip because their repository variables are unset.
 
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 

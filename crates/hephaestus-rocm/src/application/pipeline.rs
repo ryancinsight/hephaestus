@@ -104,6 +104,14 @@ pub(crate) enum PipelineKey {
     MultiStorage(u64),
     /// Authored kernel stream keyed by its source.
     Stream(u64),
+    /// Convolution kernel keyed by every ABI-varying dimension.
+    #[cfg(all(feature = "rocm", target_os = "linux"))]
+    Convolution {
+        entry: &'static str,
+        scalar: TypeId,
+        spatial_rank: usize,
+        bias: bool,
+    },
     /// Grouped authored kernel stream keyed by its source.
     GroupedStream(u64),
 }

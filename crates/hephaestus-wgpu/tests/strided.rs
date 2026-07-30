@@ -214,7 +214,7 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
             op(&out, &aliasing),
             BlockWidth::DEFAULT,
         ),
-        "output layout must not contain zero-stride aliasing",
+        "output layout must be non-overlapping",
     );
 
     // Layout exceeding the backing buffer is rejected before dispatch.

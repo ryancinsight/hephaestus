@@ -1,6 +1,5 @@
 //! CUDA implementation of the backend-neutral authored-kernel command stream.
 
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -13,7 +12,9 @@ use hephaestus_core::{
 
 #[cfg(not(feature = "cuda"))]
 use crate::application::pipeline::SafeCachedKernel;
-use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+use crate::application::pipeline::{
+    LaunchConfig, PipelineKey, cached_kernel, launch_kernel, source_hash,
+};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::compiler::SafeCachedKernel;
@@ -413,14 +414,6 @@ fn launch_grouped<K: GroupedKernelSource<CudaC>>(
         },
         args,
     )
-}
-
-fn source_hash(label: &str, entry: &str, source: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    label.hash(&mut hasher);
-    entry.hash(&mut hasher);
-    source.hash(&mut hasher);
-    hasher.finish()
 }
 
 fn byte_len<T>(len: usize) -> Result<usize> {

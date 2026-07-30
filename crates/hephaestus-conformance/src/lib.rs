@@ -9,8 +9,9 @@
 //! (Atlas conformance triage, 2026-07-28). The contract of a substitution seam
 //! was in practice defined by whichever backend's author wrote the most tests.
 //!
-//! The clauses here are generic over [`ComputeDevice`] and the operation seam,
-//! so a backend runs them by instantiating rather than by re-authoring, and a
+//! The clauses here are generic over
+//! [`ComputeDevice`](hephaestus_core::ComputeDevice) and the operation seam, so
+//! a backend runs them by instantiating rather than by re-authoring, and a
 //! clause added once is executed by every backend from then on.
 //!
 //! ## Shape
@@ -32,5 +33,8 @@
 
 /// Contract clauses for the [`AxisReductionOps`](hephaestus_core::AxisReductionOps) seam.
 pub mod axis_reduction;
+/// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
+pub mod convolution;
 
 pub use axis_reduction::assert_axis_reduction_contract;
+pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};

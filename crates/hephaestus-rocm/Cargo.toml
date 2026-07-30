@@ -23,3 +23,6 @@ leto = { workspace = true }
 eunomia = { workspace = true }
 leto-ops = { workspace = true }
 cubecl-hip-sys = { workspace = true, optional = true }
+
+[dev-dependencies]
+hephaestus-conformance = { workspace = true }

@@ -1051,6 +1051,7 @@ impl ComputeDevice for WgpuDevice {
             buffer,
             len,
             tier,
+            owner: self.pipeline_cache.clone(),
             marker: PhantomData,
         })
     }
@@ -1086,6 +1087,7 @@ impl ComputeDevice for WgpuDevice {
             buffer,
             len: host.len(),
             tier,
+            owner: self.pipeline_cache.clone(),
             marker: PhantomData,
         })
     }

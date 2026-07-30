@@ -1,5 +1,7 @@
 //! Monomorphized compute dispatch over the CUDA device.
 
+/// Native regular and transposed convolution operations.
+pub mod convolution;
 /// Contiguous elementwise operations.
 pub mod elementwise;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).

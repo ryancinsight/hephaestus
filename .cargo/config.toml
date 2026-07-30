@@ -1,5 +1,20 @@
-[build]
-rustflags = ["-C", "target-cpu=native"]
+# `-C target-cpu=native` is deliberately absent.
+#
+# Two reasons, both load-bearing:
+#
+#  1. Rustflags are part of Cargo's fingerprint, and every Atlas repository
+#     shares one CARGO_TARGET_DIR. A repo-local rustflag therefore forks the
+#     shared cache: every dependency this workspace has in common with its
+#     siblings is compiled a second time, and each switch between repositories
+#     invalidates the other's artifacts.
+#  2. This crate is consumed as a library, so a host-specific ISA baseline is
+#     not ours to impose. CPU feature selection belongs at runtime — detect the
+#     available vector features and dispatch to the widest profitable
+#     monomorphised kernel — not in a build flag that silently makes the
+#     artifact non-portable.
+#
+# For a local, non-distributed measurement run, pass the flag on the command
+# line rather than reinstating it here.
 
 [env]
 # CUDA toolkit path resolved per-host by build.rs.

@@ -10,12 +10,12 @@
 //! The one backend-specific input is whether the input and output buffers
 //! alias (a device-pointer identity check); callers compute it and pass it in.
 //!
-//! [`AxisReductionOps`] completes the family: the planning above was already
+//! [`crate::AxisReductionOps`] completes the family: the planning above was already
 //! shared, but every backend still exposed `prod_axis_into` and
 //! `prepare_reduce_axis_into` as free functions over its own device and operand
 //! types, so a consumer — or a conformance suite — had to bind to one device API
-//! to call them. The seam takes the same shape as [`DenseVectorOps`] and
-//! [`SparseOperatorOps`]: generic over the device, monomorphized at every call
+//! to call them. The seam takes the same shape as [`crate::DenseVectorOps`] and
+//! [`crate::SparseOperatorOps`]: generic over the device, monomorphized at every call
 //! site, no `dyn` anywhere.
 
 use crate::domain::device::ComputeDevice;
@@ -63,6 +63,29 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     /// Dispatch resources bound to one input/output operand pair.
     type Prepared;
 
+    /// Reduce `input` along `axis` into `output` under the combining operator
+    /// `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the axis is out of range, the output
+    /// shape does not match the reduced shape, a layout is unsupported, or the
+    /// backend dispatch fails.
+    fn reduce_axis_into<Op>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<()>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
+    {
+        let prepared = self.prepare_reduce_axis_into::<Op>(device, input, axis, output)?;
+        self.dispatch_prepared(device, &prepared)
+    }
+
     /// Product-reduce `input` along `axis` into `output`.
     ///
     /// # Errors
@@ -78,7 +101,12 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
         output: StridedView<'_, D::Buffer<T>, 2>,
     ) -> Result<()>
     where
-        T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Self::Dialect>;
+        ProdOp: CombineExpr<Self::Dialect>,
+        T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Self::Dialect>,
+    {
+        let prepared = self.prepare_reduce_axis_into::<ProdOp>(device, input, axis, output)?;
+        self.dispatch_prepared(device, &prepared)
+    }
 
     /// Bind dispatch resources for reducing `input` along `axis` into `output`
     /// under the combining operator `Op`.
@@ -104,6 +132,74 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns the backend dispatch failure.
     fn dispatch_prepared(&self, device: &D, prepared: &Self::Prepared) -> Result<()>;
+}
+
+/// Device-neutral full-array reduction over a strided n-D operand to a
+/// single scalar stored in a one-element output buffer.
+///
+/// This complements [`crate::AxisReductionOps`] by reducing the entire operand to
+/// one value rather than along one axis. The output is a rank-1 view of length
+/// one, which keeps the same `StridedView` output shape and lets consumers
+/// place the scalar where they need it.
+///
+/// Implementors are zero-sized per-backend markers. A bound of
+/// `R: FullReductionOps<D, T>` costs nothing at runtime and every call
+/// monomorphizes to the backend's own kernel dispatch.
+pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
+    /// Kernel dialect this backend authors reductions in.
+    type Dialect: KernelDialect;
+
+    /// Prepared resources for a full reduction bound to fixed input/output
+    /// views.
+    type Prepared<const N: usize>;
+
+    /// Reduce the entire `input` view into the one-element `output` under the
+    /// combining operator `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape mismatch when `output` does not have length one, an
+    /// aliasing violation, a layout validation failure, or the backend dispatch
+    /// failure.
+    fn reduce_full_into<Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, N>,
+        output: StridedView<'_, D::Buffer<T>, 1>,
+    ) -> Result<()>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
+    {
+        let prepared = self.prepare_reduce_full::<Op, N>(device, input, output)?;
+        self.dispatch_full::<N>(device, &prepared)
+    }
+
+    /// Bind dispatch resources for reducing the entire `input` view into the
+    /// one-element `output` under the combining operator `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape mismatch when `output` does not have length one, an
+    /// aliasing violation, a layout validation failure, or the backend
+    /// preparation failure.
+    fn prepare_reduce_full<Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, N>,
+        output: StridedView<'_, D::Buffer<T>, 1>,
+    ) -> Result<Self::Prepared<N>>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
+
+    /// Re-dispatch a prepared full reduction over its bound operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns a prepared-operand mismatch or the backend dispatch failure.
+    fn dispatch_full<const N: usize>(&self, device: &D, prepared: &Self::Prepared<N>)
+    -> Result<()>;
 }
 
 /// Marker asserting that a backend supplies both halves of the accelerator

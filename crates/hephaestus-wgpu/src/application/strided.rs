@@ -130,16 +130,54 @@ pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4
 }
 
 /// Validate an output layout against its buffer and return the logical length.
-fn validate_out<T, const N: usize>(out: &WgpuBuffer<T>, out_layout: &Layout<N>) -> Result<usize> {
-    if out_layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+pub(crate) fn validate_out<T, const N: usize>(
+    out: &WgpuBuffer<T>,
+    out_layout: &Layout<N>,
+) -> Result<usize> {
     out_layout
         .validate_storage_len(out.len)
         .map_err(map_layout_err)?;
+    if !writable_layout_is_nonoverlapping(out_layout)? {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output layout must be non-overlapping".to_string(),
+        });
+    }
     out_layout.checked_size().map_err(map_layout_err)
+}
+
+fn writable_layout_is_nonoverlapping<const N: usize>(layout: &Layout<N>) -> Result<bool> {
+    if layout.checked_size().map_err(map_layout_err)? == 0 {
+        return Ok(true);
+    }
+
+    let mut axes = [(0_usize, 0_usize); N];
+    let mut active = 0;
+    for (&extent, &stride) in layout.shape.iter().zip(&layout.strides) {
+        if extent <= 1 {
+            continue;
+        }
+        let magnitude = stride.unsigned_abs();
+        if magnitude == 0 {
+            return Ok(false);
+        }
+        axes[active] = (magnitude, extent);
+        active += 1;
+    }
+    axes[..active].sort_unstable_by_key(|&(stride, _)| stride);
+
+    let mut covered_span = 1_usize;
+    for &(stride, extent) in &axes[..active] {
+        if stride < covered_span {
+            return Ok(false);
+        }
+        covered_span = (extent - 1)
+            .checked_mul(stride)
+            .and_then(|axis_span| covered_span.checked_add(axis_span))
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: "writable output layout span overflows".to_string(),
+            })?;
+    }
+    Ok(true)
 }
 
 /// Upload the meta uniform, bind `buffers` after it at consecutive slots, and

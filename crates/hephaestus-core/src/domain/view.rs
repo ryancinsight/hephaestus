@@ -6,7 +6,7 @@
 //! device API, which is the same coupling [`crate::SparseOperatorOps`] and
 //! [`crate::DenseVectorOps`] removed for their families.
 //!
-//! [`StridedView`] is that pairing with the buffer type left open, so an
+//! [`crate::StridedView`] is that pairing with the buffer type left open, so an
 //! accelerator seam can accept a strided operand without naming a backend. It is
 //! deliberately a plain borrowed pair: the layout carries the shape, strides, and
 //! offset, and the view adds no invariant of its own beyond holding both for the

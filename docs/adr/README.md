@@ -43,3 +43,4 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0036](0036-device-local-cow-copy.md) | Accelerator copy-on-write stays device-local | Accepted |
 | [0037](0037-uninitialized-device-copy.md) | Overwrite-before-read device allocation | Accepted |
 | [0038](0038-blocked-qr-final-panel-synchronization.md) | Finish blocked-QR tail after one readback | Accepted |
+| [0039](0039-provider-owned-convolution.md) | Provider-owned accelerator convolution | Accepted |
