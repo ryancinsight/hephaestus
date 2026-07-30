@@ -321,7 +321,7 @@ where
     let partial_len = usize::try_from(groups).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("ROCm map-reduction group count {groups} exceeds usize range"),
     })?;
-    let partial = device.alloc_zeroed::<T>(partial_len)?;
+    let partial = device.alloc_uninitialized::<T>(partial_len)?;
     let meta = MapReductionMeta {
         shape: map_shape(a_layout.shape)?,
         a_strides: map_strides(a_layout.strides)?,
@@ -468,7 +468,7 @@ where
     T: L2NormScalar,
 {
     let squared_sum = map_reduction::<SquareMap, T, N>(device, view, view)?;
-    let output = device.alloc_zeroed::<T>(1)?;
+    let output = device.alloc_uninitialized::<T>(1)?;
     unary_elementwise_into::<SqrtOp, T>(device, &squared_sum, &output, BlockWidth::DEFAULT)?;
     Ok(output)
 }

@@ -4,13 +4,13 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact map-reduction and L2 prepared-reuse baselines.
-- [ ] Prove each non-empty workgroup and unary launch overwrites its complete
+- [x] Establish exact map-reduction and L2 prepared-reuse baselines.
+- [x] Prove each non-empty workgroup and unary launch overwrites its complete
       destination before first read.
-- [ ] Route the six WGPU, CUDA, and ROCm allocations through
+- [x] Route the six WGPU, CUDA, and ROCm allocations through
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
-- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
-- [ ] Pass exact WGPU and physical CUDA value contracts.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA value contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-map-reduction-overwrite`.

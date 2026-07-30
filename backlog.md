@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — in review
 
 - Owner: Codex on `codex/hephaestus-map-reduction-overwrite`; scope: fused
   map-reduction first-pass partials and L2 square-root outputs in WGPU, CUDA,
@@ -22,9 +22,16 @@ cuda-oxide + cutile).
   one first-pass partial initialization transfer per plan and one scalar
   initialization transfer per L2 plan; WGPU and Metal preserve
   platform-managed initialization behavior. Peak allocation is unchanged.
-- Status: in progress 2026-07-30. Claimed files: WGPU map reduction, CUDA/ROCm
-  norm implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
-  `checklist.md`.
+- Evidence: WGPU and physical CUDA value contracts pass 3/3 before and after
+  the allocation change, covering exact norms, prepared resource reuse and
+  input mutation, strided/reversed layouts, and empty identities. Rust 1.95
+  formatting and warning-denied all-target Clippy pass for WGPU,
+  feature-enabled CUDA, and adapterless ROCm. Every non-empty first-pass
+  workgroup stores its indexed partial, and the unary launch stores the sole
+  L2 output.
+- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+  WGPU map reduction, CUDA/ROCm norm implementations and contracts,
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
 ## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
