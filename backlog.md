@@ -4,6 +4,30 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-matpow-overwrite`; scope: matrix-power
+  base-copy and multiply-scratch allocations in WGPU, CUDA, and ROCm, with
+  Metal inherited through WGPU, plus exact allocated-output contracts.
+- Outcome: remove redundant initialization of three matrix-sized buffers per
+  matrix-power call before canonical strided-copy and matrix-multiply kernels
+  fully overwrite them.
+- Non-goals: exponentiation order, matrix-multiply kernels, caller-owned
+  outputs, scalar precision, layout semantics, benchmark workloads, or runtime
+  claims without matched measurements.
+- Acceptance: all nine base/scratch allocations use uninitialized storage only
+  after square-shape and allocation-size validation; CUDA gains the missing
+  value-semantic matrix-power contract; existing WGPU/ROCm contracts and the
+  new CUDA contract exercise identity, odd powers, strided input, and shape
+  rejection; warning-denied package gates and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy and up to three
+  avoided matrix-sized initialization transfers on CUDA/ROCm; peak allocation
+  is unchanged.
+- Status: in progress 2026-07-30. Claimed files: WGPU/CUDA/ROCm matrix-power
+  implementations, affected matrix-power contracts, `CHANGELOG.md`,
+  `backlog.md`, and `checklist.md`.
+
 ## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-sparse-overwrite`; scope: allocating
