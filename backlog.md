@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — in review
+## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matrix-properties-overwrite`; scope: CUDA
   and ROCm matrix-rank/determinant scratch, rank, and determinant allocations.
@@ -30,7 +30,13 @@ cuda-oxide + cutile).
   CUDA and adapterless ROCm. The native kernel copies all `rows * cols`
   scratch elements before elimination and assigns both scalar outputs on every
   path.
-- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+- Hosted evidence on implementation head `f57180e`: WGPU job `90814481300`
+  passes in 6m32s, CUDA job `90814481682` in 7m47s, ROCm job `90814482979`
+  in 5m50s, and macOS Metal job `90814482965` in 6m22s. Required-device
+  NVIDIA job `90814482224` and AMD job `90814483598` skip because hosted
+  hardware runners are unavailable; physical CUDA value contracts pass
+  locally, and no physical ROCm execution claim is made.
+- Status: done 2026-07-30; delivered through PR #158. Claimed files:
   CUDA/ROCm matrix-rank implementations and contracts, `CHANGELOG.md`,
   `backlog.md`, and `checklist.md`.
 
