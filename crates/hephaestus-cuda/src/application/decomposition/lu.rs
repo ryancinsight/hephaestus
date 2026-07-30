@@ -228,7 +228,7 @@ pub fn lu_decompose_blocked(
             });
         }
 
-        let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
+        let factors_buf = device.alloc_uninitialized::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
         let byte_count = cuda_byte_count(bytes, "blocked LU startup copy byte count")?;

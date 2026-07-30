@@ -292,7 +292,7 @@ fn factor_on_device(
         Layout::c_contiguous([rows, cols]).map_err(|error| HephaestusError::DispatchFailed {
             message: format!("QR dense layout failed: {error}"),
         })?;
-    let r = device.alloc_zeroed::<f32>(elements)?;
+    let r = device.alloc_uninitialized::<f32>(elements)?;
     if require_dense {
         let mut stream = device.stream()?;
         stream.copy(matrix.buffer, &r)?;

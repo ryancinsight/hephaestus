@@ -200,7 +200,7 @@ pub fn cholesky_decompose_blocked(
         }
 
         // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
-        let lower_buf = device.alloc_zeroed::<f32>(n * n)?;
+        let lower_buf = device.alloc_uninitialized::<f32>(n * n)?;
         device.bind()?;
         let bytes = n * n * std::mem::size_of::<f32>();
         let byte_count = cuda_byte_count(bytes, "blocked Cholesky startup copy byte count")?;
