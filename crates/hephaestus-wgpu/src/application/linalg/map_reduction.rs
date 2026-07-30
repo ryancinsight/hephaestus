@@ -153,7 +153,7 @@ where
     let groups = workgroups(len, width)?;
     let partial_len = usize::try_from(groups)
         .expect("invariant: supported WGPU targets have at least 32-bit usize");
-    let partial = device.alloc_zeroed::<T>(partial_len)?;
+    let partial = device.alloc_uninitialized::<T>(partial_len)?;
     let meta = StridedMeta {
         shape: pad_shape(a.layout.shape)?,
         a_strides: pad_strides(a.layout.strides)?,
@@ -428,7 +428,7 @@ where
     T: L2NormScalar,
 {
     let squared_sum = prepare_map_reduction::<DotOp, T, N>(device, view, view)?;
-    let output = device.alloc_zeroed::<T>(1)?;
+    let output = device.alloc_uninitialized::<T>(1)?;
     let sqrt_pipeline = unary_pipeline::<SqrtOp, T>(device, BlockWidth::DEFAULT);
     let sqrt_bind_group = device
         .inner()

@@ -4,6 +4,41 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-map-reduction-overwrite`; scope: fused
+  map-reduction first-pass partials and L2 square-root outputs in WGPU, CUDA,
+  and ROCm, with Metal inherited through WGPU.
+- Outcome: remove redundant initialization transfers before kernels overwrite
+  every non-empty map-reduction partial and L2 result.
+- Non-goals: reduction-tree identity buffers, empty-input identities, operation
+  arithmetic, layouts, benchmark workloads, or runtime claims without matched
+  measurements.
+- Acceptance: all six non-empty allocations use overwrite-before-read storage;
+  dot, trace, L1/L2/max norm, prepared reuse, strided, reversed-view, and empty
+  identity contracts retain exact values; warning-denied provider gates and
+  exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one first-pass partial initialization transfer per plan and one scalar
+  initialization transfer per L2 plan; WGPU and Metal preserve
+  platform-managed initialization behavior. Peak allocation is unchanged.
+- Evidence: WGPU and physical CUDA value contracts pass 3/3 before and after
+  the allocation change, covering exact norms, prepared resource reuse and
+  input mutation, strided/reversed layouts, and empty identities. Rust 1.95
+  formatting and warning-denied all-target Clippy pass for WGPU,
+  feature-enabled CUDA, and adapterless ROCm. Every non-empty first-pass
+  workgroup stores its indexed partial, and the unary launch stores the sole
+  L2 output.
+- Hosted evidence on implementation head `561d396`: WGPU job `90810083486`
+  passes in 4m46s, CUDA job `90810110166` in 7m36s, ROCm job `90810111786`
+  in 5m54s, and macOS Metal job `90810090280` in 7m21s. Required-device
+  NVIDIA job `90810110823` and AMD job `90810112632` skip because hosted
+  hardware runners are unavailable; physical CUDA value contracts pass
+  locally, and no physical ROCm execution claim is made.
+- Status: done 2026-07-30; delivered through PR #157. Claimed files: WGPU map
+  reduction, CUDA/ROCm norm implementations and contracts, `CHANGELOG.md`,
+  `backlog.md`, and `checklist.md`.
+
 ## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-volume-overwrite`; scope: allocating ray

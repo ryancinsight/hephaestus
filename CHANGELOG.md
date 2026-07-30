@@ -64,6 +64,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate non-empty fused map-reduction partials and L2 square-root
+  results through the overwrite-before-read device seam. CUDA and ROCm omit
+  one workgroup-count-sized initialization transfer per prepared map reduction
+  and one scalar initialization transfer per prepared L2 norm; WGPU and Metal
+  preserve platform-managed initialization behavior. Empty-input identities,
+  arithmetic, layouts, and peak allocation are unchanged; no runtime gain is
+  claimed without matched hardware measurements.
+
 - [patch] Allocate ray line-integral results through the
   overwrite-before-read device seam. CUDA and ROCm omit one ray-count-sized
   initialization transfer before the validated one-work-item-per-ray kernel
