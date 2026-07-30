@@ -15,22 +15,22 @@ use hephaestus_core::{
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
 use hephaestus_rocm::{
-    AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, EluGradOp, EluOp, ExpNegOp, ExpOp,
-    GeluTanhGradOp, GeluTanhOp, GpuCsrMatrix, IdentityOp, LnOp, MatrixFunction, MatrixNorm,
+    AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ExpNegOp,
+    ExpOp, GeluTanhGradOp, GeluTanhOp, GpuCsrMatrix, IdentityOp, LnOp, MatrixFunction, MatrixNorm,
     MatrixProduct, MatrixProperties, MatrixSolve, MishGradOp, MishOp, MulOp, NegOp, PowOp, RecipOp,
     Result, RocmDevice, RocmMultiStorageKernel, RocmVectorOps, ScanDirection, SiluGradOp, SiluOp,
     SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
-    binary_elementwise_strided_into, cumprod, cumprod_into, cumsum, det, dot, kron, kron_into,
-    matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance, max_axis, mean_axis,
-    mean_axis_into, min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, prepare_dot,
-    prepare_max_axis_into, prepare_mean_axis_into, prepare_norm_l2, prepare_reduction,
-    prepare_reduction_with_width, prepare_sum_axis_into, prod_axis, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm,
-    spmm_into, spmv, spmv_many, spmv_many_into, submit_prepared_axis_reduction_batch,
-    submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
-    sum_axis, trace, unary_elementwise, unary_elementwise_strided, unary_elementwise_strided_into,
-    uniform_with_seed,
+    binary_elementwise_strided_into, binary_elementwise_strided_typed, cumprod, cumprod_into,
+    cumsum, det, dot, kron, kron_into, matmul, matmul_into, matpow, matrix_rank,
+    matrix_rank_with_tolerance, max_axis, mean_axis, mean_axis_into, min_axis, norm_l1, norm_l2,
+    norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    prepare_norm_l2, prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into,
+    prod_axis, reduction_with_width, scalar_elementwise, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, scan_axis, scan_axis_into, spmm, spmm_into, spmv, spmv_many,
+    spmv_many_into, submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch,
+    suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into, sum_axis, trace, unary_elementwise,
+    unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::{
@@ -639,6 +639,36 @@ fn strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts() {
         .download(&identity, &mut identity_values)
         .expect("HIP strided identity download");
     assert_eq!(identity_values, [1, 3, 2, 4]);
+
+    let probe_buffer = device
+        .upload(&[1_i32, 9, 2, 0])
+        .expect("HIP comparison probe upload");
+    let probe_layout = Layout::c_contiguous([2, 2]).expect("comparison probe layout");
+    let comparison = binary_elementwise_strided_typed::<EqOp, _, 2>(
+        &device,
+        lhs,
+        StridedOperand {
+            buffer: &probe_buffer,
+            layout: &probe_layout,
+        },
+        [2, 2],
+        width,
+    )
+    .expect("HIP allocated typed strided comparison");
+    let mut comparison_values = [0_i32; 4];
+    device
+        .download(&comparison, &mut comparison_values)
+        .expect("HIP typed strided comparison download");
+    assert_eq!(comparison_values, [1, 0, 1, 0]);
+
+    let allocated_scalar =
+        scalar_elementwise_strided::<MulOp, _, 2>(&device, lhs, 2, [2, 2], width)
+            .expect("HIP allocated strided scalar");
+    let mut allocated_scalar_values = [0_i32; 4];
+    device
+        .download(&allocated_scalar, &mut allocated_scalar_values)
+        .expect("HIP allocated strided scalar download");
+    assert_eq!(allocated_scalar_values, [2, 6, 4, 8]);
 
     let scalar_output_layout = Layout::c_contiguous([2, 2]).expect("strided scalar layout");
     let scalar_output = device

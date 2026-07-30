@@ -1,11 +1,12 @@
 //! Differential contract tests for CUDA strided-layout dispatch: device results vs
 //! a CPU reference computed over the same leto layout metadata.
 
-use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError};
+use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError};
 use hephaestus_cuda::{
-    AddOp, CudaBuffer, CudaDevice, MulOp, NegOp, SqrtOp, StridedLayout, StridedOperand,
-    StridedOperandDyn, binary_elementwise_strided_dyn_into, binary_elementwise_strided_into,
-    scalar_elementwise_strided_into, unary_elementwise_strided_dyn_into,
+    AddOp, CudaBuffer, CudaDevice, EqOp, MulOp, NegOp, SqrtOp, StridedLayout, StridedOperand,
+    StridedOperandDyn, binary_elementwise_strided, binary_elementwise_strided_dyn_into,
+    binary_elementwise_strided_into, binary_elementwise_strided_typed, scalar_elementwise_strided,
+    scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_dyn_into,
     unary_elementwise_strided_into,
 };
 use leto::Layout;
@@ -368,6 +369,72 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
     let mut got = vec![0.0f32; 6];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, vec![101.0, 102.0, 103.0, 104.0, 105.0, 106.0]);
+}
+
+#[test]
+fn allocating_strided_forms_fully_overwrite_dense_outputs() {
+    let Some(dev) = device("allocating_strided_forms_fully_overwrite_dense_outputs") else {
+        return;
+    };
+    let input = dev.upload(&[1_i32, 4, 2, 5, 3, 6]).unwrap();
+    let transposed = Layout::new([2, 3], [1, 2], 0);
+    let rhs = dev.upload(&[10_i32, 20, 30, 40, 50, 60]).unwrap();
+    let dense = Layout::c_contiguous([2, 3]).unwrap();
+    let probe = dev.upload(&[1_i32, 9, 3, 4, 0, 6]).unwrap();
+
+    let binary = binary_elementwise_strided::<AddOp, _, 2>(
+        &dev,
+        op(&input, &transposed),
+        op(&rhs, &dense),
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let typed = binary_elementwise_strided_typed::<EqOp, _, 2>(
+        &dev,
+        op(&input, &transposed),
+        op(&probe, &dense),
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let unary = unary_elementwise_strided::<NegOp, _, 2>(
+        &dev,
+        op(&input, &transposed),
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let scalar = scalar_elementwise_strided::<AddOp, _, 2>(
+        &dev,
+        op(&input, &transposed),
+        10,
+        [2, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    for (buffer, expected) in [
+        (&binary, [11, 22, 33, 44, 55, 66]),
+        (&typed, [1, 0, 1, 1, 0, 1]),
+        (&unary, [-1, -2, -3, -4, -5, -6]),
+        (&scalar, [11, 12, 13, 14, 15, 16]),
+    ] {
+        let mut got = [0_i32; 6];
+        dev.download(buffer, &mut got).unwrap();
+        assert_eq!(got, expected);
+    }
+
+    let empty_input = dev.upload::<i32>(&[]).unwrap();
+    let empty_layout = Layout::c_contiguous([0, 3]).unwrap();
+    let empty = unary_elementwise_strided::<NegOp, _, 2>(
+        &dev,
+        op(&empty_input, &empty_layout),
+        [0, 3],
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(empty.len(), 0);
 }
 
 #[test]

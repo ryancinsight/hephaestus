@@ -2,6 +2,32 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf]
+
+- [x] Prove each allocated binary, typed-binary, unary, and scalar strided
+      result is fully written before any output read.
+- [x] Preserve empty allocation, layout validation, and caller-owned output
+      semantics.
+- [x] Route WGPU, CUDA, and ROCm allocated strided outputs through
+      `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA strided value contracts.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-strided-overwrite`. Each
+allocating wrapper constructs and validates a contiguous output layout before
+delegating to the canonical caller-owned form, whose kernel writes every
+logical output element exactly once. WGPU strided Nextest passes 12/12.
+Physical CUDA strided Nextest passes 13/13, including allocated binary,
+typed-binary, unary, scalar, and empty results. Warning-denied all-target
+Clippy passes for WGPU, feature-enabled CUDA, and adapterless ROCm. CUDA and
+ROCm omit one output-sized initialization transfer; WGPU and Metal preserve
+platform-managed initialization behavior. Peak allocation is unchanged and no
+runtime claim is made. Implementation head `8ca789c` passed CUDA job
+`90742542272`, ROCm job `90742542268`, WGPU job `90742542220`, and macOS
+Metal job `90742542356`. Required-device AMD job `90742542939` and NVIDIA job
+`90742542787` skipped because no hardware runner was dispatched.
+
 ## HEPH-SCAN-OUTPUT-OVERWRITE-1 [patch] [perf]
 
 - [x] Prove each non-empty allocated scan result is fully written before any

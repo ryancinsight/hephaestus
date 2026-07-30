@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-strided-overwrite`; scope: allocating
+  binary, typed-binary, unary, and scalar strided elementwise wrappers in
+  WGPU, CUDA, and ROCm, with Metal inherited through WGPU, plus exact
+  allocated-output contracts.
+- Outcome: remove redundant device-output initialization before strided
+  elementwise kernels fully overwrite their contiguous result.
+- Non-goals: caller-owned outputs, dynamic-rank dispatch, operation formulas,
+  layout semantics, benchmark workloads, or runtime claims without matched
+  measurements.
+- Acceptance: all twelve allocating wrappers use uninitialized storage only
+  after output-layout validation; allocated CUDA and ROCm contracts cover all
+  four operation forms and empty results; existing WGPU allocated contracts
+  remain exact; warning-denied package gates and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  output-sized initialization transfer on CUDA/ROCm; peak allocation is
+  unchanged.
+- Status: done. Implementation head `8ca789c` passed CUDA job `90742542272`,
+  ROCm job `90742542268`, WGPU job `90742542220`, and macOS Metal job
+  `90742542356`.
+
 ## HEPH-SCAN-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-scan-overwrite`; scope: allocating

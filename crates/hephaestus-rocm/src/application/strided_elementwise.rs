@@ -458,7 +458,8 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     binary_elementwise_strided_into::<Op, T, N>(
         device,
         lhs,
@@ -486,7 +487,8 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     binary_elementwise_strided_typed_into::<Op, T, N>(
         device,
         lhs,
@@ -561,7 +563,8 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     unary_elementwise_strided_into::<Op, T, N>(
         device,
         input,
@@ -645,7 +648,8 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     scalar_elementwise_strided_into::<Op, T, N>(
         device,
         input,
