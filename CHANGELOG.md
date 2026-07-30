@@ -64,6 +64,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate contiguous binary, typed-binary, unary, and scalar strided
+  elementwise results through the overwrite-before-read device seam. CUDA and
+  ROCm omit one output-sized initialization transfer before kernels overwrite
+  every logical result element; WGPU and Metal preserve platform-managed
+  initialization behavior. Empty allocations, caller-owned outputs, layout
+  semantics, and peak allocation are unchanged; no runtime gain is claimed
+  without matched hardware measurements.
+
 - [patch] Allocate non-empty cumulative sum/product and suffix sum/product
   results through the overwrite-before-read device seam. CUDA and ROCm omit
   one output-sized initialization transfer before the scan kernel writes every

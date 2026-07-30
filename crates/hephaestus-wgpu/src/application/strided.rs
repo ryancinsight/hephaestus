@@ -398,7 +398,7 @@ where
     }
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(len)?;
+    let out = device.alloc_uninitialized::<T>(len)?;
     binary_elementwise_strided_typed_into::<Op, T, N>(
         device,
         a,
@@ -456,7 +456,7 @@ where
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(len)?;
+    let out = device.alloc_uninitialized::<T>(len)?;
     binary_elementwise_strided_into::<Op, T, N>(
         device,
         a,
@@ -553,7 +553,7 @@ where
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(len)?;
+    let out = device.alloc_uninitialized::<T>(len)?;
     unary_elementwise_strided_into::<Op, T, N>(
         device,
         a,
@@ -663,7 +663,7 @@ where
 {
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(len)?;
+    let out = device.alloc_uninitialized::<T>(len)?;
     scalar_elementwise_strided_into::<Op, T, N>(
         device,
         a,
