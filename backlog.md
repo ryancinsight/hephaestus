@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — in review
+## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-volume-overwrite`; scope: allocating ray
   line-integral outputs in WGPU, CUDA, and ROCm, with Metal inherited through
@@ -26,7 +26,13 @@ cuda-oxide + cutile).
   pass 3/3 before and after the allocation change. Rust 1.95 warning-denied
   all-target Clippy passes for WGPU, feature-enabled CUDA, and adapterless
   ROCm. The validated one-work-item-per-ray launch writes every output slot.
-- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+- Hosted evidence on implementation head `5c32355`: WGPU job `90801212471`,
+  CUDA job `90801212567`, ROCm job `90801212912`, and macOS Metal job
+  `90801212565` pass. Required-device NVIDIA job `90801213164` and AMD job
+  `90801213519` skip because hosted hardware runners are unavailable; physical
+  CUDA value contracts pass locally, and no physical ROCm execution claim is
+  made.
+- Status: done 2026-07-30; delivered through PR #156. Claimed files:
   WGPU/CUDA/ROCm volume implementations and contracts, `CHANGELOG.md`,
   `backlog.md`, and `checklist.md`.
 
