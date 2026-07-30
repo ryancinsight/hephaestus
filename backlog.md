@@ -4,6 +4,28 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-map-reduction-overwrite`; scope: fused
+  map-reduction first-pass partials and L2 square-root outputs in WGPU, CUDA,
+  and ROCm, with Metal inherited through WGPU.
+- Outcome: remove redundant initialization transfers before kernels overwrite
+  every non-empty map-reduction partial and L2 result.
+- Non-goals: reduction-tree identity buffers, empty-input identities, operation
+  arithmetic, layouts, benchmark workloads, or runtime claims without matched
+  measurements.
+- Acceptance: all six non-empty allocations use overwrite-before-read storage;
+  dot, trace, L1/L2/max norm, prepared reuse, strided, reversed-view, and empty
+  identity contracts retain exact values; warning-denied provider gates and
+  exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one first-pass partial initialization transfer per plan and one scalar
+  initialization transfer per L2 plan; WGPU and Metal preserve
+  platform-managed initialization behavior. Peak allocation is unchanged.
+- Status: in progress 2026-07-30. Claimed files: WGPU map reduction, CUDA/ROCm
+  norm implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
+  `checklist.md`.
+
 ## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-volume-overwrite`; scope: allocating ray
