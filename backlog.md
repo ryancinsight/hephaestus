@@ -4,6 +4,30 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the
+  full-matrix startup-copy destinations for blocked Cholesky, LU, and QR in
+  WGPU, CUDA, and ROCm, with Metal inherited through WGPU.
+- Outcome: remove redundant initialization of nine matrix-sized destinations
+  before whole-buffer copies or canonical strided identity kernels fully
+  overwrite them.
+- Non-goals: panel, reflector, status, rank, threshold, or metadata buffers;
+  decomposition arithmetic; blocking strategy; layout contracts; benchmark
+  workloads; or runtime claims without matched measurements.
+- Acceptance: only the nine full-matrix startup-copy destinations use
+  uninitialized storage; full-write proofs cover dense copies and strided
+  identity dispatches; existing value-semantic blocked decomposition contracts
+  pass on WGPU and physical CUDA, ROCm contracts retain compile/value coverage,
+  warning-denied provider gates pass, and exact-head WGPU/CUDA/ROCm/macOS-Metal
+  CI is green.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  matrix-sized initialization transfer per decomposition call on CUDA/ROCm;
+  peak allocation is unchanged.
+- Status: in progress 2026-07-30. Claimed files: WGPU/CUDA/ROCm Cholesky, LU,
+  and QR implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
+  `checklist.md`.
+
 ## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matpow-overwrite`; scope: matrix-power
