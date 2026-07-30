@@ -4,6 +4,39 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-matpow-overwrite`; scope: matrix-power
+  base-copy and multiply-scratch allocations in WGPU, CUDA, and ROCm, with
+  Metal inherited through WGPU, plus exact allocated-output contracts.
+- Outcome: remove redundant initialization of three matrix-sized buffers per
+  matrix-power call before canonical strided-copy and matrix-multiply kernels
+  fully overwrite them.
+- Non-goals: exponentiation order, matrix-multiply kernels, caller-owned
+  outputs, scalar precision, layout semantics, benchmark workloads, or runtime
+  claims without matched measurements.
+- Acceptance: all nine base/scratch allocations use uninitialized storage only
+  after square-shape and allocation-size validation; CUDA gains the missing
+  value-semantic matrix-power contract; existing WGPU/ROCm contracts and the
+  new CUDA contract exercise identity, odd powers, strided input, and shape
+  rejection; warning-denied package gates and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy and up to three
+  avoided matrix-sized initialization transfers on CUDA/ROCm; peak allocation
+  is unchanged.
+- Evidence: WGPU matrix-power contracts pass 2/2; the physical-CUDA Leto,
+  identity, strided-input, and non-square contract passes 1/1; the adapterless
+  ROCm contract passes 1/1 as compile/contract coverage. Rust 1.95
+  warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
+  ROCm. The canonical strided identity kernel writes every base element and
+  `matmul_into` writes every scratch element before either buffer is read.
+- Hosted evidence on implementation head `2635fe7`: WGPU job `90794414537`
+  passes in 6m31s, CUDA job `90794414508` in 7m03s, ROCm job `90794414660`
+  in 6m05s, and macOS Metal job `90794414557` in 5m58s. Required-device
+  NVIDIA and AMD jobs skip because no hardware runners are configured; local
+  physical CUDA supplies the available device evidence.
+- Status: done 2026-07-30. Delivered by PR #154.
+
 ## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-sparse-overwrite`; scope: allocating

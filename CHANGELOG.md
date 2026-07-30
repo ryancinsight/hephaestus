@@ -64,6 +64,16 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate matrix-power base copies and multiplication scratches
+  through the overwrite-before-read device seam. CUDA and ROCm omit up to
+  three matrix-sized initialization transfers because the strided identity
+  copy and canonical matrix multiplication fully write each destination
+  before its first read; WGPU and Metal preserve platform-managed
+  initialization behavior. Identity, odd-power, strided-input, and non-square
+  contracts cover the allocation policy across providers. Arithmetic,
+  exponentiation order, layouts, and peak allocation are unchanged; no
+  runtime gain is claimed without matched hardware measurements.
+
 - [patch] Allocate sparse matrix-vector and sparse matrix-dense-matrix results
   through the overwrite-before-read device seam. CUDA and ROCm omit one
   output-sized initialization transfer before kernels overwrite every row or

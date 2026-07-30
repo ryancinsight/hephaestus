@@ -13,8 +13,8 @@ use hephaestus_cuda::{
     GeluTanhOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, RecipOp, SiluGradOp, SiluOp,
     SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, det,
-    dot, kron, matexp, matmul, matmul_into, matrix_rank, matrix_rank_with_tolerance, norm_l1,
-    norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
+    dot, kron, matexp, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
+    norm_l1, norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
     prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
     prepare_sum_axis_into, prod_axis, reduce_axis, reduction, reduction_with_width,
     scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
@@ -1198,6 +1198,74 @@ fn linalg_kron_matches_cpu_reference() {
     let mut got = vec![0.0f32; 16];
     dev.download(&out, &mut got).unwrap();
     assert_eq!(got, expected);
+}
+
+#[test]
+fn linalg_matpow_matches_leto_and_strided_references() {
+    let Some(dev) = device("linalg_matpow_matches_leto_and_strided_references") else {
+        return;
+    };
+
+    let shear_host = vec![1.0_f32, 1.0, 0.0, 1.0];
+    let shear = dev.upload(&shear_host).unwrap();
+    let square_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let shear_power = matpow(
+        &dev,
+        StridedOperand {
+            buffer: &shear,
+            layout: &square_layout,
+        },
+        5,
+    )
+    .unwrap();
+    let leto_shear = leto::Array::from_shape_vec([2, 2], shear_host).unwrap();
+    let expected_shear = leto_ops::matpow(&leto_shear.view(), 5).unwrap().into_vec();
+    let mut got_shear = [0.0_f32; 4];
+    dev.download(&shear_power, &mut got_shear).unwrap();
+    assert_eq!(got_shear.as_slice(), expected_shear.as_slice());
+
+    let strided_values = [99.0_f32, 1.0, 2.0, 3.0, 4.0];
+    let strided = dev.upload(&strided_values).unwrap();
+    let strided_layout = Layout::new([2, 2], [1, 2], 1);
+    let strided_power = matpow(
+        &dev,
+        StridedOperand {
+            buffer: &strided,
+            layout: &strided_layout,
+        },
+        2,
+    )
+    .unwrap();
+    let mut got_strided = [0.0_f32; 4];
+    dev.download(&strided_power, &mut got_strided).unwrap();
+    assert_eq!(got_strided, [7.0, 15.0, 10.0, 22.0]);
+
+    let identity_power = matpow(
+        &dev,
+        StridedOperand {
+            buffer: &strided,
+            layout: &strided_layout,
+        },
+        0,
+    )
+    .unwrap();
+    let mut got_identity = [0.0_f32; 4];
+    dev.download(&identity_power, &mut got_identity).unwrap();
+    assert_eq!(got_identity, [1.0, 0.0, 0.0, 1.0]);
+
+    let nonsquare_values = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert_dispatch_message(
+        matpow(
+            &dev,
+            StridedOperand {
+                buffer: &nonsquare_values,
+                layout: &nonsquare_layout,
+            },
+            2,
+        ),
+        "matpow requires a square matrix, got shape [2, 3]",
+    );
 }
 
 #[test]
