@@ -979,7 +979,7 @@ where
         return Ok(result);
     }
 
-    let mut base = device.alloc_zeroed::<T>(n_sq)?;
+    let mut base = device.alloc_uninitialized::<T>(n_sq)?;
     unary_elementwise_strided_into::<crate::application::elementwise::IdentityOp, T, 2>(
         device,
         matrix,
@@ -990,8 +990,8 @@ where
         BlockWidth::DEFAULT,
     )?;
 
-    let mut result_scratch = device.alloc_zeroed::<T>(n_sq)?;
-    let mut base_scratch = device.alloc_zeroed::<T>(n_sq)?;
+    let mut result_scratch = device.alloc_uninitialized::<T>(n_sq)?;
+    let mut base_scratch = device.alloc_uninitialized::<T>(n_sq)?;
     let mut remaining = exponent;
 
     loop {
