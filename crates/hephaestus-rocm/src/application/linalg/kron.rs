@@ -199,7 +199,8 @@ where
 {
     let shape = output_shape(lhs.layout, rhs.layout)?;
     let output_layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     kron_into(
         device,
         lhs,

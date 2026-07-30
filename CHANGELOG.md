@@ -64,6 +64,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate Kronecker-product, matrix-multiply, and batched-matrix-
+  multiply results through the overwrite-before-read device seam. CUDA and
+  ROCm omit one output-sized initialization transfer before kernels overwrite
+  every contiguous result element; WGPU and Metal preserve platform-managed
+  initialization behavior. Caller-owned outputs, arithmetic, layout semantics,
+  and peak allocation are unchanged; no runtime gain is claimed without
+  matched hardware measurements.
+
 - [patch] Allocate contiguous binary, typed-binary, unary, and scalar strided
   elementwise results through the overwrite-before-read device seam. CUDA and
   ROCm omit one output-sized initialization transfer before kernels overwrite

@@ -2,6 +2,34 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf]
+
+- [x] Prove allocated Kronecker, matrix-multiply, and batched-matrix-multiply
+      results are fully written before any output read.
+- [x] Preserve caller-owned output, arithmetic, layout, and empty-shape
+      semantics.
+- [x] Route all nine WGPU, CUDA, and ROCm allocating wrappers through
+      `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA linalg value contracts.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-linalg-overwrite`. Each
+allocating wrapper constructs and validates a contiguous output layout before
+delegating to the canonical caller-owned form. Kronecker kernels write each
+result directly; matrix-multiply kernels accumulate in registers and then
+write each result element once. WGPU allocated matmul/batched contracts pass
+2/2 and Kronecker passes 1/1 against CPU/Leto references. Physical CUDA
+matmul/batched contracts pass 4/4 and Kronecker passes 1/1, including the newly
+covered allocating batched form. Warning-denied all-target Clippy passes for
+WGPU, feature-enabled CUDA, and adapterless ROCm. CUDA and ROCm omit one
+output-sized initialization transfer; WGPU and Metal preserve
+platform-managed initialization behavior. Peak allocation is unchanged and no
+runtime claim is made. Implementation head `903e8b5` passed CUDA job
+`90746818443`, ROCm job `90746818452`, WGPU job `90746818469`, and macOS
+Metal job `90746818550`. Required-device AMD job `90746819174` and NVIDIA job
+`90746818834` skipped because no hardware runner was dispatched.
+
 ## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf]
 
 - [x] Prove each allocated binary, typed-binary, unary, and scalar strided

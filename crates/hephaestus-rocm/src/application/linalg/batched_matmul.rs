@@ -287,7 +287,8 @@ where
         });
     }
     let output_layout = Layout::c_contiguous([batch, rows, cols]).map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
+    let output =
+        device.alloc_uninitialized::<T>(output_layout.checked_size().map_err(map_layout_err)?)?;
     batched_matmul_into(
         device,
         lhs,

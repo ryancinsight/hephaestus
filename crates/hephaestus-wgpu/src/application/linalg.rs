@@ -508,7 +508,7 @@ where
 {
     let shape = kron_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    let out = device.alloc_uninitialized::<T>(layout.checked_size().map_err(map_layout_err)?)?;
     kron_into(
         device,
         lhs,
@@ -683,7 +683,7 @@ where
 {
     let shape = matmul_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    let out = device.alloc_uninitialized::<T>(layout.checked_size().map_err(map_layout_err)?)?;
     matmul_into(
         device,
         lhs,
@@ -909,7 +909,7 @@ where
 {
     let shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
     let layout = Layout::c_contiguous(shape).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(layout.checked_size().map_err(map_layout_err)?)?;
+    let out = device.alloc_uninitialized::<T>(layout.checked_size().map_err(map_layout_err)?)?;
     batched_matmul_into(
         device,
         lhs,

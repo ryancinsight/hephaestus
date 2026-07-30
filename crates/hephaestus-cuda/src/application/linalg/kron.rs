@@ -195,7 +195,8 @@ where
 
     let out_layout =
         Layout::c_contiguous([expected_rows, expected_cols]).map_err(map_layout_err)?;
-    let out = device.alloc_zeroed::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
+    let out =
+        device.alloc_uninitialized::<T>(out_layout.checked_size().map_err(map_layout_err)?)?;
     kron_into(
         device,
         lhs,
