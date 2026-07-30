@@ -12,7 +12,7 @@ Sprint target: 0.18.0. Phase: Closure.
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
 - [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
 - [x] Pass exact WGPU and physical CUDA linalg value contracts.
-- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-linalg-overwrite`. Each
 allocating wrapper constructs and validates a contiguous output layout before
@@ -25,7 +25,10 @@ covered allocating batched form. Warning-denied all-target Clippy passes for
 WGPU, feature-enabled CUDA, and adapterless ROCm. CUDA and ROCm omit one
 output-sized initialization transfer; WGPU and Metal preserve
 platform-managed initialization behavior. Peak allocation is unchanged and no
-runtime claim is made. Exact-head provider CI remains required.
+runtime claim is made. Implementation head `903e8b5` passed CUDA job
+`90746818443`, ROCm job `90746818452`, WGPU job `90746818469`, and macOS
+Metal job `90746818550`. Required-device AMD job `90746819174` and NVIDIA job
+`90746818834` skipped because no hardware runner was dispatched.
 
 ## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf]
 
