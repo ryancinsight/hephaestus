@@ -223,7 +223,7 @@ pub fn spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     x: &WgpuBuffer<T>,
 ) -> Result<WgpuBuffer<T>> {
     let (nrows, _) = a.shape();
-    let mut y = device.alloc_zeroed::<T>(nrows)?;
+    let mut y = device.alloc_uninitialized::<T>(nrows)?;
     spmv_into(device, a, x, &mut y)?;
     Ok(y)
 }

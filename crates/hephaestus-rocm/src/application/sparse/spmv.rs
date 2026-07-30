@@ -117,7 +117,7 @@ pub fn spmv<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     x: &RocmBuffer<T>,
 ) -> Result<RocmBuffer<T>> {
     let (nrows, _) = matrix.shape();
-    let mut y = device.alloc_zeroed::<T>(nrows)?;
+    let mut y = device.alloc_uninitialized::<T>(nrows)?;
     spmv_into(device, matrix, x, &mut y)?;
     Ok(y)
 }

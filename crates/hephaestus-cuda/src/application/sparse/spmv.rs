@@ -110,7 +110,7 @@ pub fn spmv<T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     x: &CudaBuffer<T>,
 ) -> Result<CudaBuffer<T>> {
     let (nrows, _) = a.shape();
-    let mut y = device.alloc_zeroed::<T>(nrows)?;
+    let mut y = device.alloc_uninitialized::<T>(nrows)?;
     spmv_into(device, a, x, &mut y)?;
     Ok(y)
 }

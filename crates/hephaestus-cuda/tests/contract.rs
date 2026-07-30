@@ -3962,6 +3962,25 @@ fn test_cuda_sparse_matrix_spmv_spmm() {
     let mut got_c = vec![0.0f32; 6];
     dev.download(&c_buf, &mut got_c).unwrap();
     assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 0.0);
+
+    let empty_row_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 4.0],
+        vec![0, 2, 2],
+        vec![0, 2, 2, 3],
+        3,
+        3,
+    )
+    .unwrap();
+    let empty_row_gpu = GpuCsrMatrix::from_cpu(&dev, &empty_row_csr).unwrap();
+    let empty_row_y = spmv(&dev, &empty_row_gpu, &x_buf).unwrap();
+    let mut got_empty_row_y = [0.0_f32; 3];
+    dev.download(&empty_row_y, &mut got_empty_row_y).unwrap();
+    assert_eq!(got_empty_row_y, [-1.0, 0.0, 12.0]);
+
+    let empty_row_c = spmm(&dev, &empty_row_gpu, &b_op).unwrap();
+    let mut got_empty_row_c = [0.0_f32; 6];
+    dev.download(&empty_row_c, &mut got_empty_row_c).unwrap();
+    assert_eq!(got_empty_row_c, [-3.0, -2.0, 0.0, 0.0, 20.0, 24.0]);
 }
 
 #[test]

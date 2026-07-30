@@ -5388,6 +5388,25 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     let mut got_c_batched = vec![0.0f32; 6];
     device.download(&c_batched, &mut got_c_batched).unwrap();
     assert_close_slice(&got_c_batched, &got_c, 1.0e-4, 1.0e-4);
+
+    let empty_row_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 4.0],
+        vec![0, 2, 2],
+        vec![0, 2, 2, 3],
+        3,
+        3,
+    )
+    .unwrap();
+    let empty_row_gpu = GpuCsrMatrix::from_cpu(&device, &empty_row_csr).unwrap();
+    let empty_row_y = spmv(&device, &empty_row_gpu, &x_buf).unwrap();
+    let mut got_empty_row_y = [0.0_f32; 3];
+    device.download(&empty_row_y, &mut got_empty_row_y).unwrap();
+    assert_eq!(got_empty_row_y, [-1.0, 0.0, 12.0]);
+
+    let empty_row_c = spmm(&device, &empty_row_gpu, &b_op).unwrap();
+    let mut got_empty_row_c = [0.0_f32; 6];
+    device.download(&empty_row_c, &mut got_empty_row_c).unwrap();
+    assert_eq!(got_empty_row_c, [-3.0, -2.0, 0.0, 0.0, 20.0, 24.0]);
 }
 
 /// Shared adversarial-layout driver: every non-dense view (transposed,
