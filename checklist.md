@@ -4,18 +4,25 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish the exact allocated SpMV and SpMM value-contract baseline.
-- [ ] Prove each allocated sparse result is fully written before any output
+- [x] Establish the exact allocated SpMV and SpMM value-contract baseline.
+- [x] Prove each allocated sparse result is fully written before any output
       read, including structurally empty rows.
-- [ ] Route WGPU, CUDA, and ROCm allocated sparse outputs through
+- [x] Route WGPU, CUDA, and ROCm allocated sparse outputs through
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
-- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
-- [ ] Pass exact WGPU and physical CUDA sparse value contracts.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA sparse value contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-sparse-overwrite`. Claimed
 files are the WGPU, CUDA, and ROCm sparse SpMV/SpMM allocating wrappers and
-their contracts, plus `CHANGELOG.md`, `backlog.md`, and this section.
+their contracts, plus `CHANGELOG.md`, `backlog.md`, and this section. Baseline
+and post-change WGPU and physical CUDA sparse contracts each pass 1/1. The
+adapterless ROCm contract passes 1/1 and compiles the new fixture; physical
+ROCm execution remains a hosted CI gate. Warning-denied all-target Clippy
+passes for WGPU, feature-enabled CUDA, and adapterless ROCm. CUDA and ROCm
+omit one output-sized initialization transfer; WGPU and Metal preserve
+platform-managed initialization behavior. Peak allocation is unchanged and no
+runtime claim is made.
 
 ## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf]
 

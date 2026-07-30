@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf] — in review
 
 - Owner: Codex on `codex/hephaestus-sparse-overwrite`; scope: allocating
   sparse matrix-vector and sparse matrix-dense-matrix wrappers in WGPU, CUDA,
@@ -22,9 +22,11 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal allocation policy and one avoided
   output-sized initialization transfer on CUDA/ROCm; peak allocation is
   unchanged.
-- Status: in progress 2026-07-30. Claimed files:
-  `crates/hephaestus-{wgpu,cuda,rocm}/src/application/sparse/{spmv,spmm}.rs`,
-  affected sparse contracts, `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
+- Status: in review 2026-07-30. Implementation head `51ffe32` passes exact
+  WGPU and physical CUDA sparse contracts, adapterless ROCm contract
+  compilation/execution, Rust 1.95 warning-denied WGPU/CUDA/ROCm all-target
+  Clippy, formatting, and diff checks. Exact-head provider CI remains the
+  delivery gate.
 
 ## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
