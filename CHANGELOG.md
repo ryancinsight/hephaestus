@@ -36,6 +36,12 @@ Target release: 0.18.0.
 
 ### Added
 
+- [minor] `ConvolutionOps` defines one monomorphized accelerator seam for
+  regular and transposed forward/additive-backward operations. Backend-neutral
+  planners share Leto's validated parameter vocabulary and reject rank, shape,
+  storage, writable-layout aliasing, buffer aliasing, overflow, and
+  backend-address-width violations before kernel preparation or mutation.
+
 - [minor] `AxisReductionOps` gives rank-2 axis reductions a device-neutral seam,
   completing the set begun by `DenseVectorOps` and `SparseOperatorOps`. Every
   backend previously exposed `prod_axis_into` and `prepare_reduce_axis_into` as

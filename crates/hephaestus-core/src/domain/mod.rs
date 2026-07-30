@@ -2,6 +2,8 @@
 
 /// Typed device-buffer contract.
 pub mod buffer;
+/// Device-neutral convolution operands, planning, and dispatch seam.
+pub mod convolution;
 /// Shared CPU-side panel factorisation routines for blocked decomposition.
 pub mod decomposition;
 /// Compute-device acquisition and transfer seam.

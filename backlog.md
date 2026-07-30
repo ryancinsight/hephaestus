@@ -127,8 +127,13 @@ cuda-oxide + cutile).
 - Risk/change class: `[arch] [minor]`; additive provider surface with
   cross-backend kernel, address-width, and device-failure risk.
 - Status: in progress. Leto regular/transposed forward/backward ownership is
-  merged at `aa958be`; WGPU, CUDA, ROCm, and Coeus closure audits identify the
-  exact kernels, fallbacks, missing ranks, and safety contracts to migrate.
+  merged through parameter-SSOT promotion at `f896c43`; WGPU, CUDA, ROCm, and
+  Coeus closure audits identify the exact kernels, fallbacks, missing ranks,
+  and safety contracts to migrate. The core seam and shared planner now pass
+  package check, five focused value-semantic Nextest contracts, and doctests.
+  Warning-denied Clippy remains blocked by mixed rustup/MSYS2 compiler identity
+  artifacts in the shared cache (`E0514`); no cache fork or clean is used.
+
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the

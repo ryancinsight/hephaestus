@@ -17,6 +17,12 @@
 pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
+pub use domain::convolution::{
+    ConvolutionBackwardOperands, ConvolutionForwardOperands, ConvolutionGradientViews,
+    ConvolutionOps, ConvolutionPlan, TransposedConvolutionPlan, plan_convolution_backward,
+    plan_convolution_forward, plan_transposed_convolution_backward,
+    plan_transposed_convolution_forward,
+};
 pub use domain::decomposition::{
     apply_packed_qr_panel_left, factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed,
     panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
