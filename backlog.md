@@ -4,6 +4,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-matrix-properties-overwrite`; scope: CUDA
+  and ROCm matrix-rank/determinant scratch, rank, and determinant allocations.
+- Outcome: remove six redundant initialization transfers before each native
+  single-thread matrix-properties kernel copies every scratch element and
+  writes both scalar outputs.
+- Non-goals: WGPU's host-delegated matrix-properties path, row-reduction
+  arithmetic, tolerance semantics, layouts, benchmark workloads, or runtime
+  claims without matched measurements.
+- Acceptance: CUDA and ROCm use overwrite-before-read storage only after
+  validating non-empty dimensions, tolerance, layout, and launch widths;
+  rank/determinant value and tolerance contracts pass on physical CUDA;
+  warning-denied provider gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI
+  pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one matrix-sized scratch initialization and two scalar initializations per
+  matrix-properties call. Peak allocation and WGPU/Metal behavior are
+  unchanged.
+- Status: in progress 2026-07-30. Claimed files: CUDA/ROCm matrix-rank
+  implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
+  `checklist.md`.
+
 ## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-map-reduction-overwrite`; scope: fused
