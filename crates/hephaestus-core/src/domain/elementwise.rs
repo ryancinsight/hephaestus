@@ -25,16 +25,15 @@
 //! # Operator genericity
 //!
 //! The elementwise expression is a type parameter bounded by the implementor's
-//! own [`Self::Dialect`], because the shader expression is dialect-specific
-//! while the elementwise contract is not. That keeps one seam across backends
-//! whose kernels are written in different languages.
+//! own [`crate::ElementwiseOps`] `Dialect`, because the shader expression is
+//! dialect-specific while the elementwise contract is not. That keeps one seam
+//! across backends whose kernels are written in different languages.
 
 use bytemuck::Pod;
 
 use super::device::ComputeDevice;
-use super::dialect::KernelDialect;
+use super::dialect::{DialectScalar, KernelDialect};
 use super::error::Result;
-use super::dialect::DialectScalar;
 use super::ops::{BinaryExpr, TypedBinaryExpr, UnaryExpr};
 use super::view::StridedView;
 
@@ -63,7 +62,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ///
     /// # Errors
     ///
-    /// Returns a shape mismatch, an aliased output, an layout validation
+    /// Returns a shape mismatch, an aliased output, a layout validation
     /// failure, or the backend dispatch failure.
     fn unary_into<Op, const N: usize>(
         &self,
@@ -72,7 +71,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
         output: StridedView<'_, D::Buffer<T>, N>,
     ) -> Result<()>
     where
-        Op: UnaryExpr<Self::Dialect>
+        Op: UnaryExpr<Self::Dialect>,
     {
         let prepared = self.prepare_unary_into::<Op, N>(device, input, output)?;
         self.dispatch_unary::<N>(device, &prepared)
@@ -118,7 +117,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
         output: StridedView<'_, D::Buffer<T>, N>,
     ) -> Result<()>
     where
-        Op: BinaryExpr<Self::Dialect>
+        Op: BinaryExpr<Self::Dialect>,
     {
         let prepared = self.prepare_binary_into::<Op, N>(device, lhs, rhs, output)?;
         self.dispatch_binary::<N>(device, &prepared)
@@ -158,8 +157,8 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ///
     /// # Type parameters
     ///
-    /// `T` must implement [`DialectScalar<Self::Dialect>`] so the operation can
-    /// emit the correct literal tokens for the scalar type.
+    /// `T` must implement [`DialectScalar`] for [`Self::Dialect`] so the
+    /// operation can emit the correct literal tokens for the scalar type.
     ///
     /// # Errors
     ///
@@ -174,7 +173,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
-        T: DialectScalar<Self::Dialect>
+        T: DialectScalar<Self::Dialect>,
     {
         let prepared = self.prepare_typed_binary_into::<Op, N>(device, lhs, rhs, output)?;
         self.dispatch_typed_binary::<N>(device, &prepared)

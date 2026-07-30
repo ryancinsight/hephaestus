@@ -202,7 +202,7 @@ pub trait ScanOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         Op: CombineExpr<Self::Dialect>,
-        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
     {
         let prepared = self.prepare_scan_axis::<Op, N>(device, input, axis, direction, output)?;
         self.dispatch_scan::<N>(device, &prepared)

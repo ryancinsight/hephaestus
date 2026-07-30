@@ -17,7 +17,6 @@
 pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
-pub use domain::elementwise::ElementwiseOps;
 pub use domain::decomposition::{
     apply_packed_qr_panel_left, factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed,
     panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
@@ -28,6 +27,7 @@ pub use domain::device::{
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
 };
 pub use domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
+pub use domain::elementwise::ElementwiseOps;
 pub use domain::error::{HephaestusError, Result};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,

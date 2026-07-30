@@ -80,7 +80,7 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         Op: CombineExpr<Self::Dialect>,
-        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
     {
         let prepared = self.prepare_reduce_axis_into::<Op>(device, input, axis, output)?;
         self.dispatch_prepared(device, &prepared)
@@ -102,7 +102,7 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         ProdOp: CombineExpr<Self::Dialect>,
-        T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Self::Dialect>
+        T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Self::Dialect>,
     {
         let prepared = self.prepare_reduce_axis_into::<ProdOp>(device, input, axis, output)?;
         self.dispatch_prepared(device, &prepared)
@@ -137,7 +137,7 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
 /// Device-neutral full-array reduction over a strided n-D operand to a
 /// single scalar stored in a one-element output buffer.
 ///
-/// This complements [`AxisReductionOps`] by reducing the entire operand to
+/// This complements [`crate::AxisReductionOps`] by reducing the entire operand to
 /// one value rather than along one axis. The output is a rank-1 view of length
 /// one, which keeps the same `StridedView` output shape and lets consumers
 /// place the scalar where they need it.
@@ -169,7 +169,7 @@ pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         Op: CombineExpr<Self::Dialect>,
-        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
     {
         let prepared = self.prepare_reduce_full::<Op, N>(device, input, output)?;
         self.dispatch_full::<N>(device, &prepared)
@@ -198,11 +198,8 @@ pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
     /// # Errors
     ///
     /// Returns a prepared-operand mismatch or the backend dispatch failure.
-    fn dispatch_full<const N: usize>(
-        &self,
-        device: &D,
-        prepared: &Self::Prepared<N>,
-    ) -> Result<()>;
+    fn dispatch_full<const N: usize>(&self, device: &D, prepared: &Self::Prepared<N>)
+    -> Result<()>;
 }
 
 /// Marker asserting that a backend supplies both halves of the accelerator

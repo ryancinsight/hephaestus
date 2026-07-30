@@ -8,6 +8,8 @@ pub mod decomposition;
 pub mod device;
 /// Kernel-dialect markers and per-dialect scalar tokens.
 pub mod dialect;
+/// Backend-neutral elementwise operations over strided n-D views.
+pub mod elementwise;
 /// Error contracts shared by all backends.
 pub mod error;
 /// Backend-neutral kernel authoring: interface and source declarations.
@@ -20,8 +22,6 @@ pub mod launch;
 pub mod ops;
 /// Shared narrowing/error helpers for dispatch planning.
 pub(crate) mod planning;
-/// Backend-neutral elementwise operations over strided n-D views.
-pub mod elementwise;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
