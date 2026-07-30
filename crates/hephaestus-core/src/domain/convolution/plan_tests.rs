@@ -178,3 +178,40 @@ fn address_limit_covers_physical_offsets_and_parameters() {
         "invalid configuration: convolution plan exceeds backend address limit 14"
     );
 }
+
+#[test]
+fn writable_layout_must_prove_nonoverlap() {
+    let input_buffer = Buffer { len: 4 };
+    let weight_buffer = Buffer { len: 1 };
+    let output_buffer = Buffer { len: 3 };
+    let input = layout([1, 1, 2, 2]);
+    let weight = layout([1, 1, 1, 1]);
+    let overlapping_output = Layout::new([1, 1, 2, 2], [4, 4, 1, 1], 0);
+    let operands = ConvolutionForwardOperands {
+        input: StridedView::new(&input_buffer, &input),
+        weight: StridedView::new(&weight_buffer, &weight),
+        bias: None,
+        output: StridedView::new(&output_buffer, &overlapping_output),
+    };
+    let parameters =
+        ConvolutionParameters::new([1, 1], [0, 0], [1, 1]).expect("valid convolution parameters");
+
+    let error = plan_convolution_forward::<f32, _, 4, 2>(&operands, parameters, false)
+        .expect_err("overlapping writable layout");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: convolution output layout must be non-overlapping"
+    );
+
+    let transposed_output = Layout::new([1, 1, 2, 2], [4, 4, 1, 2], 0);
+    let safe_output_buffer = Buffer { len: 4 };
+    let safe_operands = ConvolutionForwardOperands {
+        input: operands.input,
+        weight: operands.weight,
+        bias: None,
+        output: StridedView::new(&safe_output_buffer, &transposed_output),
+    };
+    let safe_plan = plan_convolution_forward::<f32, _, 4, 2>(&safe_operands, parameters, false)
+        .expect("transposed output layout is injective");
+    assert_eq!(safe_plan.output_elements, 4);
+}

@@ -114,12 +114,45 @@ pub(super) fn validate_writable<const R: usize>(
     name: &str,
 ) -> Result<()> {
     validate_readonly(layout, len)?;
-    if layout.has_zero_stride_aliasing() {
+    if !writable_layout_is_nonoverlapping(layout)? {
         return Err(invalid(format!(
-            "convolution {name} layout must not contain zero-stride aliasing"
+            "convolution {name} layout must be non-overlapping"
         )));
     }
     Ok(())
+}
+
+fn writable_layout_is_nonoverlapping<const R: usize>(layout: &Layout<R>) -> Result<bool> {
+    if layout.checked_size().map_err(map_layout_err)? == 0 {
+        return Ok(true);
+    }
+
+    let mut axes = [(0_usize, 0_usize); R];
+    let mut active = 0;
+    for (&extent, &stride) in layout.shape.iter().zip(&layout.strides) {
+        if extent <= 1 {
+            continue;
+        }
+        let magnitude = stride.unsigned_abs();
+        if magnitude == 0 {
+            return Ok(false);
+        }
+        axes[active] = (magnitude, extent);
+        active += 1;
+    }
+    axes[..active].sort_unstable_by_key(|&(stride, _)| stride);
+
+    let mut covered_span = 1_usize;
+    for &(stride, extent) in &axes[..active] {
+        if stride < covered_span {
+            return Ok(false);
+        }
+        covered_span = (extent - 1)
+            .checked_mul(stride)
+            .and_then(|axis_span| covered_span.checked_add(axis_span))
+            .ok_or_else(|| invalid("convolution writable layout span overflows"))?;
+    }
+    Ok(true)
 }
 
 pub(super) fn validate_gradient_targets<T, B, const R: usize>(
