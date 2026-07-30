@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — in review
+## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the
   full-matrix startup-copy destinations for blocked Cholesky, LU, and QR in
@@ -31,9 +31,12 @@ cuda-oxide + cutile).
   covers the destination's validated matrix extent before decomposition reads.
   Adapterless ROCm exposes no decomposition tests, so feature-enabled ROCm
   behavioral coverage remains an explicit hosted-CI requirement.
-- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
-  WGPU/CUDA/ROCm Cholesky, LU, and QR implementations and contracts,
-  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
+- Hosted evidence on implementation head `8916a22`: WGPU job `90797891213`
+  passes in 6m27s, CUDA job `90797891064` in 6m25s, feature-enabled ROCm job
+  `90797891293` in 5m57s, and macOS Metal job `90797891343` in 5m43s.
+  Required-device NVIDIA and AMD jobs skip because no hardware runners are
+  configured; local physical CUDA supplies the available device evidence.
+- Status: done 2026-07-30. Delivered by PR #155.
 
 ## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
