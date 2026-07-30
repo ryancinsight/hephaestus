@@ -4,6 +4,28 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-volume-overwrite`; scope: allocating ray
+  line-integral outputs in WGPU, CUDA, and ROCm, with Metal inherited through
+  WGPU, plus exact analytical value contracts.
+- Outcome: remove redundant initialization of one ray-count-sized output
+  before the volume kernel writes one integral for every validated ray.
+- Non-goals: ray traversal arithmetic, field/ray layouts, caller-owned output
+  semantics, reduction buffers, benchmark workloads, or runtime claims without
+  matched measurements.
+- Acceptance: all three allocating wrappers use uninitialized storage only
+  after full launch/input validation; analytical ray-integral contracts pass on
+  WGPU and physical CUDA; ROCm retains feature-enabled hosted coverage;
+  warning-denied provider gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI
+  pass.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  ray-count-sized initialization transfer on CUDA/ROCm; peak allocation is
+  unchanged.
+- Status: in progress 2026-07-30. Claimed files: WGPU/CUDA/ROCm volume
+  implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
+  `checklist.md`.
+
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the

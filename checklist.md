@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-VOLUME-OUTPUT-OVERWRITE-1 [patch] [perf]
+
+- [ ] Establish exact analytical ray line-integral baselines.
+- [ ] Prove every validated ray writes exactly one output before first read.
+- [ ] Route WGPU, CUDA, and ROCm allocating outputs through
+      `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
+- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [ ] Pass exact WGPU and physical CUDA volume value contracts.
+- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-volume-overwrite`. Claimed
+files are the WGPU, CUDA, and ROCm volume implementations and contracts, plus
+`CHANGELOG.md`, `backlog.md`, and this section.
+
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf]
 
 - [x] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
