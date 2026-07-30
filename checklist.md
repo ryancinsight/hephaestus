@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf]
+
+- [ ] Establish the exact allocated SpMV and SpMM value-contract baseline.
+- [ ] Prove each allocated sparse result is fully written before any output
+      read, including structurally empty rows.
+- [ ] Route WGPU, CUDA, and ROCm allocated sparse outputs through
+      `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
+- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [ ] Pass exact WGPU and physical CUDA sparse value contracts.
+- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-sparse-overwrite`. Claimed
+files are the WGPU, CUDA, and ROCm sparse SpMV/SpMM allocating wrappers and
+their contracts, plus `CHANGELOG.md`, `backlog.md`, and this section.
+
 ## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf]
 
 - [x] Prove allocated Kronecker, matrix-multiply, and batched-matrix-multiply
