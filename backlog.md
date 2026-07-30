@@ -4,6 +4,26 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-LINALG-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-linalg-overwrite`; scope: allocating
+  Kronecker-product, matrix-multiply, and batched-matrix-multiply wrappers in
+  WGPU, CUDA, and ROCm, with Metal inherited through WGPU, plus exact
+  allocated-output contracts.
+- Outcome: remove redundant device-output initialization before linalg kernels
+  fully overwrite their contiguous results.
+- Non-goals: caller-owned outputs, tiling, accumulation order, scalar
+  precision, layout semantics, benchmark workloads, or runtime claims without
+  matched measurements.
+- Acceptance: all nine allocating wrappers use uninitialized storage only
+  after output-layout validation; exact allocated contracts cover the three
+  operation families on applicable devices; warning-denied package gates and
+  exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  output-sized initialization transfer on CUDA/ROCm; peak allocation is
+  unchanged.
+- Status: in progress.
+
 ## HEPH-STRIDED-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-strided-overwrite`; scope: allocating
