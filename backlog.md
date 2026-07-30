@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — in review
 
 - Owner: Codex on `codex/hephaestus-matrix-properties-overwrite`; scope: CUDA
   and ROCm matrix-rank/determinant scratch, rank, and determinant allocations.
@@ -23,9 +23,16 @@ cuda-oxide + cutile).
   one matrix-sized scratch initialization and two scalar initializations per
   matrix-properties call. Peak allocation and WGPU/Metal behavior are
   unchanged.
-- Status: in progress 2026-07-30. Claimed files: CUDA/ROCm matrix-rank
-  implementations and contracts, `CHANGELOG.md`, `backlog.md`, and
-  `checklist.md`.
+- Evidence: physical CUDA rank and determinant contracts pass 2/2 before and
+  after the allocation change, including exact full-rank, rank-deficient,
+  singular, rectangular, and tolerance-discriminator values. Rust 1.95
+  formatting and warning-denied all-target Clippy pass for feature-enabled
+  CUDA and adapterless ROCm. The native kernel copies all `rows * cols`
+  scratch elements before elimination and assigns both scalar outputs on every
+  path.
+- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+  CUDA/ROCm matrix-rank implementations and contracts, `CHANGELOG.md`,
+  `backlog.md`, and `checklist.md`.
 
 ## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 

@@ -4,13 +4,13 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact CUDA rank, determinant, and tolerance baselines.
-- [ ] Prove the native single-thread kernels overwrite scratch, rank, and
+- [x] Establish exact CUDA rank, determinant, and tolerance baselines.
+- [x] Prove the native single-thread kernels overwrite scratch, rank, and
       determinant outputs on every validated path.
-- [ ] Route the six CUDA and ROCm allocations through
+- [x] Route the six CUDA and ROCm allocations through
       `ComputeDevice::alloc_uninitialized`.
-- [ ] Pass Rust 1.95 warning-denied CUDA and ROCm package gates.
-- [ ] Pass exact physical CUDA matrix-properties value contracts.
+- [x] Pass Rust 1.95 warning-denied CUDA and ROCm package gates.
+- [x] Pass exact physical CUDA matrix-properties value contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on

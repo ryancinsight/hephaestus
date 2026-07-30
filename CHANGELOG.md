@@ -64,6 +64,15 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate CUDA and ROCm matrix-properties scratch, rank, and
+  determinant outputs through the overwrite-before-read device seam. Each
+  validated native call omits one matrix-sized initialization transfer and
+  two scalar initialization transfers before its single-thread kernel copies
+  every logical element and assigns both outputs. WGPU and Metal behavior,
+  row-reduction arithmetic, tolerance semantics, layouts, and peak allocation
+  are unchanged; no runtime gain is claimed without matched hardware
+  measurements.
+
 - [patch] Allocate non-empty fused map-reduction partials and L2 square-root
   results through the overwrite-before-read device seam. CUDA and ROCm omit
   one workgroup-count-sized initialization transfer per prepared map reduction
