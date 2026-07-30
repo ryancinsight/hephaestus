@@ -33,15 +33,19 @@ pub(crate) fn download_matrix_region_compact(
     region: MatrixRegion,
 ) -> Result<PinnedHostBuffer<f32>> {
     if region.rows == 0 || region.cols == 0 {
-        return PinnedHostBuffer::zeroed(device.cuda_context().clone(), 0);
+        // SAFETY: empty buffer — no reads occur through `Deref`/`DerefMut`.
+        return unsafe { PinnedHostBuffer::uninitialized(device.cuda_context().clone(), 0) };
     }
     device.bind()?;
     let size_of_f32 = std::mem::size_of::<f32>();
     let row_bytes = region.cols * size_of_f32;
     let row_byte_count = cuda_byte_count(row_bytes, "matrix region row byte count")?;
 
-    let mut compact =
-        PinnedHostBuffer::<f32>::zeroed(device.cuda_context().clone(), region.rows * region.cols)?;
+    // SAFETY: every row is immediately written by `cuMemcpyDtoHAsync_v2`
+    // below before any read through `Deref`/`DerefMut`.
+    let mut compact = unsafe {
+        PinnedHostBuffer::<f32>::uninitialized(device.cuda_context().clone(), region.rows * region.cols)?
+    };
 
     let device_start_index = region
         .row_start
