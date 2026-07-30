@@ -282,7 +282,7 @@ fn factor_on_device(
         Layout::c_contiguous([n, n]).map_err(|error| HephaestusError::DispatchFailed {
             message: format!("Cholesky dense layout failed: {error}"),
         })?;
-    let lower = device.alloc_zeroed::<f32>(elements)?;
+    let lower = device.alloc_uninitialized::<f32>(elements)?;
     if !require_dense {
         unary_elementwise_strided_into::<IdentityOp, f32, 2>(
             device,

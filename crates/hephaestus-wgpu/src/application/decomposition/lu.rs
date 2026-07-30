@@ -498,7 +498,7 @@ pub fn lu_decompose_blocked(
     }
 
     // Allocate the device-resident buffer and copy matrix.buffer into it on the GPU
-    let factors_buf = device.alloc_zeroed::<f32>(n * n)?;
+    let factors_buf = device.alloc_uninitialized::<f32>(n * n)?;
     let mut encoder = device
         .inner()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {

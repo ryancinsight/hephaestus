@@ -4,6 +4,40 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the
+  full-matrix startup-copy destinations for blocked Cholesky, LU, and QR in
+  WGPU, CUDA, and ROCm, with Metal inherited through WGPU.
+- Outcome: remove redundant initialization of nine matrix-sized destinations
+  before whole-buffer copies or canonical strided identity kernels fully
+  overwrite them.
+- Non-goals: panel, reflector, status, rank, threshold, or metadata buffers;
+  decomposition arithmetic; blocking strategy; layout contracts; benchmark
+  workloads; or runtime claims without matched measurements.
+- Acceptance: only the nine full-matrix startup-copy destinations use
+  uninitialized storage; full-write proofs cover dense copies and strided
+  identity dispatches; existing value-semantic blocked decomposition contracts
+  pass on WGPU and physical CUDA, ROCm contracts retain compile/value coverage,
+  warning-denied provider gates pass, and exact-head WGPU/CUDA/ROCm/macOS-Metal
+  CI is green.
+- Risk/change class: `[patch]` internal allocation policy and one avoided
+  matrix-sized initialization transfer per decomposition call on CUDA/ROCm;
+  peak allocation is unchanged.
+- Evidence: WGPU blocked-decomposition contracts pass 17/17 and physical CUDA
+  contracts pass 16/16 before and after the allocation change. Rust 1.95
+  warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
+  adapterless ROCm. Each dense whole-buffer copy and strided identity dispatch
+  covers the destination's validated matrix extent before decomposition reads.
+  Adapterless ROCm exposes no decomposition tests, so feature-enabled ROCm
+  behavioral coverage remains an explicit hosted-CI requirement.
+- Hosted evidence on implementation head `8916a22`: WGPU job `90797891213`
+  passes in 6m27s, CUDA job `90797891064` in 6m25s, feature-enabled ROCm job
+  `90797891293` in 5m57s, and macOS Metal job `90797891343` in 5m43s.
+  Required-device NVIDIA and AMD jobs skip because no hardware runners are
+  configured; local physical CUDA supplies the available device evidence.
+- Status: done 2026-07-30. Delivered by PR #155.
+
 ## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matpow-overwrite`; scope: matrix-power

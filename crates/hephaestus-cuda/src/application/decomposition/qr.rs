@@ -198,7 +198,7 @@ pub fn qr_decompose_blocked(
             });
         }
 
-        let work_buf = device.alloc_zeroed::<f32>(m * n)?;
+        let work_buf = device.alloc_uninitialized::<f32>(m * n)?;
         device.bind()?;
         let bytes = m * n * std::mem::size_of::<f32>();
         let byte_count = cuda_byte_count(bytes, "blocked QR startup copy byte count")?;

@@ -395,7 +395,7 @@ pub fn qr_decompose_blocked(
     // so the first panel readback does not wait behind an avoidable full-matrix
     // device copy. Queue ordering still guarantees the copy completes before
     // the first write/update touches `work_buf`.
-    let work_buf = device.alloc_zeroed::<f32>(m * n)?;
+    let work_buf = device.alloc_uninitialized::<f32>(m * n)?;
     let mut work_copy_queued = false;
 
     let mut packed = vec![0.0f32; m * n];

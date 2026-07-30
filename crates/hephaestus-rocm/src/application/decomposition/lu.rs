@@ -275,7 +275,7 @@ fn factor_on_device(
         Layout::c_contiguous([n, n]).map_err(|error| HephaestusError::DispatchFailed {
             message: format!("LU dense layout failed: {error}"),
         })?;
-    let factors = device.alloc_zeroed::<f32>(elements)?;
+    let factors = device.alloc_uninitialized::<f32>(elements)?;
     if require_dense {
         let mut stream = device.stream()?;
         stream.copy(matrix.buffer, &factors)?;
