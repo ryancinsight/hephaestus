@@ -37,8 +37,10 @@ pub struct ConvolutionPlan<const S: usize> {
 impl<const S: usize> ConvolutionPlan<S> {
     /// Validate every value narrowed by a backend kernel's address contract.
     ///
-    /// CUDA kernels using signed 32-bit index arithmetic pass `i32::MAX`;
-    /// WGSL kernels using unsigned 32-bit metadata pass `u32::MAX`.
+    /// Backends pass the inclusive limit of every integer representation used
+    /// by their address and projection arithmetic. CUDA and the current WGSL
+    /// implementation both use signed 32-bit projection arithmetic and
+    /// therefore pass `i32::MAX`.
     ///
     /// # Errors
     ///

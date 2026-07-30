@@ -2,6 +2,9 @@
 
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
+/// Native HIP regular and transposed convolution.
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub mod convolution;
 /// Device-resident dense matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;

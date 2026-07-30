@@ -1,7 +1,7 @@
 //! WGPU implementation of the device-neutral axis-reduction seam.
 //!
 //! The kernels themselves live in [`crate::application::reduction`]; this module
-//! only adapts them to [`AxisReductionOps`] so a consumer — or a conformance
+//! only adapts them to [`hephaestus_core::AxisReductionOps`] so a consumer — or a conformance
 //! suite — can reduce along an axis without naming `WgpuDevice`. It is the
 //! reduction counterpart of [`crate::WgpuSparseOps`] and [`crate::WgpuVectorOps`].
 

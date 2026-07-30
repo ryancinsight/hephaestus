@@ -68,13 +68,13 @@ pub(super) fn validate_channel_shapes<const R: usize>(
             input.shape, weight.shape, output.shape
         )));
     }
-    if let Some(bias) = bias {
-        if bias.shape != [dimensions.output_channels] {
-            return Err(invalid(format!(
-                "convolution bias shape {:?} must equal [{}]",
-                bias.shape, dimensions.output_channels
-            )));
-        }
+    if let Some(bias) = bias
+        && bias.shape != [dimensions.output_channels]
+    {
+        return Err(invalid(format!(
+            "convolution bias shape {:?} must equal [{}]",
+            bias.shape, dimensions.output_channels
+        )));
     }
     Ok(())
 }

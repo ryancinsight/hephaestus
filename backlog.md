@@ -111,8 +111,9 @@ cuda-oxide + cutile).
 - Owner: Codex on `codex/hephaestus-compute-seams`; claimed scope:
   `crates/hephaestus-core/src/domain/convolution/`,
   backend `application/convolution/` modules, focused provider contracts,
-  ADR 0039, and this item. Existing compute-seam files and exports remain with
-  their active peer until that increment commits.
+  ADR 0039, and this item. The scope also absorbs the stale WGPU elementwise,
+  scan, and full-reduction seam increment required to keep the shared backend
+  exports warning-clean and device-safe.
 - Outcome: one fallible, monomorphized accelerator convolution seam with
   regular and transposed forward/additive-backward implementations for WGPU,
   CUDA, ROCm, and Metal, using Leto parameters as the SSOT.
@@ -130,11 +131,21 @@ cuda-oxide + cutile).
   merged through parameter-SSOT promotion at `f896c43`; WGPU, CUDA, ROCm, and
   Coeus closure audits identify the exact kernels, fallbacks, missing ranks,
   and safety contracts to migrate. The core seam and shared planner now pass
-  package check, seven focused value-semantic Nextest contracts, and doctests;
-  writable plans reject arbitrary overlapping strided layouts, and backend
-  address checks cover convolution projection intermediates before dispatch.
-  Warning-denied Clippy remains blocked by mixed rustup/MSYS2 compiler identity
-  artifacts in the shared cache (`E0514`); no cache fork or clean is used.
+  package check, seven focused value-semantic Nextest contracts, and doctests.
+  CUDA passes the shared rank-one through rank-three `f32`/`f64`
+  regular/transposed forward/backward conformance matrix on physical hardware
+  in 4.6 seconds. WGPU passes the shared rank-one through rank-three `f32`
+  matrix in 0.8 seconds. Its combined convolution and compute-seam lane passes
+  18/18 tests in 8.4 seconds, including invalid shader compilation, arbitrary
+  writable overlap, device identity, and foreign-buffer rejection before
+  mutation. ROCm now owns native HIP kernels and passes its adapterless
+  feature-off build; feature-enabled Linux compilation and device execution
+  remain hosted gates. Writable plans reject arbitrary overlapping strided
+  layouts, and backend address checks cover convolution projection
+  intermediates before dispatch. Warning-denied Clippy passes for
+  core/conformance/WGPU/Metal, CUDA with its native feature, and ROCm's
+  feature-off configuration under one coherent rustup toolchain and the shared
+  target directory.
 
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 

@@ -1,6 +1,7 @@
 use crate::CudaDevice;
 use hephaestus_core::{BlockWidth, HephaestusError, Result, ScanDirection};
 use std::any::TypeId;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 #[cfg(feature = "cuda")]
@@ -126,6 +127,22 @@ pub(crate) enum PipelineKey {
     Stream(u64),
     GroupedStream(u64),
     MultiStorage(u64),
+    /// Convolution kernel keyed by every ABI-varying dimension.
+    Convolution {
+        entry: &'static str,
+        scalar: TypeId,
+        spatial_rank: usize,
+        bias: bool,
+    },
+}
+
+/// Hash a runtime-authored kernel's complete cache identity once at preparation.
+pub(crate) fn source_hash(label: &str, entry: &str, source: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    label.hash(&mut hasher);
+    entry.hash(&mut hasher);
+    source.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Retrieve a cached kernel, compiling the source if it is not present in the cache.

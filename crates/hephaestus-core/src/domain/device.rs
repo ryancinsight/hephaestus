@@ -173,7 +173,7 @@ pub trait ComputeDevice {
     ///
     /// # Errors
     ///
-    /// Returns [`HephaestusError::LengthMismatch`] when the buffers have
+    /// Returns [`crate::HephaestusError::LengthMismatch`] when the buffers have
     /// different element counts, or the backend's typed transfer error when
     /// allocation context, encoding, submission, or synchronization fails.
     fn copy_buffer<T: Pod>(&self, src: &Self::Buffer<T>, dst: &Self::Buffer<T>) -> Result<()>;

@@ -56,6 +56,65 @@ pub(crate) fn cached_pipeline(
     .clone()
 }
 
+/// Fetch a cached pipeline while surfacing first-compilation validation.
+///
+/// WGPU reports shader and pipeline validation through error scopes rather
+/// than the constructors' return values. This variant resolves that scope
+/// before caching, so an invalid generated kernel becomes a typed preparation
+/// failure and can never reach submission.
+pub(crate) fn try_cached_pipeline(
+    device: &WgpuDevice,
+    key: PipelineKey,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> Result<wgpu::ComputePipeline> {
+    let cell = device
+        .pipeline_cache
+        .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
+        .map_err(|error| HephaestusError::DispatchFailed {
+            message: format!("pipeline cache rejected {label}: {error:?}"),
+        })?;
+    if let Some(pipeline) = cell.get() {
+        return Ok(pipeline.clone());
+    }
+
+    let error_scope = device
+        .inner()
+        .push_error_scope(wgpu::ErrorFilter::Validation);
+    let module = device
+        .inner()
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(label),
+            source: wgpu::ShaderSource::Wgsl(source().into()),
+        });
+    let pipeline = device
+        .inner()
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(label),
+            layout: None,
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+    if let Some(error) = moirai::block_on(error_scope.pop()) {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("{label} compilation failed: {error}"),
+        });
+    }
+
+    // A concurrent preparer may have populated the cell while this pipeline
+    // compiled. In either case return the canonical cached instance.
+    match cell.set(pipeline) {
+        Ok(()) => {}
+        Err(concurrent_pipeline) => drop(concurrent_pipeline),
+    }
+    Ok(cell
+        .get()
+        .expect("invariant: successful or raced OnceLock initialization stores a pipeline")
+        .clone())
+}
+
 /// Convert a logical work-item count into WGPU workgroup count.
 pub(crate) fn workgroups(len: usize, width: BlockWidth) -> Result<u32> {
     let len = u64::try_from(len).map_err(|_| HephaestusError::DispatchFailed {

@@ -10,12 +10,12 @@
 //! The one backend-specific input is whether the input and output buffers
 //! alias (a device-pointer identity check); callers compute it and pass it in.
 //!
-//! [`AxisReductionOps`] completes the family: the planning above was already
+//! [`crate::AxisReductionOps`] completes the family: the planning above was already
 //! shared, but every backend still exposed `prod_axis_into` and
 //! `prepare_reduce_axis_into` as free functions over its own device and operand
 //! types, so a consumer — or a conformance suite — had to bind to one device API
-//! to call them. The seam takes the same shape as [`DenseVectorOps`] and
-//! [`SparseOperatorOps`]: generic over the device, monomorphized at every call
+//! to call them. The seam takes the same shape as [`crate::DenseVectorOps`] and
+//! [`crate::SparseOperatorOps`]: generic over the device, monomorphized at every call
 //! site, no `dyn` anywhere.
 
 use crate::domain::device::ComputeDevice;

@@ -39,14 +39,16 @@ types retain compiled kernels, metadata, and any backend-owned resources
 needed for repeat dispatch. Generic consumers monomorphize the complete
 operation; no dynamic dispatch or per-element capability branch is present.
 
-Shared planning validates rank, shapes, channels, storage spans, writable
-zero-stride layouts, buffer aliasing, parameter equations, checked products,
-and each backend kernel's address-width contract before compilation or
-mutation. Backward preparation compiles every requested gradient kernel before
-the first launch. Validation and preparation failures leave caller-owned
-outputs unchanged. A device fault after submission is returned as a typed
-error and never changes provider; the contract does not claim transactional
-rollback after device execution has begun.
+Shared planning validates rank, shapes, channels, storage spans, arbitrary
+writable-layout overlap, buffer aliasing, parameter equations, checked
+products, and each backend kernel's address-width contract before compilation
+or mutation. Backend metadata construction additionally proves every logical
+index product and physical address fits the kernel's integer representation.
+Backward preparation compiles every requested gradient kernel before the first
+launch. Validation and preparation failures leave caller-owned outputs
+unchanged. A device fault surfaced by synchronization or transfer is returned
+as a typed error and never changes provider; the contract does not claim
+transactional rollback after device execution has begun.
 
 Backend ownership is:
 
@@ -87,10 +89,15 @@ matched measurements compare complete pre- and post-cutover operations.
 
 - Generic planner tests cover ranks 1 through 3, shape equations, strided
   storage, aliases, empty outputs, checked overflow, and backend address width.
-- Every implemented backend runs forward/backward and transposed
-  forward/backward differential tests against Leto.
+- One generic `hephaestus-conformance` suite runs regular/transposed
+  forward/backward against Leto across spatial ranks one through three for
+  `f32` and `f64`; each backend instantiates the scalars it supports and
+  backend-local tests add address and device-failure cases.
+- Exactly representable fixtures use exact equality. Reordered floating-point
+  reductions use bounds derived from reduction depth and `f32::EPSILON`.
 - Tests select optional bias and every independent gradient target.
 - Rejected validation and preparation leave outputs unchanged.
-- Dispatch instrumentation proves no host transfer or provider transition.
+- Static residue scans prove the provider implementations contain no host
+  transfer, Leto execution, or provider-transition path.
 - Warning-denied package gates, configured Nextest, doctests, SemVer checks,
   and exact-head backend CI pass before consumer cutover.

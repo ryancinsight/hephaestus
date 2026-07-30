@@ -31,4 +31,5 @@ moirai-sync = { workspace = true }
 wgpu = { workspace = true }
 
 [dev-dependencies]
+hephaestus-conformance = { workspace = true }
 leto-ops = { workspace = true }

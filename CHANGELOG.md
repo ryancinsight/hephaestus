@@ -58,7 +58,11 @@ Target release: 0.18.0.
   `ComputeDevice` and the operation seam, so a backend runs them by
   instantiating rather than re-authoring. Of the 112 entry points declared by
   all four backends, only 46 were exercised by all four and six by none; the
-  crate exists so a clause added once is executed by every backend from then on.
+  crate exists so a clause added once is executed by every backend from then
+  on. Its convolution contract differentially verifies regular/transposed
+  forward and additive input/weight gradients across spatial ranks one through
+  three for `f32` and `f64`, verifies bias gradients in the rank-one contract,
+  and checks alias rejection before mutation.
 
 - [patch] WGPU now covers the typed comparison dispatch entry points
   (`binary_elementwise_typed`, `binary_elementwise_typed_into`, and their
@@ -94,6 +98,12 @@ Target release: 0.18.0.
   behavior. Ray traversal arithmetic, field and ray layouts, and peak
   allocation are unchanged; no runtime gain is claimed without matched
   hardware measurements.
+
+- [patch] WGPU elementwise, scan, full-reduction, and convolution preparation
+  share checked pipeline, bind-group, device-identity, and submission helpers.
+  Full reduction honors strided scalar output offsets, writes operator
+  identities for empty inputs, rejects foreign-device buffers before encoding,
+  and surfaces invalid external WGSL expressions as typed errors.
 
 - [patch] Allocate blocked Cholesky, LU, and QR full-matrix startup copies
   through the overwrite-before-read device seam. CUDA and ROCm omit one

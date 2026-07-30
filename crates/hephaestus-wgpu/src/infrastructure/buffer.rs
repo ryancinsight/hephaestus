@@ -1,6 +1,8 @@
 use core::marker::PhantomData;
 use hephaestus_core::DeviceBuffer;
 
+use super::device::PipelineCache;
+
 /// A typed device buffer over a `wgpu::Buffer`.
 ///
 /// The element type lives in `PhantomData<T>` so dtype confusion between
@@ -20,6 +22,7 @@ pub struct WgpuBuffer<T> {
     pub(crate) buffer: wgpu::Buffer,
     pub(crate) len: usize,
     pub(crate) tier: themis::MemoryTier,
+    pub(crate) owner: PipelineCache,
     pub(crate) marker: PhantomData<T>,
 }
 
@@ -38,6 +41,12 @@ impl<T> WgpuBuffer<T> {
     #[inline]
     pub(crate) fn aliases<U>(&self, other: &WgpuBuffer<U>) -> bool {
         self.buffer == other.buffer
+    }
+
+    #[must_use]
+    #[inline]
+    pub(crate) fn belongs_to(&self, owner: &PipelineCache) -> bool {
+        std::sync::Arc::ptr_eq(&self.owner, owner)
     }
 }
 

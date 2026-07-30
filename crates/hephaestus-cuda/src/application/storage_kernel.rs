@@ -1,6 +1,5 @@
 //! CUDA implementation of backend-neutral multi-storage kernels.
 
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
 use bytemuck::Pod;
@@ -10,7 +9,9 @@ use hephaestus_core::{
 };
 use smallvec::SmallVec;
 
-use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+use crate::application::pipeline::{
+    LaunchConfig, PipelineKey, cached_kernel, launch_kernel, source_hash,
+};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
@@ -255,14 +256,6 @@ fn validate_distinct_bindings(storage_bindings: &[u32]) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn source_hash(label: &str, entry: &str, source: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    label.hash(&mut hasher);
-    entry.hash(&mut hasher);
-    source.hash(&mut hasher);
-    hasher.finish()
 }
 
 #[cfg(test)]

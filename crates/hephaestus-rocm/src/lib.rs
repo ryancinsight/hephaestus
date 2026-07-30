@@ -13,8 +13,10 @@
 //! synchronization, and hipRTC/module-launched elementwise, reduction,
 //! rank-2 axis-reduction, scan, map-reduction, Kronecker-product,
 //! matrix-power, matrix-multiplication, and CSR sparse matrix products
-//! operation families. Additional operator families are separate parity
-//! increments with their own value-semantic contracts. The optional
+//! operation families. The ROCm feature also provides native HIP regular and
+//! transposed convolution with additive gradients. Additional operator
+//! families are separate parity increments with their own value-semantic
+//! contracts. The optional
 //! `decomposition` feature adds device-resident Cholesky, LU, and QR
 //! factorization contracts, including complete-pivoted LU, column-pivoted QR,
 //! bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, and
@@ -36,6 +38,8 @@ pub use application::axis_reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
     prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::convolution::RocmConvolutionOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
     GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,

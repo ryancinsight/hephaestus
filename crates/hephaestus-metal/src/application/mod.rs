@@ -1,5 +1,7 @@
 //! Compute dispatch delegation to Metal.
 
+/// Zero-copy convolution delegation to Metal-selected WGPU.
+pub mod convolution;
 /// Matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;

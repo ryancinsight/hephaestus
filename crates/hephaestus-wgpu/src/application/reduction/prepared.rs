@@ -12,7 +12,8 @@ use super::{
     PreparedAxisReduction, ReductionFinalOpWrapper, ReductionOpWrapper,
     final_reduction_shader_source, shader_source,
 };
-use crate::application::pipeline::{cached_pipeline, encode_compute_pass, workgroups};
+use crate::application::pipeline::{encode_compute_pass, try_cached_pipeline, workgroups};
+use crate::application::prepared::{checked_bind_group, validate_buffer_owner};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -236,6 +237,7 @@ where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     validate_reduction_width(width)?;
+    validate_buffer_owner(input, device, "reduction input")?;
 
     if input.len == 0 {
         let output = device.upload(&[T::IDENTITY])?;
@@ -259,17 +261,19 @@ where
         TypeId::of::<T>(),
         width.get(),
     );
-    let standard_pipeline = cached_pipeline(device, standard_key, "hephaestus-reduction", || {
-        shader_source::<Op, T>(width)
-    });
+    let standard_pipeline =
+        try_cached_pipeline(device, standard_key, "hephaestus-reduction", || {
+            shader_source::<Op, T>(width)
+        })?;
     let final_key = (
         TypeId::of::<ReductionFinalOpWrapper<Op>>(),
         TypeId::of::<T>(),
         width.get(),
     );
-    let final_pipeline = cached_pipeline(device, final_key, "hephaestus-reduction-final", || {
-        final_reduction_shader_source::<Op, T>(width)
-    });
+    let final_pipeline =
+        try_cached_pipeline(device, final_key, "hephaestus-reduction-final", || {
+            final_reduction_shader_source::<Op, T>(width)
+        })?;
 
     let mut current_len = input.len;
     let width_usize = usize::try_from(width.get())
@@ -305,22 +309,21 @@ where
                 .buffer
                 .as_entire_binding()
         };
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("hephaestus-prepared-reduction"),
-                layout: &pipeline.get_bind_group_layout(0),
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: source_resource,
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: out_buffer.buffer.as_entire_binding(),
-                    },
-                ],
-            });
+        let bind_group = checked_bind_group(
+            device,
+            pipeline,
+            "hephaestus-prepared-reduction",
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: source_resource,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: out_buffer.buffer.as_entire_binding(),
+                },
+            ],
+        )?;
         passes.push(PreparedPass {
             pipeline: pipeline.clone(),
             bind_group,

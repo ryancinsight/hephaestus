@@ -88,7 +88,7 @@ impl MetalMultiStorageKernel {
     /// `params_binding` is the `@group(0)` uniform parameter binding.
     ///
     /// # Errors
-    /// Returns [`HephaestusError::DispatchFailed`] when the entry point is
+    /// Returns [`hephaestus_core::HephaestusError::DispatchFailed`] when the entry point is
     /// empty, no storage bindings are declared, or binding numbers collide.
     pub fn new(
         device: &MetalDevice,
@@ -152,7 +152,7 @@ impl MetalUnaryStorageKernel {
     /// uniform parameter bindings at `@group(0)` bindings `0`, `1`, and `2`.
     ///
     /// # Errors
-    /// Returns [`HephaestusError::DispatchFailed`] if `entry_point` is empty.
+    /// Returns [`hephaestus_core::HephaestusError::DispatchFailed`] if `entry_point` is empty.
     pub fn new(
         device: &MetalDevice,
         label: &'static str,
@@ -198,7 +198,7 @@ impl MetalBinaryStorageKernel {
     /// binding `0`.
     ///
     /// # Errors
-    /// Returns [`HephaestusError::DispatchFailed`] if `entry_point` is empty.
+    /// Returns [`hephaestus_core::HephaestusError::DispatchFailed`] if `entry_point` is empty.
     pub fn new(
         device: &MetalDevice,
         label: &'static str,
