@@ -4,14 +4,14 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact WGPU and ROCm matrix-power baselines.
-- [ ] Add the missing CUDA matrix-power differential contract.
-- [ ] Prove base-copy and multiply-scratch buffers are fully written before
+- [x] Establish exact WGPU and ROCm matrix-power baselines.
+- [x] Add the missing CUDA matrix-power differential contract.
+- [x] Prove base-copy and multiply-scratch buffers are fully written before
       each first read.
-- [ ] Route all nine WGPU, CUDA, and ROCm allocations through
+- [x] Route all nine WGPU, CUDA, and ROCm allocations through
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
-- [ ] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
-- [ ] Pass exact WGPU and physical CUDA matrix-power value contracts.
+- [x] Pass Rust 1.95 warning-denied WGPU, CUDA, and ROCm package gates.
+- [x] Pass exact WGPU and physical CUDA matrix-power value contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-matpow-overwrite`. Claimed

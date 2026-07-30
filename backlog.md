@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-MATPOW-OUTPUT-OVERWRITE-1 [patch] [perf] — in review
 
 - Owner: Codex on `codex/hephaestus-matpow-overwrite`; scope: matrix-power
   base-copy and multiply-scratch allocations in WGPU, CUDA, and ROCm, with
@@ -24,9 +24,15 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal allocation policy and up to three
   avoided matrix-sized initialization transfers on CUDA/ROCm; peak allocation
   is unchanged.
-- Status: in progress 2026-07-30. Claimed files: WGPU/CUDA/ROCm matrix-power
-  implementations, affected matrix-power contracts, `CHANGELOG.md`,
-  `backlog.md`, and `checklist.md`.
+- Evidence: WGPU matrix-power contracts pass 2/2; the physical-CUDA Leto,
+  identity, strided-input, and non-square contract passes 1/1; the adapterless
+  ROCm contract passes 1/1 as compile/contract coverage. Rust 1.95
+  warning-denied all-target Clippy passes for WGPU, feature-enabled CUDA, and
+  ROCm. The canonical strided identity kernel writes every base element and
+  `matmul_into` writes every scratch element before either buffer is read.
+- Status: in review 2026-07-30, pending exact-head provider CI. Claimed files:
+  WGPU/CUDA/ROCm matrix-power implementations, affected matrix-power
+  contracts, `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
 ## HEPH-SPARSE-OUTPUT-OVERWRITE-1 [patch] [perf] — done
 
