@@ -106,7 +106,29 @@ cuda-oxide + cutile).
 - Status: done 2026-07-30; delivered through PR #156. Claimed files:
   WGPU/CUDA/ROCm volume implementations and contracts, `CHANGELOG.md`,
   `backlog.md`, and `checklist.md`.
+## HEPH-CONVOLUTION-PROVIDER-1 [minor] [arch] — in progress
 
+- Owner: Codex on `codex/hephaestus-compute-seams`; claimed scope:
+  `crates/hephaestus-core/src/domain/convolution/`,
+  backend `application/convolution/` modules, focused provider contracts,
+  ADR 0039, and this item. Existing compute-seam files and exports remain with
+  their active peer until that increment commits.
+- Outcome: one fallible, monomorphized accelerator convolution seam with
+  regular and transposed forward/additive-backward implementations for WGPU,
+  CUDA, ROCm, and Metal, using Leto parameters as the SSOT.
+- Non-goals: Coeus caller migration, release/version transitions, dynamic
+  dispatch, host fallback, and runtime or memory claims without matched
+  measurements.
+- Acceptance: ranks 1 through 3 validate and dispatch through borrowed strided
+  device views; each backend differentially matches Leto for supported scalars;
+  invalid shape/storage/alias/address contracts fail before mutation; selected
+  provider failures return typed errors without host transfer or provider
+  change; focused package gates and exact-head provider CI pass.
+- Risk/change class: `[arch] [minor]`; additive provider surface with
+  cross-backend kernel, address-width, and device-failure risk.
+- Status: in progress. Leto regular/transposed forward/backward ownership is
+  merged at `aa958be`; WGPU, CUDA, ROCm, and Coeus closure audits identify the
+  exact kernels, fallbacks, missing ranks, and safety contracts to migrate.
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-overwrite`; scope: the
