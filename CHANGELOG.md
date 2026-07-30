@@ -64,6 +64,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate ray line-integral results through the
+  overwrite-before-read device seam. CUDA and ROCm omit one ray-count-sized
+  initialization transfer before the validated one-work-item-per-ray kernel
+  writes every output; WGPU and Metal preserve platform-managed initialization
+  behavior. Ray traversal arithmetic, field and ray layouts, and peak
+  allocation are unchanged; no runtime gain is claimed without matched
+  hardware measurements.
+
 - [patch] Allocate blocked Cholesky, LU, and QR full-matrix startup copies
   through the overwrite-before-read device seam. CUDA and ROCm omit one
   matrix-sized initialization transfer before a dense copy or canonical
