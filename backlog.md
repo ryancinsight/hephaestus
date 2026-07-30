@@ -4,6 +4,42 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-matrix-properties-overwrite`; scope: CUDA
+  and ROCm matrix-rank/determinant scratch, rank, and determinant allocations.
+- Outcome: remove six redundant initialization transfers before each native
+  single-thread matrix-properties kernel copies every scratch element and
+  writes both scalar outputs.
+- Non-goals: WGPU's host-delegated matrix-properties path, row-reduction
+  arithmetic, tolerance semantics, layouts, benchmark workloads, or runtime
+  claims without matched measurements.
+- Acceptance: CUDA and ROCm use overwrite-before-read storage only after
+  validating non-empty dimensions, tolerance, layout, and launch widths;
+  rank/determinant value and tolerance contracts pass on physical CUDA;
+  warning-denied provider gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI
+  pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one matrix-sized scratch initialization and two scalar initializations per
+  matrix-properties call. Peak allocation and WGPU/Metal behavior are
+  unchanged.
+- Evidence: physical CUDA rank and determinant contracts pass 2/2 before and
+  after the allocation change, including exact full-rank, rank-deficient,
+  singular, rectangular, and tolerance-discriminator values. Rust 1.95
+  formatting and warning-denied all-target Clippy pass for feature-enabled
+  CUDA and adapterless ROCm. The native kernel copies all `rows * cols`
+  scratch elements before elimination and assigns both scalar outputs on every
+  path.
+- Hosted evidence on implementation head `f57180e`: WGPU job `90814481300`
+  passes in 6m32s, CUDA job `90814481682` in 7m47s, ROCm job `90814482979`
+  in 5m50s, and macOS Metal job `90814482965` in 6m22s. Required-device
+  NVIDIA job `90814482224` and AMD job `90814483598` skip because hosted
+  hardware runners are unavailable; physical CUDA value contracts pass
+  locally, and no physical ROCm execution claim is made.
+- Status: done 2026-07-30; delivered through PR #158. Claimed files:
+  CUDA/ROCm matrix-rank implementations and contracts, `CHANGELOG.md`,
+  `backlog.md`, and `checklist.md`.
+
 ## HEPH-MAP-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-map-reduction-overwrite`; scope: fused

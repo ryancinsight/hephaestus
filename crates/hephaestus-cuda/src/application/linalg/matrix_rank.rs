@@ -179,9 +179,9 @@ where
         .map_err(map_layout_err)?;
 
     let len = matrix.layout.checked_size().map_err(map_layout_err)?;
-    let scratch = device.alloc_zeroed::<T>(len)?;
-    let rank_out = device.alloc_zeroed::<u32>(1)?;
-    let det_out = device.alloc_zeroed::<T>(1)?;
+    let scratch = device.alloc_uninitialized::<T>(len)?;
+    let rank_out = device.alloc_uninitialized::<u32>(1)?;
+    let det_out = device.alloc_uninitialized::<T>(1)?;
     let meta = RankMeta {
         shape: [
             to_u32(rows, "rank row count")?,
