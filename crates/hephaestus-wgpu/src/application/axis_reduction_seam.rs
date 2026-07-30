@@ -11,7 +11,7 @@ use hephaestus_core::{
 };
 
 use crate::application::reduction::{
-    PreparedAxisReduction, prepare_reduce_axis_into, prod_axis_into,
+    PreparedAxisReduction, prepare_reduce_axis_into, prod_axis_into, reduce_axis_into,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -44,6 +44,27 @@ where
 {
     type Dialect = Wgsl;
     type Prepared = PreparedAxisReduction<T>;
+
+    #[inline]
+    fn reduce_axis_into<Op>(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'_, WgpuBuffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, WgpuBuffer<T>, 2>,
+    ) -> Result<()>
+    where
+        Op: CombineExpr<Wgsl>,
+        T: OpIdentity<Op> + IdentityToken<Op, Wgsl>,
+    {
+        reduce_axis_into::<Op, T>(
+            device,
+            operand(input),
+            axis,
+            operand(output),
+            BlockWidth::DEFAULT,
+        )
+    }
 
     #[inline]
     fn prod_axis_into(

@@ -15,9 +15,13 @@
 //! The one backend-specific input is whether the input and output buffers
 //! alias (a device-pointer identity check); callers compute it and pass it in.
 
+use crate::domain::device::ComputeDevice;
+use crate::domain::dialect::KernelDialect;
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::launch::BlockWidth;
+use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity};
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
+use crate::domain::view::StridedView;
 use bytemuck::{Pod, Zeroable};
 use leto::Layout;
 
@@ -162,6 +166,77 @@ pub fn plan_axis_scan(
     })?;
 
     Ok(Some(AxisScanDispatch { meta, groups }))
+}
+
+/// Device-neutral prefix scans over strided n-D views.
+///
+/// This complements [`crate::plan_axis_scan`] by exposing the scan as a
+/// device-generic seam. Backends implement this trait once per dialect and
+/// consumers program against `S: ScanOps<D, T>` rather than a backend-specific
+/// dispatch function.
+///
+/// Implementors are zero-sized per-backend markers, so a bound of
+/// `S: ScanOps<D, T>` costs nothing at runtime and every call monomorphizes
+/// to the backend's own kernel dispatch.
+pub trait ScanOps<D: ComputeDevice, T: Pod> {
+    /// Kernel dialect this backend authors scan kernels in.
+    type Dialect: KernelDialect;
+
+    /// Prepared resources for an axis scan bound to fixed input/output views.
+    type PreparedScan<const N: usize>;
+
+    /// Compute the prefix scan of `input` along `axis` into `output` under the
+    /// combining operator `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an out-of-range axis, a shape mismatch, an aliased output, a
+    /// layout validation failure, or the backend dispatch failure.
+    fn scan_axis_into<Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, N>,
+        axis: usize,
+        direction: ScanDirection,
+        output: StridedView<'_, D::Buffer<T>, N>,
+    ) -> Result<()>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>
+    {
+        let prepared = self.prepare_scan_axis::<Op, N>(device, input, axis, direction, output)?;
+        self.dispatch_scan::<N>(device, &prepared)
+    }
+
+    /// Bind dispatch resources for scanning `input` along `axis` into `output`
+    /// under the combining operator `Op`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an out-of-range axis, a shape mismatch, an aliased output, a
+    /// layout validation failure, or the backend preparation failure.
+    fn prepare_scan_axis<Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, N>,
+        axis: usize,
+        direction: ScanDirection,
+        output: StridedView<'_, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedScan<N>>
+    where
+        Op: CombineExpr<Self::Dialect>,
+        T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
+
+    /// Re-dispatch a prepared scan over its bound operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns a prepared-operand mismatch or the backend dispatch failure.
+    fn dispatch_scan<const N: usize>(
+        &self,
+        device: &D,
+        prepared: &Self::PreparedScan<N>,
+    ) -> Result<()>;
 }
 
 #[cfg(test)]

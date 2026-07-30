@@ -17,6 +17,7 @@
 pub mod domain;
 
 pub use domain::buffer::DeviceBuffer;
+pub use domain::elementwise::ElementwiseOps;
 pub use domain::decomposition::{
     apply_packed_qr_panel_left, factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed,
     panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
@@ -47,10 +48,10 @@ pub use domain::ops::{
     TypedBinaryExpr, UnaryExpr,
 };
 pub use domain::reduction::{
-    AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, StridedComputeBackend,
-    plan_axis_reduction, reduction_pass_count, validate_reduction_width,
+    AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
+    StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
-pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, plan_axis_scan};
+pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
 pub use domain::sparse::SparseOperatorOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
 pub use domain::stream::{

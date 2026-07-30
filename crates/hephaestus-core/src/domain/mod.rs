@@ -20,6 +20,8 @@ pub mod launch;
 pub mod ops;
 /// Shared narrowing/error helpers for dispatch planning.
 pub(crate) mod planning;
+/// Backend-neutral elementwise operations over strided n-D views.
+pub mod elementwise;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
