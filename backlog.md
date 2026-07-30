@@ -127,7 +127,8 @@ cuda-oxide + cutile).
   change; focused package gates and exact-head provider CI pass.
 - Risk/change class: `[arch] [minor]`; additive provider surface with
   cross-backend kernel, address-width, and device-failure risk.
-- Status: in progress. Leto regular/transposed forward/backward ownership is
+- Status: done 2026-07-30; delivered through PR #159. Leto
+  regular/transposed forward/backward ownership is
   merged through parameter-SSOT promotion at `f896c43`; WGPU, CUDA, ROCm, and
   Coeus closure audits identify the exact kernels, fallbacks, missing ranks,
   and safety contracts to migrate. The core seam and shared planner now pass
@@ -145,7 +146,9 @@ cuda-oxide + cutile).
   intermediates before dispatch. Warning-denied Clippy passes for
   core/conformance/WGPU/Metal, CUDA with its native feature, and ROCm's
   feature-off configuration under one coherent rustup toolchain and the shared
-  target directory.
+  target directory. Exact-head hosted CI passes the CUDA, ROCm, WGPU, and macOS
+  Metal feature and adapterless contract jobs; hardware-only NVIDIA and AMD
+  jobs skip because their repository variables are unset.
 
 ## HEPH-DECOMPOSITION-STARTUP-OVERWRITE-1 [patch] [perf] — done
 
