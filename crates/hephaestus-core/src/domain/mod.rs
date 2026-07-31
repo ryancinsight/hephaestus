@@ -22,6 +22,8 @@ pub mod kernel;
 pub mod launch;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
+/// Runtime-parameter unary expressions and their backend-neutral dispatch seam.
+pub mod parameterized;
 /// Shared narrowing/error helpers for dispatch planning.
 pub(crate) mod planning;
 /// Backend-neutral axis-reduction validation and dispatch planning.

@@ -12,6 +12,8 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
+/// Runtime-parameter unary elementwise seam implementation.
+pub mod parameterized_elementwise;
 /// Pipeline compilation and launch helpers.
 pub mod pipeline;
 /// Reusable rank-2 axis reduction plans.

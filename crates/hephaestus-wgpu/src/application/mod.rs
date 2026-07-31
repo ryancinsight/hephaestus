@@ -21,6 +21,8 @@ pub mod convolution;
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Runtime-parameter unary elementwise dispatch.
+pub mod parameterized_elementwise;
 pub(crate) mod prepared;
 /// Seeded host-delegated PRNG initializers.
 pub mod random;

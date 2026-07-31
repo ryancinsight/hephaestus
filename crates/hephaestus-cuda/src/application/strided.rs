@@ -52,14 +52,14 @@ pub struct StridedOperandDyn<'a, T> {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct StridedMeta {
-    shape: [u32; 4],
-    a_strides: [i32; 4],
-    b_strides: [i32; 4],
-    out_strides: [i32; 4],
-    offsets: [u32; 4],
+    pub(crate) shape: [u32; 4],
+    pub(crate) a_strides: [i32; 4],
+    pub(crate) b_strides: [i32; 4],
+    pub(crate) out_strides: [i32; 4],
+    pub(crate) offsets: [u32; 4],
 }
 
-const CUDA_META: &str = r#"
+pub(crate) const CUDA_META: &str = r#"
 struct Meta {
     unsigned int shape[4];
     int a_strides[4];
@@ -69,7 +69,7 @@ struct Meta {
 };
 "#;
 
-const CUDA_DECODE: &str = r#"
+pub(crate) const CUDA_DECODE: &str = r#"
     unsigned int rem = i;
     int a_off = lmeta.offsets[0];
     int b_off = lmeta.offsets[1];
@@ -92,7 +92,7 @@ pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
 }
 
 #[inline]
-fn to_u32(value: usize, what: &str) -> Result<u32> {
+pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds u32 range"),
     })

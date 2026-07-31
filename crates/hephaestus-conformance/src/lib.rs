@@ -35,6 +35,9 @@
 pub mod axis_reduction;
 /// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
 pub mod convolution;
+/// Contract clauses for runtime-parameter unary dispatch.
+pub mod parameterized_unary;
 
 pub use axis_reduction::assert_axis_reduction_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
+pub use parameterized_unary::assert_parameterized_unary_contract;
