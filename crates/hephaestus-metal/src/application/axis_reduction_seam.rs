@@ -2,8 +2,8 @@
 //!
 //! Metal delegates wholly to the WGPU implementation, matching
 //! [`crate::MetalScanOps`]: the buffer wrapper is unwrapped to its inner WGPU
-//! buffer and every method forwards to [`WgpuAxisReductionOps`] on the
-//! device's WGPU handle.
+//! buffer and every method forwards to
+//! [`hephaestus_wgpu::WgpuAxisReductionOps`] on the device's WGPU handle.
 
 use hephaestus_core::{
     AxisReductionOps, CombineExpr, DialectScalar, IdentityToken, OpIdentity, ProdOp, Result,
