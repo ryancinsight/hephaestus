@@ -216,6 +216,26 @@ At 192×128 the direct route removes two 24,576-byte compact device buffers,
 **49,664 bytes of device scratch**. The 98,304-byte device `R` output and
 readback staging allocation remain required.
 
+### Rejected blocked-QR eight-panel direct route
+
+Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,
+driver 610.47. Criterion 0.8.2 runs the unchanged `blocked_qr_tail` workload
+back-to-back on the clean Leto overlay, waits for device completion inside each
+timed iteration, and validates the complete `R` factor against Leto first.
+
+| Workload | Four-panel route 95% interval | Eight-panel candidate 95% interval | Criterion change |
+| --- | ---: | ---: | ---: |
+| 192×128 unchanged control | 354.91–359.10 µs | 360.96–364.67 µs | −0.0377% to +1.8236%, `p = 0.06` |
+| 192×129 five panels | 937.57–952.44 µs | 345.98–349.25 µs | −63.864% to −62.750%, `p = 0.00` |
+| 384×256 eight panels | 2.6701–2.7027 ms | 21.756–21.916 ms | +707.13% to +718.54%, `p = 0.00` |
+
+The candidate fails because the eight-panel target regresses by more than
+sevenfold even though the five-panel target improves and the direct route
+avoids six mapping polls plus persistent scratch at 384×256. This end-to-end
+instrument does not isolate host factorization from dense transfer and
+orchestration costs. The production limit remains four panels; no runtime or
+benchmark change is retained.
+
 ### Blocked-QR narrow direct-transfer Criterion A/B
 
 Machine: Windows 11, Intel Core Ultra 9 285K, NVIDIA GeForce RTX 5080,

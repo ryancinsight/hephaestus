@@ -685,6 +685,15 @@ No open feature-combination defect is currently recorded in the backend scope.
   differential tests, a production-executing component profile, static
   allocation accounting, matched machine-local Criterion A/B, and exact-head
   WGPU/CUDA/ROCm/macOS-Metal provider CI.
+- [patch] An eight-panel extension of the dense blocked-QR direct route is
+  rejected. On the clean Leto overlay, the unchanged four-panel control has no
+  detectable shift (`p = 0.06`) and the five-panel 192x129 workload improves
+  62.750–63.864%, but the eight-panel 384x256 workload regresses
+  707.13–718.54% despite avoiding six mapping polls and smaller persistent
+  scratch. The end-to-end instrument does not isolate host factorization from
+  dense transfer and orchestration costs. The four-panel production limit is
+  retained; no runtime change ships. Evidence tier: complete Leto `R`
+  differential plus matched Criterion A/B.
 - [patch] Retained wide blocked QR now reuses one device-bound panel download
   workspace across iterations. The first panel and exact-width final tail stay
   one-shot, preserving the final-panel decision in ADR 0038 and preventing the

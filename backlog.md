@@ -109,7 +109,7 @@ cuda-oxide + cutile).
   reduction implementations and prepared plans; reduction contracts;
   `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
-## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-qr-direct-eight`; scope: WGPU blocked-QR
   direct-route threshold, its routing-boundary value contracts, matched
@@ -131,14 +131,14 @@ cuda-oxide + cutile).
   and six mapping polls, but replaces paired 98,304-byte compact staging with
   one transient 393,216-byte dense readback. Reject the change if the matched
   measurements or boundary contracts fail.
-- Evidence: the unchanged four-panel route passes all six focused blocked-QR
-  contracts. The baseline measures 192x128 at 361.67–366.84 us, 192x129 at
-  974.38–990.63 us, and 384x256 at 2.7922–2.8298 ms. The comparison cannot be
-  collected because concurrent uncommitted Leto zip changes fail with 47
-  lifetime/privacy diagnostics before Hephaestus recompiles.
-- Status: blocked 2026-07-31; re-open when the local Leto overlay is green and
-  unchanged across the matched comparison. No routing source change is
-  retained and no performance conclusion is claimed.
+- Evidence: the fresh four-panel baseline measures 192x128 at 354.91–359.10 us,
+  192x129 at 937.57–952.44 us, and 384x256 at 2.6701–2.7027 ms. Raising the
+  direct limit to eight panels leaves the 192x128 control unchanged
+  (`p = 0.06`), improves 192x129 by 62.750–63.864%, but regresses 384x256 by
+  707.13–718.54%. The candidate therefore fails its required strictly-negative
+  target intervals.
+- Status: done 2026-07-31. The eight-panel hypothesis is rejected and the
+  four-panel route is retained; no runtime source or benchmark change ships.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — done
 

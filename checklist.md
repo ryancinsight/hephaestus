@@ -52,15 +52,21 @@ Claimed files are WGPU, CUDA, and ROCm scalar reduction implementations and
 prepared plans, reduction contracts, `CHANGELOG.md`, `backlog.md`, and this
 section.
 
-## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf]
 
 - [x] Establish the exact blocked-QR value-contract baseline.
-- [x] Measure the unchanged four-, five-, and eight-panel routes.
-- [ ] Re-open after the concurrent Leto zip migration restores a green,
-      stationary overlay for the matched comparison.
+- [x] Capture a fresh four-, five-, and eight-panel baseline on the clean Leto
+      overlay.
+- [x] Compare the eight-panel direct route with the unchanged benchmark.
+- [x] Reject the candidate because the eight-panel target regresses by more
+      than 700%; retain the four-panel route.
+- [x] Record the matched Criterion result without a runtime change or speedup
+      claim.
 
-No QR source change is retained. The baseline is recorded in `backlog.md`;
-comparison and implementation remain blocked by the local Leto overlay.
+Implementation owner: Codex on `codex/hephaestus-qr-direct-eight`. Claimed
+files are WGPU blocked QR routing and boundary contracts, `benchmark_results.md`,
+`backlog.md`, `gap_audit.md`, and this section. No runtime source or benchmark
+change is retained.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
