@@ -4,7 +4,80 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — in progress
+## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-reduction-overwrite`; scope: WGPU, CUDA,
+  and ROCm scalar-reduction tree and prepared-plan outputs, with Metal
+  inheriting WGPU; exact reduction contracts and synchronized PM evidence.
+- Outcome: remove redundant output initialization before immediate singleton
+  copies and reduction kernels overwrite every immediate or private
+  intermediate result.
+- Non-goals: empty-input identity uploads, reduction arithmetic or order, axis
+  reductions, allocation capacities, benchmark workloads, and runtime claims
+  without matched measurements.
+- Acceptance: overwrite-before-read storage is used only for non-empty scalar
+  reductions; generic sum/min/max and width-boundary contracts pass on WGPU and
+  physical CUDA; prepared reuse and batching preserve exact outputs;
+  warning-denied WGPU/CUDA/ROCm gates and exact-head WGPU/CUDA/ROCm/macOS-Metal
+  CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one initialization transfer per immediate reduction-tree pass and private
+  prepared intermediate; CUDA also avoids the singleton output initialization.
+  Prepared final outputs remain initialized because `output()` is callable
+  before dispatch. WGPU and Metal record the same overwrite contract while
+  WebGPU retains its mandated initialization behavior. Peak allocation and
+  empty-input identities remain unchanged.
+- Evidence: exact-base provider CI on `ca2b875` supplies the unchanged semantic
+  baseline. Kernel review proves thread zero in each launched workgroup writes
+  its unique partial, singleton copies overwrite their sole output, and each
+  prepared private intermediate is consumed only by the following pass. CUDA
+  and ROCm contracts now assert the public final output is zero before first
+  dispatch. Independent review approves the corrected final/intermediate
+  boundary. Local compilation is blocked by concurrent uncommitted Leto zip
+  changes with 47 lifetime/privacy diagnostics; clean-checkout CI is the
+  executable gate.
+- Hosted evidence on implementation head `476bc77`: WGPU job `91137591572`
+  passes in 6m43s, CUDA job `91137591608` in 6m17s, ROCm job `91137591201` in
+  5m53s, and macOS Metal job `91137591647` in 6m54s. Required-device NVIDIA
+  and AMD jobs skip because dedicated runners are unavailable; no physical
+  CUDA or ROCm execution claim is made for this increment.
+- Status: done 2026-07-31; delivered through PR #161. Claimed files: WGPU,
+  CUDA, and ROCm scalar
+  reduction implementations and prepared plans; reduction contracts;
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
+
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+
+- Owner: Codex on `codex/hephaestus-qr-direct-eight`; scope: WGPU blocked-QR
+  direct-route threshold, its routing-boundary value contracts, matched
+  `blocked_qr_tail` measurements, and synchronized PM evidence. Metal inherits
+  the WGPU implementation.
+- Outcome: route matrices spanning at most eight 32-column panels through one
+  dense readback and host factorization only when matched Criterion evidence
+  proves this faster than the retained panel-blocked path.
+- Non-goals: decomposition arithmetic, the retained blocked algorithm, CUDA or
+  ROCm implementations, benchmark workload changes, and performance claims
+  beyond the measured shapes.
+- Acceptance: 256-column direct and 257-column blocked boundary cases preserve
+  complete factorization, reconstruction, and solve contracts; 192x129 and
+  384x256 benchmark change intervals are strictly negative at 95% confidence;
+  the unchanged 192x128 control does not shift significantly; warning-denied
+  WGPU gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal routing policy. At 384x256 the direct
+  route removes about 98,816 bytes of persistent blocked-path device scratch
+  and six mapping polls, but replaces paired 98,304-byte compact staging with
+  one transient 393,216-byte dense readback. Reject the change if the matched
+  measurements or boundary contracts fail.
+- Evidence: the unchanged four-panel route passes all six focused blocked-QR
+  contracts. The baseline measures 192x128 at 361.67–366.84 us, 192x129 at
+  974.38–990.63 us, and 384x256 at 2.7922–2.8298 ms. The comparison cannot be
+  collected because concurrent uncommitted Leto zip changes fail with 47
+  lifetime/privacy diagnostics before Hephaestus recompiles.
+- Status: blocked 2026-07-31; re-open when the local Leto overlay is green and
+  unchanged across the matched comparison. No routing source change is
+  retained and no performance conclusion is claimed.
+
+## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-workspace`; scope: reusable
   blocked Cholesky, LU, and QR panel-transfer workspaces in WGPU and CUDA, with

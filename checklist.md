@@ -2,6 +2,31 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf]
+
+- [x] Establish exact scalar-reduction and prepared-reuse baselines.
+- [x] Prove each eligible pass output is overwritten before first read.
+- [x] Route immediate outputs and private intermediates through the overwrite
+      seam; retain initialized public prepared outputs.
+- [x] Preserve empty-input identity uploads and scalar arithmetic order.
+- [x] Pass Rust 1.97 warning-denied provider gates and exact contracts.
+- [x] Run and record WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-reduction-overwrite`.
+Claimed files are WGPU, CUDA, and ROCm scalar reduction implementations and
+prepared plans, reduction contracts, `CHANGELOG.md`, `backlog.md`, and this
+section.
+
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+
+- [x] Establish the exact blocked-QR value-contract baseline.
+- [x] Measure the unchanged four-, five-, and eight-panel routes.
+- [ ] Re-open after the concurrent Leto zip migration restores a green,
+      stationary overlay for the matched comparison.
+
+No QR source change is retained. The baseline is recorded in `backlog.md`;
+comparison and implementation remain blocked by the local Leto overlay.
+
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
 - [x] Establish exact blocked Cholesky, LU, and QR value-contract baselines.

@@ -860,9 +860,12 @@ No open feature-combination defect is currently recorded in the backend scope.
   `StridedScalarKernel` reading the scalar from a pooled uniform (no per-call
   storage operand), reusing the shared strided metadata/decode/encode core;
   value-identity verified by `strided_scalar_matches_binary_broadcast_semantics`.
-- [info] Storage-buffer pooling examined and deferred (audit 2026-06-23). Unlike
-  the uniform/staging pools, `alloc_zeroed` always creates a fresh device buffer,
-  so multi-pass reductions allocate `O(log n)` intermediate buffers per call.
+- [info] Storage-buffer pooling examined and deferred (audit 2026-06-23,
+  overwrite policy updated 2026-07-31). Unlike the uniform/staging pools,
+  scalar-reduction pass allocation creates a fresh device buffer, so
+  multi-pass reductions allocate `O(log n)` intermediate buffers per call.
+  Those outputs now use the overwrite-before-read seam, avoiding CUDA/ROCm
+  initialization transfers while preserving WebGPU's initialization contract.
   These are **not** trivially poolable: all passes of a reduction are encoded in
   one command buffer and submitted once (no per-pass sync), so every intermediate
   must stay alive until the single submit completes — they cannot be freed/reused

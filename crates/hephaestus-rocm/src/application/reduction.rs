@@ -132,7 +132,7 @@ where
         let n_val = checked_work_items(current_len)?;
         let groups = grid_size(current_len, width)?;
         let output_len = current_len.div_ceil(width.get() as usize);
-        let output = device.alloc_zeroed::<T>(output_len)?;
+        let output = device.alloc_uninitialized::<T>(output_len)?;
         let key = PipelineKey::Reduction {
             op: core::any::TypeId::of::<Op>(),
             scalar: core::any::TypeId::of::<T>(),

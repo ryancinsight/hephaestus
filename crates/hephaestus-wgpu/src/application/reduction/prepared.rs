@@ -294,7 +294,11 @@ where
         } else {
             current_len.div_ceil(width_usize)
         };
-        let out_buffer = device.alloc_zeroed::<T>(out_len)?;
+        let out_buffer = if out_len == 1 {
+            device.alloc_zeroed::<T>(out_len)?
+        } else {
+            device.alloc_uninitialized::<T>(out_len)?
+        };
         let pipeline = if final_pass {
             &final_pipeline
         } else {

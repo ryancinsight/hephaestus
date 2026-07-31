@@ -89,10 +89,10 @@ where
     }
 
     if input.len() == 1 {
-        let out = device.alloc_zeroed::<T>(1)?;
+        let out = device.alloc_uninitialized::<T>(1)?;
         #[cfg(feature = "cuda")]
         // SAFETY: this device's context is current on this thread
-        // (`alloc_zeroed` above binds it); `input` and `out` are live
+        // (`alloc_uninitialized` above binds it); `input` and `out` are live
         // one-element device allocations (`input.len() == 1` checked above,
         // `out` freshly allocated with len 1), so the `size_of::<T>()`-byte
         // copy stays within both extents. The copy is asynchronous on the
@@ -118,7 +118,7 @@ where
     while current_len > 1 {
         let grid_size_val = grid_size(current_len, width)?;
         let out_len = current_len.div_ceil(width.get() as usize);
-        let out_buffer = device.alloc_zeroed::<T>(out_len)?;
+        let out_buffer = device.alloc_uninitialized::<T>(out_len)?;
 
         let key = PipelineKey::Reduction {
             op: std::any::TypeId::of::<Op>(),
