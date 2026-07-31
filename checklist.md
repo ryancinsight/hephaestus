@@ -2,6 +2,17 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf]
+
+- [ ] Prove the delegated WGPU kernel assigns every validated ray output.
+- [ ] Route Metal's private output through overwrite-before-read allocation.
+- [ ] Preserve empty, miss, constant-field, and axis-aligned analytical values.
+- [ ] Pass focused Metal checks, contracts, and exact-head backend CI.
+
+Implementation owner: Codex on `codex/hephaestus-metal-volume-overwrite`.
+Claimed files are Metal volume allocation and focused contracts, `CHANGELOG.md`,
+`backlog.md`, `gap_audit.md`, and this section.
+
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch]
 
 - [x] Define the device-neutral rank-3 attention operands, mask, gradients,
