@@ -2,6 +2,24 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ATTENTION-PROVIDER-1 [minor] [arch]
+
+- [ ] Define the device-neutral rank-3 attention operands, mask, gradients,
+      planning contract, and prepared dispatch seam.
+- [ ] Implement WGPU, CUDA, ROCm, and Metal provider-owned attention without
+      host execution or provider fallback.
+- [ ] Instantiate one Leto-differential conformance suite across available
+      backends and supported scalars.
+- [ ] Cut Coeus CPU dispatch directly to Leto and accelerator dispatch directly
+      to Hephaestus; delete superseded local kernels and fallbacks.
+- [ ] Pass focused and full warning-denied, Nextest, doctest, SemVer, and
+      exact-head hosted gates with independent review.
+
+Implementation owner: Codex on `codex/hephaestus-attention-provider`.
+Claimed files are ADR 0040; the Hephaestus core attention domain; WGPU, CUDA,
+ROCm, and Metal attention application modules; shared attention conformance;
+the owner-keyed PM entries; and the subsequent disjoint Coeus attention cutover.
+
 ## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf]
 
 - [x] Identify private factor matrices overwritten by complete startup copies.

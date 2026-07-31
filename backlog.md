@@ -4,6 +4,28 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
+
+- Owner: Codex on `codex/hephaestus-attention-provider`; scope:
+  provider-owned scaled dot-product attention forward and additive backward
+  across WGPU, CUDA, ROCm, and Metal, shared Leto-differential conformance,
+  ADR 0040, and direct Coeus integration.
+- Outcome: accelerator attention dispatch remains device-resident and routes
+  through one backend-neutral, monomorphized Hephaestus seam; CPU semantics
+  remain owned by Leto.
+- Non-goals: consumer-authored kernels, host execution, silent provider
+  fallback, compatibility adapters, and performance claims without matched
+  measurements.
+- Acceptance: unmasked, causal, broadcast keep-mask, fully masked, strided,
+  forward, and independently selected additive-gradient cases agree with Leto;
+  validation and preparation failures are mutation-free; Coeus removes local
+  attention kernels and routes CPU to Leto and accelerators to Hephaestus; all
+  affected warning-denied, Nextest, doctest, SemVer, and exact-head CI gates
+  pass.
+- Risk/change class: `[minor] [arch]`; additive provider contract and direct
+  consumer cutover under ADR 0040.
+- Status: in-progress 2026-07-31.
+
 ## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
 
 - Owner: Codex on `codex/hephaestus-parameterized-unary`; scope:
