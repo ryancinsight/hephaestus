@@ -5,15 +5,19 @@ Sprint target: 0.18.0. Phase: Closure.
 ## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf]
 
 - [x] Identify private factor matrices overwritten by complete startup copies.
-- [ ] Route complete-pivot LU and column-pivot QR factors through the overwrite
+- [x] Route complete-pivot LU and column-pivot QR factors through the overwrite
       seam.
-- [ ] Preserve dense, strided, empty, rank, solve, and inverse contracts.
-- [ ] Pass focused ROCm contracts and warning-denied provider gates.
+- [x] Preserve dense, strided, empty, rank, solve, and inverse contracts.
+- [x] Pass focused ROCm contracts and warning-denied provider gates.
 - [ ] Run independent review and exact-head backend CI.
 
 Implementation owner: Codex on `codex/hephaestus-rocm-pivot-overwrite`.
 Claimed files are the two ROCm pivoted-decomposition implementations, focused
 contracts, `CHANGELOG.md`, `backlog.md`, `gap_audit.md`, and this section.
+Focused decomposition-feature contracts pass for complete-pivot LU (3/3) and
+column-pivot QR (3/3); warning-denied ROCm clippy passes. Independent review
+approves the write coverage, ordering, failure, empty, and transfer contracts;
+exact-head hosted CI remains the merge gate.
 
 ## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf]
 

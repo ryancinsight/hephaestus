@@ -228,6 +228,17 @@ No open feature-combination defect is currently recorded in the backend scope.
 
 ## Resolved
 
+- [patch] ROCm pivoted-decomposition factor startup initialization (audit
+  2026-07-31). Native complete-pivot LU and column-pivot QR allocated zeroed
+  non-empty factor matrices immediately before a dense stream copy or validated
+  strided identity kernel assigned the full logical matrix. Both private
+  factors now use the overwrite-before-read seam, omitting one matrix-sized
+  initialization transfer per successful factorization. Auxiliary pivot,
+  status, threshold, and reflector storage retains its algorithm-required
+  initialization. Evidence tier: complete-copy coverage proof plus focused
+  Leto-differential ROCm contracts; no runtime claim without matched hardware
+  measurements.
+
 - [HEPH-BACKEND-CI-FEATURE-MATRIX-1] [patch] CUDA's `decomposition` feature
   now enables `cuda` because its decomposition modules launch CUDA kernels and
   use CUDA-only byte-count and pinned-host infrastructure. A standalone Linux

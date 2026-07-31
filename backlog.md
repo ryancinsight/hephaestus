@@ -23,6 +23,12 @@ cuda-oxide + cutile).
   successful factorization omits one initialization transfer of the complete
   factor matrix. Peak allocation, decomposition order, and public ownership are
   unchanged.
+- Evidence: focused decomposition-feature nextest contracts pass for
+  complete-pivot LU (3/3) and column-pivot QR (3/3), including Leto values,
+  dense/strided layouts, ranks, solves, inverse, least-squares, and non-finite
+  rejection. Warning-denied ROCm clippy passes. Independent review approves
+  complete write coverage, private failure paths, stream ordering, empty
+  behavior, and the bounded transfer claim with high confidence.
 - Status: in progress 2026-07-31. Claimed files:
   `crates/hephaestus-rocm/src/application/decomposition/full_piv_lu.rs`,
   `crates/hephaestus-rocm/src/application/decomposition/col_piv_qr.rs`, focused
