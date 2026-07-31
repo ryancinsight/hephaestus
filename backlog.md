@@ -14,16 +14,27 @@ cuda-oxide + cutile).
 - Non-goals: caller-owned `*_into` buffers, prepared-axis output ownership,
   axis arithmetic or layouts, empty-axis semantics, allocation capacities,
   benchmark workloads, and runtime claims without matched measurements.
-- Acceptance: overwrite-before-read storage is used only after axis, shape,
-  layout, alias, and width validation; generic and mean outputs preserve Leto
-  values for non-empty, empty, strided, and beyond-block-width cases;
+- Acceptance: overwrite-before-read storage is returned only after axis, shape,
+  layout, alias, and width validation plus successful dispatch; invalid calls
+  drop their private allocation. Generic and mean outputs preserve Leto values
+  for non-empty, empty, strided, and beyond-block-width cases;
   warning-denied WGPU/CUDA/ROCm gates and exact-head WGPU/CUDA/ROCm/macOS-Metal
   CI pass.
 - Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm omit
   one initialization transfer of `output_len * size_of::<T>()` bytes per
-  allocating axis-reduction call. WGPU and Metal record the same overwrite
-  contract while WebGPU retains its mandated initialization behavior. Peak
-  allocation and zero-length output behavior remain unchanged.
+  non-empty successful allocating axis-reduction call. WGPU and Metal record
+  the same overwrite contract while WebGPU retains its mandated initialization
+  behavior. Peak allocation and zero-length output behavior remain unchanged.
+- Evidence: exact-base provider CI on `b565f25` supplies the unchanged generic,
+  mean, strided, empty-axis, and beyond-block-width semantic baseline. Kernel
+  review proves each dispatched logical index computes one validated output
+  offset and assigns it directly; zero-length outputs return no readable
+  elements. A residue scan leaves only WGPU's initialized one-element dummy
+  binding for empty input storage. Independent review approves write coverage,
+  validation/error ordering, asynchronous queue ordering, zero-length behavior,
+  and the bounded transfer claim. Local compilation remains blocked by
+  concurrent uncommitted Leto zip changes; clean-checkout CI is the executable
+  provider gate.
 - Status: in progress 2026-07-31. Claimed files: WGPU, CUDA, and ROCm allocating
   axis-reduction implementations; axis contracts; `CHANGELOG.md`, `backlog.md`,
   `checklist.md`, and `gap_audit.md`.

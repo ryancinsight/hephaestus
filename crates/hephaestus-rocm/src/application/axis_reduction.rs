@@ -288,7 +288,7 @@ where
             .map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("layout rejected: {error}"),
             })?;
-    let output = device.alloc_zeroed::<T>(output_len)?;
+    let output = device.alloc_uninitialized::<T>(output_len)?;
     reduce_axis_into::<Op, T>(
         device,
         input,
@@ -452,7 +452,7 @@ where
             .map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("layout rejected: {error}"),
             })?;
-    let output = device.alloc_zeroed::<T>(output_len)?;
+    let output = device.alloc_uninitialized::<T>(output_len)?;
     mean_axis_into(
         device,
         input,
