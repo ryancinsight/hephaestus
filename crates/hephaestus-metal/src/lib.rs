@@ -11,9 +11,6 @@ pub mod application;
 pub mod infrastructure;
 
 pub use application::convolution::MetalConvolutionOps;
-pub use application::elementwise_seam::MetalElementwiseOps;
-pub use application::full_reduction_seam::MetalFullReductionOps;
-pub use application::scan_seam::MetalScanOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -25,6 +22,8 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
+pub use application::elementwise_seam::MetalElementwiseOps;
+pub use application::full_reduction_seam::MetalFullReductionOps;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
@@ -50,6 +49,7 @@ pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
+pub use application::scan_seam::MetalScanOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
