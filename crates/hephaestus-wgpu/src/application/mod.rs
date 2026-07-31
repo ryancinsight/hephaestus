@@ -13,6 +13,8 @@ pub(crate) mod pipeline;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 
+/// Native WGSL scaled dot-product attention.
+pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Native WGSL regular and transposed convolution.

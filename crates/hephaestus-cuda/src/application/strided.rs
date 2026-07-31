@@ -285,7 +285,7 @@ fn broadcast_dyn_layout(layout: StridedLayout<'_>, out_shape: &[usize]) -> Resul
     })
 }
 
-fn binary_shader<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
+pub(crate) fn binary_shader<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
         r#"
 {meta}
@@ -312,7 +312,7 @@ extern "C" __global__ void binary_strided_kernel(
     )
 }
 
-fn unary_shader<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+pub(crate) fn unary_shader<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 {meta}
@@ -362,6 +362,84 @@ extern "C" __global__ void scalar_strided_kernel(
         decode = CUDA_DECODE,
         expr = Op::EXPR,
     )
+}
+
+/// Validate and broadcast a binary strided operand triple, producing the
+/// launch metadata; `None` when the dispatch is empty.
+pub(crate) fn binary_strided_meta<T, const N: usize>(
+    a: &StridedOperand<'_, T, N>,
+    b: &StridedOperand<'_, T, N>,
+    out: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>> {
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    let b_layout = b
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(a.buffer.len())
+        .map_err(map_layout_err)?;
+    b_layout
+        .validate_storage_len(b.buffer.len())
+        .map_err(map_layout_err)?;
+    let len = validate_out(out.buffer, out_layout)?;
+    if len == 0 {
+        return Ok(None);
+    }
+    Ok(Some((
+        StridedMeta {
+            shape: pad_shape(out_layout.shape)?,
+            a_strides: pad_strides(a_layout.strides)?,
+            b_strides: pad_strides(b_layout.strides)?,
+            out_strides: pad_strides(out_layout.strides)?,
+            offsets: [
+                to_u32(a_layout.offset, "input offset")?,
+                to_u32(b_layout.offset, "input offset")?,
+                to_u32(out_layout.offset, "output offset")?,
+                to_u32(len, "dispatch size")?,
+            ],
+        },
+        len,
+    )))
+}
+
+/// Validate and broadcast a unary strided operand pair, producing the launch
+/// metadata; `None` when the dispatch is empty.
+pub(crate) fn unary_strided_meta<T, const N: usize>(
+    a: &StridedOperand<'_, T, N>,
+    out: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>> {
+    let out_layout = out.layout;
+    let a_layout = a
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(a.buffer.len())
+        .map_err(map_layout_err)?;
+    let len = validate_out(out.buffer, out_layout)?;
+    if len == 0 {
+        return Ok(None);
+    }
+    Ok(Some((
+        StridedMeta {
+            shape: pad_shape(out_layout.shape)?,
+            a_strides: pad_strides(a_layout.strides)?,
+            b_strides: [0; 4],
+            out_strides: pad_strides(out_layout.strides)?,
+            offsets: [
+                to_u32(a_layout.offset, "input offset")?,
+                0,
+                to_u32(out_layout.offset, "output offset")?,
+                to_u32(len, "dispatch size")?,
+            ],
+        },
+        len,
+    )))
 }
 
 struct BinaryStridedLaunch<'a, T> {
@@ -660,37 +738,8 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
-    let out_layout = out.layout;
-    let a_layout = a
-        .layout
-        .broadcast(out_layout.shape)
-        .map_err(map_layout_err)?;
-    let b_layout = b
-        .layout
-        .broadcast(out_layout.shape)
-        .map_err(map_layout_err)?;
-    a_layout
-        .validate_storage_len(a.buffer.len())
-        .map_err(map_layout_err)?;
-    b_layout
-        .validate_storage_len(b.buffer.len())
-        .map_err(map_layout_err)?;
-    let len = validate_out(out.buffer, out_layout)?;
-    if len == 0 {
+    let Some((meta, len)) = binary_strided_meta(&a, &b, &out)? else {
         return Ok(());
-    }
-
-    let meta = StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
-        b_strides: pad_strides(b_layout.strides)?,
-        out_strides: pad_strides(out_layout.strides)?,
-        offsets: [
-            to_u32(a_layout.offset, "input offset")?,
-            to_u32(b_layout.offset, "input offset")?,
-            to_u32(out_layout.offset, "output offset")?,
-            to_u32(len, "dispatch size")?,
-        ],
     };
 
     launch_binary_strided_expression(
@@ -837,30 +886,8 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
-    let out_layout = out.layout;
-    let a_layout = a
-        .layout
-        .broadcast(out_layout.shape)
-        .map_err(map_layout_err)?;
-    a_layout
-        .validate_storage_len(a.buffer.len())
-        .map_err(map_layout_err)?;
-    let len = validate_out(out.buffer, out_layout)?;
-    if len == 0 {
+    let Some((meta, len)) = unary_strided_meta(&a, &out)? else {
         return Ok(());
-    }
-
-    let meta = StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(out_layout.strides)?,
-        offsets: [
-            to_u32(a_layout.offset, "input offset")?,
-            0,
-            to_u32(out_layout.offset, "output offset")?,
-            to_u32(len, "dispatch size")?,
-        ],
     };
 
     launch_unary_strided::<Op, T>(device, a.buffer, out.buffer, meta, width, len)

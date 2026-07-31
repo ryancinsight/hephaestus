@@ -1,5 +1,7 @@
 //! Compute dispatch delegation to Metal.
 
+/// Zero-copy attention delegation to Metal-selected WGPU.
+pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Zero-copy convolution delegation to Metal-selected WGPU.

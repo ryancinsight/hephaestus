@@ -27,8 +27,98 @@ where
     D: ComputeDevice,
     O: AttentionOps<D, f32>,
 {
+    unrestricted_and_causal_forward(device, operations);
     grouped_causal_forward_and_backward(device, operations);
     fully_masked_rows_are_zero(device, operations);
+}
+
+fn unrestricted_and_causal_forward<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: AttentionOps<D, f32>,
+{
+    let query_host = [0.0_f32; 4];
+    let key_host = [0.0_f32; 4];
+    let value_host = [2.0_f32, 4.0, 6.0, 10.0];
+    let tensor_layout = Layout::new([1, 2, 2], [4, 2, 1], 0);
+
+    let fixture = MaskPolicyFixture {
+        query: &query_host,
+        key: &key_host,
+        value: &value_host,
+        layout: tensor_layout,
+    };
+    assert_mask_policy(
+        device,
+        operations,
+        fixture,
+        AttentionMask::unrestricted(),
+        LetoMask::Unmasked,
+        "unrestricted attention",
+    );
+    assert_mask_policy(
+        device,
+        operations,
+        fixture,
+        AttentionMask::causal(),
+        LetoMask::Causal,
+        "causal attention",
+    );
+}
+
+#[derive(Clone, Copy)]
+struct MaskPolicyFixture<'a> {
+    query: &'a [f32; 4],
+    key: &'a [f32; 4],
+    value: &'a [f32; 4],
+    layout: Layout<3>,
+}
+
+fn assert_mask_policy<D, O>(
+    device: &D,
+    operations: &O,
+    fixture: MaskPolicyFixture<'_>,
+    mask: AttentionMask<'_, D::Buffer<f32>>,
+    leto_mask: LetoMask<'_, f32>,
+    clause: &str,
+) where
+    D: ComputeDevice,
+    O: AttentionOps<D, f32>,
+{
+    let mut expected_output = [-3.0_f32; 4];
+    let mut expected_weights = [-3.0_f32; 4];
+    scaled_dot_product_attention_into(
+        &ArrayView::new(fixture.layout, fixture.query),
+        &ArrayView::new(fixture.layout, fixture.key),
+        &ArrayView::new(fixture.layout, fixture.value),
+        leto_mask,
+        1.0,
+        &mut ArrayViewMut::new(fixture.layout, &mut expected_output),
+        &mut ArrayViewMut::new(fixture.layout, &mut expected_weights),
+    )
+    .expect("Leto mask-policy oracle");
+
+    let query = device.upload(fixture.query).expect("query upload");
+    let key = device.upload(fixture.key).expect("key upload");
+    let value = device.upload(fixture.value).expect("value upload");
+    let output = device.upload(&[-3.0_f32; 4]).expect("output upload");
+    let weights = device.upload(&[-3.0_f32; 4]).expect("weights upload");
+    operations
+        .attention_forward_into(
+            device,
+            AttentionForwardOperands {
+                query: StridedView::new(&query, &fixture.layout),
+                key: StridedView::new(&key, &fixture.layout),
+                value: StridedView::new(&value, &fixture.layout),
+                mask,
+                scale: 1.0,
+                output: StridedView::new(&output, &fixture.layout),
+                weights: StridedView::new(&weights, &fixture.layout),
+            },
+        )
+        .expect(clause);
+    assert_download_eq(device, &output, &expected_output, clause);
+    assert_download_eq(device, &weights, &expected_weights, clause);
 }
 
 fn grouped_causal_forward_and_backward<D, O>(device: &D, operations: &O)

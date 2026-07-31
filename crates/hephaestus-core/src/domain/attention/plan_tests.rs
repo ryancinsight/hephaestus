@@ -142,3 +142,32 @@ fn backward_rejects_nonfinite_scale_with_selected_target() {
         "invalid configuration: attention scale must be finite"
     );
 }
+
+#[test]
+fn forward_rejects_empty_key_sequence() {
+    let empty = Buffer { len: 0 };
+    let query_buffer = Buffer { len: 2 };
+    let output_buffer = Buffer { len: 2 };
+    let weights_buffer = Buffer { len: 0 };
+    let query = layout([1, 1, 2]);
+    let key = layout([1, 0, 2]);
+    let value = layout([1, 0, 2]);
+    let output = layout([1, 1, 2]);
+    let weights = layout([1, 1, 0]);
+    let operands = AttentionForwardOperands {
+        query: StridedView::new(&query_buffer, &query),
+        key: StridedView::new(&empty, &key),
+        value: StridedView::new(&empty, &value),
+        mask: AttentionMask::unrestricted(),
+        scale: 1.0_f32,
+        output: StridedView::new(&output_buffer, &output),
+        weights: StridedView::new(&weights_buffer, &weights),
+    };
+
+    assert_eq!(
+        plan_attention_forward(&operands, false)
+            .expect_err("empty key sequence must fail")
+            .to_string(),
+        "invalid configuration: attention key sequence must be nonempty because softmax requires support"
+    );
+}

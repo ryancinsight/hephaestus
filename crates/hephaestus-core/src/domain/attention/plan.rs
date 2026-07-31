@@ -166,6 +166,11 @@ fn dimensions(query: [usize; 3], key: [usize; 3], value: [usize; 3]) -> Result<A
             "attention input shapes are incompatible: query {query:?}, key {key:?}, value {value:?}"
         )));
     }
+    if key_sequence == 0 {
+        return Err(invalid(
+            "attention key sequence must be nonempty because softmax requires support",
+        ));
+    }
     let score_elements = batch
         .checked_mul(query_sequence)
         .and_then(|count| count.checked_mul(key_sequence))

@@ -17,6 +17,7 @@ pub mod application;
 /// wgpu device, queue, and buffer infrastructure.
 pub mod infrastructure;
 
+pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::convolution::WgpuConvolutionOps;
 pub use application::elementwise::{
