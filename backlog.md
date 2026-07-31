@@ -6,6 +6,14 @@ cuda-oxide + cutile).
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 
+- Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
+  `a23ee9b` on this lane bundles the attention frontier's uncommitted
+  snapshot (56 files; it compiled and the cuda suite passed 142/142 at that
+  revision) together with a disjoint cuda strided-meta refactor that was
+  being committed from the shared tree at the moment the tree switched to
+  this branch. The refactor is extracted to master as `fdb6980`; identical
+  content merges cleanly when this lane lands. Attention work is otherwise
+  untouched.
 - Owner: Codex on `codex/hephaestus-attention-provider`; scope:
   provider-owned scaled dot-product attention forward and additive backward
   across WGPU, CUDA, ROCm, and Metal, shared Leto-differential conformance,
