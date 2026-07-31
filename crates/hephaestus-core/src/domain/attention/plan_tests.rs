@@ -90,7 +90,32 @@ fn rejects_colliding_output_and_preserves_exact_injective_layouts() {
 }
 
 #[test]
-fn backward_rejects_empty_targets_and_nonfinite_scale() {
+fn backward_rejects_empty_targets() {
+    let buffer = Buffer { len: 8 };
+    let query = layout([1, 2, 2]);
+    let key = layout([1, 2, 2]);
+    let value = layout([1, 2, 2]);
+    let weights = layout([1, 2, 2]);
+    let operands = AttentionBackwardOperands {
+        grad_output: StridedView::new(&buffer, &value),
+        query: StridedView::new(&buffer, &query),
+        key: StridedView::new(&buffer, &key),
+        value: StridedView::new(&buffer, &value),
+        weights: StridedView::new(&buffer, &weights),
+        scale: 1.0_f64,
+        gradients: AttentionGradientViews {
+            query: None,
+            key: None,
+            value: None,
+        },
+    };
+
+    let error = plan_attention_backward(&operands, false).expect_err("empty targets must fail");
+    assert!(error.to_string().contains("at least one gradient"));
+}
+
+#[test]
+fn backward_rejects_nonfinite_scale_with_selected_target() {
     let buffer = Buffer { len: 8 };
     let query = layout([1, 2, 2]);
     let key = layout([1, 2, 2]);
@@ -104,12 +129,16 @@ fn backward_rejects_empty_targets_and_nonfinite_scale() {
         weights: StridedView::new(&buffer, &weights),
         scale: f64::NAN,
         gradients: AttentionGradientViews {
-            query: None,
+            query: Some(StridedView::new(&buffer, &query)),
             key: None,
             value: None,
         },
     };
 
-    let error = plan_attention_backward(&operands, false).expect_err("empty targets must fail");
-    assert!(error.to_string().contains("at least one gradient"));
+    let error =
+        plan_attention_backward(&operands, false).expect_err("non-finite scale must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention scale must be finite"
+    );
 }
