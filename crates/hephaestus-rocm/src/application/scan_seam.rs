@@ -5,10 +5,10 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::application::scan::scan_axis_into;
-use crate::application::strided::StridedOperand;
 use crate::RocmBuffer;
 use crate::RocmDevice;
+use crate::application::scan::scan_axis_into;
+use crate::application::strided::StridedOperand;
 
 /// Provider-owned implementation of [`ScanOps`] for ROCm/HIP.
 #[derive(Clone, Copy, Debug, Default)]
@@ -43,21 +43,30 @@ where
                 message: format!("ROCm scan supports rank 2 only, got rank {N}"),
             });
         }
-        // SAFETY: N == 2 here, so the layouts are Layout<2>.
-        let input_layout: &Layout<2> = unsafe { &*(input.layout as *const Layout<N> as *const Layout<2>) };
-        let output_layout: &Layout<2> =
-            unsafe { &*(output.layout as *const Layout<N> as *const Layout<2>) };
+        // The rank guard above proves N == 2, so the rank-2 components are
+        // total; rebuilding a Layout<2> avoids reinterpreting &Layout<N> and
+        // keeps the featureless build under forbid(unsafe_code).
+        let input_layout = Layout::new(
+            [input.layout.shape[0], input.layout.shape[1]],
+            [input.layout.strides[0], input.layout.strides[1]],
+            input.layout.offset,
+        );
+        let output_layout = Layout::new(
+            [output.layout.shape[0], output.layout.shape[1]],
+            [output.layout.strides[0], output.layout.strides[1]],
+            output.layout.offset,
+        );
         scan_axis_into::<Op, T>(
             device,
             StridedOperand {
                 buffer: input.buffer,
-                layout: input_layout,
+                layout: &input_layout,
             },
             axis,
             direction,
             StridedOperand {
                 buffer: output.buffer,
-                layout: output_layout,
+                layout: &output_layout,
             },
             BlockWidth::DEFAULT,
         )?;
