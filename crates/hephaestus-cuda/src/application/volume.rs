@@ -203,3 +203,29 @@ pub fn ray_line_integrals(
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
 }
+
+/// Provider-owned implementation of [`hephaestus_core::RayIntegralOps`] for CUDA.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CudaRayIntegralOps;
+
+impl hephaestus_core::RayIntegralOps<CudaDevice> for CudaRayIntegralOps {
+    fn ray_line_integrals_into(
+        &self,
+        device: &CudaDevice,
+        field: &CudaBuffer<f32>,
+        geometry: hephaestus_core::FieldGeometry,
+        rays: &CudaBuffer<f32>,
+        step: f32,
+        out: &CudaBuffer<f32>,
+    ) -> hephaestus_core::Result<()> {
+        ray_line_integrals_into(
+            device,
+            field,
+            geometry,
+            rays,
+            step,
+            out,
+            BlockWidth::DEFAULT,
+        )
+    }
+}

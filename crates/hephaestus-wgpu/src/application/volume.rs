@@ -232,3 +232,29 @@ pub fn ray_line_integrals(
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
 }
+
+/// Provider-owned implementation of [`hephaestus_core::RayIntegralOps`] for WGPU.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WgpuRayIntegralOps;
+
+impl hephaestus_core::RayIntegralOps<WgpuDevice> for WgpuRayIntegralOps {
+    fn ray_line_integrals_into(
+        &self,
+        device: &WgpuDevice,
+        field: &WgpuBuffer<f32>,
+        geometry: hephaestus_core::FieldGeometry,
+        rays: &WgpuBuffer<f32>,
+        step: f32,
+        out: &WgpuBuffer<f32>,
+    ) -> hephaestus_core::Result<()> {
+        ray_line_integrals_into(
+            device,
+            field,
+            geometry,
+            rays,
+            step,
+            out,
+            BlockWidth::DEFAULT,
+        )
+    }
+}

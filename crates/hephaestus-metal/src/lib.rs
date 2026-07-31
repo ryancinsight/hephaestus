@@ -76,7 +76,7 @@ pub use application::strided::{
 };
 pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOps};
 pub use application::volume::{
-    FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
+    FieldGeometry, MetalRayIntegralOps, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 pub use infrastructure::buffer::MetalBuffer;

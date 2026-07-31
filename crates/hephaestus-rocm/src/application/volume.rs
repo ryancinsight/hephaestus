@@ -203,3 +203,29 @@ pub fn ray_line_integrals(
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
 }
+
+/// Provider-owned implementation of [`hephaestus_core::RayIntegralOps`] for ROCm.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RocmRayIntegralOps;
+
+impl hephaestus_core::RayIntegralOps<RocmDevice> for RocmRayIntegralOps {
+    fn ray_line_integrals_into(
+        &self,
+        device: &RocmDevice,
+        field: &RocmBuffer<f32>,
+        geometry: hephaestus_core::FieldGeometry,
+        rays: &RocmBuffer<f32>,
+        step: f32,
+        out: &RocmBuffer<f32>,
+    ) -> hephaestus_core::Result<()> {
+        ray_line_integrals_into(
+            device,
+            field,
+            geometry,
+            rays,
+            step,
+            out,
+            BlockWidth::DEFAULT,
+        )
+    }
+}

@@ -107,7 +107,7 @@ pub use application::vector::{
     CudaVectorOps, PreparedDot as CudaPreparedDot, PreparedL2Norm as CudaPreparedNorm,
 };
 pub use application::volume::{
-    FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
+    CudaRayIntegralOps, FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 

@@ -121,7 +121,7 @@ pub use application::vector::{
     PreparedDot as RocmPreparedDot, PreparedL2Norm as RocmPreparedNorm, RocmVectorOps,
 };
 pub use application::volume::{
-    FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
+    FieldGeometry, RAY_STRIDE, RocmRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 

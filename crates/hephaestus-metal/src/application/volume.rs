@@ -47,3 +47,29 @@ pub fn ray_line_integrals(
     ray_line_integrals_into(device, field, geometry, rays, step, &out, width)?;
     Ok(out)
 }
+
+/// Provider-owned implementation of [`hephaestus_core::RayIntegralOps`] for Metal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetalRayIntegralOps;
+
+impl hephaestus_core::RayIntegralOps<MetalDevice> for MetalRayIntegralOps {
+    fn ray_line_integrals_into(
+        &self,
+        device: &MetalDevice,
+        field: &MetalBuffer<f32>,
+        geometry: hephaestus_core::FieldGeometry,
+        rays: &MetalBuffer<f32>,
+        step: f32,
+        out: &MetalBuffer<f32>,
+    ) -> hephaestus_core::Result<()> {
+        ray_line_integrals_into(
+            device,
+            field,
+            geometry,
+            rays,
+            step,
+            out,
+            BlockWidth::DEFAULT,
+        )
+    }
+}

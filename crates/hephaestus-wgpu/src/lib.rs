@@ -85,7 +85,7 @@ pub use application::strided::{
 };
 pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
-    FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
+    FieldGeometry, RAY_STRIDE, WgpuRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
 pub use wgpu;
 

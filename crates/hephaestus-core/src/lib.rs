@@ -75,4 +75,4 @@ pub use domain::stream::{
 };
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
 pub use domain::view::StridedView;
-pub use domain::volume::{FieldGeometry, RAY_STRIDE, validate_ray_line_integrals};
+pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
