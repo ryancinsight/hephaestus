@@ -34,6 +34,9 @@ pub use application::linalg_traits::MatrixDecompose;
 pub use application::linalg_traits::{
     AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
 };
+pub use application::parameterized_elementwise::{
+    MetalParameterizedUnaryOps, parameterized_unary_strided_into,
+};
 pub use application::prepared_map_reduction::{
     PreparedDot, PreparedL2Norm, prepare_dot, prepare_norm_l2,
 };
@@ -74,6 +77,7 @@ pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOp
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
+pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 pub use infrastructure::buffer::MetalBuffer;
 pub use infrastructure::device::MetalDevice;
 

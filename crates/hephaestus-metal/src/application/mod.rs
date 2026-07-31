@@ -17,6 +17,8 @@ pub mod full_reduction_seam;
 pub mod linalg;
 /// Fluent dense-matrix traits.
 pub mod linalg_traits;
+/// Runtime-parameter unary elementwise seam implementation.
+pub mod parameterized_elementwise;
 /// Reusable dot-product and L2-norm map-reduction plans.
 pub mod prepared_map_reduction;
 /// Seeded host-delegated random initializers.

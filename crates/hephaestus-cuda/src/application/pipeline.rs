@@ -102,6 +102,11 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    ParameterizedStridedUnary {
+        op: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
     StridedScalar {
         op: TypeId,
         scalar: TypeId,

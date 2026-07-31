@@ -24,17 +24,17 @@ pub const MAX_STRIDED_RANK: usize = 4;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-struct StridedMeta {
-    shape: [u32; 4],
-    a_strides: [i32; 4],
-    b_strides: [i32; 4],
-    out_strides: [i32; 4],
-    offsets: [u32; 4],
+pub(crate) struct StridedMeta {
+    pub(crate) shape: [u32; 4],
+    pub(crate) a_strides: [i32; 4],
+    pub(crate) b_strides: [i32; 4],
+    pub(crate) out_strides: [i32; 4],
+    pub(crate) offsets: [u32; 4],
 }
 
 const _: () = assert!(core::mem::size_of::<StridedMeta>() == 80);
 
-const HIP_META: &str = r#"
+pub(crate) const HIP_META: &str = r#"
 struct Meta {
     unsigned int shape[4];
     int a_strides[4];
@@ -44,7 +44,7 @@ struct Meta {
 };
 "#;
 
-const HIP_DECODE: &str = r#"
+pub(crate) const HIP_DECODE: &str = r#"
     unsigned int rem = i;
     int a_offset = (int)lmeta.offsets[0];
     int b_offset = (int)lmeta.offsets[1];
@@ -138,7 +138,7 @@ extern "C" __global__ void scalar_strided_kernel(
     )
 }
 
-fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
+pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
@@ -152,7 +152,7 @@ fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
     Ok(padded)
 }
 
-fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
+pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
@@ -186,13 +186,13 @@ fn validate_output<T: Pod, const N: usize>(output: StridedOperand<'_, T, N>) -> 
         })
 }
 
-fn dispatch_len(len: usize) -> Result<u32> {
+pub(crate) fn dispatch_len(len: usize) -> Result<u32> {
     u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("strided dispatch length {len} exceeds u32 range"),
     })
 }
 
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
+pub(crate) fn map_layout_err(error: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
         message: format!("layout rejected: {error}"),
     }
