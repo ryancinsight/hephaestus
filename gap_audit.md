@@ -21,7 +21,9 @@ architectural decision or a tracked future-work item:
   explicit overwrite-before-read contract. CUDA uses raw device allocation and
   ROCm uses `hipMalloc` without memset; WGPU and Metal share the seam while
   retaining their platform allocation behavior. Ordinary defined-content
-  callers continue using `alloc_zeroed_with_hint`.
+  callers continue using `alloc_zeroed_with_hint`. A 2026-07-31 residue audit
+  found and closed one Metal ray-integral wrapper that still requested zeroed
+  storage before delegating to a WGPU kernel that assigns every ray output.
 - Residual: no source cutover remains in the authorized provider/consumer
   scope. No runtime bandwidth, latency, or resident-memory delta is claimed
   without a controlled benchmark.

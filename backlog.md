@@ -22,7 +22,14 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal Metal allocation policy. The change
   removes one redundant ray-count-sized logical initialization while WebGPU's
   mandatory platform initialization behavior remains implementation-defined.
-- Status: in-progress 2026-07-31.
+- Evidence: source review proves validation precedes allocation and the
+  delegated one-work-item-per-ray kernel assigns hit, miss, and grazing paths;
+  empty batches expose no readable element. Local format, all-target check,
+  warning-denied Clippy, and focused Nextest pass against the Atlas overlay.
+  The four local Metal tests return through the documented no-adapter path on
+  Windows, so native Metal values remain an exact-head macOS CI gate.
+- Status: implementation and local static gates complete 2026-07-31;
+  independent review and hosted backend CI remain open.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 

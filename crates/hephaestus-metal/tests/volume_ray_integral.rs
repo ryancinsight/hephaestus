@@ -96,6 +96,33 @@ fn affine_field_matches_midpoint_trilinear_reference() {
 }
 
 #[test]
+fn empty_ray_batch_returns_empty_output() {
+    let Some(device) = device("empty_ray_batch_returns_empty_output") else {
+        return;
+    };
+    let field = device
+        .upload(&vec![0.25f32; 9 * 5 * 5])
+        .expect("field upload");
+    let rays = device.upload(&[] as &[f32]).expect("empty ray upload");
+
+    let output = ray_line_integrals(
+        &device,
+        &field,
+        geometry(),
+        &rays,
+        0,
+        0.5,
+        BlockWidth::DEFAULT,
+    )
+    .expect("empty volume dispatch");
+
+    assert_eq!(output.len(), 0);
+    device
+        .download(&output, &mut [])
+        .expect("empty output download");
+}
+
+#[test]
 fn invalid_volume_contracts_are_rejected_before_launch() {
     let Some(device) = device("invalid_volume_contracts_are_rejected_before_launch") else {
         return;
