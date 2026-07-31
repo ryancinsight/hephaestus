@@ -45,3 +45,4 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0038](0038-blocked-qr-final-panel-synchronization.md) | Finish blocked-QR tail after one readback | Accepted |
 | [0039](0039-provider-owned-convolution.md) | Provider-owned accelerator convolution | Accepted |
 | [0040](0040-provider-owned-attention.md) | Provider-owned accelerator attention | Accepted |
+| [0041](0041-compute-backend-conformance-crate.md) | One generic ComputeBackend conformance crate | Accepted |
