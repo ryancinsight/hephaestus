@@ -88,13 +88,19 @@ fn separable_nonoverlap<const N: usize>(layout: &Layout<N>) -> Result<bool> {
         if magnitude == 0 {
             return Ok(false);
         }
-        axes[active] = (magnitude, extent);
+        *axes
+            .get_mut(active)
+            .expect("invariant: active writable axes never exceed layout rank") =
+            (magnitude, extent);
         active += 1;
     }
-    axes[..active].sort_unstable_by_key(|&(stride, _)| stride);
+    let active_axes = axes
+        .get_mut(..active)
+        .expect("invariant: active writable axes never exceed layout rank");
+    active_axes.sort_unstable_by_key(|&(stride, _)| stride);
 
     let mut covered_span = 1_usize;
-    for &(stride, extent) in &axes[..active] {
+    for &(stride, extent) in active_axes.iter() {
         if stride < covered_span {
             return Ok(false);
         }
@@ -132,10 +138,13 @@ fn exact_nonoverlap<const N: usize>(layout: &Layout<N>, len: usize) -> Result<bo
             let relative = offset - minimum;
             let word = relative / 64;
             let mask = 1_u64 << (relative % 64);
-            if occupied[word] & mask != 0 {
+            let slot = occupied
+                .get_mut(word)
+                .expect("invariant: offset lies inside the validated physical span");
+            if *slot & mask != 0 {
                 return false;
             }
-            occupied[word] |= mask;
+            *slot |= mask;
             true
         })
     } else {
@@ -146,7 +155,9 @@ fn exact_nonoverlap<const N: usize>(layout: &Layout<N>, len: usize) -> Result<bo
             true
         })?;
         offsets.sort_unstable();
-        Ok(offsets.windows(2).all(|pair| pair[0] != pair[1]))
+        Ok(offsets
+            .windows(2)
+            .all(|pair| matches!(pair, [left, right] if left != right)))
     }
 }
 
@@ -158,9 +169,9 @@ fn for_each_offset<const N: usize>(
     for linear in 0..len {
         let mut index = [0_usize; N];
         let mut remainder = linear;
-        for axis in (0..N).rev() {
-            index[axis] = remainder % layout.shape[axis];
-            remainder /= layout.shape[axis];
+        for (coordinate, &extent) in index.iter_mut().zip(&layout.shape).rev() {
+            *coordinate = remainder % extent;
+            remainder /= extent;
         }
         let offset = layout.offset_of(index).map_err(layout_error)?;
         if !visit(offset) {
