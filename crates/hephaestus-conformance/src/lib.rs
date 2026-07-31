@@ -45,6 +45,9 @@ pub mod dense_vector;
 pub mod full_reduction;
 /// Contract clauses for runtime-parameter unary dispatch.
 pub mod parameterized_unary;
+/// Contract clauses for the
+/// [`RayIntegralOps`](hephaestus_core::RayIntegralOps) seam.
+pub mod ray_integral;
 /// Contract clauses for the [`ScanOps`](hephaestus_core::ScanOps) seam.
 pub mod scan;
 /// Contract clauses for the typed paths of the
@@ -57,5 +60,6 @@ pub use convolution::{assert_convolution_contract, assert_convolution_f64_contra
 pub use dense_vector::assert_dense_vector_contract;
 pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
+pub use ray_integral::assert_ray_integral_contract;
 pub use scan::assert_scan_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
