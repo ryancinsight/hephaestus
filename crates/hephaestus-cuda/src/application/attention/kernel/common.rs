@@ -27,6 +27,27 @@ typedef struct {
     LayoutMeta target;
 } BackwardMeta;
 
+typedef struct {
+    LayoutMeta grad_output;
+    LayoutMeta query;
+    LayoutMeta key;
+    LayoutMeta value;
+    LayoutMeta weights;
+    LayoutMeta query_gradient;
+    LayoutMeta key_gradient;
+    LayoutMeta value_gradient;
+    int query_selected;
+    int key_selected;
+    int value_selected;
+} BackwardPreflightMeta;
+
+extern "C" __device__ __forceinline__ void attention_fail(
+    unsigned int* status,
+    const unsigned int code
+) {
+    atomicMin(status, code);
+}
+
 extern "C" __device__ __forceinline__ long long physical3(
     const LayoutMeta layout,
     const long long first,

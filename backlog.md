@@ -33,6 +33,12 @@ cuda-oxide + cutile).
 - Risk/change class: `[minor] [arch]`; additive provider contract and direct
   consumer cutover under ADR 0040.
 - Status: in-progress 2026-07-31.
+- Provider evidence (2026-07-31): WGPU and physical CUDA execute the shared
+  semantic conformance suite; CUDA additionally verifies native `f64` additive
+  backward. ROCm passes its Windows no-default-feature source/static contract;
+  native HIP execution remains a hosted Linux gate. Every provider resets one
+  device status word per prepared dispatch, validates in parallel before any
+  caller-visible mutation, and reads back only that status word.
 
 ## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
 

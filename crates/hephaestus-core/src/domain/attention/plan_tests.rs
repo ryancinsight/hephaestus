@@ -4,7 +4,7 @@ use leto::Layout;
 use themis::MemoryTier;
 
 use super::*;
-use crate::domain::attention::GroupedKeepMask;
+use crate::domain::attention::{AttentionMask, GroupedKeepMask};
 use crate::domain::view::StridedView;
 
 struct Buffer {
@@ -135,8 +135,7 @@ fn backward_rejects_nonfinite_scale_with_selected_target() {
         },
     };
 
-    let error =
-        plan_attention_backward(&operands, false).expect_err("non-finite scale must fail");
+    let error = plan_attention_backward(&operands, false).expect_err("non-finite scale must fail");
     assert_eq!(
         error.to_string(),
         "invalid configuration: attention scale must be finite"

@@ -3,6 +3,20 @@ use super::common::prelude;
 pub(crate) fn forward_source(scalar: &str, exponential: &str) -> String {
     format!(
         r#"{prelude}
+extern "C" __device__ __forceinline__ {scalar} attention_convex(
+    const {scalar} current,
+    const {scalar} value,
+    const {scalar} value_weight
+) {{
+    if ((current >= ({scalar})0) == (value >= ({scalar})0)) {{
+        if (current <= value) {{
+            return current + value_weight * (value - current);
+        }}
+        return value + (({scalar})1 - value_weight) * (current - value);
+    }}
+    return (({scalar})1 - value_weight) * current + value_weight * value;
+}}
+
 extern "C" __global__ void attention_forward(
     const {scalar}* query,
     const {scalar}* key,
@@ -79,11 +93,21 @@ extern "C" __global__ void attention_forward(
     }}
     for (long long feature = 0; feature < value_feature; ++feature) {{
         {scalar} result = ({scalar})0;
+        {scalar} total_weight = ({scalar})0;
         for (long long key_index = 0; key_index < key_sequence; ++key_index) {{
             const long long weight_offset =
                 physical3(parameters.weights, batch, query_index, key_index);
-            result += weights[weight_offset] *
-                value[physical3(parameters.value, batch, key_index, feature)];
+            const {scalar} weight = weights[weight_offset];
+            if (weight == ({scalar})0) {{
+                continue;
+            }}
+            const {scalar} next_total = total_weight + weight;
+            result = attention_convex(
+                result,
+                value[physical3(parameters.value, batch, key_index, feature)],
+                weight / next_total
+            );
+            total_weight = next_total;
         }}
         output[physical3(parameters.output, batch, query_index, feature)] = result;
     }}
@@ -105,5 +129,6 @@ mod tests {
         assert!(source.contains("if (!any)"));
         assert!(source.contains("= (float)0;"));
         assert!(source.contains("expf(score * scale - maximum)"));
+        assert!(source.contains("result = attention_convex("));
     }
 }

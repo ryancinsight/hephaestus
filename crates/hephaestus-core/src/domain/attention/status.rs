@@ -58,21 +58,51 @@ impl AttentionSemanticStatus {
     pub fn check(code: u32) -> Result<()> {
         let message = match code {
             code if code == Self::Valid.code() => return Ok(()),
-            code if code == Self::NonFiniteQuery.code() => "attention query contains a non-finite value",
-            code if code == Self::NonFiniteKey.code() => "attention key contains a non-finite value",
-            code if code == Self::NonFiniteValue.code() => "attention value contains a non-finite value",
-            code if code == Self::NonFiniteKeep.code() => "attention keep mask contains a non-finite value",
-            code if code == Self::NonFiniteOutputGradient.code() => "attention output gradient contains a non-finite value",
-            code if code == Self::NonFiniteWeights.code() => "attention weights contain a non-finite value",
-            code if code == Self::InvalidWeights.code() => "attention weights do not form a probability row",
-            code if code == Self::NonFiniteQueryGradient.code() => "attention query-gradient destination contains a non-finite value",
-            code if code == Self::NonFiniteKeyGradient.code() => "attention key-gradient destination contains a non-finite value",
-            code if code == Self::NonFiniteValueGradient.code() => "attention value-gradient destination contains a non-finite value",
-            code if code == Self::NonFiniteWeightsArithmetic.code() => "attention weight arithmetic produced a non-finite value",
-            code if code == Self::NonFiniteOutputArithmetic.code() => "attention output arithmetic produced a non-finite value",
-            code if code == Self::NonFiniteQueryGradientArithmetic.code() => "attention query-gradient arithmetic produced a non-finite value",
-            code if code == Self::NonFiniteKeyGradientArithmetic.code() => "attention key-gradient arithmetic produced a non-finite value",
-            code if code == Self::NonFiniteValueGradientArithmetic.code() => "attention value-gradient arithmetic produced a non-finite value",
+            code if code == Self::NonFiniteQuery.code() => {
+                "attention query contains a non-finite value"
+            }
+            code if code == Self::NonFiniteKey.code() => {
+                "attention key contains a non-finite value"
+            }
+            code if code == Self::NonFiniteValue.code() => {
+                "attention value contains a non-finite value"
+            }
+            code if code == Self::NonFiniteKeep.code() => {
+                "attention keep mask contains a non-finite value"
+            }
+            code if code == Self::NonFiniteOutputGradient.code() => {
+                "attention output gradient contains a non-finite value"
+            }
+            code if code == Self::NonFiniteWeights.code() => {
+                "attention weights contain a non-finite value"
+            }
+            code if code == Self::InvalidWeights.code() => {
+                "attention weights do not form a probability row"
+            }
+            code if code == Self::NonFiniteQueryGradient.code() => {
+                "attention query-gradient destination contains a non-finite value"
+            }
+            code if code == Self::NonFiniteKeyGradient.code() => {
+                "attention key-gradient destination contains a non-finite value"
+            }
+            code if code == Self::NonFiniteValueGradient.code() => {
+                "attention value-gradient destination contains a non-finite value"
+            }
+            code if code == Self::NonFiniteWeightsArithmetic.code() => {
+                "attention weight arithmetic produced a non-finite value"
+            }
+            code if code == Self::NonFiniteOutputArithmetic.code() => {
+                "attention output arithmetic produced a non-finite value"
+            }
+            code if code == Self::NonFiniteQueryGradientArithmetic.code() => {
+                "attention query-gradient arithmetic produced a non-finite value"
+            }
+            code if code == Self::NonFiniteKeyGradientArithmetic.code() => {
+                "attention key-gradient arithmetic produced a non-finite value"
+            }
+            code if code == Self::NonFiniteValueGradientArithmetic.code() => {
+                "attention value-gradient arithmetic produced a non-finite value"
+            }
             unknown => {
                 return Err(HephaestusError::DispatchFailed {
                     message: format!("attention preflight returned unknown status code {unknown}"),
@@ -92,7 +122,10 @@ mod tests {
     #[test]
     fn status_codes_are_stable_and_unknown_codes_are_device_failures() {
         assert_eq!(AttentionSemanticStatus::Valid.code(), 0);
-        assert_eq!(AttentionSemanticStatus::NonFiniteValueGradientArithmetic.code(), 15);
+        assert_eq!(
+            AttentionSemanticStatus::NonFiniteValueGradientArithmetic.code(),
+            15
+        );
         assert!(AttentionSemanticStatus::check(0).is_ok());
         assert_eq!(
             AttentionSemanticStatus::check(16)

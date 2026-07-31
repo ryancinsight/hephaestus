@@ -108,6 +108,51 @@ pub(super) struct BackwardMeta {
     pub(super) target: LayoutMeta,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub(super) struct BackwardPreflightMeta {
+    pub(super) grad_output: LayoutMeta,
+    pub(super) query: LayoutMeta,
+    pub(super) key: LayoutMeta,
+    pub(super) value: LayoutMeta,
+    pub(super) weights: LayoutMeta,
+    pub(super) query_gradient: LayoutMeta,
+    pub(super) key_gradient: LayoutMeta,
+    pub(super) value_gradient: LayoutMeta,
+    pub(super) query_selected: i32,
+    pub(super) key_selected: i32,
+    pub(super) value_selected: i32,
+}
+
+impl BackwardPreflightMeta {
+    pub(super) fn new<T>(
+        operands: &AttentionBackwardOperands<'_, CudaBuffer<T>, T>,
+    ) -> Result<Self> {
+        Ok(Self {
+            grad_output: LayoutMeta::new(operands.grad_output.layout)?,
+            query: LayoutMeta::new(operands.query.layout)?,
+            key: LayoutMeta::new(operands.key.layout)?,
+            value: LayoutMeta::new(operands.value.layout)?,
+            weights: LayoutMeta::new(operands.weights.layout)?,
+            query_gradient: operands.gradients.query.map_or_else(
+                || Ok(LayoutMeta::empty()),
+                |gradient| LayoutMeta::new(gradient.layout),
+            )?,
+            key_gradient: operands.gradients.key.map_or_else(
+                || Ok(LayoutMeta::empty()),
+                |gradient| LayoutMeta::new(gradient.layout),
+            )?,
+            value_gradient: operands.gradients.value.map_or_else(
+                || Ok(LayoutMeta::empty()),
+                |gradient| LayoutMeta::new(gradient.layout),
+            )?,
+            query_selected: i32::from(operands.gradients.query.is_some()),
+            key_selected: i32::from(operands.gradients.key.is_some()),
+            value_selected: i32::from(operands.gradients.value.is_some()),
+        })
+    }
+}
+
 impl BackwardMeta {
     pub(super) fn new<T>(
         operands: &AttentionBackwardOperands<'_, CudaBuffer<T>, T>,
@@ -133,6 +178,7 @@ fn invalid(message: impl Into<String>) -> HephaestusError {
 const _: () = assert!(core::mem::size_of::<LayoutMeta>() == 56);
 const _: () = assert!(core::mem::size_of::<ForwardMeta>() == 352);
 const _: () = assert!(core::mem::size_of::<BackwardMeta>() == 336);
+const _: () = assert!(core::mem::size_of::<BackwardPreflightMeta>() == 464);
 
 #[cfg(test)]
 mod tests {

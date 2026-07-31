@@ -1,4 +1,4 @@
-use hephaestus_core::Result;
+use hephaestus_core::{AttentionSemanticStatus, ComputeDevice, Result};
 
 use crate::application::pipeline::encode_compute_pass;
 use crate::application::prepared::{checked_submit, device_owner, validate_device_owner};
@@ -82,25 +82,41 @@ impl PreparedAttentionKernel {
 
 /// A forward pass whose weight and output stages were prepared atomically.
 pub struct PreparedAttentionForward {
+    preflight: [PreparedAttentionKernel; 5],
+    status: WgpuBuffer<u32>,
     weights: PreparedAttentionKernel,
     output: PreparedAttentionKernel,
 }
 
 impl PreparedAttentionForward {
-    pub(super) const fn new(
+    pub(super) fn new(
+        preflight: [PreparedAttentionKernel; 5],
+        status: WgpuBuffer<u32>,
         weights: PreparedAttentionKernel,
         output: PreparedAttentionKernel,
     ) -> Self {
-        Self { weights, output }
+        Self {
+            preflight,
+            status,
+            weights,
+            output,
+        }
     }
 
     pub(super) fn dispatch(&self, device: &WgpuDevice) -> Result<()> {
-        dispatch_kernels(device, [&self.weights, &self.output])
+        dispatch_preflight_then_kernels(
+            device,
+            &self.preflight,
+            &self.status,
+            [&self.weights, &self.output],
+        )
     }
 }
 
 /// Every selected additive-gradient stage plus its device-resident score workspace.
 pub struct PreparedAttentionBackward {
+    preflight: smallvec::SmallVec<[PreparedAttentionKernel; 12]>,
+    status: WgpuBuffer<u32>,
     score: Option<PreparedAttentionKernel>,
     query: Option<PreparedAttentionKernel>,
     key: Option<PreparedAttentionKernel>,
@@ -109,7 +125,9 @@ pub struct PreparedAttentionBackward {
 }
 
 impl PreparedAttentionBackward {
-    pub(super) const fn new(
+    pub(super) fn new(
+        preflight: smallvec::SmallVec<[PreparedAttentionKernel; 12]>,
+        status: WgpuBuffer<u32>,
         score: Option<PreparedAttentionKernel>,
         query: Option<PreparedAttentionKernel>,
         key: Option<PreparedAttentionKernel>,
@@ -117,6 +135,8 @@ impl PreparedAttentionBackward {
         score_workspace: Option<WgpuBuffer<f32>>,
     ) -> Self {
         Self {
+            preflight,
+            status,
             score,
             query,
             key,
@@ -126,8 +146,10 @@ impl PreparedAttentionBackward {
     }
 
     pub(super) fn dispatch(&self, device: &WgpuDevice) -> Result<()> {
-        dispatch_kernels(
+        dispatch_preflight_then_kernels(
             device,
+            &self.preflight,
+            &self.status,
             [
                 self.score.as_ref(),
                 self.query.as_ref(),
@@ -140,14 +162,31 @@ impl PreparedAttentionBackward {
     }
 }
 
+fn dispatch_preflight_then_kernels<'a>(
+    device: &WgpuDevice,
+    preflight: &[PreparedAttentionKernel],
+    status: &WgpuBuffer<u32>,
+    kernels: impl IntoIterator<Item = &'a PreparedAttentionKernel>,
+) -> Result<()> {
+    let kernels: smallvec::SmallVec<[&PreparedAttentionKernel; 4]> = kernels.into_iter().collect();
+    for kernel in preflight.iter().chain(kernels.iter().copied()) {
+        kernel.validate_device(device)?;
+    }
+    device
+        .queue()
+        .write_buffer(status.raw(), 0, bytemuck::bytes_of(&u32::MAX));
+    dispatch_kernels(device, preflight)?;
+    let mut code = [0_u32];
+    device.download(status, &mut code)?;
+    AttentionSemanticStatus::check(if code[0] == u32::MAX { 0 } else { code[0] })?;
+    dispatch_kernels(device, kernels)
+}
+
 fn dispatch_kernels<'a>(
     device: &WgpuDevice,
     kernels: impl IntoIterator<Item = &'a PreparedAttentionKernel>,
 ) -> Result<()> {
-    let kernels: smallvec::SmallVec<[&PreparedAttentionKernel; 4]> = kernels.into_iter().collect();
-    for kernel in &kernels {
-        kernel.validate_device(device)?;
-    }
+    let kernels: smallvec::SmallVec<[&PreparedAttentionKernel; 10]> = kernels.into_iter().collect();
     let Some(label) = kernels.iter().find_map(|kernel| kernel.label()) else {
         return Ok(());
     };

@@ -6,9 +6,9 @@ Sprint target: 0.18.0. Phase: Closure.
 
 - [x] Define the device-neutral rank-3 attention operands, mask, gradients,
       planning contract, and prepared dispatch seam.
-- [ ] Implement WGPU, CUDA, ROCm, and Metal provider-owned attention without
+- [x] Implement WGPU, CUDA, ROCm, and Metal provider-owned attention without
       host execution or provider fallback.
-- [ ] Instantiate one Leto-differential conformance suite across available
+- [x] Instantiate one Leto-differential conformance suite across available
       backends and supported scalars.
 - [ ] Cut Coeus CPU dispatch directly to Leto and accelerator dispatch directly
       to Hephaestus; delete superseded local kernels and fallbacks.
@@ -19,6 +19,15 @@ Implementation owner: Codex on `codex/hephaestus-attention-provider`.
 Claimed files are ADR 0040; the Hephaestus core attention domain; WGPU, CUDA,
 ROCm, and Metal attention application modules; shared attention conformance;
 the owner-keyed PM entries; and the subsequent disjoint Coeus attention cutover.
+Local provider gates pass: core attention 6/6, combined WGPU/CUDA attention
+11/11, and ROCm no-default-feature attention 9/9, with warning-denied checks.
+The broader touched-package Nextest lane passes 465/465 and all six touched
+crates pass doctests. `hephaestus-core` passes 196/196 SemVer checks against
+`origin/master`. The remaining closure is the direct Coeus cutover and
+exact-head hosted gates.
+Independent review found that empty ROCm forward dispatch returned before its
+status reset; the reset now precedes the empty guard and the focused ROCm lane
+passes 9/9 after the correction.
 
 ## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf]
 

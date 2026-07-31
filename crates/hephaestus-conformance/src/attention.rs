@@ -30,6 +30,9 @@ where
     unrestricted_and_causal_forward(device, operations);
     grouped_causal_forward_and_backward(device, operations);
     fully_masked_rows_are_zero(device, operations);
+    finite_extreme_convex_output_is_preserved(device, operations);
+    forward_semantic_failures_are_atomic(device, operations);
+    backward_semantic_failures_are_atomic(device, operations);
 }
 
 fn unrestricted_and_causal_forward<D, O>(device: &D, operations: &O)
@@ -292,6 +295,191 @@ where
         .expect("fully masked attention dispatch");
     assert_download_eq(device, &output, &[0.0; 4], "fully masked output");
     assert_download_eq(device, &weights, &[0.0; 4], "fully masked weights");
+}
+
+fn finite_extreme_convex_output_is_preserved<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: AttentionOps<D, f32>,
+{
+    let query_layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let key_layout = Layout::new([1, 2, 1], [2, 1, 1], 0);
+    let weights_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
+    let expected = 0.75 * f32::MAX;
+    let query = device.upload(&[0.0_f32]).expect("query upload");
+    let key = device.upload(&[0.0_f32; 2]).expect("key upload");
+    let value = device.upload(&[expected; 2]).expect("value upload");
+    let output = device.upload(&[0.0_f32]).expect("output upload");
+    let weights = device.upload(&[0.0_f32; 2]).expect("weights upload");
+    operations
+        .attention_forward_into(
+            device,
+            AttentionForwardOperands {
+                query: StridedView::new(&query, &query_layout),
+                key: StridedView::new(&key, &key_layout),
+                value: StridedView::new(&value, &key_layout),
+                mask: AttentionMask::unrestricted(),
+                scale: 1.0,
+                output: StridedView::new(&output, &query_layout),
+                weights: StridedView::new(&weights, &weights_layout),
+            },
+        )
+        .expect("finite convex output must remain representable");
+    assert_download_eq(device, &output, &[expected], "finite convex output");
+    assert_download_eq(device, &weights, &[0.5, 0.5], "finite convex weights");
+}
+
+fn forward_semantic_failures_are_atomic<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: AttentionOps<D, f32>,
+{
+    let scalar_layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let mask_layout = Layout::new([1, 1], [1, 1], 0);
+    let finite = device.upload(&[1.0_f32]).expect("finite input upload");
+    let nonfinite = device.upload(&[f32::NAN]).expect("non-finite input upload");
+    let output = device.upload(&[7.0_f32]).expect("sentinel output upload");
+    let weights = device.upload(&[8.0_f32]).expect("sentinel weights upload");
+
+    let error = operations
+        .attention_forward_into(
+            device,
+            AttentionForwardOperands {
+                query: StridedView::new(&nonfinite, &scalar_layout),
+                key: StridedView::new(&finite, &scalar_layout),
+                value: StridedView::new(&finite, &scalar_layout),
+                mask: AttentionMask::unrestricted(),
+                scale: 1.0,
+                output: StridedView::new(&output, &scalar_layout),
+                weights: StridedView::new(&weights, &scalar_layout),
+            },
+        )
+        .expect_err("non-finite query must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention query contains a non-finite value"
+    );
+    assert_download_eq(device, &output, &[7.0], "non-finite query output atomicity");
+    assert_download_eq(
+        device,
+        &weights,
+        &[8.0],
+        "non-finite query weight atomicity",
+    );
+
+    let grouped_mask = GroupedKeepMask::new(
+        StridedView::new(&nonfinite, &mask_layout),
+        NonZeroUsize::new(1).expect("nonzero group width"),
+    );
+    let error = operations
+        .attention_forward_into(
+            device,
+            AttentionForwardOperands {
+                query: StridedView::new(&finite, &scalar_layout),
+                key: StridedView::new(&finite, &scalar_layout),
+                value: StridedView::new(&finite, &scalar_layout),
+                mask: AttentionMask::keep(grouped_mask),
+                scale: 1.0,
+                output: StridedView::new(&output, &scalar_layout),
+                weights: StridedView::new(&weights, &scalar_layout),
+            },
+        )
+        .expect_err("non-finite keep mask must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention keep mask contains a non-finite value"
+    );
+    assert_download_eq(device, &output, &[7.0], "non-finite mask output atomicity");
+    assert_download_eq(device, &weights, &[8.0], "non-finite mask weight atomicity");
+
+    let maximum = device.upload(&[f32::MAX]).expect("maximum input upload");
+    let error = operations
+        .attention_forward_into(
+            device,
+            AttentionForwardOperands {
+                query: StridedView::new(&maximum, &scalar_layout),
+                key: StridedView::new(&maximum, &scalar_layout),
+                value: StridedView::new(&finite, &scalar_layout),
+                mask: AttentionMask::unrestricted(),
+                scale: 1.0,
+                output: StridedView::new(&output, &scalar_layout),
+                weights: StridedView::new(&weights, &scalar_layout),
+            },
+        )
+        .expect_err("non-finite score arithmetic must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention weight arithmetic produced a non-finite value"
+    );
+    assert_download_eq(device, &output, &[7.0], "score overflow output atomicity");
+    assert_download_eq(device, &weights, &[8.0], "score overflow weight atomicity");
+}
+
+fn backward_semantic_failures_are_atomic<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: AttentionOps<D, f32>,
+{
+    let layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let one = device.upload(&[1.0_f32]).expect("unit input upload");
+    let invalid_weights = device.upload(&[-0.25_f32]).expect("invalid weights upload");
+    let destination = device.upload(&[3.0_f32]).expect("gradient sentinel upload");
+    let error = operations
+        .attention_backward_accumulate(
+            device,
+            AttentionBackwardOperands {
+                grad_output: StridedView::new(&one, &layout),
+                query: StridedView::new(&one, &layout),
+                key: StridedView::new(&one, &layout),
+                value: StridedView::new(&one, &layout),
+                weights: StridedView::new(&invalid_weights, &layout),
+                scale: 1.0,
+                gradients: AttentionGradientViews {
+                    query: None,
+                    key: None,
+                    value: Some(StridedView::new(&destination, &layout)),
+                },
+            },
+        )
+        .expect_err("invalid probability row must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention weights do not form a probability row"
+    );
+    assert_download_eq(device, &destination, &[3.0], "invalid weights atomicity");
+
+    let maximum_output_gradient = device.upload(&[f32::MAX]).expect("maximum gradient upload");
+    let maximum_destination = device
+        .upload(&[f32::MAX])
+        .expect("maximum destination upload");
+    let error = operations
+        .attention_backward_accumulate(
+            device,
+            AttentionBackwardOperands {
+                grad_output: StridedView::new(&maximum_output_gradient, &layout),
+                query: StridedView::new(&one, &layout),
+                key: StridedView::new(&one, &layout),
+                value: StridedView::new(&one, &layout),
+                weights: StridedView::new(&one, &layout),
+                scale: 1.0,
+                gradients: AttentionGradientViews {
+                    query: None,
+                    key: None,
+                    value: Some(StridedView::new(&maximum_destination, &layout)),
+                },
+            },
+        )
+        .expect_err("additive gradient overflow must fail");
+    assert_eq!(
+        error.to_string(),
+        "invalid configuration: attention value-gradient arithmetic produced a non-finite value"
+    );
+    assert_download_eq(
+        device,
+        &maximum_destination,
+        &[f32::MAX],
+        "gradient overflow atomicity",
+    );
 }
 
 fn assert_download_eq<D, T>(device: &D, buffer: &D::Buffer<T>, expected: &[T], clause: &str)

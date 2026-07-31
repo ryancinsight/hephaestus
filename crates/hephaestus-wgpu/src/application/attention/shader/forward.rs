@@ -104,11 +104,26 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     let query_index = row % parameters.dimensions.y;
     let batch = row / parameters.dimensions.y;
     var accumulated = 0.0;
+    var total_weight = 0.0;
     var key_index = 0u;
     loop {{
         if (key_index >= parameters.dimensions.z) {{ break; }}
-        accumulated += weights[physical(parameters.weights, batch, query_index, key_index)] *
-            value[physical(parameters.value, batch, key_index, feature)];
+        let weight = weights[physical(parameters.weights, batch, query_index, key_index)];
+        if (weight != 0.0) {{
+            let next_total = total_weight + weight;
+            let next = value[physical(parameters.value, batch, key_index, feature)];
+            let fraction = weight / next_total;
+            if ((accumulated >= 0.0) == (next >= 0.0)) {{
+                if (accumulated <= next) {{
+                    accumulated = accumulated + fraction * (next - accumulated);
+                }} else {{
+                    accumulated = next + (1.0 - fraction) * (accumulated - next);
+                }}
+            }} else {{
+                accumulated = (1.0 - fraction) * accumulated + fraction * next;
+            }}
+            total_weight = next_total;
+        }}
         key_index += 1u;
     }}
     output[physical(parameters.destination, batch, query_index, feature)] = accumulated;

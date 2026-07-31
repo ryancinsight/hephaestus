@@ -1,3 +1,5 @@
+use hephaestus_core::AttentionSemanticStatus;
+
 use super::GradientKernel;
 use super::common::prelude;
 
@@ -9,6 +11,7 @@ extern "C" __global__ void attention_score_gradient(
     const {scalar}* value,
     const {scalar}* weights,
     {scalar}* score_gradient,
+    unsigned int* status,
     const BackwardMeta parameters
 ) {{
     const long long row = (long long)(blockIdx.x * blockDim.x + threadIdx.x);
@@ -29,8 +32,14 @@ extern "C" __global__ void attention_score_gradient(
                 grad_output[physical3(parameters.grad_output, batch, query_index, feature)] *
                 value[physical3(parameters.value, batch, key_index, feature)];
         }}
+        if (!isfinite(probability_gradient)) {{
+            attention_fail(status, {weights_arithmetic}u);
+        }}
         weighted_sum += probability_gradient *
             weights[physical3(parameters.weights, batch, query_index, key_index)];
+    }}
+    if (!isfinite(weighted_sum)) {{
+        attention_fail(status, {weights_arithmetic}u);
     }}
     for (long long key_index = 0; key_index < key_sequence; ++key_index) {{
         {scalar} probability_gradient = ({scalar})0;
@@ -43,11 +52,54 @@ extern "C" __global__ void attention_score_gradient(
             weights[physical3(parameters.weights, batch, query_index, key_index)];
         score_gradient[row * key_sequence + key_index] =
             probability * (probability_gradient - weighted_sum);
+        if (!isfinite(score_gradient[row * key_sequence + key_index])) {{
+            attention_fail(status, {weights_arithmetic}u);
+        }}
     }}
 }}
 "#,
         prelude = prelude(),
+        weights_arithmetic = AttentionSemanticStatus::NonFiniteWeightsArithmetic.code(),
     )
+}
+
+pub(crate) fn backward_preflight_source(scalar: &str, kernel: GradientKernel) -> String {
+    let (body, arithmetic_status) = match kernel {
+        GradientKernel::Query => (
+            query_preflight_body(),
+            AttentionSemanticStatus::NonFiniteQueryGradientArithmetic,
+        ),
+        GradientKernel::Key => (
+            key_preflight_body(),
+            AttentionSemanticStatus::NonFiniteKeyGradientArithmetic,
+        ),
+        GradientKernel::Value => (
+            value_preflight_body(),
+            AttentionSemanticStatus::NonFiniteValueGradientArithmetic,
+        ),
+    };
+    format!(
+        r#"{prelude}
+extern "C" __global__ void {entry}(
+    const {scalar}* grad_output,
+    const {scalar}* query,
+    const {scalar}* key,
+    const {scalar}* weights,
+    const {scalar}* score_gradient,
+    const {scalar}* target,
+    unsigned int* status,
+    const {scalar} scale,
+    const BackwardMeta parameters
+) {{
+    const long long linear = (long long)(blockIdx.x * blockDim.x + threadIdx.x);
+    {body}
+}}
+"#,
+        prelude = prelude(),
+        entry = kernel.preflight_entry(),
+    )
+    .replace("SCALAR", scalar)
+    .replace("{arithmetic_status}", &arithmetic_status.code().to_string())
 }
 
 pub(crate) fn backward_source(scalar: &str, kernel: GradientKernel) -> String {
@@ -138,6 +190,77 @@ fn value_body() -> &'static str {
 "#
 }
 
+fn query_preflight_body() -> &'static str {
+    r#"
+    const long long feature_extent = parameters.query.shape[2];
+    const long long query_sequence = parameters.query.shape[1];
+    const long long elements = parameters.query.shape[0] * query_sequence * feature_extent;
+    if (linear >= elements) return;
+    const long long feature = linear % feature_extent;
+    const long long row = linear / feature_extent;
+    const long long query_index = row % query_sequence;
+    const long long batch = row / query_sequence;
+    const long long key_sequence = parameters.key.shape[1];
+    SCALAR sum = (SCALAR)0;
+    for (long long key_index = 0; key_index < key_sequence; ++key_index) {
+        sum += score_gradient[row * key_sequence + key_index] *
+            key[physical3(parameters.key, batch, key_index, feature)];
+    }
+    const SCALAR increment = scale * sum;
+    const SCALAR current = target[physical3(parameters.target, batch, query_index, feature)];
+    if (!isfinite(sum) || !isfinite(increment) || !isfinite(current + increment)) {
+        attention_fail(status, {arithmetic_status}u);
+    }
+"#
+}
+
+fn key_preflight_body() -> &'static str {
+    r#"
+    const long long feature_extent = parameters.key.shape[2];
+    const long long key_sequence = parameters.key.shape[1];
+    const long long elements = parameters.key.shape[0] * key_sequence * feature_extent;
+    if (linear >= elements) return;
+    const long long feature = linear % feature_extent;
+    const long long row = linear / feature_extent;
+    const long long key_index = row % key_sequence;
+    const long long batch = row / key_sequence;
+    const long long query_sequence = parameters.query.shape[1];
+    SCALAR sum = (SCALAR)0;
+    for (long long query_index = 0; query_index < query_sequence; ++query_index) {
+        sum += score_gradient[(batch * query_sequence + query_index) * key_sequence + key_index] *
+            query[physical3(parameters.query, batch, query_index, feature)];
+    }
+    const SCALAR increment = scale * sum;
+    const SCALAR current = target[physical3(parameters.target, batch, key_index, feature)];
+    if (!isfinite(sum) || !isfinite(increment) || !isfinite(current + increment)) {
+        attention_fail(status, {arithmetic_status}u);
+    }
+"#
+}
+
+fn value_preflight_body() -> &'static str {
+    r#"
+    const long long feature_extent = parameters.value.shape[2];
+    const long long key_sequence = parameters.value.shape[1];
+    const long long elements = parameters.value.shape[0] * key_sequence * feature_extent;
+    if (linear >= elements) return;
+    const long long feature = linear % feature_extent;
+    const long long row = linear / feature_extent;
+    const long long key_index = row % key_sequence;
+    const long long batch = row / key_sequence;
+    const long long query_sequence = parameters.query.shape[1];
+    SCALAR sum = (SCALAR)0;
+    for (long long query_index = 0; query_index < query_sequence; ++query_index) {
+        sum += weights[physical3(parameters.weights, batch, query_index, key_index)] *
+            grad_output[physical3(parameters.grad_output, batch, query_index, feature)];
+    }
+    const SCALAR current = target[physical3(parameters.target, batch, key_index, feature)];
+    if (!isfinite(sum) || !isfinite(current + sum)) {
+        attention_fail(status, {arithmetic_status}u);
+    }
+"#
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,6 +283,10 @@ mod tests {
             assert!(source.contains("target[physical3(parameters.target"));
             assert!(source.contains("] +="));
             assert!(!source.contains("SCALAR"));
+            let preflight = backward_preflight_source("float", kernel);
+            assert!(preflight.contains("const float current"));
+            assert!(!preflight.contains("] +="));
+            assert!(!preflight.contains("SCALAR"));
         }
     }
 }

@@ -7,6 +7,9 @@ use hephaestus_core::{
 };
 
 use super::metadata::AttentionMeta;
+use super::preflight::{
+    prepare_backward as prepare_backward_preflight, prepare_forward as prepare_forward_preflight,
+};
 use super::prepared::{
     PreparedAttentionBackward, PreparedAttentionForward, PreparedAttentionKernel,
 };
@@ -20,11 +23,11 @@ use crate::application::prepared::checked_bind_group;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-const WORKGROUP_WIDTH: hephaestus_core::BlockWidth = hephaestus_core::BlockWidth::DEFAULT;
+pub(super) const WORKGROUP_WIDTH: hephaestus_core::BlockWidth =
+    hephaestus_core::BlockWidth::DEFAULT;
 
 struct ForwardWeights;
 struct ForwardOutput;
-struct BackwardScore;
 struct BackwardQuery;
 struct BackwardKey;
 struct BackwardValue;
@@ -75,6 +78,8 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             .grouped_keep()
             .map_or(operands.query.buffer, |keep| keep.view().buffer);
         let rows = checked_product(plan.batch, plan.query_sequence, "forward row count")?;
+        let preflight =
+            prepare_forward_preflight(device, &operands, plan, &metadata, mask_buffer, rows)?;
         let weights = prepare_kernel::<ForwardWeights>(
             device,
             ForwardStage::Weights,
@@ -101,7 +106,12 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
                 binding(2, operands.output.buffer),
             ],
         )?;
-        Ok(PreparedAttentionForward::new(weights, output))
+        Ok(PreparedAttentionForward::new(
+            preflight.kernels,
+            preflight.status,
+            weights,
+            output,
+        ))
     }
 
     fn dispatch_attention_forward(
@@ -124,10 +134,8 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
         let score_workspace = needs_score
             .then(|| device.alloc_zeroed::<f32>(plan.score_elements))
             .transpose()?;
-        let score = score_workspace
-            .as_ref()
-            .map(|workspace| prepare_score(device, &operands, plan, workspace))
-            .transpose()?;
+        let preflight =
+            prepare_backward_preflight(device, &operands, plan, score_workspace.as_ref())?;
         let query = operands
             .gradients
             .query
@@ -164,7 +172,9 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             .map(|target| prepare_value(device, &operands, plan, target))
             .transpose()?;
         Ok(PreparedAttentionBackward::new(
-            score,
+            preflight.kernels,
+            preflight.status,
+            None,
             query,
             key,
             value,
@@ -179,28 +189,6 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
     ) -> Result<()> {
         prepared.dispatch(device)
     }
-}
-
-fn prepare_score(
-    device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
-    plan: AttentionPlan,
-    workspace: &WgpuBuffer<f32>,
-) -> Result<PreparedAttentionKernel> {
-    let metadata = backward_metadata(operands, plan, operands.weights)?;
-    prepare_backward_kernel::<BackwardScore>(
-        device,
-        BackwardStage::Score,
-        &metadata,
-        plan.score_elements,
-        "hephaestus-attention-backward-score",
-        &[
-            binding(0, operands.grad_output.buffer),
-            binding(1, operands.value.buffer),
-            binding(2, operands.weights.buffer),
-            binding(3, workspace),
-        ],
-    )
 }
 
 fn prepare_gradient<K: 'static>(
@@ -264,7 +252,7 @@ fn prepare_value(
     )
 }
 
-fn backward_metadata(
+pub(super) fn backward_metadata(
     operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
     plan: AttentionPlan,
     destination: StridedView<'_, WgpuBuffer<f32>, 3>,
@@ -322,7 +310,7 @@ fn prepare_backward_kernel<K: 'static>(
     )
 }
 
-fn prepare(
+pub(super) fn prepare(
     device: &WgpuDevice,
     metadata: &AttentionMeta,
     elements: usize,
@@ -359,7 +347,7 @@ fn prepare(
     ))
 }
 
-fn checked_product(left: usize, right: usize, name: &str) -> Result<usize> {
+pub(super) fn checked_product(left: usize, right: usize, name: &str) -> Result<usize> {
     left.checked_mul(right).ok_or_else(|| {
         super::resources::invalid(format!("attention {name} overflows: {left} * {right}"))
     })

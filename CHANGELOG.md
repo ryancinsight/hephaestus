@@ -40,7 +40,10 @@ Target release: 0.18.0.
   attention preparation and dispatch over borrowed rank-3 device views. Its
   shared planner validates grouped keep masks, shapes, storage spans, exact
   writable-layout injectivity, aliases, finite scales, and backend address
-  limits before mutation.
+  limits before mutation. Device-resident parallel preflight uses one shared
+  status-code contract and one scalar readback to preserve failure atomicity;
+  WGPU, CUDA, ROCm, and Metal retain monomorphized backend kernels without
+  downloading operands or silently executing on the host.
 
 - [minor] `ParameterizedUnaryExpr` and `ParameterizedUnaryOps` keep `f32`
   Hardtanh and Threshold bounds, replacement values, and gradients as runtime
