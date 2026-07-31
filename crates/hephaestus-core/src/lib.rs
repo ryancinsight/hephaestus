@@ -16,6 +16,11 @@
 /// Device and buffer contracts.
 pub mod domain;
 
+pub use domain::attention::{
+    AttentionBackwardOperands, AttentionCausality, AttentionForwardOperands,
+    AttentionGradientViews, AttentionMask, AttentionOps, AttentionPlan, AttentionScalar,
+    AttentionSemanticStatus, GroupedKeepMask, plan_attention_backward, plan_attention_forward,
+};
 pub use domain::buffer::DeviceBuffer;
 pub use domain::convolution::{
     ConvolutionBackwardOperands, ConvolutionForwardOperands, ConvolutionGradientViews,

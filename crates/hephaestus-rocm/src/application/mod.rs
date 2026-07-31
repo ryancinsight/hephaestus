@@ -1,5 +1,7 @@
 //! ROCm application-layer compute operations.
 
+/// Native HIP scaled dot-product attention.
+pub mod attention;
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
 #[cfg(all(feature = "rocm", target_os = "linux"))]

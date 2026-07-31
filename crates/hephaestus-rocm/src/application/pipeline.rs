@@ -118,6 +118,8 @@ pub(crate) enum PipelineKey {
         spatial_rank: usize,
         bias: bool,
     },
+    /// Scaled dot-product attention kernel keyed by entry point and scalar.
+    Attention { entry: &'static str, scalar: TypeId },
     /// Grouped authored kernel stream keyed by its source.
     GroupedStream(u64),
 }

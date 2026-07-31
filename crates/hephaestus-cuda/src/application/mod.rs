@@ -1,5 +1,7 @@
 //! Monomorphized compute dispatch over the CUDA device.
 
+/// Native scaled dot-product attention operations.
+pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Native regular and transposed convolution operations.

@@ -31,6 +31,8 @@
 //! order cannot change the result and no tolerance is applicable. A clause that
 //! needed an epsilon would state its derivation at the assertion site.
 
+/// Contract clauses for the [`AttentionOps`](hephaestus_core::AttentionOps) seam.
+pub mod attention;
 /// Contract clauses for the [`AxisReductionOps`](hephaestus_core::AxisReductionOps) seam.
 pub mod axis_reduction;
 /// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
@@ -41,6 +43,7 @@ pub mod parameterized_unary;
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
 
+pub use attention::assert_attention_contract;
 pub use axis_reduction::assert_axis_reduction_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use parameterized_unary::assert_parameterized_unary_contract;

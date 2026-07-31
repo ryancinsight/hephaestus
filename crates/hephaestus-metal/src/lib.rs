@@ -10,6 +10,7 @@ pub mod application;
 /// Metal device and buffer infrastructure.
 pub mod infrastructure;
 
+pub use application::attention::MetalAttentionOps;
 pub use application::axis_reduction_seam::MetalAxisReductionOps;
 pub use application::convolution::MetalConvolutionOps;
 pub use application::elementwise::{
