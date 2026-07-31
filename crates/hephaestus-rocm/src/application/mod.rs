@@ -22,7 +22,6 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 pub(crate) mod pipeline;
@@ -32,6 +31,8 @@ pub mod prepared_axis_reduction;
 pub mod prepared_map_reduction;
 /// Reusable multi-pass scalar reduction plans.
 pub mod prepared_reduction;
+/// Reusable strided elementwise plans.
+pub mod prepared_strided_elementwise;
 /// Seeded host-delegated random initializers.
 pub mod random;
 /// Contiguous multi-pass tree reductions.

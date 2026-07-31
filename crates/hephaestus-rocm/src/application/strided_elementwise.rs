@@ -59,7 +59,7 @@ pub(crate) const HIP_DECODE: &str = r#"
     }
 "#;
 
-fn binary_shader<T: DialectScalar<HipC>>(expr: &'static str) -> String {
+pub(crate) fn binary_shader<T: DialectScalar<HipC>>(expr: &'static str) -> String {
     format!(
         r#"
 {meta}
@@ -86,7 +86,7 @@ extern "C" __global__ void binary_strided_kernel(
     )
 }
 
-fn unary_shader<Op: UnaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
+pub(crate) fn unary_shader<Op: UnaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
     format!(
         r#"
 {meta}
@@ -207,6 +207,104 @@ struct BinaryKernelLaunch<'a, T> {
     len: usize,
     operation: core::any::TypeId,
     expr: &'static str,
+}
+
+/// Validate, broadcast, and alias-check a binary strided operand triple,
+/// producing the launch metadata; `None` when the dispatch is empty.
+pub(crate) fn binary_strided_meta<T, const N: usize>(
+    lhs: &StridedOperand<'_, T, N>,
+    rhs: &StridedOperand<'_, T, N>,
+    output: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>>
+where
+    T: Pod,
+{
+    let lhs_layout = lhs
+        .layout
+        .broadcast(output.layout.shape)
+        .map_err(map_layout_err)?;
+    let rhs_layout = rhs
+        .layout
+        .broadcast(output.layout.shape)
+        .map_err(map_layout_err)?;
+    lhs_layout
+        .validate_storage_len(lhs.buffer.len())
+        .map_err(map_layout_err)?;
+    rhs_layout
+        .validate_storage_len(rhs.buffer.len())
+        .map_err(map_layout_err)?;
+    if lhs.buffer.aliases(output.buffer) || rhs.buffer.aliases(output.buffer) {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output buffer must not alias either input buffer".to_string(),
+        });
+    }
+    let len = validate_output(*output)?;
+    if len == 0 {
+        return Ok(None);
+    }
+    let meta = StridedMeta {
+        shape: pad_shape(output.layout.shape)?,
+        a_strides: pad_strides(lhs_layout.strides)?,
+        b_strides: pad_strides(rhs_layout.strides)?,
+        out_strides: pad_strides(output.layout.strides)?,
+        offsets: [
+            u32::try_from(lhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: "input offset exceeds u32 range".to_string(),
+            })?,
+            u32::try_from(rhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: "input offset exceeds u32 range".to_string(),
+            })?,
+            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: "output offset exceeds u32 range".to_string(),
+            })?,
+            dispatch_len(len)?,
+        ],
+    };
+    Ok(Some((meta, len)))
+}
+
+/// Validate, broadcast, and alias-check a unary strided operand pair,
+/// producing the launch metadata; `None` when the dispatch is empty.
+pub(crate) fn unary_strided_meta<T, const N: usize>(
+    input: &StridedOperand<'_, T, N>,
+    output: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>>
+where
+    T: Pod,
+{
+    let input_layout = input
+        .layout
+        .broadcast(output.layout.shape)
+        .map_err(map_layout_err)?;
+    input_layout
+        .validate_storage_len(input.buffer.len())
+        .map_err(map_layout_err)?;
+    if input.buffer.aliases(output.buffer) {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output buffer must not alias input buffer".to_string(),
+        });
+    }
+    let len = validate_output(*output)?;
+    if len == 0 {
+        return Ok(None);
+    }
+    let meta = StridedMeta {
+        shape: pad_shape(output.layout.shape)?,
+        a_strides: pad_strides(input_layout.strides)?,
+        b_strides: [0; 4],
+        out_strides: pad_strides(output.layout.strides)?,
+        offsets: [
+            u32::try_from(input_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: "input offset exceeds u32 range".to_string(),
+            })?,
+            0,
+            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+                message: "output offset exceeds u32 range".to_string(),
+            })?,
+            dispatch_len(len)?,
+        ],
+    };
+    Ok(Some((meta, len)))
 }
 
 fn launch_binary_expression<T>(
@@ -343,46 +441,8 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
-    let lhs_layout = lhs
-        .layout
-        .broadcast(output.layout.shape)
-        .map_err(map_layout_err)?;
-    let rhs_layout = rhs
-        .layout
-        .broadcast(output.layout.shape)
-        .map_err(map_layout_err)?;
-    lhs_layout
-        .validate_storage_len(lhs.buffer.len())
-        .map_err(map_layout_err)?;
-    rhs_layout
-        .validate_storage_len(rhs.buffer.len())
-        .map_err(map_layout_err)?;
-    if lhs.buffer.aliases(output.buffer) || rhs.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias either input buffer".to_string(),
-        });
-    }
-    let len = validate_output(output)?;
-    if len == 0 {
+    let Some((meta, len)) = binary_strided_meta(&lhs, &rhs, &output)? else {
         return Ok(());
-    }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(lhs_layout.strides)?,
-        b_strides: pad_strides(rhs_layout.strides)?,
-        out_strides: pad_strides(output.layout.strides)?,
-        offsets: [
-            u32::try_from(lhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            u32::try_from(rhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
     };
     launch_binary_expression(
         device,
@@ -516,37 +576,8 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
-    let input_layout = input
-        .layout
-        .broadcast(output.layout.shape)
-        .map_err(map_layout_err)?;
-    input_layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias input buffer".to_string(),
-        });
-    }
-    let len = validate_output(output)?;
-    if len == 0 {
+    let Some((meta, len)) = unary_strided_meta(&input, &output)? else {
         return Ok(());
-    }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(input_layout.strides)?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides)?,
-        offsets: [
-            u32::try_from(input_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            0,
-            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
     };
     launch_unary::<Op, T>(device, input.buffer, output.buffer, meta, width, len)
 }
