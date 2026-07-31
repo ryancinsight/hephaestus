@@ -74,11 +74,19 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate rank-2 sum, product, minimum, maximum, and mean outputs
+  through the overwrite-before-read device seam across WGPU, CUDA, and ROCm,
+  with Metal inheriting WGPU. Each non-empty successful CUDA and ROCm call
+  omits one initialization transfer of the complete C-contiguous output before
+  the axis kernel assigns every logical element. Empty-axis identities/errors,
+  arithmetic, layouts, and peak allocation are unchanged; no runtime gain is
+  claimed without matched hardware measurements.
+
 - [patch] Allocate non-empty immediate scalar-reduction outputs and private
   prepared intermediates through the overwrite-before-read device seam across
   WGPU, CUDA, and ROCm, with Metal inheriting WGPU. CUDA and ROCm omit one
-  initialization transfer per native
-  immediate-reduction pass and per private prepared-plan intermediate; CUDA
+  initialization transfer per native immediate-reduction pass and per private
+  prepared-plan intermediate; CUDA
   also omits the singleton copy destination initialization. Prepared final
   outputs remain initialized because callers may read them before dispatch.
   Empty-input identities remain explicitly uploaded, arithmetic order and peak

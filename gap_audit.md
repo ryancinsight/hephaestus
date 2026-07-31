@@ -875,6 +875,18 @@ No open feature-combination defect is currently recorded in the backend scope.
   but non-trivial change with uncertain payoff (the blocked-decomposition
   profile shows the host/device sync floor, not allocation, dominates); deferred
   until a workload measures storage-allocation churn as material.
+- [patch] Allocating rank-2 axis-reduction output initialization (audit
+  2026-07-31). WGPU, CUDA, and ROCm allocated zeroed C-contiguous outputs even
+  though each validated kernel invocation assigns every logical output index
+  exactly once. The six generic/mean allocation sites now use the
+  overwrite-before-read seam; CUDA and ROCm omit one output-sized
+  initialization transfer per non-empty successful call. Invalid calls drop
+  the private output without exposing it. Zero-length outputs expose no
+  readable element, empty sum/product axes retain operation identities, and
+  minimum/maximum/mean retain their typed empty-axis errors. Evidence tier:
+  kernel write-coverage proof, focused WGPU/CUDA/ROCm Leto-differential axis
+  contracts, and implementation-head four-provider CI; no runtime claim without
+  matched hardware measurements.
 
 ## Accepted Design Decisions
 

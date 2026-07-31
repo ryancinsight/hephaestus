@@ -379,7 +379,7 @@ where
     output_shape[axis] = 1;
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let output_len = output_layout.checked_size().map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_len)?;
+    let output = device.alloc_uninitialized::<T>(output_len)?;
     reduce_axis_into::<Op, T>(
         device,
         input,
@@ -437,7 +437,7 @@ where
     output_shape[axis] = 1;
     let output_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let output_len = output_layout.checked_size().map_err(map_layout_err)?;
-    let output = device.alloc_zeroed::<T>(output_len)?;
+    let output = device.alloc_uninitialized::<T>(output_len)?;
     mean_axis_into(
         device,
         input,

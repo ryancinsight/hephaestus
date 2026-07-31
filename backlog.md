@@ -4,7 +4,41 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-axis-reduction-overwrite`; scope: WGPU,
+  CUDA, and ROCm allocating rank-2 sum/product/min/max/mean outputs, with Metal
+  inheriting WGPU; exact axis contracts and synchronized PM evidence.
+- Outcome: remove redundant initialization before each allocating axis kernel
+  assigns every logical output element exactly once.
+- Non-goals: caller-owned `*_into` buffers, prepared-axis output ownership,
+  axis arithmetic or layouts, empty-axis semantics, allocation capacities,
+  benchmark workloads, and runtime claims without matched measurements.
+- Acceptance: overwrite-before-read storage is returned only after axis, shape,
+  layout, alias, and width validation plus successful dispatch; invalid calls
+  drop their private allocation. Generic and mean outputs preserve Leto values
+  for non-empty, empty, strided, and beyond-block-width cases;
+  warning-denied WGPU/CUDA/ROCm gates and exact-head WGPU/CUDA/ROCm/macOS-Metal
+  CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm omit
+  one initialization transfer of `output_len * size_of::<T>()` bytes per
+  non-empty successful allocating axis-reduction call. WGPU and Metal record
+  the same overwrite contract while WebGPU retains its mandated initialization
+  behavior. Peak allocation and zero-length output behavior remain unchanged.
+- Evidence: exact-base provider CI on `b565f25` supplies the unchanged generic,
+  mean, strided, empty-axis, and beyond-block-width semantic baseline. Kernel
+  review proves each dispatched logical index computes one validated output
+  offset and assigns it directly; zero-length outputs return no readable
+  elements. A residue scan leaves only WGPU's initialized one-element dummy
+  binding for empty input storage. Independent review approves write coverage,
+  validation/error ordering, asynchronous queue ordering, zero-length behavior,
+  and the bounded transfer claim. Focused local Leto-differential contracts pass
+  for WGPU (1/1), CUDA (1/1), and ROCm (1/1). Implementation-head CI passes on
+  WGPU (`91142020221`), CUDA (`91142020156`), ROCm (`91142020205`), and macOS
+  Metal (`91142019842`).
+- Status: done 2026-07-31. Delivered by PR #162.
+
+## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-reduction-overwrite`; scope: WGPU, CUDA,
   and ROCm scalar-reduction tree and prepared-plan outputs, with Metal

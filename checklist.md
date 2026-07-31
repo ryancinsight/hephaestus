@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf]
+
+- [x] Establish exact generic and mean axis-reduction baselines.
+- [x] Prove every non-empty allocating output is fully assigned before read.
+- [x] Route six WGPU, CUDA, and ROCm outputs through the overwrite seam.
+- [x] Preserve zero-length outputs and empty reduced-axis identities/errors.
+- [x] Pass Rust 1.97 warning-denied provider gates and exact contracts.
+- [x] Run and record implementation-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-axis-reduction-overwrite`.
+Claimed files are WGPU, CUDA, and ROCm allocating axis-reduction implementations
+and contracts, `CHANGELOG.md`, `backlog.md`, `gap_audit.md`, and this section.
+Focused local contracts pass for WGPU, CUDA, and ROCm. Implementation-head CI
+passes on WGPU (`91142020221`), CUDA (`91142020156`), ROCm (`91142020205`), and
+macOS Metal (`91142019842`); the documentation-head rerun is the merge gate.
+
 ## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf]
 
 - [x] Establish exact scalar-reduction and prepared-reuse baselines.
