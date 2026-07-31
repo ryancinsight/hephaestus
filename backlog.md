@@ -4,6 +4,25 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
+
+- Owner: Codex on `codex/hephaestus-parameterized-unary`; scope:
+  provider-owned runtime-parameter unary expressions, Hardtanh and Threshold
+  forward/gradient implementations across WGPU, CUDA, ROCm, and Metal,
+  shared Leto-differential conformance, ADR 0032, and direct Coeus integration.
+- Outcome: runtime activation parameters remain data supplied at dispatch, not
+  consumer-authored shader source, and every backend computes the same
+  parameter-sensitive values and kink conventions as Leto CPU.
+- Non-goals: unrelated activation families, consumer compatibility paths,
+  silent CPU fallback, and performance claims without matched measurements.
+- Acceptance: non-default parameter and boundary cases pass one generic
+  conformance suite on each available provider; Coeus removes its local
+  Hardtanh/Threshold expressions and routes directly through Hephaestus; all
+  affected warning-denied, nextest, doctest, and exact-head CI gates pass.
+- Risk/change class: `[minor] [arch]`; additive provider contract and direct
+  consumer cutover under revised ADR 0032.
+- Status: in-progress 2026-07-31.
+
 ## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-rocm-pivot-overwrite`; scope: ROCm native
