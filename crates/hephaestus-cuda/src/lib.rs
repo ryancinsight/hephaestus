@@ -43,9 +43,6 @@ mod infrastructure;
 pub mod application;
 
 pub use application::convolution::CudaConvolutionOps;
-pub use application::elementwise_seam::{
-    CudaElementwiseOps, CudaPreparedElementwise,
-};
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -57,6 +54,8 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
+pub use application::elementwise_seam::{CudaElementwiseOps, CudaPreparedElementwise};
+pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -76,19 +75,16 @@ pub use application::prepared_reduction::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,
     submit_prepared_reduction_batch,
 };
-pub use application::full_reduction_seam::{
-    CudaFullReductionOps, CudaPreparedFullReduction,
-};
 pub use application::reduction::{
     MaxOp, MinOp, ProdOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
     min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,
     reduction_with_width, sum_axis, sum_axis_into,
 };
-pub use application::scan_seam::{CudaPreparedScan, CudaScanOps};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
+pub use application::scan_seam::{CudaPreparedScan, CudaScanOps};
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };

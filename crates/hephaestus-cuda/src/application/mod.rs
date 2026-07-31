@@ -2,10 +2,12 @@
 
 /// Native regular and transposed convolution operations.
 pub mod convolution;
-/// Device-neutral elementwise seam implementation.
-pub mod elementwise_seam;
 /// Contiguous elementwise operations.
 pub mod elementwise;
+/// Device-neutral elementwise seam implementation.
+pub mod elementwise_seam;
+/// Device-neutral full-reduction seam implementation.
+pub mod full_reduction_seam;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
 /// Pipeline compilation and launch helpers.
@@ -16,14 +18,12 @@ pub mod prepared_axis_reduction;
 pub mod prepared_map_reduction;
 /// Reusable multi-pass scalar reduction plans.
 pub mod prepared_reduction;
-/// Device-neutral full-reduction seam implementation.
-pub mod full_reduction_seam;
 /// Multi-pass tree reductions.
 pub mod reduction;
-/// Device-neutral scan seam implementation.
-pub mod scan_seam;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Device-neutral scan seam implementation.
+pub mod scan_seam;
 /// Two-dimensional Laplacian stencil kernels.
 pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.

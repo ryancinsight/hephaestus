@@ -6,10 +6,10 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::application::elementwise_seam::RocmElementwiseOps;
-use crate::application::reduction::reduction_with_width;
 use crate::RocmBuffer;
 use crate::RocmDevice;
+use crate::application::elementwise_seam::RocmElementwiseOps;
+use crate::application::reduction::reduction_with_width;
 
 fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
@@ -28,7 +28,10 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let logical_len = input.layout.checked_size().map_err(map_layout_err)?;
-    input.layout.validate_storage_len(input.buffer.len()).map_err(map_layout_err)?;
+    input
+        .layout
+        .validate_storage_len(input.buffer.len())
+        .map_err(map_layout_err)?;
     if logical_len == 0 {
         return device.alloc_uninitialized(0);
     }
@@ -70,7 +73,10 @@ where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
     {
-        output.layout.validate_storage_len(output.buffer.len()).map_err(map_layout_err)?;
+        output
+            .layout
+            .validate_storage_len(output.buffer.len())
+            .map_err(map_layout_err)?;
         if output.layout.checked_size().map_err(map_layout_err)? != 1 {
             return Err(HephaestusError::DispatchFailed {
                 message: "full reduction output must have exactly 1 element".to_string(),

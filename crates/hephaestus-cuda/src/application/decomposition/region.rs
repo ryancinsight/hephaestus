@@ -44,7 +44,10 @@ pub(crate) fn download_matrix_region_compact(
     // SAFETY: every row is immediately written by `cuMemcpyDtoHAsync_v2`
     // below before any read through `Deref`/`DerefMut`.
     let mut compact = unsafe {
-        PinnedHostBuffer::<f32>::uninitialized(device.cuda_context().clone(), region.rows * region.cols)?
+        PinnedHostBuffer::<f32>::uninitialized(
+            device.cuda_context().clone(),
+            region.rows * region.cols,
+        )?
     };
 
     let device_start_index = region
