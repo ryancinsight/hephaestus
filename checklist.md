@@ -9,8 +9,8 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Route immediate outputs and private intermediates through the overwrite
       seam; retain initialized public prepared outputs.
 - [x] Preserve empty-input identity uploads and scalar arithmetic order.
-- [ ] Pass Rust 1.97 warning-denied provider gates and exact contracts.
-- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+- [x] Pass Rust 1.97 warning-denied provider gates and exact contracts.
+- [x] Run and record WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on `codex/hephaestus-reduction-overwrite`.
 Claimed files are WGPU, CUDA, and ROCm scalar reduction implementations and

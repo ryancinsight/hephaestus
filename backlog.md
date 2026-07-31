@@ -36,7 +36,13 @@ cuda-oxide + cutile).
   boundary. Local compilation is blocked by concurrent uncommitted Leto zip
   changes with 47 lifetime/privacy diagnostics; clean-checkout CI is the
   executable gate.
-- Status: in progress 2026-07-31. Claimed files: WGPU, CUDA, and ROCm scalar
+- Hosted evidence on implementation head `476bc77`: WGPU job `91137591572`
+  passes in 6m43s, CUDA job `91137591608` in 6m17s, ROCm job `91137591201` in
+  5m53s, and macOS Metal job `91137591647` in 6m54s. Required-device NVIDIA
+  and AMD jobs skip because dedicated runners are unavailable; no physical
+  CUDA or ROCm execution claim is made for this increment.
+- Status: done 2026-07-31; delivered through PR #161. Claimed files: WGPU,
+  CUDA, and ROCm scalar
   reduction implementations and prepared plans; reduction contracts;
   `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
