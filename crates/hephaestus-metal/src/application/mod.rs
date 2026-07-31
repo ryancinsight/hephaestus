@@ -5,6 +5,8 @@ pub mod convolution;
 /// Matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;
+/// Device-neutral elementwise seam implementation.
+pub mod elementwise_seam;
 /// Elementwise compute dispatch.
 pub mod elementwise;
 /// Linear algebra operations.
@@ -15,8 +17,12 @@ pub mod linalg_traits;
 pub mod prepared_map_reduction;
 /// Seeded host-delegated random initializers.
 pub mod random;
+/// Device-neutral full-reduction seam implementation.
+pub mod full_reduction_seam;
 /// Reduction operations.
 pub mod reduction;
+/// Device-neutral scan seam implementation.
+pub mod scan_seam;
 /// Scan operations.
 pub mod scan;
 /// GPU-resident CSR sparse matrix operations.

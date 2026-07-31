@@ -9,6 +9,12 @@ pub mod convolution;
 #[cfg(feature = "decomposition")]
 pub mod decomposition;
 pub mod elementwise;
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+/// Device-neutral elementwise seam implementation.
+pub mod elementwise_seam;
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+/// Device-neutral full-reduction seam implementation.
+pub mod full_reduction_seam;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 pub(crate) mod pipeline;
@@ -24,6 +30,9 @@ pub mod random;
 pub mod reduction;
 /// Rank-2 prefix and suffix scans over strided layouts.
 pub mod scan;
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+/// Device-neutral scan seam implementation.
+pub mod scan_seam;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
 /// Two-dimensional Laplacian stencil kernels.

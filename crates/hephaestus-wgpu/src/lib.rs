@@ -30,8 +30,8 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
-pub use application::elementwise_seam::WgpuElementwiseOps;
-pub use application::full_reduction_seam::WgpuFullReductionOps;
+pub use application::elementwise_seam::{PreparedElementwise, WgpuElementwiseOps};
+pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -58,7 +58,7 @@ pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
-pub use application::scan_seam::WgpuScanOps;
+pub use application::scan_seam::{PreparedScan, WgpuScanOps};
 #[cfg(feature = "sparse")]
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, WgpuSparseOps, prepare_spmm,

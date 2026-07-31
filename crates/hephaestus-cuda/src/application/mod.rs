@@ -4,6 +4,10 @@
 pub mod convolution;
 /// Contiguous elementwise operations.
 pub mod elementwise;
+/// Device-neutral elementwise seam implementation.
+pub mod elementwise_seam;
+/// Device-neutral full-reduction seam implementation.
+pub mod full_reduction_seam;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
 /// Pipeline compilation and launch helpers.
@@ -18,6 +22,8 @@ pub mod prepared_reduction;
 pub mod reduction;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Device-neutral scan seam implementation.
+pub mod scan_seam;
 /// Two-dimensional Laplacian stencil kernels.
 pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.

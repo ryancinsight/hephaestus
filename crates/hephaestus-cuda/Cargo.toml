@@ -10,20 +10,18 @@ description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded 
 
 [features]
 # Default includes the CUDA toolchain so the crate builds and runs with CUDA
-# support enabled by default. `cuda` pulls cutile-rs and requires a CUDA 13.2+
-# toolkit at build time for its headers; the driver is still loaded dynamically
-# at runtime, so deployment does not require static CUDA linkage.
+# support enabled by default. The driver is still loaded dynamically at runtime,
+# so deployment does not require static CUDA linkage.
 default = ["parallel", "mnemosyne-memory", "decomposition", "cuda"]
 parallel = []
 mnemosyne-memory = []
-cuda = ["dep:cutile", "dep:cuda-oxide", "dep:libloading"]
+cuda = ["dep:cuda-oxide", "dep:libloading"]
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
 ## The decomposition modules launch CUDA kernels and therefore require the
 ## CUDA device substrate as part of the same feature contract.
 decomposition = ["cuda"]
 
 [dependencies]
-aequitas = { workspace = true }
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
@@ -35,13 +33,12 @@ mnemosyne-core = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 libloading = { version = "0.8", optional = true }
-# cuda-oxide owns the device substrate per ADR 0001; cutile remains the
-# kernel-authoring dependency above that substrate.
+# cuda-oxide owns the device substrate per ADR 0001.
 cuda-oxide = { version = "0.4.0", optional = true }
-cutile = { git = "https://github.com/NVlabs/cutile-rs", optional = true }
 
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
+aequitas = { workspace = true }
 
 [[bench]]
 name = "comparative"

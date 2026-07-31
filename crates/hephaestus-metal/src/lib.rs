@@ -11,6 +11,9 @@ pub mod application;
 pub mod infrastructure;
 
 pub use application::convolution::MetalConvolutionOps;
+pub use application::elementwise_seam::MetalElementwiseOps;
+pub use application::full_reduction_seam::MetalFullReductionOps;
+pub use application::scan_seam::MetalScanOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,

@@ -94,7 +94,7 @@ impl ComputeDevice for RocmDevice {
         host: &[T],
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>> {
-        let buffer = self.alloc_zeroed_with_hint(host.len(), hint)?;
+        let buffer = self.alloc_uninitialized_with_hint(host.len(), hint)?;
         self.write_buffer(&buffer, host)?;
         Ok(buffer)
     }

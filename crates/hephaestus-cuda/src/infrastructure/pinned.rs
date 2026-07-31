@@ -39,13 +39,19 @@ unsafe impl<T: Send> Send for PinnedHostBuffer<T> {}
 unsafe impl<T: Sync> Sync for PinnedHostBuffer<T> {}
 
 impl<T: Pod> PinnedHostBuffer<T> {
-    /// Allocate a zero-initialized pinned host buffer of `len` elements.
+    /// Allocate an uninitialized pinned host buffer of `len` elements.
+    ///
+    /// # Safety
+    ///
+    /// The caller must fully initialize the buffer (e.g. via `cuMemcpy*`)
+    /// before reading through `Deref`/`DerefMut`. The zero-fill from
+    /// [`zeroed`](Self::zeroed) is skipped, so uninitialized bytes produce
+    /// undefined values on read.
     ///
     /// # Errors
     /// Returns [`HephaestusError::AllocationFailed`] if the byte size
-    /// overflows `usize` or the driver allocation fails (e.g. the host has
-    /// exhausted its page-lockable memory budget).
-    pub(crate) fn zeroed(context: Arc<CudaContext>, len: usize) -> Result<Self> {
+    /// overflows `usize` or the driver allocation fails.
+    pub(crate) unsafe fn uninitialized(context: Arc<CudaContext>, len: usize) -> Result<Self> {
         if len == 0 {
             return Ok(Self {
                 ptr: std::ptr::null_mut(),
@@ -72,14 +78,6 @@ impl<T: Pod> PinnedHostBuffer<T> {
             return Err(HephaestusError::AllocationFailed {
                 message: format!("cuMemAllocHost_v2({byte_len} bytes) failed with code {res}"),
             });
-        }
-
-        // SAFETY: `raw` points to `byte_len` freshly allocated bytes with no
-        // prior initialization; writing zero bytes over them is always sound,
-        // and `T: Pod` guarantees the all-zero bit pattern is a valid `T`, so
-        // reinterpreting the allocation as `[T; len]` below is well-typed.
-        unsafe {
-            std::ptr::write_bytes(raw.cast::<u8>(), 0, byte_len);
         }
 
         Ok(Self {

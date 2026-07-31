@@ -62,6 +62,10 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::elementwise_seam::{RocmElementwiseOps, RocmPreparedElementwise};
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -88,6 +92,8 @@ pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::scan_seam::{RocmPreparedScan, RocmScanOps};
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
