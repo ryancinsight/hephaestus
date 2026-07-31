@@ -42,12 +42,15 @@ single-precision intrinsics. Metal consumes the WGPU dialect through its
 existing native Metal-selected WGPU device. Coeus integration remains a
 dependency-ordered consumer commit in the same co-evolution delivery.
 
-Add `ParameterizedUnaryExpr<L>` and `ParameterizedUnaryOps<D, T>`. Expressions
-read canonical locals `x`, `first`, and `second`; dispatch accepts `[T; 2]`.
+Add `ParameterizedUnaryExpr<L>` and `ParameterizedUnaryOps<D>`. Expressions
+read canonical locals `x`, `first`, and `second`; dispatch accepts `[f32; 2]`.
 Hardtanh interprets the pair as `(minimum, maximum)`, Threshold as `(threshold,
 replacement)`, and their gradient markers ignore the unused second value.
-The fixed pair keeps one kernel ABI for the current one- and two-parameter
-activation family without encoding runtime values in generated source.
+The dispatch scalar is `f32`, matching the current Coeus activation contract;
+the operation seam does not falsely admit integer or vector types whose
+comparison expressions or parameter ABI differ. The fixed pair keeps one
+kernel ABI for the current one- and two-parameter activation family without
+encoding runtime values in generated source.
 
 WGPU stores the pair in one pooled uniform buffer, CUDA and ROCm pass both
 scalars by value, and Metal delegates to the WGPU implementation selected on a
@@ -57,8 +60,11 @@ directly to caller-owned output storage without a tensor-sized intermediate.
 CUDA and ROCm use a distinct parameterized-unary cache-key variant because the
 five-argument kernel ABI must never alias the ordinary three-argument unary
 kernel. A core-owned writable-layout validator rejects overlapping outputs
-consistently before any backend dispatch. Hardtanh uses the same explicit
-comparison chain in every dialect, including when callers reverse its bounds.
+consistently before any backend dispatch. Its common separable-stride proof is
+allocation-free; layouts needing an exact proof use either a physical-span
+bitset or sorted offsets, whichever consumes less memory, bounded by eight
+bytes per logical output element. Hardtanh uses the same explicit comparison
+chain in every dialect, including when callers reverse its bounds.
 
 ## Alternatives rejected
 

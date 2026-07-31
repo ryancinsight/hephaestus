@@ -27,7 +27,7 @@ fn dispatch<D, O, Op>(
 ) -> [f32; 6]
 where
     D: ComputeDevice,
-    O: ParameterizedUnaryOps<D, f32>,
+    O: ParameterizedUnaryOps<D>,
     Op: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
 {
     let output = device.alloc_zeroed::<f32>(12).expect("output allocation");
@@ -53,7 +53,7 @@ where
 pub fn assert_parameterized_unary_contract<D, O>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: ParameterizedUnaryOps<D, f32>,
+    O: ParameterizedUnaryOps<D>,
     HardtanhOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
     HardtanhGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
     ThresholdOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,

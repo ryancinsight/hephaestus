@@ -4,7 +4,6 @@
 //! pipeline-cache keys, so changing activation bounds reuses the compiled
 //! kernel and changes only the two scalar arguments.
 
-use bytemuck::Pod;
 use leto::Layout;
 
 use super::device::ComputeDevice;
@@ -19,12 +18,12 @@ pub trait ParameterizedUnaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static
     const EXPR: &'static str;
 }
 
-/// Device-neutral runtime-parameter unary operations over strided views.
+/// Device-neutral runtime-parameter unary operations over `f32` strided views.
 ///
 /// The pair is operation-defined. Hardtanh interprets it as `(minimum,
 /// maximum)` and Threshold as `(threshold, replacement)`. Gradient operations
 /// ignore the unused second value while retaining one stable dispatch shape.
-pub trait ParameterizedUnaryOps<D: ComputeDevice, T: Pod> {
+pub trait ParameterizedUnaryOps<D: ComputeDevice> {
     /// Kernel dialect authored by this backend.
     type Dialect: KernelDialect;
 
@@ -37,16 +36,20 @@ pub trait ParameterizedUnaryOps<D: ComputeDevice, T: Pod> {
     fn parameterized_unary_into<Op, const N: usize>(
         &self,
         device: &D,
-        input: StridedView<'_, D::Buffer<T>, N>,
-        parameters: [T; 2],
-        output: StridedView<'_, D::Buffer<T>, N>,
+        input: StridedView<'_, D::Buffer<f32>, N>,
+        parameters: [f32; 2],
+        output: StridedView<'_, D::Buffer<f32>, N>,
     ) -> Result<()>
     where
         Op: ParameterizedUnaryExpr<Self::Dialect>;
 }
 
 /// Validate that a writable parameterized-unary layout is addressable and
-/// proves non-overlap, then return its logical element count.
+/// injective, then return its logical element count.
+///
+/// Monotonically separable strides take an allocation-free proof path. Other
+/// layouts use exact offset validation with temporary storage bounded by eight
+/// bytes per logical element.
 ///
 /// # Errors
 ///
@@ -64,6 +67,17 @@ pub fn validate_parameterized_output<const N: usize>(
         return Ok(0);
     }
 
+    if separable_nonoverlap(layout)? {
+        return Ok(len);
+    }
+    if exact_nonoverlap(layout, len)? {
+        Ok(len)
+    } else {
+        Err(nonoverlap_error())
+    }
+}
+
+fn separable_nonoverlap<const N: usize>(layout: &Layout<N>) -> Result<bool> {
     let mut axes = [(0_usize, 0_usize); N];
     let mut active = 0;
     for (&extent, &stride) in layout.shape.iter().zip(&layout.strides) {
@@ -72,7 +86,7 @@ pub fn validate_parameterized_output<const N: usize>(
         }
         let magnitude = stride.unsigned_abs();
         if magnitude == 0 {
-            return Err(nonoverlap_error());
+            return Ok(false);
         }
         axes[active] = (magnitude, extent);
         active += 1;
@@ -82,7 +96,7 @@ pub fn validate_parameterized_output<const N: usize>(
     let mut covered_span = 1_usize;
     for &(stride, extent) in &axes[..active] {
         if stride < covered_span {
-            return Err(nonoverlap_error());
+            return Ok(false);
         }
         covered_span = (extent - 1)
             .checked_mul(stride)
@@ -91,7 +105,75 @@ pub fn validate_parameterized_output<const N: usize>(
                 message: "writable output layout span overflows".to_string(),
             })?;
     }
-    Ok(len)
+    Ok(true)
+}
+
+fn exact_nonoverlap<const N: usize>(layout: &Layout<N>, len: usize) -> Result<bool> {
+    let (minimum, maximum) = layout.checked_min_max_offsets().map_err(layout_error)?;
+    let span = maximum
+        .checked_sub(minimum)
+        .and_then(|distance| distance.checked_add(1))
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: "writable output layout span overflows".to_string(),
+        })?;
+    let words = span.checked_add(63).map(|bits| bits / 64).ok_or_else(|| {
+        HephaestusError::DispatchFailed {
+            message: "writable output layout bitset size overflows".to_string(),
+        }
+    })?;
+
+    if words <= len {
+        let mut occupied = Vec::new();
+        occupied
+            .try_reserve_exact(words)
+            .map_err(allocation_error)?;
+        occupied.resize(words, 0_u64);
+        for_each_offset(layout, len, |offset| {
+            let relative = offset - minimum;
+            let word = relative / 64;
+            let mask = 1_u64 << (relative % 64);
+            if occupied[word] & mask != 0 {
+                return false;
+            }
+            occupied[word] |= mask;
+            true
+        })
+    } else {
+        let mut offsets = Vec::new();
+        offsets.try_reserve_exact(len).map_err(allocation_error)?;
+        for_each_offset(layout, len, |offset| {
+            offsets.push(offset);
+            true
+        })?;
+        offsets.sort_unstable();
+        Ok(offsets.windows(2).all(|pair| pair[0] != pair[1]))
+    }
+}
+
+fn for_each_offset<const N: usize>(
+    layout: &Layout<N>,
+    len: usize,
+    mut visit: impl FnMut(usize) -> bool,
+) -> Result<bool> {
+    for linear in 0..len {
+        let mut index = [0_usize; N];
+        let mut remainder = linear;
+        for axis in (0..N).rev() {
+            index[axis] = remainder % layout.shape[axis];
+            remainder /= layout.shape[axis];
+        }
+        let offset = layout.offset_of(index).map_err(layout_error)?;
+        if !visit(offset) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn allocation_error(error: std::collections::TryReserveError) -> HephaestusError {
+    HephaestusError::DispatchFailed {
+        message: format!("writable output layout validation allocation failed: {error}"),
+    }
 }
 
 fn layout_error(error: leto::LetoError) -> HephaestusError {
@@ -183,5 +265,36 @@ mod tests {
             <ThresholdGradOp as ParameterizedUnaryExpr<HipC>>::EXPR,
             "x > first ? 1.0 : 0.0"
         );
+    }
+
+    #[test]
+    fn writable_layout_validation_accepts_injective_interleaving() {
+        let layout = Layout::new([2, 3], [3, 2], 0);
+        let len = validate_parameterized_output(&layout, 8).expect("injective layout");
+        assert_eq!(len, 6);
+    }
+
+    #[test]
+    fn writable_layout_validation_rejects_nonzero_stride_aliasing() {
+        let layout = Layout::new([2, 2], [1, 1], 0);
+        assert!(matches!(
+            validate_parameterized_output(&layout, 3),
+            Err(HephaestusError::DispatchFailed { message })
+                if message == "output layout must be non-overlapping"
+        ));
+    }
+
+    #[test]
+    fn writable_layout_validation_uses_bounded_sparse_fallback() {
+        let injective = Layout::new([2, 3], [300, 200], 0);
+        let len = validate_parameterized_output(&injective, 701).expect("injective sparse layout");
+        assert_eq!(len, 6);
+
+        let overlapping = Layout::new([2, 3], [300, 150], 0);
+        assert!(matches!(
+            validate_parameterized_output(&overlapping, 601),
+            Err(HephaestusError::DispatchFailed { message })
+                if message == "output layout must be non-overlapping"
+        ));
     }
 }

@@ -2,10 +2,9 @@
 
 use core::marker::PhantomData;
 
-use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, DialectScalar, HephaestusError, ParameterizedUnaryExpr, ParameterizedUnaryOps,
-    Result, StridedView, Wgsl, validate_parameterized_output,
+    BlockWidth, HephaestusError, ParameterizedUnaryExpr, ParameterizedUnaryOps, Result,
+    StridedView, Wgsl, validate_parameterized_output,
 };
 
 use crate::application::elementwise::encode_elementwise;
@@ -19,10 +18,9 @@ use crate::infrastructure::device::WgpuDevice;
 
 struct ParameterizedUnaryKernel<Op>(PhantomData<Op>);
 
-fn shader_source<Op, T>(width: BlockWidth) -> String
+fn shader_source<Op>(width: BlockWidth) -> String
 where
     Op: ParameterizedUnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl>,
 {
     format!(
         r#"{meta}
@@ -46,7 +44,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 }}
 "#,
         meta = WGSL_META,
-        ty = T::TYPE_TOKEN,
+        ty = "f32",
         wg = width.get(),
         decode = WGSL_DECODE,
         expr = Op::EXPR,
@@ -58,16 +56,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// # Errors
 ///
 /// Returns a layout, shape, alias, workgroup, pipeline, or submission error.
-pub fn parameterized_unary_strided_into<Op, T, const N: usize>(
+pub fn parameterized_unary_strided_into<Op, const N: usize>(
     device: &WgpuDevice,
-    input: StridedOperand<'_, T, N>,
-    parameters: [T; 2],
-    output: StridedOperand<'_, T, N>,
+    input: StridedOperand<'_, f32, N>,
+    parameters: [f32; 2],
+    output: StridedOperand<'_, f32, N>,
     width: BlockWidth,
 ) -> Result<()>
 where
     Op: ParameterizedUnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + Pod,
 {
     const {
         assert!(N <= crate::application::strided::MAX_STRIDED_RANK);
@@ -103,16 +100,16 @@ where
     };
     let key = (
         core::any::TypeId::of::<ParameterizedUnaryKernel<Op>>(),
-        core::any::TypeId::of::<T>(),
+        core::any::TypeId::of::<f32>(),
         width.get(),
     );
     let pipeline = cached_pipeline(device, key, "hephaestus-parameterized-unary", || {
-        shader_source::<Op, T>(width)
+        shader_source::<Op>(width)
     });
 
     let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
-    let raw_parameters = device.get_uniform_buffer(WgpuDevice::byte_size::<[T; 2]>(1)?)?;
+    let raw_parameters = device.get_uniform_buffer(WgpuDevice::byte_size::<[f32; 2]>(1)?)?;
     let parameter_buffer =
         crate::infrastructure::pool::uniform_guard(device.clone(), raw_parameters);
     device
@@ -152,23 +149,20 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuParameterizedUnaryOps;
 
-impl<T> ParameterizedUnaryOps<WgpuDevice, T> for WgpuParameterizedUnaryOps
-where
-    T: DialectScalar<Wgsl> + Pod + Send + Sync + 'static,
-{
+impl ParameterizedUnaryOps<WgpuDevice> for WgpuParameterizedUnaryOps {
     type Dialect = Wgsl;
 
     fn parameterized_unary_into<Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        input: StridedView<'_, WgpuBuffer<T>, N>,
-        parameters: [T; 2],
-        output: StridedView<'_, WgpuBuffer<T>, N>,
+        input: StridedView<'_, WgpuBuffer<f32>, N>,
+        parameters: [f32; 2],
+        output: StridedView<'_, WgpuBuffer<f32>, N>,
     ) -> Result<()>
     where
         Op: ParameterizedUnaryExpr<Self::Dialect>,
     {
-        parameterized_unary_strided_into::<Op, T, N>(
+        parameterized_unary_strided_into::<Op, N>(
             device,
             StridedOperand {
                 buffer: input.buffer,

@@ -1,9 +1,8 @@
 //! Device-neutral runtime-parameter unary seam for ROCm.
 
-use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, DeviceBuffer, DialectScalar, HephaestusError, HipC, ParameterizedUnaryExpr,
-    ParameterizedUnaryOps, Result, StridedView, validate_parameterized_output,
+    BlockWidth, DeviceBuffer, HephaestusError, HipC, ParameterizedUnaryExpr, ParameterizedUnaryOps,
+    Result, StridedView, validate_parameterized_output,
 };
 
 use crate::application::pipeline::{
@@ -17,10 +16,9 @@ use crate::application::strided_elementwise::{
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
 
-fn parameterized_unary_shader<Op, T>() -> String
+fn parameterized_unary_shader<Op>() -> String
 where
     Op: ParameterizedUnaryExpr<HipC>,
-    T: DialectScalar<HipC>,
 {
     format!(
         r#"
@@ -43,34 +41,33 @@ extern "C" __global__ void parameterized_unary_strided_kernel(
 "#,
         meta = HIP_META,
         decode = HIP_DECODE,
-        ty = T::TYPE_TOKEN,
+        ty = "float",
         expr = Op::EXPR,
     )
 }
 
-fn launch_parameterized_unary<Op, T>(
+fn launch_parameterized_unary<Op>(
     device: &RocmDevice,
-    input: &RocmBuffer<T>,
-    parameters: [T; 2],
-    output: &RocmBuffer<T>,
+    input: &RocmBuffer<f32>,
+    parameters: [f32; 2],
+    output: &RocmBuffer<f32>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
 ) -> Result<()>
 where
     Op: ParameterizedUnaryExpr<HipC>,
-    T: DialectScalar<HipC> + Pod,
 {
     let key = PipelineKey::ParameterizedStridedUnary {
         op: core::any::TypeId::of::<Op>(),
-        scalar: core::any::TypeId::of::<T>(),
+        scalar: core::any::TypeId::of::<f32>(),
         width: width.get(),
     };
     let kernel = cached_kernel(
         device,
         key,
         "parameterized_unary_strided_kernel",
-        parameterized_unary_shader::<Op, T>,
+        parameterized_unary_shader::<Op>,
     )?;
     let mut meta = meta;
     let mut input_ptr: DevicePtr = input.raw();
@@ -79,8 +76,8 @@ where
     let mut args: [*mut core::ffi::c_void; 5] = [
         (&mut meta as *mut StridedMeta).cast(),
         (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut first as *mut T).cast(),
-        (&mut second as *mut T).cast(),
+        (&mut first as *mut f32).cast(),
+        (&mut second as *mut f32).cast(),
         (&mut output_ptr as *mut DevicePtr).cast(),
     ];
     launch_kernel(
@@ -92,16 +89,15 @@ where
 }
 
 /// Run a runtime-parameter unary expression over strided rank-`N` views.
-pub fn parameterized_unary_strided_into<Op, T, const N: usize>(
+pub fn parameterized_unary_strided_into<Op, const N: usize>(
     device: &RocmDevice,
-    input: StridedOperand<'_, T, N>,
-    parameters: [T; 2],
-    output: StridedOperand<'_, T, N>,
+    input: StridedOperand<'_, f32, N>,
+    parameters: [f32; 2],
+    output: StridedOperand<'_, f32, N>,
     width: BlockWidth,
 ) -> Result<()>
 where
     Op: ParameterizedUnaryExpr<HipC>,
-    T: DialectScalar<HipC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -138,7 +134,7 @@ where
             dispatch_len(len)?,
         ],
     };
-    launch_parameterized_unary::<Op, T>(
+    launch_parameterized_unary::<Op>(
         device,
         input.buffer,
         parameters,
@@ -153,23 +149,20 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmParameterizedUnaryOps;
 
-impl<T> ParameterizedUnaryOps<RocmDevice, T> for RocmParameterizedUnaryOps
-where
-    T: DialectScalar<HipC> + Pod + Send + Sync + 'static,
-{
+impl ParameterizedUnaryOps<RocmDevice> for RocmParameterizedUnaryOps {
     type Dialect = HipC;
 
     fn parameterized_unary_into<Op, const N: usize>(
         &self,
         device: &RocmDevice,
-        input: StridedView<'_, RocmBuffer<T>, N>,
-        parameters: [T; 2],
-        output: StridedView<'_, RocmBuffer<T>, N>,
+        input: StridedView<'_, RocmBuffer<f32>, N>,
+        parameters: [f32; 2],
+        output: StridedView<'_, RocmBuffer<f32>, N>,
     ) -> Result<()>
     where
         Op: ParameterizedUnaryExpr<Self::Dialect>,
     {
-        parameterized_unary_strided_into::<Op, T, N>(
+        parameterized_unary_strided_into::<Op, N>(
             device,
             StridedOperand {
                 buffer: input.buffer,

@@ -36,12 +36,12 @@ Target release: 0.18.0.
 
 ### Added
 
-- [minor] `ParameterizedUnaryExpr` and `ParameterizedUnaryOps` keep Hardtanh
-  and Threshold bounds, replacement values, and gradients as runtime dispatch
-  data across WGPU, CUDA, ROCm, and Metal. One shared exact conformance suite
-  covers non-default parameters, kink conventions, strided layouts, changed
-  parameters on cached kernels, reversed-bound dialect parity, and writable
-  layout and buffer alias rejection.
+- [minor] `ParameterizedUnaryExpr` and `ParameterizedUnaryOps` keep `f32`
+  Hardtanh and Threshold bounds, replacement values, and gradients as runtime
+  dispatch data across WGPU, CUDA, ROCm, and Metal. One shared exact conformance
+  suite covers non-default parameters, kink conventions, strided layouts,
+  changed parameters on cached kernels, reversed-bound dialect parity, and
+  writable layout and buffer alias rejection.
 
 - [minor] `ConvolutionOps` defines one monomorphized accelerator seam for
   regular and transposed forward/additive-backward operations. Backend-neutral

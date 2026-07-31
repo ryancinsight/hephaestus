@@ -1,8 +1,7 @@
 //! Device-neutral runtime-parameter unary seam for CUDA.
 
-use bytemuck::Pod;
 use hephaestus_core::{
-    BlockWidth, CudaC, DeviceBuffer, DialectScalar, HephaestusError, ParameterizedUnaryExpr,
+    BlockWidth, CudaC, DeviceBuffer, HephaestusError, ParameterizedUnaryExpr,
     ParameterizedUnaryOps, Result, StridedView, validate_parameterized_output,
 };
 
@@ -15,10 +14,9 @@ use crate::application::strided::{
 };
 use crate::{CudaBuffer, CudaDevice};
 
-fn parameterized_unary_shader<Op, T>() -> String
+fn parameterized_unary_shader<Op>() -> String
 where
     Op: ParameterizedUnaryExpr<CudaC>,
-    T: DialectScalar<CudaC>,
 {
     format!(
         r#"
@@ -40,35 +38,34 @@ extern "C" __global__ void parameterized_unary_strided_kernel(
 }}
 "#,
         meta = CUDA_META,
-        ty = T::TYPE_TOKEN,
+        ty = "float",
         decode = CUDA_DECODE,
         expr = Op::EXPR,
     )
 }
 
-fn launch_parameterized_unary<Op, T>(
+fn launch_parameterized_unary<Op>(
     device: &CudaDevice,
-    input: &CudaBuffer<T>,
-    parameters: [T; 2],
-    output: &CudaBuffer<T>,
+    input: &CudaBuffer<f32>,
+    parameters: [f32; 2],
+    output: &CudaBuffer<f32>,
     meta: StridedMeta,
     width: BlockWidth,
     len: usize,
 ) -> Result<()>
 where
     Op: ParameterizedUnaryExpr<CudaC>,
-    T: DialectScalar<CudaC> + Pod,
 {
     let key = PipelineKey::ParameterizedStridedUnary {
         op: core::any::TypeId::of::<Op>(),
-        scalar: core::any::TypeId::of::<T>(),
+        scalar: core::any::TypeId::of::<f32>(),
         width: width.get(),
     };
     let kernel = cached_kernel(
         device,
         key,
         "parameterized_unary_strided_kernel",
-        parameterized_unary_shader::<Op, T>,
+        parameterized_unary_shader::<Op>,
     )?;
     let mut meta = meta;
     let mut input_ptr = input.raw();
@@ -77,8 +74,8 @@ where
     let mut args: [*mut core::ffi::c_void; 5] = [
         (&mut meta as *mut StridedMeta).cast(),
         (&mut input_ptr as *mut u64).cast(),
-        (&mut first as *mut T).cast(),
-        (&mut second as *mut T).cast(),
+        (&mut first as *mut f32).cast(),
+        (&mut second as *mut f32).cast(),
         (&mut output_ptr as *mut u64).cast(),
     ];
     launch_kernel(
@@ -90,16 +87,15 @@ where
 }
 
 /// Run a runtime-parameter unary expression over strided rank-`N` views.
-pub fn parameterized_unary_strided_into<Op, T, const N: usize>(
+pub fn parameterized_unary_strided_into<Op, const N: usize>(
     device: &CudaDevice,
-    input: StridedOperand<'_, T, N>,
-    parameters: [T; 2],
-    output: StridedOperand<'_, T, N>,
+    input: StridedOperand<'_, f32, N>,
+    parameters: [f32; 2],
+    output: StridedOperand<'_, f32, N>,
     width: BlockWidth,
 ) -> Result<()>
 where
     Op: ParameterizedUnaryExpr<CudaC>,
-    T: DialectScalar<CudaC> + Pod,
 {
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
@@ -132,7 +128,7 @@ where
             to_u32(len, "dispatch size")?,
         ],
     };
-    launch_parameterized_unary::<Op, T>(
+    launch_parameterized_unary::<Op>(
         device,
         input.buffer,
         parameters,
@@ -147,23 +143,20 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaParameterizedUnaryOps;
 
-impl<T> ParameterizedUnaryOps<CudaDevice, T> for CudaParameterizedUnaryOps
-where
-    T: DialectScalar<CudaC> + Pod + Send + Sync + 'static,
-{
+impl ParameterizedUnaryOps<CudaDevice> for CudaParameterizedUnaryOps {
     type Dialect = CudaC;
 
     fn parameterized_unary_into<Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        input: StridedView<'_, CudaBuffer<T>, N>,
-        parameters: [T; 2],
-        output: StridedView<'_, CudaBuffer<T>, N>,
+        input: StridedView<'_, CudaBuffer<f32>, N>,
+        parameters: [f32; 2],
+        output: StridedView<'_, CudaBuffer<f32>, N>,
     ) -> Result<()>
     where
         Op: ParameterizedUnaryExpr<Self::Dialect>,
     {
-        parameterized_unary_strided_into::<Op, T, N>(
+        parameterized_unary_strided_into::<Op, N>(
             device,
             StridedOperand {
                 buffer: input.buffer,
