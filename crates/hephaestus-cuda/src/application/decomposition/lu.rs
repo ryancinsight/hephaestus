@@ -451,7 +451,7 @@ mod gemm_impl {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn gemm_trailing_update(
+    pub(crate) fn gemm_trailing_update(
         device: &CudaDevice,
         a_buf: &CudaBuffer<f32>,
         a_offset: usize,

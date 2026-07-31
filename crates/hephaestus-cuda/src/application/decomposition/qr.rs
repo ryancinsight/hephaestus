@@ -459,7 +459,7 @@ mod hh_impl {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn hh_trailing_update(
+    pub(crate) fn hh_trailing_update(
         device: &CudaDevice,
         v_buf: &CudaBuffer<f32>,
         a_buf: &CudaBuffer<f32>,

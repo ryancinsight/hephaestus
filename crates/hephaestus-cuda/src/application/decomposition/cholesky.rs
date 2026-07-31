@@ -388,7 +388,7 @@ mod syrk_impl {
         .to_string()
     }
 
-    pub fn syrk_trailing_update(
+    pub(crate) fn syrk_trailing_update(
         device: &CudaDevice,
         trail: &CudaBuffer<f32>,
         trail_layout: &leto::Layout<2>,
