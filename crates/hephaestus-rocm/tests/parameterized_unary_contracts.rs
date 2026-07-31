@@ -2,13 +2,15 @@
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 use hephaestus_conformance::assert_parameterized_unary_contract;
-use hephaestus_rocm::{HardtanhOp, parameterized_unary_strided_into};
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-use hephaestus_rocm::{RocmDevice, RocmParameterizedUnaryOps};
+use hephaestus_rocm::RocmDevice;
+use hephaestus_rocm::{HardtanhOp, RocmParameterizedUnaryOps, parameterized_unary_strided_into};
 
 #[test]
 fn adapterless_build_exports_the_parameterized_dispatch_surface() {
     let _dispatch = parameterized_unary_strided_into::<HardtanhOp, 1>;
+    let provider = RocmParameterizedUnaryOps;
+    assert_eq!(core::mem::size_of_val(&provider), 0);
 }
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
