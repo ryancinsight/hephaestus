@@ -55,15 +55,18 @@ section.
 ## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf]
 
 - [x] Establish the exact blocked-QR value-contract baseline.
-- [ ] Capture a fresh four-, five-, and eight-panel baseline on the clean Leto
+- [x] Capture a fresh four-, five-, and eight-panel baseline on the clean Leto
       overlay.
-- [ ] Compare the eight-panel direct route with the unchanged benchmark.
-- [ ] Accept only if both target intervals improve and the control is stable.
-- [ ] Pass routing-boundary contracts, warning-denied gates, and backend CI.
+- [x] Compare the eight-panel direct route with the unchanged benchmark.
+- [x] Reject the candidate because the eight-panel target regresses by more
+      than 700%; retain the four-panel route.
+- [x] Record the matched Criterion result without a runtime change or speedup
+      claim.
 
 Implementation owner: Codex on `codex/hephaestus-qr-direct-eight`. Claimed
-files are WGPU blocked QR routing and boundary contracts, `CHANGELOG.md`,
-`backlog.md`, `gap_audit.md`, and this section.
+files are WGPU blocked QR routing and boundary contracts, `benchmark_results.md`,
+`backlog.md`, `gap_audit.md`, and this section. No runtime source or benchmark
+change is retained.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
