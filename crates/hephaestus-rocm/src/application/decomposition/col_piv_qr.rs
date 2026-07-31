@@ -385,7 +385,7 @@ pub fn col_piv_qr(
         Layout::c_contiguous([rows, cols]).map_err(|error| HephaestusError::DispatchFailed {
             message: format!("column-pivoted QR dense layout failed: {error}"),
         })?;
-    let r = device.alloc_zeroed::<f32>(elements)?;
+    let r = device.alloc_uninitialized::<f32>(elements)?;
     unary_elementwise_strided_into::<IdentityOp, f32, 2>(
         device,
         matrix,

@@ -4,6 +4,35 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-rocm-pivot-overwrite`; scope: ROCm native
+  complete-pivot LU and column-pivot QR factor-matrix startup copies, focused
+  Leto-differential contracts, and synchronized PM evidence.
+- Outcome: allocate each non-empty private factor matrix through the
+  overwrite-before-read seam before the validated dense copy or strided
+  identity kernel assigns every logical element.
+- Non-goals: decomposition arithmetic, pivot/status/threshold initialization,
+  empty outputs, WGPU/CUDA host-upload implementations, allocation capacities,
+  benchmark workloads, and runtime claims without matched measurements.
+- Acceptance: both private factor allocations are exposed only after their
+  complete copy dispatch and decomposition stages succeed; dense and strided
+  inputs preserve Leto values, pivots, rank, solve, and inverse/least-squares
+  contracts; warning-denied ROCm gates and exact-head backend CI pass.
+- Risk/change class: `[patch]` internal ROCm allocation policy. Each non-empty
+  successful factorization omits one initialization transfer of the complete
+  factor matrix. Peak allocation, decomposition order, and public ownership are
+  unchanged.
+- Evidence: focused decomposition-feature nextest contracts pass for
+  complete-pivot LU (3/3) and column-pivot QR (3/3), including Leto values,
+  dense/strided layouts, ranks, solves, inverse, least-squares, and non-finite
+  rejection. Warning-denied ROCm clippy passes. Independent review approves
+  complete write coverage, private failure paths, stream ordering, empty
+  behavior, and the bounded transfer claim with high confidence.
+  Implementation-head CI passes on CUDA (`91147530954`), ROCm (`91147531264`),
+  WGPU (`91147531030`), and macOS Metal (`91147530759`).
+- Status: done 2026-07-31. Delivered by PR #163.
+
 ## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-axis-reduction-overwrite`; scope: WGPU,

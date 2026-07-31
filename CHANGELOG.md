@@ -74,6 +74,13 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate non-empty ROCm complete-pivot LU and column-pivot QR factor
+  matrices through the overwrite-before-read device seam. Each successful
+  factorization omits one matrix-sized initialization transfer before its dense
+  copy or strided identity kernel assigns every logical element. Pivot,
+  status, threshold, empty-output, and decomposition arithmetic contracts are
+  unchanged; no runtime gain is claimed without matched hardware measurements.
+
 - [patch] Allocate rank-2 sum, product, minimum, maximum, and mean outputs
   through the overwrite-before-read device seam across WGPU, CUDA, and ROCm,
   with Metal inheriting WGPU. Each non-empty successful CUDA and ROCm call
