@@ -2,6 +2,9 @@
 
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+/// Device-neutral axis-reduction seam implementation.
+pub mod axis_reduction_seam;
 /// Native HIP regular and transposed convolution.
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub mod convolution;
@@ -30,7 +33,6 @@ pub mod random;
 pub mod reduction;
 /// Rank-2 prefix and suffix scans over strided layouts.
 pub mod scan;
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral scan seam implementation.
 pub mod scan_seam;
 /// Device-resident CSR sparse matrix products.

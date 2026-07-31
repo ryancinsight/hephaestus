@@ -61,7 +61,15 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     type Dialect: KernelDialect;
 
     /// Dispatch resources bound to one input/output operand pair.
-    type Prepared;
+    ///
+    /// Lifetime-parameterized so backends whose prepared form borrows the
+    /// operand pair (CUDA, ROCm) implement the seam without erasing that
+    /// borrow; handle-based backends (WGPU) simply ignore `'op`.
+    type Prepared<'op>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Reduce `input` along `axis` into `output` under the combining operator
     /// `Op`.
@@ -115,13 +123,13 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns a typed dispatch error when axis, shape, output-layout, or
     /// aliasing validation fails.
-    fn prepare_reduce_axis_into<Op>(
+    fn prepare_reduce_axis_into<'op, Op>(
         &self,
         device: &D,
-        input: StridedView<'_, D::Buffer<T>, 2>,
+        input: StridedView<'op, D::Buffer<T>, 2>,
         axis: usize,
-        output: StridedView<'_, D::Buffer<T>, 2>,
-    ) -> Result<Self::Prepared>
+        output: StridedView<'op, D::Buffer<T>, 2>,
+    ) -> Result<Self::Prepared<'op>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
@@ -131,7 +139,7 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     /// # Errors
     ///
     /// Returns the backend dispatch failure.
-    fn dispatch_prepared(&self, device: &D, prepared: &Self::Prepared) -> Result<()>;
+    fn dispatch_prepared(&self, device: &D, prepared: &Self::Prepared<'_>) -> Result<()>;
 }
 
 /// Device-neutral full-array reduction over a strided n-D operand to a

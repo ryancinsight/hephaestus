@@ -39,6 +39,8 @@ pub use application::axis_reduction::{
     prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
 #[cfg(all(feature = "rocm", target_os = "linux"))]
+pub use application::axis_reduction_seam::RocmAxisReductionOps;
+#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::convolution::RocmConvolutionOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
@@ -92,7 +94,6 @@ pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::scan_seam::{RocmPreparedScan, RocmScanOps};
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,

@@ -43,7 +43,10 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod,
 {
     type Dialect = Wgsl;
-    type Prepared = PreparedAxisReduction<T>;
+    type Prepared<'op>
+        = PreparedAxisReduction<T>
+    where
+        T: 'op;
 
     #[inline]
     fn reduce_axis_into<Op>(
@@ -87,13 +90,13 @@ where
     }
 
     #[inline]
-    fn prepare_reduce_axis_into<Op>(
+    fn prepare_reduce_axis_into<'op, Op>(
         &self,
         device: &WgpuDevice,
-        input: StridedView<'_, WgpuBuffer<T>, 2>,
+        input: StridedView<'op, WgpuBuffer<T>, 2>,
         axis: usize,
-        output: StridedView<'_, WgpuBuffer<T>, 2>,
-    ) -> Result<Self::Prepared>
+        output: StridedView<'op, WgpuBuffer<T>, 2>,
+    ) -> Result<Self::Prepared<'op>>
     where
         Op: CombineExpr<Wgsl>,
         T: OpIdentity<Op> + IdentityToken<Op, Wgsl>,
@@ -108,7 +111,7 @@ where
     }
 
     #[inline]
-    fn dispatch_prepared(&self, device: &WgpuDevice, prepared: &Self::Prepared) -> Result<()> {
+    fn dispatch_prepared(&self, device: &WgpuDevice, prepared: &Self::Prepared<'_>) -> Result<()> {
         prepared.dispatch(device)
     }
 }

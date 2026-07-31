@@ -42,6 +42,7 @@ mod infrastructure;
 /// Monomorphized CUDA compute dispatch.
 pub mod application;
 
+pub use application::axis_reduction_seam::CudaAxisReductionOps;
 pub use application::convolution::CudaConvolutionOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
