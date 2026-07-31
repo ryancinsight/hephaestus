@@ -22,6 +22,12 @@ cuda-oxide + cutile).
   initialization transfers per blocked QR call. WGPU and Metal record the
   overwrite contract while preserving WebGPU's platform-managed
   initialization. Peak allocation is unchanged.
+- Evidence: WGPU blocked-decomposition contracts pass 19/19 before and after
+  the change; physical CUDA contracts pass 18/18 before and after. Rust 1.97
+  package formatting and warning-denied all-target Clippy pass for WGPU and
+  feature-enabled CUDA. Region gathers and host uploads overwrite every active
+  compact-panel, reflector-vector, and reflector-metadata prefix before the
+  corresponding copy or update consumes it.
 - Status: in progress 2026-07-31. Claimed files: WGPU blocked Cholesky, LU, and
   QR implementations; CUDA blocked QR; `CHANGELOG.md`, `backlog.md`, and
   `checklist.md`.

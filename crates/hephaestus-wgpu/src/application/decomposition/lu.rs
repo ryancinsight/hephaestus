@@ -521,7 +521,7 @@ pub fn lu_decompose_blocked(
 
     // Pre-allocate a single reusable compact transfer buffer for the maximum panel size (n * block_size)
     // to avoid O(n/b) device allocations inside the loop.
-    let temp_compact_buf = device.alloc_zeroed::<f32>(n * block_size)?;
+    let temp_compact_buf = device.alloc_uninitialized::<f32>(n * block_size)?;
 
     // Track cumulative row permutation applied to the full matrix.
     let mut perm: Vec<usize> = (0..n).collect();

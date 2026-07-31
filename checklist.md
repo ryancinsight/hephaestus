@@ -4,12 +4,12 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
-- [ ] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
-- [ ] Prove each consumed workspace prefix is overwritten before first read.
-- [ ] Route the WGPU and CUDA reusable workspaces through
+- [x] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
+- [x] Prove each consumed workspace prefix is overwritten before first read.
+- [x] Route the WGPU and CUDA reusable workspaces through
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
-- [ ] Pass Rust 1.97 warning-denied WGPU and CUDA package gates.
-- [ ] Pass exact WGPU and physical CUDA blocked-decomposition contracts.
+- [x] Pass Rust 1.97 warning-denied WGPU and CUDA package gates.
+- [x] Pass exact WGPU and physical CUDA blocked-decomposition contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on

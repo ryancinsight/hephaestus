@@ -74,6 +74,15 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Allocate seven reusable blocked-decomposition panel-transfer
+  workspaces through the overwrite-before-read device seam. CUDA omits two
+  initialization transfers before blocked QR uploads each active reflector
+  vector and metadata prefix. WGPU and Metal record the same consumption
+  contract while preserving WebGPU's platform-managed initialization.
+  ROCm's native whole-device decomposition algorithms have no corresponding
+  host-panel workspace. Arithmetic, workspace capacities, and peak allocation
+  are unchanged; no runtime gain is claimed without matched measurements.
+
 - [patch] Allocate CUDA and ROCm matrix-properties scratch, rank, and
   determinant outputs through the overwrite-before-read device seam. Each
   validated native call omits one matrix-sized initialization transfer and

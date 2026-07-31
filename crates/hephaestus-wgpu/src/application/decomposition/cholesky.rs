@@ -488,7 +488,7 @@ pub fn cholesky_decompose_blocked(
 
     // Pre-allocate a reusable compact buffer for the maximum panel region:
     // panel_rows = n - k <= n, cols = b <= block_size  =>  max n * block_size elements.
-    let panel_compact_buf = device.alloc_zeroed::<f32>(n * block_size)?;
+    let panel_compact_buf = device.alloc_uninitialized::<f32>(n * block_size)?;
 
     let mut host = vec![0.0f32; n * n];
 
