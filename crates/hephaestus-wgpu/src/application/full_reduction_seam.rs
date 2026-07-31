@@ -61,14 +61,17 @@ where
     T: DialectScalar<Wgsl> + Pod + Send + Sync + 'static,
 {
     type Dialect = Wgsl;
-    type Prepared<const N: usize> = PreparedFullReduction<T>;
+    type Prepared<'op, const N: usize>
+        = PreparedFullReduction<T>
+    where
+        T: 'op;
 
-    fn prepare_reduce_full<Op, const N: usize>(
+    fn prepare_reduce_full<'op, Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        input: StridedView<'_, WgpuBuffer<T>, N>,
-        output: StridedView<'_, WgpuBuffer<T>, 1>,
-    ) -> Result<Self::Prepared<N>>
+        input: StridedView<'op, WgpuBuffer<T>, N>,
+        output: StridedView<'op, WgpuBuffer<T>, 1>,
+    ) -> Result<Self::Prepared<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -100,7 +103,7 @@ where
     fn dispatch_full<const N: usize>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::Prepared<N>,
+        prepared: &Self::Prepared<'_, N>,
     ) -> Result<()> {
         validate_device_owner(&prepared.owner, device, "full reduction")?;
 

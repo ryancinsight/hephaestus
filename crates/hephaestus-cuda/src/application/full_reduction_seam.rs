@@ -1,3 +1,11 @@
+//! CUDA implementation of the device-neutral full-reduction seam.
+//!
+//! The prepared form owns a contiguous staging buffer and the multi-pass
+//! reduction plan, and borrows the operand pair: each dispatch re-materialises
+//! the (possibly strided) input into the staging buffer, re-runs the passes,
+//! and writes the scalar into the bound output — so re-dispatch observes
+//! writes to the bound input (the seam's rebind contract).
+
 use bytemuck::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, ElementwiseOps,
@@ -6,7 +14,7 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::application::elementwise_seam::CudaElementwiseOps;
-use crate::application::reduction::reduction_with_width;
+use crate::application::prepared_reduction::PreparedReductionPlan;
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -15,41 +23,17 @@ use crate::infrastructure::device::CudaDevice;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaFullReductionOps;
 
-/// Prepared full reduction; the operation runs in `prepare` under CUDA's
-/// synchronous execution model so `dispatch` is a no-op.
-#[derive(Clone, Copy, Debug)]
-pub struct CudaPreparedFullReduction;
-
-/// Materialise a strided view into a contiguous buffer.
-///
-/// Always allocates a new buffer because [`CudaBuffer`] is not [`Clone`]; the
-/// fast-path for already-contiguous inputs is evaluated but not taken (the
-/// caller already owns the buffer reference).
-fn contiguous_reduction_source<T, const N: usize>(
-    device: &CudaDevice,
-    input: StridedView<'_, CudaBuffer<T>, N>,
-) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod,
-{
-    let logical_len = input.layout.checked_size().map_err(map_layout_err)?;
-    input
-        .layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if logical_len == 0 {
-        return device.alloc_uninitialized(0);
-    }
-
-    let out_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
-    let contig = device.alloc_uninitialized::<T>(logical_len)?;
-    <CudaElementwiseOps as ElementwiseOps<CudaDevice, T>>::unary_into::<IdentityOp, N>(
-        &CudaElementwiseOps,
-        device,
-        input,
-        StridedView::new(&contig, &out_layout),
-    )?;
-    Ok(contig)
+/// Prepared full reduction bound to one input/output pair.
+pub struct CudaPreparedFullReduction<'op, T, const N: usize> {
+    input: &'op CudaBuffer<T>,
+    input_layout: Layout<N>,
+    output: &'op CudaBuffer<T>,
+    output_offset: usize,
+    /// Contiguous staging target re-filled from `input` at each dispatch;
+    /// `None` when the logical input is empty and the plan's identity output
+    /// is written directly.
+    staging: Option<(CudaBuffer<T>, Layout<N>)>,
+    plan: PreparedReductionPlan<T>,
 }
 
 impl<T> FullReductionOps<CudaDevice, T> for CudaFullReductionOps
@@ -57,14 +41,17 @@ where
     T: DialectScalar<CudaC> + Pod + Send + Sync,
 {
     type Dialect = CudaC;
-    type Prepared<const N: usize> = CudaPreparedFullReduction;
+    type Prepared<'op, const N: usize>
+        = CudaPreparedFullReduction<'op, T, N>
+    where
+        T: 'op;
 
-    fn prepare_reduce_full<Op, const N: usize>(
+    fn prepare_reduce_full<'op, Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        input: StridedView<'_, CudaBuffer<T>, N>,
-        output: StridedView<'_, CudaBuffer<T>, 1>,
-    ) -> Result<Self::Prepared<N>>
+        input: StridedView<'op, CudaBuffer<T>, N>,
+        output: StridedView<'op, CudaBuffer<T>, 1>,
+    ) -> Result<Self::Prepared<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -78,22 +65,50 @@ where
                 message: "full reduction output must have exactly 1 element".to_string(),
             });
         }
+        let logical_len = input.layout.checked_size().map_err(map_layout_err)?;
+        input
+            .layout
+            .validate_storage_len(input.buffer.len())
+            .map_err(map_layout_err)?;
 
-        let source = contiguous_reduction_source(device, input)?;
-        let result = reduction_with_width::<Op, T>(device, &source, BlockWidth::DEFAULT)?;
+        let staging = if logical_len == 0 {
+            None
+        } else {
+            let staging_layout =
+                Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+            Some((
+                device.alloc_uninitialized::<T>(logical_len)?,
+                staging_layout,
+            ))
+        };
+        let plan = PreparedReductionPlan::prepare::<Op>(device, logical_len, BlockWidth::DEFAULT)?;
 
-        let mut host_val = [T::IDENTITY];
-        device.download_sub_buffer(&result, 0, &mut host_val)?;
-        device.write_sub_buffer(output.buffer, output.layout.offset, &host_val)?;
-
-        Ok(CudaPreparedFullReduction)
+        Ok(CudaPreparedFullReduction {
+            input: input.buffer,
+            input_layout: *input.layout,
+            output: output.buffer,
+            output_offset: output.layout.offset,
+            staging,
+            plan,
+        })
     }
 
     fn dispatch_full<const N: usize>(
         &self,
-        _device: &CudaDevice,
-        _prepared: &Self::Prepared<N>,
+        device: &CudaDevice,
+        prepared: &Self::Prepared<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        if let Some((staging, staging_layout)) = &prepared.staging {
+            <CudaElementwiseOps as ElementwiseOps<CudaDevice, T>>::unary_into::<IdentityOp, N>(
+                &CudaElementwiseOps,
+                device,
+                StridedView::new(prepared.input, &prepared.input_layout),
+                StridedView::new(staging, staging_layout),
+            )?;
+            prepared.plan.dispatch(staging)?;
+        }
+        let mut host_val = [T::zeroed()];
+        device.download_sub_buffer(prepared.plan.output(), 0, &mut host_val)?;
+        device.write_sub_buffer(prepared.output, prepared.output_offset, &host_val)
     }
 }

@@ -1,3 +1,11 @@
+//! ROCm/HIP implementation of the device-neutral full-reduction seam.
+//!
+//! The prepared form owns a contiguous staging buffer and the multi-pass
+//! reduction plan, and borrows the operand pair: each dispatch re-materialises
+//! the (possibly strided) input into the staging buffer, re-runs the passes,
+//! and writes the scalar into the bound output — so re-dispatch observes
+//! writes to the bound input (the seam's rebind contract).
+
 use bytemuck::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, ElementwiseOps,
@@ -9,7 +17,7 @@ use leto::Layout;
 use crate::RocmBuffer;
 use crate::RocmDevice;
 use crate::application::elementwise_seam::RocmElementwiseOps;
-use crate::application::reduction::reduction_with_width;
+use crate::application::prepared_reduction::PreparedReductionPlan;
 
 fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
@@ -17,58 +25,39 @@ fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     }
 }
 
-/// Materialise a strided view into a contiguous buffer.
-///
-/// Always allocates a new buffer because [`RocmBuffer`] is not [`Clone`].
-fn contiguous_reduction_source<T, const N: usize>(
-    device: &RocmDevice,
-    input: StridedView<'_, RocmBuffer<T>, N>,
-) -> Result<RocmBuffer<T>>
-where
-    T: DialectScalar<HipC> + Pod,
-{
-    let logical_len = input.layout.checked_size().map_err(map_layout_err)?;
-    input
-        .layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if logical_len == 0 {
-        return device.alloc_uninitialized(0);
-    }
-
-    let out_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
-    let contig = device.alloc_uninitialized::<T>(logical_len)?;
-    <RocmElementwiseOps as ElementwiseOps<RocmDevice, T>>::unary_into::<IdentityOp, N>(
-        &RocmElementwiseOps,
-        device,
-        input,
-        StridedView::new(&contig, &out_layout),
-    )?;
-    Ok(contig)
-}
-
 /// Provider-owned implementation of [`FullReductionOps`] for ROCm/HIP.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmFullReductionOps;
 
-/// Prepared full reduction; the operation runs in `prepare` under ROCm's
-/// synchronous execution model so `dispatch` is a no-op.
-#[derive(Clone, Copy, Debug)]
-pub struct RocmPreparedFullReduction;
+/// Prepared full reduction bound to one input/output pair.
+pub struct RocmPreparedFullReduction<'op, T, const N: usize> {
+    input: &'op RocmBuffer<T>,
+    input_layout: Layout<N>,
+    output: &'op RocmBuffer<T>,
+    output_offset: usize,
+    /// Contiguous staging target re-filled from `input` at each dispatch;
+    /// `None` when the logical input is empty and the plan's identity output
+    /// is written directly.
+    staging: Option<(RocmBuffer<T>, Layout<N>)>,
+    plan: PreparedReductionPlan<T>,
+}
 
 impl<T> FullReductionOps<RocmDevice, T> for RocmFullReductionOps
 where
     T: DialectScalar<HipC> + Pod + Send + Sync,
 {
     type Dialect = HipC;
-    type Prepared<const N: usize> = RocmPreparedFullReduction;
+    type Prepared<'op, const N: usize>
+        = RocmPreparedFullReduction<'op, T, N>
+    where
+        T: 'op;
 
-    fn prepare_reduce_full<Op, const N: usize>(
+    fn prepare_reduce_full<'op, Op, const N: usize>(
         &self,
         device: &RocmDevice,
-        input: StridedView<'_, RocmBuffer<T>, N>,
-        output: StridedView<'_, RocmBuffer<T>, 1>,
-    ) -> Result<Self::Prepared<N>>
+        input: StridedView<'op, RocmBuffer<T>, N>,
+        output: StridedView<'op, RocmBuffer<T>, 1>,
+    ) -> Result<Self::Prepared<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -82,22 +71,51 @@ where
                 message: "full reduction output must have exactly 1 element".to_string(),
             });
         }
+        let logical_len = input.layout.checked_size().map_err(map_layout_err)?;
+        input
+            .layout
+            .validate_storage_len(input.buffer.len())
+            .map_err(map_layout_err)?;
 
-        let source = contiguous_reduction_source(device, input)?;
-        let result = reduction_with_width::<Op, T>(device, &source, BlockWidth::DEFAULT)?;
+        let staging = if logical_len == 0 {
+            None
+        } else {
+            let staging_layout =
+                Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+            Some((
+                device.alloc_uninitialized::<T>(logical_len)?,
+                staging_layout,
+            ))
+        };
+        let plan = PreparedReductionPlan::prepare::<Op>(device, logical_len, BlockWidth::DEFAULT)?;
 
-        let mut host_val = [T::IDENTITY];
-        device.download(&result, &mut host_val)?;
-        device.write_sub_buffer(output.buffer, output.layout.offset, &host_val)?;
-
-        Ok(RocmPreparedFullReduction)
+        Ok(RocmPreparedFullReduction {
+            input: input.buffer,
+            input_layout: *input.layout,
+            output: output.buffer,
+            output_offset: output.layout.offset,
+            staging,
+            plan,
+        })
     }
 
     fn dispatch_full<const N: usize>(
         &self,
-        _device: &RocmDevice,
-        _prepared: &Self::Prepared<N>,
+        device: &RocmDevice,
+        prepared: &Self::Prepared<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        if let Some((staging, staging_layout)) = &prepared.staging {
+            <RocmElementwiseOps as ElementwiseOps<RocmDevice, T>>::unary_into::<IdentityOp, N>(
+                &RocmElementwiseOps,
+                device,
+                StridedView::new(prepared.input, &prepared.input_layout),
+                StridedView::new(staging, staging_layout),
+            )?;
+            prepared.plan.dispatch(staging)?;
+        }
+        // The final pass output holds exactly one element by construction.
+        let mut host_val = [T::zeroed()];
+        device.download(prepared.plan.output(), &mut host_val)?;
+        device.write_sub_buffer(prepared.output, prepared.output_offset, &host_val)
     }
 }

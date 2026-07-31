@@ -159,7 +159,15 @@ pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
 
     /// Prepared resources for a full reduction bound to fixed input/output
     /// views.
-    type Prepared<const N: usize>;
+    ///
+    /// Lifetime-parameterized so backends whose prepared form borrows the
+    /// operand pair implement the seam without erasing that borrow;
+    /// handle-based backends simply ignore `'op`.
+    type Prepared<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Reduce the entire `input` view into the one-element `output` under the
     /// combining operator `Op`.
@@ -191,12 +199,12 @@ pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
     /// Returns a shape mismatch when `output` does not have length one, an
     /// aliasing violation, a layout validation failure, or the backend
     /// preparation failure.
-    fn prepare_reduce_full<Op, const N: usize>(
+    fn prepare_reduce_full<'op, Op, const N: usize>(
         &self,
         device: &D,
-        input: StridedView<'_, D::Buffer<T>, N>,
-        output: StridedView<'_, D::Buffer<T>, 1>,
-    ) -> Result<Self::Prepared<N>>
+        input: StridedView<'op, D::Buffer<T>, N>,
+        output: StridedView<'op, D::Buffer<T>, 1>,
+    ) -> Result<Self::Prepared<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
@@ -206,8 +214,11 @@ pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
     /// # Errors
     ///
     /// Returns a prepared-operand mismatch or the backend dispatch failure.
-    fn dispatch_full<const N: usize>(&self, device: &D, prepared: &Self::Prepared<N>)
-    -> Result<()>;
+    fn dispatch_full<const N: usize>(
+        &self,
+        device: &D,
+        prepared: &Self::Prepared<'_, N>,
+    ) -> Result<()>;
 }
 
 /// Marker asserting that a backend supplies both halves of the accelerator

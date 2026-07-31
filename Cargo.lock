@@ -2635,12 +2635,28 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
+name = "iris"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gaia"
+version = "0.3.0"
+
+[[patch.unused]]
 name = "proteus"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris"
-version = "0.1.0"
+name = "moirai-http"
+version = "0.4.0"
 
 [[patch.unused]]
 name = "ritk-core"
@@ -2663,32 +2679,12 @@ name = "ritk-vtk"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "apollo-fft"
-version = "0.25.0"
-
-[[patch.unused]]
-name = "apollo-nufft"
-version = "0.7.0"
+name = "horae"
+version = "0.1.0"
 
 [[patch.unused]]
 name = "hyperion"
 version = "0.1.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "athena-core"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "athena-leto"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "moirai-http"
-version = "0.4.0"
 
 [[patch.unused]]
 name = "coeus-autograd"
@@ -2719,17 +2715,21 @@ name = "coeus-tensor"
 version = "0.9.0"
 
 [[patch.unused]]
-name = "horae"
+name = "athena-core"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "gaia"
-version = "0.3.0"
-
-[[patch.unused]]
-name = "asclepius"
+name = "athena-leto"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius-coeus"
+name = "tyche-core"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "apollo-fft"
+version = "0.25.0"
+
+[[patch.unused]]
+name = "apollo-nufft"
+version = "0.7.0"

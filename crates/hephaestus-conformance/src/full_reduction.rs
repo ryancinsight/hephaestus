@@ -144,6 +144,46 @@ where
         "{name}: transposed full product"
     );
 
+    // A prepared reduction may be re-dispatched, and holds its operand
+    // bindings rather than a snapshot: after the input is rewritten to all
+    // twos, the product becomes 2^12 = 4096, still exact.
+    let out1 = device.alloc_zeroed::<f32>(1).expect("output alloc");
+    let out_layout = Layout::c_contiguous([1]).expect("scalar layout");
+    let prepared = ops
+        .prepare_reduce_full::<ProdOp, 2>(
+            device,
+            StridedView::new(&source, &dense),
+            StridedView::new(&out1, &out_layout),
+        )
+        .expect("prepare full product");
+    ops.dispatch_full::<2>(device, &prepared)
+        .expect("first dispatch");
+    let mut got1 = [0.0f32; 1];
+    device.download(&out1, &mut got1).expect("download");
+    assert_eq!(got1, [1728.0], "{name}: prepared full product");
+    ops.dispatch_full::<2>(device, &prepared)
+        .expect("second dispatch");
+    device.download(&out1, &mut got1).expect("download");
+    assert_eq!(
+        got1,
+        [1728.0],
+        "{name}: prepared full reduction must be idempotent over unchanged input"
+    );
+    device
+        .write_buffer(&source, &[2.0f32; 12])
+        .expect("input rewrite");
+    ops.dispatch_full::<2>(device, &prepared)
+        .expect("third dispatch");
+    device.download(&out1, &mut got1).expect("download");
+    assert_eq!(
+        got1,
+        [4096.0],
+        "{name}: prepared full reduction must observe writes to its bound input"
+    );
+    device
+        .write_buffer(&source, &fixture())
+        .expect("input restore");
+
     // An output that is not exactly one element is rejected and untouched.
     let out = device.upload(&[9.0f32, 9.0]).expect("output upload");
     let out_layout = Layout::c_contiguous([2]).expect("output layout");

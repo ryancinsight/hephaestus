@@ -20,14 +20,17 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
-    type Prepared<const N: usize> = PreparedFullReduction<T>;
+    type Prepared<'op, const N: usize>
+        = PreparedFullReduction<T>
+    where
+        T: 'op;
 
-    fn prepare_reduce_full<Op, const N: usize>(
+    fn prepare_reduce_full<'op, Op, const N: usize>(
         &self,
         device: &MetalDevice,
-        input: StridedView<'_, MetalBuffer<T>, N>,
-        output: StridedView<'_, MetalBuffer<T>, 1>,
-    ) -> Result<Self::Prepared<N>>
+        input: StridedView<'op, MetalBuffer<T>, N>,
+        output: StridedView<'op, MetalBuffer<T>, 1>,
+    ) -> Result<Self::Prepared<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -42,7 +45,7 @@ where
     fn dispatch_full<const N: usize>(
         &self,
         device: &MetalDevice,
-        prepared: &Self::Prepared<N>,
+        prepared: &Self::Prepared<'_, N>,
     ) -> Result<()> {
         <WgpuFullReductionOps as FullReductionOps<WgpuDevice, T>>::dispatch_full::<N>(
             &self.inner,
