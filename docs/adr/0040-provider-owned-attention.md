@@ -33,9 +33,10 @@ provider branch.
 
 Query, key, value, output, weights, upstream gradients, and selected gradient
 destinations remain device-resident. Callers own all public output storage.
-Keep masks borrow a rank-3 device view and broadcast dimensions of one without
-materialization. The scale remains a runtime scalar because sequence feature
-width is data-dependent.
+Keep masks borrow a rank-2 `[mask_batch, key_sequence]` device view and carry a
+nonzero execution-batch group width. This represents rank-1, singleton-batch,
+input-batch, and execution-batch masks without materialization. The scale
+remains a runtime scalar because sequence feature width is data-dependent.
 
 Validation proves shape equations, storage spans, writable-layout uniqueness,
 buffer non-aliasing, finite scale, checked products, and backend address width

@@ -1,5 +1,7 @@
 //! Domain contracts: errors, typed device buffers, and accelerator seams.
 
+/// Device-neutral scaled dot-product attention contracts and planning.
+pub mod attention;
 /// Typed device-buffer contract.
 pub mod buffer;
 /// Device-neutral convolution operands, planning, and dispatch seam.

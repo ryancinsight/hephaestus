@@ -4,7 +4,7 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch]
 
-- [ ] Define the device-neutral rank-3 attention operands, mask, gradients,
+- [x] Define the device-neutral rank-3 attention operands, mask, gradients,
       planning contract, and prepared dispatch seam.
 - [ ] Implement WGPU, CUDA, ROCm, and Metal provider-owned attention without
       host execution or provider fallback.
