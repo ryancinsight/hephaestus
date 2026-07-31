@@ -4,6 +4,26 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-metal-volume-overwrite`; scope: Metal's
+  allocating ray-line-integral wrapper, focused analytical contracts, and
+  synchronized PM evidence.
+- Outcome: allocate the private ray-count-sized output through the
+  overwrite-before-read seam before the delegated WGPU kernel assigns every
+  validated ray result.
+- Non-goals: ray traversal arithmetic, field/ray layouts, caller-owned output,
+  WGPU/CUDA/ROCm implementations, benchmark workloads, and runtime claims
+  without matched measurements.
+- Acceptance: validation precedes allocation; every non-empty output element
+  is assigned before exposure; empty output remains valid; analytical Metal
+  ray-integral contracts and warning-denied provider gates pass; exact-head
+  backend CI passes.
+- Risk/change class: `[patch]` internal Metal allocation policy. The change
+  removes one redundant ray-count-sized logical initialization while WebGPU's
+  mandatory platform initialization behavior remains implementation-defined.
+- Status: in-progress 2026-07-31.
+
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 
 - Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
