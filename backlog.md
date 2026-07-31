@@ -109,7 +109,7 @@ cuda-oxide + cutile).
   reduction implementations and prepared plans; reduction contracts;
   `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
-## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — in progress
 
 - Owner: Codex on `codex/hephaestus-qr-direct-eight`; scope: WGPU blocked-QR
   direct-route threshold, its routing-boundary value contracts, matched
@@ -132,13 +132,14 @@ cuda-oxide + cutile).
   one transient 393,216-byte dense readback. Reject the change if the matched
   measurements or boundary contracts fail.
 - Evidence: the unchanged four-panel route passes all six focused blocked-QR
-  contracts. The baseline measures 192x128 at 361.67–366.84 us, 192x129 at
-  974.38–990.63 us, and 384x256 at 2.7922–2.8298 ms. The comparison cannot be
-  collected because concurrent uncommitted Leto zip changes fail with 47
-  lifetime/privacy diagnostics before Hephaestus recompiles.
-- Status: blocked 2026-07-31; re-open when the local Leto overlay is green and
-  unchanged across the matched comparison. No routing source change is
-  retained and no performance conclusion is claimed.
+  contracts. The earlier baseline measures 192x128 at 361.67–366.84 us,
+  192x129 at 974.38–990.63 us, and 384x256 at 2.7922–2.8298 ms, but predates
+  the now-committed Leto zip migration and is not a matched comparison.
+- Status: in progress 2026-07-31. The local Leto overlay is clean; capture a
+  fresh four-panel baseline and compare the eight-panel candidate without
+  changing the benchmark workload. Claimed files: WGPU blocked QR routing and
+  boundary contracts, `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+  `gap_audit.md`.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — done
 
