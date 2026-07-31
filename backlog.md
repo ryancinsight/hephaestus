@@ -4,7 +4,32 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — in progress
+## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-reduction-overwrite`; scope: WGPU, CUDA,
+  and ROCm scalar-reduction tree and prepared-plan outputs, with Metal
+  inheriting WGPU; exact reduction contracts and synchronized PM evidence.
+- Outcome: remove redundant output initialization before singleton copies and
+  reduction kernels overwrite every scalar or partial result.
+- Non-goals: empty-input identity uploads, reduction arithmetic or order, axis
+  reductions, allocation capacities, benchmark workloads, and runtime claims
+  without matched measurements.
+- Acceptance: overwrite-before-read storage is used only for non-empty scalar
+  reductions; generic sum/min/max and width-boundary contracts pass on WGPU and
+  physical CUDA; prepared reuse and batching preserve exact outputs;
+  warning-denied WGPU/CUDA/ROCm gates and exact-head WGPU/CUDA/ROCm/macOS-Metal
+  CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
+  one initialization transfer per reduction-tree pass, including each prepared
+  plan output; CUDA also avoids the singleton output initialization. WGPU and
+  Metal record the same overwrite contract while WebGPU retains its mandated
+  initialization behavior. Peak allocation and empty-input identities remain
+  unchanged.
+- Status: in progress 2026-07-31. Claimed files: WGPU, CUDA, and ROCm scalar
+  reduction implementations and prepared plans; reduction contracts;
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
+
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
 
 - Owner: Codex on `codex/hephaestus-qr-direct-eight`; scope: WGPU blocked-QR
   direct-route threshold, its routing-boundary value contracts, matched
@@ -26,9 +51,14 @@ cuda-oxide + cutile).
   and six mapping polls, but replaces paired 98,304-byte compact staging with
   one transient 393,216-byte dense readback. Reject the change if the matched
   measurements or boundary contracts fail.
-- Status: in progress 2026-07-31. Claimed files: WGPU QR implementation and
-  contract; `benchmark_results.md`, `CHANGELOG.md`, `backlog.md`, and
-  `checklist.md`.
+- Evidence: the unchanged four-panel route passes all six focused blocked-QR
+  contracts. The baseline measures 192x128 at 361.67–366.84 us, 192x129 at
+  974.38–990.63 us, and 384x256 at 2.7922–2.8298 ms. The comparison cannot be
+  collected because concurrent uncommitted Leto zip changes fail with 47
+  lifetime/privacy diagnostics before Hephaestus recompiles.
+- Status: blocked 2026-07-31; re-open when the local Leto overlay is green and
+  unchanged across the matched comparison. No routing source change is
+  retained and no performance conclusion is claimed.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — done
 

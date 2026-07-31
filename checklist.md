@@ -2,18 +2,29 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
-## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf]
+## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact blocked-QR value-contract and matched benchmark baselines.
-- [ ] Measure the four-panel control and the five- and eight-panel routing cases.
-- [ ] Route at most eight panels directly only if both target intervals improve.
-- [ ] Add 256/257-column routing-boundary value contracts.
-- [ ] Pass Rust 1.97 warning-denied WGPU package gates and exact contracts.
+- [ ] Establish exact scalar-reduction and prepared-reuse baselines.
+- [ ] Prove each non-empty pass output is overwritten before first read.
+- [ ] Route WGPU, CUDA, and ROCm outputs through uninitialized allocation.
+- [ ] Preserve empty-input identity uploads and scalar arithmetic order.
+- [ ] Pass Rust 1.97 warning-denied provider gates and exact contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
-Implementation owner: Codex on `codex/hephaestus-qr-direct-eight`. Claimed
-files are the WGPU QR implementation and contract, `benchmark_results.md`,
-`CHANGELOG.md`, `backlog.md`, and this section.
+Implementation owner: Codex on `codex/hephaestus-reduction-overwrite`.
+Claimed files are WGPU, CUDA, and ROCm scalar reduction implementations and
+prepared plans, reduction contracts, `CHANGELOG.md`, `backlog.md`, and this
+section.
+
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — blocked
+
+- [x] Establish the exact blocked-QR value-contract baseline.
+- [x] Measure the unchanged four-, five-, and eight-panel routes.
+- [ ] Re-open after the concurrent Leto zip migration restores a green,
+      stationary overlay for the matched comparison.
+
+No QR source change is retained. The baseline is recorded in `backlog.md`;
+comparison and implementation remain blocked by the local Leto overlay.
 
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
