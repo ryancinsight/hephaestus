@@ -35,7 +35,6 @@ pub(crate) enum PipelineKey {
         width: u32,
     },
     /// Runtime-parameter strided unary operation with a distinct kernel ABI.
-    #[cfg(all(feature = "rocm", target_os = "linux"))]
     ParameterizedStridedUnary {
         op: TypeId,
         scalar: TypeId,

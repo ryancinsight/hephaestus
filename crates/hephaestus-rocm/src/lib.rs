@@ -77,9 +77,7 @@ pub use application::linalg::{
     matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
 };
 pub use application::linalg::{matexp, pinv};
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::parameterized_elementwise::RocmParameterizedUnaryOps;
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
