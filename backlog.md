@@ -4,7 +4,33 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — in progress
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-qr-direct-eight`; scope: WGPU blocked-QR
+  direct-route threshold, its routing-boundary value contracts, matched
+  `blocked_qr_tail` measurements, and synchronized PM evidence. Metal inherits
+  the WGPU implementation.
+- Outcome: route matrices spanning at most eight 32-column panels through one
+  dense readback and host factorization only when matched Criterion evidence
+  proves this faster than the retained panel-blocked path.
+- Non-goals: decomposition arithmetic, the retained blocked algorithm, CUDA or
+  ROCm implementations, benchmark workload changes, and performance claims
+  beyond the measured shapes.
+- Acceptance: 256-column direct and 257-column blocked boundary cases preserve
+  complete factorization, reconstruction, and solve contracts; 192x129 and
+  384x256 benchmark change intervals are strictly negative at 95% confidence;
+  the unchanged 192x128 control does not shift significantly; warning-denied
+  WGPU gates and exact-head WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal routing policy. At 384x256 the direct
+  route removes about 98,816 bytes of persistent blocked-path device scratch
+  and six mapping polls, but replaces paired 98,304-byte compact staging with
+  one transient 393,216-byte dense readback. Reject the change if the matched
+  measurements or boundary contracts fail.
+- Status: in progress 2026-07-31. Claimed files: WGPU QR implementation and
+  contract; `benchmark_results.md`, `CHANGELOG.md`, `backlog.md`, and
+  `checklist.md`.
+
+## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-decomposition-workspace`; scope: reusable
   blocked Cholesky, LU, and QR panel-transfer workspaces in WGPU and CUDA, with

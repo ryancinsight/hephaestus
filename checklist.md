@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-QR-DIRECT-EIGHT-1 [patch] [perf]
+
+- [ ] Establish exact blocked-QR value-contract and matched benchmark baselines.
+- [ ] Measure the four-panel control and the five- and eight-panel routing cases.
+- [ ] Route at most eight panels directly only if both target intervals improve.
+- [ ] Add 256/257-column routing-boundary value contracts.
+- [ ] Pass Rust 1.97 warning-denied WGPU package gates and exact contracts.
+- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+
+Implementation owner: Codex on `codex/hephaestus-qr-direct-eight`. Claimed
+files are the WGPU QR implementation and contract, `benchmark_results.md`,
+`CHANGELOG.md`, `backlog.md`, and this section.
+
 ## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch]
 
 - [x] Establish exact blocked Cholesky, LU, and QR value-contract baselines.
