@@ -884,8 +884,9 @@ No open feature-combination defect is currently recorded in the backend scope.
   the private output without exposing it. Zero-length outputs expose no
   readable element, empty sum/product axes retain operation identities, and
   minimum/maximum/mean retain their typed empty-axis errors. Evidence tier:
-  kernel write-coverage proof plus existing Leto-differential axis contracts;
-  no runtime claim without matched hardware measurements.
+  kernel write-coverage proof, focused WGPU/CUDA/ROCm Leto-differential axis
+  contracts, and implementation-head four-provider CI; no runtime claim without
+  matched hardware measurements.
 
 ## Accepted Design Decisions
 

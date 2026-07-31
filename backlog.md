@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf] — in progress
+## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-axis-reduction-overwrite`; scope: WGPU,
   CUDA, and ROCm allocating rank-2 sum/product/min/max/mean outputs, with Metal
@@ -32,12 +32,11 @@ cuda-oxide + cutile).
   elements. A residue scan leaves only WGPU's initialized one-element dummy
   binding for empty input storage. Independent review approves write coverage,
   validation/error ordering, asynchronous queue ordering, zero-length behavior,
-  and the bounded transfer claim. Local compilation remains blocked by
-  concurrent uncommitted Leto zip changes; clean-checkout CI is the executable
-  provider gate.
-- Status: in progress 2026-07-31. Claimed files: WGPU, CUDA, and ROCm allocating
-  axis-reduction implementations; axis contracts; `CHANGELOG.md`, `backlog.md`,
-  `checklist.md`, and `gap_audit.md`.
+  and the bounded transfer claim. Focused local Leto-differential contracts pass
+  for WGPU (1/1), CUDA (1/1), and ROCm (1/1). Implementation-head CI passes on
+  WGPU (`91142020221`), CUDA (`91142020156`), ROCm (`91142020205`), and macOS
+  Metal (`91142019842`).
+- Status: done 2026-07-31. Delivered by PR #162.
 
 ## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
