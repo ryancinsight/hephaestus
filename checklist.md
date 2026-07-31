@@ -4,10 +4,11 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-SCALAR-REDUCTION-OVERWRITE-1 [patch] [perf]
 
-- [ ] Establish exact scalar-reduction and prepared-reuse baselines.
-- [ ] Prove each non-empty pass output is overwritten before first read.
-- [ ] Route WGPU, CUDA, and ROCm outputs through uninitialized allocation.
-- [ ] Preserve empty-input identity uploads and scalar arithmetic order.
+- [x] Establish exact scalar-reduction and prepared-reuse baselines.
+- [x] Prove each eligible pass output is overwritten before first read.
+- [x] Route immediate outputs and private intermediates through the overwrite
+      seam; retain initialized public prepared outputs.
+- [x] Preserve empty-input identity uploads and scalar arithmetic order.
 - [ ] Pass Rust 1.97 warning-denied provider gates and exact contracts.
 - [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 

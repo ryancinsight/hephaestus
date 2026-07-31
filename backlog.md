@@ -9,8 +9,9 @@ cuda-oxide + cutile).
 - Owner: Codex on `codex/hephaestus-reduction-overwrite`; scope: WGPU, CUDA,
   and ROCm scalar-reduction tree and prepared-plan outputs, with Metal
   inheriting WGPU; exact reduction contracts and synchronized PM evidence.
-- Outcome: remove redundant output initialization before singleton copies and
-  reduction kernels overwrite every scalar or partial result.
+- Outcome: remove redundant output initialization before immediate singleton
+  copies and reduction kernels overwrite every immediate or private
+  intermediate result.
 - Non-goals: empty-input identity uploads, reduction arithmetic or order, axis
   reductions, allocation capacities, benchmark workloads, and runtime claims
   without matched measurements.
@@ -20,11 +21,21 @@ cuda-oxide + cutile).
   warning-denied WGPU/CUDA/ROCm gates and exact-head WGPU/CUDA/ROCm/macOS-Metal
   CI pass.
 - Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm avoid
-  one initialization transfer per reduction-tree pass, including each prepared
-  plan output; CUDA also avoids the singleton output initialization. WGPU and
-  Metal record the same overwrite contract while WebGPU retains its mandated
-  initialization behavior. Peak allocation and empty-input identities remain
-  unchanged.
+  one initialization transfer per immediate reduction-tree pass and private
+  prepared intermediate; CUDA also avoids the singleton output initialization.
+  Prepared final outputs remain initialized because `output()` is callable
+  before dispatch. WGPU and Metal record the same overwrite contract while
+  WebGPU retains its mandated initialization behavior. Peak allocation and
+  empty-input identities remain unchanged.
+- Evidence: exact-base provider CI on `ca2b875` supplies the unchanged semantic
+  baseline. Kernel review proves thread zero in each launched workgroup writes
+  its unique partial, singleton copies overwrite their sole output, and each
+  prepared private intermediate is consumed only by the following pass. CUDA
+  and ROCm contracts now assert the public final output is zero before first
+  dispatch. Independent review approves the corrected final/intermediate
+  boundary. Local compilation is blocked by concurrent uncommitted Leto zip
+  changes with 47 lifetime/privacy diagnostics; clean-checkout CI is the
+  executable gate.
 - Status: in progress 2026-07-31. Claimed files: WGPU, CUDA, and ROCm scalar
   reduction implementations and prepared plans; reduction contracts;
   `CHANGELOG.md`, `backlog.md`, and `checklist.md`.

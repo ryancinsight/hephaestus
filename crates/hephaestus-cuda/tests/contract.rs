@@ -674,8 +674,10 @@ fn prepared_reduction_reuses_device_outputs_and_batches() {
 
     let sum = prepare_reduction_with_width::<SumOp, _>(&dev, &input, width).unwrap();
     let output_ptr = sum.output().raw();
+    let mut got = [u32::MAX];
+    dev.download(sum.output(), &mut got).unwrap();
+    assert_eq!(got, [0]);
     sum.dispatch().unwrap();
-    let mut got = [0_u32];
     dev.download(sum.output(), &mut got).unwrap();
     assert_eq!(got, [expected_sum]);
     sum.dispatch().unwrap();

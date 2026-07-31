@@ -75,7 +75,11 @@ impl<T> PreparedReductionPlan<T> {
         loop {
             let groups = grid_size(current_len, width)?;
             let output_len = current_len.div_ceil(width.get() as usize);
-            let output = device.alloc_zeroed::<T>(output_len)?;
+            let output = if output_len == 1 {
+                device.alloc_zeroed::<T>(output_len)?
+            } else {
+                device.alloc_uninitialized::<T>(output_len)?
+            };
             passes.push(PreparedPass {
                 kernel: Arc::clone(&kernel),
                 groups,

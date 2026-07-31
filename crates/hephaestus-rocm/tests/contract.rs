@@ -852,8 +852,12 @@ fn prepared_reduction_reuses_device_outputs_and_batches() {
 
     let sum = prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, width)
         .expect("HIP prepared sum");
+    let mut got_sum = [u32::MAX];
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP initialized prepared sum download");
+    assert_eq!(got_sum, [0]);
     sum.dispatch().expect("HIP prepared sum dispatch");
-    let mut got_sum = [0_u32];
     device
         .download(sum.output(), &mut got_sum)
         .expect("HIP prepared sum download");
