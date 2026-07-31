@@ -1627,7 +1627,7 @@ fn matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_c
     device
         .download(&output, &mut output_values)
         .expect("HIP matmul download");
-    let mut expected = Vec::with_capacity(17 * 5);
+    let mut expected: Vec<i32> = Vec::with_capacity(17 * 5);
     for row in 0..17 {
         for col in 0..5 {
             expected.push(
@@ -1722,7 +1722,7 @@ fn batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_c
     device
         .download(&output, &mut output_values)
         .expect("HIP batched matmul download");
-    let mut expected = Vec::with_capacity(3 * 17 * 5);
+    let mut expected: Vec<i32> = Vec::with_capacity(3 * 17 * 5);
     for batch in 0..3 {
         for row in 0..17 {
             for col in 0..5 {

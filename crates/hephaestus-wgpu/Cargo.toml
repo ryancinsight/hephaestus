@@ -16,11 +16,8 @@ mnemosyne-memory = []
 decomposition = ["dep:leto-ops"]
 ## Enable CSR sparse matrix upload/download and GPU sparse products.
 sparse = ["dep:leto-ops"]
-## Enable the WGPU-versus-CUDA comparative benchmark target.
-cuda-comparative = ["dep:hephaestus-cuda", "hephaestus-cuda/cuda", "hephaestus-cuda/decomposition"]
 
 [dependencies]
-aequitas = { workspace = true }
 hephaestus-core = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
@@ -33,7 +30,6 @@ moirai = { workspace = true }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 smallvec = { workspace = true }
-hephaestus-cuda = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Resolution constraint for WGPU HAL's gpu-allocator D3D12 type identity.
@@ -44,6 +40,7 @@ hephaestus-conformance = { workspace = true }
 criterion = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }
+aequitas = { workspace = true }
 
 [[bench]]
 name = "elementwise_into"
@@ -56,7 +53,6 @@ harness = false
 [[bench]]
 name = "comparative"
 harness = false
-required-features = ["cuda-comparative"]
 
 [[bench]]
 name = "sparse_comparative"
