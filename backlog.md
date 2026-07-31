@@ -4,6 +4,30 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-ROCM-PIVOT-OVERWRITE-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-rocm-pivot-overwrite`; scope: ROCm native
+  complete-pivot LU and column-pivot QR factor-matrix startup copies, focused
+  Leto-differential contracts, and synchronized PM evidence.
+- Outcome: allocate each non-empty private factor matrix through the
+  overwrite-before-read seam before the validated dense copy or strided
+  identity kernel assigns every logical element.
+- Non-goals: decomposition arithmetic, pivot/status/threshold initialization,
+  empty outputs, WGPU/CUDA host-upload implementations, allocation capacities,
+  benchmark workloads, and runtime claims without matched measurements.
+- Acceptance: both private factor allocations are exposed only after their
+  complete copy dispatch and decomposition stages succeed; dense and strided
+  inputs preserve Leto values, pivots, rank, solve, and inverse/least-squares
+  contracts; warning-denied ROCm gates and exact-head backend CI pass.
+- Risk/change class: `[patch]` internal ROCm allocation policy. Each non-empty
+  successful factorization omits one initialization transfer of the complete
+  factor matrix. Peak allocation, decomposition order, and public ownership are
+  unchanged.
+- Status: in progress 2026-07-31. Claimed files:
+  `crates/hephaestus-rocm/src/application/decomposition/full_piv_lu.rs`,
+  `crates/hephaestus-rocm/src/application/decomposition/col_piv_qr.rs`, focused
+  contracts, `CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md`.
+
 ## HEPH-AXIS-REDUCTION-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-axis-reduction-overwrite`; scope: WGPU,
