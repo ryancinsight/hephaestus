@@ -48,15 +48,27 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
 
     /// Prepared resources for a unary elementwise operation bound to fixed
     /// input and output views.
-    type PreparedUnary<const N: usize>;
+    type PreparedUnary<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Prepared resources for a binary elementwise operation bound to fixed
     /// left, right, and output views.
-    type PreparedBinary<const N: usize>;
+    type PreparedBinary<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Prepared resources for a scalar-aware binary elementwise operation bound
     /// to fixed left, right, and output views.
-    type PreparedTypedBinary<const N: usize>;
+    type PreparedTypedBinary<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Compute `output = Op(input)` elementwise in one shot.
     ///
@@ -83,12 +95,12 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns a shape mismatch, an aliased output, a layout validation
     /// failure, or the backend preparation failure.
-    fn prepare_unary_into<Op, const N: usize>(
+    fn prepare_unary_into<'op, Op, const N: usize>(
         &self,
         device: &D,
-        input: StridedView<'_, D::Buffer<T>, N>,
-        output: StridedView<'_, D::Buffer<T>, N>,
-    ) -> Result<Self::PreparedUnary<N>>
+        input: StridedView<'op, D::Buffer<T>, N>,
+        output: StridedView<'op, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedUnary<'op, N>>
     where
         Op: UnaryExpr<Self::Dialect>;
 
@@ -100,7 +112,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     fn dispatch_unary<const N: usize>(
         &self,
         device: &D,
-        prepared: &Self::PreparedUnary<N>,
+        prepared: &Self::PreparedUnary<'_, N>,
     ) -> Result<()>;
 
     /// Compute `output = Op(lhs, rhs)` elementwise in one shot.
@@ -130,13 +142,13 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns a shape mismatch, an aliased output, a layout validation
     /// failure, or the backend preparation failure.
-    fn prepare_binary_into<Op, const N: usize>(
+    fn prepare_binary_into<'op, Op, const N: usize>(
         &self,
         device: &D,
-        lhs: StridedView<'_, D::Buffer<T>, N>,
-        rhs: StridedView<'_, D::Buffer<T>, N>,
-        output: StridedView<'_, D::Buffer<T>, N>,
-    ) -> Result<Self::PreparedBinary<N>>
+        lhs: StridedView<'op, D::Buffer<T>, N>,
+        rhs: StridedView<'op, D::Buffer<T>, N>,
+        output: StridedView<'op, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedBinary<'op, N>>
     where
         Op: BinaryExpr<Self::Dialect>;
 
@@ -148,7 +160,7 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     fn dispatch_binary<const N: usize>(
         &self,
         device: &D,
-        prepared: &Self::PreparedBinary<N>,
+        prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()>;
 
     /// Compute `output = Op(lhs, rhs)` elementwise in one shot using a
@@ -186,13 +198,13 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns a shape mismatch, an aliased output, a layout validation
     /// failure, or the backend preparation failure.
-    fn prepare_typed_binary_into<Op, const N: usize>(
+    fn prepare_typed_binary_into<'op, Op, const N: usize>(
         &self,
         device: &D,
-        lhs: StridedView<'_, D::Buffer<T>, N>,
-        rhs: StridedView<'_, D::Buffer<T>, N>,
-        output: StridedView<'_, D::Buffer<T>, N>,
-    ) -> Result<Self::PreparedTypedBinary<N>>
+        lhs: StridedView<'op, D::Buffer<T>, N>,
+        rhs: StridedView<'op, D::Buffer<T>, N>,
+        output: StridedView<'op, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedTypedBinary<'op, N>>
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
         T: DialectScalar<Self::Dialect>;
@@ -205,6 +217,6 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
     fn dispatch_typed_binary<const N: usize>(
         &self,
         device: &D,
-        prepared: &Self::PreparedTypedBinary<N>,
+        prepared: &Self::PreparedTypedBinary<'_, N>,
     ) -> Result<()>;
 }

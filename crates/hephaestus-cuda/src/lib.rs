@@ -56,7 +56,7 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
-pub use application::elementwise_seam::{CudaElementwiseOps, CudaPreparedElementwise};
+pub use application::elementwise_seam::CudaElementwiseOps;
 pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
@@ -79,6 +79,7 @@ pub use application::prepared_reduction::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,
     submit_prepared_reduction_batch,
 };
+pub use application::prepared_strided_elementwise::{PreparedStridedBinary, PreparedStridedUnary};
 pub use application::reduction::{
     MaxOp, MinOp, ProdOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
     min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,

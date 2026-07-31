@@ -4,10 +4,11 @@ use hephaestus_core::{
     TypedBinaryExpr, UnaryExpr,
 };
 
-use crate::application::strided::{
-    StridedOperand, binary_elementwise_strided_into, binary_elementwise_strided_typed_into,
-    unary_elementwise_strided_into,
+use crate::application::prepared_strided_elementwise::{
+    PreparedStridedBinary, PreparedStridedUnary, prepare_binary_elementwise_strided_into,
+    prepare_binary_elementwise_strided_typed_into, prepare_unary_elementwise_strided_into,
 };
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
@@ -15,33 +16,37 @@ use crate::infrastructure::device::CudaDevice;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaElementwiseOps;
 
-/// Prepared elementwise state; the operation runs in `prepare` under CUDA's
-/// synchronous execution model so `dispatch` is a no-op.
-#[derive(Clone, Copy, Debug)]
-pub struct CudaPreparedElementwise;
-
 impl<T> ElementwiseOps<CudaDevice, T> for CudaElementwiseOps
 where
     T: DialectScalar<CudaC> + Pod,
 {
     type Dialect = CudaC;
-    type PreparedUnary<const N: usize> = CudaPreparedElementwise;
-    type PreparedBinary<const N: usize> = CudaPreparedElementwise;
-    type PreparedTypedBinary<const N: usize> = CudaPreparedElementwise;
+    type PreparedUnary<'op, const N: usize>
+        = PreparedStridedUnary<'op, T>
+    where
+        T: 'op;
+    type PreparedBinary<'op, const N: usize>
+        = PreparedStridedBinary<'op, T>
+    where
+        T: 'op;
+    type PreparedTypedBinary<'op, const N: usize>
+        = PreparedStridedBinary<'op, T>
+    where
+        T: 'op;
 
-    fn prepare_unary_into<Op, const N: usize>(
+    fn prepare_unary_into<'op, Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        input: StridedView<'_, CudaBuffer<T>, N>,
-        output: StridedView<'_, CudaBuffer<T>, N>,
-    ) -> Result<Self::PreparedUnary<N>>
+        input: StridedView<'op, CudaBuffer<T>, N>,
+        output: StridedView<'op, CudaBuffer<T>, N>,
+    ) -> Result<Self::PreparedUnary<'op, N>>
     where
         Op: UnaryExpr<Self::Dialect>,
     {
         const {
             assert!(N <= crate::application::strided::MAX_STRIDED_RANK);
         }
-        unary_elementwise_strided_into::<Op, T, N>(
+        prepare_unary_elementwise_strided_into::<Op, T, N>(
             device,
             StridedOperand {
                 buffer: input.buffer,
@@ -52,32 +57,31 @@ where
                 layout: output.layout,
             },
             BlockWidth::DEFAULT,
-        )?;
-        Ok(CudaPreparedElementwise)
+        )
     }
 
     fn dispatch_unary<const N: usize>(
         &self,
-        _device: &CudaDevice,
-        _prepared: &Self::PreparedUnary<N>,
+        device: &CudaDevice,
+        prepared: &Self::PreparedUnary<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        prepared.dispatch(device)
     }
 
-    fn prepare_binary_into<Op, const N: usize>(
+    fn prepare_binary_into<'op, Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        lhs: StridedView<'_, CudaBuffer<T>, N>,
-        rhs: StridedView<'_, CudaBuffer<T>, N>,
-        output: StridedView<'_, CudaBuffer<T>, N>,
-    ) -> Result<Self::PreparedBinary<N>>
+        lhs: StridedView<'op, CudaBuffer<T>, N>,
+        rhs: StridedView<'op, CudaBuffer<T>, N>,
+        output: StridedView<'op, CudaBuffer<T>, N>,
+    ) -> Result<Self::PreparedBinary<'op, N>>
     where
         Op: BinaryExpr<Self::Dialect>,
     {
         const {
             assert!(N <= crate::application::strided::MAX_STRIDED_RANK);
         }
-        binary_elementwise_strided_into::<Op, T, N>(
+        prepare_binary_elementwise_strided_into::<Op, T, N>(
             device,
             StridedOperand {
                 buffer: lhs.buffer,
@@ -92,32 +96,31 @@ where
                 layout: output.layout,
             },
             BlockWidth::DEFAULT,
-        )?;
-        Ok(CudaPreparedElementwise)
+        )
     }
 
     fn dispatch_binary<const N: usize>(
         &self,
-        _device: &CudaDevice,
-        _prepared: &Self::PreparedBinary<N>,
+        device: &CudaDevice,
+        prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        prepared.dispatch(device)
     }
 
-    fn prepare_typed_binary_into<Op, const N: usize>(
+    fn prepare_typed_binary_into<'op, Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        lhs: StridedView<'_, CudaBuffer<T>, N>,
-        rhs: StridedView<'_, CudaBuffer<T>, N>,
-        output: StridedView<'_, CudaBuffer<T>, N>,
-    ) -> Result<Self::PreparedTypedBinary<N>>
+        lhs: StridedView<'op, CudaBuffer<T>, N>,
+        rhs: StridedView<'op, CudaBuffer<T>, N>,
+        output: StridedView<'op, CudaBuffer<T>, N>,
+    ) -> Result<Self::PreparedTypedBinary<'op, N>>
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
     {
         const {
             assert!(N <= crate::application::strided::MAX_STRIDED_RANK);
         }
-        binary_elementwise_strided_typed_into::<Op, T, N>(
+        prepare_binary_elementwise_strided_typed_into::<Op, T, N>(
             device,
             StridedOperand {
                 buffer: lhs.buffer,
@@ -132,15 +135,14 @@ where
                 layout: output.layout,
             },
             BlockWidth::DEFAULT,
-        )?;
-        Ok(CudaPreparedElementwise)
+        )
     }
 
     fn dispatch_typed_binary<const N: usize>(
         &self,
-        _device: &CudaDevice,
-        _prepared: &Self::PreparedTypedBinary<N>,
+        device: &CudaDevice,
+        prepared: &Self::PreparedTypedBinary<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        prepared.dispatch(device)
     }
 }

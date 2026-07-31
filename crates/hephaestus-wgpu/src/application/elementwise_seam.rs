@@ -363,16 +363,25 @@ where
     T: DialectScalar<Wgsl> + Pod + Send + Sync + 'static,
 {
     type Dialect = Wgsl;
-    type PreparedUnary<const N: usize> = PreparedElementwise;
-    type PreparedBinary<const N: usize> = PreparedElementwise;
-    type PreparedTypedBinary<const N: usize> = PreparedElementwise;
+    type PreparedUnary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
+    type PreparedBinary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
+    type PreparedTypedBinary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
 
-    fn prepare_unary_into<Op, const N: usize>(
+    fn prepare_unary_into<'op, Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        input: StridedView<'_, WgpuBuffer<T>, N>,
-        output: StridedView<'_, WgpuBuffer<T>, N>,
-    ) -> Result<Self::PreparedUnary<N>>
+        input: StridedView<'op, WgpuBuffer<T>, N>,
+        output: StridedView<'op, WgpuBuffer<T>, N>,
+    ) -> Result<Self::PreparedUnary<'op, N>>
     where
         Op: UnaryExpr<Self::Dialect>,
     {
@@ -382,18 +391,18 @@ where
     fn dispatch_unary<const N: usize>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedUnary<N>,
+        prepared: &Self::PreparedUnary<'_, N>,
     ) -> Result<()> {
         dispatch_prepared::<N>(device, prepared, "hephaestus-seam-unary")
     }
 
-    fn prepare_binary_into<Op, const N: usize>(
+    fn prepare_binary_into<'op, Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        lhs: StridedView<'_, WgpuBuffer<T>, N>,
-        rhs: StridedView<'_, WgpuBuffer<T>, N>,
-        output: StridedView<'_, WgpuBuffer<T>, N>,
-    ) -> Result<Self::PreparedBinary<N>>
+        lhs: StridedView<'op, WgpuBuffer<T>, N>,
+        rhs: StridedView<'op, WgpuBuffer<T>, N>,
+        output: StridedView<'op, WgpuBuffer<T>, N>,
+    ) -> Result<Self::PreparedBinary<'op, N>>
     where
         Op: BinaryExpr<Self::Dialect>,
     {
@@ -403,18 +412,18 @@ where
     fn dispatch_binary<const N: usize>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedBinary<N>,
+        prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()> {
         dispatch_prepared::<N>(device, prepared, "hephaestus-seam-binary")
     }
 
-    fn prepare_typed_binary_into<Op, const N: usize>(
+    fn prepare_typed_binary_into<'op, Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        lhs: StridedView<'_, WgpuBuffer<T>, N>,
-        rhs: StridedView<'_, WgpuBuffer<T>, N>,
-        output: StridedView<'_, WgpuBuffer<T>, N>,
-    ) -> Result<Self::PreparedTypedBinary<N>>
+        lhs: StridedView<'op, WgpuBuffer<T>, N>,
+        rhs: StridedView<'op, WgpuBuffer<T>, N>,
+        output: StridedView<'op, WgpuBuffer<T>, N>,
+    ) -> Result<Self::PreparedTypedBinary<'op, N>>
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
         T: DialectScalar<Self::Dialect>,
@@ -431,7 +440,7 @@ where
     fn dispatch_typed_binary<const N: usize>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedTypedBinary<N>,
+        prepared: &Self::PreparedTypedBinary<'_, N>,
     ) -> Result<()> {
         dispatch_prepared::<N>(device, prepared, "hephaestus-seam-typed-binary")
     }

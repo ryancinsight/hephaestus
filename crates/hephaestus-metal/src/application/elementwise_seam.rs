@@ -20,16 +20,25 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
-    type PreparedUnary<const N: usize> = PreparedElementwise;
-    type PreparedBinary<const N: usize> = PreparedElementwise;
-    type PreparedTypedBinary<const N: usize> = PreparedElementwise;
+    type PreparedUnary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
+    type PreparedBinary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
+    type PreparedTypedBinary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
 
-    fn prepare_unary_into<Op, const N: usize>(
+    fn prepare_unary_into<'op, Op, const N: usize>(
         &self,
         device: &MetalDevice,
-        input: StridedView<'_, MetalBuffer<T>, N>,
-        output: StridedView<'_, MetalBuffer<T>, N>,
-    ) -> Result<Self::PreparedUnary<N>>
+        input: StridedView<'op, MetalBuffer<T>, N>,
+        output: StridedView<'op, MetalBuffer<T>, N>,
+    ) -> Result<Self::PreparedUnary<'op, N>>
     where
         Op: UnaryExpr<Self::Dialect>,
     {
@@ -43,7 +52,7 @@ where
     fn dispatch_unary<const N: usize>(
         &self,
         device: &MetalDevice,
-        prepared: &Self::PreparedUnary<N>,
+        prepared: &Self::PreparedUnary<'_, N>,
     ) -> Result<()> {
         <WgpuElementwiseOps as ElementwiseOps<WgpuDevice, T>>::dispatch_unary::<N>(
             &self.inner,
@@ -52,13 +61,13 @@ where
         )
     }
 
-    fn prepare_binary_into<Op, const N: usize>(
+    fn prepare_binary_into<'op, Op, const N: usize>(
         &self,
         device: &MetalDevice,
-        lhs: StridedView<'_, MetalBuffer<T>, N>,
-        rhs: StridedView<'_, MetalBuffer<T>, N>,
-        output: StridedView<'_, MetalBuffer<T>, N>,
-    ) -> Result<Self::PreparedBinary<N>>
+        lhs: StridedView<'op, MetalBuffer<T>, N>,
+        rhs: StridedView<'op, MetalBuffer<T>, N>,
+        output: StridedView<'op, MetalBuffer<T>, N>,
+    ) -> Result<Self::PreparedBinary<'op, N>>
     where
         Op: BinaryExpr<Self::Dialect>,
     {
@@ -73,7 +82,7 @@ where
     fn dispatch_binary<const N: usize>(
         &self,
         device: &MetalDevice,
-        prepared: &Self::PreparedBinary<N>,
+        prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()> {
         <WgpuElementwiseOps as ElementwiseOps<WgpuDevice, T>>::dispatch_binary::<N>(
             &self.inner,
@@ -82,13 +91,13 @@ where
         )
     }
 
-    fn prepare_typed_binary_into<Op, const N: usize>(
+    fn prepare_typed_binary_into<'op, Op, const N: usize>(
         &self,
         device: &MetalDevice,
-        lhs: StridedView<'_, MetalBuffer<T>, N>,
-        rhs: StridedView<'_, MetalBuffer<T>, N>,
-        output: StridedView<'_, MetalBuffer<T>, N>,
-    ) -> Result<Self::PreparedTypedBinary<N>>
+        lhs: StridedView<'op, MetalBuffer<T>, N>,
+        rhs: StridedView<'op, MetalBuffer<T>, N>,
+        output: StridedView<'op, MetalBuffer<T>, N>,
+    ) -> Result<Self::PreparedTypedBinary<'op, N>>
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
     {
@@ -103,7 +112,7 @@ where
     fn dispatch_typed_binary<const N: usize>(
         &self,
         device: &MetalDevice,
-        prepared: &Self::PreparedTypedBinary<N>,
+        prepared: &Self::PreparedTypedBinary<'_, N>,
     ) -> Result<()> {
         <WgpuElementwiseOps as ElementwiseOps<WgpuDevice, T>>::dispatch_typed_binary::<N>(
             &self.inner,

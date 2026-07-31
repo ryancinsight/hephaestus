@@ -67,7 +67,7 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-pub use application::elementwise_seam::{RocmElementwiseOps, RocmPreparedElementwise};
+pub use application::elementwise_seam::RocmElementwiseOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
 #[cfg(feature = "decomposition")]
@@ -92,6 +92,7 @@ pub use application::prepared_reduction::{
     PreparedReduction, prepare_reduction, prepare_reduction_with_width,
     submit_prepared_reduction_batch,
 };
+pub use application::prepared_strided_elementwise::{PreparedStridedBinary, PreparedStridedUnary};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{
