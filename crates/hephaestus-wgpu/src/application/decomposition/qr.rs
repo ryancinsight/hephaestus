@@ -410,13 +410,13 @@ pub fn qr_decompose_blocked(
     let mut vector_offsets: Vec<usize> = Vec::with_capacity(block_size);
 
     // Pre-allocate vectors_dev of maximum needed size: m * block_size.
-    let vectors_dev = device.alloc_zeroed::<f32>(m * block_size)?;
+    let vectors_dev = device.alloc_uninitialized::<f32>(m * block_size)?;
 
     // Pre-allocate reflector_dev of size block_size.
-    let reflector_dev = device.alloc_zeroed::<HhReflectorMeta>(block_size)?;
+    let reflector_dev = device.alloc_uninitialized::<HhReflectorMeta>(block_size)?;
 
     // Pre-allocate a single temp_compact_buf to avoid repeated allocations in the loop.
-    let temp_compact_buf = device.alloc_zeroed::<f32>(m * block_size)?;
+    let temp_compact_buf = device.alloc_uninitialized::<f32>(m * block_size)?;
     let mut panel_download_workspace = None;
 
     let hh_pipeline = cached_pipeline(

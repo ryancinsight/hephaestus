@@ -4,6 +4,39 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-DECOMPOSITION-WORKSPACE-OVERWRITE-1 [patch] — in progress
+
+- Owner: Codex on `codex/hephaestus-decomposition-workspace`; scope: reusable
+  blocked Cholesky, LU, and QR panel-transfer workspaces in WGPU and CUDA, with
+  Metal inheriting WGPU.
+- Outcome: remove redundant initialization before each workspace's active
+  prefix is overwritten by a region-copy kernel or host upload.
+- Non-goals: decomposition arithmetic, startup-copy destinations, ROCm's
+  native whole-device algorithms, workspace capacities, benchmark workloads,
+  or runtime claims without matched measurements.
+- Acceptance: overwrite-before-read storage is used only where every consumed
+  element is first written; exact blocked-decomposition value contracts pass
+  on WGPU and physical CUDA; warning-denied provider gates and exact-head
+  WGPU/CUDA/ROCm/macOS-Metal CI pass.
+- Risk/change class: `[patch]` internal allocation policy. CUDA avoids two
+  initialization transfers per blocked QR call. WGPU and Metal record the
+  overwrite contract while preserving WebGPU's platform-managed
+  initialization. Peak allocation is unchanged.
+- Evidence: WGPU blocked-decomposition contracts pass 19/19 before and after
+  the change; physical CUDA contracts pass 18/18 before and after. Rust 1.97
+  package formatting and warning-denied all-target Clippy pass for WGPU and
+  feature-enabled CUDA. Region gathers and host uploads overwrite every active
+  compact-panel, reflector-vector, and reflector-metadata prefix before the
+  corresponding copy or update consumes it.
+- Hosted evidence on implementation head `be734be`: WGPU job `91084690146`
+  passes in 6m41s, CUDA job `91084690094` in 6m09s, ROCm job `91084735821` in
+  6m13s, and macOS Metal job `91084744715` in 7m08s. Required-device NVIDIA
+  and AMD jobs skip because dedicated runners are unavailable; physical CUDA
+  value contracts pass locally, and no physical ROCm execution claim is made.
+- Status: done 2026-07-31; delivered through PR #160. Claimed files: WGPU
+  blocked Cholesky, LU, and QR implementations; CUDA blocked QR;
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
+
 ## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matrix-properties-overwrite`; scope: CUDA

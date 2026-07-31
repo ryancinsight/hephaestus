@@ -227,10 +227,10 @@ pub fn qr_decompose_blocked(
         let mut cumulative_betas = Vec::with_capacity(n.min(m));
 
         // Pre-allocate vectors buffer.
-        let vectors_dev = device.alloc_zeroed::<f32>(m * block_size)?;
+        let vectors_dev = device.alloc_uninitialized::<f32>(m * block_size)?;
 
         // Pre-allocate reflector buffer.
-        let reflector_dev = device.alloc_zeroed::<hh_impl::HhReflectorMeta>(block_size)?;
+        let reflector_dev = device.alloc_uninitialized::<hh_impl::HhReflectorMeta>(block_size)?;
 
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
