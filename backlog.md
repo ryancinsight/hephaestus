@@ -28,9 +28,14 @@ cuda-oxide + cutile).
   feature-enabled CUDA. Region gathers and host uploads overwrite every active
   compact-panel, reflector-vector, and reflector-metadata prefix before the
   corresponding copy or update consumes it.
-- Status: in progress 2026-07-31. Claimed files: WGPU blocked Cholesky, LU, and
-  QR implementations; CUDA blocked QR; `CHANGELOG.md`, `backlog.md`, and
-  `checklist.md`.
+- Hosted evidence on implementation head `be734be`: WGPU job `91084690146`
+  passes in 6m41s, CUDA job `91084690094` in 6m09s, ROCm job `91084735821` in
+  6m13s, and macOS Metal job `91084744715` in 7m08s. Required-device NVIDIA
+  and AMD jobs skip because dedicated runners are unavailable; physical CUDA
+  value contracts pass locally, and no physical ROCm execution claim is made.
+- Status: done 2026-07-31; delivered through PR #160. Claimed files: WGPU
+  blocked Cholesky, LU, and QR implementations; CUDA blocked QR;
+  `CHANGELOG.md`, `backlog.md`, and `checklist.md`.
 
 ## HEPH-MATRIX-PROPERTIES-OVERWRITE-1 [patch] [perf] — done
 

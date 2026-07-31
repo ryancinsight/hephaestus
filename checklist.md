@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
       `ComputeDevice::alloc_uninitialized`; Metal inherits WGPU.
 - [x] Pass Rust 1.97 warning-denied WGPU and CUDA package gates.
 - [x] Pass exact WGPU and physical CUDA blocked-decomposition contracts.
-- [ ] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
+- [x] Run and record exact-head WGPU, CUDA, ROCm, and macOS Metal CI.
 
 Implementation owner: Codex on
 `codex/hephaestus-decomposition-workspace`. Claimed files are WGPU blocked
