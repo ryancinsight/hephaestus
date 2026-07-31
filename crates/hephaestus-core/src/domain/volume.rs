@@ -123,6 +123,38 @@ pub fn validate_ray_line_integrals(
     Ok(n_rays)
 }
 
+use crate::domain::device::ComputeDevice;
+
+/// Device-neutral volume ray line integrals.
+///
+/// Marches each ray through a regular `f32` scalar field with midpoint
+/// sampling and accumulates `field · dl`. The scalar type is fixed at `f32`
+/// by every backend kernel; a generic scalar dimension enters here when the
+/// kernels ship it, not before. Ray records are `RAY_STRIDE` floats:
+/// `[origin xyz, direction xyz]`.
+///
+/// Implementors are zero-sized per-backend markers. A bound of
+/// `R: RayIntegralOps<D>` costs nothing at runtime and every call
+/// monomorphizes to the backend's own kernel dispatch.
+pub trait RayIntegralOps<D: ComputeDevice> {
+    /// Integrate `field` along each ray into caller-owned `out` (one value
+    /// per ray), stepping by `step` world units.
+    ///
+    /// # Errors
+    ///
+    /// Returns a geometry/ray/output length mismatch, a non-positive step,
+    /// or the backend dispatch failure.
+    fn ray_line_integrals_into(
+        &self,
+        device: &D,
+        field: &D::Buffer<f32>,
+        geometry: FieldGeometry,
+        rays: &D::Buffer<f32>,
+        step: f32,
+        out: &D::Buffer<f32>,
+    ) -> Result<()>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,36 +221,4 @@ mod tests {
                 if message.contains("n_rays") && message.contains("2^24")
         ));
     }
-}
-
-use crate::domain::device::ComputeDevice;
-
-/// Device-neutral volume ray line integrals.
-///
-/// Marches each ray through a regular `f32` scalar field with midpoint
-/// sampling and accumulates `field · dl`. The scalar type is fixed at `f32`
-/// by every backend kernel; a generic scalar dimension enters here when the
-/// kernels ship it, not before. Ray records are `RAY_STRIDE` floats:
-/// `[origin xyz, direction xyz]`.
-///
-/// Implementors are zero-sized per-backend markers. A bound of
-/// `R: RayIntegralOps<D>` costs nothing at runtime and every call
-/// monomorphizes to the backend's own kernel dispatch.
-pub trait RayIntegralOps<D: ComputeDevice> {
-    /// Integrate `field` along each ray into caller-owned `out` (one value
-    /// per ray), stepping by `step` world units.
-    ///
-    /// # Errors
-    ///
-    /// Returns a geometry/ray/output length mismatch, a non-positive step,
-    /// or the backend dispatch failure.
-    fn ray_line_integrals_into(
-        &self,
-        device: &D,
-        field: &D::Buffer<f32>,
-        geometry: FieldGeometry,
-        rays: &D::Buffer<f32>,
-        step: f32,
-        out: &D::Buffer<f32>,
-    ) -> Result<()>;
 }
