@@ -29,9 +29,11 @@ cuda-oxide + cutile).
   and non-square behavior. Adapterless CUDA/ROCm focused runs pass 3/3 compile
   and source contracts; their value-semantic execution remains a hosted-device
   requirement. Doctests and warning-clean Rustdoc pass for all three provider
-  crates. Hosted exact-head CI remains open.
-- Status: implementation, focused local gates, and independent review complete
-  2026-07-31; hosted exact-head backend CI remains open.
+  crates. Exact implementation-head CI passes CUDA run `30678625029`, ROCm
+  run `30678625038`, WGPU run `30678625043`, and macOS Metal run
+  `30678625035` at `d36a992`.
+- Status: done 2026-07-31; final docs-only closeout-head CI remains the merge
+  gate for PR #169.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

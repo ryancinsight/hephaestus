@@ -8,7 +8,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Preserve exact exponent-zero, empty, strided, and odd-power contracts.
 - [x] Prove the identity kernel assigns every allocated element before read.
 - [x] Pass warning-denied provider gates.
-- [ ] Pass exact-head backend CI.
+- [x] Pass exact implementation-head backend CI.
 
 Implementation owner: Codex on `codex/hephaestus-matpow-device-identity`.
 Claimed files are WGPU, CUDA, and ROCm matrix-power identity initialization and
