@@ -97,6 +97,24 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Implement the shared `ComputeDeviceCapabilities` seam for Metal by
+  delegating limits and optional-feature queries to its Metal-selected WGPU
+  context. Metal conformance tests can now capability-gate optional f64 clauses
+  through the same provider-owned API as WGPU, CUDA, and ROCm.
+
+- [patch] Gate WGPU and Metal decomposition-seam modules, re-exports, and the
+  Metal decomposition conformance target with their existing `decomposition`
+  feature. No-default-feature all-target builds no longer compile seam code or
+  contracts that import feature-gated decomposition implementations.
+
+- [patch] Reuse WGPU's downloaded matrix backing storage directly for
+  host-delegated rank and determinant elimination when the layout is canonical
+  C-contiguous at offset zero. This removes one logical-matrix host allocation
+  and copy from that path. Strided views still compact into independent
+  row-major storage, now without a zero-fill-before-overwrite pass. Arithmetic,
+  device transfers, and public APIs are unchanged; no runtime gain is claimed
+  without matched measurements.
+
 - [patch] Allocate non-empty ROCm complete-pivot LU and column-pivot QR factor
   matrices through the overwrite-before-read device seam. Each successful
   factorization omits one matrix-sized initialization transfer before its dense

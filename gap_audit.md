@@ -11,6 +11,47 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1] Host scratch ownership
+
+- Finding: WGPU rank and determinant downloaded the complete device backing
+  buffer and then always allocated and filled a second `rows * cols` host
+  matrix before running host-delegated Gaussian elimination. Canonical
+  C-contiguous offset-zero inputs were already in the required row-major order.
+- Resolution: validate and expose the downloaded prefix directly for canonical
+  layouts. Preserve independent compaction for strided views while constructing
+  that buffer with exact capacity and no zero-fill-before-overwrite pass.
+- Evidence: pointer-level contracts distinguish in-place contiguous reuse from
+  independent strided ownership and assert row-major values. Four existing WGPU
+  rank/determinant device contracts retain Leto differential values and the
+  documented tolerance/pivot semantics. Formatting, all-target check,
+  warning-denied Clippy, doctests, and Rustdoc complete locally.
+- Residual: the full backing-buffer download and determinant upload remain.
+  Rustdoc reports a pre-existing broken `StencilOps` link in peer-owned stencil
+  scope. No runtime gain is claimed without controlled measurements.
+- Status: implementation complete and independently approved 2026-08-01 after
+  excluding generated Atlas overlay lockfile reordering. Initial exact-head
+  WGPU and Metal CI exposed inconsistent no-default-feature decomposition seam
+  gating inherited from base head `98e9e3e`; the independently approved
+  owner-level module and re-export gates are fixed. Refreshed Metal run
+  `30707678624` exposed the same missing feature gate on the dedicated
+  decomposition conformance target; its independently approved fix now shares
+  the capability gate. Exact local WGPU no-default library and Metal no-default
+  all-target checks pass. Exact implementation head `1169f99` passes CUDA run
+  `30708041475`, ROCm run `30708041480`, WGPU run `30708041490`, and macOS Metal
+  run `30708041462`. During docs-only closeout CI, `master` advanced to
+  `275f622`; GitHub's merge ref exposed its Metal f64 convolution contract
+  importing `ComputeDevice` instead of `ComputeDeviceCapabilities`. Cross-target
+  reproduction proved that `MetalDevice` also lacked the shared capability
+  implementation. The branch integrates that base, delegates Metal limits and
+  feature queries through its Metal-selected WGPU context, and corrects the
+  owning-trait import. The macOS cross-target contract build, focused
+  value-semantic capability test, all-target check, and warning-denied clippy
+  pass locally; independent review approves the implementation and exhaustive
+  feature coverage. Integrated implementation head `bfe934f` passes CUDA run
+  `30708999594`, ROCm run `30708999598`, WGPU run `30708999600`, and macOS
+  Metal run `30708999596`. The final docs-only closeout-head matrix remains PR
+  #172's merge gate.
+
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 
 - Finding: device-local Coeus COW now allocates a replacement and copies the

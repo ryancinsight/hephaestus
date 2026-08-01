@@ -19,6 +19,8 @@ use crate::infrastructure::device::WgpuDevice;
 
 #[cfg(test)]
 mod identity_contract;
+#[cfg(test)]
+mod matrix_properties_contract;
 
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
 pub trait MatmulZero: DialectScalar<Wgsl> {
@@ -349,6 +351,57 @@ where
         zero
     };
     (rank, determinant)
+}
+
+/// Runs a matrix operation over mutable canonical row-major storage.
+///
+/// Canonical C-contiguous layouts already occupy the downloaded buffer prefix
+/// in the order required by the operation, so that prefix is reused in place.
+/// Other valid layouts are compacted into an independently owned buffer.
+fn with_row_major_matrix<T, R>(
+    host_buffer: &mut [T],
+    layout: &Layout<2>,
+    operation: impl FnOnce(&mut [T]) -> R,
+) -> Result<R>
+where
+    T: Copy,
+{
+    layout
+        .validate_storage_len(host_buffer.len())
+        .map_err(map_layout_err)?;
+    let logical_len = layout.checked_size().map_err(map_layout_err)?;
+
+    if layout.is_c_contiguous() {
+        let storage_len = host_buffer.len();
+        let scratch = host_buffer.get_mut(..logical_len).ok_or_else(|| {
+            HephaestusError::DispatchFailed {
+                message: format!(
+                    "contiguous matrix requires {logical_len} elements but backing storage has {}",
+                    storage_len
+                ),
+            }
+        })?;
+        return Ok(operation(scratch));
+    }
+
+    let [rows, cols] = layout.shape;
+    let mut scratch = Vec::with_capacity(logical_len);
+    for row in 0..rows {
+        for col in 0..cols {
+            let source_offset = layout.offset_of([row, col]).map_err(map_layout_err)?;
+            let value = host_buffer.get(source_offset).copied().ok_or_else(|| {
+                HephaestusError::DispatchFailed {
+                    message: format!(
+                        "matrix element [{row}, {col}] resolves to offset {source_offset}, outside backing storage length {}",
+                        host_buffer.len()
+                    ),
+                }
+            })?;
+            scratch.push(value);
+        }
+    }
+
+    Ok(operation(&mut scratch))
 }
 
 fn kron_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
@@ -1197,28 +1250,14 @@ where
 
     // Host-delegated (WG-P1): the single-thread `@workgroup_size(1)` kernel
     // this replaced gained nothing from GPU dispatch. Download the whole
-    // backing buffer once, then copy the strided view into a contiguous
-    // row-major scratch buffer the elimination algorithm can swap/mutate
-    // in place (mirrors the WGSL kernel's own `input` -> `scratch` copy).
+    // backing buffer once. Canonical row-major inputs reuse that allocation;
+    // strided views compact into row-major scratch for in-place elimination.
     let mut host_buffer = vec![T::from(0.0); matrix.buffer.len];
     device.download(matrix.buffer, &mut host_buffer)?;
 
-    let row_stride = matrix.layout.strides[0];
-    let col_stride = matrix.layout.strides[1];
-    let base_offset = matrix.layout.offset as isize;
-    let mut scratch = vec![T::from(0.0); rows * cols];
-    for row in 0..rows {
-        for col in 0..cols {
-            let src_offset = base_offset + row as isize * row_stride + col as isize * col_stride;
-            let src_offset =
-                usize::try_from(src_offset).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("rank input offset {src_offset} is negative"),
-                })?;
-            scratch[row * cols + col] = host_buffer[src_offset];
-        }
-    }
-
-    let (rank, determinant) = matrix_properties_host(&mut scratch, rows, cols, relative_tolerance);
+    let (rank, determinant) = with_row_major_matrix(&mut host_buffer, matrix.layout, |scratch| {
+        matrix_properties_host(scratch, rows, cols, relative_tolerance)
+    })?;
 
     let det_out = device.upload(&[determinant])?;
     Ok((rank, det_out))
