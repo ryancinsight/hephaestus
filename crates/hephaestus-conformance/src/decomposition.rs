@@ -39,6 +39,10 @@ where
     cholesky_factors_an_spd_matrix(device, ops);
     cholesky_rejects_an_indefinite_matrix(device, ops);
     qr_solves_a_consistent_least_squares_system(device, ops);
+    lu_matches_the_leto_reference(device, ops);
+    cholesky_matches_the_leto_reference(device, ops);
+    qr_matches_the_leto_reference(device, ops);
+    identity_factorizations_are_exact(device, ops);
 }
 
 /// LU with a forced pivot: `A = [[0,2,1],[1,1,1],[2,4,1]]` has `a₀₀ = 0`,
@@ -267,5 +271,193 @@ where
                 "{name}: R entry ({row},{col}) = {value} must vanish"
             );
         }
+    }
+}
+
+/// Differential LU clause against leto, the drop-in CPU substrate.
+///
+/// Device and host run the same algorithm family in `f32` but not in a
+/// provably identical evaluation order, so factor equality is
+/// epsilon-bounded by the module-head derivation, never bitwise
+/// (reduction-order sensitivity). Pivot choices ARE asserted exactly: the
+/// fixture has a unique maximum-magnitude candidate at every elimination
+/// step, so any correct partial-pivoting implementation selects the same
+/// rows.
+fn lu_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [0.0f32, 2.0, 1.0, 1.0, 1.0, 1.0, 2.0, 4.0, 1.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("matrix layout");
+    let lu = ops
+        .lu(device, StridedView::new(&a, &layout))
+        .expect("device LU");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 3], a_host.to_vec()).expect("host matrix");
+    let host_lu = leto_ops::lu_decompose(&host_matrix.view()).expect("leto LU");
+
+    assert_eq!(
+        lu.pivots(),
+        host_lu.pivots(),
+        "{name}: LU pivot choice diverges from leto"
+    );
+    let mut factors = [0.0f32; 9];
+    device
+        .download(lu.factors(), &mut factors)
+        .expect("factor download");
+    let host_factors = leto::Storage::as_slice(host_lu.factors().storage());
+    for (index, (device_value, host_value)) in factors.iter().zip(host_factors).enumerate() {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: LU factor {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+    assert!(
+        (lu.det() - host_lu.det()).abs() < DECOMP_BOUND,
+        "{name}: LU det {} vs leto {}",
+        lu.det(),
+        host_lu.det()
+    );
+}
+
+/// Cholesky of the 3x3 SPD matrix `[[4,2,0.5],[2,5,1],[0.5,1,3]]` matches
+/// leto elementwise on the lower factor within the derived bound.
+fn cholesky_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [4.0f32, 2.0, 0.5, 2.0, 5.0, 1.0, 0.5, 1.0, 3.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("matrix layout");
+    let chol = ops
+        .cholesky(device, StridedView::new(&a, &layout))
+        .expect("device Cholesky");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 3], a_host.to_vec()).expect("host matrix");
+    let host_chol = leto_ops::cholesky_decompose(&host_matrix.view()).expect("leto Cholesky");
+
+    let mut lower = [0.0f32; 9];
+    device
+        .download(chol.lower(), &mut lower)
+        .expect("factor download");
+    let host_lower = leto::Storage::as_slice(host_chol.lower().storage());
+    for row in 0..3 {
+        for col in 0..=row {
+            let index = row * 3 + col;
+            assert!(
+                (lower[index] - host_lower[index]).abs() < DECOMP_BOUND,
+                "{name}: Cholesky lower ({row},{col}): device {} vs leto {}",
+                lower[index],
+                host_lower[index]
+            );
+        }
+    }
+}
+
+/// QR least squares on the overdetermined consistent system
+/// `A = [[1,0],[0,1],[1,1]]`, `b = [1,2,3]`: the exact minimizer is
+/// `x = [1,2]`, asserted both analytically and against leto.
+fn qr_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("matrix layout");
+    let qr = ops
+        .qr(device, StridedView::new(&a, &layout))
+        .expect("device QR");
+
+    let rhs_host = [1.0f32, 2.0, 3.0];
+    let rhs = device.upload(&rhs_host).expect("rhs upload");
+    let x = qr.solve_least_squares(device, &rhs).expect("device solve");
+    let mut got = [0.0f32; 2];
+    device.download(&x, &mut got).expect("solution download");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 2], a_host.to_vec()).expect("host matrix");
+    let host_rhs = leto::Array::from_shape_vec([3], rhs_host.to_vec()).expect("host rhs");
+    let host_qr = leto_ops::qr_decompose(&host_matrix.view()).expect("leto QR");
+    let host_x = host_qr
+        .solve_least_squares(&host_rhs.view())
+        .expect("leto solve");
+    let host_solution = leto::Storage::as_slice(host_x.storage());
+
+    let expected = [1.0f32, 2.0];
+    for index in 0..2 {
+        assert!(
+            (got[index] - expected[index]).abs() < DECOMP_BOUND,
+            "{name}: QR minimizer component {index} = {}, expected {}",
+            got[index],
+            expected[index]
+        );
+        assert!(
+            (got[index] - host_solution[index]).abs() < DECOMP_BOUND,
+            "{name}: QR solution component {index}: device {} vs leto {}",
+            got[index],
+            host_solution[index]
+        );
+    }
+}
+
+/// Factorizing the identity is exact: every arithmetic step multiplies by
+/// 0 or 1 or takes `sqrt(1)`, so no rounding occurs and the factors admit
+/// exact equality (LU packed factors and pivots, Cholesky lower). QR
+/// asserts entry magnitudes within the derived bound only: the Householder
+/// sign convention belongs to the backend (cuda yields `-I`, wgpu `+I`).
+fn identity_factorizations_are_exact<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let identity = [1.0f32, 0.0, 0.0, 1.0];
+    let layout = Layout::c_contiguous([2, 2]).expect("layout");
+
+    let a = device.upload(&identity).expect("upload");
+    let lu = ops
+        .lu(device, StridedView::new(&a, &layout))
+        .expect("identity LU");
+    let mut factors = [0.0f32; 4];
+    device
+        .download(lu.factors(), &mut factors)
+        .expect("factor download");
+    assert_eq!(factors, identity, "{name}: identity LU factors");
+    assert_eq!(lu.pivots(), &[0, 1], "{name}: identity LU pivots");
+    assert!(
+        (lu.det() - 1.0).abs() == 0.0,
+        "{name}: identity LU det {}",
+        lu.det()
+    );
+
+    let a = device.upload(&identity).expect("upload");
+    let chol = ops
+        .cholesky(device, StridedView::new(&a, &layout))
+        .expect("identity Cholesky");
+    let mut lower = [0.0f32; 4];
+    device
+        .download(chol.lower(), &mut lower)
+        .expect("factor download");
+    assert_eq!(lower, identity, "{name}: identity Cholesky lower");
+
+    let a = device.upload(&identity).expect("upload");
+    let qr = ops
+        .qr(device, StridedView::new(&a, &layout))
+        .expect("identity QR");
+    use hephaestus_core::DeviceBuffer;
+    let mut r = vec![0.0f32; qr.r_buffer().len()];
+    device.download(qr.r_buffer(), &mut r).expect("R download");
+    for (index, value) in r.iter().take(4).enumerate() {
+        let expected = identity[index];
+        assert!(
+            (value.abs() - expected).abs() < DECOMP_BOUND,
+            "{name}: identity QR R entry {index} = {value}, expected magnitude {expected}"
+        );
     }
 }
