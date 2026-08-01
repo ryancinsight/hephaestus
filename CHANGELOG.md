@@ -43,6 +43,15 @@ Target release: 0.18.0.
   their pseudoinverse and matrix-exponential paths no longer zero-fill four
   host vectors immediately before those vectors are wholly overwritten.
 
+- [minor] `StatefulUpdateOps` adds one provider-owned, monomorphized `f32`
+  kernel family for SGD, Adam, AdamW, RMSProp, and AdaGrad across WGPU, CUDA,
+  ROCm, and Metal. The shared rank-eight planner validates shapes, storage
+  spans, writable-layout injectivity, hyperparameters, and pairwise aliasing
+  before mutation; provider dispatch remains device-resident and uses borrowed
+  buffers without host fallback. One direct Leto differential suite exercises
+  every rule across repeated updates, scalar and rank-eight boundaries,
+  strided sentinel-backed storage, and failure-atomic rejection.
+
 - [minor] `AttentionOps` defines provider-owned, fallible scaled dot-product
   attention preparation and dispatch over borrowed rank-3 device views. Its
   shared planner validates grouped keep masks, shapes, storage spans, exact

@@ -17,6 +17,30 @@ are the core device seam, shared transfer conformance, CUDA/ROCm device and
 `gap_audit.md`, and this section. WGPU pipeline/prepared files and active
 attention/parameterized-unary/stateful scopes are excluded.
 
+## HEPH-STATEFUL-UPDATE-1 [minor] [arch]
+
+- [x] Record ownership, variants, failure semantics, and migration direction in
+      ADR 0045.
+- [x] Implement the generic request, planner, errors, and five rule markers.
+- [x] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
+- [x] Replace the initial analytical contract oracle with direct Leto
+      differential execution and complete adversarial conformance.
+- [x] Pass focused warning-denied gates, independent review, and exact-head CI.
+
+Implementation owner: Codex on `codex/hephaestus-stateful-update`. Claimed
+files are ADR 0045; the core stateful-update domain; provider stateful-update
+application modules; shared conformance; and owner-keyed PM/release entries.
+Local evidence passes the direct Leto differential suite on a physical WGPU
+adapter and physical CUDA device, plus ROCm's adapterless export contract. The
+suite covers repeated updates for all five rules, scalar and rank-eight empty
+layouts, strided storage with sentinels, shape and alias failure atomicity, and
+foreign-device rejection before mutation. Warning-denied focused Clippy and
+the core 83/83 Nextest lane pass. Independent source review approves the
+provider ownership and pre-mutation validation boundary. Implementation head
+`fc0605c` passes WGPU `30713623614`, CUDA `30713623627`, ROCm `30713623615`,
+and native macOS Metal `30713623612`; the docs-only closeout head must pass the
+same matrix before merge.
+
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch]
 
 - [x] Prove each successful dispatch wholly overwrites poisoned prior output

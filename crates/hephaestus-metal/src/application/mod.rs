@@ -42,6 +42,8 @@ pub mod scan_seam;
 pub mod sparse;
 /// Device-neutral sparse operator seam implementation.
 pub mod sparse_seam;
+/// Stateful parameter updates through the native Metal-selected WGPU device.
+pub mod stateful_update;
 /// 2D Laplacian stencil delegation.
 pub mod stencil;
 /// Metal-selected storage-kernel dispatch.

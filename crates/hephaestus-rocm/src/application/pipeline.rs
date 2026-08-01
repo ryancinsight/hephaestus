@@ -40,6 +40,12 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    /// Stateful parameter update keyed by rule, scalar, and block width.
+    StatefulUpdate {
+        rule: TypeId,
+        scalar: TypeId,
+        width: u32,
+    },
     /// Strided scalar operation keyed by operation, scalar, and block width.
     StridedScalar {
         op: TypeId,
