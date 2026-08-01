@@ -259,3 +259,96 @@ where
         }),
     })
 }
+
+/// A broadcast-scalar strided dispatch bound to one input/output pair.
+///
+/// Holds its operand borrows; dispatch re-reads their device addresses, so
+/// writes to the bound input between dispatches are observed. The scalar is
+/// dispatch data captured at preparation. An empty dispatch prepares to a
+/// no-op.
+pub struct PreparedStridedScalar<'op, T> {
+    a: &'op RocmBuffer<T>,
+    out: &'op RocmBuffer<T>,
+    scalar: T,
+    plan: Option<StridedPlan>,
+}
+
+impl<T> PreparedStridedScalar<'_, T>
+where
+    T: DialectScalar<HipC> + Pod,
+{
+    /// Re-run the bound broadcast-scalar dispatch.
+    ///
+    /// # Errors
+    ///
+    /// Returns the native launch failure.
+    pub fn dispatch(&self, device: &RocmDevice) -> Result<()> {
+        let Some(plan) = &self.plan else {
+            return Ok(());
+        };
+        let mut meta_val = plan.meta;
+        let mut a_ptr: DevicePtr = self.a.raw();
+        let mut scalar_val = self.scalar;
+        let mut out_ptr: DevicePtr = self.out.raw();
+        // Argument list mirrors `scalar_strided_kernel(Meta, const T*, T, T*)`.
+        let mut args: [*mut core::ffi::c_void; 4] = [
+            (&mut meta_val as *mut StridedMeta).cast(),
+            (&mut a_ptr as *mut DevicePtr).cast(),
+            (&mut scalar_val as *mut T).cast(),
+            (&mut out_ptr as *mut DevicePtr).cast(),
+        ];
+        launch_kernel(
+            device,
+            &plan.kernel,
+            LaunchConfig::linear(plan.grid, plan.width),
+            &mut args,
+        )
+    }
+}
+
+/// Validate and bind a broadcast-scalar strided dispatch.
+///
+/// # Errors
+///
+/// Returns a layout validation failure, an aliasing violation, or the kernel
+/// compilation failure.
+pub fn prepare_scalar_elementwise_strided_into<'op, Op, T, const N: usize>(
+    device: &RocmDevice,
+    a: StridedOperand<'op, T, N>,
+    scalar: T,
+    out: StridedOperand<'op, T, N>,
+    width: BlockWidth,
+) -> Result<PreparedStridedScalar<'op, T>>
+where
+    Op: BinaryExpr<HipC>,
+    T: DialectScalar<HipC> + Pod,
+{
+    let meta = crate::application::strided_elementwise::scalar_strided_meta(&a, &out)?;
+    let Some((meta, len)) = meta else {
+        return Ok(PreparedStridedScalar {
+            a: a.buffer,
+            out: out.buffer,
+            scalar,
+            plan: None,
+        });
+    };
+    let key = PipelineKey::StridedScalar {
+        op: core::any::TypeId::of::<Op>(),
+        scalar: core::any::TypeId::of::<T>(),
+        width: width.get(),
+    };
+    let kernel = cached_kernel(device, key, "scalar_strided_kernel", || {
+        crate::application::strided_elementwise::scalar_shader::<Op, T>()
+    })?;
+    Ok(PreparedStridedScalar {
+        a: a.buffer,
+        out: out.buffer,
+        scalar,
+        plan: Some(StridedPlan {
+            meta,
+            kernel,
+            grid: grid_size(len, width)?,
+            width,
+        }),
+    })
+}

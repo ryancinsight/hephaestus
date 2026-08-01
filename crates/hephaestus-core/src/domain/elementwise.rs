@@ -69,6 +69,15 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
         D: 'op,
         T: 'op;
 
+    /// Prepared resources for a broadcast-scalar binary elementwise
+    /// operation bound to fixed input/output views. The scalar itself is
+    /// dispatch data captured at preparation.
+    type PreparedScalar<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
+
     /// Prepared resources for a scalar-aware binary elementwise operation bound
     /// to fixed left, right, and output views.
     type PreparedTypedBinary<'op, const N: usize>
@@ -168,6 +177,57 @@ pub trait ElementwiseOps<D: ComputeDevice, T: Pod> {
         &self,
         device: &D,
         prepared: &Self::PreparedBinary<'_, N>,
+    ) -> Result<()>;
+
+    /// Compute `output = Op(input, scalar)` elementwise, broadcasting one
+    /// runtime scalar as the right-hand operand.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape mismatch, an aliased output, a layout validation
+    /// failure, or the backend dispatch failure.
+    fn scalar_into<Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, N>,
+        scalar: T,
+        output: StridedView<'_, D::Buffer<T>, N>,
+    ) -> Result<()>
+    where
+        Op: BinaryExpr<Self::Dialect>,
+    {
+        let prepared = self.prepare_scalar_into::<Op, N>(device, input, scalar, output)?;
+        self.dispatch_scalar::<N>(device, &prepared)
+    }
+
+    /// Prepare a broadcast-scalar dispatch bound to `input` and `output`.
+    /// The scalar value is captured by the prepared form; rebind semantics
+    /// apply to the buffer operands only.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape mismatch, an aliased output, a layout validation
+    /// failure, or the backend preparation failure.
+    fn prepare_scalar_into<'op, Op, const N: usize>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<T>, N>,
+        scalar: T,
+        output: StridedView<'op, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedScalar<'op, N>>
+    where
+        Op: BinaryExpr<Self::Dialect>;
+
+    /// Re-dispatch a prepared broadcast-scalar operation over its bound
+    /// operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns a prepared-operand mismatch or the backend dispatch failure.
+    fn dispatch_scalar<const N: usize>(
+        &self,
+        device: &D,
+        prepared: &Self::PreparedScalar<'_, N>,
     ) -> Result<()>;
 
     /// Compute `output = Op(lhs, rhs)` elementwise in one shot using a

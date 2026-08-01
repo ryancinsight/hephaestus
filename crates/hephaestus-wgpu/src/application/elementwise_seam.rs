@@ -28,12 +28,14 @@ pub struct PreparedElementwise {
     bind_group: Option<wgpu::BindGroup>,
     groups: u32,
     _meta_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
+    _scalar_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
 }
 
 // ── Kernel discriminators (separate pipeline-cache keys) ──────────────
 
 struct SeamUnaryKernel<Op>(PhantomData<Op>);
 struct SeamBinaryKernel<Op>(PhantomData<Op>);
+struct SeamScalarKernel<Op>(PhantomData<Op>);
 
 // ── Shader sources (mirror the strided module; TypeId keeps pipelines separate) ─
 
@@ -158,6 +160,7 @@ where
             bind_group: None,
             groups: 0,
             _meta_buffer: None,
+            _scalar_buffer: None,
         });
     }
 
@@ -220,6 +223,143 @@ where
         bind_group: Some(bind_group),
         groups,
         _meta_buffer: Some(meta_buffer),
+        _scalar_buffer: None,
+    })
+}
+
+fn scalar_shader<T: DialectScalar<Wgsl>, Op: BinaryExpr<Wgsl>>(width: BlockWidth) -> String {
+    format!(
+        r#"{meta}
+@group(0) @binding(0) var<uniform> lmeta: Meta;
+@group(0) @binding(1) var<storage, read> a: array<{ty}>;
+@group(0) @binding(2) var<uniform> scalar: {ty};
+@group(0) @binding(3) var<storage, read_write> out: array<{ty}>;
+
+@compute @workgroup_size({wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
+    let i = gid.x;
+    if (i >= lmeta.offsets.w) {{ return; }}
+{decode}    let lhs = a[u32(a_off)];
+    let rhs = scalar;
+    out[u32(o_off)] = {expr};
+}}
+"#,
+        meta = wgsl_meta(),
+        ty = T::TYPE_TOKEN,
+        wg = width.get(),
+        decode = wgsl_decode(),
+        expr = <Op as BinaryExpr<Wgsl>>::EXPR,
+    )
+}
+
+/// Meta-building and bind-group creation for broadcast-scalar dispatches.
+fn prepare_scalar_inner<Op, T, const N: usize>(
+    device: &WgpuDevice,
+    input: StridedView<'_, WgpuBuffer<T>, N>,
+    scalar: T,
+    output: StridedView<'_, WgpuBuffer<T>, N>,
+) -> Result<PreparedElementwise>
+where
+    Op: BinaryExpr<Wgsl> + 'static,
+    T: DialectScalar<Wgsl> + Pod + 'static,
+{
+    validate_rank::<N>()?;
+
+    let out_layout = output.layout;
+    let a_layout = input
+        .layout
+        .broadcast(out_layout.shape)
+        .map_err(map_layout_err)?;
+    a_layout
+        .validate_storage_len(input.buffer.len)
+        .map_err(map_layout_err)?;
+    if output.buffer.aliases(input.buffer) {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output buffer must not alias input buffer".to_string(),
+        });
+    }
+    let len = validate_out(output.buffer, out_layout)?;
+    if len == 0 {
+        return Ok(PreparedElementwise {
+            owner: device_owner(device),
+            pipeline: None,
+            bind_group: None,
+            groups: 0,
+            _meta_buffer: None,
+            _scalar_buffer: None,
+        });
+    }
+
+    let meta = crate::application::strided::StridedMeta {
+        shape: pad_shape(out_layout.shape)?,
+        a_strides: pad_strides(a_layout.strides)?,
+        b_strides: [0; 4],
+        out_strides: pad_strides(out_layout.strides)?,
+        offsets: [
+            crate::application::strided::to_u32(a_layout.offset, "input offset")?,
+            0,
+            crate::application::strided::to_u32(out_layout.offset, "output offset")?,
+            crate::application::strided::to_u32(len, "dispatch size")?,
+        ],
+    };
+
+    let groups = workgroups(len, BlockWidth::DEFAULT)?;
+    let pipeline = try_cached_pipeline(
+        device,
+        (
+            TypeId::of::<SeamScalarKernel<Op>>(),
+            TypeId::of::<T>(),
+            BlockWidth::DEFAULT.get(),
+        ),
+        "hephaestus-seam-scalar",
+        || scalar_shader::<T, Op>(BlockWidth::DEFAULT),
+    )?;
+
+    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<
+        crate::application::strided::StridedMeta,
+    >(1)?)?;
+    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
+    device
+        .queue()
+        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+
+    let raw_scalar = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar);
+    device
+        .queue()
+        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
+
+    let bind_group = checked_bind_group(
+        device,
+        &pipeline,
+        "hephaestus-seam-scalar",
+        &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: meta_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: input.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: scalar_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: output.buffer.as_entire_binding(),
+            },
+        ],
+    )?;
+
+    Ok(PreparedElementwise {
+        owner: device_owner(device),
+        pipeline: Some(pipeline),
+        bind_group: Some(bind_group),
+        groups,
+        _meta_buffer: Some(meta_buffer),
+        _scalar_buffer: Some(scalar_buffer),
     })
 }
 
@@ -264,6 +404,7 @@ where
             bind_group: None,
             groups: 0,
             _meta_buffer: None,
+            _scalar_buffer: None,
         });
     }
 
@@ -327,6 +468,7 @@ where
         bind_group: Some(bind_group),
         groups,
         _meta_buffer: Some(meta_buffer),
+        _scalar_buffer: None,
     })
 }
 
@@ -368,6 +510,10 @@ where
     where
         T: 'op;
     type PreparedBinary<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
+    type PreparedScalar<'op, const N: usize>
         = PreparedElementwise
     where
         T: 'op;
@@ -415,6 +561,27 @@ where
         prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()> {
         dispatch_prepared::<N>(device, prepared, "hephaestus-seam-binary")
+    }
+
+    fn prepare_scalar_into<'op, Op, const N: usize>(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'op, WgpuBuffer<T>, N>,
+        scalar: T,
+        output: StridedView<'op, WgpuBuffer<T>, N>,
+    ) -> Result<Self::PreparedScalar<'op, N>>
+    where
+        Op: BinaryExpr<Self::Dialect>,
+    {
+        prepare_scalar_inner::<Op, T, N>(device, input, scalar, output)
+    }
+
+    fn dispatch_scalar<const N: usize>(
+        &self,
+        device: &WgpuDevice,
+        prepared: &Self::PreparedScalar<'_, N>,
+    ) -> Result<()> {
+        dispatch_prepared::<N>(device, prepared, "hephaestus-seam-scalar")
     }
 
     fn prepare_typed_binary_into<'op, Op, const N: usize>(

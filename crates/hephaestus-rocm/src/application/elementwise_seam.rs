@@ -5,8 +5,9 @@ use hephaestus_core::{
 };
 
 use crate::application::prepared_strided_elementwise::{
-    PreparedStridedBinary, PreparedStridedUnary, prepare_binary_elementwise_strided_into,
-    prepare_binary_elementwise_strided_typed_into, prepare_unary_elementwise_strided_into,
+    PreparedStridedBinary, PreparedStridedScalar, PreparedStridedUnary,
+    prepare_binary_elementwise_strided_into, prepare_binary_elementwise_strided_typed_into,
+    prepare_scalar_elementwise_strided_into, prepare_unary_elementwise_strided_into,
 };
 use crate::application::strided::StridedOperand;
 use crate::{RocmBuffer, RocmDevice};
@@ -26,6 +27,10 @@ where
         T: 'op;
     type PreparedBinary<'op, const N: usize>
         = PreparedStridedBinary<'op, T>
+    where
+        T: 'op;
+    type PreparedScalar<'op, const N: usize>
+        = PreparedStridedScalar<'op, T>
     where
         T: 'op;
     type PreparedTypedBinary<'op, const N: usize>
@@ -102,6 +107,42 @@ where
         &self,
         device: &RocmDevice,
         prepared: &Self::PreparedBinary<'_, N>,
+    ) -> Result<()> {
+        prepared.dispatch(device)
+    }
+
+    fn prepare_scalar_into<'op, Op, const N: usize>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<T>, N>,
+        scalar: T,
+        output: StridedView<'op, RocmBuffer<T>, N>,
+    ) -> Result<Self::PreparedScalar<'op, N>>
+    where
+        Op: BinaryExpr<Self::Dialect>,
+    {
+        const {
+            assert!(N <= crate::application::strided_elementwise::MAX_STRIDED_RANK);
+        }
+        prepare_scalar_elementwise_strided_into::<Op, T, N>(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+            scalar,
+            StridedOperand {
+                buffer: output.buffer,
+                layout: output.layout,
+            },
+            BlockWidth::DEFAULT,
+        )
+    }
+
+    fn dispatch_scalar<const N: usize>(
+        &self,
+        device: &RocmDevice,
+        prepared: &Self::PreparedScalar<'_, N>,
     ) -> Result<()> {
         prepared.dispatch(device)
     }

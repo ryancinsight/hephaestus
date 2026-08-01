@@ -337,7 +337,7 @@ extern "C" __global__ void unary_strided_kernel(
     )
 }
 
-fn scalar_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+pub(crate) fn scalar_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"
 {meta}
@@ -942,6 +942,25 @@ where
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
 
+    let Some((meta, len)) = scalar_strided_meta(&a, &out)? else {
+        return Ok(());
+    };
+    launch_scalar_strided::<Op, T>(device, a.buffer, scalar, out.buffer, meta, width, len)
+}
+
+/// Validate a broadcast-scalar operand pair and build its dispatch metadata,
+/// or `None` when the logical output is empty.
+///
+/// # Errors
+///
+/// Returns a layout validation failure.
+pub(crate) fn scalar_strided_meta<T, const N: usize>(
+    a: &StridedOperand<'_, T, N>,
+    out: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>>
+where
+    T: bytemuck::Pod,
+{
     let out_layout = out.layout;
     let a_layout = a
         .layout
@@ -952,23 +971,23 @@ where
         .map_err(map_layout_err)?;
     let len = validate_out(out.buffer, out_layout)?;
     if len == 0 {
-        return Ok(());
+        return Ok(None);
     }
-
-    let meta = StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(out_layout.strides)?,
-        offsets: [
-            to_u32(a_layout.offset, "input offset")?,
-            0,
-            to_u32(out_layout.offset, "output offset")?,
-            to_u32(len, "dispatch size")?,
-        ],
-    };
-
-    launch_scalar_strided::<Op, T>(device, a.buffer, scalar, out.buffer, meta, width, len)
+    Ok(Some((
+        StridedMeta {
+            shape: pad_shape(out_layout.shape)?,
+            a_strides: pad_strides(a_layout.strides)?,
+            b_strides: [0; 4],
+            out_strides: pad_strides(out_layout.strides)?,
+            offsets: [
+                to_u32(a_layout.offset, "input offset")?,
+                0,
+                to_u32(out_layout.offset, "output offset")?,
+                to_u32(len, "dispatch size")?,
+            ],
+        },
+        len,
+    )))
 }
 
 /// Run `out = op(a, scalar)` over `output_shape`, allocating a C-contiguous output buffer.

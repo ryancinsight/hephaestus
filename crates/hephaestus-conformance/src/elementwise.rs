@@ -43,6 +43,8 @@ where
     strided_operands_are_read_through_their_layouts(device, ops);
     prepared_unary_rebinds_bound_operands(device, ops);
     prepared_binary_rebinds_bound_operands(device, ops);
+    scalar_ops_compute_exact_values(device, ops);
+    prepared_scalar_rebinds_bound_operands(device, ops);
     shape_mismatch_is_rejected_before_mutation(device, ops);
 }
 
@@ -326,5 +328,91 @@ where
     assert_eq!(
         got, [7.0; 4],
         "{name}: rejected dispatch must not mutate the output"
+    );
+}
+
+/// Broadcast-scalar arithmetic: dyadic operands and scalars, exact results.
+fn scalar_ops_compute_exact_values<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    SubOp: BinaryExpr<E::Dialect>,
+    MulOp: BinaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let input = [3.0f32, 0.5, -1.0, 8.0];
+    let a = device.upload(&input).expect("input upload");
+    let layout = Layout::c_contiguous([4]).expect("rank-1 layout");
+
+    let out = device.alloc_zeroed::<f32>(4).expect("output alloc");
+    ops.scalar_into::<SubOp, 1>(
+        device,
+        StridedView::new(&a, &layout),
+        2.0,
+        StridedView::new(&out, &layout),
+    )
+    .expect("scalar sub dispatch");
+    let mut got = [0.0f32; 4];
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [1.0, -1.5, -3.0, 6.0],
+        "{name}: broadcast-scalar subtraction"
+    );
+
+    ops.scalar_into::<MulOp, 1>(
+        device,
+        StridedView::new(&a, &layout),
+        0.5,
+        StridedView::new(&out, &layout),
+    )
+    .expect("scalar mul dispatch");
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [1.5, 0.25, -0.5, 4.0],
+        "{name}: broadcast-scalar multiplication"
+    );
+}
+
+/// A prepared broadcast-scalar dispatch re-runs over its bound buffers; the
+/// scalar itself is fixed at preparation.
+fn prepared_scalar_rebinds_bound_operands<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    AddOp: BinaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let a = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).expect("upload");
+    let out = device.alloc_zeroed::<f32>(4).expect("output alloc");
+    let layout = Layout::c_contiguous([4]).expect("rank-1 layout");
+    let prepared = ops
+        .prepare_scalar_into::<AddOp, 1>(
+            device,
+            StridedView::new(&a, &layout),
+            1.0,
+            StridedView::new(&out, &layout),
+        )
+        .expect("prepare scalar");
+
+    ops.dispatch_scalar::<1>(device, &prepared)
+        .expect("dispatch");
+    let mut got = [0.0f32; 4];
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(got, [2.0, 3.0, 4.0, 5.0], "{name}: prepared scalar add");
+
+    device
+        .write_buffer(&a, &[10.0f32, 20.0, 30.0, 40.0])
+        .expect("input rewrite");
+    ops.dispatch_scalar::<1>(device, &prepared)
+        .expect("rebind dispatch");
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [11.0, 21.0, 31.0, 41.0],
+        "{name}: prepared scalar must observe buffer writes while keeping its captured scalar"
     );
 }

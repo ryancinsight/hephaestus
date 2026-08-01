@@ -28,6 +28,10 @@ where
         = PreparedElementwise
     where
         T: 'op;
+    type PreparedScalar<'op, const N: usize>
+        = PreparedElementwise
+    where
+        T: 'op;
     type PreparedTypedBinary<'op, const N: usize>
         = PreparedElementwise
     where
@@ -85,6 +89,36 @@ where
         prepared: &Self::PreparedBinary<'_, N>,
     ) -> Result<()> {
         <WgpuElementwiseOps as ElementwiseOps<WgpuDevice, T>>::dispatch_binary::<N>(
+            &self.inner,
+            device.wgpu_device(),
+            prepared,
+        )
+    }
+
+    fn prepare_scalar_into<'op, Op, const N: usize>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<T>, N>,
+        scalar: T,
+        output: StridedView<'op, MetalBuffer<T>, N>,
+    ) -> Result<Self::PreparedScalar<'op, N>>
+    where
+        Op: BinaryExpr<Self::Dialect>,
+    {
+        self.inner.prepare_scalar_into::<Op, N>(
+            device.wgpu_device(),
+            StridedView::new(&input.buffer.inner, input.layout),
+            scalar,
+            StridedView::new(&output.buffer.inner, output.layout),
+        )
+    }
+
+    fn dispatch_scalar<const N: usize>(
+        &self,
+        device: &MetalDevice,
+        prepared: &Self::PreparedScalar<'_, N>,
+    ) -> Result<()> {
+        <WgpuElementwiseOps as ElementwiseOps<WgpuDevice, T>>::dispatch_scalar::<N>(
             &self.inner,
             device.wgpu_device(),
             prepared,

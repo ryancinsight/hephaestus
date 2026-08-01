@@ -111,7 +111,7 @@ extern "C" __global__ void unary_strided_kernel(
     )
 }
 
-fn scalar_shader<Op: BinaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
+pub(crate) fn scalar_shader<Op: BinaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
     format!(
         r#"
 {meta}
@@ -623,6 +623,33 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
     }
+    let Some((meta, len)) = scalar_strided_meta(&input, &output)? else {
+        return Ok(());
+    };
+    launch_scalar::<Op, T>(
+        device,
+        input.buffer,
+        scalar,
+        output.buffer,
+        meta,
+        width,
+        len,
+    )
+}
+
+/// Validate a broadcast-scalar operand pair and build its dispatch metadata,
+/// or `None` when the logical output is empty.
+///
+/// # Errors
+///
+/// Returns a layout validation failure or an aliasing violation.
+pub(crate) fn scalar_strided_meta<T, const N: usize>(
+    input: &StridedOperand<'_, T, N>,
+    output: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>>
+where
+    T: Pod,
+{
     let input_layout = input
         .layout
         .broadcast(output.layout.shape)
@@ -635,35 +662,33 @@ where
             message: "output buffer must not alias input buffer".to_string(),
         });
     }
-    let len = validate_output(output)?;
+    let len = validate_output(*output)?;
     if len == 0 {
-        return Ok(());
+        return Ok(None);
     }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(input_layout.strides)?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides)?,
-        offsets: [
-            u32::try_from(input_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            0,
-            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
-    };
-    launch_scalar::<Op, T>(
-        device,
-        input.buffer,
-        scalar,
-        output.buffer,
-        meta,
-        width,
+    Ok(Some((
+        StridedMeta {
+            shape: pad_shape(output.layout.shape)?,
+            a_strides: pad_strides(input_layout.strides)?,
+            b_strides: [0; 4],
+            out_strides: pad_strides(output.layout.strides)?,
+            offsets: [
+                u32::try_from(input_layout.offset).map_err(|_| {
+                    HephaestusError::DispatchFailed {
+                        message: "input offset exceeds u32 range".to_string(),
+                    }
+                })?,
+                0,
+                u32::try_from(output.layout.offset).map_err(|_| {
+                    HephaestusError::DispatchFailed {
+                        message: "output offset exceeds u32 range".to_string(),
+                    }
+                })?,
+                dispatch_len(len)?,
+            ],
+        },
         len,
-    )
+    )))
 }
 
 /// Allocate a C-contiguous output and run a strided scalar operation.
