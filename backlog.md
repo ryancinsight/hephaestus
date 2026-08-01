@@ -141,7 +141,9 @@ cuda-oxide + cutile).
   Independent review approves the scratch-reuse and symmetric module/re-export
   feature-gating diffs after excluding generated Atlas overlay lockfile
   reordering, and separately approves the Metal test-target feature gate.
-  Refreshed exact-head backend CI remains the merge gate.
+  Exact implementation head `1169f99` passes CUDA run `30708041475`, ROCm run
+  `30708041480`, WGPU run `30708041490`, and macOS Metal run `30708041462`.
+  Final docs-only closeout-head CI remains PR #172's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

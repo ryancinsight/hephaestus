@@ -3418,5 +3418,6 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       decomposition seam gating in both backends.
 - [x] Gate the Metal decomposition conformance target and pass the workflow's
       exact no-default all-target check.
-- [x] Record independent blocker-fix review; require exact-head CUDA, ROCm,
-      WGPU, and macOS Metal CI evidence before merge.
+- [x] Record independent blocker-fix review and exact implementation-head CUDA,
+      ROCm, WGPU, and macOS Metal CI evidence.
+- [ ] Require the final docs-only closeout-head backend matrix before merge.

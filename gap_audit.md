@@ -36,7 +36,9 @@ architectural decision or a tracked future-work item:
   `30707678624` exposed the same missing feature gate on the dedicated
   decomposition conformance target; its independently approved fix now shares
   the capability gate. Exact local WGPU no-default library and Metal no-default
-  all-target checks pass. Refreshed exact-head backend CI remains the merge
+  all-target checks pass. Exact implementation head `1169f99` passes CUDA run
+  `30708041475`, ROCm run `30708041480`, WGPU run `30708041490`, and macOS Metal
+  run `30708041462`. Final docs-only closeout-head CI remains PR #172's merge
   gate.
 
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
