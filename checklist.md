@@ -8,13 +8,19 @@ Sprint target: 0.18.0. Phase: Closure.
       ADR 0045.
 - [x] Implement the generic request, planner, errors, and five rule markers.
 - [x] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
-- [ ] Replace the initial analytical contract oracle with direct Leto
+- [x] Replace the initial analytical contract oracle with direct Leto
       differential execution and complete adversarial conformance.
 - [ ] Pass focused warning-denied gates, independent review, and exact-head CI.
 
 Implementation owner: Codex on `codex/hephaestus-stateful-update`. Claimed
 files are ADR 0045; the core stateful-update domain; provider stateful-update
 application modules; shared conformance; and owner-keyed PM/release entries.
+Local evidence passes the direct Leto differential suite on a physical WGPU
+adapter and physical CUDA device, plus ROCm's adapterless export contract. The
+suite covers repeated updates for all five rules, scalar and rank-eight empty
+layouts, strided storage with sentinels, shape and alias failure atomicity, and
+foreign-device rejection before mutation. Warning-denied focused Clippy and
+the core 83/83 Nextest lane pass; independent review and exact-head CI remain.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf]
 

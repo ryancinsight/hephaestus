@@ -7,13 +7,13 @@
 
 ## Context
 
-Coeus exposes fused SGD, Adam, RMSProp, AdamW, and AdaGrad updates through a
-backend trait. CPU execution owns one generic implementation, WGPU and CUDA
-carry separate provider-language formulas, CUDA silently downloads unsupported
-inputs for CPU execution, and ROCm and Metal do not implement the contract.
-Hephaestus already owns accelerator kernel authoring and dispatch, but its
-elementwise seam has one output and prohibits the read/write aliasing required
-by optimizer state transitions.
+Before this decision, Coeus exposed fused SGD, Adam, RMSProp, AdamW, and
+AdaGrad updates through a backend trait. CPU execution owned one generic
+implementation, WGPU and CUDA carried separate provider-language formulas,
+CUDA silently downloaded unsupported inputs for CPU execution, and ROCm and
+Metal did not implement the contract. Hephaestus already owned accelerator
+kernel authoring and dispatch, but its elementwise seam had one output and
+prohibited the read/write aliasing required by optimizer state transitions.
 
 An optimizer update is one elementwise transaction over a parameter, a
 gradient, and one or two state buffers. Every writable value must be computed
@@ -40,7 +40,10 @@ writable buffers unchanged.
 4. WGPU, CUDA, ROCm, and Metal implement the same seam through their existing
    typed authored-kernel and multi-storage machinery. Provider modules own
    dialect source, compilation, metadata packing, launch, and synchronization;
-   consumers never supply shader source.
+   consumers never supply shader source. Metal uses the workspace's established
+   WGPU device-API substrate with `Backends::METAL` as its only admitted API;
+   this is WGSL execution on the selected Metal adapter, not fallback to a WGPU
+   adapter or another provider.
 5. `hephaestus-conformance` owns one contract instantiated by every admitted
    backend and scalar, using direct Leto execution as the CPU differential
    oracle. It covers all rules, nonzero state,

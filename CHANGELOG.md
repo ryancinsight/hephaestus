@@ -41,7 +41,9 @@ Target release: 0.18.0.
   ROCm, and Metal. The shared rank-eight planner validates shapes, storage
   spans, writable-layout injectivity, hyperparameters, and pairwise aliasing
   before mutation; provider dispatch remains device-resident and uses borrowed
-  buffers without host fallback.
+  buffers without host fallback. One direct Leto differential suite exercises
+  every rule across repeated updates, scalar and rank-eight boundaries,
+  strided sentinel-backed storage, and failure-atomic rejection.
 
 - [minor] `AttentionOps` defines provider-owned, fallible scaled dot-product
   attention preparation and dispatch over borrowed rank-3 device views. Its

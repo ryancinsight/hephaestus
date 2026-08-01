@@ -176,6 +176,32 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaStatefulUpdateOps;
 
+fn validate_device<const N: usize>(
+    device: &CudaDevice,
+    operands: &StatefulUpdateOperands<'_, CudaBuffer<f32>, N>,
+) -> Result<()> {
+    #[cfg(feature = "cuda")]
+    let matches = |buffer: &CudaBuffer<f32>| {
+        buffer
+            .context
+            .as_ref()
+            .is_some_and(|context| std::sync::Arc::ptr_eq(context, device.cuda_context()))
+    };
+    #[cfg(not(feature = "cuda"))]
+    let matches = |_buffer: &CudaBuffer<f32>| true;
+
+    if matches(operands.parameter.buffer)
+        && matches(operands.gradient.buffer)
+        && operands.states.iter().all(|state| matches(state.buffer))
+    {
+        Ok(())
+    } else {
+        Err(hephaestus_core::HephaestusError::InvalidConfiguration {
+            message: "CUDA stateful-update operands must belong to the dispatch device".to_string(),
+        })
+    }
+}
+
 impl StatefulUpdateOps<CudaDevice> for CudaStatefulUpdateOps {
     type Dialect = CudaC;
 
@@ -189,6 +215,7 @@ impl StatefulUpdateOps<CudaDevice> for CudaStatefulUpdateOps {
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
         Rule::validate_parameters(&parameters)?;
+        validate_device(device, &operands)?;
         let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
         if plan.is_empty() {
             return Ok(());

@@ -5,8 +5,14 @@ use super::parameters::{
     AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
 
+mod sealed {
+    pub trait Sealed {}
+}
+
 /// Compile-time rule contract shared by all accelerator dialects.
-pub trait StatefulUpdateRule<L: KernelDialect>: Copy + Send + Sync + 'static {
+pub trait StatefulUpdateRule<L: KernelDialect>:
+    sealed::Sealed + Copy + Send + Sync + 'static
+{
     /// Validated POD parameters uploaded once per dispatch.
     type Parameters: Pod;
     /// Number of writable persistent-state views required by the rule.
@@ -35,6 +41,12 @@ pub struct RmsProp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AdaGrad;
 
+impl sealed::Sealed for Sgd {}
+impl sealed::Sealed for Adam {}
+impl sealed::Sealed for AdamW {}
+impl sealed::Sealed for RmsProp {}
+impl sealed::Sealed for AdaGrad {}
+
 impl<L: KernelDialect> StatefulUpdateRule<L> for Sgd {
     type Parameters = SgdParameters;
     const STATE_COUNT: usize = 1;
@@ -59,7 +71,7 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for Adam {
         "padding_zero",
         "padding_one",
     ];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0 - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0 - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0f - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0f - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
     fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
         parameters.validate()
     }
@@ -78,7 +90,7 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for AdamW {
         "weight_decay",
         "padding",
     ];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0 - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0 - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value * (1.0 - parameters.learning_rate * parameters.weight_decay) - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0f - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0f - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value * (1.0f - parameters.learning_rate * parameters.weight_decay) - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
     fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
         parameters.validate()
     }
@@ -89,7 +101,7 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for RmsProp {
     const STATE_COUNT: usize = 1;
     const PARAMETER_FIELDS: &'static [&'static str] =
         &["learning_rate", "alpha", "epsilon", "padding"];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.alpha + (1.0 - parameters.alpha) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);";
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.alpha + (1.0f - parameters.alpha) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);";
     fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
         parameters.validate()
     }

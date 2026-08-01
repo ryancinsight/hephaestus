@@ -9,6 +9,7 @@ use hephaestus_core::{
 
 use crate::application::elementwise::encode_elementwise;
 use crate::application::pipeline::{cached_pipeline, workgroups};
+use crate::application::prepared::validate_buffer_owner;
 use crate::{Result, WgpuBuffer, WgpuDevice};
 
 struct StatefulKernel<Rule>(PhantomData<Rule>);
@@ -139,6 +140,15 @@ impl StatefulUpdateOps<WgpuDevice> for WgpuStatefulUpdateOps {
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
         Rule::validate_parameters(&parameters)?;
+        validate_buffer_owner(
+            operands.parameter.buffer,
+            device,
+            "stateful-update parameter",
+        )?;
+        validate_buffer_owner(operands.gradient.buffer, device, "stateful-update gradient")?;
+        for state in operands.states {
+            validate_buffer_owner(state.buffer, device, "stateful-update state")?;
+        }
         let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
         if plan.is_empty() {
             return Ok(());

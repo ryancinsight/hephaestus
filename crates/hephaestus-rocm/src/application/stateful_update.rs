@@ -194,6 +194,28 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmStatefulUpdateOps;
 
+fn validate_device<const N: usize>(
+    _device: &RocmDevice,
+    operands: &StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
+) -> Result<()> {
+    #[cfg(all(feature = "rocm", target_os = "linux"))]
+    let matches =
+        |buffer: &RocmBuffer<f32>| std::sync::Arc::ptr_eq(&buffer.context, &_device.context);
+    #[cfg(not(all(feature = "rocm", target_os = "linux")))]
+    let matches = |_buffer: &RocmBuffer<f32>| true;
+
+    if matches(operands.parameter.buffer)
+        && matches(operands.gradient.buffer)
+        && operands.states.iter().all(|state| matches(state.buffer))
+    {
+        Ok(())
+    } else {
+        Err(hephaestus_core::HephaestusError::InvalidConfiguration {
+            message: "ROCm stateful-update operands must belong to the dispatch device".to_string(),
+        })
+    }
+}
+
 impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
     type Dialect = HipC;
 
@@ -207,6 +229,7 @@ impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
         Rule::validate_parameters(&parameters)?;
+        validate_device(device, &operands)?;
         let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
         if plan.is_empty() {
             return Ok(());

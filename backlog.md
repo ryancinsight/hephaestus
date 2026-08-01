@@ -29,8 +29,10 @@ cuda-oxide + cutile).
 - Risk/change class: `[minor] [arch]`; additive public provider seam. Coeus's
   later fallible cutover is a separate breaking consumer increment.
 - Status: in-progress 2026-08-01. Core planner and all four provider dispatch
-  implementations pass warning-denied focused gates; direct Leto differential
-  conformance, independent review, exact-head CI, and consumer cutover remain.
+  implementations pass warning-denied focused gates. Direct Leto differential
+  conformance passes on physical WGPU and CUDA devices; ROCm's adapterless
+  contract passes. Independent review and exact-head CI remain; the Coeus
+  consumer cutover is the next separate increment.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 
