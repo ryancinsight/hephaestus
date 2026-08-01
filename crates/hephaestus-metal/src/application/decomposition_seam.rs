@@ -43,9 +43,11 @@ impl ColPivQrHandle<MetalDevice> for MetalColPivQrDecomposition {
     }
 }
 
-/// Fully pivoted LU result: the WGPU handle wrapped for this device.
+/// Fully pivoted LU result: the WGPU handle plus its factors rewrapped
+/// for this device.
 pub struct MetalFullPivLuDecomposition {
     inner: GpuFullPivLuDecomposition,
+    factors: MetalBuffer<f32>,
 }
 
 impl FullPivLuHandle<MetalDevice> for MetalFullPivLuDecomposition {
@@ -57,6 +59,9 @@ impl FullPivLuHandle<MetalDevice> for MetalFullPivLuDecomposition {
     }
     fn det(&self) -> f32 {
         self.inner.det()
+    }
+    fn factors(&self) -> &MetalBuffer<f32> {
+        &self.factors
     }
     fn row_permutation(&self) -> &[usize] {
         self.inner.row_permutation()
@@ -213,15 +218,17 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
         device: &MetalDevice,
         input: StridedView<'op, MetalBuffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>> {
-        Ok(MetalFullPivLuDecomposition {
-            inner: full_piv_lu(
-                device,
-                StridedOperand {
-                    buffer: input.buffer,
-                    layout: input.layout,
-                },
-            )?,
-        })
+        let inner = full_piv_lu(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let factors = MetalBuffer {
+            inner: inner.lu_buffer().clone(),
+        };
+        Ok(MetalFullPivLuDecomposition { inner, factors })
     }
 
     fn cholesky<'op>(

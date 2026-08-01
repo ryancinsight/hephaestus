@@ -15,7 +15,8 @@
 //! the comparison itself adds no `f32` error.
 
 use hephaestus_core::{
-    CholeskyHandle, ComputeDevice, DecompositionOps, LuHandle, QrHandle, StridedView,
+    CholeskyHandle, ColPivQrHandle, ComputeDevice, DecompositionOps, FullPivLuHandle, LuHandle,
+    QrHandle, StridedView,
 };
 use leto::Layout;
 
@@ -39,6 +40,8 @@ where
     cholesky_factors_an_spd_matrix(device, ops);
     cholesky_rejects_an_indefinite_matrix(device, ops);
     qr_solves_a_consistent_least_squares_system(device, ops);
+    col_piv_qr_reveals_rank_and_solves(device, ops);
+    full_piv_lu_reveals_rank_and_reconstructs(device, ops);
     lu_matches_the_leto_reference(device, ops);
     cholesky_matches_the_leto_reference(device, ops);
     qr_matches_the_leto_reference(device, ops);
@@ -456,4 +459,145 @@ where
             "{name}: identity QR R entry {index} = {value}, expected magnitude {expected}"
         );
     }
+}
+
+/// Column-pivoted QR reveals rank and solves consistent least squares.
+///
+/// The rank-1 fixture stacks a column and its double, so exactly one
+/// pivoted diagonal survives; the full-rank fixture reuses the QR
+/// least-squares system whose minimizer is exactly `[1, 1]`.
+fn col_piv_qr_reveals_rank_and_solves<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+
+    let deficient = device
+        .upload(&[1.0f32, 2.0, 2.0, 4.0, 3.0, 6.0])
+        .expect("rank-1 upload");
+    let tall = Layout::c_contiguous([3, 2]).expect("3x2 layout");
+    let qr = ops
+        .col_piv_qr(device, StridedView::new(&deficient, &tall))
+        .expect("rank-1 col-pivoted QR");
+    assert_eq!(qr.rank(), 1, "{name}: rank-1 fixture must reveal rank 1");
+    let permutation = qr.permutation();
+    assert_eq!(permutation.len(), 2, "{name}: permutation length");
+    let mut seen = [false; 2];
+    for &p in permutation {
+        assert!(
+            p < 2 && !seen[p],
+            "{name}: invalid column permutation {permutation:?}"
+        );
+        seen[p] = true;
+    }
+
+    let full = device
+        .upload(&[1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0])
+        .expect("full-rank upload");
+    let qr = ops
+        .col_piv_qr(device, StridedView::new(&full, &tall))
+        .expect("full-rank col-pivoted QR");
+    assert_eq!(qr.rank(), 2, "{name}: full-rank fixture must reveal rank 2");
+    let rhs = device.upload(&[1.0f32, 1.0, 2.0]).expect("rhs upload");
+    let x = qr.solve_least_squares(device, &rhs).expect("LS solve");
+    let mut got = [0.0f32; 2];
+    device.download(&x, &mut got).expect("solution download");
+    for (index, value) in got.iter().enumerate() {
+        assert!(
+            (value - 1.0).abs() < DECOMP_BOUND,
+            "{name}: pivoted LS component {index} = {value}, expected 1"
+        );
+    }
+}
+
+/// Fully pivoted LU reveals rank, keeps exact det/solve oracles, and
+/// reconstructs `P·A·Q = L·U` through both permutation vectors in `f64`.
+fn full_piv_lu_reveals_rank_and_reconstructs<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+
+    // Rank-deficient: row 2 is twice row 1.
+    let deficient = device
+        .upload(&[1.0f32, 2.0, 3.0, 2.0, 4.0, 6.0, 1.0, 1.0, 1.0])
+        .expect("rank-2 upload");
+    let square = Layout::c_contiguous([3, 3]).expect("3x3 layout");
+    let lu = ops
+        .full_piv_lu(device, StridedView::new(&deficient, &square))
+        .expect("rank-2 full-pivoted LU");
+    assert_eq!(lu.rank(), 2, "{name}: rank-2 fixture must reveal rank 2");
+
+    // Full-rank: the trio fixture with det 4 and solution [1,1,1].
+    let a_host = [0.0f32, 2.0, 1.0, 1.0, 1.0, 1.0, 2.0, 4.0, 1.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let lu = ops
+        .full_piv_lu(device, StridedView::new(&a, &square))
+        .expect("full-rank full-pivoted LU");
+    assert_eq!(lu.order(), 3, "{name}: order");
+    assert_eq!(lu.rank(), 3, "{name}: full-rank fixture must reveal rank 3");
+    assert!(
+        (lu.det() - 4.0).abs() < DECOMP_BOUND,
+        "{name}: full-pivot det {} != 4",
+        lu.det()
+    );
+    let rhs = device.upload(&[3.0f32, 3.0, 7.0]).expect("rhs upload");
+    let x = lu.solve(device, &rhs).expect("full-pivot solve");
+    let mut got = [0.0f32; 3];
+    device.download(&x, &mut got).expect("solution download");
+    for (index, value) in got.iter().enumerate() {
+        assert!(
+            (value - 1.0).abs() < DECOMP_BOUND,
+            "{name}: full-pivot solution component {index} = {value}, expected 1"
+        );
+    }
+
+    // Both permutation vectors are permutations.
+    let rows = lu.row_permutation();
+    let cols = lu.col_permutation();
+    for (label, permutation) in [("row", rows), ("column", cols)] {
+        assert_eq!(permutation.len(), 3, "{name}: {label} permutation length");
+        let mut seen = [false; 3];
+        for &p in permutation {
+            assert!(
+                p < 3 && !seen[p],
+                "{name}: invalid {label} permutation {permutation:?}"
+            );
+            seen[p] = true;
+        }
+    }
+
+    // Host reconstruction in f64: gather A through both permutations and
+    // compare against L·U from the packed factors.
+    let mut factors = [0.0f32; 9];
+    device
+        .download(lu.factors(), &mut factors)
+        .expect("factor download");
+    let mut max_err = 0.0f64;
+    for row in 0..3 {
+        for col in 0..3 {
+            let mut acc = 0.0f64;
+            for k in 0..3 {
+                let l = match k.cmp(&row) {
+                    std::cmp::Ordering::Less => f64::from(factors[row * 3 + k]),
+                    std::cmp::Ordering::Equal => 1.0,
+                    std::cmp::Ordering::Greater => 0.0,
+                };
+                let u = if k <= col {
+                    f64::from(factors[k * 3 + col])
+                } else {
+                    0.0
+                };
+                acc += l * u;
+            }
+            let gathered = f64::from(a_host[rows[row] * 3 + cols[col]]);
+            max_err = max_err.max((acc - gathered).abs());
+        }
+    }
+    assert!(
+        max_err < f64::from(DECOMP_BOUND),
+        "{name}: full-pivot reconstruction error {max_err}"
+    );
 }

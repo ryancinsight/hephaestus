@@ -206,6 +206,10 @@ pub trait FullPivLuHandle<D: ComputeDevice> {
     /// Determinant accumulated during elimination.
     fn det(&self) -> f32;
 
+    /// Device-resident packed `L`/`U` factors, `n × n` row-major (unit
+    /// lower diagonal implicit), of the fully pivoted elimination.
+    fn factors(&self) -> &D::Buffer<f32>;
+
     /// Row permutation vector (leto's convention).
     fn row_permutation(&self) -> &[usize];
 

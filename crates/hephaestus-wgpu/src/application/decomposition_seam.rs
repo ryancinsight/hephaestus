@@ -100,6 +100,9 @@ impl FullPivLuHandle<WgpuDevice> for GpuFullPivLuDecomposition {
     fn det(&self) -> f32 {
         Self::det(self)
     }
+    fn factors(&self) -> &WgpuBuffer<f32> {
+        self.lu_buffer()
+    }
     fn row_permutation(&self) -> &[usize] {
         Self::row_permutation(self)
     }
