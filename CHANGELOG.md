@@ -145,10 +145,10 @@ Target release: 0.18.0.
 - [patch] Allocate ray line-integral results through the
   overwrite-before-read device seam. CUDA and ROCm omit one ray-count-sized
   initialization transfer before the validated one-work-item-per-ray kernel
-  writes every output; WGPU and Metal preserve platform-managed initialization
-  behavior. Ray traversal arithmetic, field and ray layouts, and peak
-  allocation are unchanged; no runtime gain is claimed without matched
-  hardware measurements.
+  writes every output; WGPU and Metal use the same overwrite contract while
+  preserving WebGPU's platform-managed initialization behavior. Ray traversal
+  arithmetic, field and ray layouts, and peak allocation are unchanged; no
+  runtime gain is claimed without matched hardware measurements.
 
 - [patch] WGPU elementwise, scan, full-reduction, and convolution preparation
   share checked pipeline, bind-group, device-identity, and submission helpers.

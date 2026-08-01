@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf]
+
+- [x] Prove the delegated WGPU kernel assigns every validated ray output.
+- [x] Route Metal's private output through overwrite-before-read allocation.
+- [x] Preserve empty, miss, constant-field, and axis-aligned analytical values.
+- [x] Pass focused Metal checks, contracts, and exact-head backend CI.
+
+Implementation owner: Codex on `codex/hephaestus-metal-volume-overwrite`.
+Claimed files are Metal volume allocation and focused contracts, `CHANGELOG.md`,
+`backlog.md`, `gap_audit.md`, and this section. Local format, all-target check,
+warning-denied Clippy, and focused Nextest pass; Windows has no Metal adapter,
+so exact native values remain covered by macOS CI run `30674702295`. Exact head
+`f857c84` also passes CUDA `30674702291`, ROCm `30674702372`, and WGPU
+`30674702296`.
+
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch]
 
 - [x] Define the device-neutral rank-3 attention operands, mask, gradients,

@@ -2,10 +2,9 @@
 //!
 //! Each clause is generic over the device and the seam, so every backend runs
 //! the same assertions. All fixtures are small integer-valued or dyadic `f32`
-//! vectors, so every product, sum, and quotient is exactly representable and
-//! every oracle is an exact equality: the dot fixture reduces to `26`, the
-//! norm fixture is the Pythagorean quadruple `[2,3,6,0]` with norm exactly
-//! `7`, and division uses power-of-two divisors.
+//! vectors, so every product, sum, and quotient is exactly representable. The
+//! dot fixture therefore uses exact equality, while the norm fixture permits
+//! one output ULP for the backend square-root operation.
 
 use hephaestus_core::{ComputeDevice, DenseVectorOps};
 
@@ -14,6 +13,17 @@ fn download<D: ComputeDevice, const LEN: usize>(device: &D, buffer: &D::Buffer<f
     let mut got = [0.0f32; LEN];
     device.download(buffer, &mut got).expect("download");
     got
+}
+
+/// Assert that one positive normal result is within one output ULP.
+fn assert_one_ulp(actual: f32, expected: f32, name: &str, clause: &str) {
+    // For positive normal f32 values, expected * EPSILON upper-bounds one ULP
+    // throughout the expected value's binade.
+    let one_ulp = expected * f32::EPSILON;
+    assert!(
+        (actual - expected).abs() <= one_ulp,
+        "{name}: {clause}: expected {expected}, got {actual}, one-ULP bound {one_ulp}"
+    );
 }
 
 /// Run every dense-vector clause against one backend.
@@ -136,23 +146,26 @@ where
         "{name}: prepared dot must reject an operand it was not prepared against"
     );
 
-    // Prepared norm: the Pythagorean quadruple [2,3,6,0] has norm exactly 7.
+    // Prepared norm: the Pythagorean quadruple [2,3,6,0] has norm 7. The
+    // integer sum of squares is exact; only the backend sqrt may round.
     let v = device
         .upload(&[2.0f32, 3.0, 6.0, 0.0])
         .expect("norm vector");
     let prepared = ops.prepare_norm_l2(device, &v).expect("prepare norm");
-    assert_eq!(
+    assert_one_ulp(
         ops.norm_l2_prepared(device, &prepared, &v).expect("norm"),
         7.0,
-        "{name}: prepared norm"
+        name,
+        "prepared norm",
     );
     // Rebind: [9,12,20,0] is a Pythagorean quadruple with norm exactly 25.
     device
         .write_buffer(&v, &[9.0f32, 12.0, 20.0, 0.0])
         .expect("vector rewrite");
-    assert_eq!(
+    assert_one_ulp(
         ops.norm_l2_prepared(device, &prepared, &v).expect("norm"),
         25.0,
-        "{name}: prepared norm must observe writes to its bound operand"
+        name,
+        "prepared norm must observe writes to its bound operand",
     );
 }

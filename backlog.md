@@ -4,6 +4,37 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — review
+
+- Owner: Codex on `codex/hephaestus-metal-volume-overwrite`; scope: Metal's
+  allocating ray-line-integral wrapper, focused analytical contracts, and
+  synchronized PM evidence.
+- Outcome: allocate the private ray-count-sized output through the
+  overwrite-before-read seam before the delegated WGPU kernel assigns every
+  validated ray result.
+- Non-goals: ray traversal arithmetic, field/ray layouts, caller-owned output,
+  WGPU/CUDA/ROCm implementations, benchmark workloads, and runtime claims
+  without matched measurements.
+- Acceptance: validation precedes allocation; every non-empty output element
+  is assigned before exposure; empty output remains valid; analytical Metal
+  ray-integral contracts and warning-denied provider gates pass; exact-head
+  backend CI passes.
+- Risk/change class: `[patch]` internal Metal allocation policy. The change
+  removes one redundant ray-count-sized logical initialization while WebGPU's
+  mandatory platform initialization behavior remains implementation-defined.
+- Evidence: source review proves validation precedes allocation and the
+  delegated one-work-item-per-ray kernel assigns hit, miss, and grazing paths;
+  empty batches expose no readable element. Local format, all-target check,
+  warning-denied Clippy, and focused Nextest pass against the Atlas overlay.
+  The four local Metal tests return through the documented no-adapter path on
+  Windows. Exact head `f857c84` passes CUDA run `30674702291`, ROCm run
+  `30674702372`, WGPU run `30674702296`, and native macOS Metal run
+  `30674702295`. The first native Metal run exposed an invalid bitwise norm
+  oracle; the corrected shared contract bounds the backend square root to one
+  output ULP while retaining exact arithmetic assertions elsewhere.
+- Status: implementation, independent review, local static gates, and hosted
+  backend CI complete 2026-07-31; PR #168 is ready to merge.
+
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 
 - Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
