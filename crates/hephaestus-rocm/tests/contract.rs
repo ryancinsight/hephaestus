@@ -998,6 +998,9 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     )
     .expect("HIP prepared L2 norm");
     let norm_output = prepared_norm.output() as *const _;
+    device
+        .write_buffer(prepared_norm.output(), &[f32::NAN])
+        .expect("HIP prepared L2 output poison");
     prepared_norm
         .dispatch()
         .expect("HIP prepared L2 norm dispatch");
@@ -1011,6 +1014,9 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     device
         .write_buffer(&norm_input, &[4.0_f32; 4])
         .expect("HIP prepared L2 input update");
+    device
+        .write_buffer(prepared_norm.output(), &[f32::NAN])
+        .expect("HIP repeated prepared L2 output poison");
     prepared_norm
         .dispatch()
         .expect("HIP repeated prepared L2 norm dispatch");

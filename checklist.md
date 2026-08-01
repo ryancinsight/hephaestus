@@ -2,6 +2,23 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-PREPARED-L2-OVERWRITE-1 [patch]
+
+- [x] Prove each successful dispatch wholly overwrites poisoned prior output
+      and record a physical CUDA value baseline.
+- [x] Reject uninitialized prepared output after proving it remains publicly
+      readable before first dispatch and after failed dispatch.
+- [x] Preserve repeated-input, strided, empty, and exact-value contracts.
+- [x] Pass focused formatting, warning-denied diagnostics, and Nextest gates.
+- [x] Record independent review of the prepared-output lifecycle and evidence.
+- [x] Record exact implementation-head backend CI and require the final
+      docs-only closeout-head matrix before merge.
+
+Implementation owner: Codex on `codex/hephaestus-prepared-l2-overwrite`.
+Claimed files are CUDA/ROCm prepared map-reduction contracts, `CHANGELOG.md`,
+`backlog.md`, `gap_audit.md`, and this section.
+WGPU/Metal allocation behavior and active provider scopes are excluded.
+
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf]
 
 - [x] Replace host-built identity uploads with backend-native device writes.

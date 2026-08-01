@@ -7,7 +7,7 @@ use hephaestus_metal::MetalDevice;
 
 #[test]
 fn metal_satisfies_the_transfer_contract() {
-    let device = MetalDevice::try_default()
-        .expect("Metal transfer conformance requires a physical device");
+    let device =
+        MetalDevice::try_default().expect("Metal transfer conformance requires a physical device");
     assert_transfer_contract(&device);
 }

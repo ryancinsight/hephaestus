@@ -11,6 +11,32 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-PREPARED-L2-OVERWRITE-1] Prepared output lifecycle
+
+- Finding: the earlier fused map-reduction changelog overclaimed that prepared
+  CUDA/ROCm L2 results omit scalar initialization. Although successful
+  square-root dispatch overwrites the sole element, `output()` exposes the
+  allocation before first dispatch and remains readable after a failed
+  dispatch. Raw uninitialized CUDA/ROCm storage would therefore violate the
+  public lifecycle.
+- Resolution: retain defined zeroed storage in all four public-strided and
+  internal-dense preparation paths. Poison the stable output with `NaN` before
+  first and repeated successful dispatches so the value contract proves kernel
+  assignment without using that proof to weaken pre-dispatch safety. Correct
+  the changelog to limit overwrite allocation to immediate L2 results.
+- Evidence: physical CUDA passes the focused prepared-map contract before and
+  after the allocation change; adapterless ROCm compiles and exercises the
+  typed unavailable-device path. Formatting, warning-denied provider Clippy,
+  and no-default all-target checks pass locally.
+- Residual: local physical ROCm execution is unavailable on this Windows host;
+  no physical ROCm execution is claimed. Implementation head `998f521` passes
+  CUDA run `30710893281`, ROCm run `30710893299`, WGPU run `30710893294`, and
+  macOS Metal run `30710893263`; hardware-only NVIDIA and AMD jobs skip because
+  no runner was dispatched. The external `recurseml/analysis` integration
+  reports its generic service error and is not provider evidence. Final
+  docs-only closeout-head CI remains PR #173's merge gate. No allocation,
+  peak-memory, transfer, or runtime improvement is claimed.
+
 ## [HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1] Host scratch ownership
 
 - Finding: WGPU rank and determinant downloaded the complete device backing

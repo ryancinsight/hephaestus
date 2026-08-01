@@ -1001,6 +1001,8 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     )
     .unwrap();
     let norm_output = prepared_norm.output() as *const _;
+    dev.write_buffer(prepared_norm.output(), &[f32::NAN])
+        .unwrap();
     prepared_norm.dispatch().unwrap();
     dev.download(prepared_norm.output(), &mut got).unwrap();
     let expected = 30.0_f32.sqrt();
@@ -1008,6 +1010,8 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(norm_output, prepared_norm.output() as *const _);
 
     dev.write_buffer(&norm_input, &[4.0_f32; 4]).unwrap();
+    dev.write_buffer(prepared_norm.output(), &[f32::NAN])
+        .unwrap();
     prepared_norm.dispatch().unwrap();
     dev.download(prepared_norm.output(), &mut got).unwrap();
     assert_eq!(got, [8.0]);
