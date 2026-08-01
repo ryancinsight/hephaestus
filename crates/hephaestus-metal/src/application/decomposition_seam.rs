@@ -9,12 +9,13 @@
 
 use hephaestus_core::{
     CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView,
+    StridedView, SymmetricEigenHandle,
 };
 
 use crate::application::decomposition::{
     GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose, qr_decompose,
+    GpuQrDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose, col_piv_qr,
+    full_piv_lu, lu_decompose, qr_decompose, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::MetalBuffer;
@@ -73,6 +74,26 @@ impl FullPivLuHandle<MetalDevice> for MetalFullPivLuDecomposition {
         self.inner
             .solve(device.wgpu_device(), &rhs.inner)
             .map(|inner| MetalBuffer { inner })
+    }
+}
+
+/// Symmetric eigendecomposition result: the WGPU handle plus its factors
+/// rewrapped for this device.
+pub struct MetalSymmetricEigenDecomposition {
+    inner: GpuSymmetricEigenDecomposition,
+    eigenvalues: MetalBuffer<f32>,
+    eigenvectors: MetalBuffer<f32>,
+}
+
+impl SymmetricEigenHandle<MetalDevice> for MetalSymmetricEigenDecomposition {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn eigenvalues(&self) -> &MetalBuffer<f32> {
+        &self.eigenvalues
+    }
+    fn eigenvectors(&self) -> &MetalBuffer<f32> {
+        &self.eigenvectors
     }
 }
 
@@ -229,6 +250,47 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
             inner: inner.lu_buffer().clone(),
         };
         Ok(MetalFullPivLuDecomposition { inner, factors })
+    }
+
+    type SymmetricEigen<'op> = MetalSymmetricEigenDecomposition;
+
+    fn symmetric_eigen<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::SymmetricEigen<'op>> {
+        let inner = symmetric_eigen_jacobi(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let eigenvalues = MetalBuffer {
+            inner: inner.eigenvalues().clone(),
+        };
+        let eigenvectors = MetalBuffer {
+            inner: inner.eigenvectors().clone(),
+        };
+        Ok(MetalSymmetricEigenDecomposition {
+            inner,
+            eigenvalues,
+            eigenvectors,
+        })
+    }
+
+    fn symmetric_eigenvalues(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'_, MetalBuffer<f32>, 2>,
+    ) -> Result<MetalBuffer<f32>> {
+        symmetric_eigenvalues_jacobi(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )
     }
 
     fn cholesky<'op>(

@@ -161,6 +161,36 @@ pub trait DecompositionOps<D: ComputeDevice> {
         input: StridedView<'op, D::Buffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>>;
 
+    /// Symmetric eigendecomposition result bound to this backend.
+    type SymmetricEigen<'op>: SymmetricEigenHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Factor a symmetric rank-2 view as `A = V·Λ·Vᵀ`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn symmetric_eigen<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::SymmetricEigen<'op>>;
+
+    /// Eigenvalues of a symmetric rank-2 view, without eigenvectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn symmetric_eigenvalues(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<f32>>;
+
     /// Factor a symmetric positive-definite matrix as `A = L·Lᵀ`.
     ///
     /// # Errors
@@ -223,4 +253,20 @@ pub trait FullPivLuHandle<D: ComputeDevice> {
     /// Returns a rank-deficiency rejection, a length mismatch, or the
     /// backend dispatch failure.
     fn solve(&self, device: &D, rhs: &D::Buffer<f32>) -> Result<D::Buffer<f32>>;
+}
+
+/// Oracle-minimal accessors on a symmetric eigendecomposition result
+/// (ADR 0042 staging, stage 2).
+pub trait SymmetricEigenHandle<D: ComputeDevice> {
+    /// Dimension of the factored symmetric matrix.
+    fn order(&self) -> usize;
+
+    /// Device-resident eigenvalues (ordering is the backend's Jacobi
+    /// sweep output; the conformance clause asserts the value multiset,
+    /// not an order).
+    fn eigenvalues(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident eigenvectors, `n × n` row-major with eigenvector
+    /// `k` in column `k`, paired index-for-index with `eigenvalues`.
+    fn eigenvectors(&self) -> &D::Buffer<f32>;
 }

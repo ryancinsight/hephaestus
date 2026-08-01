@@ -35,6 +35,7 @@ pub use domain::decomposition::{
 };
 pub use domain::decomposition_seam::{
     CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle,
+    SymmetricEigenHandle,
 };
 pub use domain::dense_product::DenseProductOps;
 pub use domain::device::{

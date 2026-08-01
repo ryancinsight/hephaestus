@@ -7,12 +7,13 @@
 
 use hephaestus_core::{
     CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView,
+    StridedView, SymmetricEigenHandle,
 };
 
 use crate::application::decomposition::{
     GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose, qr_decompose,
+    GpuQrDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose, col_piv_qr,
+    full_piv_lu, lu_decompose, qr_decompose, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -114,6 +115,18 @@ impl FullPivLuHandle<WgpuDevice> for GpuFullPivLuDecomposition {
     }
 }
 
+impl SymmetricEigenHandle<WgpuDevice> for GpuSymmetricEigenDecomposition {
+    fn order(&self) -> usize {
+        self.n()
+    }
+    fn eigenvalues(&self) -> &WgpuBuffer<f32> {
+        Self::eigenvalues(self)
+    }
+    fn eigenvectors(&self) -> &WgpuBuffer<f32> {
+        Self::eigenvectors(self)
+    }
+}
+
 /// Convert the device-neutral view into this backend's operand pair.
 #[inline]
 fn operand<'a>(view: StridedView<'a, WgpuBuffer<f32>, 2>) -> StridedOperand<'a, f32, 2> {
@@ -161,6 +174,24 @@ impl DecompositionOps<WgpuDevice> for WgpuDecompositionOps {
         input: StridedView<'op, WgpuBuffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>> {
         full_piv_lu(device, operand(input))
+    }
+
+    type SymmetricEigen<'op> = GpuSymmetricEigenDecomposition;
+
+    fn symmetric_eigen<'op>(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'op, WgpuBuffer<f32>, 2>,
+    ) -> Result<Self::SymmetricEigen<'op>> {
+        symmetric_eigen_jacobi(device, operand(input))
+    }
+
+    fn symmetric_eigenvalues(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'_, WgpuBuffer<f32>, 2>,
+    ) -> Result<WgpuBuffer<f32>> {
+        symmetric_eigenvalues_jacobi(device, operand(input))
     }
 
     fn cholesky<'op>(

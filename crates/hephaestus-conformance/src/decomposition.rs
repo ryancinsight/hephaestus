@@ -16,7 +16,7 @@
 
 use hephaestus_core::{
     CholeskyHandle, ColPivQrHandle, ComputeDevice, DecompositionOps, FullPivLuHandle, LuHandle,
-    QrHandle, StridedView,
+    QrHandle, StridedView, SymmetricEigenHandle,
 };
 use leto::Layout;
 
@@ -41,6 +41,7 @@ where
     cholesky_rejects_an_indefinite_matrix(device, ops);
     qr_solves_a_consistent_least_squares_system(device, ops);
     col_piv_qr_reveals_rank_and_solves(device, ops);
+    symmetric_eigen_diagonalizes_exactly(device, ops);
     full_piv_lu_reveals_rank_and_reconstructs(device, ops);
     lu_matches_the_leto_reference(device, ops);
     cholesky_matches_the_leto_reference(device, ops);
@@ -600,4 +601,82 @@ where
         max_err < f64::from(DECOMP_BOUND),
         "{name}: full-pivot reconstruction error {max_err}"
     );
+}
+
+/// Symmetric Jacobi eigendecomposition: the fixture `[[2,1],[1,2]]` has
+/// the exact spectrum `{1, 3}`; the clause asserts the eigenvalue
+/// multiset, the `f64` residual `‖A·V − V·Λ‖` and orthogonality
+/// `‖VᵀV − I‖` under the column-eigenvector convention, and agreement of
+/// the values-only path.
+fn symmetric_eigen_diagonalizes_exactly<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [2.0f32, 1.0, 1.0, 2.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let square = Layout::c_contiguous([2, 2]).expect("2x2 layout");
+    let eigen = ops
+        .symmetric_eigen(device, StridedView::new(&a, &square))
+        .expect("symmetric eigendecomposition");
+    assert_eq!(eigen.order(), 2, "{name}: eigen order");
+
+    let mut values = [0.0f32; 2];
+    device
+        .download(eigen.eigenvalues(), &mut values)
+        .expect("eigenvalue download");
+    let mut sorted = values;
+    sorted.sort_by(f32::total_cmp);
+    assert!(
+        (sorted[0] - 1.0).abs() < DECOMP_BOUND && (sorted[1] - 3.0).abs() < DECOMP_BOUND,
+        "{name}: spectrum must be {{1, 3}}, got {values:?}"
+    );
+
+    let mut vectors = [0.0f32; 4];
+    device
+        .download(eigen.eigenvectors(), &mut vectors)
+        .expect("eigenvector download");
+
+    // Residual ‖A·V − V·Λ‖ and orthogonality ‖VᵀV − I‖ in f64.
+    let mut max_residual = 0.0f64;
+    let mut max_ortho = 0.0f64;
+    for row in 0..2 {
+        for col in 0..2 {
+            let mut av = 0.0f64;
+            let mut vtv = 0.0f64;
+            for k in 0..2 {
+                av += f64::from(a_host[row * 2 + k]) * f64::from(vectors[k * 2 + col]);
+                vtv += f64::from(vectors[k * 2 + row]) * f64::from(vectors[k * 2 + col]);
+            }
+            let vl = f64::from(vectors[row * 2 + col]) * f64::from(values[col]);
+            max_residual = max_residual.max((av - vl).abs());
+            let identity = if row == col { 1.0 } else { 0.0 };
+            max_ortho = max_ortho.max((vtv - identity).abs());
+        }
+    }
+    assert!(
+        max_residual < f64::from(DECOMP_BOUND),
+        "{name}: eigen residual ‖A·V − V·Λ‖ = {max_residual}"
+    );
+    assert!(
+        max_ortho < f64::from(DECOMP_BOUND),
+        "{name}: eigenvector orthogonality ‖VᵀV − I‖ = {max_ortho}"
+    );
+
+    // The values-only path agrees with the full path's multiset.
+    let only = ops
+        .symmetric_eigenvalues(device, StridedView::new(&a, &square))
+        .expect("values-only path");
+    let mut got_only = [0.0f32; 2];
+    device
+        .download(&only, &mut got_only)
+        .expect("values-only download");
+    got_only.sort_by(f32::total_cmp);
+    for (index, (full, fast)) in sorted.iter().zip(&got_only).enumerate() {
+        assert!(
+            (full - fast).abs() < DECOMP_BOUND,
+            "{name}: values-only eigenvalue {index}: {fast} vs full path {full}"
+        );
+    }
 }
