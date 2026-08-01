@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-STATEFUL-UPDATE-1 [minor] [arch]
+
+- [x] Record ownership, variants, failure semantics, and migration direction in
+      ADR 0045.
+- [ ] Implement the generic request, planner, errors, and five rule markers.
+- [ ] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
+- [ ] Instantiate shared Leto-differential and adversarial conformance.
+- [ ] Pass focused warning-denied gates, independent review, and exact-head CI.
+
+Implementation owner: Codex on `codex/hephaestus-stateful-update`. Claimed
+files are ADR 0045; the core stateful-update domain; provider stateful-update
+application modules; shared conformance; and owner-keyed PM/release entries.
+
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf]
 
 - [x] Replace host-built identity uploads with backend-native device writes.

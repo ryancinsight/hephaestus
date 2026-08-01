@@ -10,6 +10,26 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-STATEFUL-UPDATE-1 [minor] [arch] — in-progress
+
+- Owner: Codex on `codex/hephaestus-stateful-update`; scope: ADR 0045,
+  provider-neutral stateful update vocabulary and validation, WGPU/CUDA/ROCm/
+  Metal implementations, shared conformance, and synchronized release records.
+- Outcome: expose one provider-owned, monomorphized stateful elementwise seam
+  capable of SGD, Adam, RMSProp, AdamW, and AdaGrad without consumer-authored
+  accelerator formulas or host execution.
+- Non-goals: Coeus consumer cutover, optimizer API compatibility shims,
+  reduced-precision admission, benchmark-instrument changes, or unmeasured
+  runtime and memory claims.
+- Acceptance: all five rules execute through one generic request/planner;
+  validation precedes mutation and rejects invalid shape/span/layout/alias/
+  hyperparameter contracts with typed errors; every backend instantiates the
+  shared Leto-differential suite; no provider silently executes on another
+  backend; warning-denied focused gates and exact-head provider CI pass.
+- Risk/change class: `[minor] [arch]`; additive public provider seam. Coeus's
+  later fallible cutover is a separate breaking consumer increment.
+- Status: in-progress 2026-08-01. ADR 0045 accepted; implementation pending.
+
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matpow-device-identity`; scope: WGPU,
