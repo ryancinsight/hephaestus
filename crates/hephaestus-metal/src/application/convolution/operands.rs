@@ -5,9 +5,9 @@ use hephaestus_wgpu::WgpuBuffer;
 
 use crate::MetalBuffer;
 
-pub(super) fn forward<'a, const R: usize>(
-    operands: ConvolutionForwardOperands<'a, MetalBuffer<f32>, R>,
-) -> ConvolutionForwardOperands<'a, WgpuBuffer<f32>, R> {
+pub(super) fn forward<'a, T, const R: usize>(
+    operands: ConvolutionForwardOperands<'a, MetalBuffer<T>, R>,
+) -> ConvolutionForwardOperands<'a, WgpuBuffer<T>, R> {
     ConvolutionForwardOperands {
         input: view(operands.input),
         weight: view(operands.weight),
@@ -16,9 +16,9 @@ pub(super) fn forward<'a, const R: usize>(
     }
 }
 
-pub(super) fn backward<'a, const R: usize>(
-    operands: ConvolutionBackwardOperands<'a, MetalBuffer<f32>, R>,
-) -> ConvolutionBackwardOperands<'a, WgpuBuffer<f32>, R> {
+pub(super) fn backward<'a, T, const R: usize>(
+    operands: ConvolutionBackwardOperands<'a, MetalBuffer<T>, R>,
+) -> ConvolutionBackwardOperands<'a, WgpuBuffer<T>, R> {
     ConvolutionBackwardOperands {
         input: view(operands.input),
         weight: view(operands.weight),
@@ -31,8 +31,8 @@ pub(super) fn backward<'a, const R: usize>(
     }
 }
 
-fn view<const R: usize>(
-    view: StridedView<'_, MetalBuffer<f32>, R>,
-) -> StridedView<'_, WgpuBuffer<f32>, R> {
+fn view<T, const R: usize>(
+    view: StridedView<'_, MetalBuffer<T>, R>,
+) -> StridedView<'_, WgpuBuffer<T>, R> {
     StridedView::new(view.buffer.wgpu_buffer(), view.layout)
 }

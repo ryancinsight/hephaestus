@@ -21,28 +21,32 @@ use crate::{MetalBuffer, MetalDevice};
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetalConvolutionOps;
 
-impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
+impl<T> ConvolutionOps<MetalDevice, T> for MetalConvolutionOps
+where
+    T: bytemuck::Pod,
+    WgpuConvolutionOps: ConvolutionOps<WgpuDevice, T>,
+{
     type PreparedForward<'a, const R: usize, const S: usize>
-        = MetalPreparedConvolutionForward<'a, R, S>
+        = MetalPreparedConvolutionForward<'a, T, R, S>
     where
         MetalDevice: 'a;
     type PreparedBackward<'a, const R: usize, const S: usize>
-        = MetalPreparedConvolutionBackward<'a, R, S>
+        = MetalPreparedConvolutionBackward<'a, T, R, S>
     where
         MetalDevice: 'a;
     type PreparedTransposedForward<'a, const R: usize, const S: usize>
-        = MetalPreparedTransposedConvolutionForward<'a, R, S>
+        = MetalPreparedTransposedConvolutionForward<'a, T, R, S>
     where
         MetalDevice: 'a;
     type PreparedTransposedBackward<'a, const R: usize, const S: usize>
-        = MetalPreparedTransposedConvolutionBackward<'a, R, S>
+        = MetalPreparedTransposedConvolutionBackward<'a, T, R, S>
     where
         MetalDevice: 'a;
 
     fn prepare_convolution_forward<'a, const R: usize, const S: usize>(
         &self,
         device: &'a MetalDevice,
-        operands: ConvolutionForwardOperands<'a, MetalBuffer<f32>, R>,
+        operands: ConvolutionForwardOperands<'a, MetalBuffer<T>, R>,
         parameters: ConvolutionParameters<S>,
     ) -> Result<Self::PreparedForward<'a, R, S>> {
         Ok(MetalPreparedConvolutionForward {
@@ -60,7 +64,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
         device: &MetalDevice,
         prepared: &Self::PreparedForward<'_, R, S>,
     ) -> Result<()> {
-        <WgpuConvolutionOps as ConvolutionOps<WgpuDevice, f32>>::dispatch_convolution_forward::<R, S>(
+        <WgpuConvolutionOps as ConvolutionOps<WgpuDevice, T>>::dispatch_convolution_forward::<R, S>(
             &wgpu_ops(),
             device.wgpu_device(),
             &prepared.inner,
@@ -70,7 +74,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
     fn prepare_convolution_backward<'a, const R: usize, const S: usize>(
         &self,
         device: &'a MetalDevice,
-        operands: ConvolutionBackwardOperands<'a, MetalBuffer<f32>, R>,
+        operands: ConvolutionBackwardOperands<'a, MetalBuffer<T>, R>,
         parameters: ConvolutionParameters<S>,
     ) -> Result<Self::PreparedBackward<'a, R, S>> {
         Ok(MetalPreparedConvolutionBackward {
@@ -88,7 +92,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
         device: &MetalDevice,
         prepared: &Self::PreparedBackward<'_, R, S>,
     ) -> Result<()> {
-        <WgpuConvolutionOps as ConvolutionOps<WgpuDevice, f32>>::dispatch_convolution_backward::<R, S>(
+        <WgpuConvolutionOps as ConvolutionOps<WgpuDevice, T>>::dispatch_convolution_backward::<R, S>(
             &wgpu_ops(),
             device.wgpu_device(),
             &prepared.inner,
@@ -98,7 +102,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
     fn prepare_convolution_transposed_forward<'a, const R: usize, const S: usize>(
         &self,
         device: &'a MetalDevice,
-        operands: ConvolutionForwardOperands<'a, MetalBuffer<f32>, R>,
+        operands: ConvolutionForwardOperands<'a, MetalBuffer<T>, R>,
         parameters: TransposedConvolutionParameters<S>,
     ) -> Result<Self::PreparedTransposedForward<'a, R, S>> {
         Ok(MetalPreparedTransposedConvolutionForward {
@@ -118,7 +122,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
     ) -> Result<()> {
         <WgpuConvolutionOps as ConvolutionOps<
             WgpuDevice,
-            f32,
+            T,
         >>::dispatch_convolution_transposed_forward::<R, S>(
             &wgpu_ops(),
             device.wgpu_device(),
@@ -129,7 +133,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
     fn prepare_convolution_transposed_backward<'a, const R: usize, const S: usize>(
         &self,
         device: &'a MetalDevice,
-        operands: ConvolutionBackwardOperands<'a, MetalBuffer<f32>, R>,
+        operands: ConvolutionBackwardOperands<'a, MetalBuffer<T>, R>,
         parameters: TransposedConvolutionParameters<S>,
     ) -> Result<Self::PreparedTransposedBackward<'a, R, S>> {
         Ok(MetalPreparedTransposedConvolutionBackward {
@@ -149,7 +153,7 @@ impl ConvolutionOps<MetalDevice, f32> for MetalConvolutionOps {
     ) -> Result<()> {
         <WgpuConvolutionOps as ConvolutionOps<
             WgpuDevice,
-            f32,
+            T,
         >>::dispatch_convolution_transposed_backward::<R, S>(
             &wgpu_ops(),
             device.wgpu_device(),
