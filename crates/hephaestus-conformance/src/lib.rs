@@ -64,6 +64,8 @@ pub mod scan;
 pub mod sparse;
 /// 2D stencil clauses with an analytical quadratic oracle.
 pub mod stencil;
+/// Device transfer and buffer-initialization clauses.
+pub mod transfer;
 /// Contract clauses for the typed paths of the
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
@@ -82,4 +84,5 @@ pub use ray_integral::assert_ray_integral_contract;
 pub use scan::assert_scan_contract;
 pub use sparse::assert_sparse_operator_contract;
 pub use stencil::assert_stencil_contract;
+pub use transfer::assert_transfer_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
