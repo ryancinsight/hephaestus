@@ -6,6 +6,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 Target release: 0.18.0.
 
+### Fixed
+
+- [patch] Accept finite zero learning rates in every stateful-update rule so
+  warmup schedules preserve optimizer-state transitions without mutating the
+  parameter.
+
 ### Breaking
 
 - [arch] `DenseVectorOps` prepared dot and L2-norm handles now use operand

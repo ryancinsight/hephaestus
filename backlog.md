@@ -1,5 +1,18 @@
 # Backlog — hephaestus
 
+## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
+
+- Owner: Codex on `codex/hephaestus-zero-learning-rate`; scope: stateful-update
+  parameter validation, focused contracts, and release records.
+- Outcome: every stateful-update parameter contract accepts a finite zero
+  learning rate while retaining strict positive epsilon and finite-domain
+  checks.
+- Acceptance: all five rules construct at zero learning rate, negative and
+  non-finite rates remain rejected, focused Nextest and warning-denied Clippy
+  pass, and exact-head hosted checks pass before merge.
+- Status: implementation and focused local verification complete; hosted
+  verification pending.
+
 - Composition note (2026-07-31 late, session-2026-07-30-board-ssot): the
   sparse-seam commit on this lane also carries the rocm-pivot frontier's
   in-flight snapshot (board files + wgpu linalg identity-contract work) —
