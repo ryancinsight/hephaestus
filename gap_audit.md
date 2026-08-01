@@ -11,6 +11,27 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1] Host scratch ownership
+
+- Finding: WGPU rank and determinant downloaded the complete device backing
+  buffer and then always allocated and filled a second `rows * cols` host
+  matrix before running host-delegated Gaussian elimination. Canonical
+  C-contiguous offset-zero inputs were already in the required row-major order.
+- Resolution: validate and expose the downloaded prefix directly for canonical
+  layouts. Preserve independent compaction for strided views while constructing
+  that buffer with exact capacity and no zero-fill-before-overwrite pass.
+- Evidence: pointer-level contracts distinguish in-place contiguous reuse from
+  independent strided ownership and assert row-major values. Four existing WGPU
+  rank/determinant device contracts retain Leto differential values and the
+  documented tolerance/pivot semantics. Formatting, all-target check,
+  warning-denied Clippy, doctests, and Rustdoc complete locally.
+- Residual: the full backing-buffer download and determinant upload remain.
+  Rustdoc reports a pre-existing broken `StencilOps` link in peer-owned stencil
+  scope. No runtime gain is claimed without controlled measurements.
+- Status: implementation complete and independently approved 2026-08-01 after
+  excluding generated Atlas overlay lockfile reordering. Exact-head backend CI
+  remains the merge gate.
+
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 
 - Finding: device-local Coeus COW now allocates a replacement and copies the

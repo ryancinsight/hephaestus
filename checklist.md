@@ -3408,11 +3408,11 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 
 - [x] Verify canonical C-contiguity includes offset zero and claim a disjoint
       WGPU matrix-properties ownership slice.
-- [ ] Pin pointer-level contiguous reuse and independent strided compaction
+- [x] Pin pointer-level contiguous reuse and independent strided compaction
       contracts.
-- [ ] Reuse the downloaded contiguous prefix without changing elimination
+- [x] Reuse the downloaded contiguous prefix without changing elimination
       arithmetic or strided behavior.
-- [ ] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
+- [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
       doctests, and Rustdoc.
-- [ ] Record independent review plus exact-head CUDA, ROCm, WGPU, and macOS
+- [x] Record independent review; require exact-head CUDA, ROCm, WGPU, and macOS
       Metal CI evidence before merge.

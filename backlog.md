@@ -121,8 +121,17 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal ownership optimization. Canonical
   contiguous inputs eliminate one `rows * cols` host allocation and copy by
   construction; the full backing-buffer download and determinant upload remain.
-- Status: claimed 2026-08-01; pre-edit focused Nextest compilation exceeded the
-  120-second shell command ceiling without producing a test result.
+- Evidence: two pointer/value ownership contracts and four existing
+  rank/determinant device-value contracts pass focused Nextest. Formatting,
+  all-target check, warning-denied Clippy, doctests, and Rustdoc complete
+  locally; Rustdoc reports a pre-existing broken `StencilOps` link in
+  peer-owned stencil scope. The broad pre-edit Nextest command exceeded the
+  120-second shell ceiling during compilation, and a broad post-edit attempt
+  failed linking the unrelated `convolution_contracts` binary before tests;
+  narrowed affected-target runs pass.
+- Status: implementation and focused local gates complete 2026-08-01.
+  Independent review approves the cleaned diff after excluding generated Atlas
+  overlay lockfile reordering; exact-head backend CI remains the merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

@@ -90,6 +90,14 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Reuse WGPU's downloaded matrix backing storage directly for
+  host-delegated rank and determinant elimination when the layout is canonical
+  C-contiguous at offset zero. This removes one logical-matrix host allocation
+  and copy from that path. Strided views still compact into independent
+  row-major storage, now without a zero-fill-before-overwrite pass. Arithmetic,
+  device transfers, and public APIs are unchanged; no runtime gain is claimed
+  without matched measurements.
+
 - [patch] Allocate non-empty ROCm complete-pivot LU and column-pivot QR factor
   matrices through the overwrite-before-read device seam. Each successful
   factorization omits one matrix-sized initialization transfer before its dense
