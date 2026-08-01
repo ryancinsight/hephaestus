@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — in-progress
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — review
 
 - Owner: Codex on `codex/hephaestus-metal-volume-overwrite`; scope: Metal's
   allocating ray-line-integral wrapper, focused analytical contracts, and
@@ -27,9 +27,13 @@ cuda-oxide + cutile).
   empty batches expose no readable element. Local format, all-target check,
   warning-denied Clippy, and focused Nextest pass against the Atlas overlay.
   The four local Metal tests return through the documented no-adapter path on
-  Windows, so native Metal values remain an exact-head macOS CI gate.
-- Status: implementation and local static gates complete 2026-07-31;
-  independent review and hosted backend CI remain open.
+  Windows. Exact head `f857c84` passes CUDA run `30674702291`, ROCm run
+  `30674702372`, WGPU run `30674702296`, and native macOS Metal run
+  `30674702295`. The first native Metal run exposed an invalid bitwise norm
+  oracle; the corrected shared contract bounds the backend square root to one
+  output ULP while retaining exact arithmetic assertions elsewhere.
+- Status: implementation, independent review, local static gates, and hosted
+  backend CI complete 2026-07-31; PR #168 is ready to merge.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 
