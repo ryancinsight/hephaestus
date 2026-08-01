@@ -66,7 +66,7 @@ cuda-oxide + cutile).
   Exact closeout head `015d82e` passes CUDA run `30680144377`, ROCm run
   `30680144380`, WGPU run `30680144391`, and macOS Metal run `30680144423`.
 
-## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — in-progress
+## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-identity-uniform-pack`; scope: WGPU matrix
   identity dispatch metadata, inherited Metal behavior, focused matrix-power
@@ -94,11 +94,35 @@ cuda-oxide + cutile).
   Rustdoc pass offline. The Atlas development overlay changes the unused-patch
   lock set, so local `--locked` commands stop before compilation; exact-head
   hosted CI remains the clean-lock evidence.
-- Status: implementation and focused local gates complete 2026-07-31.
+- Status: done 2026-07-31. Delivered by PR #171, merge commit `1710f36`.
+  Final docs head `eec0f03` passes CUDA run `30682601670`, ROCm run
+  `30682601650`, WGPU run `30682601688`, and macOS Metal run `30682601655`.
+  Implementation and focused local gates complete 2026-07-31.
   Independent review approves the general scalar/vector layout and evidence
   boundary. Exact implementation head `106a475` passes CUDA run `30682144677`,
   ROCm run `30682144681`, WGPU run `30682144674`, and macOS Metal run
-  `30682144672`; final docs-only closeout-head CI remains PR #171's merge gate.
+  `30682144672`.
+
+## HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-matrix-properties-host-reuse`; scope:
+  WGPU host-delegated rank/determinant scratch ownership, focused layout/value
+  contracts, and synchronized PM evidence.
+- Outcome: reuse the downloaded backing buffer directly as mutable Gaussian-
+  elimination scratch when the matrix layout is canonical C-contiguous at
+  offset zero, avoiding a second logical-matrix allocation and copy.
+- Non-goals: rank/determinant arithmetic, device download/upload behavior,
+  strided-view compaction, CUDA/ROCm implementations, public APIs, or
+  unmeasured runtime claims.
+- Acceptance: the contiguous callback receives the downloaded buffer prefix
+  in place; strided layouts still compact into independent row-major storage;
+  focused rank/determinant values remain unchanged; formatting, all-target
+  check, warning-denied Clippy, Nextest, doctests, and Rustdoc pass.
+- Risk/change class: `[patch]` internal ownership optimization. Canonical
+  contiguous inputs eliminate one `rows * cols` host allocation and copy by
+  construction; the full backing-buffer download and determinant upload remain.
+- Status: claimed 2026-08-01; pre-edit focused Nextest compilation exceeded the
+  120-second shell command ceiling without producing a test result.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
