@@ -3,6 +3,8 @@
 //! These run real device dispatch differentially against host references.
 //! On a host without the `cuda` feature or without a CUDA device,
 //! [`CudaDevice::try_default`] returns `Err` and each test skips.
+//! Hardware CI sets `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1` so acquisition failure
+//! fails the lane instead of being reported as device evidence.
 
 use hephaestus_core::{
     BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer,
@@ -23,12 +25,28 @@ use hephaestus_cuda::{
 };
 use leto::Layout;
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+struct AlternateIdentity(i32);
+
+impl hephaestus_core::DialectScalar<hephaestus_core::CudaC> for AlternateIdentity {
+    const TYPE_TOKEN: &'static str = "int";
+}
+
+impl hephaestus_cuda::MatrixIdentityScalar for AlternateIdentity {
+    const ZERO: Self = Self(-7);
+    const ONE: Self = Self(9);
+}
+
 /// Acquire a device, or `None` to skip (no `cuda` feature / no GPU).
 fn device(test: &str) -> Option<CudaDevice> {
     match CudaDevice::try_default() {
-        Ok(d) => Some(d),
-        Err(e) => {
-            eprintln!("skip {test}: CUDA device unavailable ({e})");
+        Ok(device) => Some(device),
+        Err(error) => {
+            if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_some() {
+                panic!("CUDA device required for {test}, but acquisition failed: {error}");
+            }
+            eprintln!("skip {test}: CUDA device unavailable ({error})");
             None
         }
     }
@@ -1254,6 +1272,41 @@ fn linalg_matpow_matches_leto_and_strided_references() {
     let mut got_identity = [0.0_f32; 4];
     dev.download(&identity_power, &mut got_identity).unwrap();
     assert_eq!(got_identity, [1.0, 0.0, 0.0, 1.0]);
+
+    let alternate = dev.upload(&[AlternateIdentity(4); 4]).unwrap();
+    let alternate_power = matpow(
+        &dev,
+        StridedOperand {
+            buffer: &alternate,
+            layout: &square_layout,
+        },
+        0,
+    )
+    .unwrap();
+    let mut got_alternate = [AlternateIdentity(0); 4];
+    dev.download(&alternate_power, &mut got_alternate).unwrap();
+    assert_eq!(
+        got_alternate,
+        [
+            AlternateIdentity(9),
+            AlternateIdentity(-7),
+            AlternateIdentity(-7),
+            AlternateIdentity(9),
+        ]
+    );
+
+    let empty = dev.upload::<f32>(&[]).unwrap();
+    let empty_layout = Layout::c_contiguous([0, 0]).unwrap();
+    let empty_power = matpow(
+        &dev,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        0,
+    )
+    .unwrap();
+    assert_eq!(empty_power.len(), 0);
 
     let nonsquare_values = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
     let nonsquare_layout = Layout::c_contiguous([2, 3]).unwrap();

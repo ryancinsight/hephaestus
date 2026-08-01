@@ -43,6 +43,19 @@ use hephaestus_rocm::{
 };
 use hephaestus_rocm::{matexp, pinv};
 use leto::Layout;
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+struct AlternateIdentity(i32);
+
+impl hephaestus_core::DialectScalar<HipC> for AlternateIdentity {
+    const TYPE_TOKEN: &'static str = "int";
+}
+
+impl hephaestus_rocm::MatrixIdentityScalar for AlternateIdentity {
+    const ZERO: Self = Self(-7);
+    const ONE: Self = Self(9);
+}
 use std::borrow::Cow;
 
 struct StreamAddKernel;
@@ -2060,6 +2073,45 @@ fn matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square() {
         .download(&identity_power, &mut identity_output)
         .expect("HIP matpow identity download");
     assert_eq!(identity_output, [1, 0, 0, 1]);
+
+    let alternate_buffer = device
+        .upload(&[AlternateIdentity(4); 4])
+        .expect("HIP alternate identity upload");
+    let alternate_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &alternate_buffer,
+            layout: &square_layout,
+        },
+        0,
+    )
+    .expect("HIP alternate identity matpow");
+    let mut alternate_output = [AlternateIdentity(0); 4];
+    device
+        .download(&alternate_power, &mut alternate_output)
+        .expect("HIP alternate identity download");
+    assert_eq!(
+        alternate_output,
+        [
+            AlternateIdentity(9),
+            AlternateIdentity(-7),
+            AlternateIdentity(-7),
+            AlternateIdentity(9),
+        ]
+    );
+
+    let empty_buffer = device.upload::<i32>(&[]).expect("HIP empty matpow upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty matpow layout");
+    let empty_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+        0,
+    )
+    .expect("HIP empty matpow");
+    assert_eq!(empty_power.len(), 0);
 
     let nonsquare_values = [1_i32, 2, 3, 4, 5, 6];
     let nonsquare_buffer = device

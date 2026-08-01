@@ -4,7 +4,38 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — review
+## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-matpow-device-identity`; scope: WGPU,
+  CUDA, and ROCm matrix-power identity initialization, shared value contracts,
+  Metal inheritance through WGPU, and synchronized PM evidence.
+- Outcome: construct the exponent-zero identity directly in device storage so
+  matrix power allocates no matrix-sized host vector and performs no
+  matrix-sized host-to-device identity upload.
+- Non-goals: exponentiation order, matrix-multiply kernels, base/scratch
+  allocation policy, scalar precision, layout semantics, or unmeasured runtime
+  claims.
+- Acceptance: square-shape and checked-size validation precede allocation; one
+  backend-native dispatch assigns every identity element; empty and
+  exponent-zero results retain exact values; no host matrix-sized identity
+  allocation remains; exact-head CUDA, ROCm, WGPU, and macOS Metal CI passes.
+- Risk/change class: `[patch]` internal initialization placement. Peak device
+  allocation is unchanged; host peak memory and identity transfer volume fall
+  from `O(n^2)` to `O(1)` by construction.
+- Evidence: WGPU, CUDA, and ROCm compile warning-clean with distinct cached,
+  scalar-generic identity kernels. Local WGPU device execution passes 2/2
+  focused matrix-power contracts, including trait-defined nonstandard identity
+  values, exact built-in exponent-zero identity, empty, strided, odd-power,
+  and non-square behavior. Adapterless CUDA/ROCm focused runs pass 3/3 compile
+  and source contracts; their value-semantic execution remains a hosted-device
+  requirement. Doctests and warning-clean Rustdoc pass for all three provider
+  crates. Exact implementation-head CI passes CUDA run `30678625029`, ROCm
+  run `30678625038`, WGPU run `30678625043`, and macOS Metal run
+  `30678625035` at `d36a992`.
+- Status: done 2026-07-31; final docs-only closeout-head CI remains the merge
+  gate for PR #169.
+
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-metal-volume-overwrite`; scope: Metal's
   allocating ray-line-integral wrapper, focused analytical contracts, and
@@ -32,8 +63,7 @@ cuda-oxide + cutile).
   `30674702295`. The first native Metal run exposed an invalid bitwise norm
   oracle; the corrected shared contract bounds the backend square root to one
   output ULP while retaining exact arithmetic assertions elsewhere.
-- Status: implementation, independent review, local static gates, and hosted
-  backend CI complete 2026-07-31; PR #168 is ready to merge.
+- Status: done 2026-07-31. Delivered by PR #168, merge commit `b7ff88b`.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 

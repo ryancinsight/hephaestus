@@ -33,6 +33,8 @@ pub mod scan;
 pub mod scan_seam;
 /// GPU-resident CSR sparse matrix operations.
 pub mod sparse;
+/// Device-neutral sparse operator seam implementation.
+pub mod sparse_seam;
 /// 2D Laplacian stencil delegation.
 pub mod stencil;
 /// Metal-selected storage-kernel dispatch.
