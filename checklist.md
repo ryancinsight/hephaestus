@@ -3401,4 +3401,5 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       uniform allocation.
 - [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
       doctests, and Rustdoc.
-- [ ] Record exact hosted WGPU/Metal CI evidence.
+- [x] Record exact implementation-head CUDA, ROCm, WGPU, and macOS Metal CI
+      evidence; require the docs-only closeout-head matrix before merge.

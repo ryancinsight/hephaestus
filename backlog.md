@@ -94,8 +94,11 @@ cuda-oxide + cutile).
   Rustdoc pass offline. The Atlas development overlay changes the unused-patch
   lock set, so local `--locked` commands stop before compilation; exact-head
   hosted CI remains the clean-lock evidence.
-- Status: implementation and focused local gates complete 2026-07-31; hosted
-  WGPU/macOS Metal CI is the remaining merge gate.
+- Status: implementation and focused local gates complete 2026-07-31.
+  Independent review approves the general scalar/vector layout and evidence
+  boundary. Exact implementation head `106a475` passes CUDA run `30682144677`,
+  ROCm run `30682144681`, WGPU run `30682144674`, and macOS Metal run
+  `30682144672`; final docs-only closeout-head CI remains PR #171's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
