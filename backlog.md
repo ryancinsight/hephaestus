@@ -58,7 +58,10 @@ cuda-oxide + cutile).
   scope-local warning-denied Clippy, doctests, and Rustdoc pass.
 - Status: implementation and focused local gates complete 2026-07-31 on
   `codex/hephaestus-rocm-pivot-device-init`; independent review approves the
-  ABI/full-write design, and exact-head hosted CI remains open.
+  ABI/full-write design. Shared implementation head `dffefa0` passes CUDA run
+  `30679817477`, ROCm run `30679817473`, WGPU run `30679817471`, and macOS
+  Metal run `30679817479`; final docs-only closeout-head CI remains PR #170's
+  merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

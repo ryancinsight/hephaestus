@@ -20,7 +20,7 @@ inherits the WGPU implementation and remains a native macOS CI gate.
 - [x] Extend existing validation dispatches to initialize device outputs.
 - [x] Preserve exact pivoted QR/LU values, permutations, rank, and failures.
 - [x] Prove every uninitialized output is assigned before decomposition steps.
-- [ ] Pass warning-denied focused gates and exact-head ROCm/Metal CI.
+- [x] Pass warning-denied focused gates and exact implementation-head CI.
 
 Implementation owner: Codex on
 `codex/hephaestus-rocm-pivot-device-init`.
