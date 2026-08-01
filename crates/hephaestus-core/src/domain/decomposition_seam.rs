@@ -43,11 +43,10 @@ pub trait LuHandle<D: ComputeDevice> {
 pub trait QrHandle<D: ComputeDevice> {
     /// Input shape `(m, n)`.
     fn shape(&self) -> (usize, usize);
-    /// Device-resident upper-triangular `R`, row-major: either the `n × n`
-    /// leading block or the full `m × n` factor (whose rows beyond `n`
-    /// vanish) — both shapes occur across backends today, and the length of
-    /// the returned buffer discriminates them. Normalizing on `n × n` is a
-    /// recorded follow-up.
+    /// Device-resident upper-triangular `R`, `m × n` row-major (leto's
+    /// convention — rows beyond `n` vanish). The Householder sign choice is
+    /// the backend's own; only entry magnitudes and the triangular structure
+    /// are contract.
     fn r_buffer(&self) -> &D::Buffer<f32>;
     /// Solve the least-squares problem `min ‖A·x − rhs‖₂`.
     ///

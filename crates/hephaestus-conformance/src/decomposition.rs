@@ -251,16 +251,12 @@ where
         );
     }
 
-    // R is upper-triangular. The buffer is either the n×n leading block or
-    // the full m×n factor (per the seam contract); in both row-major shapes
-    // every entry strictly below the diagonal of the first n rows — and any
-    // row beyond n — vanishes to within factorization error.
+    // R is m×n row-major (the seam pins leto's convention): every entry
+    // strictly below the diagonal — including the rows beyond n — vanishes
+    // to within factorization error.
     use hephaestus_core::DeviceBuffer;
     let r_len = qr.r_buffer().len();
-    assert!(
-        r_len == 4 || r_len == 6,
-        "{name}: R buffer must be n*n or m*n, got {r_len}"
-    );
+    assert_eq!(r_len, 6, "{name}: R must be m*n = 6 elements, got {r_len}");
     let mut r = vec![0.0f32; r_len];
     device.download(qr.r_buffer(), &mut r).expect("R download");
     for (index, value) in r.iter().enumerate() {
@@ -410,7 +406,7 @@ where
 /// 0 or 1 or takes `sqrt(1)`, so no rounding occurs and the factors admit
 /// exact equality (LU packed factors and pivots, Cholesky lower). QR
 /// asserts entry magnitudes within the derived bound only: the Householder
-/// sign convention belongs to the backend (cuda yields `-I`, wgpu `+I`).
+/// sign convention belongs to the backend and is not contract.
 fn identity_factorizations_are_exact<D, R>(device: &D, ops: &R)
 where
     D: ComputeDevice,
