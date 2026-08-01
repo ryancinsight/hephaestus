@@ -8,6 +8,8 @@ pub mod buffer;
 pub mod convolution;
 /// Shared CPU-side panel factorisation routines for blocked decomposition.
 pub mod decomposition;
+/// Device-neutral dense decomposition seam (ADR 0042).
+pub mod decomposition_seam;
 /// Compute-device acquisition and transfer seam.
 pub mod device;
 /// Kernel-dialect markers and per-dialect scalar tokens.

@@ -19,6 +19,8 @@ pub mod attention;
 pub mod axis_reduction_seam;
 /// Native WGSL regular and transposed convolution.
 pub mod convolution;
+/// Device-neutral decomposition seam implementation.
+pub mod decomposition_seam;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.
