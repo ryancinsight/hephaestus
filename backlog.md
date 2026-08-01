@@ -4,7 +4,28 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — review
+## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-matpow-device-identity`; scope: WGPU,
+  CUDA, and ROCm matrix-power identity initialization, shared value contracts,
+  Metal inheritance through WGPU, and synchronized PM evidence.
+- Outcome: construct the exponent-zero identity directly in device storage so
+  matrix power allocates no matrix-sized host vector and performs no
+  matrix-sized host-to-device identity upload.
+- Non-goals: exponentiation order, matrix-multiply kernels, base/scratch
+  allocation policy, scalar precision, layout semantics, or unmeasured runtime
+  claims.
+- Acceptance: square-shape and checked-size validation precede allocation; one
+  backend-native dispatch assigns every identity element; empty and
+  exponent-zero results retain exact values; no host matrix-sized identity
+  allocation remains; exact-head CUDA, ROCm, WGPU, and macOS Metal CI passes.
+- Risk/change class: `[patch]` internal initialization placement. Peak device
+  allocation is unchanged; host peak memory and identity transfer volume fall
+  from `O(n^2)` to `O(1)` by construction.
+- Status: claimed 2026-07-31 after PR #168 merged; implementation and evidence
+  remain open.
+
+## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-metal-volume-overwrite`; scope: Metal's
   allocating ray-line-integral wrapper, focused analytical contracts, and
@@ -32,8 +53,7 @@ cuda-oxide + cutile).
   `30674702295`. The first native Metal run exposed an invalid bitwise norm
   oracle; the corrected shared contract bounds the backend square root to one
   output ULP while retaining exact arithmetic assertions elsewhere.
-- Status: implementation, independent review, local static gates, and hosted
-  backend CI complete 2026-07-31; PR #168 is ready to merge.
+- Status: done 2026-07-31. Delivered by PR #168, merge commit `b7ff88b`.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
 

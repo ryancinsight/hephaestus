@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf]
+
+- [ ] Replace host-built identity uploads with backend-native device writes.
+- [ ] Preserve exact exponent-zero, empty, strided, and odd-power contracts.
+- [ ] Prove the identity kernel assigns every allocated element before read.
+- [ ] Pass warning-denied provider gates and exact-head backend CI.
+
+Implementation owner: Codex on `codex/hephaestus-matpow-device-identity`.
+Claimed files are WGPU, CUDA, and ROCm matrix-power identity initialization and
+contracts, `CHANGELOG.md`, `backlog.md`, `gap_audit.md`, and this section. Metal
+inherits the WGPU implementation and remains a native macOS CI gate.
+
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf]
 
 - [x] Prove the delegated WGPU kernel assigns every validated ray output.
