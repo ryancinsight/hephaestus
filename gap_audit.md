@@ -11,6 +11,31 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-OWNED-DOWNLOAD-1] Host result initialization
+
+- Finding: CUDA and ROCm pseudoinverse and matrix exponential each allocated a
+  zero-filled host vector immediately before a synchronous device-to-host copy
+  overwrote every byte. The caller-owned `ComputeDevice::download` contract
+  could not express provider allocation without duplicating that initialization.
+- Resolution: add a default-compatible `download_owned` provider method.
+  CUDA and ROCm reserve fallible host capacity, copy synchronously into spare
+  capacity, and publish vector length only after success; zero-sized types use
+  safe initialized resize. Four matrix-function consumers use the owned result
+  directly. WGPU and Metal retain the initialized default in this increment.
+- Evidence: shared bitwise transfer conformance includes NaN payloads, signed
+  zero, logical length, and empty no-allocation behavior. WGPU conformance passes
+  1/1; physical CUDA conformance plus matrix functions pass 4/4; adapterless
+  ROCm matrix-function contracts pass 3/3. Feature-enabled and feature-off
+  warning-denied checks pass. Independent review approves the copy and public
+  API contracts after requiring the safe ZST branch and changelog entry.
+- Residual: no physical ROCm device is available on this Windows host; the HIP
+  path requires hosted ROCm CI. Miri cannot execute CUDA/HIP driver calls. The
+  source change removes four `O(n)` host initialization writes but does not
+  change allocation count or peak memory; no runtime gain is claimed without a
+  controlled hardware benchmark. `hephaestus-core` is unpublished, so
+  `cargo-semver-checks` has no registry baseline. WGPU/Metal owned-download
+  zero-fill removal is a separate staging-readback slice.
+
 ## [HEPH-PREPARED-L2-OVERWRITE-1] Prepared output lifecycle
 
 - Finding: the earlier fused map-reduction changelog overclaimed that prepared

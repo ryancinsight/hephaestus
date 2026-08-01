@@ -29,9 +29,16 @@ cuda-oxide + cutile).
 - Risk/change class: `[minor]` additive open-trait API and `[perf]` removal of
   four redundant host initialization writes. Unsafe length publication is
   confined to synchronous CUDA/ROCm transfers after every byte is written.
-- Status: claimed 2026-08-01. WGPU pre-edit pseudoinverse/exponential baseline
-  passes 8/8; CUDA/ROCm baseline collection is in progress against the shared
-  build cache.
+- Status: implementation complete 2026-08-01. Pre-edit WGPU matrix-function
+  baseline passes 8/8 and physical CUDA passes 2/2. Post-edit shared transfer
+  conformance passes on WGPU and physical CUDA; CUDA matrix-function contracts
+  pass 3/3, including empty outputs; adapterless ROCm differential, closed-form,
+  invalid, and empty contracts pass 3/3. Feature-enabled and feature-off
+  warning-denied checks, formatting, doctests, and Rustdoc build pass.
+  Independent review approves the failure-atomic copy design after requiring a
+  safe ZST path plus changelog entry; both are applied and re-review approves.
+  `cargo-semver-checks` cannot retrieve a registry baseline because
+  `hephaestus-core` is unpublished. Exact-head backend CI remains the merge gate.
 
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 

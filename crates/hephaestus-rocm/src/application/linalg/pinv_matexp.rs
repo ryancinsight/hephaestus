@@ -18,8 +18,7 @@ pub fn pinv(device: &RocmDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<R
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let output = leto_ops::pinv(&view).map_err(|error| HephaestusError::DispatchFailed {
         message: format!("Pseudoinverse failed: {error}"),
@@ -46,8 +45,7 @@ pub fn matexp(device: &RocmDevice, matrix: StridedOperand<'_, f32, 2>) -> Result
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let output = leto_ops::matexp(&view).map_err(|error| HephaestusError::DispatchFailed {
         message: format!("Matrix exponential failed: {error}"),

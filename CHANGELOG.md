@@ -36,6 +36,13 @@ Target release: 0.18.0.
 
 ### Added
 
+- [minor] `ComputeDevice::download_owned` allocates host-owned transfer results
+  behind the provider seam while remaining source-compatible for external
+  backend implementors through an initialized default. CUDA and ROCm override
+  it with failure-atomic synchronous copies into reserved host capacity, and
+  their pseudoinverse and matrix-exponential paths no longer zero-fill four
+  host vectors immediately before those vectors are wholly overwritten.
+
 - [minor] `AttentionOps` defines provider-owned, fallible scaled dot-product
   attention preparation and dispatch over borrowed rank-3 device views. Its
   shared planner validates grouped keep masks, shapes, storage spans, exact

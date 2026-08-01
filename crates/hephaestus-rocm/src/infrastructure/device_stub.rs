@@ -121,6 +121,10 @@ impl ComputeDevice for RocmDevice {
         Err(unavailable())
     }
 
+    fn download_owned<T: Pod>(&self, _buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        Err(unavailable())
+    }
+
     fn write_buffer<T: Pod>(&self, _buffer: &Self::Buffer<T>, _host: &[T]) -> Result<()> {
         Err(unavailable())
     }

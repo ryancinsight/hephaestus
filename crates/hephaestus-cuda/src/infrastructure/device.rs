@@ -789,6 +789,50 @@ impl ComputeDevice for CudaDevice {
         Ok(())
     }
 
+    fn download_owned<T: Pod>(&self, buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        let len = buffer.len;
+        let mut out = Vec::new();
+        out.try_reserve_exact(len)
+            .map_err(|error| HephaestusError::AllocationFailed {
+                message: format!(
+                    "CUDA host download allocation for {len} elements failed: {error}"
+                ),
+            })?;
+        if core::mem::size_of::<T>() == 0 {
+            out.resize(len, bytemuck::Zeroable::zeroed());
+            return Ok(out);
+        }
+        let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
+            HephaestusError::AllocationFailed {
+                message: format!("CUDA host download byte count overflows for {len} elements"),
+            }
+        })?;
+        if bytes != 0 {
+            let byte_count = cuda_byte_count(bytes, "owned download byte count")?;
+            self.bind()?;
+            // SAFETY: `try_reserve_exact` established capacity for `len`
+            // elements, so the spare-capacity pointer addresses `bytes`
+            // writable host bytes. The synchronous copy initializes every byte
+            // before vector length is published below.
+            let status = unsafe {
+                cuda_oxide::sys::cuMemcpyDtoH_v2(
+                    out.spare_capacity_mut().as_mut_ptr().cast::<c_void>(),
+                    buffer.ptr,
+                    byte_count,
+                )
+            };
+            if status != 0 {
+                return Err(HephaestusError::TransferFailed {
+                    message: format!("owned download cuMemcpyDtoH_v2({bytes} bytes) -> {status}"),
+                });
+            }
+        }
+        // SAFETY: `T` is non-zero-sized here and the successful synchronous
+        // copy above initialized all `len` elements before publication.
+        unsafe { out.set_len(len) };
+        Ok(out)
+    }
+
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
         validate_slice_alignment(host)?;
         if host.len() != buffer.len {

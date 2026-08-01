@@ -146,6 +146,33 @@ pub trait ComputeDevice {
     /// [`HephaestusError::LengthMismatch`]: crate::domain::error::HephaestusError::LengthMismatch
     fn download<T: Pod>(&self, buffer: &Self::Buffer<T>, out: &mut [T]) -> Result<()>;
 
+    /// Copy a device buffer into newly allocated host-owned storage.
+    ///
+    /// The default preserves compatibility for external backend implementors
+    /// by allocating initialized storage and delegating to [`Self::download`].
+    /// Backends whose synchronous transfer primitive can initialize reserved
+    /// host capacity directly may override this method, provided no partially
+    /// initialized vector is exposed when the transfer fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::HephaestusError::AllocationFailed`] when host storage
+    /// cannot be reserved, or the backend's typed transfer error.
+    fn download_owned<T: Pod>(&self, buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        let mut out = Vec::new();
+        out.try_reserve_exact(buffer.len()).map_err(|error| {
+            crate::HephaestusError::AllocationFailed {
+                message: format!(
+                    "host download allocation for {} elements failed: {error}",
+                    buffer.len()
+                ),
+            }
+        })?;
+        out.resize(buffer.len(), bytemuck::Zeroable::zeroed());
+        self.download(buffer, &mut out)?;
+        Ok(out)
+    }
+
     /// Overwrite an existing device buffer with host data (host→device).
     ///
     /// Unlike [`upload`](Self::upload) which allocates a new buffer, this

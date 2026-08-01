@@ -41,6 +41,17 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
         );
     }
 
+    // Provider-owned download preserves the same bitwise transfer contract.
+    let owned = device.download_owned(&buffer).expect("owned download");
+    assert_eq!(owned.len(), pattern.len(), "{name}: owned download length");
+    for (index, (host, device_value)) in pattern.iter().zip(&owned).enumerate() {
+        assert_eq!(
+            host.to_bits(),
+            device_value.to_bits(),
+            "{name}: owned round-trip element {index} must be bitwise identical"
+        );
+    }
+
     // Zero allocation is observable zeros.
     let zeros = device.alloc_zeroed::<f32>(4).expect("alloc_zeroed");
     let mut got = [1.0f32; 4];
@@ -106,4 +117,14 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
     device
         .download(&empty, &mut nothing)
         .expect("empty download");
+    let owned_empty = device.download_owned(&empty).expect("empty owned download");
+    assert!(
+        owned_empty.is_empty(),
+        "{name}: empty owned download length"
+    );
+    assert_eq!(
+        owned_empty.capacity(),
+        0,
+        "{name}: empty owned download must not allocate"
+    );
 }
