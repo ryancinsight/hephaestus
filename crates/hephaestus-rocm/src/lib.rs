@@ -110,6 +110,7 @@ pub use application::sparse::{
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
+pub use application::stateful_update::RocmStatefulUpdateOps;
 pub use application::stencil::RocmStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
