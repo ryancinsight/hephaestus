@@ -176,3 +176,26 @@ impl Laplacian2DKernel {
         )
     }
 }
+
+/// Provider-owned implementation of [`StencilOps`] for Cuda.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CudaStencilOps;
+
+impl hephaestus_core::StencilOps<CudaDevice> for CudaStencilOps {
+    type Laplacian2D = Laplacian2DKernel;
+
+    fn prepare_laplacian_2d(&self, device: &CudaDevice) -> Result<Self::Laplacian2D> {
+        Laplacian2DKernel::new(device)
+    }
+
+    fn laplacian_2d_into(
+        &self,
+        device: &CudaDevice,
+        kernel: &Self::Laplacian2D,
+        input: &CudaBuffer<f32>,
+        output: &CudaBuffer<f32>,
+        params: &Laplacian2DParams,
+    ) -> Result<()> {
+        kernel.dispatch(device, input, output, params)
+    }
+}

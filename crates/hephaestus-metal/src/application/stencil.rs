@@ -38,3 +38,26 @@ impl Laplacian2DKernel {
         )
     }
 }
+
+/// Provider-owned implementation of [`StencilOps`] for Metal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetalStencilOps;
+
+impl hephaestus_core::StencilOps<MetalDevice> for MetalStencilOps {
+    type Laplacian2D = Laplacian2DKernel;
+
+    fn prepare_laplacian_2d(&self, device: &MetalDevice) -> Result<Self::Laplacian2D> {
+        Laplacian2DKernel::new(device)
+    }
+
+    fn laplacian_2d_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::Laplacian2D,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &Laplacian2DParams,
+    ) -> Result<()> {
+        kernel.dispatch(device, input, output, params)
+    }
+}

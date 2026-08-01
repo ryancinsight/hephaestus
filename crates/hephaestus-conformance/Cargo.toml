@@ -18,5 +18,6 @@ publish = false
 [dependencies]
 hephaestus-core = { workspace = true }
 bytemuck = { workspace = true }
+aequitas = { workspace = true }
 leto = { workspace = true, default-features = false, features = ["std"] }
 leto-ops = { workspace = true }

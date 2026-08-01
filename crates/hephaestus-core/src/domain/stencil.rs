@@ -117,6 +117,40 @@ impl Laplacian2DParams {
     }
 }
 
+/// Device-neutral 2D stencil dispatch.
+///
+/// Implementors are zero-sized per-backend markers; the prepared kernel is
+/// the backend's compiled stencil pipeline, reusable across dispatches.
+/// The operand scalar is fixed at `f32` by [`Laplacian2DParams`]'s lane
+/// layout.
+pub trait StencilOps<D: crate::ComputeDevice> {
+    /// Compiled 2D Laplacian kernel, reusable across dispatches.
+    type Laplacian2D;
+
+    /// Compile the 2D Laplacian kernel for a device.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend's kernel compilation or layout failure.
+    fn prepare_laplacian_2d(&self, device: &D) -> Result<Self::Laplacian2D>;
+
+    /// Apply the 2D Laplacian stencil: `output = L(input)` under the grid,
+    /// boundary, and polarity contract carried by `params`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a storage-length mismatch against the grid, or the backend
+    /// dispatch failure.
+    fn laplacian_2d_into(
+        &self,
+        device: &D,
+        kernel: &Self::Laplacian2D,
+        input: &D::Buffer<f32>,
+        output: &D::Buffer<f32>,
+        params: &Laplacian2DParams,
+    ) -> Result<()>;
+}
+
 #[cfg(test)]
 mod tests {
     use aequitas::systems::si::units::Meter;

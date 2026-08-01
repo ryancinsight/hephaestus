@@ -169,3 +169,26 @@ impl Laplacian2DKernel {
         )
     }
 }
+
+/// Provider-owned implementation of [`StencilOps`] for Rocm.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RocmStencilOps;
+
+impl hephaestus_core::StencilOps<RocmDevice> for RocmStencilOps {
+    type Laplacian2D = Laplacian2DKernel;
+
+    fn prepare_laplacian_2d(&self, device: &RocmDevice) -> Result<Self::Laplacian2D> {
+        Laplacian2DKernel::new(device)
+    }
+
+    fn laplacian_2d_into(
+        &self,
+        device: &RocmDevice,
+        kernel: &Self::Laplacian2D,
+        input: &RocmBuffer<f32>,
+        output: &RocmBuffer<f32>,
+        params: &Laplacian2DParams,
+    ) -> Result<()> {
+        kernel.dispatch(device, input, output, params)
+    }
+}

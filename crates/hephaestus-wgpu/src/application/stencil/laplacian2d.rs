@@ -219,5 +219,28 @@ fn laplacian_2d(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 ";
 
+/// Provider-owned implementation of [`StencilOps`] for Wgpu.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WgpuStencilOps;
+
+impl hephaestus_core::StencilOps<WgpuDevice> for WgpuStencilOps {
+    type Laplacian2D = Laplacian2DKernel;
+
+    fn prepare_laplacian_2d(&self, device: &WgpuDevice) -> Result<Self::Laplacian2D> {
+        Laplacian2DKernel::new(device)
+    }
+
+    fn laplacian_2d_into(
+        &self,
+        device: &WgpuDevice,
+        kernel: &Self::Laplacian2D,
+        input: &WgpuBuffer<f32>,
+        output: &WgpuBuffer<f32>,
+        params: &Laplacian2DParams,
+    ) -> Result<()> {
+        kernel.dispatch(device, input, output, params)
+    }
+}
+
 #[cfg(test)]
 mod tests;
