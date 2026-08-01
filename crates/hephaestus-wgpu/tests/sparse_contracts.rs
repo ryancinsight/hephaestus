@@ -6,7 +6,7 @@
 //! and the backend's seam value. CUDA and ROCm instantiate when they gain
 //! native CSR SpMV implementations (ATLAS-ARCH-001c).
 
-use hephaestus_conformance::assert_sparse_operator_contract;
+use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
 use hephaestus_wgpu::{WgpuDevice, WgpuSparseOps};
 
 #[test]
@@ -19,4 +19,5 @@ fn wgpu_satisfies_the_sparse_operator_contract() {
         }
     };
     assert_sparse_operator_contract(&device, &WgpuSparseOps);
+    assert_batch_submit_contract(&device, &WgpuSparseOps);
 }

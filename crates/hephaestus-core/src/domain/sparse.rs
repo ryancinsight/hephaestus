@@ -132,6 +132,41 @@ pub trait SparseOperatorOps<D: ComputeDevice, T: Pod> {
     fn dispatch_apply(&self, device: &D, prepared: &Self::PreparedApply<'_>) -> Result<()>;
 }
 
+/// Batched submission of prepared sparse dispatches (ADR 0045).
+///
+/// One submission amortizes per-dispatch overhead: WGPU encodes the batch
+/// into a single command buffer, CUDA/HIP launch back-to-back without
+/// intervening synchronization. The contract is result equivalence with
+/// dispatching each operation individually, in order — not timing — so a
+/// backend with no batching advantage may loop.
+pub trait BatchSubmitOps<D: ComputeDevice, T: Pod>: SparseOperatorOps<D, T> {
+    /// One batchable prepared dispatch: the backend's union of prepared
+    /// forms encodable into a single submission.
+    type Dispatch<'op>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
+
+    /// Wrap a prepared SpMV as a batchable dispatch.
+    ///
+    /// The dispatch borrows the prepared form (`'plan`), which may be
+    /// shorter than the operand borrows inside it (`'op`).
+    fn spmv_dispatch<'plan, 'op: 'plan>(
+        &self,
+        prepared: &'plan Self::PreparedApply<'op>,
+    ) -> Self::Dispatch<'plan>;
+
+    /// Submit every operation in order with one device round-trip. An
+    /// empty batch is a valid no-op.
+    ///
+    /// # Errors
+    ///
+    /// Returns a cross-device batch rejection or the backend submission
+    /// failure.
+    fn submit_batch(&self, device: &D, operations: &[Self::Dispatch<'_>]) -> Result<()>;
+}
+
 /// Validate canonical CSR structure before anything is uploaded.
 ///
 /// The seam accepts raw parts, so the invariants a host matrix type would

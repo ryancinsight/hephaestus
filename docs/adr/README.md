@@ -49,5 +49,5 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0042](0042-device-neutral-decomposition-seam.md) | Device-neutral decomposition seam | Accepted |
 | [0043](0043-special-value-semantics-capability.md) | Special-value semantics as a dialect capability | Accepted |
 | [0044](0044-device-neutral-dense-product-seam.md) | Device-neutral dense product seam | Accepted |
-| [0045](0045-prepared-batch-submission-seam.md) | Prepared batch submission seam | Proposed |
+| [0045](0045-prepared-batch-submission-seam.md) | Prepared batch submission seam | Accepted |
 | [0045](0045-provider-owned-stateful-updates.md) | Provider-owned stateful elementwise updates | Accepted |

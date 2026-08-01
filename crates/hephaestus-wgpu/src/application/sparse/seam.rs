@@ -1,8 +1,9 @@
 //! WGPU implementation of the device-neutral sparse operator seam.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
+use hephaestus_core::{BatchSubmitOps, Result, SparseOperatorOps, StridedView, validate_csr};
 
+use super::batch::{PreparedSparseDispatch, submit_prepared_sparse_batch};
 use super::spmv::PreparedSpmv;
 use super::{GpuCsrMatrix, spmm::spmm_into, spmv::prepare_spmv, spmv::spmv_into};
 use crate::application::strided::StridedOperand;
@@ -95,5 +96,26 @@ where
         output: &mut WgpuBuffer<T>,
     ) -> Result<()> {
         spmv_into(device, matrix, input, output)
+    }
+}
+
+impl<T> BatchSubmitOps<WgpuDevice, T> for WgpuSparseOps
+where
+    T: DialectScalar<Wgsl> + MatmulZero + Pod + leto_ops::Scalar,
+{
+    type Dispatch<'op>
+        = PreparedSparseDispatch<'op, T>
+    where
+        T: 'op;
+
+    fn spmv_dispatch<'plan, 'op: 'plan>(
+        &self,
+        prepared: &'plan Self::PreparedApply<'op>,
+    ) -> Self::Dispatch<'plan> {
+        PreparedSparseDispatch::Spmv(prepared)
+    }
+
+    fn submit_batch(&self, _device: &WgpuDevice, operations: &[Self::Dispatch<'_>]) -> Result<()> {
+        submit_prepared_sparse_batch(operations)
     }
 }

@@ -7,7 +7,7 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::assert_sparse_operator_contract;
+use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
 use hephaestus_rocm::{RocmDevice, RocmSparseOps};
 
 #[test]
@@ -21,4 +21,5 @@ fn rocm_satisfies_the_sparse_operator_contract() {
         Err(error) => panic!("ROCm sparse conformance requires a physical device: {error}"),
     };
     assert_sparse_operator_contract(&device, &RocmSparseOps);
+    assert_batch_submit_contract(&device, &RocmSparseOps);
 }

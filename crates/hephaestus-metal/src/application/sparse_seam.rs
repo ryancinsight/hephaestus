@@ -7,7 +7,7 @@
 //! same underlying device.
 
 use bytemuck::Pod;
-use hephaestus_core::{DialectScalar, Result, SparseOperatorOps, StridedView};
+use hephaestus_core::{BatchSubmitOps, DialectScalar, Result, SparseOperatorOps, StridedView};
 use hephaestus_wgpu::{GpuCsrMatrix, MatmulZero, WgpuDevice, WgpuSparseOps, Wgsl};
 
 use crate::infrastructure::buffer::MetalBuffer;
@@ -107,6 +107,31 @@ where
             matrix,
             &input.inner,
             &mut output.inner,
+        )
+    }
+}
+
+impl<T> BatchSubmitOps<MetalDevice, T> for MetalSparseOps
+where
+    T: DialectScalar<Wgsl> + MatmulZero + Pod + leto_ops::Scalar,
+{
+    type Dispatch<'op>
+        = <WgpuSparseOps as BatchSubmitOps<WgpuDevice, T>>::Dispatch<'op>
+    where
+        T: 'op;
+
+    fn spmv_dispatch<'plan, 'op: 'plan>(
+        &self,
+        prepared: &'plan Self::PreparedApply<'op>,
+    ) -> Self::Dispatch<'plan> {
+        self.inner.spmv_dispatch(prepared)
+    }
+
+    fn submit_batch(&self, device: &MetalDevice, operations: &[Self::Dispatch<'_>]) -> Result<()> {
+        <WgpuSparseOps as BatchSubmitOps<WgpuDevice, T>>::submit_batch(
+            &self.inner,
+            device.wgpu_device(),
+            operations,
         )
     }
 }

@@ -1,7 +1,10 @@
 # ADR 0045 — Prepared batch submission seam
 
-- Status: Proposed
-- Date: 2026-08-01
+- Status: Accepted
+- Date: 2026-08-01 (revised same day: implemented as-designed for the
+  sparse union; `spmv_dispatch` gained a decoupled plan-borrow lifetime
+  (`'plan` vs the operand `'op`) that the single-lifetime draft's
+  invariant GAT position made unusable at call sites)
 - Refs: atlas `backlog.md#atlas-arch-001` (001k-k2); ADR 0041 (conformance
   crate); the per-backend `submit_prepared_{reduction,axis_reduction,
   sparse}_batch` entry points this seam makes device-neutral.

@@ -8,7 +8,7 @@
 
 #![cfg(target_os = "macos")]
 
-use hephaestus_conformance::assert_sparse_operator_contract;
+use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
 use hephaestus_metal::{MetalDevice, MetalSparseOps};
 
 #[test]
@@ -16,4 +16,5 @@ fn metal_satisfies_the_sparse_operator_contract() {
     let device =
         MetalDevice::try_default().expect("Metal sparse conformance requires a physical device");
     assert_sparse_operator_contract(&device, &MetalSparseOps::default());
+    assert_batch_submit_contract(&device, &MetalSparseOps::default());
 }

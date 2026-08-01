@@ -6,9 +6,11 @@
 //! `RocmDevice`, matching the WGPU and CUDA seam shapes.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
+use hephaestus_core::{BatchSubmitOps, Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::prepared::{PreparedSpmv, prepare_spmv};
+use super::prepared::{
+    PreparedSparseDispatch, PreparedSpmv, prepare_spmv, submit_prepared_sparse_batch,
+};
 use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
 use crate::RocmBuffer;
 use crate::RocmDevice;
@@ -110,5 +112,26 @@ where
         output: &mut RocmBuffer<T>,
     ) -> Result<()> {
         spmv_into(device, matrix, input, output)
+    }
+}
+
+impl<T> BatchSubmitOps<RocmDevice, T> for RocmSparseOps
+where
+    T: DialectScalar<HipC> + Pod + leto_ops::Scalar,
+{
+    type Dispatch<'op>
+        = PreparedSparseDispatch<'op, 'op, T>
+    where
+        T: 'op;
+
+    fn spmv_dispatch<'plan, 'op: 'plan>(
+        &self,
+        prepared: &'plan Self::PreparedApply<'op>,
+    ) -> Self::Dispatch<'plan> {
+        PreparedSparseDispatch::Spmv(prepared)
+    }
+
+    fn submit_batch(&self, _device: &RocmDevice, operations: &[Self::Dispatch<'_>]) -> Result<()> {
+        submit_prepared_sparse_batch(operations)
     }
 }

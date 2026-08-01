@@ -6,9 +6,11 @@
 //! `CudaDevice`, matching the WGPU seam shape.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
+use hephaestus_core::{BatchSubmitOps, Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::prepared::{PreparedSpmv, prepare_spmv};
+use super::prepared::{
+    PreparedSparseDispatch, PreparedSpmv, prepare_spmv, submit_prepared_sparse_batch,
+};
 use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
@@ -110,5 +112,26 @@ where
         output: &mut CudaBuffer<T>,
     ) -> Result<()> {
         spmv_into(device, matrix, input, output)
+    }
+}
+
+impl<T> BatchSubmitOps<CudaDevice, T> for CudaSparseOps
+where
+    T: DialectScalar<CudaC> + Pod + leto_ops::Scalar,
+{
+    type Dispatch<'op>
+        = PreparedSparseDispatch<'op, 'op, T>
+    where
+        T: 'op;
+
+    fn spmv_dispatch<'plan, 'op: 'plan>(
+        &self,
+        prepared: &'plan Self::PreparedApply<'op>,
+    ) -> Self::Dispatch<'plan> {
+        PreparedSparseDispatch::Spmv(prepared)
+    }
+
+    fn submit_batch(&self, _device: &CudaDevice, operations: &[Self::Dispatch<'_>]) -> Result<()> {
+        submit_prepared_sparse_batch(operations)
     }
 }

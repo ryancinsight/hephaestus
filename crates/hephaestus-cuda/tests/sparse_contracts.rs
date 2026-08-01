@@ -7,7 +7,7 @@
 
 #![cfg(feature = "cuda")]
 
-use hephaestus_conformance::assert_sparse_operator_contract;
+use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
 use hephaestus_cuda::{CudaDevice, CudaSparseOps};
 
 #[test]
@@ -21,4 +21,5 @@ fn cuda_satisfies_the_sparse_operator_contract() {
         Err(error) => panic!("CUDA sparse conformance requires a physical device: {error}"),
     };
     assert_sparse_operator_contract(&device, &CudaSparseOps);
+    assert_batch_submit_contract(&device, &CudaSparseOps);
 }

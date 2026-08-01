@@ -70,7 +70,7 @@ pub use domain::reduction::{
     StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
-pub use domain::sparse::{SparseOperatorOps, validate_csr};
+pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
 pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
     RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,

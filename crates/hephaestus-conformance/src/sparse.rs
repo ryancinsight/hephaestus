@@ -8,7 +8,7 @@
 //! documented CSR invariant, and a rejected upload or apply must leave
 //! nothing partially mutated.
 
-use hephaestus_core::{ComputeDevice, SparseOperatorOps, StridedView};
+use hephaestus_core::{BatchSubmitOps, ComputeDevice, SparseOperatorOps, StridedView};
 use leto::Layout;
 
 /// The 3x3 fixture's CSR parts.
@@ -191,5 +191,59 @@ where
         ops.upload_csr(device, &values, &cols[..4], &row_ptr, 3, 3)
             .is_err(),
         "{name}: upload must reject a values/col_indices length mismatch"
+    );
+}
+
+/// Batched submission is result-equivalent to dispatching each prepared
+/// operation individually, in order; an empty batch is a valid no-op.
+///
+/// Split out from [`assert_sparse_operator_contract`] because batching is
+/// its own seam ([`BatchSubmitOps`], ADR 0045).
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract.
+pub fn assert_batch_submit_contract<D, S>(device: &D, ops: &S)
+where
+    D: ComputeDevice,
+    S: BatchSubmitOps<D, f32>,
+{
+    let name = device.backend_name();
+    let (values, cols, row_ptr) = fixture();
+    let matrix = ops
+        .upload_csr(device, &values, &cols, &row_ptr, 3, 3)
+        .expect("fixture upload");
+
+    // An empty batch is a valid no-op.
+    ops.submit_batch(device, &[]).expect("empty batch");
+
+    // Two prepared SpMVs over distinct operands submit as one batch and
+    // produce exactly the individually dispatched results.
+    let x_one = device.upload(&[1.0f32, 2.0, 3.0]).expect("input one");
+    let y_one = device.alloc_zeroed::<f32>(3).expect("output one");
+    let x_two = device.upload(&[2.0f32, 0.0, 1.0]).expect("input two");
+    let y_two = device.alloc_zeroed::<f32>(3).expect("output two");
+    let first = ops
+        .prepare_apply(device, &matrix, &x_one, &y_one)
+        .expect("prepare first");
+    let second = ops
+        .prepare_apply(device, &matrix, &x_two, &y_two)
+        .expect("prepare second");
+
+    ops.submit_batch(
+        device,
+        &[ops.spmv_dispatch(&first), ops.spmv_dispatch(&second)],
+    )
+    .expect("batch submit");
+
+    let mut got = [0.0f32; 3];
+    device.download(&y_one, &mut got).expect("download one");
+    assert_eq!(got, [5.0, 6.0, 19.0], "{name}: batched SpMV, first operand");
+    device.download(&y_two, &mut got).expect("download two");
+    assert_eq!(
+        got,
+        [5.0, 0.0, 13.0],
+        "{name}: batched SpMV, second operand"
     );
 }
