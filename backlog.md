@@ -51,8 +51,14 @@ cuda-oxide + cutile).
   identity storage and transfer volume fall from `O(rows²)` to `O(1)`;
   permutation host storage and transfer fall from `O(n)` to `O(1)`. Device
   allocation and decomposition arithmetic are unchanged.
-- Status: claimed 2026-07-31 by Codex on
-  `codex/hephaestus-rocm-pivot-device-init`; implementation and evidence open.
+- Evidence: source contracts pin the validation-kernel ABI and prove complete
+  `Q`, permutation, and rank assignment. Focused decomposition-feature
+  Nextest executes 2/2 source contracts; 4 device-value contracts compile and
+  adapterless-skip pending hosted ROCm execution. ROCm all-target check,
+  scope-local warning-denied Clippy, doctests, and Rustdoc pass.
+- Status: implementation and focused local gates complete 2026-07-31 on
+  `codex/hephaestus-rocm-pivot-device-init`; independent review approves the
+  ABI/full-write design, and exact-head hosted CI remains open.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

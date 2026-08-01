@@ -176,6 +176,14 @@ Target release: 0.18.0.
   exponentiation order, layouts, and peak allocation are unchanged; no
   runtime gain is claimed without matched hardware measurements.
 
+- [patch] Initialize native ROCm column-pivoted QR's `Q`, permutation, and
+  rank plus complete-pivoted LU's permutations and rank inside their existing
+  validation dispatches. This also aligns the validation-kernel parameter ABI
+  with the host launch arrays. QR no longer allocates or uploads an `O(rows²)`
+  host identity, and both decompositions remove `O(n)` host permutation
+  initialization; device allocation and factorization arithmetic are
+  unchanged, with no runtime claim absent matched hardware measurements.
+
 - [patch] Construct matrix-power identity results directly in device storage
   through fully assigning WGPU, CUDA, and ROCm kernels, with Metal inheriting
   WGPU. Exponent-zero calls no longer allocate or upload a matrix-sized host

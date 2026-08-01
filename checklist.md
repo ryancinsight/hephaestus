@@ -17,9 +17,9 @@ inherits the WGPU implementation and remains a native macOS CI gate.
 
 ## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf]
 
-- [ ] Extend existing validation dispatches to initialize device outputs.
-- [ ] Preserve exact pivoted QR/LU values, permutations, rank, and failures.
-- [ ] Prove every uninitialized output is assigned before decomposition steps.
+- [x] Extend existing validation dispatches to initialize device outputs.
+- [x] Preserve exact pivoted QR/LU values, permutations, rank, and failures.
+- [x] Prove every uninitialized output is assigned before decomposition steps.
 - [ ] Pass warning-denied focused gates and exact-head ROCm/Metal CI.
 
 Implementation owner: Codex on
