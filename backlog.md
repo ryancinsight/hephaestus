@@ -103,7 +103,7 @@ cuda-oxide + cutile).
   ROCm run `30682144681`, WGPU run `30682144674`, and macOS Metal run
   `30682144672`.
 
-## HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1 [patch] [perf] — in-progress
+## HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matrix-properties-host-reuse`; scope:
   WGPU host-delegated rank/determinant scratch ownership, focused layout/value
@@ -152,7 +152,9 @@ cuda-oxide + cutile).
   macOS cross-target contract build, focused value-semantic capability test,
   Metal all-target check, and warning-denied clippy pass locally; independent
   review approves the complete limits and five-feature delegation coverage.
-  Final exact-merge-head CI remains PR #172's merge gate.
+  Integrated implementation head `bfe934f` passes CUDA run `30708999594`, ROCm
+  run `30708999598`, WGPU run `30708999600`, and macOS Metal run `30708999596`.
+  The final docs-only closeout-head matrix remains PR #172's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

@@ -3423,4 +3423,5 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 - [x] Integrate advancing `master`, implement Metal's missing shared capability
       seam, correct the f64 contract's owning-trait import, and independently
       review the fix.
-- [ ] Require the final docs-only closeout-head backend matrix before merge.
+- [x] Record the integrated implementation-head matrix and require the final
+      docs-only closeout-head backend matrix before merge.

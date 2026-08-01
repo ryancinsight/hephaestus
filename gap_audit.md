@@ -47,7 +47,10 @@ architectural decision or a tracked future-work item:
   owning-trait import. The macOS cross-target contract build, focused
   value-semantic capability test, all-target check, and warning-denied clippy
   pass locally; independent review approves the implementation and exhaustive
-  feature coverage. Final exact-merge-head CI remains PR #172's merge gate.
+  feature coverage. Integrated implementation head `bfe934f` passes CUDA run
+  `30708999594`, ROCm run `30708999598`, WGPU run `30708999600`, and macOS
+  Metal run `30708999596`. The final docs-only closeout-head matrix remains PR
+  #172's merge gate.
 
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 
