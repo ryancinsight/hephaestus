@@ -1,5 +1,11 @@
 # Backlog — hephaestus
 
+- Composition note (2026-07-31 late, session-2026-07-30-board-ssot): the
+  sparse-seam commit on this lane also carries the rocm-pivot frontier's
+  in-flight snapshot (board files + wgpu linalg identity-contract work) —
+  an over-broad `git add -A` from the shared tree. Nothing altered or
+  lost; the sparse-seam content is disjoint.
+
 Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
