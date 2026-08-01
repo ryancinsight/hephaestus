@@ -50,6 +50,9 @@ pub mod parameterized_unary;
 pub mod ray_integral;
 /// Contract clauses for the [`ScanOps`](hephaestus_core::ScanOps) seam.
 pub mod scan;
+/// Contract clauses for the
+/// [`SparseOperatorOps`](hephaestus_core::SparseOperatorOps) seam.
+pub mod sparse;
 /// Contract clauses for the typed paths of the
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
@@ -62,4 +65,5 @@ pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use ray_integral::assert_ray_integral_contract;
 pub use scan::assert_scan_contract;
+pub use sparse::assert_sparse_operator_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
