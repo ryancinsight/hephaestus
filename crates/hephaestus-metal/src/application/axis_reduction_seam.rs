@@ -7,7 +7,7 @@
 
 use hephaestus_core::{
     AxisReductionOps, CombineExpr, DialectScalar, IdentityToken, OpIdentity, ProdOp, Result,
-    StridedView, Wgsl,
+    StridedView, SumOp, Wgsl,
 };
 use hephaestus_wgpu::{PreparedAxisReduction, WgpuAxisReductionOps, WgpuDevice};
 
@@ -60,6 +60,24 @@ where
         T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
     {
         self.inner.prod_axis_into(
+            device.wgpu_device(),
+            StridedView::new(&input.buffer.inner, input.layout),
+            axis,
+            StridedView::new(&output.buffer.inner, output.layout),
+        )
+    }
+
+    fn mean_axis_into(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'_, MetalBuffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, MetalBuffer<T>, 2>,
+    ) -> Result<()>
+    where
+        T: OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
+    {
+        self.inner.mean_axis_into(
             device.wgpu_device(),
             StridedView::new(&input.buffer.inner, input.layout),
             axis,

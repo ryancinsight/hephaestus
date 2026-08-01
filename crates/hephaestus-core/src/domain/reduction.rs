@@ -22,7 +22,7 @@ use crate::domain::device::ComputeDevice;
 use crate::domain::dialect::KernelDialect;
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::launch::BlockWidth;
-use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity, ProdOp};
+use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity, ProdOp, SumOp};
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use crate::domain::vector::DenseVectorOps;
 use crate::domain::view::StridedView;
@@ -122,6 +122,27 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
         let prepared = self.prepare_reduce_axis_into::<ProdOp>(device, input, axis, output)?;
         self.dispatch_prepared(device, &prepared)
     }
+
+    /// Mean-reduce `input` along `axis` into `output`.
+    ///
+    /// The divisor is the reduced axis length, so the reduced axis must be
+    /// non-empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the axis is out of range or empty,
+    /// the output shape does not match the reduced shape, a layout is
+    /// unsupported, or the backend dispatch fails.
+    fn mean_axis_into(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<()>
+    where
+        SumOp: CombineExpr<Self::Dialect>,
+        T: OpIdentity<SumOp> + IdentityToken<SumOp, Self::Dialect>;
 
     /// Bind dispatch resources for reducing `input` along `axis` into `output`
     /// under the combining operator `Op`.

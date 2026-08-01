@@ -11,12 +11,12 @@
 use bytemuck::Pod;
 use hephaestus_core::{
     AxisReductionOps, BlockWidth, CombineExpr, DialectScalar, HipC, IdentityToken, OpIdentity,
-    ProdOp, Result, StridedView,
+    ProdOp, Result, StridedView, SumOp,
 };
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
-use crate::application::axis_reduction::{prod_axis_into, reduce_axis_into};
+use crate::application::axis_reduction::{mean_axis_into, prod_axis_into, reduce_axis_into};
 use crate::application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_reduce_axis_into,
 };
@@ -92,6 +92,25 @@ where
     }
 
     #[inline]
+    fn mean_axis_into(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'_, RocmBuffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, RocmBuffer<T>, 2>,
+    ) -> Result<()>
+    where
+        T: OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
+    {
+        mean_axis_into::<T>(
+            device,
+            operand(input),
+            axis,
+            operand(output),
+            BlockWidth::DEFAULT,
+        )
+    }
+
     fn prepare_reduce_axis_into<'op, Op>(
         &self,
         device: &RocmDevice,

@@ -7,11 +7,12 @@
 
 use hephaestus_core::{
     AxisReductionOps, BlockWidth, CombineExpr, DialectScalar, IdentityToken, OpIdentity, ProdOp,
-    Result, StridedView, Wgsl,
+    Result, StridedView, SumOp, Wgsl,
 };
 
 use crate::application::reduction::{
-    PreparedAxisReduction, prepare_reduce_axis_into, prod_axis_into, reduce_axis_into,
+    PreparedAxisReduction, mean_axis_into, prepare_reduce_axis_into, prod_axis_into,
+    reduce_axis_into,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -90,6 +91,25 @@ where
     }
 
     #[inline]
+    fn mean_axis_into(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'_, WgpuBuffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, WgpuBuffer<T>, 2>,
+    ) -> Result<()>
+    where
+        T: OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
+    {
+        mean_axis_into::<T>(
+            device,
+            operand(input),
+            axis,
+            operand(output),
+            BlockWidth::DEFAULT,
+        )
+    }
+
     fn prepare_reduce_axis_into<'op, Op>(
         &self,
         device: &WgpuDevice,

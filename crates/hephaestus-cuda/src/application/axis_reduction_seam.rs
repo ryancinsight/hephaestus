@@ -10,13 +10,13 @@
 use bytemuck::Pod;
 use hephaestus_core::{
     AxisReductionOps, BlockWidth, CombineExpr, CudaC, DialectScalar, IdentityToken, OpIdentity,
-    ProdOp, Result, StridedView,
+    ProdOp, Result, StridedView, SumOp,
 };
 
 use crate::application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_reduce_axis_into,
 };
-use crate::application::reduction::{prod_axis_into, reduce_axis_into};
+use crate::application::reduction::{mean_axis_into, prod_axis_into, reduce_axis_into};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -91,6 +91,25 @@ where
     }
 
     #[inline]
+    fn mean_axis_into(
+        &self,
+        device: &CudaDevice,
+        input: StridedView<'_, CudaBuffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, CudaBuffer<T>, 2>,
+    ) -> Result<()>
+    where
+        T: OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
+    {
+        mean_axis_into::<T>(
+            device,
+            operand(input),
+            axis,
+            operand(output),
+            BlockWidth::DEFAULT,
+        )
+    }
+
     fn prepare_reduce_axis_into<'op, Op>(
         &self,
         device: &CudaDevice,
