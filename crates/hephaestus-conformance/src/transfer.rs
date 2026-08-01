@@ -110,6 +110,28 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
         "{name}: rejected writes must not mutate the buffer"
     );
 
+    // A probed hardware topology's REPORTED fields are mutually
+    // consistent. Zero means unreported, never fabricated (wgpu's pinned
+    // convention: WebGPU exposes no SM/register introspection), so the
+    // clause constrains only fields the backend actually reported; `None`
+    // (no snapshot at all) is equally valid. Encoding unknowability in
+    // the type instead of a zero sentinel is filed upstream against
+    // themis (ATLAS-THEMIS-TOPOLOGY-OPTION-1).
+    if let Some(topology) = device.topology() {
+        let warp = topology.warp_width();
+        assert!(
+            warp == 0 || warp.is_power_of_two(),
+            "{name}: a reported warp width must be a power of two, got {warp}"
+        );
+        let threads = topology.max_threads_per_unit();
+        if warp > 0 && threads > 0 {
+            assert!(
+                threads >= warp,
+                "{name}: a compute unit must hold at least one warp"
+            );
+        }
+    }
+
     // Zero-length transfers are valid no-ops.
     let empty = device.upload(&[] as &[f32]).expect("empty upload");
     assert_eq!(empty.len(), 0, "{name}: empty buffer length");

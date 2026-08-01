@@ -205,6 +205,14 @@ pub trait ComputeDevice {
     /// allocation context, encoding, submission, or synchronization fails.
     fn copy_buffer<T: Pod>(&self, src: &Self::Buffer<T>, dst: &Self::Buffer<T>) -> Result<()>;
 
+    /// The device's hardware topology snapshot, when the backend probed
+    /// one at initialization. `None` means the backend captured no
+    /// snapshot (stub devices, handle-wrapping constructors); inside a
+    /// snapshot, a zero field means that capacity is unreported by the
+    /// backend's API, never a fabricated value (wgpu reports only warp
+    /// width and memory tier).
+    fn topology(&self) -> Option<&themis::GpuTopology>;
+
     /// Wait until previously submitted work and transfers visible to this
     /// device context have completed.
     ///

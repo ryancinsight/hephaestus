@@ -1146,6 +1146,10 @@ impl ComputeDevice for WgpuDevice {
         self.synchronize()
     }
 
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        WgpuDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         self.device
             .poll(wgpu::PollType::wait_indefinitely())

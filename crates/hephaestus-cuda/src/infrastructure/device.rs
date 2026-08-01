@@ -881,6 +881,10 @@ impl ComputeDevice for CudaDevice {
         self.synchronize()
     }
 
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        CudaDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         self.bind()?;
         // SAFETY: the CUDA context is current for this thread after `bind`.

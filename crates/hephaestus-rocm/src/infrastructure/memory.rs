@@ -264,6 +264,10 @@ impl ComputeDevice for RocmDevice {
         self.synchronize()
     }
 
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        RocmDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         self.context.set_current()?;
         // SAFETY: no pointers are passed; HIP synchronizes the current device.

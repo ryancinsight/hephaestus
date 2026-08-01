@@ -104,6 +104,10 @@ impl ComputeDevice for MetalDevice {
     }
 
     #[inline]
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        MetalDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         self.inner.synchronize()
     }

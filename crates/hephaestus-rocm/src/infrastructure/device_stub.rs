@@ -142,6 +142,10 @@ impl ComputeDevice for RocmDevice {
         Err(unavailable())
     }
 
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        RocmDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         Err(unavailable())
     }

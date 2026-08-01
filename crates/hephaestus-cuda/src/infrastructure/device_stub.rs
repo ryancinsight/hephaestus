@@ -166,6 +166,10 @@ impl ComputeDevice for CudaDevice {
         Self::unavailable()
     }
 
+    fn topology(&self) -> Option<&themis::GpuTopology> {
+        CudaDevice::topology(self)
+    }
+
     fn synchronize(&self) -> Result<()> {
         Self::unavailable()
     }
