@@ -38,6 +38,9 @@ pub mod axis_reduction;
 /// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
 pub mod convolution;
 /// Contract clauses for the
+/// [`DecompositionOps`](hephaestus_core::DecompositionOps) seam.
+pub mod decomposition;
+/// Contract clauses for the
 /// [`DenseVectorOps`](hephaestus_core::DenseVectorOps) seam.
 pub mod dense_vector;
 /// Contract clauses for the
@@ -60,6 +63,7 @@ pub mod typed_elementwise;
 pub use attention::assert_attention_contract;
 pub use axis_reduction::assert_axis_reduction_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
+pub use decomposition::assert_decomposition_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;

@@ -24,7 +24,9 @@ pub trait LuHandle<D: ComputeDevice> {
     /// Device-resident packed `L\U` factors, `n × n` row-major (unit
     /// diagonal of `L` implicit).
     fn factors(&self) -> &D::Buffer<f32>;
-    /// Row permutation as pivot indices applied during elimination.
+    /// Row permutation as a permutation vector: row `k` of `P·A` is row
+    /// `pivots()[k]` of `A` (leto's pivot convention, shared by every
+    /// backend's factorization machinery).
     fn pivots(&self) -> &[usize];
     /// Determinant of `A`, including the permutation sign.
     fn det(&self) -> f32;
@@ -41,7 +43,11 @@ pub trait LuHandle<D: ComputeDevice> {
 pub trait QrHandle<D: ComputeDevice> {
     /// Input shape `(m, n)`.
     fn shape(&self) -> (usize, usize);
-    /// Device-resident upper-triangular `R`, `n × n` row-major.
+    /// Device-resident upper-triangular `R`, row-major: either the `n × n`
+    /// leading block or the full `m × n` factor (whose rows beyond `n`
+    /// vanish) — both shapes occur across backends today, and the length of
+    /// the returned buffer discriminates them. Normalizing on `n × n` is a
+    /// recorded follow-up.
     fn r_buffer(&self) -> &D::Buffer<f32>;
     /// Solve the least-squares problem `min ‖A·x − rhs‖₂`.
     ///
