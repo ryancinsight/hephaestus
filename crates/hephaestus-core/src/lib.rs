@@ -33,7 +33,9 @@ pub use domain::decomposition::{
     panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
     validate_square_operand,
 };
-pub use domain::decomposition_seam::{CholeskyHandle, DecompositionOps, LuHandle, QrHandle};
+pub use domain::decomposition_seam::{
+    CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle,
+};
 pub use domain::dense_product::DenseProductOps;
 pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,

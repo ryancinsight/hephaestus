@@ -7,15 +7,69 @@
 //! rewrapped factor buffer (WGPU buffers clone as handles, so the rewrap is
 //! a reference-count bump, not a copy).
 
-use hephaestus_core::{CholeskyHandle, DecompositionOps, LuHandle, QrHandle, Result, StridedView};
+use hephaestus_core::{
+    CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
+    StridedView,
+};
 
 use crate::application::decomposition::{
-    GpuCholesky, GpuLuDecomposition, GpuQrDecomposition, cholesky_decompose, lu_decompose,
-    qr_decompose,
+    GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
+    GpuQrDecomposition, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose, qr_decompose,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
+
+/// Column-pivoted QR result: the WGPU handle wrapped for this device.
+pub struct MetalColPivQrDecomposition {
+    inner: GpuColPivQrDecomposition,
+}
+
+impl ColPivQrHandle<MetalDevice> for MetalColPivQrDecomposition {
+    fn rank(&self) -> usize {
+        self.inner.rank()
+    }
+    fn permutation(&self) -> &[usize] {
+        self.inner.permutation()
+    }
+    fn solve_least_squares(
+        &self,
+        device: &MetalDevice,
+        rhs: &MetalBuffer<f32>,
+    ) -> Result<MetalBuffer<f32>> {
+        self.inner
+            .solve_least_squares(device.wgpu_device(), &rhs.inner)
+            .map(|inner| MetalBuffer { inner })
+    }
+}
+
+/// Fully pivoted LU result: the WGPU handle wrapped for this device.
+pub struct MetalFullPivLuDecomposition {
+    inner: GpuFullPivLuDecomposition,
+}
+
+impl FullPivLuHandle<MetalDevice> for MetalFullPivLuDecomposition {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn rank(&self) -> usize {
+        self.inner.rank()
+    }
+    fn det(&self) -> f32 {
+        self.inner.det()
+    }
+    fn row_permutation(&self) -> &[usize] {
+        self.inner.row_permutation()
+    }
+    fn col_permutation(&self) -> &[usize] {
+        self.inner.col_permutation()
+    }
+    fn solve(&self, device: &MetalDevice, rhs: &MetalBuffer<f32>) -> Result<MetalBuffer<f32>> {
+        self.inner
+            .solve(device.wgpu_device(), &rhs.inner)
+            .map(|inner| MetalBuffer { inner })
+    }
+}
 
 /// Dense decompositions for one Metal device.
 #[derive(Clone, Copy, Debug, Default)]
@@ -133,6 +187,41 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
             inner: inner.r_buffer().clone(),
         };
         Ok(MetalQrDecomposition { inner, r })
+    }
+
+    type ColPivQr<'op> = MetalColPivQrDecomposition;
+    type FullPivLu<'op> = MetalFullPivLuDecomposition;
+
+    fn col_piv_qr<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::ColPivQr<'op>> {
+        Ok(MetalColPivQrDecomposition {
+            inner: col_piv_qr(
+                device,
+                StridedOperand {
+                    buffer: input.buffer,
+                    layout: input.layout,
+                },
+            )?,
+        })
+    }
+
+    fn full_piv_lu<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::FullPivLu<'op>> {
+        Ok(MetalFullPivLuDecomposition {
+            inner: full_piv_lu(
+                device,
+                StridedOperand {
+                    buffer: input.buffer,
+                    layout: input.layout,
+                },
+            )?,
+        })
     }
 
     fn cholesky<'op>(

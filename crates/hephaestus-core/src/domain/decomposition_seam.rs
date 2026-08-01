@@ -125,6 +125,42 @@ pub trait DecompositionOps<D: ComputeDevice> {
         input: StridedView<'op, D::Buffer<f32>, 2>,
     ) -> Result<Self::Qr<'op>>;
 
+    /// Column-pivoted QR result bound to this backend.
+    type ColPivQr<'op>: ColPivQrHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Fully pivoted LU result bound to this backend.
+    type FullPivLu<'op>: FullPivLuHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Factor a rank-2 view by column-pivoted QR, revealing rank.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape rejection (`m < n`), a layout validation failure,
+    /// or the backend dispatch failure.
+    fn col_piv_qr<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::ColPivQr<'op>>;
+
+    /// Factor a square rank-2 view by fully pivoted LU, revealing rank.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn full_piv_lu<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::FullPivLu<'op>>;
+
     /// Factor a symmetric positive-definite matrix as `A = L·Lᵀ`.
     ///
     /// # Errors
@@ -136,4 +172,51 @@ pub trait DecompositionOps<D: ComputeDevice> {
         device: &D,
         input: StridedView<'op, D::Buffer<f32>, 2>,
     ) -> Result<Self::Cholesky<'op>>;
+}
+
+/// Oracle-minimal accessors on a column-pivoted QR result (ADR 0042
+/// staging, stage 1).
+pub trait ColPivQrHandle<D: ComputeDevice> {
+    /// Numerical rank revealed by the pivoted factorization.
+    fn rank(&self) -> usize;
+
+    /// Column permutation as a permutation vector (leto's convention; the
+    /// conformance clause pins the gather direction against the host
+    /// reference).
+    fn permutation(&self) -> &[usize];
+
+    /// Solve `min ‖A·x − rhs‖₂`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch against the factored shape or the
+    /// backend dispatch failure.
+    fn solve_least_squares(&self, device: &D, rhs: &D::Buffer<f32>) -> Result<D::Buffer<f32>>;
+}
+
+/// Oracle-minimal accessors on a fully pivoted LU result (ADR 0042
+/// staging, stage 1).
+pub trait FullPivLuHandle<D: ComputeDevice> {
+    /// Factored dimension `n`.
+    fn order(&self) -> usize;
+
+    /// Numerical rank revealed by full pivoting.
+    fn rank(&self) -> usize;
+
+    /// Determinant accumulated during elimination.
+    fn det(&self) -> f32;
+
+    /// Row permutation vector (leto's convention).
+    fn row_permutation(&self) -> &[usize];
+
+    /// Column permutation vector (leto's convention).
+    fn col_permutation(&self) -> &[usize];
+
+    /// Solve `A·x = rhs` for a full-rank factorization.
+    ///
+    /// # Errors
+    ///
+    /// Returns a rank-deficiency rejection, a length mismatch, or the
+    /// backend dispatch failure.
+    fn solve(&self, device: &D, rhs: &D::Buffer<f32>) -> Result<D::Buffer<f32>>;
 }
