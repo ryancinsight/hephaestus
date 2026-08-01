@@ -90,6 +90,11 @@ Target release: 0.18.0.
 
 ### Changed
 
+- [patch] Implement the shared `ComputeDeviceCapabilities` seam for Metal by
+  delegating limits and optional-feature queries to its Metal-selected WGPU
+  context. Metal conformance tests can now capability-gate optional f64 clauses
+  through the same provider-owned API as WGPU, CUDA, and ROCm.
+
 - [patch] Gate WGPU and Metal decomposition-seam modules, re-exports, and the
   Metal decomposition conformance target with their existing `decomposition`
   feature. No-default-feature all-target builds no longer compile seam code or

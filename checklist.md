@@ -3420,4 +3420,7 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       exact no-default all-target check.
 - [x] Record independent blocker-fix review and exact implementation-head CUDA,
       ROCm, WGPU, and macOS Metal CI evidence.
+- [x] Integrate advancing `master`, implement Metal's missing shared capability
+      seam, correct the f64 contract's owning-trait import, and independently
+      review the fix.
 - [ ] Require the final docs-only closeout-head backend matrix before merge.

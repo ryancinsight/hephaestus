@@ -143,7 +143,16 @@ cuda-oxide + cutile).
   reordering, and separately approves the Metal test-target feature gate.
   Exact implementation head `1169f99` passes CUDA run `30708041475`, ROCm run
   `30708041480`, WGPU run `30708041490`, and macOS Metal run `30708041462`.
-  Final docs-only closeout-head CI remains PR #172's merge gate.
+  During docs-only closeout CI, `master` advanced to `275f622`; GitHub's merge
+  ref exposed its Metal f64 convolution contract importing `ComputeDevice`
+  instead of the owning `ComputeDeviceCapabilities` trait. Cross-target
+  reproduction then proved the deeper provider gap: `MetalDevice` did not
+  implement that shared seam. The branch now integrates the base, adds the real
+  Metal capability delegation, and uses the owning trait in the contract. The
+  macOS cross-target contract build, focused value-semantic capability test,
+  Metal all-target check, and warning-denied clippy pass locally; independent
+  review approves the complete limits and five-feature delegation coverage.
+  Final exact-merge-head CI remains PR #172's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

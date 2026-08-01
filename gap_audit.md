@@ -38,8 +38,16 @@ architectural decision or a tracked future-work item:
   the capability gate. Exact local WGPU no-default library and Metal no-default
   all-target checks pass. Exact implementation head `1169f99` passes CUDA run
   `30708041475`, ROCm run `30708041480`, WGPU run `30708041490`, and macOS Metal
-  run `30708041462`. Final docs-only closeout-head CI remains PR #172's merge
-  gate.
+  run `30708041462`. During docs-only closeout CI, `master` advanced to
+  `275f622`; GitHub's merge ref exposed its Metal f64 convolution contract
+  importing `ComputeDevice` instead of `ComputeDeviceCapabilities`. Cross-target
+  reproduction proved that `MetalDevice` also lacked the shared capability
+  implementation. The branch integrates that base, delegates Metal limits and
+  feature queries through its Metal-selected WGPU context, and corrects the
+  owning-trait import. The macOS cross-target contract build, focused
+  value-semantic capability test, all-target check, and warning-denied clippy
+  pass locally; independent review approves the implementation and exhaustive
+  feature coverage. Final exact-merge-head CI remains PR #172's merge gate.
 
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 
