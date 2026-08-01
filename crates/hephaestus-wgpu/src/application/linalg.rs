@@ -937,8 +937,7 @@ struct MatrixLayout {{
 
 @group(0) @binding(0) var<storage, read_write> output: array<{ty}>;
 @group(0) @binding(1) var<uniform> matrix_layout: MatrixLayout;
-@group(0) @binding(2) var<uniform> zero_value: {ty};
-@group(0) @binding(3) var<uniform> one_value: {ty};
+@group(0) @binding(2) var<uniform> identity_values: vec2<{ty}>;
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
@@ -946,7 +945,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         let index = matrix_layout.offset
             + id.y * u32(matrix_layout.strides.x)
             + id.x * u32(matrix_layout.strides.y);
-        output[index] = select(zero_value, one_value, id.x == id.y);
+        output[index] = select(identity_values.x, identity_values.y, id.x == id.y);
     }}
 }}
 "#,
@@ -966,19 +965,16 @@ where
     let metadata = map_layout(layout)?;
     let raw_layout = device.get_uniform_buffer(WgpuDevice::byte_size::<GpuMatrixLayout>(1)?)?;
     let layout_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_layout);
-    let raw_zero = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let raw_one = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let zero_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_zero);
-    let one_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_one);
+    let raw_identity = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(2)?)?;
+    let identity_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_identity);
     device
         .queue()
         .write_buffer(&layout_buffer, 0, bytemuck::bytes_of(&metadata));
-    device
-        .queue()
-        .write_buffer(&zero_buffer, 0, bytemuck::bytes_of(&T::ZERO));
-    device
-        .queue()
-        .write_buffer(&one_buffer, 0, bytemuck::bytes_of(&T::ONE));
+    device.queue().write_buffer(
+        &identity_buffer,
+        0,
+        bytemuck::cast_slice(&[T::ZERO, T::ONE]),
+    );
     let key = (TypeId::of::<IdentityKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = try_cached_pipeline(device, key, "hephaestus-matrix-identity", || {
         identity_shader_source::<T>()
@@ -999,11 +995,7 @@ where
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: zero_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: one_buffer.as_entire_binding(),
+                    resource: identity_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -1027,8 +1019,7 @@ where
     }
     device.queue().submit(Some(encoder.finish()));
     drop(layout_buffer);
-    drop(zero_buffer);
-    drop(one_buffer);
+    drop(identity_buffer);
     Ok(output)
 }
 

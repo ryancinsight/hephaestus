@@ -84,7 +84,15 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal metadata packing. Per-dispatch uniform
   acquisitions and queue writes fall from three to two by construction; output
   storage and peak matrix memory are unchanged.
-- Status: claimed 2026-07-31 before implementation.
+- Evidence: the shader source contract pins one `vec2<T>` identity binding and
+  three total bindings. Local WGPU execution passes the nonstandard-identity,
+  built-in exponent-zero, empty, odd-power, strided, and non-square matrix-power
+  contracts. Formatting, all-target check, warning-denied Clippy, doctests, and
+  Rustdoc pass offline. The Atlas development overlay changes the unused-patch
+  lock set, so local `--locked` commands stop before compilation; exact-head
+  hosted CI remains the clean-lock evidence.
+- Status: implementation and focused local gates complete 2026-07-31; hosted
+  WGPU/macOS Metal CI is the remaining merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
