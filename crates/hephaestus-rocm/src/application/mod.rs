@@ -40,6 +40,8 @@ pub mod prepared_reduction;
 pub mod prepared_strided_elementwise;
 /// Seeded host-delegated random initializers.
 pub mod random;
+/// Device-neutral seeded random initialization seam.
+pub mod random_seam;
 /// Contiguous multi-pass tree reductions.
 pub mod reduction;
 /// Rank-2 prefix and suffix scans over strided layouts.

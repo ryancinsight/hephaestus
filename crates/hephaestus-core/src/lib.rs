@@ -64,6 +64,7 @@ pub use domain::parameterized::{
     HardtanhGradOp, HardtanhOp, ParameterizedUnaryExpr, ParameterizedUnaryOps, ThresholdGradOp,
     ThresholdOp, validate_parameterized_output,
 };
+pub use domain::random::RandomInitOps;
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
     StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,

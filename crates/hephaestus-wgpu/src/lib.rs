@@ -51,6 +51,8 @@ pub use application::parameterized_elementwise::{
 };
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub use application::random::{normal_with_seed, uniform_with_seed};
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+pub use application::random_seam::WgpuRandomOps;
 pub use application::reduction::{
     MaxOp, MinOp, PreparedAxisReduction, PreparedReduction, ProdOp, SumOp, max_axis, max_axis_into,
     mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,

@@ -46,6 +46,7 @@ pub use application::prepared_map_reduction::{
     PreparedDot, PreparedL2Norm, prepare_dot, prepare_norm_l2,
 };
 pub use application::random::{normal_with_seed, uniform_with_seed};
+pub use application::random_seam::MetalRandomOps;
 pub use application::reduction::{
     MaxOp, MinOp, PreparedAxisReduction, PreparedReduction, ProdOp, SumOp, max_axis, max_axis_into,
     mean_axis, mean_axis_into, min_axis, min_axis_into, prepare_max_axis_into,

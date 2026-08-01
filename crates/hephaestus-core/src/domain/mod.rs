@@ -32,6 +32,8 @@ pub mod ops;
 pub mod parameterized;
 /// Shared narrowing/error helpers for dispatch planning.
 pub(crate) mod planning;
+/// Device-neutral seeded random initialization seam.
+pub mod random;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.

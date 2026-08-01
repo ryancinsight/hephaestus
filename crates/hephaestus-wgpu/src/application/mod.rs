@@ -32,6 +32,9 @@ pub mod parameterized_elementwise;
 pub(crate) mod prepared;
 /// Seeded host-delegated PRNG initializers.
 pub mod random;
+/// Device-neutral seeded random initialization seam.
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+pub mod random_seam;
 /// Reduction compute operations.
 pub mod reduction;
 /// Prefix and suffix scan compute operations.

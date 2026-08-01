@@ -29,6 +29,8 @@ pub mod parameterized_elementwise;
 pub mod prepared_map_reduction;
 /// Seeded host-delegated random initializers.
 pub mod random;
+/// Device-neutral seeded random initialization seam.
+pub mod random_seam;
 /// Reduction operations.
 pub mod reduction;
 /// Scan operations.

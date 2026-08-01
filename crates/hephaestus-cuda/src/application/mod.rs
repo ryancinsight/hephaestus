@@ -31,6 +31,8 @@ pub mod prepared_map_reduction;
 pub mod prepared_reduction;
 /// Reusable strided elementwise plans.
 pub mod prepared_strided_elementwise;
+/// Device-neutral seeded random initialization seam.
+pub mod random_seam;
 /// Multi-pass tree reductions.
 pub mod reduction;
 /// Prefix/suffix scan operations.

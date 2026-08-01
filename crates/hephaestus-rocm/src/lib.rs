@@ -97,6 +97,7 @@ pub use application::prepared_reduction::{
 };
 pub use application::prepared_strided_elementwise::{PreparedStridedBinary, PreparedStridedUnary};
 pub use application::random::{normal_with_seed, uniform_with_seed};
+pub use application::random_seam::RocmRandomOps;
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,

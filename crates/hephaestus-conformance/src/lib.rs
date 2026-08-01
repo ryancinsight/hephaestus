@@ -52,6 +52,8 @@ pub mod elementwise;
 pub mod full_reduction;
 /// Contract clauses for runtime-parameter unary dispatch.
 pub mod parameterized_unary;
+/// Seeded random initialization clauses.
+pub mod random_init;
 /// Contract clauses for the
 /// [`RayIntegralOps`](hephaestus_core::RayIntegralOps) seam.
 pub mod ray_integral;
@@ -73,6 +75,7 @@ pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;
 pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
+pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
 pub use scan::assert_scan_contract;
 pub use sparse::assert_sparse_operator_contract;
