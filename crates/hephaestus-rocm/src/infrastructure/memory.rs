@@ -130,6 +130,49 @@ impl ComputeDevice for RocmDevice {
         }
     }
 
+    fn download_owned<T: Pod>(&self, buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        let len = buffer.len;
+        let mut out = Vec::new();
+        out.try_reserve_exact(len)
+            .map_err(|error| HephaestusError::AllocationFailed {
+                message: format!(
+                    "ROCm host download allocation for {len} elements failed: {error}"
+                ),
+            })?;
+        if core::mem::size_of::<T>() == 0 {
+            out.resize(len, bytemuck::Zeroable::zeroed());
+            return Ok(out);
+        }
+        let bytes = checked_bytes::<T>(len)?;
+        if bytes != 0 {
+            self.context.set_current()?;
+            // SAFETY: `try_reserve_exact` established capacity for `len`
+            // elements, so the spare-capacity pointer addresses `bytes`
+            // writable host bytes. `hipMemcpy` is synchronous and initializes
+            // every byte before vector length is published below.
+            let status = unsafe {
+                cubecl_hip_sys::hipMemcpy(
+                    out.spare_capacity_mut().as_mut_ptr().cast::<c_void>(),
+                    buffer.ptr.cast_const(),
+                    bytes,
+                    cubecl_hip_sys::hipMemcpyKind_hipMemcpyDeviceToHost,
+                )
+            };
+            if status != super::device::HIP_SUCCESS {
+                return Err(HephaestusError::TransferFailed {
+                    message: super::device::status_message(
+                        status,
+                        "owned hipMemcpy device-to-host",
+                    ),
+                });
+            }
+        }
+        // SAFETY: `T` is non-zero-sized here and the successful synchronous
+        // copy above initialized all `len` elements before publication.
+        unsafe { out.set_len(len) };
+        Ok(out)
+    }
+
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
         if host.len() != buffer.len {
             return Err(HephaestusError::LengthMismatch {

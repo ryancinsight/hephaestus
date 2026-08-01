@@ -145,6 +145,10 @@ impl ComputeDevice for CudaDevice {
         Self::unavailable()
     }
 
+    fn download_owned<T: Pod>(&self, _buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        Self::unavailable()
+    }
+
     fn write_buffer<T: Pod>(&self, _buffer: &Self::Buffer<T>, _host: &[T]) -> Result<()> {
         Self::unavailable()
     }

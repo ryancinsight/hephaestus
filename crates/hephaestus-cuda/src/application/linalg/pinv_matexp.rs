@@ -18,8 +18,7 @@ pub fn pinv(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<C
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let out_arr = leto_ops::pinv(&view).map_err(|e| HephaestusError::DispatchFailed {
@@ -48,8 +47,7 @@ pub fn matexp(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let out_arr = leto_ops::matexp(&view).map_err(|e| HephaestusError::DispatchFailed {

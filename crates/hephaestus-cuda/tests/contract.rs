@@ -1383,6 +1383,23 @@ fn linalg_matexp_matches_closed_form_diagonal() {
 }
 
 #[test]
+fn linalg_matrix_functions_preserve_empty_outputs() {
+    let Some(dev) = device("linalg_matrix_functions_preserve_empty_outputs") else {
+        return;
+    };
+
+    let matrix = dev.upload(&[] as &[f32]).unwrap();
+    let layout = Layout::c_contiguous([0, 0]).unwrap();
+    let operand = StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+
+    assert_eq!(pinv(&dev, operand).unwrap().len(), 0);
+    assert_eq!(matexp(&dev, operand).unwrap().len(), 0);
+}
+
+#[test]
 fn reduction_axis_reduction_generic_matches_cpu() {
     let Some(dev) = device("reduction_axis_reduction_generic_matches_cpu") else {
         return;

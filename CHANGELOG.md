@@ -36,6 +36,13 @@ Target release: 0.18.0.
 
 ### Added
 
+- [minor] `ComputeDevice::download_owned` allocates host-owned transfer results
+  behind the provider seam while remaining source-compatible for external
+  backend implementors through an initialized default. CUDA and ROCm override
+  it with failure-atomic synchronous copies into reserved host capacity, and
+  their pseudoinverse and matrix-exponential paths no longer zero-fill four
+  host vectors immediately before those vectors are wholly overwritten.
+
 - [minor] `StatefulUpdateOps` adds one provider-owned, monomorphized `f32`
   kernel family for SGD, Adam, AdamW, RMSProp, and AdaGrad across WGPU, CUDA,
   ROCm, and Metal. The shared rank-eight planner validates shapes, storage

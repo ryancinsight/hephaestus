@@ -10,6 +10,41 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-owned-download`; scope: the
+  `ComputeDevice` owned-download seam, shared transfer conformance, optimized
+  CUDA/ROCm implementations, and CUDA/ROCm `pinv`/`matexp` consumers.
+- Outcome: let a provider allocate device-to-host results so CUDA and ROCm do
+  not zero-fill host vectors immediately before a synchronous full overwrite.
+- Non-goals: transfer arithmetic, device staging-pool policy, WGPU/Metal
+  zero-fill removal, native GPU implementations of host-delegated matrix
+  functions, active attention/parameterized-unary/stateful scopes, or runtime
+  and peak-memory claims without controlled measurements.
+- Acceptance: `download_owned` is default-compatible for external backends,
+  bitwise-preserving and empty-safe across shared conformance; CUDA/ROCm publish
+  no partially initialized vector on failure and their four matrix-function
+  downloads use the provider-owned result directly; focused value contracts,
+  feature-off stubs, warning-denied gates, and exact-head backend CI pass.
+- Risk/change class: `[minor]` additive open-trait API and `[perf]` removal of
+  four redundant host initialization writes. Unsafe length publication is
+  confined to synchronous CUDA/ROCm transfers after every byte is written.
+- Status: implementation complete 2026-08-01. Pre-edit WGPU matrix-function
+  baseline passes 8/8 and physical CUDA passes 2/2. Post-edit shared transfer
+  conformance passes on WGPU and physical CUDA; CUDA matrix-function contracts
+  pass 3/3, including empty outputs; adapterless ROCm differential, closed-form,
+  invalid, and empty contracts pass 3/3. Feature-enabled and feature-off
+  warning-denied checks, formatting, doctests, and Rustdoc build pass.
+  Independent review approves the failure-atomic copy design after requiring a
+  safe ZST path plus changelog entry; both are applied and re-review approves.
+  `cargo-semver-checks` cannot retrieve a registry baseline because
+  `hephaestus-core` is unpublished. Implementation head `dad12d6` passes CUDA
+  run `30713948491`, ROCm run `30713948448`, WGPU run `30713948446`, and macOS
+  Metal run `30713948456`; hardware-only NVIDIA and AMD jobs skip because no
+  runner was dispatched. The external `recurseml/analysis` service reports its
+  generic error and is not provider evidence. Final docs-only exact-head CI
+  remains PR #175's merge gate.
+
 ## HEPH-STATEFUL-UPDATE-1 [minor] [arch] — in-progress
 
 - Owner: Codex on `codex/hephaestus-stateful-update`; scope: ADR 0045,
@@ -36,6 +71,7 @@ cuda-oxide + cutile).
   `fc0605c` passes WGPU `30713623614`, CUDA `30713623627`, ROCm `30713623615`,
   and native macOS Metal `30713623612`; the docs-only closeout head must pass
   the same matrix before merge. The Coeus consumer cutover is the next item.
+
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and
