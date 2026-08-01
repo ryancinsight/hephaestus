@@ -67,6 +67,34 @@ where
         <WgpuSparseOps as SparseOperatorOps<WgpuDevice, T>>::nnz(&self.inner, matrix)
     }
 
+    type PreparedApply<'op>
+        = <WgpuSparseOps as SparseOperatorOps<WgpuDevice, T>>::PreparedApply<'op>
+    where
+        T: 'op;
+
+    fn prepare_apply<'op>(
+        &self,
+        device: &'op MetalDevice,
+        matrix: &'op Self::Matrix,
+        input: &'op MetalBuffer<T>,
+        output: &'op MetalBuffer<T>,
+    ) -> Result<Self::PreparedApply<'op>> {
+        self.inner
+            .prepare_apply(device.wgpu_device(), matrix, &input.inner, &output.inner)
+    }
+
+    fn dispatch_apply(
+        &self,
+        device: &MetalDevice,
+        prepared: &Self::PreparedApply<'_>,
+    ) -> Result<()> {
+        <WgpuSparseOps as SparseOperatorOps<WgpuDevice, T>>::dispatch_apply(
+            &self.inner,
+            device.wgpu_device(),
+            prepared,
+        )
+    }
+
     fn apply(
         &self,
         device: &MetalDevice,

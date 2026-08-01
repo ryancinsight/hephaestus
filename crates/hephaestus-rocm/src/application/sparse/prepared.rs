@@ -172,7 +172,7 @@ pub fn prepare_spmv<'a, T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     device: &'a RocmDevice,
     matrix: &'a GpuCsrMatrix<T>,
     x: &'a RocmBuffer<T>,
-    output: &'a mut RocmBuffer<T>,
+    output: &'a RocmBuffer<T>,
 ) -> Result<PreparedSpmv<'a, T>> {
     let (nrows, ncols) = matrix.shape();
     if x.len() != ncols {
@@ -203,7 +203,7 @@ pub fn prepare_spmv<'a, T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
         device,
         matrix,
         x,
-        output: &*output,
+        output,
         kernel,
         width,
         grid,
@@ -268,7 +268,7 @@ where
         device,
         matrix,
         rhs,
-        output: &*output,
+        output,
         kernel,
         width,
         grid,

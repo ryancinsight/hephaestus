@@ -173,7 +173,7 @@ pub fn prepare_spmv<'a, T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
     device: &'a CudaDevice,
     matrix: &'a GpuCsrMatrix<T>,
     x: &'a CudaBuffer<T>,
-    output: &'a mut CudaBuffer<T>,
+    output: &'a CudaBuffer<T>,
 ) -> Result<PreparedSpmv<'a, T>> {
     let (nrows, ncols) = matrix.shape();
     if x.len() != ncols {
@@ -204,7 +204,7 @@ pub fn prepare_spmv<'a, T: DialectScalar<CudaC> + leto_ops::Scalar + Pod>(
         device,
         matrix,
         x,
-        output: &*output,
+        output,
         kernel,
         width,
         grid,
@@ -269,7 +269,7 @@ where
         device,
         matrix,
         rhs,
-        output: &*output,
+        output,
         kernel,
         width,
         grid,

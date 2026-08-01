@@ -108,7 +108,7 @@ pub fn prepare_spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     device: &WgpuDevice,
     a: &GpuCsrMatrix<T>,
     x: &WgpuBuffer<T>,
-    y: &mut WgpuBuffer<T>,
+    y: &WgpuBuffer<T>,
 ) -> Result<PreparedSpmv<T>> {
     let (nrows, ncols) = a.shape();
     if x.len() != ncols {

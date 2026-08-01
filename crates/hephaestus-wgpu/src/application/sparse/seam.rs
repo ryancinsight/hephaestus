@@ -3,7 +3,8 @@
 use bytemuck::Pod;
 use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
+use super::spmv::PreparedSpmv;
+use super::{GpuCsrMatrix, spmm::spmm_into, spmv::prepare_spmv, spmv::spmv_into};
 use crate::application::strided::StridedOperand;
 use crate::{MatmulZero, WgpuBuffer, WgpuDevice, Wgsl};
 use hephaestus_core::DialectScalar;
@@ -60,6 +61,30 @@ where
 
     fn nnz(&self, matrix: &Self::Matrix) -> usize {
         matrix.nnz()
+    }
+
+    type PreparedApply<'op>
+        = PreparedSpmv<T>
+    where
+        T: 'op;
+
+    fn prepare_apply<'op>(
+        &self,
+        device: &'op WgpuDevice,
+        matrix: &'op Self::Matrix,
+        input: &'op WgpuBuffer<T>,
+        output: &'op WgpuBuffer<T>,
+    ) -> Result<Self::PreparedApply<'op>> {
+        prepare_spmv(device, matrix, input, output)
+    }
+
+    fn dispatch_apply(
+        &self,
+        _device: &WgpuDevice,
+        prepared: &Self::PreparedApply<'_>,
+    ) -> Result<()> {
+        prepared.dispatch();
+        Ok(())
     }
 
     fn apply(

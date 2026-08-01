@@ -8,6 +8,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
+use super::prepared::{PreparedSpmv, prepare_spmv};
 use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
@@ -76,6 +77,29 @@ where
 
     fn nnz(&self, matrix: &Self::Matrix) -> usize {
         matrix.nnz()
+    }
+
+    type PreparedApply<'op>
+        = PreparedSpmv<'op, T>
+    where
+        T: 'op;
+
+    fn prepare_apply<'op>(
+        &self,
+        device: &'op CudaDevice,
+        matrix: &'op Self::Matrix,
+        input: &'op CudaBuffer<T>,
+        output: &'op CudaBuffer<T>,
+    ) -> Result<Self::PreparedApply<'op>> {
+        prepare_spmv(device, matrix, input, output)
+    }
+
+    fn dispatch_apply(
+        &self,
+        _device: &CudaDevice,
+        prepared: &Self::PreparedApply<'_>,
+    ) -> Result<()> {
+        prepared.dispatch()
     }
 
     fn apply(

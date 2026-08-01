@@ -3796,8 +3796,8 @@ fn test_cuda_prepared_sparse_dispatch_matches_reference() {
     .unwrap();
     let gpu_csr = GpuCsrMatrix::from_cpu(&dev, &cpu_csr).unwrap();
     let x = dev.upload(&[1.0_f32, 2.0, 3.0]).unwrap();
-    let mut y = dev.upload(&[77.0_f32; 3]).unwrap();
-    let prepared_spmv = prepare_spmv(&dev, &gpu_csr, &x, &mut y).unwrap();
+    let y = dev.upload(&[77.0_f32; 3]).unwrap();
+    let prepared_spmv = prepare_spmv(&dev, &gpu_csr, &x, &y).unwrap();
     prepared_spmv.dispatch().unwrap();
     prepared_spmv.dispatch().unwrap();
 
@@ -3829,12 +3829,8 @@ fn test_cuda_prepared_sparse_dispatch_matches_reference() {
     assert_eq!(got_many, got_c);
 
     let wrong_x = dev.upload(&[1.0_f32, 2.0]).unwrap();
-    let mut wrong_output = dev.upload(&[0.0_f32; 3]).unwrap();
-    assert_length_mismatch(
-        prepare_spmv(&dev, &gpu_csr, &wrong_x, &mut wrong_output),
-        3,
-        2,
-    );
+    let wrong_output = dev.upload(&[0.0_f32; 3]).unwrap();
+    assert_length_mismatch(prepare_spmv(&dev, &gpu_csr, &wrong_x, &wrong_output), 3, 2);
     let bad_layout = Layout::new([3, 2], [2, 1], 5);
     let bad_operand = StridedOperand {
         buffer: &b,

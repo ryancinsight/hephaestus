@@ -113,7 +113,7 @@ pub fn prepare_spmv<T>(
     device: &MetalDevice,
     matrix: &GpuCsrMatrix<T>,
     x: &MetalBuffer<T>,
-    output: &mut MetalBuffer<T>,
+    output: &MetalBuffer<T>,
 ) -> Result<PreparedSpmv<T>>
 where
     T: DialectScalar<Wgsl> + wgpu_backend::MatmulZero + Pod,
@@ -123,7 +123,7 @@ where
             device.wgpu_device(),
             &matrix.inner,
             x.wgpu_buffer(),
-            &mut output.inner,
+            &output.inner,
         )?,
     })
 }

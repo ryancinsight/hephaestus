@@ -65,6 +65,37 @@ where
     // The stored explicit-value count is the fixture's five nonzeros.
     assert_eq!(ops.nnz(&matrix), 5, "{name}: nnz");
 
+    // A prepared SpMV re-dispatches over its bound operands: idempotent
+    // over unchanged inputs, and writes to the bound input are observed.
+    device
+        .write_buffer(&x, &[1.0f32, 2.0, 3.0])
+        .expect("input restore");
+    let prepared = ops
+        .prepare_apply(device, &matrix, &x, &y)
+        .expect("prepare spmv");
+    ops.dispatch_apply(device, &prepared).expect("dispatch");
+    device.download(&y, &mut got).expect("download");
+    assert_eq!(got, [5.0, 6.0, 19.0], "{name}: prepared SpMV");
+    ops.dispatch_apply(device, &prepared).expect("re-dispatch");
+    device.download(&y, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [5.0, 6.0, 19.0],
+        "{name}: prepared SpMV must be idempotent over unchanged operands"
+    );
+    device
+        .write_buffer(&x, &[2.0f32, 0.0, 1.0])
+        .expect("input rewrite");
+    ops.dispatch_apply(device, &prepared)
+        .expect("rebind dispatch");
+    device.download(&y, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [5.0, 0.0, 13.0],
+        "{name}: prepared SpMV must observe writes to its bound input"
+    );
+    drop(prepared);
+
     // Exact SpMM against a dense 3x2 batch B = [[1,2],[2,0],[3,1]]:
     // A·B = [[5,5],[6,0],[19,13]] row-major.
     let batch = device

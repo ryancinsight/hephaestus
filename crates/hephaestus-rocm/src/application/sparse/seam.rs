@@ -8,6 +8,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
+use super::prepared::{PreparedSpmv, prepare_spmv};
 use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
 use crate::RocmBuffer;
 use crate::RocmDevice;
@@ -76,6 +77,29 @@ where
 
     fn nnz(&self, matrix: &Self::Matrix) -> usize {
         matrix.nnz()
+    }
+
+    type PreparedApply<'op>
+        = PreparedSpmv<'op, T>
+    where
+        T: 'op;
+
+    fn prepare_apply<'op>(
+        &self,
+        device: &'op RocmDevice,
+        matrix: &'op Self::Matrix,
+        input: &'op RocmBuffer<T>,
+        output: &'op RocmBuffer<T>,
+    ) -> Result<Self::PreparedApply<'op>> {
+        prepare_spmv(device, matrix, input, output)
+    }
+
+    fn dispatch_apply(
+        &self,
+        _device: &RocmDevice,
+        prepared: &Self::PreparedApply<'_>,
+    ) -> Result<()> {
+        prepared.dispatch()
     }
 
     fn apply(

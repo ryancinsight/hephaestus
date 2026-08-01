@@ -83,10 +83,10 @@ fn bench_spmv(device: &WgpuDevice, cpu_csr: &leto_ops::CsrMatrix<f32>) {
         .expect("invariant: WGPU SpMV download succeeds");
     assert_close_slice(&got, leto::Storage::as_slice(expected.storage()), 1.0e-4);
 
-    let mut y_reused = device
+    let y_reused = device
         .alloc_zeroed::<f32>(ROWS)
         .expect("invariant: reusable SpMV output allocation succeeds");
-    let prepared_spmv = prepare_spmv(device, &gpu_csr, &x_wg, &mut y_reused)
+    let prepared_spmv = prepare_spmv(device, &gpu_csr, &x_wg, &y_reused)
         .expect("invariant: WGPU prepared SpMV succeeds");
     let t_wgpu = Instant::now();
     for _ in 0..ITERS {

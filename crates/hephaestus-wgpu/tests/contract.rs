@@ -4997,15 +4997,15 @@ fn test_wgpu_sparse_matrix_spmv_spmm() {
     device.download(&y_reused, &mut got_y_reused).unwrap();
     assert_close_slice(&got_y_reused, &got_y, 1.0e-4, 1.0e-4);
 
-    let mut y_prepared = device.upload(&[77.0f32, 77.0, 77.0]).unwrap();
-    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &mut y_prepared).unwrap();
+    let y_prepared = device.upload(&[77.0f32, 77.0, 77.0]).unwrap();
+    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &y_prepared).unwrap();
     prepared_spmv.dispatch();
     let mut got_y_prepared = vec![0.0f32; 3];
     device.download(&y_prepared, &mut got_y_prepared).unwrap();
     assert_close_slice(&got_y_prepared, &got_y, 1.0e-4, 1.0e-4);
 
-    let mut y_batched = device.upload(&[55.0f32, 55.0, 55.0]).unwrap();
-    let batched_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &mut y_batched).unwrap();
+    let y_batched = device.upload(&[55.0f32, 55.0, 55.0]).unwrap();
+    let batched_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &y_batched).unwrap();
 
     // SpMM: C = A * B, B = [ 1.0  2.0 ]
     //                      [ 3.0  4.0 ]

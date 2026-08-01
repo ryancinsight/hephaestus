@@ -437,8 +437,8 @@ fn prepared_sparse_dispatch_matches_reference() {
     let x = device
         .upload(&[1.0_f32, 2.0, 3.0])
         .expect("SpMV input upload");
-    let mut y = device.upload(&[77.0_f32; 3]).expect("SpMV output upload");
-    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x, &mut y).expect("prepare Metal SpMV");
+    let y = device.upload(&[77.0_f32; 3]).expect("SpMV output upload");
+    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x, &y).expect("prepare Metal SpMV");
     prepared_spmv.dispatch();
     prepared_spmv.dispatch();
 
@@ -478,10 +478,10 @@ fn prepared_sparse_dispatch_matches_reference() {
     assert_eq!(got_many, got_c);
 
     let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
-    let mut wrong_output = device
+    let wrong_output = device
         .upload(&[0.0_f32; 3])
         .expect("wrong SpMV output upload");
-    match prepare_spmv(&device, &gpu_csr, &wrong_x, &mut wrong_output) {
+    match prepare_spmv(&device, &gpu_csr, &wrong_x, &wrong_output) {
         Err(HephaestusError::LengthMismatch {
             host_len: 3,
             device_len: 2,

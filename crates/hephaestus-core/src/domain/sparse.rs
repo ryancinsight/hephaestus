@@ -97,6 +97,39 @@ pub trait SparseOperatorOps<D: ComputeDevice, T: Pod> {
 
     /// Number of explicitly stored values.
     fn nnz(&self, matrix: &Self::Matrix) -> usize;
+
+    /// Prepared SpMV bound to fixed matrix/input/output allocations.
+    ///
+    /// Lifetime-parameterized so backends whose prepared form borrows the
+    /// operands implement the seam without erasing that borrow;
+    /// handle-based backends simply ignore `'op`.
+    type PreparedApply<'op>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
+
+    /// Bind dispatch resources for `output = matrix · input`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a length mismatch against the matrix shape, an aliasing
+    /// violation, or the backend preparation failure.
+    fn prepare_apply<'op>(
+        &self,
+        device: &'op D,
+        matrix: &'op Self::Matrix,
+        input: &'op D::Buffer<T>,
+        output: &'op D::Buffer<T>,
+    ) -> Result<Self::PreparedApply<'op>>;
+
+    /// Re-dispatch a prepared SpMV over its bound operands. Writes to the
+    /// bound input between dispatches are observed (the rebind contract).
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend dispatch failure.
+    fn dispatch_apply(&self, device: &D, prepared: &Self::PreparedApply<'_>) -> Result<()>;
 }
 
 /// Validate canonical CSR structure before anything is uploaded.
