@@ -1,5 +1,7 @@
 //! Rank-2 prefix/suffix scan kernels over strided matrix operands on the CUDA device.
 
+use std::sync::Arc;
+
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use core::mem::size_of;
@@ -10,7 +12,9 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::CudaDevice;
-use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+use crate::application::pipeline::{
+    LaunchConfig, PipelineKey, SafeCachedKernel, cached_kernel, launch_kernel,
+};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 
@@ -122,15 +126,30 @@ extern "C" __global__ void scan_kernel(
     )
 }
 
-/// Scan a rank-2 strided matrix along `axis`, preserving the input shape.
-pub fn scan_axis_into<Op, T>(
+/// Kernel, geometry, and metadata for one planned scan launch.
+pub(crate) struct ScanLaunch {
+    kernel: Arc<SafeCachedKernel>,
+    meta: AxisScanMeta,
+    groups: u32,
+    width: BlockWidth,
+    shared_bytes: u32,
+}
+
+/// Resolve the kernel and launch geometry for a rank-2 scan, or `None` when
+/// the scan is empty.
+///
+/// # Errors
+///
+/// Returns an out-of-range axis, a shape mismatch, an aliased output, a
+/// layout validation failure, or the kernel compilation failure.
+pub(crate) fn plan_scan_launch<Op, T>(
     device: &CudaDevice,
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     direction: ScanDirection,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
-) -> Result<()>
+) -> Result<Option<ScanLaunch>>
 where
     Op: CombineExpr<CudaC>,
     T: DialectScalar<CudaC> + Pod + IdentityToken<Op, CudaC>,
@@ -146,7 +165,7 @@ where
         input.buffer.aliases(output.buffer),
     )?
     else {
-        return Ok(());
+        return Ok(None);
     };
 
     let key = PipelineKey::AxisScan {
@@ -161,17 +180,6 @@ where
         scan_shader_source::<Op, T>(width)
     })?;
 
-    let mut meta_val = dispatch.meta;
-    let mut in_ptr = input.buffer.raw();
-    let mut out_ptr = output.buffer.raw();
-
-    // Argument list mirrors `scan_kernel(AxisScanMeta, const T*, T*)`.
-    let mut args: [*mut std::ffi::c_void; 3] = [
-        &mut meta_val as *mut AxisScanMeta as *mut std::ffi::c_void,
-        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
-    ];
-
     let shared_bytes = width
         .get()
         .checked_mul(u32::try_from(size_of::<T>()).map_err(|_| {
@@ -183,12 +191,62 @@ where
             message: "scan shared-memory byte count overflows u32".to_string(),
         })?;
 
+    Ok(Some(ScanLaunch {
+        kernel,
+        meta: dispatch.meta,
+        groups: dispatch.groups,
+        width,
+        shared_bytes,
+    }))
+}
+
+/// Launch a planned scan against device addresses read at call time, so a
+/// caller holding buffer borrows observes writes made after planning.
+///
+/// # Errors
+///
+/// Returns the native launch failure.
+pub(crate) fn launch_planned_scan(
+    device: &CudaDevice,
+    plan: &ScanLaunch,
+    mut in_ptr: u64,
+    mut out_ptr: u64,
+) -> Result<()> {
+    let mut meta_val = plan.meta;
+    // Argument list mirrors `scan_kernel(AxisScanMeta, const T*, T*)`.
+    let mut args: [*mut std::ffi::c_void; 3] = [
+        &mut meta_val as *mut AxisScanMeta as *mut std::ffi::c_void,
+        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
+        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+    ];
     launch_kernel(
         device,
-        &kernel,
-        LaunchConfig::linear_shared(dispatch.groups, width, shared_bytes),
+        &plan.kernel,
+        LaunchConfig::linear_shared(plan.groups, plan.width, plan.shared_bytes),
         &mut args,
     )
+}
+
+/// Scan a rank-2 strided matrix along `axis`, preserving the input shape.
+pub fn scan_axis_into<Op, T>(
+    device: &CudaDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    direction: ScanDirection,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: CombineExpr<CudaC>,
+    T: DialectScalar<CudaC> + Pod + IdentityToken<Op, CudaC>,
+{
+    let in_ptr = input.buffer.raw();
+    let out_ptr = output.buffer.raw();
+    let Some(plan) = plan_scan_launch::<Op, T>(device, input, axis, direction, output, width)?
+    else {
+        return Ok(());
+    };
+    launch_planned_scan(device, &plan, in_ptr, out_ptr)
 }
 
 /// Scan a rank-2 strided matrix along `axis`, allocating a C-contiguous output buffer.

@@ -20,16 +20,19 @@ where
     T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
-    type PreparedScan<const N: usize> = PreparedScan;
+    type PreparedScan<'op, const N: usize>
+        = PreparedScan
+    where
+        T: 'op;
 
-    fn prepare_scan_axis<Op, const N: usize>(
+    fn prepare_scan_axis<'op, Op, const N: usize>(
         &self,
         device: &MetalDevice,
-        input: StridedView<'_, MetalBuffer<T>, N>,
+        input: StridedView<'op, MetalBuffer<T>, N>,
         axis: usize,
         direction: ScanDirection,
-        output: StridedView<'_, MetalBuffer<T>, N>,
-    ) -> Result<Self::PreparedScan<N>>
+        output: StridedView<'op, MetalBuffer<T>, N>,
+    ) -> Result<Self::PreparedScan<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -46,7 +49,7 @@ where
     fn dispatch_scan<const N: usize>(
         &self,
         device: &MetalDevice,
-        prepared: &Self::PreparedScan<N>,
+        prepared: &Self::PreparedScan<'_, N>,
     ) -> Result<()> {
         <WgpuScanOps as ScanOps<WgpuDevice, T>>::dispatch_scan::<N>(
             &self.inner,

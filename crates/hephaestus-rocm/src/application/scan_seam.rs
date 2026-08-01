@@ -7,33 +7,42 @@ use leto::Layout;
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
-use crate::application::scan::scan_axis_into;
+use crate::application::scan::{ScanLaunch, launch_planned_scan, plan_scan_launch};
 use crate::application::strided::StridedOperand;
 
 /// Provider-owned implementation of [`ScanOps`] for ROCm/HIP.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmScanOps;
 
-/// Prepared scan; the operation runs in `prepare` under ROCm's synchronous
-/// execution model so `dispatch` is a no-op.
-#[derive(Clone, Copy, Debug)]
-pub struct RocmPreparedScan;
+/// Prepared scan bound to one input/output pair.
+///
+/// Holds its operand borrows; dispatch re-reads their device addresses, so
+/// writes to the bound operands between dispatches are observed (the seam's
+/// rebind contract). An empty scan prepares to a no-op.
+pub struct RocmPreparedScan<'op, T> {
+    input: &'op RocmBuffer<T>,
+    output: &'op RocmBuffer<T>,
+    plan: Option<ScanLaunch>,
+}
 
 impl<T> ScanOps<RocmDevice, T> for RocmScanOps
 where
     T: DialectScalar<HipC> + Pod,
 {
     type Dialect = HipC;
-    type PreparedScan<const N: usize> = RocmPreparedScan;
+    type PreparedScan<'op, const N: usize>
+        = RocmPreparedScan<'op, T>
+    where
+        T: 'op;
 
-    fn prepare_scan_axis<Op, const N: usize>(
+    fn prepare_scan_axis<'op, Op, const N: usize>(
         &self,
         device: &RocmDevice,
-        input: StridedView<'_, RocmBuffer<T>, N>,
+        input: StridedView<'op, RocmBuffer<T>, N>,
         axis: usize,
         direction: ScanDirection,
-        output: StridedView<'_, RocmBuffer<T>, N>,
-    ) -> Result<Self::PreparedScan<N>>
+        output: StridedView<'op, RocmBuffer<T>, N>,
+    ) -> Result<Self::PreparedScan<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -56,7 +65,7 @@ where
             [output.layout.strides[0], output.layout.strides[1]],
             output.layout.offset,
         );
-        scan_axis_into::<Op, T>(
+        let plan = plan_scan_launch::<Op, T>(
             device,
             StridedOperand {
                 buffer: input.buffer,
@@ -70,14 +79,21 @@ where
             },
             BlockWidth::DEFAULT,
         )?;
-        Ok(RocmPreparedScan)
+        Ok(RocmPreparedScan {
+            input: input.buffer,
+            output: output.buffer,
+            plan,
+        })
     }
 
     fn dispatch_scan<const N: usize>(
         &self,
-        _device: &RocmDevice,
-        _prepared: &Self::PreparedScan<N>,
+        device: &RocmDevice,
+        prepared: &Self::PreparedScan<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        let Some(plan) = &prepared.plan else {
+            return Ok(());
+        };
+        launch_planned_scan(device, plan, prepared.input.raw(), prepared.output.raw())
     }
 }

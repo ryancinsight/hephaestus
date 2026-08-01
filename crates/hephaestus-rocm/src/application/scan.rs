@@ -1,5 +1,7 @@
 //! Rank-2 prefix/suffix scan kernels over strided matrix operands on ROCm.
 
+use std::sync::Arc;
+
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use core::mem::size_of;
@@ -10,7 +12,9 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::RocmDevice;
-use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+use crate::application::pipeline::{
+    LaunchConfig, PipelineKey, RocmKernel, cached_kernel, launch_kernel,
+};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
 
@@ -122,15 +126,30 @@ extern "C" __global__ void scan_kernel(
     )
 }
 
-/// Scan a rank-2 strided operand along `axis`, preserving its shape.
-pub fn scan_axis_into<Op, T>(
+/// Kernel, geometry, and metadata for one planned scan launch.
+pub(crate) struct ScanLaunch {
+    kernel: Arc<RocmKernel>,
+    meta: AxisScanMeta,
+    groups: u32,
+    width: BlockWidth,
+    shared_bytes: u32,
+}
+
+/// Resolve the kernel and launch geometry for a rank-2 scan, or `None` when
+/// the scan is empty.
+///
+/// # Errors
+///
+/// Returns an out-of-range axis, a shape mismatch, an aliased output, a
+/// layout validation failure, or the kernel compilation failure.
+pub(crate) fn plan_scan_launch<Op, T>(
     device: &RocmDevice,
     input: StridedOperand<'_, T, 2>,
     axis: usize,
     direction: ScanDirection,
     output: StridedOperand<'_, T, 2>,
     width: BlockWidth,
-) -> Result<()>
+) -> Result<Option<ScanLaunch>>
 where
     Op: CombineExpr<HipC>,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op> + IdentityToken<Op, HipC>,
@@ -146,7 +165,7 @@ where
         input.buffer.aliases(output.buffer),
     )?
     else {
-        return Ok(());
+        return Ok(None);
     };
 
     let key = PipelineKey::AxisScan {
@@ -160,14 +179,6 @@ where
         scan_shader_source::<Op, T>(width)
     })?;
 
-    let mut meta_val = dispatch.meta;
-    let mut input_ptr: DevicePtr = input.buffer.raw();
-    let mut output_ptr: DevicePtr = output.buffer.raw();
-    let mut args: [*mut core::ffi::c_void; 3] = [
-        (&mut meta_val as *mut AxisScanMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
-    ];
     let shared_bytes = width
         .get()
         .checked_mul(u32::try_from(size_of::<T>()).map_err(|_| {
@@ -179,12 +190,62 @@ where
             message: "scan shared-memory byte count overflows u32".to_string(),
         })?;
 
+    Ok(Some(ScanLaunch {
+        kernel,
+        meta: dispatch.meta,
+        groups: dispatch.groups,
+        width,
+        shared_bytes,
+    }))
+}
+
+/// Launch a planned scan against device addresses read at call time, so a
+/// caller holding buffer borrows observes writes made after planning.
+///
+/// # Errors
+///
+/// Returns the native launch failure.
+pub(crate) fn launch_planned_scan(
+    device: &RocmDevice,
+    plan: &ScanLaunch,
+    mut input_ptr: DevicePtr,
+    mut output_ptr: DevicePtr,
+) -> Result<()> {
+    let mut meta_val = plan.meta;
+    // Argument list mirrors `scan_kernel(AxisScanMeta, const T*, T*)`.
+    let mut args: [*mut core::ffi::c_void; 3] = [
+        (&mut meta_val as *mut AxisScanMeta).cast(),
+        (&mut input_ptr as *mut DevicePtr).cast(),
+        (&mut output_ptr as *mut DevicePtr).cast(),
+    ];
     launch_kernel(
         device,
-        &kernel,
-        LaunchConfig::linear_shared(dispatch.groups, width, shared_bytes),
+        &plan.kernel,
+        LaunchConfig::linear_shared(plan.groups, plan.width, plan.shared_bytes),
         &mut args,
     )
+}
+
+/// Scan a rank-2 strided operand along `axis`, preserving its shape.
+pub fn scan_axis_into<Op, T>(
+    device: &RocmDevice,
+    input: StridedOperand<'_, T, 2>,
+    axis: usize,
+    direction: ScanDirection,
+    output: StridedOperand<'_, T, 2>,
+    width: BlockWidth,
+) -> Result<()>
+where
+    Op: CombineExpr<HipC>,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op> + IdentityToken<Op, HipC>,
+{
+    let input_ptr: DevicePtr = input.buffer.raw();
+    let output_ptr: DevicePtr = output.buffer.raw();
+    let Some(plan) = plan_scan_launch::<Op, T>(device, input, axis, direction, output, width)?
+    else {
+        return Ok(());
+    };
+    launch_planned_scan(device, &plan, input_ptr, output_ptr)
 }
 
 /// Scan a rank-2 strided operand along `axis`, allocating a C-contiguous output.

@@ -183,7 +183,15 @@ pub trait ScanOps<D: ComputeDevice, T: Pod> {
     type Dialect: KernelDialect;
 
     /// Prepared resources for an axis scan bound to fixed input/output views.
-    type PreparedScan<const N: usize>;
+    ///
+    /// Lifetime-parameterized so backends whose prepared form borrows the
+    /// operand pair implement the seam without erasing that borrow;
+    /// handle-based backends simply ignore `'op`.
+    type PreparedScan<'op, const N: usize>
+    where
+        Self: 'op,
+        D: 'op,
+        T: 'op;
 
     /// Compute the prefix scan of `input` along `axis` into `output` under the
     /// combining operator `Op`.
@@ -215,14 +223,14 @@ pub trait ScanOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns an out-of-range axis, a shape mismatch, an aliased output, a
     /// layout validation failure, or the backend preparation failure.
-    fn prepare_scan_axis<Op, const N: usize>(
+    fn prepare_scan_axis<'op, Op, const N: usize>(
         &self,
         device: &D,
-        input: StridedView<'_, D::Buffer<T>, N>,
+        input: StridedView<'op, D::Buffer<T>, N>,
         axis: usize,
         direction: ScanDirection,
-        output: StridedView<'_, D::Buffer<T>, N>,
-    ) -> Result<Self::PreparedScan<N>>
+        output: StridedView<'op, D::Buffer<T>, N>,
+    ) -> Result<Self::PreparedScan<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>;
@@ -235,7 +243,7 @@ pub trait ScanOps<D: ComputeDevice, T: Pod> {
     fn dispatch_scan<const N: usize>(
         &self,
         device: &D,
-        prepared: &Self::PreparedScan<N>,
+        prepared: &Self::PreparedScan<'_, N>,
     ) -> Result<()>;
 }
 

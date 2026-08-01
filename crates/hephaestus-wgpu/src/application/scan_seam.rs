@@ -33,16 +33,19 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     type Dialect = Wgsl;
-    type PreparedScan<const N: usize> = PreparedScan;
+    type PreparedScan<'op, const N: usize>
+        = PreparedScan
+    where
+        T: 'op;
 
-    fn prepare_scan_axis<Op, const N: usize>(
+    fn prepare_scan_axis<'op, Op, const N: usize>(
         &self,
         device: &WgpuDevice,
-        input: StridedView<'_, WgpuBuffer<T>, N>,
+        input: StridedView<'op, WgpuBuffer<T>, N>,
         axis: usize,
         direction: ScanDirection,
-        output: StridedView<'_, WgpuBuffer<T>, N>,
-    ) -> Result<Self::PreparedScan<N>>
+        output: StridedView<'op, WgpuBuffer<T>, N>,
+    ) -> Result<Self::PreparedScan<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -128,7 +131,7 @@ where
     fn dispatch_scan<const N: usize>(
         &self,
         device: &WgpuDevice,
-        prepared: &Self::PreparedScan<N>,
+        prepared: &Self::PreparedScan<'_, N>,
     ) -> Result<()> {
         validate_device_owner(&prepared.owner, device, "scan")?;
         let Some(pipeline) = &prepared.pipeline else {

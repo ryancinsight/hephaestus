@@ -91,6 +91,7 @@ where
         + IdentityToken<CumProdOp, S::Dialect>,
 {
     let name = device.backend_name();
+    scan_prepared_rebinds_bound_operands(device, ops);
 
     // Forward prefix sum along the rows: each [1,2,3,2] row accumulates to
     // [1,3,6,8].
@@ -145,5 +146,60 @@ where
     assert_eq!(
         got, [9.0; 12],
         "{name}: a rejected scan must not touch the output"
+    );
+}
+
+/// A prepared scan re-dispatches over its bound operands: dispatch is
+/// idempotent over unchanged inputs and observes writes made after
+/// preparation (the rebind contract shared by every prepared seam form).
+fn scan_prepared_rebinds_bound_operands<D, S>(device: &D, ops: &S)
+where
+    D: ComputeDevice,
+    S: ScanOps<D, f32>,
+    CumSumOp: CombineExpr<S::Dialect>,
+    f32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, S::Dialect>,
+{
+    let name = device.backend_name();
+    let source = device.upload(&fixture()).expect("fixture upload");
+    let out = device.alloc_zeroed::<f32>(12).expect("output alloc");
+    let dense = Layout::c_contiguous([3, 4]).expect("dense layout");
+    let prepared = ops
+        .prepare_scan_axis::<CumSumOp, 2>(
+            device,
+            StridedView::new(&source, &dense),
+            1,
+            ScanDirection::Forward,
+            StridedView::new(&out, &dense),
+        )
+        .expect("prepare scan");
+
+    let expected = [
+        1.0f32, 3.0, 6.0, 8.0, 1.0, 3.0, 6.0, 8.0, 1.0, 3.0, 6.0, 8.0,
+    ];
+    ops.dispatch_scan::<2>(device, &prepared).expect("dispatch");
+    let mut got = [0.0f32; 12];
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(got, expected, "{name}: prepared forward row prefix sum");
+
+    ops.dispatch_scan::<2>(device, &prepared)
+        .expect("re-dispatch");
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got, expected,
+        "{name}: prepared scan must be idempotent over unchanged operands"
+    );
+
+    device
+        .write_buffer(&source, &[1.0f32; 12])
+        .expect("input rewrite");
+    ops.dispatch_scan::<2>(device, &prepared)
+        .expect("rebind dispatch");
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [
+            1.0f32, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0
+        ],
+        "{name}: prepared scan must observe writes to its bound operands"
     );
 }

@@ -5,7 +5,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::application::scan::scan_axis_into;
+use crate::application::scan::{ScanLaunch, launch_planned_scan, plan_scan_launch};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -14,26 +14,35 @@ use crate::infrastructure::device::CudaDevice;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaScanOps;
 
-/// Prepared scan; the operation runs in `prepare` under CUDA's synchronous
-/// execution model so `dispatch` is a no-op.
-#[derive(Clone, Copy, Debug)]
-pub struct CudaPreparedScan;
+/// Prepared scan bound to one input/output pair.
+///
+/// Holds its operand borrows; dispatch re-reads their device addresses, so
+/// writes to the bound operands between dispatches are observed (the seam's
+/// rebind contract). An empty scan prepares to a no-op.
+pub struct CudaPreparedScan<'op, T> {
+    input: &'op CudaBuffer<T>,
+    output: &'op CudaBuffer<T>,
+    plan: Option<ScanLaunch>,
+}
 
 impl<T> ScanOps<CudaDevice, T> for CudaScanOps
 where
     T: DialectScalar<CudaC> + Pod,
 {
     type Dialect = CudaC;
-    type PreparedScan<const N: usize> = CudaPreparedScan;
+    type PreparedScan<'op, const N: usize>
+        = CudaPreparedScan<'op, T>
+    where
+        T: 'op;
 
-    fn prepare_scan_axis<Op, const N: usize>(
+    fn prepare_scan_axis<'op, Op, const N: usize>(
         &self,
         device: &CudaDevice,
-        input: StridedView<'_, CudaBuffer<T>, N>,
+        input: StridedView<'op, CudaBuffer<T>, N>,
         axis: usize,
         direction: ScanDirection,
-        output: StridedView<'_, CudaBuffer<T>, N>,
-    ) -> Result<Self::PreparedScan<N>>
+        output: StridedView<'op, CudaBuffer<T>, N>,
+    ) -> Result<Self::PreparedScan<'op, N>>
     where
         Op: CombineExpr<Self::Dialect>,
         T: OpIdentity<Op> + IdentityToken<Op, Self::Dialect>,
@@ -56,7 +65,7 @@ where
             [output.layout.strides[0], output.layout.strides[1]],
             output.layout.offset,
         );
-        scan_axis_into::<Op, T>(
+        let plan = plan_scan_launch::<Op, T>(
             device,
             StridedOperand {
                 buffer: input.buffer,
@@ -70,14 +79,21 @@ where
             },
             BlockWidth::DEFAULT,
         )?;
-        Ok(CudaPreparedScan)
+        Ok(CudaPreparedScan {
+            input: input.buffer,
+            output: output.buffer,
+            plan,
+        })
     }
 
     fn dispatch_scan<const N: usize>(
         &self,
-        _device: &CudaDevice,
-        _prepared: &Self::PreparedScan<N>,
+        device: &CudaDevice,
+        prepared: &Self::PreparedScan<'_, N>,
     ) -> Result<()> {
-        Ok(())
+        let Some(plan) = &prepared.plan else {
+            return Ok(());
+        };
+        launch_planned_scan(device, plan, prepared.input.raw(), prepared.output.raw())
     }
 }
