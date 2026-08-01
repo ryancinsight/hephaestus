@@ -10,28 +10,39 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-PREPARED-L2-OVERWRITE-1 [patch] [perf] — in-progress
+## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — in-progress
 
 - Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and
   ROCm prepared L2 result allocation, existing prepared-map value contracts,
   and synchronized PM evidence.
-- Outcome: allocate every non-empty prepared L2 scalar result through the
-  overwrite-before-read seam so preparation performs no redundant device
-  initialization before the square-root kernel assigns the result.
+- Outcome: preserve defined CUDA/ROCm prepared-L2 output across the public
+  pre-dispatch and failed-dispatch lifecycle, strengthen successful-dispatch
+  overwrite coverage, and correct the stale overwrite-performance claim.
 - Non-goals: map/reduction arithmetic, empty identities, plan capacities,
   WGPU/Metal platform allocation, active attention/parameterized-unary/stateful
   update scopes, or runtime claims without matched hardware measurements.
 - Acceptance: both public strided and internal dense CUDA/ROCm preparation
-  paths use uninitialized scalar storage; the unary kernel assigns the sole
-  element on every successful dispatch; repeated-input, strided, empty, and
-  exact-value contracts remain green; warning-denied provider gates and exact
-  head CUDA, ROCm, WGPU, and macOS Metal CI pass.
-- Risk/change class: `[patch]` internal allocation policy. CUDA and ROCm omit
-  one scalar initialization transfer per prepared L2 plan; allocation count,
-  peak memory, arithmetic, and public ownership remain unchanged.
-- Status: claimed 2026-08-01. Physical CUDA baseline contract passes 1/1 at
-  `88b5ac3`; the four zeroed allocations postdate the prior map-reduction
-  overwrite slice and contradict its retained changelog claim.
+  paths retain zeroed scalar storage while the unary kernel demonstrably
+  assigns the sole element on every successful dispatch; repeated-input,
+  strided, empty, and exact-value contracts remain green; warning-denied
+  provider gates and exact-head CUDA, ROCm, WGPU, and macOS Metal CI pass.
+- Risk/change class: `[patch]` correctness and evidence repair. The rejected
+  uninitialized allocation would expose undefined contents through `output()`
+  before first dispatch or after failure. Allocation count, peak memory,
+  arithmetic, and public ownership remain unchanged; no performance gain is
+  claimed.
+- Status: implementation and focused local gates complete 2026-08-01.
+  Physical CUDA baseline and post-edit contracts pass 1/1, including `NaN`
+  poisoning before first and repeated dispatch; adapterless ROCm compiles and
+  passes its typed-unavailable contract. Formatting, feature-enabled CUDA and
+  adapterless ROCm warning-denied Clippy, and no-default all-target checks pass.
+  Independent review rejected the proposed uninitialized allocation because
+  `output()` is public before first dispatch and remains accessible after a
+  failed dispatch. The implementation therefore retains all four defined
+  allocations, keeps the stronger successful-overwrite contracts, and corrects
+  the changelog boundary. Independent re-review approves the corrected
+  lifecycle, tests, and evidence claims. Exact-head backend CI remains the
+  merge gate.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 
