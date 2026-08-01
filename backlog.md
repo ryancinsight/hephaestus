@@ -10,6 +10,29 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
+## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-owned-download`; scope: the
+  `ComputeDevice` owned-download seam, shared transfer conformance, optimized
+  CUDA/ROCm implementations, and CUDA/ROCm `pinv`/`matexp` consumers.
+- Outcome: let a provider allocate device-to-host results so CUDA and ROCm do
+  not zero-fill host vectors immediately before a synchronous full overwrite.
+- Non-goals: transfer arithmetic, device staging-pool policy, WGPU/Metal
+  zero-fill removal, native GPU implementations of host-delegated matrix
+  functions, active attention/parameterized-unary/stateful scopes, or runtime
+  and peak-memory claims without controlled measurements.
+- Acceptance: `download_owned` is default-compatible for external backends,
+  bitwise-preserving and empty-safe across shared conformance; CUDA/ROCm publish
+  no partially initialized vector on failure and their four matrix-function
+  downloads use the provider-owned result directly; focused value contracts,
+  feature-off stubs, warning-denied gates, and exact-head backend CI pass.
+- Risk/change class: `[minor]` additive open-trait API and `[perf]` removal of
+  four redundant host initialization writes. Unsafe length publication is
+  confined to synchronous CUDA/ROCm transfers after every byte is written.
+- Status: claimed 2026-08-01. WGPU pre-edit pseudoinverse/exponential baseline
+  passes 8/8; CUDA/ROCm baseline collection is in progress against the shared
+  build cache.
+
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and

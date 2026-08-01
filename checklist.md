@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-OWNED-DOWNLOAD-1 [minor] [perf]
+
+- [ ] Add a default-compatible, bitwise-preserving owned-download seam.
+- [ ] Implement failure-atomic CUDA and ROCm uninitialized host ownership.
+- [ ] Cut CUDA/ROCm pseudoinverse and matrix exponential to the owned result.
+- [ ] Preserve empty, invalid, differential, and closed-form value contracts.
+- [ ] Pass feature-off, warning-denied, focused Nextest, and exact-head CI.
+- [ ] Record independent unsafe-contract and evidence review before merge.
+
+Implementation owner: Codex on `codex/hephaestus-owned-download`. Claimed files
+are the core device seam, shared transfer conformance, CUDA/ROCm device and
+`pinv`/`matexp` modules and contracts, plus `CHANGELOG.md`, `backlog.md`,
+`gap_audit.md`, and this section. WGPU pipeline/prepared files and active
+attention/parameterized-unary/stateful scopes are excluded.
+
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch]
 
 - [x] Prove each successful dispatch wholly overwrites poisoned prior output
