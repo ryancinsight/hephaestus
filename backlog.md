@@ -4,7 +4,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — in-progress
+## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-matpow-device-identity`; scope: WGPU,
   CUDA, and ROCm matrix-power identity initialization, shared value contracts,
@@ -34,6 +34,25 @@ cuda-oxide + cutile).
   `30678625035` at `d36a992`.
 - Status: done 2026-07-31; final docs-only closeout-head CI remains the merge
   gate for PR #169.
+
+## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf] — in-progress
+
+- Outcome: initialize native ROCm column-pivoted QR's `Q` identity and
+  permutation plus complete-pivoted LU's row/column permutations directly in
+  device storage through their existing validation dispatches.
+- Scope: ROCm `decomposition/{col_piv_qr,full_piv_lu}.rs`, focused native
+  decomposition contracts, and synchronized PM/release records. WGPU/CUDA
+  host-backed decomposition replacement and algorithm changes are non-goals.
+- Acceptance: every uninitialized output element is assigned before the first
+  factorization step; pivoted values, permutations, rank, empty behavior, and
+  non-finite rejection remain exact; no extra initialization kernel launch is
+  added; warning-denied focused gates and exact-head ROCm/Metal CI pass.
+- Risk/change class: `[patch]` internal initialization placement. QR host peak
+  identity storage and transfer volume fall from `O(rows²)` to `O(1)`;
+  permutation host storage and transfer fall from `O(n)` to `O(1)`. Device
+  allocation and decomposition arithmetic are unchanged.
+- Status: claimed 2026-07-31 by Codex on
+  `codex/hephaestus-rocm-pivot-device-init`; implementation and evidence open.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
