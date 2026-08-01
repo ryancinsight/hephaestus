@@ -129,11 +129,29 @@ struct ColPivQrMeta {
 
 extern "C" __global__ void col_piv_qr_validate(
     const float* matrix,
+    float* q,
+    unsigned int* permutation,
+    float* heads,
+    float* betas,
     unsigned int* status,
+    unsigned int* rank,
+    float* threshold,
     ColPivQrMeta meta
 ) {
     unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int elements = meta.rows * meta.cols;
+    unsigned int q_elements = meta.rows * meta.rows;
+    if (index < q_elements) {
+        unsigned int row = index / meta.rows;
+        unsigned int column = index % meta.rows;
+        q[index] = row == column ? 1.0f : 0.0f;
+    }
+    if (index < meta.cols) {
+        permutation[index] = index;
+    }
+    if (index == 0u) {
+        rank[0] = meta.pivots;
+    }
     if (index < elements && !isfinite(matrix[index])) {
         atomicExch(status, 1u);
     }
@@ -395,23 +413,12 @@ pub fn col_piv_qr(
         },
         WIDTH,
     )?;
-    let mut q_host = vec![0.0_f32; q_elements];
-    for index in 0..rows {
-        q_host[index * rows + index] = 1.0;
-    }
-    let q = device.upload(&q_host)?;
-    let identity: Vec<u32> = (0..cols)
-        .map(|index| {
-            u32::try_from(index).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("column-pivoted QR index {index} exceeds HIP range"),
-            })
-        })
-        .collect::<Result<_>>()?;
-    let permutation = device.upload(&identity)?;
+    let q = device.alloc_uninitialized::<f32>(q_elements)?;
+    let permutation = device.alloc_uninitialized::<u32>(cols)?;
     let heads = device.alloc_zeroed::<f32>(rows.min(cols))?;
     let betas = device.alloc_zeroed::<f32>(rows.min(cols))?;
     let status = device.alloc_zeroed::<u32>(1)?;
-    let rank = device.upload(&[pivots_u32])?;
+    let rank = device.alloc_uninitialized::<u32>(1)?;
     let threshold = device.alloc_zeroed::<f32>(1)?;
     launch_stage(
         device,
@@ -430,7 +437,7 @@ pub fn col_piv_qr(
             pivots: pivots_u32,
             k: 0,
         },
-        elements,
+        elements.max(q_elements).max(cols),
     )?;
     for k in 0..rows.min(cols) {
         let k_u32 = u32::try_from(k).map_err(|_| HephaestusError::DispatchFailed {
@@ -513,10 +520,15 @@ mod tests {
     #[test]
     fn source_contains_column_pivot_stages() {
         let source = kernel_source();
-        assert!(source.contains("col_piv_qr_validate"));
+        assert!(source.contains(
+            "col_piv_qr_validate(\n    const float* matrix,\n    float* q,\n    unsigned int* permutation,\n    float* heads,\n    float* betas,\n    unsigned int* status,\n    unsigned int* rank,\n    float* threshold,\n    ColPivQrMeta meta"
+        ));
         assert!(source.contains("col_piv_qr_step"));
         assert!(source.contains("pivot_norm_sq"));
         assert!(source.contains("permutation[k]"));
         assert!(source.contains("Q H"));
+        assert!(source.contains("q[index] = row == column ? 1.0f : 0.0f"));
+        assert!(source.contains("permutation[index] = index"));
+        assert!(source.contains("rank[0] = meta.pivots"));
     }
 }

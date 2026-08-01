@@ -15,6 +15,16 @@ Claimed files are WGPU, CUDA, and ROCm matrix-power identity initialization and
 contracts, `CHANGELOG.md`, `backlog.md`, `gap_audit.md`, and this section. Metal
 inherits the WGPU implementation and remains a native macOS CI gate.
 
+## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf]
+
+- [x] Extend existing validation dispatches to initialize device outputs.
+- [x] Preserve exact pivoted QR/LU values, permutations, rank, and failures.
+- [x] Prove every uninitialized output is assigned before decomposition steps.
+- [x] Pass warning-denied focused gates and exact implementation-head CI.
+
+Implementation owner: Codex on
+`codex/hephaestus-rocm-pivot-device-init`.
+
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf]
 
 - [x] Prove the delegated WGPU kernel assigns every validated ray output.

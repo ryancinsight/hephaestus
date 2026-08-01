@@ -144,11 +144,22 @@ struct FullPivLuMeta {
 
 extern "C" __global__ void full_piv_lu_validate(
     const float* matrix,
+    unsigned int* row_perm,
+    unsigned int* col_perm,
     unsigned int* status,
+    unsigned int* rank,
+    float* threshold,
     FullPivLuMeta meta
 ) {
     unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int elements = meta.n * meta.n;
+    if (index < meta.n) {
+        row_perm[index] = index;
+        col_perm[index] = index;
+    }
+    if (index == 0u) {
+        rank[0] = meta.n;
+    }
     if (index < elements && !isfinite(matrix[index])) {
         atomicExch(status, 1u);
     }
@@ -367,17 +378,10 @@ fn factor_on_device(
         )?;
     }
 
-    let identity: Vec<u32> = (0..n)
-        .map(|index| {
-            u32::try_from(index).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("complete-pivoted LU index {index} exceeds HIP range"),
-            })
-        })
-        .collect::<Result<_>>()?;
-    let row_perm = device.upload(&identity)?;
-    let col_perm = device.upload(&identity)?;
+    let row_perm = device.alloc_uninitialized::<u32>(n)?;
+    let col_perm = device.alloc_uninitialized::<u32>(n)?;
     let status = device.alloc_zeroed::<u32>(1)?;
-    let rank = device.upload(&[n_u32])?;
+    let rank = device.alloc_uninitialized::<u32>(1)?;
     let threshold = device.alloc_zeroed::<f32>(1)?;
     launch_stage(
         device,
@@ -483,10 +487,15 @@ mod tests {
     #[test]
     fn source_contains_complete_pivot_stages() {
         let source = kernel_source();
-        assert!(source.contains("full_piv_lu_validate"));
+        assert!(source.contains(
+            "full_piv_lu_validate(\n    const float* matrix,\n    unsigned int* row_perm,\n    unsigned int* col_perm,\n    unsigned int* status,\n    unsigned int* rank,\n    float* threshold,\n    FullPivLuMeta meta"
+        ));
         assert!(source.contains("full_piv_lu_step"));
         assert!(source.contains("pivot_row"));
         assert!(source.contains("pivot_col"));
         assert!(source.contains("threshold[0]"));
+        assert!(source.contains("row_perm[index] = index"));
+        assert!(source.contains("col_perm[index] = index"));
+        assert!(source.contains("rank[0] = meta.n"));
     }
 }

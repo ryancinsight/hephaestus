@@ -230,6 +230,16 @@ No open feature-combination defect is currently recorded in the backend scope.
 
 ## Resolved
 
+- [patch] ROCm pivoted-decomposition host identity initialization (audit
+  2026-07-31). Native column-pivoted QR built and uploaded an `O(rows²)` host
+  `Q` identity plus an `O(cols)` permutation, while complete-pivoted LU built
+  and uploaded two `O(n)` permutations. Their existing validation dispatches
+  now fully assign those device buffers and initial rank before any
+  factorization step, without an extra launch. The validation signatures also
+  match the complete host argument arrays. Evidence tier: source ABI/full-write
+  contracts plus existing pivoted value/permutation/rank/non-finite contracts;
+  no runtime claim without matched hardware measurements.
+
 - [patch] Matrix-power host identity construction (audit 2026-07-31). WGPU,
   CUDA, and ROCm built an `n²` host vector and uploaded it before every power,
   including exponent zero; Metal inherited WGPU. Each provider now allocates
