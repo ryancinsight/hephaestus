@@ -28,11 +28,14 @@ cuda-oxide + cutile).
   backend; warning-denied focused gates and exact-head provider CI pass.
 - Risk/change class: `[minor] [arch]`; additive public provider seam. Coeus's
   later fallible cutover is a separate breaking consumer increment.
-- Status: in-progress 2026-08-01. Core planner and all four provider dispatch
+- Status: done 2026-08-01. Core planner and all four provider dispatch
   implementations pass warning-denied focused gates. Direct Leto differential
   conformance passes on physical WGPU and CUDA devices; ROCm's adapterless
-  contract passes. Independent review and exact-head CI remain; the Coeus
-  consumer cutover is the next separate increment.
+  contract passes. Independent source review approves the provider ownership,
+  Metal substrate boundary, and pre-mutation validation. Implementation head
+  `fc0605c` passes WGPU `30713623614`, CUDA `30713623627`, ROCm `30713623615`,
+  and native macOS Metal `30713623612`; the docs-only closeout head must pass
+  the same matrix before merge. The Coeus consumer cutover is the next item.
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and

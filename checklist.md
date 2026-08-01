@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
 - [x] Replace the initial analytical contract oracle with direct Leto
       differential execution and complete adversarial conformance.
-- [ ] Pass focused warning-denied gates, independent review, and exact-head CI.
+- [x] Pass focused warning-denied gates, independent review, and exact-head CI.
 
 Implementation owner: Codex on `codex/hephaestus-stateful-update`. Claimed
 files are ADR 0045; the core stateful-update domain; provider stateful-update
@@ -20,7 +20,11 @@ adapter and physical CUDA device, plus ROCm's adapterless export contract. The
 suite covers repeated updates for all five rules, scalar and rank-eight empty
 layouts, strided storage with sentinels, shape and alias failure atomicity, and
 foreign-device rejection before mutation. Warning-denied focused Clippy and
-the core 83/83 Nextest lane pass; independent review and exact-head CI remain.
+the core 83/83 Nextest lane pass. Independent source review approves the
+provider ownership and pre-mutation validation boundary. Implementation head
+`fc0605c` passes WGPU `30713623614`, CUDA `30713623627`, ROCm `30713623615`,
+and native macOS Metal `30713623612`; the docs-only closeout head must pass the
+same matrix before merge.
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch]
 
 - [x] Prove each successful dispatch wholly overwrites poisoned prior output
