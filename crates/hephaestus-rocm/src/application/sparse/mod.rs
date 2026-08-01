@@ -1,6 +1,8 @@
 //! GPU-resident Compressed Sparse Row (CSR) matrices and HIP dispatch.
 
 mod prepared;
+/// Device-neutral sparse operator seam implementation.
+pub mod seam;
 mod spmm;
 mod spmv;
 

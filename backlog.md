@@ -1,5 +1,11 @@
 # Backlog — hephaestus
 
+- Composition note (2026-07-31 late, session-2026-07-30-board-ssot): the
+  sparse-seam commit on this lane also carries the rocm-pivot frontier's
+  in-flight snapshot (board files + wgpu linalg identity-contract work) —
+  an over-broad `git add -A` from the shared tree. Nothing altered or
+  lost; the sparse-seam content is disjoint.
+
 Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
@@ -35,7 +41,7 @@ cuda-oxide + cutile).
 - Status: done 2026-07-31; final docs-only closeout-head CI remains the merge
   gate for PR #169.
 
-## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf] — in-progress
+## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf] — done
 
 - Outcome: initialize native ROCm column-pivoted QR's `Q` identity and
   permutation plus complete-pivoted LU's row/column permutations directly in
@@ -56,12 +62,43 @@ cuda-oxide + cutile).
   Nextest executes 2/2 source contracts; 4 device-value contracts compile and
   adapterless-skip pending hosted ROCm execution. ROCm all-target check,
   scope-local warning-denied Clippy, doctests, and Rustdoc pass.
-- Status: implementation and focused local gates complete 2026-07-31 on
-  `codex/hephaestus-rocm-pivot-device-init`; independent review approves the
-  ABI/full-write design. Shared implementation head `dffefa0` passes CUDA run
-  `30679817477`, ROCm run `30679817473`, WGPU run `30679817471`, and macOS
-  Metal run `30679817479`; final docs-only closeout-head CI remains PR #170's
-  merge gate.
+- Status: done 2026-07-31. Delivered by PR #170, merge commit `548c181`.
+  Exact closeout head `015d82e` passes CUDA run `30680144377`, ROCm run
+  `30680144380`, WGPU run `30680144391`, and macOS Metal run `30680144423`.
+
+## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-identity-uniform-pack`; scope: WGPU matrix
+  identity dispatch metadata, inherited Metal behavior, focused matrix-power
+  contracts, and synchronized PM evidence.
+- Outcome: place trait-defined additive and multiplicative identity values in
+  one pooled allocation with separately aligned ranges so each non-empty
+  identity dispatch acquires two uniform buffers rather than three.
+- Non-goals: matrix-power arithmetic, kernel launch count, output allocation,
+  scalar identity semantics, CUDA/ROCm launch ABIs, or unmeasured runtime
+  claims.
+- Acceptance: custom nonstandard scalar identities, admitted vector token
+  layouts, and built-in integer/float identities remain exact; empty and
+  non-square behavior is unchanged; zero and one ranges satisfy device uniform
+  offset alignment without host padding allocation; warning-denied WGPU gates
+  and exact-head WGPU/macOS Metal CI pass.
+- Risk/change class: `[patch]` internal uniform pooling. Per-dispatch uniform
+  acquisitions fall from three to two by construction; queue writes, bindings,
+  output storage, and peak matrix memory are unchanged.
+- Evidence: shader source contracts preserve separate typed identity bindings
+  for scalar and vector tokens, while the buffer-layout contract pins a
+  device-aligned second range for three-lane values. Local WGPU execution passes
+  the nonstandard-identity,
+  built-in exponent-zero, empty, odd-power, strided, and non-square matrix-power
+  contracts. Formatting, all-target check, warning-denied Clippy, doctests, and
+  Rustdoc pass offline. The Atlas development overlay changes the unused-patch
+  lock set, so local `--locked` commands stop before compilation; exact-head
+  hosted CI remains the clean-lock evidence.
+- Status: implementation and focused local gates complete 2026-07-31.
+  Independent review approves the general scalar/vector layout and evidence
+  boundary. Exact implementation head `106a475` passes CUDA run `30682144677`,
+  ROCm run `30682144681`, WGPU run `30682144674`, and macOS Metal run
+  `30682144672`; final docs-only closeout-head CI remains PR #171's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

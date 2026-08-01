@@ -3391,3 +3391,15 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 - [x] Record the unchanged command-submission baseline.
 - [x] Return before encoder allocation when a batch has no GPU work.
 - [x] Record the matched result and run affected gates.
+## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf]
+
+- [x] Claim WGPU matrix-identity uniform packing without touching live sparse,
+      attention, or parameterized-unary scopes.
+- [x] Pin separate typed shader bindings and retain custom-identity value
+      coverage.
+- [x] Place zero/one identity values in separately aligned ranges of one pooled
+      uniform allocation.
+- [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
+      doctests, and Rustdoc.
+- [x] Record exact implementation-head CUDA, ROCm, WGPU, and macOS Metal CI
+      evidence; require the docs-only closeout-head matrix before merge.

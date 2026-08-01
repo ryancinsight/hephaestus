@@ -17,6 +17,9 @@ use crate::application::strided::{
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
+#[cfg(test)]
+mod identity_contract;
+
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
 pub trait MatmulZero: DialectScalar<Wgsl> {
     /// The WGSL zero literal (e.g. `"0.0"`, `"0u"`, `"0"`).
@@ -951,6 +954,27 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     )
 }
 
+fn identity_buffer_layout<T: Pod>(alignment: u64) -> Result<(u64, u64)> {
+    let value_size = WgpuDevice::byte_size::<T>(1)?;
+    let one_offset = value_size
+        .checked_add(alignment - 1)
+        .map(|bytes| (bytes / alignment) * alignment)
+        .ok_or_else(|| HephaestusError::AllocationFailed {
+            message: format!(
+                "identity uniform byte size {value_size} cannot be aligned to {alignment} bytes"
+            ),
+        })?;
+    let buffer_size =
+        one_offset
+            .checked_add(value_size)
+            .ok_or_else(|| HephaestusError::AllocationFailed {
+                message: format!(
+                    "identity uniform byte size {value_size} at offset {one_offset} overflows u64"
+                ),
+            })?;
+    Ok((one_offset, buffer_size))
+}
+
 fn device_identity<T>(device: &WgpuDevice, layout: &Layout<2>) -> Result<WgpuBuffer<T>>
 where
     T: MatrixIdentityScalar,
@@ -963,19 +987,21 @@ where
     let metadata = map_layout(layout)?;
     let raw_layout = device.get_uniform_buffer(WgpuDevice::byte_size::<GpuMatrixLayout>(1)?)?;
     let layout_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_layout);
-    let raw_zero = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let raw_one = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let zero_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_zero);
-    let one_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_one);
+    let identity_value_size = WgpuDevice::byte_size::<T>(1)?;
+    let identity_alignment = u64::from(device.limits().min_uniform_buffer_offset_alignment)
+        .max(wgpu::COPY_BUFFER_ALIGNMENT);
+    let (one_offset, identity_buffer_size) = identity_buffer_layout::<T>(identity_alignment)?;
+    let raw_identity = device.get_uniform_buffer(identity_buffer_size)?;
+    let identity_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_identity);
     device
         .queue()
         .write_buffer(&layout_buffer, 0, bytemuck::bytes_of(&metadata));
     device
         .queue()
-        .write_buffer(&zero_buffer, 0, bytemuck::bytes_of(&T::ZERO));
+        .write_buffer(&identity_buffer, 0, bytemuck::bytes_of(&T::ZERO));
     device
         .queue()
-        .write_buffer(&one_buffer, 0, bytemuck::bytes_of(&T::ONE));
+        .write_buffer(&identity_buffer, one_offset, bytemuck::bytes_of(&T::ONE));
     let key = (TypeId::of::<IdentityKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = try_cached_pipeline(device, key, "hephaestus-matrix-identity", || {
         identity_shader_source::<T>()
@@ -996,11 +1022,19 @@ where
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: zero_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &identity_buffer,
+                        offset: 0,
+                        size: core::num::NonZeroU64::new(identity_value_size),
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: one_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &identity_buffer,
+                        offset: one_offset,
+                        size: core::num::NonZeroU64::new(identity_value_size),
+                    }),
                 },
             ],
         });
@@ -1024,8 +1058,7 @@ where
     }
     device.queue().submit(Some(encoder.finish()));
     drop(layout_buffer);
-    drop(zero_buffer);
-    drop(one_buffer);
+    drop(identity_buffer);
     Ok(output)
 }
 

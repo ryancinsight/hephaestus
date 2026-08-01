@@ -100,6 +100,7 @@ pub use application::scan::{
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
 pub use application::scan_seam::{RocmPreparedScan, RocmScanOps};
+pub use application::sparse::seam::RocmSparseOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
