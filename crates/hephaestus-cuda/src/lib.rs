@@ -90,6 +90,7 @@ pub use application::scan::{
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
 pub use application::scan_seam::{CudaPreparedScan, CudaScanOps};
+pub use application::sparse::seam::CudaSparseOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };

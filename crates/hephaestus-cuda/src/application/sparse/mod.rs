@@ -1,6 +1,8 @@
 //! GPU-resident Compressed Sparse Row (CSR) matrix representation for CUDA.
 
 mod prepared;
+/// Device-neutral sparse operator seam implementation.
+pub mod seam;
 mod spmm;
 mod spmv;
 

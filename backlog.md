@@ -35,7 +35,7 @@ cuda-oxide + cutile).
 - Status: done 2026-07-31; final docs-only closeout-head CI remains the merge
   gate for PR #169.
 
-## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf] — in-progress
+## HEPH-ROCM-PIVOT-DEVICE-INIT-1 [patch] [perf] — done
 
 - Outcome: initialize native ROCm column-pivoted QR's `Q` identity and
   permutation plus complete-pivoted LU's row/column permutations directly in
@@ -56,12 +56,29 @@ cuda-oxide + cutile).
   Nextest executes 2/2 source contracts; 4 device-value contracts compile and
   adapterless-skip pending hosted ROCm execution. ROCm all-target check,
   scope-local warning-denied Clippy, doctests, and Rustdoc pass.
-- Status: implementation and focused local gates complete 2026-07-31 on
-  `codex/hephaestus-rocm-pivot-device-init`; independent review approves the
-  ABI/full-write design. Shared implementation head `dffefa0` passes CUDA run
-  `30679817477`, ROCm run `30679817473`, WGPU run `30679817471`, and macOS
-  Metal run `30679817479`; final docs-only closeout-head CI remains PR #170's
-  merge gate.
+- Status: done 2026-07-31. Delivered by PR #170, merge commit `548c181`.
+  Exact closeout head `015d82e` passes CUDA run `30680144377`, ROCm run
+  `30680144380`, WGPU run `30680144391`, and macOS Metal run `30680144423`.
+
+## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — in-progress
+
+- Owner: Codex on `codex/hephaestus-identity-uniform-pack`; scope: WGPU matrix
+  identity dispatch metadata, inherited Metal behavior, focused matrix-power
+  contracts, and synchronized PM evidence.
+- Outcome: pack trait-defined additive and multiplicative identity values into
+  one uniform buffer so each non-empty identity dispatch acquires, writes, and
+  binds two uniform buffers rather than three.
+- Non-goals: matrix-power arithmetic, kernel launch count, output allocation,
+  scalar identity semantics, CUDA/ROCm launch ABIs, or unmeasured runtime
+  claims.
+- Acceptance: custom nonstandard scalar identities and built-in integer/float
+  identities remain exact; empty and non-square behavior is unchanged; shader
+  source exposes one packed identity binding; warning-denied WGPU gates and
+  exact-head WGPU/macOS Metal CI pass.
+- Risk/change class: `[patch]` internal metadata packing. Per-dispatch uniform
+  acquisitions and queue writes fall from three to two by construction; output
+  storage and peak matrix memory are unchanged.
+- Status: claimed 2026-07-31 before implementation.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

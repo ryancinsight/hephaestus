@@ -17,6 +17,9 @@ use crate::application::strided::{
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
+#[cfg(test)]
+mod identity_contract;
+
 /// Helper trait to substitute the correct zero literal in WGSL for different scalar types.
 pub trait MatmulZero: DialectScalar<Wgsl> {
     /// The WGSL zero literal (e.g. `"0.0"`, `"0u"`, `"0"`).
