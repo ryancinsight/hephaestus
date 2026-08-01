@@ -6,11 +6,12 @@
 //! `RocmDevice`, matching the WGPU and CUDA seam shapes.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, validate_csr};
+use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::{GpuCsrMatrix, spmv::spmv_into};
+use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
 use crate::RocmBuffer;
 use crate::RocmDevice;
+use crate::application::strided::StridedOperand;
 use hephaestus_core::DialectScalar;
 use hephaestus_core::HipC;
 
@@ -53,6 +54,28 @@ where
 
     fn shape(&self, matrix: &Self::Matrix) -> (usize, usize) {
         matrix.shape()
+    }
+
+    fn apply_batch(
+        &self,
+        device: &RocmDevice,
+        matrix: &Self::Matrix,
+        batch: StridedView<'_, RocmBuffer<T>, 2>,
+        output: &mut RocmBuffer<T>,
+    ) -> Result<()> {
+        spmm_into(
+            device,
+            matrix,
+            StridedOperand {
+                buffer: batch.buffer,
+                layout: batch.layout,
+            },
+            output,
+        )
+    }
+
+    fn nnz(&self, matrix: &Self::Matrix) -> usize {
+        matrix.nnz()
     }
 
     fn apply(

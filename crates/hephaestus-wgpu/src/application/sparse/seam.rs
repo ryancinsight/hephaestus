@@ -1,9 +1,10 @@
 //! WGPU implementation of the device-neutral sparse operator seam.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, validate_csr};
+use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::{GpuCsrMatrix, spmv::spmv_into};
+use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
+use crate::application::strided::StridedOperand;
 use crate::{MatmulZero, WgpuBuffer, WgpuDevice, Wgsl};
 use hephaestus_core::DialectScalar;
 
@@ -37,6 +38,28 @@ where
 
     fn shape(&self, matrix: &Self::Matrix) -> (usize, usize) {
         matrix.shape()
+    }
+
+    fn apply_batch(
+        &self,
+        device: &WgpuDevice,
+        matrix: &Self::Matrix,
+        batch: StridedView<'_, WgpuBuffer<T>, 2>,
+        output: &mut WgpuBuffer<T>,
+    ) -> Result<()> {
+        spmm_into(
+            device,
+            matrix,
+            &StridedOperand {
+                buffer: batch.buffer,
+                layout: batch.layout,
+            },
+            output,
+        )
+    }
+
+    fn nnz(&self, matrix: &Self::Matrix) -> usize {
+        matrix.nnz()
     }
 
     fn apply(

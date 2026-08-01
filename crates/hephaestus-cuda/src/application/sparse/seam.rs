@@ -6,9 +6,10 @@
 //! `CudaDevice`, matching the WGPU seam shape.
 
 use bytemuck::Pod;
-use hephaestus_core::{Result, SparseOperatorOps, validate_csr};
+use hephaestus_core::{Result, SparseOperatorOps, StridedView, validate_csr};
 
-use super::{GpuCsrMatrix, spmv::spmv_into};
+use super::{GpuCsrMatrix, spmm::spmm_into, spmv::spmv_into};
+use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use hephaestus_core::CudaC;
@@ -53,6 +54,28 @@ where
 
     fn shape(&self, matrix: &Self::Matrix) -> (usize, usize) {
         matrix.shape()
+    }
+
+    fn apply_batch(
+        &self,
+        device: &CudaDevice,
+        matrix: &Self::Matrix,
+        batch: StridedView<'_, CudaBuffer<T>, 2>,
+        output: &mut CudaBuffer<T>,
+    ) -> Result<()> {
+        spmm_into(
+            device,
+            matrix,
+            &StridedOperand {
+                buffer: batch.buffer,
+                layout: batch.layout,
+            },
+            output,
+        )
+    }
+
+    fn nnz(&self, matrix: &Self::Matrix) -> usize {
+        matrix.nnz()
     }
 
     fn apply(

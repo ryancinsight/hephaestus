@@ -7,7 +7,7 @@
 //! same underlying device.
 
 use bytemuck::Pod;
-use hephaestus_core::{DialectScalar, Result, SparseOperatorOps};
+use hephaestus_core::{DialectScalar, Result, SparseOperatorOps, StridedView};
 use hephaestus_wgpu::{GpuCsrMatrix, MatmulZero, WgpuDevice, WgpuSparseOps, Wgsl};
 
 use crate::infrastructure::buffer::MetalBuffer;
@@ -46,6 +46,25 @@ where
 
     fn shape(&self, matrix: &Self::Matrix) -> (usize, usize) {
         <WgpuSparseOps as SparseOperatorOps<WgpuDevice, T>>::shape(&self.inner, matrix)
+    }
+
+    fn apply_batch(
+        &self,
+        device: &MetalDevice,
+        matrix: &Self::Matrix,
+        batch: StridedView<'_, MetalBuffer<T>, 2>,
+        output: &mut MetalBuffer<T>,
+    ) -> Result<()> {
+        self.inner.apply_batch(
+            device.wgpu_device(),
+            matrix,
+            StridedView::new(&batch.buffer.inner, batch.layout),
+            &mut output.inner,
+        )
+    }
+
+    fn nnz(&self, matrix: &Self::Matrix) -> usize {
+        <WgpuSparseOps as SparseOperatorOps<WgpuDevice, T>>::nnz(&self.inner, matrix)
     }
 
     fn apply(

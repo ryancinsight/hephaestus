@@ -4,6 +4,7 @@ use bytemuck::Pod;
 
 use super::device::ComputeDevice;
 use super::error::Result;
+use super::view::StridedView;
 
 /// Backend-neutral sparse matrix-vector application.
 ///
@@ -75,6 +76,27 @@ pub trait SparseOperatorOps<D: ComputeDevice, T: Pod> {
         input: &D::Buffer<T>,
         output: &mut D::Buffer<T>,
     ) -> Result<()>;
+
+    /// Apply the operator to a dense right-hand-side batch:
+    /// `output = matrix · batch`, where `batch` is a rank-2 view whose row
+    /// count matches the matrix columns and whose columns are independent
+    /// right-hand sides. `output` is row-major `rows × batch-columns`. This
+    /// is the SpMM kernel; batched SpMV is the same dispatch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape or length mismatch against the matrix shape, an
+    /// aliased output, or the backend dispatch failure.
+    fn apply_batch(
+        &self,
+        device: &D,
+        matrix: &Self::Matrix,
+        batch: StridedView<'_, D::Buffer<T>, 2>,
+        output: &mut D::Buffer<T>,
+    ) -> Result<()>;
+
+    /// Number of explicitly stored values.
+    fn nnz(&self, matrix: &Self::Matrix) -> usize;
 }
 
 /// Validate canonical CSR structure before anything is uploaded.

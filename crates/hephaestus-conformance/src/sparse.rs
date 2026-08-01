@@ -8,7 +8,8 @@
 //! documented CSR invariant, and a rejected upload or apply must leave
 //! nothing partially mutated.
 
-use hephaestus_core::{ComputeDevice, SparseOperatorOps};
+use hephaestus_core::{ComputeDevice, SparseOperatorOps, StridedView};
+use leto::Layout;
 
 /// The 3x3 fixture's CSR parts.
 fn fixture() -> (Vec<f32>, Vec<usize>, Vec<usize>) {
@@ -59,6 +60,59 @@ where
         got,
         [5.0, 0.0, 13.0],
         "{name}: SpMV must read current input contents"
+    );
+
+    // The stored explicit-value count is the fixture's five nonzeros.
+    assert_eq!(ops.nnz(&matrix), 5, "{name}: nnz");
+
+    // Exact SpMM against a dense 3x2 batch B = [[1,2],[2,0],[3,1]]:
+    // A·B = [[5,5],[6,0],[19,13]] row-major.
+    let batch = device
+        .upload(&[1.0f32, 2.0, 2.0, 0.0, 3.0, 1.0])
+        .expect("batch upload");
+    let batch_layout = Layout::c_contiguous([3, 2]).expect("batch layout");
+    let mut product = device.alloc_zeroed::<f32>(6).expect("product alloc");
+    ops.apply_batch(
+        device,
+        &matrix,
+        StridedView::new(&batch, &batch_layout),
+        &mut product,
+    )
+    .expect("spmm");
+    let mut got_product = [0.0f32; 6];
+    device
+        .download(&product, &mut got_product)
+        .expect("product download");
+    assert_eq!(
+        got_product,
+        [5.0, 5.0, 6.0, 0.0, 19.0, 13.0],
+        "{name}: exact SpMM over a dense batch"
+    );
+
+    // A batch whose row count disagrees with the matrix columns is
+    // rejected before any output element is written.
+    let bad_layout = Layout::c_contiguous([2, 3]).expect("bad batch layout");
+    let sentinel = device
+        .upload(&[7.0f32, 7.0, 7.0, 7.0, 7.0, 7.0])
+        .expect("sentinel upload");
+    let mut sentinel_out = sentinel;
+    assert!(
+        ops.apply_batch(
+            device,
+            &matrix,
+            StridedView::new(&batch, &bad_layout),
+            &mut sentinel_out,
+        )
+        .is_err(),
+        "{name}: SpMM must reject a batch with mismatched rows"
+    );
+    let mut got_sentinel = [0.0f32; 6];
+    device
+        .download(&sentinel_out, &mut got_sentinel)
+        .expect("sentinel download");
+    assert_eq!(
+        got_sentinel, [7.0; 6],
+        "{name}: rejected SpMM must not mutate the output"
     );
 
     // Structural rejections: each documented CSR invariant, none mutating.
