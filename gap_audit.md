@@ -29,8 +29,12 @@ architectural decision or a tracked future-work item:
   Rustdoc reports a pre-existing broken `StencilOps` link in peer-owned stencil
   scope. No runtime gain is claimed without controlled measurements.
 - Status: implementation complete and independently approved 2026-08-01 after
-  excluding generated Atlas overlay lockfile reordering. Exact-head backend CI
-  remains the merge gate.
+  excluding generated Atlas overlay lockfile reordering. Initial exact-head
+  WGPU and Metal CI exposed inconsistent no-default-feature decomposition seam
+  gating inherited from base head `98e9e3e`; the independently approved
+  owner-level module and re-export gates are fixed and both exact local
+  no-default-feature checks pass. Refreshed exact-head backend CI remains the
+  merge gate.
 
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 

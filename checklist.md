@@ -3414,5 +3414,7 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       arithmetic or strided behavior.
 - [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
       doctests, and Rustdoc.
-- [x] Record independent review; require exact-head CUDA, ROCm, WGPU, and macOS
-      Metal CI evidence before merge.
+- [x] Diagnose initial WGPU/Metal CI failures and restore no-default-feature
+      decomposition seam gating in both backends.
+- [x] Record independent blocker-fix review; require exact-head CUDA, ROCm,
+      WGPU, and macOS Metal CI evidence before merge.
