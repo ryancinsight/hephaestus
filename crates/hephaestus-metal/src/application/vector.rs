@@ -190,6 +190,14 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
         })
     }
 
+    fn norm_l1(&self, device: &MetalDevice, vector: &MetalBuffer<f32>) -> Result<f32> {
+        self.inner.norm_l1(device.wgpu_device(), &vector.inner)
+    }
+
+    fn norm_max(&self, device: &MetalDevice, vector: &MetalBuffer<f32>) -> Result<f32> {
+        self.inner.norm_max(device.wgpu_device(), &vector.inner)
+    }
+
     fn norm_l2_prepared<'a>(
         &self,
         device: &MetalDevice,

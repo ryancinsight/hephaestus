@@ -232,6 +232,20 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
         let prepared = self.prepare_norm_l2(device, vector)?;
         self.norm_l2_prepared(device, &prepared, vector)
     }
+
+    /// Compute a one-shot L1 norm `Σ|xᵢ|`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend dispatch failure.
+    fn norm_l1(&self, device: &D, vector: &D::Buffer<T>) -> Result<T>;
+
+    /// Compute a one-shot max norm `maxᵢ|xᵢ|`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend dispatch failure.
+    fn norm_max(&self, device: &D, vector: &D::Buffer<T>) -> Result<T>;
 }
 
 /// Reduction resources a consumer can **retain** across iterations.

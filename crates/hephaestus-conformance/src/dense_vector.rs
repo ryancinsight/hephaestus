@@ -151,6 +151,16 @@ where
     let v = device
         .upload(&[2.0f32, 3.0, 6.0, 0.0])
         .expect("norm vector");
+    assert_eq!(
+        ops.norm_l1(device, &v).expect("norm_l1"),
+        11.0,
+        "{name}: L1 norm of the quadruple is the exact integer sum of magnitudes"
+    );
+    assert_eq!(
+        ops.norm_max(device, &v).expect("norm_max"),
+        6.0,
+        "{name}: max norm of the quadruple is its largest magnitude"
+    );
     let prepared = ops.prepare_norm_l2(device, &v).expect("prepare norm");
     assert_one_ulp(
         ops.norm_l2_prepared(device, &prepared, &v).expect("norm"),

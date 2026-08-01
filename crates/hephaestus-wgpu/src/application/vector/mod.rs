@@ -308,6 +308,38 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         })
     }
 
+    fn norm_l1(&self, device: &WgpuDevice, vector: &WgpuBuffer<f32>) -> Result<f32> {
+        let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!("norm operand layout rejected: {error}"),
+            }
+        })?;
+        let result = crate::application::linalg::norm_l1::<f32, 1>(
+            device,
+            crate::application::strided::StridedOperand {
+                buffer: vector,
+                layout: &layout,
+            },
+        )?;
+        Self::download_scalar(device, &result)
+    }
+
+    fn norm_max(&self, device: &WgpuDevice, vector: &WgpuBuffer<f32>) -> Result<f32> {
+        let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!("norm operand layout rejected: {error}"),
+            }
+        })?;
+        let result = crate::application::linalg::norm_max::<f32, 1>(
+            device,
+            crate::application::strided::StridedOperand {
+                buffer: vector,
+                layout: &layout,
+            },
+        )?;
+        Self::download_scalar(device, &result)
+    }
+
     fn norm_l2_prepared<'a>(
         &self,
         device: &WgpuDevice,

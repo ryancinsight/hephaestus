@@ -144,6 +144,32 @@ where
         "{name}: transposed full product"
     );
 
+    // A diagonal-strided rank-1 view sums to the trace: uploading the 3x3
+    // matrix [[1..3],[4..6],[7..9]] and reducing the stride-4 diagonal view
+    // yields 1 + 5 + 9 = 15 exactly. This is the kernel-level path the
+    // backend `trace` conveniences take (square check and diagonal-view
+    // construction are host-side arithmetic above the same reduction).
+    let square = device
+        .upload(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+        .expect("square upload");
+    let diagonal = Layout::new([3], [4], 0);
+    let trace_out = device.alloc_zeroed::<f32>(1).expect("trace output");
+    let scalar_layout = Layout::c_contiguous([1]).expect("scalar layout");
+    ops.reduce_full_into::<SumOp, 1>(
+        device,
+        StridedView::new(&square, &diagonal),
+        StridedView::new(&trace_out, &scalar_layout),
+    )
+    .expect("diagonal reduction");
+    let mut got_trace = [0.0f32; 1];
+    device
+        .download(&trace_out, &mut got_trace)
+        .expect("trace download");
+    assert_eq!(
+        got_trace[0], 15.0,
+        "{name}: diagonal-strided view must sum to the trace"
+    );
+
     // A prepared reduction may be re-dispatched, and holds its operand
     // bindings rather than a snapshot: after the input is rewritten to all
     // twos, the product becomes 2^12 = 4096, still exact.

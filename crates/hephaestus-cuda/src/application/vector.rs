@@ -332,6 +332,38 @@ impl DenseVectorOps<CudaDevice, f32> for CudaVectorOps {
         prepare_dense_norm_l2(device, vector)
     }
 
+    fn norm_l1(&self, device: &CudaDevice, vector: &CudaBuffer<f32>) -> Result<f32> {
+        let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!("norm operand layout rejected: {error}"),
+            }
+        })?;
+        let result = crate::application::linalg::norm_l1::<f32, 1>(
+            device,
+            crate::application::strided::StridedOperand {
+                buffer: vector,
+                layout: &layout,
+            },
+        )?;
+        Self::scalar(device, &result)
+    }
+
+    fn norm_max(&self, device: &CudaDevice, vector: &CudaBuffer<f32>) -> Result<f32> {
+        let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!("norm operand layout rejected: {error}"),
+            }
+        })?;
+        let result = crate::application::linalg::norm_max::<f32, 1>(
+            device,
+            crate::application::strided::StridedOperand {
+                buffer: vector,
+                layout: &layout,
+            },
+        )?;
+        Self::scalar(device, &result)
+    }
+
     fn norm_l2_prepared<'a>(
         &self,
         device: &CudaDevice,
