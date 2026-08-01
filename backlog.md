@@ -10,7 +10,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — in-progress
+## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 
 - Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and
   ROCm prepared L2 result allocation, existing prepared-map value contracts,
@@ -41,8 +41,12 @@ cuda-oxide + cutile).
   failed dispatch. The implementation therefore retains all four defined
   allocations, keeps the stronger successful-overwrite contracts, and corrects
   the changelog boundary. Independent re-review approves the corrected
-  lifecycle, tests, and evidence claims. Exact-head backend CI remains the
-  merge gate.
+  lifecycle, tests, and evidence claims. Implementation head `998f521` passes
+  CUDA run `30710893281`, ROCm run `30710893299`, WGPU run `30710893294`, and
+  macOS Metal run `30710893263`; hardware-only NVIDIA and AMD jobs skip because
+  no runner was dispatched. The external `recurseml/analysis` integration
+  reports its generic service error and is not provider evidence. Final
+  docs-only closeout-head CI remains PR #173's merge gate.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 

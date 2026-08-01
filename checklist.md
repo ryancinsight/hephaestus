@@ -11,7 +11,8 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Preserve repeated-input, strided, empty, and exact-value contracts.
 - [x] Pass focused formatting, warning-denied diagnostics, and Nextest gates.
 - [x] Record independent review of the prepared-output lifecycle and evidence.
-- [ ] Require exact-head backend CI before merge.
+- [x] Record exact implementation-head backend CI and require the final
+      docs-only closeout-head matrix before merge.
 
 Implementation owner: Codex on `codex/hephaestus-prepared-l2-overwrite`.
 Claimed files are CUDA/ROCm prepared map-reduction contracts, `CHANGELOG.md`,

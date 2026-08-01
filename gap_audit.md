@@ -29,8 +29,13 @@ architectural decision or a tracked future-work item:
   typed unavailable-device path. Formatting, warning-denied provider Clippy,
   and no-default all-target checks pass locally.
 - Residual: local physical ROCm execution is unavailable on this Windows host;
-  hosted ROCm and the exact-head CUDA/WGPU/macOS-Metal matrix remain required.
-  No allocation, peak-memory, transfer, or runtime improvement is claimed.
+  no physical ROCm execution is claimed. Implementation head `998f521` passes
+  CUDA run `30710893281`, ROCm run `30710893299`, WGPU run `30710893294`, and
+  macOS Metal run `30710893263`; hardware-only NVIDIA and AMD jobs skip because
+  no runner was dispatched. The external `recurseml/analysis` integration
+  reports its generic service error and is not provider evidence. Final
+  docs-only closeout-head CI remains PR #173's merge gate. No allocation,
+  peak-memory, transfer, or runtime improvement is claimed.
 
 ## [HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1] Host scratch ownership
 
