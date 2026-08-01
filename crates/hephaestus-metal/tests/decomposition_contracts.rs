@@ -5,7 +5,7 @@
 //! [`hephaestus_core::DecompositionOps`]; this file only supplies the device
 //! and the backend seam value.
 
-#![cfg(target_os = "macos")]
+#![cfg(all(target_os = "macos", feature = "decomposition"))]
 use hephaestus_conformance::assert_decomposition_contract;
 use hephaestus_metal::{MetalDecompositionOps, MetalDevice};
 

@@ -1,5 +1,7 @@
 use bytemuck::Pod;
-use hephaestus_core::{ComputeDevice, Result};
+use hephaestus_core::{
+    ComputeDevice, ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, Result,
+};
 use hephaestus_wgpu::WgpuDevice;
 
 use crate::infrastructure::buffer::MetalBuffer;
@@ -104,5 +106,17 @@ impl ComputeDevice for MetalDevice {
     #[inline]
     fn synchronize(&self) -> Result<()> {
         self.inner.synchronize()
+    }
+}
+
+impl ComputeDeviceCapabilities for MetalDevice {
+    #[inline]
+    fn device_limits(&self) -> DeviceLimits {
+        ComputeDeviceCapabilities::device_limits(&self.inner)
+    }
+
+    #[inline]
+    fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
+        ComputeDeviceCapabilities::supports_device_feature(&self.inner, feature)
     }
 }

@@ -13,6 +13,7 @@ pub mod infrastructure;
 pub use application::attention::MetalAttentionOps;
 pub use application::axis_reduction_seam::MetalAxisReductionOps;
 pub use application::convolution::MetalConvolutionOps;
+#[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::{
     MetalCholeskyDecomposition, MetalDecompositionOps, MetalLuDecomposition, MetalQrDecomposition,
 };

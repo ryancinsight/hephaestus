@@ -10,10 +10,10 @@ use std::borrow::Cow;
 
 use hephaestus_core::{
     BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
-    DeviceBuffer, DispatchGrid, GroupedBinding, GroupedBindingDecl, GroupedCommandStream,
-    GroupedKernelDevice, GroupedKernelInterface, GroupedKernelSequence, GroupedKernelSource,
-    HephaestusError, KernelDevice, KernelInterface, KernelSource, MultiStorageKernel, Result,
-    UnaryStorageKernel, Wgsl,
+    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
+    GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
+    GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice, KernelInterface,
+    KernelSource, MultiStorageKernel, Result, UnaryStorageKernel, Wgsl,
 };
 use hephaestus_metal::{
     AddOp, EluGradOp, EluOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MatrixFunction,
@@ -143,6 +143,27 @@ fn device(test: &str) -> Option<MetalDevice> {
             eprintln!("skip {test}: Metal device unavailable ({e})");
             None
         }
+    }
+}
+
+#[test]
+fn metal_capabilities_match_the_selected_wgpu_context() {
+    let Some(device) = device("metal_capabilities_match_the_selected_wgpu_context") else {
+        return;
+    };
+
+    assert_eq!(device.device_limits(), device.wgpu_device().device_limits());
+    for feature in [
+        DeviceFeature::TimestampQuery,
+        DeviceFeature::ShaderF64,
+        DeviceFeature::ShaderF16,
+        DeviceFeature::MappablePrimaryBuffers,
+        DeviceFeature::ImmediateData,
+    ] {
+        assert_eq!(
+            device.supports_device_feature(feature),
+            device.wgpu_device().supports_device_feature(feature)
+        );
     }
 }
 

@@ -3,7 +3,7 @@
 #![cfg(target_os = "macos")]
 
 use hephaestus_conformance::{assert_convolution_contract, assert_convolution_f64_contract};
-use hephaestus_core::{ComputeDevice, DeviceFeature};
+use hephaestus_core::{ComputeDeviceCapabilities, DeviceFeature};
 use hephaestus_metal::{MetalConvolutionOps, MetalDevice};
 
 #[test]

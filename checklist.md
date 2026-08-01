@@ -3403,3 +3403,25 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       doctests, and Rustdoc.
 - [x] Record exact implementation-head CUDA, ROCm, WGPU, and macOS Metal CI
       evidence; require the docs-only closeout-head matrix before merge.
+
+## HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1 [patch] [perf]
+
+- [x] Verify canonical C-contiguity includes offset zero and claim a disjoint
+      WGPU matrix-properties ownership slice.
+- [x] Pin pointer-level contiguous reuse and independent strided compaction
+      contracts.
+- [x] Reuse the downloaded contiguous prefix without changing elimination
+      arithmetic or strided behavior.
+- [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
+      doctests, and Rustdoc.
+- [x] Diagnose initial WGPU/Metal CI failures and restore no-default-feature
+      decomposition seam gating in both backends.
+- [x] Gate the Metal decomposition conformance target and pass the workflow's
+      exact no-default all-target check.
+- [x] Record independent blocker-fix review and exact implementation-head CUDA,
+      ROCm, WGPU, and macOS Metal CI evidence.
+- [x] Integrate advancing `master`, implement Metal's missing shared capability
+      seam, correct the f64 contract's owning-trait import, and independently
+      review the fix.
+- [x] Record the integrated implementation-head matrix and require the final
+      docs-only closeout-head backend matrix before merge.

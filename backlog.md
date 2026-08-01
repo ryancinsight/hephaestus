@@ -66,7 +66,7 @@ cuda-oxide + cutile).
   Exact closeout head `015d82e` passes CUDA run `30680144377`, ROCm run
   `30680144380`, WGPU run `30680144391`, and macOS Metal run `30680144423`.
 
-## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — in-progress
+## HEPH-WGPU-IDENTITY-UNIFORM-PACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-identity-uniform-pack`; scope: WGPU matrix
   identity dispatch metadata, inherited Metal behavior, focused matrix-power
@@ -94,11 +94,67 @@ cuda-oxide + cutile).
   Rustdoc pass offline. The Atlas development overlay changes the unused-patch
   lock set, so local `--locked` commands stop before compilation; exact-head
   hosted CI remains the clean-lock evidence.
-- Status: implementation and focused local gates complete 2026-07-31.
+- Status: done 2026-07-31. Delivered by PR #171, merge commit `1710f36`.
+  Final docs head `eec0f03` passes CUDA run `30682601670`, ROCm run
+  `30682601650`, WGPU run `30682601688`, and macOS Metal run `30682601655`.
+  Implementation and focused local gates complete 2026-07-31.
   Independent review approves the general scalar/vector layout and evidence
   boundary. Exact implementation head `106a475` passes CUDA run `30682144677`,
   ROCm run `30682144681`, WGPU run `30682144674`, and macOS Metal run
-  `30682144672`; final docs-only closeout-head CI remains PR #171's merge gate.
+  `30682144672`.
+
+## HEPH-WGPU-MATRIX-PROPERTIES-HOST-REUSE-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/hephaestus-matrix-properties-host-reuse`; scope:
+  WGPU host-delegated rank/determinant scratch ownership, focused layout/value
+  contracts, and synchronized PM evidence.
+- Outcome: reuse the downloaded backing buffer directly as mutable Gaussian-
+  elimination scratch when the matrix layout is canonical C-contiguous at
+  offset zero, avoiding a second logical-matrix allocation and copy.
+- Non-goals: rank/determinant arithmetic, device download/upload behavior,
+  strided-view compaction, CUDA/ROCm implementations, public APIs, or
+  unmeasured runtime claims.
+- Acceptance: the contiguous callback receives the downloaded buffer prefix
+  in place; strided layouts still compact into independent row-major storage;
+  focused rank/determinant values remain unchanged; formatting, all-target
+  check, warning-denied Clippy, Nextest, doctests, and Rustdoc pass.
+- Risk/change class: `[patch]` internal ownership optimization. Canonical
+  contiguous inputs eliminate one `rows * cols` host allocation and copy by
+  construction; the full backing-buffer download and determinant upload remain.
+- Evidence: two pointer/value ownership contracts and four existing
+  rank/determinant device-value contracts pass focused Nextest. Formatting,
+  all-target check, warning-denied Clippy, doctests, and Rustdoc complete
+  locally. Initial exact-head WGPU run `30707193470` and Metal run
+  `30707193482` exposed a pre-existing base-head feature-gating defect:
+  decomposition seam modules imported feature-gated decomposition modules in
+  no-default-feature builds. WGPU and Metal now gate the seam modules and
+  re-exports consistently. Refreshed Metal run `30707678624` then exposed the
+  same missing feature gate on its macOS-only decomposition conformance target;
+  that target now shares the capability gate. Exact WGPU no-default library and
+  Metal no-default all-target checks pass locally. Rustdoc reports a
+  pre-existing broken `StencilOps` link in
+  peer-owned stencil scope. The broad pre-edit Nextest command exceeded the
+  120-second shell ceiling during compilation, and a broad post-edit attempt
+  failed linking the unrelated `convolution_contracts` binary before tests;
+  narrowed affected-target runs pass.
+- Status: implementation and focused local gates complete 2026-08-01.
+  Independent review approves the scratch-reuse and symmetric module/re-export
+  feature-gating diffs after excluding generated Atlas overlay lockfile
+  reordering, and separately approves the Metal test-target feature gate.
+  Exact implementation head `1169f99` passes CUDA run `30708041475`, ROCm run
+  `30708041480`, WGPU run `30708041490`, and macOS Metal run `30708041462`.
+  During docs-only closeout CI, `master` advanced to `275f622`; GitHub's merge
+  ref exposed its Metal f64 convolution contract importing `ComputeDevice`
+  instead of the owning `ComputeDeviceCapabilities` trait. Cross-target
+  reproduction then proved the deeper provider gap: `MetalDevice` did not
+  implement that shared seam. The branch now integrates the base, adds the real
+  Metal capability delegation, and uses the owning trait in the contract. The
+  macOS cross-target contract build, focused value-semantic capability test,
+  Metal all-target check, and warning-denied clippy pass locally; independent
+  review approves the complete limits and five-feature delegation coverage.
+  Integrated implementation head `bfe934f` passes CUDA run `30708999594`, ROCm
+  run `30708999598`, WGPU run `30708999600`, and macOS Metal run `30708999596`.
+  The final docs-only closeout-head matrix remains PR #172's merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
