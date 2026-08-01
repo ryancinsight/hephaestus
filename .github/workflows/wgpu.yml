@@ -18,7 +18,7 @@ env:
 
 jobs:
   wgpu:
-    name: WGPU feature and adapterless contracts
+    name: WGPU feature and software-adapter contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -105,6 +105,8 @@ jobs:
 
       - name: Run WGPU warning-denied contracts and docs
         working-directory: hephaestus
+        env:
+          HEPHAESTUS_WGPU_REQUIRE_DEVICE: "1"
         shell: bash
         run: |
           set -euo pipefail

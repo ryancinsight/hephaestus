@@ -230,6 +230,16 @@ No open feature-combination defect is currently recorded in the backend scope.
 
 ## Resolved
 
+- [patch] Matrix-power host identity construction (audit 2026-07-31). WGPU,
+  CUDA, and ROCm built an `n²` host vector and uploaded it before every power,
+  including exponent zero; Metal inherited WGPU. Each provider now allocates
+  private device storage and launches a fully assigning identity kernel after
+  square-shape, storage, and checked-size validation. Empty matrices return
+  before compilation or dispatch. Evidence tier: source assignment proof plus
+  trait-defined nonstandard identity, exact built-in exponent-zero, empty,
+  strided, odd-power, and non-square contracts; no runtime claim without
+  matched hardware measurements.
+
 - [patch] ROCm pivoted-decomposition factor startup initialization (audit
   2026-07-31). Native complete-pivot LU and column-pivot QR allocated zeroed
   non-empty factor matrices immediately before a dense stream copy or validated

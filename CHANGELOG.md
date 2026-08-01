@@ -176,6 +176,14 @@ Target release: 0.18.0.
   exponentiation order, layouts, and peak allocation are unchanged; no
   runtime gain is claimed without matched hardware measurements.
 
+- [patch] Construct matrix-power identity results directly in device storage
+  through fully assigning WGPU, CUDA, and ROCm kernels, with Metal inheriting
+  WGPU. Exponent-zero calls no longer allocate or upload a matrix-sized host
+  identity, reducing host peak memory and transfer volume from `O(n²)` to
+  `O(1)` while preserving exact integer and floating-point identity values.
+  Device allocation and arithmetic are unchanged; no runtime gain is claimed
+  without matched hardware measurements.
+
 - [patch] Allocate sparse matrix-vector and sparse matrix-dense-matrix results
   through the overwrite-before-read device seam. CUDA and ROCm omit one
   output-sized initialization transfer before kernels overwrite every row or

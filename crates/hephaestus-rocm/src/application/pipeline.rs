@@ -81,6 +81,8 @@ pub(crate) enum PipelineKey {
     },
     /// Rank-2 matrix multiplication keyed by kernel marker and scalar.
     Matmul { marker: TypeId, scalar: TypeId },
+    /// Square identity initialization keyed by scalar.
+    MatrixIdentity { scalar: TypeId },
     /// Batched rank-3 matrix multiplication keyed by kernel marker and scalar.
     BatchedMatmul { marker: TypeId, scalar: TypeId },
     /// Rank-2 Kronecker product keyed by kernel marker and scalar.

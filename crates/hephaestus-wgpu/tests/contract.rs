@@ -2,6 +2,8 @@
 //!
 //! Tests acquire a real adapter; on hosts without one (headless CI without
 //! GPU/lavapipe) they skip with a message rather than fabricate a pass.
+//! Hosted software-adapter CI sets `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1` so an
+//! unavailable adapter fails that lane instead of being reported as evidence.
 
 use hephaestus_core::BlockWidth;
 use hephaestus_wgpu::{
@@ -18,13 +20,33 @@ use hephaestus_wgpu::{
     unary_elementwise_into,
 };
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+struct AlternateIdentity(i32);
+
+impl hephaestus_core::DialectScalar<hephaestus_core::Wgsl> for AlternateIdentity {
+    const TYPE_TOKEN: &'static str = "i32";
+}
+
+impl hephaestus_wgpu::MatmulZero for AlternateIdentity {
+    const WGSL_ZERO: &'static str = "0";
+}
+
+impl hephaestus_wgpu::MatrixIdentityScalar for AlternateIdentity {
+    const ZERO: Self = Self(-7);
+    const ONE: Self = Self(9);
+}
+
 fn device_or_skip() -> Option<WgpuDevice> {
     static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
     DEVICE
         .get_or_init(
             || match WgpuDevice::try_default("hephaestus-contract-test") {
                 Ok(device) => Some(device),
-                Err(HephaestusError::AdapterUnavailable { .. }) => {
+                Err(error @ HephaestusError::AdapterUnavailable { .. }) => {
+                    if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some() {
+                        panic!("WGPU adapter required, but acquisition failed: {error}");
+                    }
                     eprintln!("skipping wgpu contract test: adapter unavailable");
                     None
                 }
@@ -1989,6 +2011,43 @@ fn linalg_matpow_matches_leto_reference() {
     let mut got_diagonal = vec![0i32; 4];
     device.download(&diagonal_pow, &mut got_diagonal).unwrap();
     assert_eq!(got_diagonal, vec![1, 0, 0, 1]);
+
+    let alternate = device.upload(&[AlternateIdentity(4); 4]).unwrap();
+    let alternate_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &alternate,
+            layout: &shear_layout,
+        },
+        0,
+    )
+    .unwrap();
+    let mut got_alternate = vec![AlternateIdentity(0); 4];
+    device
+        .download(&alternate_power, &mut got_alternate)
+        .unwrap();
+    assert_eq!(
+        got_alternate,
+        vec![
+            AlternateIdentity(9),
+            AlternateIdentity(-7),
+            AlternateIdentity(-7),
+            AlternateIdentity(9),
+        ]
+    );
+
+    let empty = device.upload::<i32>(&[]).unwrap();
+    let empty_layout = Layout::c_contiguous([0, 0]).unwrap();
+    let empty_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        0,
+    )
+    .unwrap();
+    assert_eq!(empty_power.len(), 0);
 }
 
 #[test]

@@ -22,8 +22,16 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal initialization placement. Peak device
   allocation is unchanged; host peak memory and identity transfer volume fall
   from `O(n^2)` to `O(1)` by construction.
-- Status: claimed 2026-07-31 after PR #168 merged; implementation and evidence
-  remain open.
+- Evidence: WGPU, CUDA, and ROCm compile warning-clean with distinct cached,
+  scalar-generic identity kernels. Local WGPU device execution passes 2/2
+  focused matrix-power contracts, including trait-defined nonstandard identity
+  values, exact built-in exponent-zero identity, empty, strided, odd-power,
+  and non-square behavior. Adapterless CUDA/ROCm focused runs pass 3/3 compile
+  and source contracts; their value-semantic execution remains a hosted-device
+  requirement. Doctests and warning-clean Rustdoc pass for all three provider
+  crates. Hosted exact-head CI remains open.
+- Status: implementation, focused local gates, and independent review complete
+  2026-07-31; hosted exact-head backend CI remains open.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 

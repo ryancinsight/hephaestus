@@ -10,7 +10,7 @@ use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError,
 use leto::Layout;
 use std::any::TypeId;
 
-use crate::application::pipeline::cached_pipeline;
+use crate::application::pipeline::{cached_pipeline, try_cached_pipeline};
 use crate::application::strided::{
     StridedOperand, map_layout_err, to_i32, to_u32, unary_elementwise_strided_into,
 };
@@ -23,7 +23,7 @@ pub trait MatmulZero: DialectScalar<Wgsl> {
     const WGSL_ZERO: &'static str;
 }
 
-/// WGPU scalar whose host identity values support matrix-power initialization.
+/// WGPU scalar supporting matrix identity initialization.
 pub trait MatrixIdentityScalar: MatmulZero + Pod {
     /// Additive identity.
     const ZERO: Self;
@@ -90,6 +90,7 @@ struct GpuMatrixLayout {
 
 struct MatmulKernel<T>(PhantomData<T>);
 struct KronKernel<T>(PhantomData<T>);
+struct IdentityKernel<T>(PhantomData<T>);
 
 mod map_reduction;
 pub use map_reduction::{
@@ -922,19 +923,110 @@ where
     Ok(out)
 }
 
-fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Result<Vec<T>> {
-    let len = n
-        .checked_mul(n)
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!(
-                "identity matrix size {n}\u{00d7}{n} overflows usize ({n}^2 > usize::MAX)"
-            ),
-        })?;
-    let mut values = vec![T::ZERO; len];
-    for i in 0..n {
-        values[i * n + i] = T::ONE;
+fn identity_shader_source<T: MatrixIdentityScalar>() -> String {
+    format!(
+        r#"
+struct MatrixLayout {{
+    shape: vec2<u32>,
+    strides: vec2<i32>,
+    offset: u32,
+}}
+
+@group(0) @binding(0) var<storage, read_write> output: array<{ty}>;
+@group(0) @binding(1) var<uniform> matrix_layout: MatrixLayout;
+@group(0) @binding(2) var<uniform> zero_value: {ty};
+@group(0) @binding(3) var<uniform> one_value: {ty};
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
+    if (id.x < matrix_layout.shape.y && id.y < matrix_layout.shape.x) {{
+        let index = matrix_layout.offset
+            + id.y * u32(matrix_layout.strides.x)
+            + id.x * u32(matrix_layout.strides.y);
+        output[index] = select(zero_value, one_value, id.x == id.y);
+    }}
+}}
+"#,
+        ty = T::TYPE_TOKEN,
+    )
+}
+
+fn device_identity<T>(device: &WgpuDevice, layout: &Layout<2>) -> Result<WgpuBuffer<T>>
+where
+    T: MatrixIdentityScalar,
+{
+    let len = layout.checked_size().map_err(map_layout_err)?;
+    let output = device.alloc_uninitialized::<T>(len)?;
+    if len == 0 {
+        return Ok(output);
     }
-    Ok(values)
+    let metadata = map_layout(layout)?;
+    let raw_layout = device.get_uniform_buffer(WgpuDevice::byte_size::<GpuMatrixLayout>(1)?)?;
+    let layout_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_layout);
+    let raw_zero = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let raw_one = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+    let zero_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_zero);
+    let one_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_one);
+    device
+        .queue()
+        .write_buffer(&layout_buffer, 0, bytemuck::bytes_of(&metadata));
+    device
+        .queue()
+        .write_buffer(&zero_buffer, 0, bytemuck::bytes_of(&T::ZERO));
+    device
+        .queue()
+        .write_buffer(&one_buffer, 0, bytemuck::bytes_of(&T::ONE));
+    let key = (TypeId::of::<IdentityKernel<T>>(), TypeId::of::<T>(), 16);
+    let pipeline = try_cached_pipeline(device, key, "hephaestus-matrix-identity", || {
+        identity_shader_source::<T>()
+    })?;
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-matrix-identity"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: output.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: layout_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: zero_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: one_buffer.as_entire_binding(),
+                },
+            ],
+        });
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-matrix-identity"),
+        });
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-matrix-identity"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(
+            to_u32(layout.shape[1].div_ceil(16), "identity workgroups x")?,
+            to_u32(layout.shape[0].div_ceil(16), "identity workgroups y")?,
+            1,
+        );
+    }
+    device.queue().submit(Some(encoder.finish()));
+    drop(layout_buffer);
+    drop(zero_buffer);
+    drop(one_buffer);
+    Ok(output)
 }
 
 /// Raise a square matrix to a non-negative integer power on the GPU.
@@ -974,7 +1066,7 @@ where
                 "matpow: matrix size {rows}\u{00d7}{rows} overflows usize ({rows}^2 > usize::MAX)"
             ),
         })?;
-    let mut result = device.upload(&identity_matrix::<T>(rows)?)?;
+    let mut result = device_identity::<T>(device, &layout)?;
     if exponent == 0 {
         return Ok(result);
     }

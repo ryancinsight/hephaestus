@@ -76,6 +76,9 @@ pub(crate) enum PipelineKey {
         marker: TypeId,
         scalar: TypeId,
     },
+    MatrixIdentity {
+        scalar: TypeId,
+    },
     BatchedMatmul {
         marker: TypeId,
         scalar: TypeId,

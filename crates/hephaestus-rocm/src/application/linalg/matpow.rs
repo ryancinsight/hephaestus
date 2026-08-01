@@ -9,11 +9,12 @@ use leto::Layout;
 use super::{map_layout_err, matmul_into};
 use crate::RocmDevice;
 use crate::application::elementwise::IdentityOp;
+use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::application::strided_elementwise::unary_elementwise_strided_into;
 use crate::infrastructure::RocmBuffer;
 
-/// ROCm scalar whose host identity values support matrix-power initialization.
+/// ROCm scalar supporting matrix identity initialization.
 pub trait MatrixIdentityScalar: DialectScalar<HipC> + Pod {
     /// Additive identity.
     const ZERO: Self;
@@ -25,28 +26,71 @@ impl MatrixIdentityScalar for f32 {
     const ZERO: Self = 0.0;
     const ONE: Self = 1.0;
 }
-
 impl MatrixIdentityScalar for u32 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
 }
-
 impl MatrixIdentityScalar for i32 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
 }
 
-fn identity_matrix<T: MatrixIdentityScalar>(n: usize) -> Result<Vec<T>> {
-    let len = n
-        .checked_mul(n)
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!("identity matrix size {n}×{n} overflows usize"),
-        })?;
-    let mut values = vec![T::ZERO; len];
-    for index in 0..n {
-        values[index * n + index] = T::ONE;
+fn identity_shader_source<T: MatrixIdentityScalar>() -> String {
+    format!(
+        r#"
+extern "C" __global__ void matrix_identity_kernel(
+    {ty}* out,
+    unsigned int rows,
+    {ty} zero,
+    {ty} one
+) {{
+    unsigned int column = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int row = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < rows && column < rows) {{
+        size_t index = (size_t)row * (size_t)rows + (size_t)column;
+        out[index] = row == column ? one : zero;
+    }}
+}}
+"#,
+        ty = T::TYPE_TOKEN,
+    )
+}
+
+fn device_identity<T>(device: &RocmDevice, rows: usize, len: usize) -> Result<RocmBuffer<T>>
+where
+    T: MatrixIdentityScalar,
+{
+    let output = device.alloc_uninitialized::<T>(len)?;
+    if len == 0 {
+        return Ok(output);
     }
-    Ok(values)
+    let kernel = cached_kernel(
+        device,
+        PipelineKey::MatrixIdentity {
+            scalar: core::any::TypeId::of::<T>(),
+        },
+        "matrix_identity_kernel",
+        identity_shader_source::<T>,
+    )?;
+    let mut output_ptr = output.raw();
+    let mut rows = u32::try_from(rows).map_err(|_| HephaestusError::DispatchFailed {
+        message: "matpow row count exceeds u32 range".to_string(),
+    })?;
+    let mut zero = T::ZERO;
+    let mut one = T::ONE;
+    let mut args: [*mut core::ffi::c_void; 4] = [
+        (&mut output_ptr as *mut crate::infrastructure::DevicePtr).cast(),
+        (&mut rows as *mut u32).cast(),
+        (&mut zero as *mut T).cast(),
+        (&mut one as *mut T).cast(),
+    ];
+    launch_kernel(
+        device,
+        &kernel,
+        LaunchConfig::planar(rows.div_ceil(16), rows.div_ceil(16), 16, 16),
+        &mut args,
+    )?;
+    Ok(output)
 }
 
 /// Raise a square matrix to a non-negative integer power on ROCm.
@@ -89,7 +133,7 @@ where
         .ok_or_else(|| HephaestusError::DispatchFailed {
             message: format!("matpow matrix size {rows}×{rows} overflows usize"),
         })?;
-    let mut result = device.upload(&identity_matrix::<T>(rows)?)?;
+    let mut result = device_identity::<T>(device, rows, n_sq)?;
     if exponent == 0 {
         return Ok(result);
     }
@@ -157,13 +201,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::identity_matrix;
+    use super::identity_shader_source;
 
     #[test]
-    fn identity_matrix_places_only_the_multiplicative_identity_on_diagonal() {
-        assert_eq!(
-            identity_matrix::<i32>(3).expect("valid identity"),
-            [1, 0, 0, 0, 1, 0, 0, 0, 1]
-        );
+    fn identity_kernel_assigns_diagonal_and_off_diagonal_elements() {
+        let source = identity_shader_source::<i32>();
+        assert!(source.contains("size_t index = (size_t)row * (size_t)rows"));
+        assert!(source.contains("row == column ? one : zero"));
     }
 }
