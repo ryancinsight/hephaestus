@@ -232,7 +232,7 @@ No open feature-combination defect is currently recorded in the backend scope.
 
 - [patch] WGPU matrix-identity uniform packing (audit 2026-07-31). The native
   identity dispatch acquired and wrote separate layout, zero, and one uniform
-  buffers. Zero and one now share one `vec2<T>` binding, reducing per-dispatch
+  buffers. Zero and one now share one typed-struct binding, reducing per-dispatch
   uniform acquisitions, writes, and bindings from three to two without changing
   the output allocation or launch count; Metal inherits the WGPU path. Evidence
   tier: shader-binding source contract plus real-device nonstandard-identity and

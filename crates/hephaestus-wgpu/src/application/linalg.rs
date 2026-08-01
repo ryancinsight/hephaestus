@@ -935,9 +935,14 @@ struct MatrixLayout {{
     offset: u32,
 }}
 
+struct IdentityValues {{
+    zero_value: {ty},
+    one_value: {ty},
+}}
+
 @group(0) @binding(0) var<storage, read_write> output: array<{ty}>;
 @group(0) @binding(1) var<uniform> matrix_layout: MatrixLayout;
-@group(0) @binding(2) var<uniform> identity_values: vec2<{ty}>;
+@group(0) @binding(2) var<uniform> identity_values: IdentityValues;
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
@@ -945,7 +950,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         let index = matrix_layout.offset
             + id.y * u32(matrix_layout.strides.x)
             + id.x * u32(matrix_layout.strides.y);
-        output[index] = select(identity_values.x, identity_values.y, id.x == id.y);
+        output[index] = select(
+            identity_values.zero_value,
+            identity_values.one_value,
+            id.x == id.y,
+        );
     }}
 }}
 "#,

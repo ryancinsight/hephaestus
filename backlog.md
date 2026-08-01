@@ -84,7 +84,7 @@ cuda-oxide + cutile).
 - Risk/change class: `[patch]` internal metadata packing. Per-dispatch uniform
   acquisitions and queue writes fall from three to two by construction; output
   storage and peak matrix memory are unchanged.
-- Evidence: the shader source contract pins one `vec2<T>` identity binding and
+- Evidence: the shader source contract pins one packed identity binding and
   three total bindings. Local WGPU execution passes the nonstandard-identity,
   built-in exponent-zero, empty, odd-power, strided, and non-square matrix-power
   contracts. Formatting, all-target check, warning-denied Clippy, doctests, and
