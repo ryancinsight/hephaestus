@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-PREPARED-L2-OVERWRITE-1 [patch] [perf]
+
+- [x] Prove the scalar result is wholly overwritten before its first read and
+      record a physical CUDA value baseline.
+- [ ] Replace all four CUDA/ROCm prepared-L2 scalar clears with the existing
+      overwrite-before-read allocation seam.
+- [ ] Preserve repeated-input, strided, empty, and exact-value contracts.
+- [ ] Pass focused formatting, warning-denied diagnostics, and Nextest gates.
+- [ ] Record independent review and exact-head backend CI before merge.
+
+Implementation owner: Codex on `codex/hephaestus-prepared-l2-overwrite`.
+Claimed files are CUDA/ROCm prepared map-reduction implementations and
+contracts, `CHANGELOG.md`, `backlog.md`, `gap_audit.md`, and this section.
+WGPU/Metal allocation behavior and active provider scopes are excluded.
+
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf]
 
 - [x] Replace host-built identity uploads with backend-native device writes.
