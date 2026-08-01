@@ -48,3 +48,4 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0041](0041-compute-backend-conformance-crate.md) | One generic ComputeBackend conformance crate | Accepted |
 | [0042](0042-device-neutral-decomposition-seam.md) | Device-neutral decomposition seam | Accepted |
 | [0043](0043-special-value-semantics-capability.md) | Special-value semantics as a dialect capability | Accepted |
+| [0044](0044-device-neutral-dense-product-seam.md) | Device-neutral dense product seam | Accepted |

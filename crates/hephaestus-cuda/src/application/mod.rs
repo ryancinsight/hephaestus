@@ -9,6 +9,8 @@ pub mod convolution;
 /// Device-neutral decomposition seam implementation.
 #[cfg(feature = "decomposition")]
 pub mod decomposition_seam;
+/// Device-neutral dense product seam implementation.
+pub mod dense_product_seam;
 /// Contiguous elementwise operations.
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.

@@ -34,6 +34,7 @@ pub use domain::decomposition::{
     validate_square_operand,
 };
 pub use domain::decomposition_seam::{CholeskyHandle, DecompositionOps, LuHandle, QrHandle};
+pub use domain::dense_product::DenseProductOps;
 pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,

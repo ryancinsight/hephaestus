@@ -42,6 +42,8 @@ pub mod convolution;
 pub mod decomposition;
 /// Contract clauses for the
 /// [`DenseVectorOps`](hephaestus_core::DenseVectorOps) seam.
+/// Dense matmul/batched-matmul/Kronecker product clauses.
+pub mod dense_product;
 pub mod dense_vector;
 /// Untyped unary/binary elementwise arithmetic clauses.
 pub mod elementwise;
@@ -66,6 +68,7 @@ pub use attention::assert_attention_contract;
 pub use axis_reduction::assert_axis_reduction_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use decomposition::assert_decomposition_contract;
+pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;
 pub use full_reduction::assert_full_reduction_contract;

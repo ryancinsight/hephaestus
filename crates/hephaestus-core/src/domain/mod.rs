@@ -10,6 +10,8 @@ pub mod convolution;
 pub mod decomposition;
 /// Device-neutral dense decomposition seam (ADR 0042).
 pub mod decomposition_seam;
+/// Device-neutral dense product seam (ADR 0044).
+pub mod dense_product;
 /// Compute-device acquisition and transfer seam.
 pub mod device;
 /// Kernel-dialect markers and per-dialect scalar tokens.

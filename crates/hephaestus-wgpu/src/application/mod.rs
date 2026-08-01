@@ -21,6 +21,8 @@ pub mod axis_reduction_seam;
 pub mod convolution;
 /// Device-neutral decomposition seam implementation.
 pub mod decomposition_seam;
+/// Device-neutral dense product seam implementation.
+pub mod dense_product_seam;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.

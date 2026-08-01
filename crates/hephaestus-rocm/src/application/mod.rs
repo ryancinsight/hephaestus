@@ -16,6 +16,8 @@ pub mod decomposition;
 /// Device-neutral decomposition seam implementation.
 #[cfg(feature = "decomposition")]
 pub mod decomposition_seam;
+/// Device-neutral dense product seam implementation.
+pub mod dense_product_seam;
 pub mod elementwise;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral elementwise seam implementation.
