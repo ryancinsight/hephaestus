@@ -43,6 +43,8 @@ pub mod decomposition;
 /// Contract clauses for the
 /// [`DenseVectorOps`](hephaestus_core::DenseVectorOps) seam.
 pub mod dense_vector;
+/// Untyped unary/binary elementwise arithmetic clauses.
+pub mod elementwise;
 /// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
@@ -65,6 +67,7 @@ pub use axis_reduction::assert_axis_reduction_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use decomposition::assert_decomposition_contract;
 pub use dense_vector::assert_dense_vector_contract;
+pub use elementwise::assert_elementwise_contract;
 pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use ray_integral::assert_ray_integral_contract;
