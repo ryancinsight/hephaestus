@@ -62,6 +62,8 @@ pub mod scan;
 /// Contract clauses for the
 /// [`SparseOperatorOps`](hephaestus_core::SparseOperatorOps) seam.
 pub mod sparse;
+/// Contract clauses for provider-owned stateful parameter updates.
+pub mod stateful_update;
 /// 2D stencil clauses with an analytical quadratic oracle.
 pub mod stencil;
 /// Contract clauses for the typed paths of the
@@ -81,5 +83,6 @@ pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
 pub use scan::assert_scan_contract;
 pub use sparse::assert_sparse_operator_contract;
+pub use stateful_update::assert_stateful_update_contract;
 pub use stencil::assert_stencil_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;

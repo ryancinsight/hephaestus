@@ -44,6 +44,8 @@ pub mod scan_seam;
 #[cfg(feature = "sparse")]
 /// GPU Compressed Sparse Row (CSR) sparse matrix operations.
 pub mod sparse;
+/// Provider-owned stateful parameter updates.
+pub mod stateful_update;
 /// Generic WGSL storage-kernel dispatch.
 pub mod storage_kernel;
 /// Backend-neutral command stream implementation for authored WGSL kernels.

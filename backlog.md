@@ -28,7 +28,9 @@ cuda-oxide + cutile).
   backend; warning-denied focused gates and exact-head provider CI pass.
 - Risk/change class: `[minor] [arch]`; additive public provider seam. Coeus's
   later fallible cutover is a separate breaking consumer increment.
-- Status: in-progress 2026-08-01. ADR 0045 accepted; implementation pending.
+- Status: in-progress 2026-08-01. Core planner and all four provider dispatch
+  implementations pass warning-denied focused gates; direct Leto differential
+  conformance, independent review, exact-head CI, and consumer cutover remain.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 

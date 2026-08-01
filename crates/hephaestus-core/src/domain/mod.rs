@@ -41,6 +41,8 @@ pub mod scan;
 /// Backend-neutral volume ray-integral geometry and validation.
 /// Device-neutral sparse operator contracts.
 pub mod sparse;
+/// Provider-owned stateful parameter-update rules and dispatch seam.
+pub mod stateful_update;
 /// Backend-neutral two-dimensional Laplacian stencil parameters.
 pub mod stencil;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.

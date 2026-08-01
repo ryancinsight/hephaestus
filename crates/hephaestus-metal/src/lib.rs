@@ -66,6 +66,7 @@ pub use application::sparse::{
     submit_prepared_sparse_batch,
 };
 pub use application::sparse_seam::MetalSparseOps;
+pub use application::stateful_update::MetalStatefulUpdateOps;
 pub use application::stencil::MetalStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,

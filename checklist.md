@@ -6,9 +6,10 @@ Sprint target: 0.18.0. Phase: Closure.
 
 - [x] Record ownership, variants, failure semantics, and migration direction in
       ADR 0045.
-- [ ] Implement the generic request, planner, errors, and five rule markers.
-- [ ] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
-- [ ] Instantiate shared Leto-differential and adversarial conformance.
+- [x] Implement the generic request, planner, errors, and five rule markers.
+- [x] Implement WGPU, CUDA, ROCm, and Metal provider dispatch.
+- [ ] Replace the initial analytical contract oracle with direct Leto
+      differential execution and complete adversarial conformance.
 - [ ] Pass focused warning-denied gates, independent review, and exact-head CI.
 
 Implementation owner: Codex on `codex/hephaestus-stateful-update`. Claimed

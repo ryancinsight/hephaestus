@@ -39,6 +39,8 @@ pub mod reduction;
 pub mod scan;
 /// Device-neutral scan seam implementation.
 pub mod scan_seam;
+/// Device-neutral stateful-update seam implementation.
+pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.
 pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.

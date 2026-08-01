@@ -95,6 +95,7 @@ pub use application::scan::{
 };
 pub use application::scan_seam::{CudaPreparedScan, CudaScanOps};
 pub use application::sparse::seam::CudaSparseOps;
+pub use application::stateful_update::CudaStatefulUpdateOps;
 pub use application::stencil::CudaStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,

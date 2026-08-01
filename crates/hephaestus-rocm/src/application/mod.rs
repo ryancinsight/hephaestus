@@ -50,6 +50,8 @@ pub mod scan;
 pub mod scan_seam;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
+/// Provider-owned stateful parameter updates.
+pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.
 pub mod stencil;
 /// Backend-neutral multi-storage kernel dispatch.

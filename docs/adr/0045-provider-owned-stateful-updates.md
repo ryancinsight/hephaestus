@@ -22,11 +22,13 @@ writable buffers unchanged.
 
 ## Decision
 
-1. `hephaestus-core` owns a `StatefulUpdateOps<D, T>` seam parameterized by a
-   zero-sized update-rule marker, scalar type, fixed rank, and const state
-   count. The request contains borrowed strided parameter, gradient, and state
-   views plus rule-specific POD parameters. Dispatch remains monomorphized;
-   there is no trait-object or per-element runtime dispatch.
+1. `hephaestus-core` owns a `StatefulUpdateOps<D>` seam parameterized by a
+   zero-sized update-rule marker and fixed rank. The marker declares one or two
+   state views; the borrowed request carries them as a slice so one signature
+   serves every rule while state cardinality is validated once before launch.
+   Rule and rank still monomorphize the complete kernel; there is no trait
+   object or per-element runtime dispatch. Rank-eight packed metadata preserves
+   Coeus's existing dynamic-rank boundary.
 2. Rule markers own the mathematical update and provider-expression contract
    for SGD, Adam, RMSProp, AdamW, and AdaGrad. A rule declares its state count
    and parameter block, preventing unrelated optional fields and invalid rule
@@ -39,8 +41,9 @@ writable buffers unchanged.
    typed authored-kernel and multi-storage machinery. Provider modules own
    dialect source, compilation, metadata packing, launch, and synchronization;
    consumers never supply shader source.
-5. `hephaestus-conformance` owns one Leto-differential contract instantiated
-   by every admitted backend and scalar. It covers all rules, nonzero state,
+5. `hephaestus-conformance` owns one contract instantiated by every admitted
+   backend and scalar, using direct Leto execution as the CPU differential
+   oracle. It covers all rules, nonzero state,
    repeated steps, strided and offset views, rank boundaries, empty requests,
    alias and shape rejection, unavailable devices, and failure atomicity.
 6. Coeus converts its dynamic layouts into this contract once in

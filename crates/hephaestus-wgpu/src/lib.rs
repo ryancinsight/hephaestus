@@ -73,6 +73,7 @@ pub use application::sparse::{
     prepare_spmv, prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
+pub use application::stateful_update::WgpuStatefulUpdateOps;
 pub use application::stencil::WgpuStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
