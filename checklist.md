@@ -3416,5 +3416,7 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
       doctests, and Rustdoc.
 - [x] Diagnose initial WGPU/Metal CI failures and restore no-default-feature
       decomposition seam gating in both backends.
+- [x] Gate the Metal decomposition conformance target and pass the workflow's
+      exact no-default all-target check.
 - [x] Record independent blocker-fix review; require exact-head CUDA, ROCm,
       WGPU, and macOS Metal CI evidence before merge.

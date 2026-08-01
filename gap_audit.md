@@ -32,9 +32,12 @@ architectural decision or a tracked future-work item:
   excluding generated Atlas overlay lockfile reordering. Initial exact-head
   WGPU and Metal CI exposed inconsistent no-default-feature decomposition seam
   gating inherited from base head `98e9e3e`; the independently approved
-  owner-level module and re-export gates are fixed and both exact local
-  no-default-feature checks pass. Refreshed exact-head backend CI remains the
-  merge gate.
+  owner-level module and re-export gates are fixed. Refreshed Metal run
+  `30707678624` exposed the same missing feature gate on the dedicated
+  decomposition conformance target; its independently approved fix now shares
+  the capability gate. Exact local WGPU no-default library and Metal no-default
+  all-target checks pass. Refreshed exact-head backend CI remains the merge
+  gate.
 
 ## [HEPH-DEVICE-LOCAL-COW-2] Overwrite-before-read allocation
 

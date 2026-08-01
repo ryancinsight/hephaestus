@@ -90,10 +90,10 @@ Target release: 0.18.0.
 
 ### Changed
 
-- [patch] Gate WGPU and Metal decomposition-seam modules and re-exports with
-  their existing `decomposition` feature. No-default-feature library builds no
-  longer compile seam implementations that import feature-gated decomposition
-  modules.
+- [patch] Gate WGPU and Metal decomposition-seam modules, re-exports, and the
+  Metal decomposition conformance target with their existing `decomposition`
+  feature. No-default-feature all-target builds no longer compile seam code or
+  contracts that import feature-gated decomposition implementations.
 
 - [patch] Reuse WGPU's downloaded matrix backing storage directly for
   host-delegated rank and determinant elimination when the layout is canonical

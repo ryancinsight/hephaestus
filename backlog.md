@@ -128,16 +128,20 @@ cuda-oxide + cutile).
   `30707193482` exposed a pre-existing base-head feature-gating defect:
   decomposition seam modules imported feature-gated decomposition modules in
   no-default-feature builds. WGPU and Metal now gate the seam modules and
-  re-exports consistently; both exact no-default-feature library checks pass
-  locally. Rustdoc reports a pre-existing broken `StencilOps` link in
+  re-exports consistently. Refreshed Metal run `30707678624` then exposed the
+  same missing feature gate on its macOS-only decomposition conformance target;
+  that target now shares the capability gate. Exact WGPU no-default library and
+  Metal no-default all-target checks pass locally. Rustdoc reports a
+  pre-existing broken `StencilOps` link in
   peer-owned stencil scope. The broad pre-edit Nextest command exceeded the
   120-second shell ceiling during compilation, and a broad post-edit attempt
   failed linking the unrelated `convolution_contracts` binary before tests;
   narrowed affected-target runs pass.
 - Status: implementation and focused local gates complete 2026-08-01.
-  Independent review approves the scratch-reuse and symmetric feature-gating
-  diffs after excluding generated Atlas overlay lockfile reordering. Refreshed
-  exact-head backend CI remains the merge gate.
+  Independent review approves the scratch-reuse and symmetric module/re-export
+  feature-gating diffs after excluding generated Atlas overlay lockfile
+  reordering, and separately approves the Metal test-target feature gate.
+  Refreshed exact-head backend CI remains the merge gate.
 
 ## HEPH-METAL-VOLUME-OVERWRITE-1 [patch] [perf] — done
 
