@@ -55,6 +55,8 @@ pub use application::decomposition::{
     qr_decompose_blocked, schur, singular_values, svd_decompose, svd_rank_revealing,
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
+#[cfg(feature = "decomposition")]
+pub use application::decomposition_seam::RocmDecompositionOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,

@@ -6,6 +6,9 @@ pub mod attention;
 pub mod axis_reduction_seam;
 /// Native regular and transposed convolution operations.
 pub mod convolution;
+/// Device-neutral decomposition seam implementation.
+#[cfg(feature = "decomposition")]
+pub mod decomposition_seam;
 /// Contiguous elementwise operations.
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
