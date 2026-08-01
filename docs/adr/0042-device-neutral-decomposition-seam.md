@@ -6,6 +6,11 @@
   coverage — the drafted `<T>` parameter and the SVD/eigen families enter
   when their machinery ships; revision driven by implementation evidence,
   all four adapters delivered as-built)
+- Second revision, 2026-08-01 (late): the remaining 18 decomposition entry
+  points are staged into the seam by result-shape family (see Staging
+  below), driven by the 001j ledger burn-down. The trio seam and its
+  clauses shipped and hardened (pivot convention, R storage convention,
+  Householder sign ownership) exactly as this record's e1/e2 predicted.
 - Refs: atlas `backlog.md#atlas-arch-001` (001e-e1); ADR 0041 (conformance
   crate); the per-backend `MatrixDecompose` traits this seam replaces as the
   cross-backend surface.
@@ -50,6 +55,44 @@ residuals `‖A − LU‖ ≤ c(n)·ε·‖A‖` (and QR/Cholesky/SVD analogues)
 orthogonality `‖QᵀQ − I‖`, pivot-permutation validity, SPD fixtures for
 Cholesky, and solve round-trips — leto is the differential oracle per the
 drop-in substrate rule.
+
+## Staging (second revision): the remaining families
+
+Ordered by (consumer value × machinery readiness); each stage is one
+e1-style seam increment plus one e2-style clause increment, and each
+handle trait stays oracle-minimal per the original decision.
+
+1. **Pivoted eliminations** — `col_piv_qr{,_blocked}`,
+   `full_piv_lu{,_blocked}`: extend `DecompositionOps` with `col_piv_qr`
+   and `full_piv_lu` returning handles exposing the permutation(s), rank,
+   and solves. Oracles: permutation validity (both sides for full-pivot),
+   rank revelation on a constructed rank-deficient fixture, and
+   reconstruction through the permutations.
+2. **Spectral, symmetric first** — `symmetric_eigen_jacobi`,
+   `symmetric_eigenvalues_jacobi`: eigenpairs of a symmetric fixture with
+   known closed-form spectrum; orthogonality `‖QᵀQ − I‖` and residual
+   `‖AV − VΛ‖` at derived bounds.
+3. **SVD family** — `svd_decompose`, `svd_rank_revealing`,
+   `singular_values`: singular values of fixtures with known exact
+   spectra, `‖A − UΣVᵀ‖`, orthogonality both sides, and the
+   rank-revealing tolerance as a documented input contract.
+4. **General spectral** — `eigenvalues` (complex results via
+   `eunomia::Complex`), `schur`, `hessenberg`, `bidiagonalize`:
+   similarity/orthogonality invariants and reconstruction residuals;
+   Hessenberg/bidiagonal structure asserted directly (zero patterns).
+5. **Symmetric-indefinite** — `bunch_kaufman`, `udu_decompose`: inertia
+   against a fixture with known signature, reconstruction, and solves.
+
+**Blocked variants are not seam methods.** `*_blocked` is an execution
+strategy of the same mathematical operation, not a distinct contract —
+publishing it on the seam would encode an implementation dimension in
+API names. The blocked kernels remain per-backend entry points behind
+the unblocked seam methods; their equivalence is covered per-backend by
+the existing differential tests (blocked vs leto across panel
+boundaries), and a backend is free to route the seam method to its
+blocked kernel by size heuristic. If a consumer ever needs explicit
+strategy selection, it enters as a policy parameter per the standards'
+variation mechanisms, never as `*_blocked` seam methods.
 
 ## Alternatives
 
