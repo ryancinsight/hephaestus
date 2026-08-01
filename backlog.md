@@ -33,6 +33,43 @@ cuda-oxide + cutile).
   conformance passes on physical WGPU and CUDA devices; ROCm's adapterless
   contract passes. Independent review and exact-head CI remain; the Coeus
   consumer cutover is the next separate increment.
+## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
+
+- Owner: Codex on `codex/hephaestus-prepared-l2-overwrite`; scope: CUDA and
+  ROCm prepared L2 result allocation, existing prepared-map value contracts,
+  and synchronized PM evidence.
+- Outcome: preserve defined CUDA/ROCm prepared-L2 output across the public
+  pre-dispatch and failed-dispatch lifecycle, strengthen successful-dispatch
+  overwrite coverage, and correct the stale overwrite-performance claim.
+- Non-goals: map/reduction arithmetic, empty identities, plan capacities,
+  WGPU/Metal platform allocation, active attention/parameterized-unary/stateful
+  update scopes, or runtime claims without matched hardware measurements.
+- Acceptance: both public strided and internal dense CUDA/ROCm preparation
+  paths retain zeroed scalar storage while the unary kernel demonstrably
+  assigns the sole element on every successful dispatch; repeated-input,
+  strided, empty, and exact-value contracts remain green; warning-denied
+  provider gates and exact-head CUDA, ROCm, WGPU, and macOS Metal CI pass.
+- Risk/change class: `[patch]` correctness and evidence repair. The rejected
+  uninitialized allocation would expose undefined contents through `output()`
+  before first dispatch or after failure. Allocation count, peak memory,
+  arithmetic, and public ownership remain unchanged; no performance gain is
+  claimed.
+- Status: implementation and focused local gates complete 2026-08-01.
+  Physical CUDA baseline and post-edit contracts pass 1/1, including `NaN`
+  poisoning before first and repeated dispatch; adapterless ROCm compiles and
+  passes its typed-unavailable contract. Formatting, feature-enabled CUDA and
+  adapterless ROCm warning-denied Clippy, and no-default all-target checks pass.
+  Independent review rejected the proposed uninitialized allocation because
+  `output()` is public before first dispatch and remains accessible after a
+  failed dispatch. The implementation therefore retains all four defined
+  allocations, keeps the stronger successful-overwrite contracts, and corrects
+  the changelog boundary. Independent re-review approves the corrected
+  lifecycle, tests, and evidence claims. Implementation head `998f521` passes
+  CUDA run `30710893281`, ROCm run `30710893299`, WGPU run `30710893294`, and
+  macOS Metal run `30710893263`; hardware-only NVIDIA and AMD jobs skip because
+  no runner was dispatched. The external `recurseml/analysis` integration
+  reports its generic service error and is not provider evidence. Final
+  docs-only closeout-head CI remains PR #173's merge gate.
 
 ## HEPH-MATPOW-DEVICE-IDENTITY-1 [patch] [perf] — done
 
