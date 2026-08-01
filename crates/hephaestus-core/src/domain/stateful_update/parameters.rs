@@ -20,15 +20,6 @@ fn require_nonnegative(name: &str, field: &str, value: f32) -> Result<()> {
     Ok(())
 }
 
-fn require_positive(name: &str, field: &str, value: f32) -> Result<()> {
-    if value <= 0.0 {
-        return Err(HephaestusError::InvalidConfiguration {
-            message: format!("{name} parameter {field} must be positive, got {value}"),
-        });
-    }
-    Ok(())
-}
-
 /// Validated stochastic-gradient-descent parameters.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -44,7 +35,7 @@ impl SgdParameters {
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless the learning
-    /// rate is finite and positive and momentum is finite in `[0, 1)`.
+    /// rate is finite and non-negative and momentum is finite in `[0, 1)`.
     pub fn new(learning_rate: f32, momentum: f32) -> Result<Self> {
         let parameters = Self {
             learning_rate,
@@ -63,7 +54,7 @@ impl SgdParameters {
                 ("momentum", self.momentum),
             ],
         )?;
-        require_positive("SGD", "learning_rate", self.learning_rate)?;
+        require_nonnegative("SGD", "learning_rate", self.learning_rate)?;
         if !(0.0..1.0).contains(&self.momentum) {
             return Err(HephaestusError::InvalidConfiguration {
                 message: format!(
@@ -95,8 +86,8 @@ impl AdamParameters {
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
-    /// and epsilon are finite and positive, beta values lie in `[0, 1)`, and
-    /// `step` is positive and representable as `i32`.
+    /// is finite and non-negative, epsilon is finite and positive, beta values
+    /// lie in `[0, 1)`, and `step` is positive and representable as `i32`.
     pub fn new(
         learning_rate: f32,
         beta_one: f32,
@@ -221,7 +212,7 @@ fn validate_adaptive_values(
             ("bias_correction_two", bias_correction_two),
         ],
     )?;
-    require_positive(name, "learning_rate", learning_rate)?;
+    require_nonnegative(name, "learning_rate", learning_rate)?;
     if !(0.0..1.0).contains(&beta_one)
         || !(0.0..1.0).contains(&beta_two)
         || epsilon <= 0.0
@@ -253,7 +244,8 @@ impl RmsPropParameters {
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
-    /// and epsilon are finite and positive and alpha lies in `[0, 1)`.
+    /// is finite and non-negative, epsilon is finite and positive, and alpha
+    /// lies in `[0, 1)`.
     pub fn new(learning_rate: f32, alpha: f32, epsilon: f32) -> Result<Self> {
         let parameters = Self {
             learning_rate,
@@ -274,7 +266,7 @@ impl RmsPropParameters {
                 ("epsilon", self.epsilon),
             ],
         )?;
-        require_positive("RMSProp", "learning_rate", self.learning_rate)?;
+        require_nonnegative("RMSProp", "learning_rate", self.learning_rate)?;
         if !(0.0..1.0).contains(&self.alpha) || self.epsilon <= 0.0 {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "RMSProp alpha must lie in [0, 1) and epsilon must be positive"
@@ -300,7 +292,7 @@ impl AdaGradParameters {
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
-    /// and epsilon are finite and positive.
+    /// is finite and non-negative and epsilon is finite and positive.
     pub fn new(learning_rate: f32, epsilon: f32) -> Result<Self> {
         let parameters = Self {
             learning_rate,
@@ -319,7 +311,7 @@ impl AdaGradParameters {
                 ("epsilon", self.epsilon),
             ],
         )?;
-        require_positive("AdaGrad", "learning_rate", self.learning_rate)?;
+        require_nonnegative("AdaGrad", "learning_rate", self.learning_rate)?;
         if self.epsilon <= 0.0 {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "AdaGrad epsilon must be positive".to_string(),
@@ -377,8 +369,8 @@ mod tests {
             "SGD parameter momentum must lie in [0, 1), got 1",
         );
         assert_invalid(
-            AdamParameters::new(0.0, 0.9, 0.999, 1.0e-8, 1),
-            "Adam parameter learning_rate must be positive, got 0",
+            AdamParameters::new(-0.1, 0.9, 0.999, 1.0e-8, 1),
+            "Adam parameter learning_rate must be nonnegative, got -0.1",
         );
         assert_invalid(
             RmsPropParameters::new(0.1, 1.0, 1.0e-8),
@@ -392,5 +384,14 @@ mod tests {
             AdamWParameters::new(0.1, 0.9, 0.999, 1.0e-8, -0.1, 1),
             "AdamW parameter weight_decay must be nonnegative, got -0.1",
         );
+    }
+
+    #[test]
+    fn all_rules_accept_zero_learning_rate() {
+        SgdParameters::new(0.0, 0.9).expect("zero-rate SGD parameters");
+        AdamParameters::new(0.0, 0.9, 0.999, 1.0e-8, 1).expect("zero-rate Adam parameters");
+        AdamWParameters::new(0.0, 0.9, 0.999, 1.0e-8, 0.01, 1).expect("zero-rate AdamW parameters");
+        RmsPropParameters::new(0.0, 0.9, 1.0e-8).expect("zero-rate RMSProp parameters");
+        AdaGradParameters::new(0.0, 1.0e-8).expect("zero-rate AdaGrad parameters");
     }
 }

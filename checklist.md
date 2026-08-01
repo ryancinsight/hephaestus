@@ -2,6 +2,13 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
+
+- [x] Admit finite zero learning rates without relaxing epsilon or domain
+      validation.
+- [x] Cover all five parameter contracts with focused Nextest.
+- [ ] Pass warning-denied Clippy and exact-head hosted checks; merge.
+
 ## HEPH-OWNED-DOWNLOAD-1 [minor] [perf]
 
 - [x] Add a default-compatible, bitwise-preserving owned-download seam.
