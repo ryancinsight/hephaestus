@@ -28,6 +28,24 @@ pub trait KernelDialect:
 {
     /// Human-readable dialect name for diagnostics.
     const NAME: &'static str;
+
+    /// Whether this kernel language guarantees IEEE-754 `f32` special-value
+    /// semantics (ADR 0043).
+    ///
+    /// When `true`, device kernels authored in this dialect may rely on —
+    /// and the conformance suite asserts — unordered NaN comparisons
+    /// (`NaN != NaN`), NaN propagation through arithmetic, directed
+    /// infinities, and the NaN-producing indeterminate forms
+    /// (`Inf - Inf`, `0 * Inf`). CUDA C++ and HIP C++ document these
+    /// guarantees. When `false` (WGSL), the language specification permits
+    /// implementations to assume NaN and infinity are absent, and an
+    /// expression that would produce one yields an *indeterminate value* —
+    /// wrong-but-safe, never undefined behaviour. Kernels do not validate
+    /// operand finiteness at dispatch; finiteness enforcement belongs at
+    /// host-side trust boundaries, and consumers needing cross-backend
+    /// determinism must keep device inputs finite unless this const is
+    /// `true` for every dialect involved.
+    const IEEE_SPECIAL_VALUES: bool;
 }
 
 /// WGSL dialect marker (wgpu backends).
@@ -44,14 +62,17 @@ pub struct HipC;
 
 impl KernelDialect for Wgsl {
     const NAME: &'static str = "wgsl";
+    const IEEE_SPECIAL_VALUES: bool = false;
 }
 
 impl KernelDialect for CudaC {
     const NAME: &'static str = "cuda-c";
+    const IEEE_SPECIAL_VALUES: bool = true;
 }
 
 impl KernelDialect for HipC {
     const NAME: &'static str = "hip-c";
+    const IEEE_SPECIAL_VALUES: bool = true;
 }
 
 /// Maps a host scalar type to its shader type token in dialect `L` at compile

@@ -14,8 +14,8 @@
 
 use bytemuck::Pod;
 use hephaestus_core::{
-    ComputeDevice, DialectScalar, ElementwiseOps, EqOp, GeOp, GtOp, LeOp, LtOp, NeOp, StridedView,
-    TypedBinaryExpr,
+    AddOp, BinaryExpr, ComputeDevice, DialectScalar, ElementwiseOps, EqOp, GeOp, GtOp,
+    KernelDialect, LeOp, LtOp, MulOp, NeOp, StridedView, TypedBinaryExpr,
 };
 use leto::Layout;
 
@@ -121,8 +121,11 @@ where
         + TypedBinaryExpr<<E as ElementwiseOps<D, i32>>::Dialect, i32>,
     GeOp: TypedBinaryExpr<<E as ElementwiseOps<D, u32>>::Dialect, u32>
         + TypedBinaryExpr<<E as ElementwiseOps<D, f32>>::Dialect, f32>,
+    AddOp: BinaryExpr<<E as ElementwiseOps<D, f32>>::Dialect>,
+    MulOp: BinaryExpr<<E as ElementwiseOps<D, f32>>::Dialect>,
 {
     unsigned_comparisons_are_exact_indicators(device, ops);
+    special_values_follow_ieee_where_advertised(device, ops);
     signed_comparisons_order_by_sign(device, ops);
     finite_float_comparisons_are_exact_indicators(device, ops);
     into_form_is_idempotent_over_unchanged_operands(device, ops);
@@ -405,4 +408,114 @@ where
         [1, 1, 0, 1, 1, 0],
         "{name}: strided operands must be read through their layouts"
     );
+}
+
+/// IEEE-754 `f32` special-value semantics, asserted only where the dialect
+/// advertises them (`KernelDialect::IEEE_SPECIAL_VALUES`, ADR 0043).
+///
+/// A non-advertising dialect (WGSL) skips by construction through the const
+/// branch below — its specification permits treating NaN and infinity as
+/// absent, so no assertion about them can hold. Oracles are exact bit-class
+/// checks: comparison indicators, `is_nan`, and signed-infinity equality.
+fn special_values_follow_ieee_where_advertised<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    EqOp: TypedBinaryExpr<E::Dialect, f32>,
+    NeOp: TypedBinaryExpr<E::Dialect, f32>,
+    LtOp: TypedBinaryExpr<E::Dialect, f32>,
+    AddOp: BinaryExpr<E::Dialect>,
+    MulOp: BinaryExpr<E::Dialect>,
+{
+    if !<E::Dialect as KernelDialect>::IEEE_SPECIAL_VALUES {
+        return;
+    }
+    let name = device.backend_name();
+    let nan = f32::NAN;
+    let inf = f32::INFINITY;
+
+    // Unordered comparisons: every ordered comparison involving NaN is
+    // false; inequality is true.
+    let lhs = [nan, nan, 1.0, nan];
+    let rhs = [nan, 1.0, nan, 2.0];
+    assert_eq!(
+        compare::<_, _, f32, EqOp, 4>(device, ops, &lhs, &rhs),
+        [0.0; 4],
+        "{name}: NaN must compare unequal to everything, itself included"
+    );
+    assert_eq!(
+        compare::<_, _, f32, NeOp, 4>(device, ops, &lhs, &rhs),
+        [1.0; 4],
+        "{name}: NaN != x must hold for every x"
+    );
+    assert_eq!(
+        compare::<_, _, f32, LtOp, 4>(device, ops, &lhs, &rhs),
+        [0.0; 4],
+        "{name}: ordered comparison with NaN must be false"
+    );
+
+    // Propagation and directed infinities through addition, including the
+    // indeterminate form Inf + (-Inf) -> NaN.
+    let sums =
+        arithmetic::<_, _, AddOp, 4>(device, ops, &[nan, inf, -inf, inf], &[1.0, 1.0, 1.0, -inf]);
+    assert!(
+        sums[0].is_nan(),
+        "{name}: NaN + 1 must be NaN, got {}",
+        sums[0]
+    );
+    assert_eq!(sums[1], inf, "{name}: Inf + 1 must stay +Inf");
+    assert_eq!(sums[2], -inf, "{name}: -Inf + 1 must stay -Inf");
+    assert!(
+        sums[3].is_nan(),
+        "{name}: Inf + (-Inf) must be NaN, got {}",
+        sums[3]
+    );
+
+    // Propagation and sign handling through multiplication, including the
+    // indeterminate form 0 * Inf -> NaN.
+    let products =
+        arithmetic::<_, _, MulOp, 4>(device, ops, &[nan, 0.0, inf, -inf], &[1.0, inf, 2.0, 3.0]);
+    assert!(
+        products[0].is_nan(),
+        "{name}: NaN * 1 must be NaN, got {}",
+        products[0]
+    );
+    assert!(
+        products[1].is_nan(),
+        "{name}: 0 * Inf must be NaN, got {}",
+        products[1]
+    );
+    assert_eq!(products[2], inf, "{name}: Inf * 2 must stay +Inf");
+    assert_eq!(products[3], -inf, "{name}: -Inf * 3 must stay -Inf");
+}
+
+/// Dispatch one rank-1 binary arithmetic op through the seam and return the
+/// downloaded results.
+fn arithmetic<D, E, Op, const LEN: usize>(
+    device: &D,
+    ops: &E,
+    lhs: &[f32],
+    rhs: &[f32],
+) -> [f32; LEN]
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    Op: BinaryExpr<E::Dialect>,
+{
+    let a = device.upload(lhs).expect("lhs upload");
+    let b = device.upload(rhs).expect("rhs upload");
+    let out = device.alloc_zeroed::<f32>(LEN).expect("output alloc");
+    let layout = Layout::c_contiguous([LEN]).expect("rank-1 layout");
+    ops.binary_into::<Op, 1>(
+        device,
+        StridedView::new(&a, &layout),
+        StridedView::new(&b, &layout),
+        StridedView::new(&out, &layout),
+    )
+    .expect("binary dispatch");
+    let mut got = [0.0f32; LEN];
+    device.download(&out, &mut got).expect("download");
+    got
 }

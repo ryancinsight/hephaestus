@@ -32,6 +32,13 @@ use super::error::Result;
 /// increasing and below `columns`. Implementations validate these and return
 /// [`crate::HephaestusError`] rather than dispatching against malformed
 /// structure.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait SparseOperatorOps<D: ComputeDevice, T: Pod> {
     /// Device-resident sparse matrix.
     type Matrix;

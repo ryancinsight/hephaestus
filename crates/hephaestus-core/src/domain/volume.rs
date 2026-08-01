@@ -136,6 +136,13 @@ use crate::domain::device::ComputeDevice;
 /// Implementors are zero-sized per-backend markers. A bound of
 /// `R: RayIntegralOps<D>` costs nothing at runtime and every call
 /// monomorphizes to the backend's own kernel dispatch.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait RayIntegralOps<D: ComputeDevice> {
     /// Integrate `field` along each ray into caller-owned `out` (one value
     /// per ray), stepping by `step` world units.

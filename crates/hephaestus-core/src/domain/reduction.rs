@@ -56,6 +56,13 @@ use leto::Layout;
 /// dialect-specific (`Wgsl`, `CudaC`, `HipC`) while the reduction contract is
 /// not. That keeps one seam across backends whose kernels are written in
 /// different languages.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     /// Kernel dialect this backend authors reductions in.
     type Dialect: KernelDialect;
@@ -153,6 +160,13 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
 /// Implementors are zero-sized per-backend markers. A bound of
 /// `R: FullReductionOps<D, T>` costs nothing at runtime and every call
 /// monomorphizes to the backend's own kernel dispatch.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait FullReductionOps<D: ComputeDevice, T: Pod> {
     /// Kernel dialect this backend authors reductions in.
     type Dialect: KernelDialect;

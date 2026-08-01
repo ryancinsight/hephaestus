@@ -178,6 +178,13 @@ pub fn plan_axis_scan(
 /// Implementors are zero-sized per-backend markers, so a bound of
 /// `S: ScanOps<D, T>` costs nothing at runtime and every call monomorphizes
 /// to the backend's own kernel dispatch.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait ScanOps<D: ComputeDevice, T: Pod> {
     /// Kernel dialect this backend authors scan kernels in.
     type Dialect: KernelDialect;

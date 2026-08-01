@@ -78,6 +78,13 @@ pub trait CholeskyHandle<D: ComputeDevice> {
 /// Implementors are zero-sized per-backend markers. A bound of
 /// `R: DecompositionOps<D>` costs nothing at runtime and every call
 /// monomorphizes to the backend's own kernel dispatch.
+///
+/// # Special values
+///
+/// Floating-point NaN and infinity behaviour follows the kernel
+/// dialect's declared capability: see
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// (ADR 0043) for what is and is not promised per dialect.
 pub trait DecompositionOps<D: ComputeDevice> {
     /// LU result handle.
     type Lu<'op>: LuHandle<D>
