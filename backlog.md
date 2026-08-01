@@ -10,7 +10,7 @@ Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
 cuda-oxide + cutile).
 
-## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — in-progress
+## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-owned-download`; scope: the
   `ComputeDevice` owned-download seam, shared transfer conformance, optimized
@@ -38,7 +38,12 @@ cuda-oxide + cutile).
   Independent review approves the failure-atomic copy design after requiring a
   safe ZST path plus changelog entry; both are applied and re-review approves.
   `cargo-semver-checks` cannot retrieve a registry baseline because
-  `hephaestus-core` is unpublished. Exact-head backend CI remains the merge gate.
+  `hephaestus-core` is unpublished. Implementation head `dad12d6` passes CUDA
+  run `30713948491`, ROCm run `30713948448`, WGPU run `30713948446`, and macOS
+  Metal run `30713948456`; hardware-only NVIDIA and AMD jobs skip because no
+  runner was dispatched. The external `recurseml/analysis` service reports its
+  generic error and is not provider evidence. Final docs-only exact-head CI
+  remains PR #175's merge gate.
 
 ## HEPH-PREPARED-L2-OVERWRITE-1 [patch] — done
 

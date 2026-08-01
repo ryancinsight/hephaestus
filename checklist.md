@@ -8,7 +8,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Implement failure-atomic CUDA and ROCm uninitialized host ownership.
 - [x] Cut CUDA/ROCm pseudoinverse and matrix exponential to the owned result.
 - [x] Preserve empty, invalid, differential, and closed-form value contracts.
-- [ ] Pass feature-off, warning-denied, focused Nextest, and exact-head CI.
+- [x] Pass feature-off, warning-denied, focused Nextest, and exact-head CI.
 - [x] Record independent unsafe-contract and evidence review before merge.
 
 Implementation owner: Codex on `codex/hephaestus-owned-download`. Claimed files

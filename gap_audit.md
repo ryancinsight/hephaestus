@@ -34,7 +34,12 @@ architectural decision or a tracked future-work item:
   change allocation count or peak memory; no runtime gain is claimed without a
   controlled hardware benchmark. `hephaestus-core` is unpublished, so
   `cargo-semver-checks` has no registry baseline. WGPU/Metal owned-download
-  zero-fill removal is a separate staging-readback slice.
+  zero-fill removal is a separate staging-readback slice. Implementation head
+  `dad12d6` passes CUDA run `30713948491`, ROCm run `30713948448`, WGPU run
+  `30713948446`, and macOS Metal run `30713948456`; hardware-only NVIDIA and AMD
+  jobs skip because no runner was dispatched. The external
+  `recurseml/analysis` generic error is not backend evidence. Final docs-only
+  exact-head CI remains PR #175's merge gate.
 
 ## [HEPH-PREPARED-L2-OVERWRITE-1] Prepared output lifecycle
 
