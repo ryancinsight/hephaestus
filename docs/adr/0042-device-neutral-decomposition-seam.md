@@ -1,7 +1,11 @@
 # ADR 0042 — Device-neutral decomposition seam
 
-- Status: Proposed
-- Date: 2026-08-01
+- Status: Accepted
+- Date: 2026-08-01 (revised same day: scope narrowed to the LU/QR/Cholesky
+  trio and the scalar fixed at `f32`, matching the kernels' current
+  coverage — the drafted `<T>` parameter and the SVD/eigen families enter
+  when their machinery ships; revision driven by implementation evidence,
+  all four adapters delivered as-built)
 - Refs: atlas `backlog.md#atlas-arch-001` (001e-e1); ADR 0041 (conformance
   crate); the per-backend `MatrixDecompose` traits this seam replaces as the
   cross-backend surface.

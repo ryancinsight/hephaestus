@@ -13,6 +13,9 @@ pub mod infrastructure;
 pub use application::attention::MetalAttentionOps;
 pub use application::axis_reduction_seam::MetalAxisReductionOps;
 pub use application::convolution::MetalConvolutionOps;
+pub use application::decomposition_seam::{
+    MetalCholeskyDecomposition, MetalDecompositionOps, MetalLuDecomposition, MetalQrDecomposition,
+};
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,

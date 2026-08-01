@@ -9,6 +9,8 @@ pub mod convolution;
 /// Matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;
+/// Device-neutral decomposition seam implementation.
+pub mod decomposition_seam;
 /// Elementwise compute dispatch.
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
