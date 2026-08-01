@@ -71,21 +71,24 @@ cuda-oxide + cutile).
 - Owner: Codex on `codex/hephaestus-identity-uniform-pack`; scope: WGPU matrix
   identity dispatch metadata, inherited Metal behavior, focused matrix-power
   contracts, and synchronized PM evidence.
-- Outcome: pack trait-defined additive and multiplicative identity values into
-  one uniform buffer so each non-empty identity dispatch acquires, writes, and
-  binds two uniform buffers rather than three.
+- Outcome: place trait-defined additive and multiplicative identity values in
+  one pooled allocation with separately aligned ranges so each non-empty
+  identity dispatch acquires two uniform buffers rather than three.
 - Non-goals: matrix-power arithmetic, kernel launch count, output allocation,
   scalar identity semantics, CUDA/ROCm launch ABIs, or unmeasured runtime
   claims.
-- Acceptance: custom nonstandard scalar identities and built-in integer/float
-  identities remain exact; empty and non-square behavior is unchanged; shader
-  source exposes one packed identity binding; warning-denied WGPU gates and
-  exact-head WGPU/macOS Metal CI pass.
-- Risk/change class: `[patch]` internal metadata packing. Per-dispatch uniform
-  acquisitions and queue writes fall from three to two by construction; output
-  storage and peak matrix memory are unchanged.
-- Evidence: the shader source contract pins one packed identity binding and
-  three total bindings. Local WGPU execution passes the nonstandard-identity,
+- Acceptance: custom nonstandard scalar identities, admitted vector token
+  layouts, and built-in integer/float identities remain exact; empty and
+  non-square behavior is unchanged; zero and one ranges satisfy device uniform
+  offset alignment without host padding allocation; warning-denied WGPU gates
+  and exact-head WGPU/macOS Metal CI pass.
+- Risk/change class: `[patch]` internal uniform pooling. Per-dispatch uniform
+  acquisitions fall from three to two by construction; queue writes, bindings,
+  output storage, and peak matrix memory are unchanged.
+- Evidence: shader source contracts preserve separate typed identity bindings
+  for scalar and vector tokens, while the buffer-layout contract pins a
+  device-aligned second range for three-lane values. Local WGPU execution passes
+  the nonstandard-identity,
   built-in exponent-zero, empty, odd-power, strided, and non-square matrix-power
   contracts. Formatting, all-target check, warning-denied Clippy, doctests, and
   Rustdoc pass offline. The Atlas development overlay changes the unused-patch

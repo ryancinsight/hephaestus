@@ -1,4 +1,4 @@
-use super::{MatmulZero, MatrixIdentityScalar, identity_shader_source};
+use super::{MatmulZero, MatrixIdentityScalar, identity_buffer_layout, identity_shader_source};
 use hephaestus_core::{DialectScalar, Wgsl};
 
 #[repr(transparent)]
@@ -19,14 +19,21 @@ impl MatrixIdentityScalar for VectorIdentity {
 }
 
 #[test]
-fn identity_shader_packs_scalar_identities_in_one_binding() {
+fn identity_shader_preserves_separate_typed_bindings() {
     let source = identity_shader_source::<f32>();
 
-    assert!(source.contains("@group(0) @binding(2) var<uniform> identity_values: IdentityValues;"));
-    assert_eq!(source.matches("@binding(").count(), 3);
-    assert!(!source.contains("@binding(3)"));
-    assert!(source.contains("identity_values.zero_value"));
-    assert!(source.contains("identity_values.one_value"));
+    assert!(source.contains("@group(0) @binding(2) var<uniform> zero_value: f32;"));
+    assert!(source.contains("@group(0) @binding(3) var<uniform> one_value: f32;"));
+    assert_eq!(source.matches("@binding(").count(), 4);
+    assert!(source.contains("select(zero_value, one_value, id.x == id.y)"));
+}
+
+#[test]
+fn identity_buffer_aligns_three_lane_values_without_host_padding() {
+    let (one_offset, buffer_size) = identity_buffer_layout::<[i32; 3]>(256).unwrap();
+
+    assert_eq!(one_offset, 256);
+    assert_eq!(buffer_size, 268);
 }
 
 #[test]

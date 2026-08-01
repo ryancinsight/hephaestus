@@ -232,12 +232,13 @@ No open feature-combination defect is currently recorded in the backend scope.
 
 - [patch] WGPU matrix-identity uniform packing (audit 2026-07-31). The native
   identity dispatch acquired and wrote separate layout, zero, and one uniform
-  buffers. Zero and one now share one typed-struct binding, reducing per-dispatch
-  uniform acquisitions, writes, and bindings from three to two without changing
-  the output allocation or launch count; Metal inherits the WGPU path. Evidence
-  tier: shader-binding source contract plus real-device nonstandard-identity and
-  built-in matrix-power value contracts; no runtime claim without matched
-  hardware measurements.
+  buffers. Zero and one now occupy separately device-aligned ranges of one
+  pooled buffer, reducing per-dispatch uniform acquisitions from three to two
+  without host padding allocation or changes to queue writes, bindings, output
+  allocation, or launch count; Metal inherits the WGPU path. Evidence tier:
+  scalar/vector shader-binding and three-lane range-alignment source contracts
+  plus real-device nonstandard-identity and built-in matrix-power value
+  contracts; no runtime claim without matched hardware measurements.
 
 - [patch] ROCm pivoted-decomposition host identity initialization (audit
   2026-07-31). Native column-pivoted QR built and uploaded an `O(rows²)` host

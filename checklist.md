@@ -3395,10 +3395,10 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 
 - [x] Claim WGPU matrix-identity uniform packing without touching live sparse,
       attention, or parameterized-unary scopes.
-- [x] Pin the packed-binding shader contract and retain custom-identity value
+- [x] Pin separate typed shader bindings and retain custom-identity value
       coverage.
-- [x] Pack zero/one identity values into one uniform acquisition and queue
-      write.
+- [x] Place zero/one identity values in separately aligned ranges of one pooled
+      uniform allocation.
 - [x] Run focused WGPU formatting, warning-denied diagnostics, Nextest,
       doctests, and Rustdoc.
 - [ ] Record exact hosted WGPU/Metal CI evidence.

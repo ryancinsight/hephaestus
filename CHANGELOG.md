@@ -192,12 +192,12 @@ Target release: 0.18.0.
   Device allocation and arithmetic are unchanged; no runtime gain is claimed
   without matched hardware measurements.
 
-- [patch] Pack WGPU matrix-identity zero and one values into one uniform
-  binding, inherited by Metal. Each non-empty identity dispatch now acquires,
-  writes, and binds two uniform buffers instead of three while preserving
-  trait-defined nonstandard identities. Output storage, launch count, and
-  arithmetic are unchanged; no runtime gain is claimed without matched
-  hardware measurements.
+- [patch] Place WGPU matrix-identity zero and one values in separately aligned
+  ranges of one pooled uniform allocation, inherited by Metal. Each non-empty
+  identity dispatch now acquires two uniform buffers instead of three while
+  preserving trait-defined scalar and vector token layouts. Queue writes,
+  bindings, output storage, launch count, and arithmetic are unchanged; no
+  runtime gain is claimed without matched hardware measurements.
 
 - [patch] Allocate sparse matrix-vector and sparse matrix-dense-matrix results
   through the overwrite-before-read device seam. CUDA and ROCm omit one
