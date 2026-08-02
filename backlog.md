@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — in-progress
+## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on shared `feat/topology-option`; scope: CUDA and ROCm
   decomposition modules that allocate an initialized host vector immediately
@@ -25,9 +25,13 @@
   decomposition Clippy and full-tree formatting pass. Independent review
   initially rejected a substring-based stack-read exception; exact-call and
   exact-array guards were added, focused tests rerun, and re-review approves.
-  Exact-head hosted backend CI remains the merge gate. Rustdoc builds with four
-  pre-existing unrelated broken-link warnings across the CUDA/ROCm stencil and
-  sparse modules.
+  Implementation head `b685cc6` passes CUDA run `30731767939`, ROCm run
+  `30731767934`, WGPU run `30731767943`, and native macOS Metal run
+  `30731767923`; hardware-only NVIDIA and AMD jobs skip because no runner was
+  dispatched. The external `recurseml/analysis` service reports its generic
+  error and is not provider evidence. Final docs-only exact-head CI remains PR
+  #178's merge gate. Rustdoc builds with four pre-existing unrelated broken-link
+  warnings across the CUDA/ROCm stencil and sparse modules.
 
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
 

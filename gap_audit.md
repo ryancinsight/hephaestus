@@ -66,7 +66,11 @@ architectural decision or a tracked future-work item:
   allocation count, transfer volume, device storage, or peak host storage. No
   runtime or peak-memory gain is claimed without matched hardware measurement.
   WGPU/Metal provider-owned staging readback remains separate because the live
-  WGPU device implementation is currently in a peer-owned topology scope.
+  WGPU device implementation was in a peer-owned topology scope during this
+  increment. Implementation head `b685cc6` passes CUDA run `30731767939`, ROCm
+  run `30731767934`, WGPU run `30731767943`, and native macOS Metal run
+  `30731767923`; hardware-only NVIDIA and AMD jobs skip because no runner was
+  dispatched. Final docs-only exact-head CI remains PR #178's merge gate.
 
 ## [HEPH-PREPARED-L2-OVERWRITE-1] Prepared output lifecycle
 
