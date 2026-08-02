@@ -38,6 +38,30 @@ architectural decision or a tracked future-work item:
   combines the explicit initialized-byte invariant, value-semantic device
   execution, and independent review.
 
+## [HEPH-WGPU-DECOMP-READBACK-1] Decomposition host initialization
+
+- Finding: after WGPU gained provider-owned mapped readback, nine non-blocked
+  decomposition families still allocated 16 initialized host vectors
+  immediately before full mapped copies wholly overwrote them. Metal inherited
+  the same path through its WGPU-backed device.
+- Resolution: route matrix inputs and solve right-hand sides in bidiagonal,
+  Bunch-Kaufman, column-pivoted QR, eigenvalue, complete-pivoted LU, Hessenberg,
+  Schur, SVD, and UDU families through `ComputeDevice::download_owned`. Leave
+  blocked LU, QR, and Cholesky untouched under the active KS-5 claim.
+- Evidence: a syntax-aware source regression rejects direct caller-owned heap
+  readback, including method and UFCS forms, and pins the exact 16 owned calls
+  across every claimed module. The shared decomposition conformance suite
+  preserves factorization, solve, reconstruction, invalid, and empty values.
+  Both focused tests pass under the exact committed Git graph. Formatting,
+  all-target warning-denied Clippy, doctests, and warning-clean Rustdoc pass;
+  independent re-review reports no remaining finding. Hosted provider evidence
+  remains the merge gate.
+- Residual: allocation count, transfer volume, device storage, and peak host
+  storage are unchanged. The source change removes 16 linear host
+  initialization writes by construction; no runtime or peak-memory improvement
+  is claimed without controlled hardware measurement. Native Metal execution
+  remains hosted macOS evidence.
+
 ## [HEPH-WGPU-METAL-OWNED-READBACK-1] Themis package identity blocker
 
 - Finding: exact-head Metal and ROCm CI failed before compilation because

@@ -41,6 +41,7 @@ criterion = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }
 aequitas = { workspace = true }
+syn = { workspace = true }
 
 [[bench]]
 name = "elementwise_into"

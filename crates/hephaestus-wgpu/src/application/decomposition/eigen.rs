@@ -71,8 +71,7 @@ pub fn symmetric_eigen_jacobi(
         });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner =
@@ -104,8 +103,7 @@ pub fn symmetric_eigenvalues_jacobi(
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let s_host = leto_ops::symmetric_eigenvalues_jacobi(&view).map_err(|e| {
@@ -128,8 +126,7 @@ pub fn eigenvalues(
         return device.alloc_zeroed::<Complex<f32>>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let e_host = leto_ops::eigenvalues(&view).map_err(|e| HephaestusError::DispatchFailed {
