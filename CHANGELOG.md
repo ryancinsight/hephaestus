@@ -9,8 +9,9 @@ Target release: 0.18.0.
 ### Fixed
 
 - [patch] Bind the `moirai` dependency to its `moirai-runtime` registry package
-  identity while retaining the `moirai` Rust crate name, and align CI's local
-  Mnemosyne patches with the published package identities.
+  identity while retaining the `moirai` Rust crate name, add registry versions
+  to every normal path and Git dependency used by publishable packages, and
+  align CI's local Mnemosyne patches with the published package identities.
 
 - [patch] WGPU and Metal owned device readback now copy mapped staging bytes
   directly into reserved host result capacity and publish vector length only

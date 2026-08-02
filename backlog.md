@@ -2,16 +2,18 @@
 
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
 
-- Owner: Codex `/root`; scope: the root Moirai dependency identity, clean
-  lockfile, focused WGPU resolution gate, and release records.
+- Owner: Codex `/root`; scope: root dependency package identities and registry
+  versions, clean lockfile, focused WGPU resolution gate, and release records.
 - Acceptance: the `moirai` Rust import resolves package `moirai-runtime` from
-  Moirai's default branch without compatibility code in Hephaestus or its
-  consumers.
+  Moirai's default branch without compatibility code, and all six publishable
+  packages pass exact-source crates.io dry runs.
 - Status: the exact external graph resolves Moirai `b7988419`, Leto
   `a5d53ca9`, and the published package identity; format and the focused locked
   WGPU package check pass. Exact-head CI exposed stale Mnemosyne patch keys;
-  those keys now match the published package identities. Hosted verification
-  and merge remain.
+  those keys now match the published package identities. The first crates.io
+  dry run then rejected unversioned normal Git dependencies before upload; all
+  normal path and Git dependencies now carry their registry versions. Exact-
+  source dry runs, hosted verification, and merge remain.
 
 ## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — done
 
