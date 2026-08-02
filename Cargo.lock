@@ -643,7 +643,7 @@ dependencies = [
  "bytemuck",
  "eunomia",
  "leto",
- "themis",
+ "themis-topology",
  "thiserror 2.0.19",
 ]
 
@@ -664,7 +664,7 @@ dependencies = [
  "moirai-gpu",
  "moirai-sync",
  "smallvec",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -679,7 +679,7 @@ dependencies = [
  "hephaestus-wgpu",
  "leto",
  "leto-ops",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -709,7 +709,7 @@ dependencies = [
  "leto",
  "leto-ops",
  "smallvec",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -730,7 +730,7 @@ dependencies = [
  "moirai-sync",
  "pollster",
  "smallvec",
- "themis",
+ "themis-topology",
  "wgpu",
  "windows 0.62.2",
 ]
@@ -744,7 +744,7 @@ dependencies = [
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -755,7 +755,7 @@ dependencies = [
  "eunomia",
  "mnemosyne",
  "rkyv",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -856,7 +856,7 @@ dependencies = [
  "leto",
  "moirai",
  "serde",
- "themis",
+ "themis-topology",
  "thiserror 2.0.19",
 ]
 
@@ -954,7 +954,7 @@ dependencies = [
  "eunomia",
  "mnemosyne-backend",
  "mnemosyne-core",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -998,7 +998,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1012,7 +1012,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1093,7 +1093,7 @@ dependencies = [
  "mnemosyne-core",
  "moirai-core",
  "moirai-utils",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1107,7 +1107,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis-topology",
  "thiserror 1.0.69",
 ]
 
@@ -1142,7 +1142,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1933,7 +1933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 
 [[package]]
-name = "themis"
+name = "themis-topology"
 version = "0.10.1"
 dependencies = [
  "melinoe",
@@ -2616,8 +2616,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
-name = "hyperion"
+name = "proteus"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "athena-core"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "athena-leto"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "hephaestus-core"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-cuda"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-metal"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-rocm"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-wgpu"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "moirai-http"
+version = "0.4.0"
 
 [[patch.unused]]
 name = "apollo-fft"
@@ -2632,39 +2672,35 @@ name = "apollo-sht"
 version = "0.7.0"
 
 [[patch.unused]]
-name = "coeus-autograd"
+name = "ritk-core"
 version = "0.9.0"
 
 [[patch.unused]]
-name = "coeus-core"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-nn"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-ops"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-optim"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-tensor"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "moirai-http"
-version = "0.4.0"
-
-[[patch.unused]]
-name = "asclepius"
+name = "ritk-dicom"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius-coeus"
+name = "ritk-image"
+version = "0.2.0"
+
+[[patch.unused]]
+name = "ritk-io"
+version = "0.2.0"
+
+[[patch.unused]]
+name = "ritk-registration"
+version = "0.53.0"
+
+[[patch.unused]]
+name = "ritk-spatial"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "ritk-vtk"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "iris"
 version = "0.1.0"
 
 [[patch.unused]]
@@ -2696,16 +2732,32 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "proteus"
-version = "0.1.0"
+name = "gaia"
+version = "0.3.0"
 
 [[patch.unused]]
-name = "athena-core"
-version = "0.1.0"
+name = "coeus-autograd"
+version = "0.9.0"
 
 [[patch.unused]]
-name = "athena-leto"
-version = "0.1.0"
+name = "coeus-core"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-nn"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-ops"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-optim"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-tensor"
+version = "0.9.0"
 
 [[patch.unused]]
 name = "horae"
@@ -2716,37 +2768,5 @@ name = "tyche-core"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "gaia"
-version = "0.3.0"
-
-[[patch.unused]]
-name = "ritk-core"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "ritk-dicom"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "ritk-image"
-version = "0.2.0"
-
-[[patch.unused]]
-name = "ritk-io"
-version = "0.2.0"
-
-[[patch.unused]]
-name = "ritk-registration"
-version = "0.53.0"
-
-[[patch.unused]]
-name = "ritk-spatial"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "ritk-vtk"
+name = "hyperion"
 version = "0.1.0"
