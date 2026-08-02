@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — in progress
+## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-rocm-copy-sync`; scope: ROCm's synchronous
   device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
@@ -25,7 +25,11 @@
   no-default-feature contract and transfer binaries pass 37/37, all-target
   warning-denied Clippy and doctests pass, and formatting is clean. Physical
   value execution remains hosted ROCm evidence. Independent re-review approves
-  with no remaining findings. Exact-head provider CI remains.
+  with no remaining findings. Exact implementation-head WGPU run `30772689478`,
+  CUDA run `30772689476`, ROCm run `30772689469`, and native macOS Metal run
+  `30772689455` pass. Hardware-only NVIDIA and AMD jobs skip because matching
+  labeled runners are unavailable; PR #187's documentation-only closeout head
+  remains the merge gate.
 
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — done
 

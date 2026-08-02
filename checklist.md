@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Add adapterless source coverage for the no-global-barrier contract.
 - [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
   review.
-- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-rocm-copy-sync`. Claimed files are
 ROCm memory transfer infrastructure, focused ROCm transfer contracts, and
@@ -31,6 +31,10 @@ source regression to pin synchronous completion explicitly; corrected run
 pass on the corrected diff. Independent re-review approves with no remaining
 findings and confirms synchronous completion, zero-byte handling, exact byte
 calculation, mismatch validation, and the limited performance claim.
+Exact implementation-head WGPU run `30772689478`, CUDA run `30772689476`, ROCm
+run `30772689469`, and native macOS Metal run `30772689455` pass. Hardware-only
+NVIDIA and AMD jobs skip because matching labeled runners are unavailable; PR
+#187's documentation-only closeout head remains the merge gate.
 
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — Owner: Codex
 

@@ -30,11 +30,15 @@ architectural decision or a tracked future-work item:
   focused source coverage passes 1/1; the complete no-default-feature transfer
   and contract binaries pass 37/37, with warning-denied Clippy, doctests, and
   formatting green. Independent re-review approves with no remaining findings.
+  Exact implementation-head WGPU run `30772689478`, CUDA run `30772689476`,
+  ROCm run `30772689469`, and native macOS Metal run `30772689455` pass.
 - Residual: the Windows host has no physical ROCm device. Hosted ROCm CI is the
   execution oracle. The change removes one whole-device barrier call by
   construction; transfer bytes, buffer ownership, and synchronous completion
   remain unchanged. No runtime speedup is claimed without matched hardware
-  measurement.
+  measurement. Hardware-only NVIDIA and AMD jobs skip because matching labeled
+  runners are unavailable; PR #187's documentation-only closeout head remains
+  the merge gate.
 
 ## [HEPH-ROCM-SPARSE-READBACK-1] CSR host initialization
 
