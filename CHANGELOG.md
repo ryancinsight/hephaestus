@@ -8,6 +8,9 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] Bind the `moirai` dependency to its `moirai-runtime` registry package
+  identity while retaining the `moirai` Rust crate name.
+
 - [patch] CUDA and ROCm decomposition paths route 53 heap-vector readbacks
   through provider-owned host allocation, eliminating the initialization pass
   that previously zero-filled each vector immediately before a synchronous

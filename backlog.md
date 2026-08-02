@@ -1,5 +1,16 @@
 # Backlog — hephaestus
 
+## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
+
+- Owner: Codex `/root`; scope: the root Moirai dependency identity, clean
+  lockfile, focused WGPU resolution gate, and release records.
+- Acceptance: the `moirai` Rust import resolves package `moirai-runtime` from
+  Moirai's default branch without compatibility code in Hephaestus or its
+  consumers.
+- Status: the exact external graph resolves Moirai `b7988419`, Leto
+  `a5d53ca9`, and the published package identity; format and the focused locked
+  WGPU package check pass. Exact-head hosted verification and merge remain.
+
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on shared `feat/topology-option`; scope: CUDA and ROCm
