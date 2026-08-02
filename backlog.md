@@ -2655,11 +2655,15 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   `mean` reciprocal and `__rpow__` `ln` host scalars (irreducible without new
   backend kernels; no full-array mean op exists) and the PyO3-boundary shape
   validation (different error-domain binding helpers, not duplicated math).
-  Incidental findings recorded: themis git-package resolution defect
-  (workspace declares git package `themis`, which exists nowhere; the
-  committed no-source Cargo.lock entry masks it under `--locked` — any
-  re-resolution fails) and a pre-existing `clippy::collapsible_if` debt in
-  `hephaestus-conformance/src/transfer.rs:119`.
+  Incidental findings: themis git-package resolution defect (workspace
+  declared git package `themis`, which upstream renamed to `themis-topology`
+  while keeping lib name `themis`; the committed no-source Cargo.lock entry
+  masked it under `--locked` — any re-resolution failed, including CI's
+  `cargo update` step). Fixed in `473dcf7`: `package = "themis-topology"` on
+  the workspace dependency; extern crate name unchanged. Pre-existing
+  `clippy::collapsible_if` debt in
+  `hephaestus-conformance/src/transfer.rs:119` remains (CI never clippies
+  conformance).
 - [KS-7] [minor] Perf batch from the audit: CUDA streams + pinned staging
   (CU-P1/P6/M3), batched-matmul `blockIdx.z` (CU-P5), typed CUDA cache keys
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
