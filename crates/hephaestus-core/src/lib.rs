@@ -34,8 +34,8 @@ pub use domain::decomposition::{
     validate_square_operand,
 };
 pub use domain::decomposition_seam::{
-    CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle,
-    SvdHandle, SymmetricEigenHandle,
+    BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle,
+    LuHandle, QrHandle, SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 pub use domain::dense_product::DenseProductOps;
 pub use domain::device::{

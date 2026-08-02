@@ -8,15 +8,16 @@
 //! a reference-count bump, not a copy).
 
 use hephaestus_core::{
-    CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView, SvdHandle, SymmetricEigenHandle,
+    BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle,
+    LuHandle, QrHandle, Result, StridedView, SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 
 use crate::application::decomposition::{
-    GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose,
-    col_piv_qr, full_piv_lu, lu_decompose, qr_decompose, singular_values, svd_decompose,
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    GpuBunchKaufmanDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition,
+    GpuUduDecomposition, bunch_kaufman, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose,
+    qr_decompose, singular_values, svd_decompose, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::MetalBuffer;
@@ -119,6 +120,57 @@ impl SvdHandle<MetalDevice> for MetalSvdDecomposition {
     }
     fn singular_values(&self) -> &MetalBuffer<f32> {
         &self.singular_values
+    }
+}
+
+/// Bunch–Kaufman result: the WGPU handle plus its factors rewrapped for
+/// this device.
+pub struct MetalBunchKaufmanDecomposition {
+    inner: GpuBunchKaufmanDecomposition,
+    l: MetalBuffer<f32>,
+    d: MetalBuffer<f32>,
+}
+
+impl BunchKaufmanHandle<MetalDevice> for MetalBunchKaufmanDecomposition {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn l_buffer(&self) -> &MetalBuffer<f32> {
+        &self.l
+    }
+    fn d_buffer(&self) -> &MetalBuffer<f32> {
+        &self.d
+    }
+    fn permutation(&self) -> &[usize] {
+        self.inner.permutation()
+    }
+}
+
+/// `U·D·Uᵀ` result: the WGPU handle plus its factors rewrapped for this
+/// device.
+pub struct MetalUduDecomposition {
+    inner: GpuUduDecomposition,
+    u: MetalBuffer<f32>,
+    d: MetalBuffer<f32>,
+}
+
+impl UduHandle<MetalDevice> for MetalUduDecomposition {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn u_buffer(&self) -> &MetalBuffer<f32> {
+        &self.u
+    }
+    fn d_buffer(&self) -> &MetalBuffer<f32> {
+        &self.d
+    }
+    fn det(&self) -> f32 {
+        self.inner.det()
+    }
+    fn solve(&self, device: &MetalDevice, rhs: &MetalBuffer<f32>) -> Result<MetalBuffer<f32>> {
+        self.inner
+            .solve(device.wgpu_device(), &rhs.inner)
+            .map(|inner| MetalBuffer { inner })
     }
 }
 
@@ -361,6 +413,51 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
                 layout: input.layout,
             },
         )
+    }
+
+    type BunchKaufman<'op> = MetalBunchKaufmanDecomposition;
+    type Udu<'op> = MetalUduDecomposition;
+
+    fn bunch_kaufman<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::BunchKaufman<'op>> {
+        let inner = bunch_kaufman(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let l = MetalBuffer {
+            inner: inner.l_buffer().clone(),
+        };
+        let d = MetalBuffer {
+            inner: inner.d_buffer().clone(),
+        };
+        Ok(MetalBunchKaufmanDecomposition { inner, l, d })
+    }
+
+    fn udu<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::Udu<'op>> {
+        let inner = udu_decompose(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let u = MetalBuffer {
+            inner: inner.u_buffer().clone(),
+        };
+        let d = MetalBuffer {
+            inner: inner.d_buffer().clone(),
+        };
+        Ok(MetalUduDecomposition { inner, u, d })
     }
 
     fn cholesky<'op>(

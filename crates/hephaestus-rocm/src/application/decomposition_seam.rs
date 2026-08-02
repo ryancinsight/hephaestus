@@ -6,17 +6,18 @@
 //! `RocmDevice`, matching the crate's other seam adapters.
 
 use hephaestus_core::{
-    CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView, SvdHandle, SymmetricEigenHandle,
+    BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle,
+    LuHandle, QrHandle, Result, StridedView, SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
 use crate::application::decomposition::{
-    GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose,
-    col_piv_qr, full_piv_lu, lu_decompose, qr_decompose, singular_values, svd_decompose,
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    GpuBunchKaufmanDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition,
+    GpuUduDecomposition, bunch_kaufman, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose,
+    qr_decompose, singular_values, svd_decompose, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use crate::application::strided::StridedOperand;
 
@@ -143,6 +144,39 @@ impl SvdHandle<RocmDevice> for GpuSvdDecomposition {
     }
 }
 
+impl BunchKaufmanHandle<RocmDevice> for GpuBunchKaufmanDecomposition {
+    fn order(&self) -> usize {
+        self.n()
+    }
+    fn l_buffer(&self) -> &RocmBuffer<f32> {
+        Self::l_buffer(self)
+    }
+    fn d_buffer(&self) -> &RocmBuffer<f32> {
+        Self::d_buffer(self)
+    }
+    fn permutation(&self) -> &[usize] {
+        Self::permutation(self)
+    }
+}
+
+impl UduHandle<RocmDevice> for GpuUduDecomposition {
+    fn order(&self) -> usize {
+        self.n()
+    }
+    fn u_buffer(&self) -> &RocmBuffer<f32> {
+        Self::u_buffer(self)
+    }
+    fn d_buffer(&self) -> &RocmBuffer<f32> {
+        Self::d_buffer(self)
+    }
+    fn det(&self) -> f32 {
+        Self::det(self)
+    }
+    fn solve(&self, device: &RocmDevice, rhs: &RocmBuffer<f32>) -> Result<RocmBuffer<f32>> {
+        Self::solve(self, device, rhs)
+    }
+}
+
 /// Convert the device-neutral view into this backend's operand pair.
 #[inline]
 fn operand<'a>(view: StridedView<'a, RocmBuffer<f32>, 2>) -> StridedOperand<'a, f32, 2> {
@@ -226,6 +260,25 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         input: StridedView<'_, RocmBuffer<f32>, 2>,
     ) -> Result<RocmBuffer<f32>> {
         singular_values(device, operand(input))
+    }
+
+    type BunchKaufman<'op> = GpuBunchKaufmanDecomposition;
+    type Udu<'op> = GpuUduDecomposition;
+
+    fn bunch_kaufman<'op>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<f32>, 2>,
+    ) -> Result<Self::BunchKaufman<'op>> {
+        bunch_kaufman(device, operand(input))
+    }
+
+    fn udu<'op>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<f32>, 2>,
+    ) -> Result<Self::Udu<'op>> {
+        udu_decompose(device, operand(input))
     }
 
     fn cholesky<'op>(
