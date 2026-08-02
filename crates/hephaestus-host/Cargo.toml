@@ -1,0 +1,16 @@
+[package]
+name = "hephaestus-host"
+description = "Host reference device for the Hephaestus seams: conformance-grade CPU implementors over leto (ADR 0046)"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bytemuck = { workspace = true }
+hephaestus-core = { path = "../hephaestus-core" }
+themis = { workspace = true }
+
+[dev-dependencies]
+hephaestus-conformance = { path = "../hephaestus-conformance" }
