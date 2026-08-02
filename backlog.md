@@ -2931,6 +2931,19 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   KS-6 lane's merged PR #180 (unblocked only because master is unprotected);
   the last green master CI was 2026-08-02T04:25Z, before the remote moved.
   Re-open trigger: none — this item is the cure.
+  Status: done (verified 2026-08-02, user session). The CI configure
+  template fix (`fix(ci)` 197b161/7f48f20/1a65172: patch `mnemosyne-memory` /
+  `mnemosyne-memory-core` identities) plus the manifest/lockfile migration
+  landed via merged PRs #179/#181/#182; `repos/mnemosyne` refreshed to
+  `213fead`. Verification on the claimed lane (shared overlay + refreshed
+  checkout): `cargo metadata --all-features` and `cargo update --workspace`
+  (the CI configure step verbatim) exit 0; fmt/check (wgpu no-default-features
+  lib + all-targets, cuda, metal)/clippy wgpu `-D warnings`/nextest core
+  84/84/wgpu 210/210/doctest 1/1/doc all green. Local doc `--all-features`
+  exits 101 only on `hephaestus-rocm`, the Linux-only `rocm` feature guard
+  (CI-covered). Lockfile churn from the overlay refresh was intentionally
+  reverted — the committed lock keeps git-source pins for non-overlay release
+  builds.
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
   implementation are delivered; remaining work is the CUDA kernel/launch
