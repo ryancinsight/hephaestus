@@ -97,8 +97,7 @@ pub fn svd_decompose(
         return svd_empty(device, rows, cols);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner = leto_ops::svd_decompose(&view).map_err(|e| HephaestusError::DispatchFailed {
@@ -139,8 +138,7 @@ pub fn svd_rank_revealing(
         return svd_empty(device, rows, cols);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner =
@@ -182,8 +180,7 @@ pub fn singular_values(
         return device.alloc_zeroed::<f32>(0);
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let s_host = leto_ops::singular_values(&view).map_err(|e| HephaestusError::DispatchFailed {

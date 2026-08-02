@@ -219,7 +219,7 @@ fn laplacian_2d(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 ";
 
-/// Provider-owned implementation of [`StencilOps`] for Wgpu.
+/// Provider-owned implementation of [`hephaestus_core::StencilOps`] for WGPU.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuStencilOps;
 

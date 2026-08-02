@@ -8,6 +8,10 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] WGPU and Metal non-blocked decomposition paths route 16 full-vector
+  host readbacks through provider-owned allocation, eliminating the initialized
+  host-vector pass that mapped staging immediately overwrote.
+
 - [patch] Bind the `moirai` dependency to its `moirai-runtime` registry package
   identity while retaining the `moirai` Rust crate name, add registry versions
   to every normal path and Git dependency used by publishable packages, and

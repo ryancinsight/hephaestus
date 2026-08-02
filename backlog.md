@@ -1,5 +1,37 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-wgpu-decomposition-readback`; scope: WGPU
+  non-blocked decomposition full-vector readbacks, their source/value contract,
+  Metal inheritance, and owner-keyed PM/release records.
+- Outcome: route host-delegated decomposition inputs and solve right-hand sides
+  through `ComputeDevice::download_owned`, removing the initialized host-vector
+  pass that mapped staging wholly overwrites.
+- Non-goals: `lu`, `qr`, and `cholesky` files claimed by KS-5; core host-loop
+  consolidation; CUDA/ROCm; decomposition arithmetic; transfer staging policy;
+  and runtime or peak-memory claims without matched measurements.
+- Acceptance: every direct full-vector readback in the nine claimed families is
+  provider-owned; empty, invalid, factorization, solve, and reconstruction
+  values remain unchanged; a source regression prevents initialized heap
+  readbacks from returning; focused Nextest, warning-denied Clippy, formatting,
+  independent review, and exact-head WGPU/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; host allocation initialization only.
+  Allocation count, transfer volume, and device storage remain unchanged.
+- Status: implementation and focused exact-source verification complete
+  2026-08-02. Sixteen matrix-input and solve-vector readbacks now use WGPU's
+  failure-atomic `download_owned`; the syntax-aware source regression and shared
+  decomposition value contract pass 2/2 under the committed Git graph. The
+  Atlas-overlay attempt failed before Hephaestus compilation because fresh
+  peer-owned Moirai `main` enabled `missing_docs` while its async feature
+  surface remained incomplete; the locked CI-equivalent graph at Moirai
+  `b7988419` compiles and tests cleanly. Formatting, all-target warning-denied
+  Clippy, doctests 2/2, and warning-clean Rustdoc pass. Independent review
+  approves the corrected syntax-aware regression. Exact implementation head
+  `d27cfd6` passes WGPU run `30760402397`, CUDA run `30760402388`, ROCm run
+  `30760402390`, and native macOS Metal run `30760402389`. Hardware-only NVIDIA
+  and AMD jobs skip because this dispatch did not request self-hosted devices.
+
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
 
 - Owner: Codex `/root`; scope: root dependency package identities and registry

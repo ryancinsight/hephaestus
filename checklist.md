@@ -2,6 +2,36 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — Owner: Codex
+
+- [x] Record the exact non-blocked WGPU direct-readback inventory and preserve
+  the shared decomposition value baseline.
+- [x] Replace initialized host vectors with failure-atomic provider-owned
+  readbacks in `bidiagonal`, `bunch_kaufman`, `col_piv_qr`, `eigen`,
+  `full_piv_lu`, `hessenberg`, `schur`, `svd`, and `udu`.
+- [x] Add a source contract that rejects direct heap-vector `download` calls in
+  the claimed modules while leaving KS-5's `lu`, `qr`, and `cholesky` untouched.
+- [x] Run format, focused WGPU Nextest, warning-denied Clippy, doctest/Rustdoc,
+  independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-wgpu-decomposition-readback`.
+Claimed files are the nine non-blocked WGPU decomposition modules,
+`crates/hephaestus-wgpu/tests/decomposition_contracts.rs`, and owner-keyed
+`CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md` entries.
+Exact-source MSVC Nextest run `879edae7-437c-4179-8692-f41cc64b212d` passes the
+syntax-aware source regression and shared decomposition contract 2/2; the tests
+execute in 249 ms and 2.521 s respectively. The initial
+Atlas-overlay attempt fails before Hephaestus compilation on a fresh peer-owned
+Moirai `missing_docs` ratchet; the committed Git graph compiles cleanly.
+Formatting, all-target warning-denied Clippy, doctests 2/2, and warning-clean
+Rustdoc pass. The package Rustdoc gate also exposed and fixed one pre-existing
+unresolved `StencilOps` link without changing stencil behavior. Independent
+re-review approves the syntax-aware regression with no remaining findings.
+Exact implementation head `d27cfd6` passes WGPU run `30760402397`, CUDA run
+`30760402388`, ROCm run `30760402390`, and native macOS Metal run `30760402389`.
+Hardware-only NVIDIA and AMD jobs skip because this dispatch did not request
+self-hosted devices.
+
 ## KS-5 blocked-LU slice [major] — Owner: user session
 
 - [ ] Hoist the blocked-LU host loop into `hephaestus-core` per ADR-0003:

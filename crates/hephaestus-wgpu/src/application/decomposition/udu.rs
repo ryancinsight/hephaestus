@@ -62,8 +62,7 @@ impl GpuUduDecomposition {
             .inner
             .as_ref()
             .expect("invariant: non-empty UDU decomposition stores host factors");
-        let mut rhs_host = vec![0.0f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             leto::Layout::c_contiguous([self.n])
@@ -113,8 +112,7 @@ pub fn udu_decompose(
         });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner = leto_ops::udu_decompose(&view).map_err(|e| HephaestusError::DispatchFailed {
