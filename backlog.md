@@ -18,7 +18,14 @@
   WGPU/CUDA/ROCm/macOS Metal CI pass.
 - Risk/change class: `[patch] [perf]`; host initialization only. Allocation
   count, transfer volume, device storage, and public API remain unchanged.
-- Status: claimed 2026-08-02; baseline and implementation pending.
+- Status: implementation and focused local verification complete 2026-08-02.
+  All three CSR vectors use provider-owned readback. The adapterless source
+  contract passes 1/1, and the focused sparse contract remains green 1/1;
+  physical value execution is runner-gated on this Windows host. Formatting,
+  no-default-feature all-target warning-denied Clippy, doctests, and Rustdoc
+  complete; Rustdoc retains two pre-existing unrelated broken links. Exact-head
+  provider CI remains. Independent review approves with no findings and notes
+  the documented lack of local physical ROCm execution.
 
 ## HEPH-METAL-ACQUISITION-1 [minor] — done
 
