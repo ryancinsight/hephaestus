@@ -26,7 +26,9 @@ architectural decision or a tracked future-work item:
   source contract 1/1 and focused sparse contract 1/1; warning-denied Clippy,
   formatting, doctests, and Rustdoc complete. Independent review approves with
   no findings and confirms the provider's synchronous failure-atomic transfer
-  invariant plus the scope of the recorded evidence.
+  invariant plus the scope of the recorded evidence. Exact implementation head
+  `922b05c` passes WGPU run `30770979399`, CUDA run `30770979420`, ROCm run
+  `30770979416`, and native macOS Metal run `30770979385`.
 - Residual: the Windows host has no physical ROCm device, so the local sparse
   test exits through its documented device guard. Hosted hardware execution is
   reported separately. Allocation count, transfer count and volume, device

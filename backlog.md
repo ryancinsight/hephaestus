@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — in progress
+## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-rocm-sparse-readback`; scope: ROCm CSR
   device-to-host reconstruction, its focused source/value contracts, and
@@ -23,9 +23,13 @@
   contract passes 1/1, and the focused sparse contract remains green 1/1;
   physical value execution is runner-gated on this Windows host. Formatting,
   no-default-feature all-target warning-denied Clippy, doctests, and Rustdoc
-  complete; Rustdoc retains two pre-existing unrelated broken links. Exact-head
-  provider CI remains. Independent review approves with no findings and notes
-  the documented lack of local physical ROCm execution.
+  complete; Rustdoc retains two pre-existing unrelated broken links.
+  Independent review approves with no findings and notes the documented lack
+  of local physical ROCm execution. Exact implementation head `922b05c` passes
+  WGPU run `30770979399`, CUDA run `30770979420`, ROCm run `30770979416`, and
+  native macOS Metal run `30770979385`. Hardware-only NVIDIA and AMD jobs skip
+  because this dispatch did not request self-hosted devices. PR #186's
+  docs-only closure head repeats the provider matrix as the merge gate.
 
 ## HEPH-METAL-ACQUISITION-1 [minor] — done
 

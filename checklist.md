@@ -9,7 +9,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Add a source contract preventing direct heap-vector CSR readbacks.
 - [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
   review.
-- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-rocm-sparse-readback`. Claimed files
 are `crates/hephaestus-rocm/src/application/sparse/mod.rs`, focused ROCm sparse
@@ -25,7 +25,11 @@ all-target warning-denied Clippy, doctests, and Rustdoc complete. Rustdoc
 retains two pre-existing unrelated broken links in sparse-seam and stencil
 documentation. Independent review approves with no findings; it confirms the
 three synchronous provider-owned transfers, unchanged conversion/reconstruction
-path, empty handling, and accurate evidence limits.
+path, empty handling, and accurate evidence limits. Exact implementation head
+`922b05c` passes WGPU run `30770979399`, CUDA run `30770979420`, ROCm run
+`30770979416`, and native macOS Metal run `30770979385`. Hardware-only NVIDIA
+and AMD jobs skip because no self-hosted device was requested. PR #186's
+docs-only closure head repeats the provider matrix before merge.
 
 ## HEPH-METAL-ACQUISITION-1 [minor] — Owner: Codex
 
