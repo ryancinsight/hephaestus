@@ -87,8 +87,7 @@ impl GpuQrDecomposition {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0f32; m];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             leto::Layout::c_contiguous([m]).expect("infallible: valid contiguous layout"),
@@ -126,8 +125,7 @@ pub fn qr_decompose(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
 
@@ -307,8 +305,7 @@ pub fn qr_decompose_blocked(
         }
 
         // Download final matrix to extract R.
-        let mut host = vec![0.0f32; m * n];
-        device.download(&work_buf, &mut host)?;
+        let host = device.download_owned(&work_buf)?;
 
         // Merge R (upper triangle of host) with the accumulated reflector tails.
         for i in 0..m {

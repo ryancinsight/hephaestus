@@ -69,8 +69,7 @@ impl GpuUduDecomposition {
             .ok_or_else(|| HephaestusError::DispatchFailed {
                 message: "UDU factor missing for non-empty matrix".to_string(),
             })?;
-        let mut rhs_host = vec![0.0_f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
         let layout = leto::Layout::c_contiguous([self.n]).map_err(|error| {
             HephaestusError::DispatchFailed {
                 message: format!("UDU RHS layout failed: {error}"),
@@ -120,8 +119,7 @@ pub fn udu_decompose(
         });
     }
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner =
         leto_ops::udu_decompose(&view).map_err(|error| HephaestusError::DispatchFailed {

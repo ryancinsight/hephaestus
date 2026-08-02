@@ -41,6 +41,33 @@ architectural decision or a tracked future-work item:
   `recurseml/analysis` generic error is not backend evidence. Final docs-only
   exact-head CI remains PR #175's merge gate.
 
+## [HEPH-DECOMP-OWNED-READBACK-1] Decomposition host initialization
+
+- Finding: after the provider-owned download seam landed, CUDA and ROCm
+  decomposition modules still allocated 53 zero-filled heap vectors immediately
+  before synchronous driver copies wholly overwrote them. This repeated the
+  superseded caller-owned transfer pattern across matrix inputs, solve vectors,
+  factors, reflector data, and permutations.
+- Resolution: route all 25 CUDA and 28 ROCm heap-vector decomposition readbacks
+  through `ComputeDevice::download_owned`. Retain seven ROCm one-word status and
+  rank reads as fixed stack arrays because they allocate no heap storage and
+  encode the validation ABI directly.
+- Evidence: physical CUDA decomposition conformance preserves factorization,
+  solve, invalid, empty, and decomposition values and passes with a structural
+  source regression. Adapterless ROCm compiles the full decomposition surface
+  and executes the same structural regression; warning-denied Clippy passes for
+  both providers. The CUDA/ROCm provider implementations synchronously publish
+  vector length only after a successful complete copy, as verified by the
+  shared owned-transfer contract. Independent review required exact approved
+  stack-read statements plus exact one-word declarations in the structural
+  oracle; the correction passes focused reruns and re-review approves.
+- Residual: no physical ROCm device is available locally. The change removes
+  53 linear host initialization writes by construction but does not alter
+  allocation count, transfer volume, device storage, or peak host storage. No
+  runtime or peak-memory gain is claimed without matched hardware measurement.
+  WGPU/Metal provider-owned staging readback remains separate because the live
+  WGPU device implementation is currently in a peer-owned topology scope.
+
 ## [HEPH-PREPARED-L2-OVERWRITE-1] Prepared output lifecycle
 
 - Finding: the earlier fused map-reduction changelog overclaimed that prepared

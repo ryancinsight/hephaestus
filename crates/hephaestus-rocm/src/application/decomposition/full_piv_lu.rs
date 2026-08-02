@@ -103,8 +103,7 @@ impl GpuFullPivLuDecomposition {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0_f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             Layout::c_contiguous([self.n]).map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("complete-pivoted LU solve RHS layout failed: {error}"),
@@ -426,10 +425,8 @@ fn factor_on_device(
     let rank = usize::try_from(rank_host[0]).map_err(|_| HephaestusError::DispatchFailed {
         message: "complete-pivoted LU rank exceeds host index range".to_string(),
     })?;
-    let mut row_perm_host = vec![0_u32; n];
-    let mut col_perm_host = vec![0_u32; n];
-    device.download(&row_perm, &mut row_perm_host)?;
-    device.download(&col_perm, &mut col_perm_host)?;
+    let row_perm_host = device.download_owned(&row_perm)?;
+    let col_perm_host = device.download_owned(&col_perm)?;
     let row_perm = row_perm_host
         .into_iter()
         .map(|value| {
@@ -447,8 +444,7 @@ fn factor_on_device(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let inner = leto_ops::full_piv_lu(&leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data))
         .map_err(|error| HephaestusError::DispatchFailed {
             message: format!("complete-pivoted LU host contract failed: {error}"),

@@ -87,8 +87,7 @@ impl GpuQrDecomposition {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0_f32; self.rows];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             Layout::c_contiguous([self.rows]).map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("QR solve RHS layout failed: {error}"),
@@ -354,12 +353,9 @@ fn factor_on_device(
         });
     }
 
-    let mut host_r = vec![0.0_f32; elements];
-    let mut host_heads = vec![0.0_f32; cols];
-    let mut host_betas = vec![0.0_f32; cols];
-    device.download(&r, &mut host_r)?;
-    device.download(&heads, &mut host_heads)?;
-    device.download(&betas, &mut host_betas)?;
+    let host_r = device.download_owned(&r)?;
+    let host_heads = device.download_owned(&heads)?;
+    let host_betas = device.download_owned(&betas)?;
     let inner =
         leto_ops::QrDecomposition::from_raw_parts(host_r, host_heads, host_betas, rows, cols);
     Ok(GpuQrDecomposition {

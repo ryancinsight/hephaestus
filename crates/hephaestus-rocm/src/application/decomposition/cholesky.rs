@@ -89,8 +89,7 @@ impl GpuCholesky {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0_f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             Layout::c_contiguous([self.n]).map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("Cholesky solve RHS layout failed: {error}"),
@@ -336,8 +335,7 @@ fn factor_on_device(
         });
     }
 
-    let mut host_factor = vec![0.0_f32; elements];
-    device.download(&lower, &mut host_factor)?;
+    let host_factor = device.download_owned(&lower)?;
     let host_array = leto::Array2::from_shape_vec([n, n], host_factor).map_err(|error| {
         HephaestusError::DispatchFailed {
             message: format!("Cholesky factor shape failed: {error}"),

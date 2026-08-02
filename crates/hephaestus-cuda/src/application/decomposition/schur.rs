@@ -57,8 +57,7 @@ pub fn schur(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<
         return Ok(GpuRealSchur { q, t, n: 0 });
     }
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner = leto_ops::schur(&view).map_err(|e| HephaestusError::DispatchFailed {

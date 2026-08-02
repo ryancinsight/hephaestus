@@ -73,8 +73,7 @@ impl GpuFullPivLuDecomposition {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             leto::Layout::c_contiguous([self.n]).expect("infallible: valid contiguous layout"),
@@ -121,8 +120,7 @@ pub fn full_piv_lu(
         .validate_storage_len(matrix.buffer.len())
         .map_err(map_layout_err)?;
 
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner = leto_ops::full_piv_lu(&view).map_err(|e| HephaestusError::DispatchFailed {

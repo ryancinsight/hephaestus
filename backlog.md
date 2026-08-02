@@ -17,6 +17,17 @@
 - Risk/change class: `[patch] [perf]`; internal allocation placement only.
   Allocation count and transfer volume remain unchanged. Runtime and peak-memory
   changes require matched measurements and are not claimed.
+- Status: implementation and focused local verification complete 2026-08-01.
+  Twenty-five CUDA and 28 ROCm heap-vector readbacks now use the provider-owned
+  result; seven ROCm one-word status/rank stack reads retain `download`.
+  Physical CUDA decomposition conformance plus the structural regression pass
+  2/2; adapterless ROCm structural conformance passes 1/1. Warning-denied
+  decomposition Clippy and full-tree formatting pass. Independent review
+  initially rejected a substring-based stack-read exception; exact-call and
+  exact-array guards were added, focused tests rerun, and re-review approves.
+  Exact-head hosted backend CI remains the merge gate. Rustdoc builds with four
+  pre-existing unrelated broken-link warnings across the CUDA/ROCm stencil and
+  sparse modules.
 
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
 

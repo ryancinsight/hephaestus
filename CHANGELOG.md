@@ -8,6 +8,11 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] CUDA and ROCm decomposition paths route 53 heap-vector readbacks
+  through provider-owned host allocation, eliminating the initialization pass
+  that previously zero-filled each vector immediately before a synchronous
+  device transfer wholly overwrote it.
+
 - [patch] Accept finite zero learning rates in every stateful-update rule so
   warmup schedules preserve optimizer-state transitions without mutating the
   parameter.

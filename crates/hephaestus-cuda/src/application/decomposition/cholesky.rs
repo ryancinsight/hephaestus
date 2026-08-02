@@ -80,8 +80,7 @@ impl GpuCholesky {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
 
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             leto::Layout::c_contiguous([self.n]).expect("infallible: valid contiguous layout"),
@@ -141,8 +140,7 @@ pub fn cholesky_decompose(
     }
 
     // Download input to host.
-    let mut host_data = vec![0.0f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
 
     // Create a leto ArrayView over the downloaded data.
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
@@ -271,8 +269,7 @@ pub fn cholesky_decompose_blocked(
         }
 
         // Download the final factored matrix back to host.
-        let mut host = vec![0.0f32; n * n];
-        device.download(&lower_buf, &mut host)?;
+        let mut host = device.download_owned(&lower_buf)?;
 
         for row in 0..n {
             for col in (row + 1)..n {
