@@ -69,18 +69,32 @@ patches the pre-rename names, and the local `repos/mnemosyne` checkout is 5
 behind origin (stale packages), which breaks the shared overlay's patch
 resolution. Lane: `fix/ks10-mnemosyne-sweep` in `hephaestus-ks10-mnemosyne-sweep`.
 
-- [ ] Update `rocm-cargo-config.toml` (CI configure template) to patch
-  `mnemosyne-memory` and `mnemosyne-memory-core` instead of `mnemosyne` /
-  `mnemosyne-core`; refresh the stale migration comment.
-- [ ] Refresh `repos/mnemosyne` to origin/main so the overlay patch paths
-  resolve the renamed packages.
-- [ ] Verify: `cargo metadata --all-features` and the full local gate
-  (fmt/check/clippy/nextest core+wgpu/doctest/doc) on the lane.
-- [ ] Push, PR, confirm the four backend CI workflows pass their configure
-  step (the blocker: "does not contain packages matching `mnemosyne`"), merge.
+Resolved 2026-08-02: the CI template fix had already landed on master via the
+peer's merged CI work (`fix(ci)` 197b161/7f48f20/1a65172, now patching
+`mnemosyne-memory`/`mnemosyne-memory-core`), the manifest/lock migration via
+PRs #179/#181/#182, and `repos/mnemosyne` was refreshed to `213fead` before
+this item's claim. Remaining KS-10 work was therefore verification, which
+passed in full on the claimed lane.
 
-Acceptance: all four backend CI workflows reach their build/test steps; a
-fresh `cargo update --workspace` + full local gate passes.
+- [x] Confirm the CI configure template patches the renamed identities.
+  Evidence: `.github/rocm-cargo-config.toml` on master patches
+  `mnemosyne-memory` (crates/mnemosyne) and `mnemosyne-memory-core`
+  (crates/mnemosyne-core); all four backend workflows consume it via
+  sed `/workspace`→`GITHUB_WORKSPACE` then `cargo update --workspace`.
+- [x] Confirm the workspace/lock graph resolves against the current remote.
+  Evidence: `cargo metadata --all-features` exit 0; `cargo update --workspace`
+  (the configure step verbatim) exit 0. Remaining references are the
+  `mnemosyne` concept-name doc comment (launch.rs) and CI checkout paths.
+- [x] Run the full local gate. Evidence: fmt clean; check wgpu
+  `--no-default-features --lib` + `--all-targets`, cuda `--all-targets`,
+  metal `--all-targets` clean; clippy wgpu `--all-targets --no-deps`
+  `-D warnings` clean; nextest core 84/84; nextest wgpu 210/210
+  (`HEPHAESTUS_WGPU_REQUIRE_DEVICE=1`); core doctest 1/1; `cargo doc
+  --no-deps` clean. `cargo doc --all-features` exits 101 only on
+  `hephaestus-rocm` (Linux-only `rocm` feature guard, CI-covered).
+- [x] Close the board item. Lockfile churn produced by the overlay
+  re-resolution was intentionally reverted: the committed lock keeps
+  git-source pins so non-overlay builds (release pipelines) keep resolving.
 
 ## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
