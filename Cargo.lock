@@ -674,8 +674,11 @@ name = "hephaestus-host"
 version = "0.18.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "hephaestus-conformance",
  "hephaestus-core",
+ "leto",
+ "leto-ops",
  "themis-topology",
 ]
 

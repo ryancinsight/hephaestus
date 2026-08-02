@@ -9,11 +9,11 @@ repository.workspace = true
 
 [dependencies]
 bytemuck = { workspace = true }
-hephaestus-core = { path = "../hephaestus-core" }
+hephaestus-core = { workspace = true }
 eunomia = { workspace = true }
 leto = { workspace = true, default-features = false, features = ["std"] }
 leto-ops = { workspace = true }
 themis = { workspace = true }
 
 [dev-dependencies]
-hephaestus-conformance = { path = "../hephaestus-conformance" }
+hephaestus-conformance = { workspace = true }

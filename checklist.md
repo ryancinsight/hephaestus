@@ -8,6 +8,8 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Refresh the lockfile and pass clean locked metadata plus the focused WGPU
   package check.
 - [x] Align the checkout-local CI patches with Mnemosyne's published packages.
+- [x] Version every normal path and Git dependency used by publishable packages.
+- [ ] Pass all six exact-source crates.io dry runs.
 - [ ] Merge the provider identity fix before refreshing Apollo and Coeus.
 
 ## KS-6 [major] — Owner: user session (takeover from claude-seam)

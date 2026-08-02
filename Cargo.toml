@@ -22,11 +22,11 @@ repository = "https://github.com/ryancinsight/hephaestus.git"
 [workspace.dependencies]
 # ── Local Workspace Crates ──
 hephaestus-conformance = { path = "crates/hephaestus-conformance" }
-hephaestus-core = { path = "crates/hephaestus-core" }
-hephaestus-wgpu = { path = "crates/hephaestus-wgpu" }
-hephaestus-cuda = { path = "crates/hephaestus-cuda", default-features = false }
-hephaestus-rocm = { path = "crates/hephaestus-rocm", default-features = false }
-hephaestus-metal = { path = "crates/hephaestus-metal" }
+hephaestus-core = { version = "0.18.0", path = "crates/hephaestus-core" }
+hephaestus-wgpu = { version = "0.18.0", path = "crates/hephaestus-wgpu" }
+hephaestus-cuda = { version = "0.18.0", path = "crates/hephaestus-cuda", default-features = false }
+hephaestus-rocm = { version = "0.18.0", path = "crates/hephaestus-rocm", default-features = false }
+hephaestus-metal = { version = "0.18.0", path = "crates/hephaestus-metal" }
 
 # ── GPU ──
 # Hephaestus owns the Atlas WGPU ABI; consumers pin this exact major.
@@ -62,16 +62,16 @@ leto = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", d
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
-themis = { package = "themis-topology", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 leto-ops = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-memory-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
-moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
+mnemosyne-memory-core = { version = "0.2.0", git = "https://github.com/ryancinsight/Mnemosyne.git" }
+moirai-gpu = { version = "0.4.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
-moirai-sync = { git = "https://github.com/ryancinsight/Moirai.git" }
-moirai = { package = "moirai-runtime", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
+moirai-sync = { version = "0.4.0", git = "https://github.com/ryancinsight/Moirai.git" }
+moirai = { package = "moirai-runtime", version = "0.4.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
