@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — Owner: Codex
+
+- [ ] Record non-empty and empty ROCm CSR round-trip baselines.
+- [ ] Replace initialized full-overwrite host vectors with `download_owned`.
+- [ ] Add a source contract preventing direct heap-vector CSR readbacks.
+- [ ] Run formatting, focused Nextest, warning-denied Clippy, independent
+  review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-rocm-sparse-readback`. Claimed files
+are `crates/hephaestus-rocm/src/application/sparse/mod.rs`, focused ROCm sparse
+contracts, and owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+`gap_audit.md` entries. KS-5 decomposition files remain excluded.
+
 ## HEPH-METAL-ACQUISITION-1 [minor] — Owner: Codex
 
 - [x] Record the current Metal acquisition baseline and WGPU substrate closure.

@@ -1,5 +1,25 @@
 # Backlog — hephaestus
 
+## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/perf-rocm-sparse-readback`; scope: ROCm CSR
+  device-to-host reconstruction, its focused source/value contracts, and
+  owner-keyed PM/release records.
+- Outcome: route CSR values, column indices, and row pointers through the
+  provider-owned readback seam, removing three initialized host-vector writes
+  that successful HIP transfers wholly overwrite.
+- Non-goals: sparse arithmetic or storage layout; transfer count or volume;
+  WGPU/Metal/CUDA; KS-5 decomposition files; and runtime or peak-memory claims
+  without matched hardware measurements.
+- Acceptance: all three full-vector CSR readbacks use `download_owned`; empty
+  and non-empty round trips retain exact Leto values; a source regression
+  prevents initialized readbacks from returning; focused Nextest,
+  warning-denied Clippy, formatting, independent review, and exact-head
+  WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; host initialization only. Allocation
+  count, transfer volume, device storage, and public API remain unchanged.
+- Status: claimed 2026-08-02; baseline and implementation pending.
+
 ## HEPH-METAL-ACQUISITION-1 [minor] — done
 
 - Owner: Codex on `codex/feat-metal-device-acquisition`; scope: Metal's shared
