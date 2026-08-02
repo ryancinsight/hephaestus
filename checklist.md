@@ -11,7 +11,7 @@ Sprint target: 0.18.0. Phase: Closure.
   `full_piv_lu`, `hessenberg`, `schur`, `svd`, and `udu`.
 - [x] Add a source contract that rejects direct heap-vector `download` calls in
   the claimed modules while leaving KS-5's `lu`, `qr`, and `cholesky` untouched.
-- [ ] Run format, focused WGPU Nextest, warning-denied Clippy, doctest/Rustdoc,
+- [x] Run format, focused WGPU Nextest, warning-denied Clippy, doctest/Rustdoc,
   independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-wgpu-decomposition-readback`.
@@ -27,6 +27,10 @@ Formatting, all-target warning-denied Clippy, doctests 2/2, and warning-clean
 Rustdoc pass. The package Rustdoc gate also exposed and fixed one pre-existing
 unresolved `StencilOps` link without changing stencil behavior. Independent
 re-review approves the syntax-aware regression with no remaining findings.
+Exact implementation head `d27cfd6` passes WGPU run `30760402397`, CUDA run
+`30760402388`, ROCm run `30760402390`, and native macOS Metal run `30760402389`.
+Hardware-only NVIDIA and AMD jobs skip because this dispatch did not request
+self-hosted devices.
 
 ## KS-5 blocked-LU slice [major] — Owner: user session
 

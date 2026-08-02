@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — in progress
+## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-decomposition-readback`; scope: WGPU
   non-blocked decomposition full-vector readbacks, their source/value contract,
@@ -27,8 +27,10 @@
   surface remained incomplete; the locked CI-equivalent graph at Moirai
   `b7988419` compiles and tests cleanly. Formatting, all-target warning-denied
   Clippy, doctests 2/2, and warning-clean Rustdoc pass. Independent review
-  approves the corrected syntax-aware regression. Hosted WGPU/Metal and
-  closeout gates remain.
+  approves the corrected syntax-aware regression. Exact implementation head
+  `d27cfd6` passes WGPU run `30760402397`, CUDA run `30760402388`, ROCm run
+  `30760402390`, and native macOS Metal run `30760402389`. Hardware-only NVIDIA
+  and AMD jobs skip because this dispatch did not request self-hosted devices.
 
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
 

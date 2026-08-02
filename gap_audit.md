@@ -54,8 +54,10 @@ architectural decision or a tracked future-work item:
   preserves factorization, solve, reconstruction, invalid, and empty values.
   Both focused tests pass under the exact committed Git graph. Formatting,
   all-target warning-denied Clippy, doctests, and warning-clean Rustdoc pass;
-  independent re-review reports no remaining finding. Hosted provider evidence
-  remains the merge gate.
+  independent re-review reports no remaining finding. Exact implementation
+  head `d27cfd6` passes WGPU run `30760402397`, CUDA run `30760402388`, ROCm run
+  `30760402390`, and native macOS Metal run `30760402389`. Hardware-only NVIDIA
+  and AMD jobs skip because this dispatch did not request self-hosted devices.
 - Residual: allocation count, transfer volume, device storage, and peak host
   storage are unchanged. The source change removes 16 linear host
   initialization writes by construction; no runtime or peak-memory improvement
