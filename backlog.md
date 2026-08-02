@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-METAL-ACQUISITION-1 [minor] — in progress
+## HEPH-METAL-ACQUISITION-1 [minor] — done
 
 - Owner: Codex on `codex/feat-metal-device-acquisition`; scope: Metal's shared
   device-acquisition trait implementation, its WGPU Metal-only substrate,
@@ -28,7 +28,10 @@
   the tool's temporary rustdoc graph. Independent review approves after
   requiring one-time limit selection, viable-adapter continuation, physical
   identity/feature assertions, and preservation of `try_default`; all are
-  applied. Native Metal and exact-head provider CI remain.
+  applied. Exact implementation head `3b8cc85` passes WGPU run `30762519498`,
+  CUDA run `30762519504`, ROCm run `30762519499`, and native macOS Metal run
+  `30762519503`. Hardware-only NVIDIA and AMD jobs skip because this dispatch
+  did not request self-hosted devices.
 
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
 

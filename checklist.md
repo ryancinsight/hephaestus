@@ -9,7 +9,7 @@ Sprint target: 0.18.0. Phase: Closure.
   acquisition without fallback to another WGPU backend.
 - [x] Implement `ComputeDeviceAcquisition` for `MetalDevice` and add
   value-semantic capability/boundary contracts.
-- [ ] Run focused format, Nextest, warning-denied Clippy, doctest/Rustdoc,
+- [x] Run focused format, Nextest, warning-denied Clippy, doctest/Rustdoc,
   independent review, SemVer classification, and exact-head provider CI.
 
 Implementation owner: Codex on `codex/feat-metal-device-acquisition`. Claimed
@@ -28,6 +28,10 @@ temporary rustdoc graph, which was deleted with its 9.0 GiB repo-local cache.
 Physical adapter selection, optional-feature intersection, and required-limit
 enforcement remain native macOS CI evidence from this Windows host. Independent
 re-review approves with no remaining findings.
+Exact implementation head `3b8cc85` passes WGPU run `30762519498`, CUDA run
+`30762519504`, ROCm run `30762519499`, and native macOS Metal run `30762519503`.
+Hardware-only NVIDIA and AMD jobs skip because this dispatch did not request
+self-hosted devices.
 
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — Owner: Codex
 

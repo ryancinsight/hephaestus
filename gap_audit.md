@@ -84,7 +84,10 @@ architectural decision or a tracked future-work item:
   Rustdoc, and formatting pass. WGPU SemVer passes 196/196 applicable checks;
   Metal SemVer is blocked before API analysis by an unexpected MSVC linker
   failure in the tool's temporary rustdoc graph. Independent re-review reports
-  no remaining finding. Native macOS execution remains the physical gate.
+  no remaining finding. Exact implementation head `3b8cc85` passes WGPU run
+  `30762519498`, CUDA run `30762519504`, ROCm run `30762519499`, and native
+  macOS Metal run `30762519503`. Hardware-only NVIDIA and AMD jobs skip because
+  this dispatch did not request self-hosted devices.
 - Residual: no Metal adapter is available on this Windows host. The change is
   capability parity, not a runtime or memory optimization; no performance claim
   is made.
