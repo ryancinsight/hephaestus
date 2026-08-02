@@ -8,6 +8,11 @@
 //! performance path — consumers wanting fast CPU execution use leto
 //! directly.
 
+/// Leto as a decomposition-seam implementor.
+pub mod decomposition;
+
+pub use decomposition::HostDecompositionOps;
+
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use bytemuck::Pod;

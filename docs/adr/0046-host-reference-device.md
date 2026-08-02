@@ -1,6 +1,9 @@
 # ADR 0046 — Host reference device and the Leto implementor
 
-- Status: Proposed
+- Status: Accepted
+- Revision 2026-08-02: Accepted on delivery of HostDecompositionOps — the
+  full decomposition conformance suite passes on the host pair, joining the
+  transfer clauses shipped with `HostDevice`.
 - Date: 2026-08-02
 - Refs: atlas `backlog.md#atlas-substrate-003` (residual); atlas ADR 0039 §3
   (the Leto–Hephaestus pair's role-trait obligation); ADR 0041 (conformance
