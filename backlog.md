@@ -2875,6 +2875,22 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   public-surface change and would remove the Metal-specific required-device
   CI contract. The macOS workflow and README now carry the decision evidence.
 
+- [KS-10] [major] `mnemosyne` co-evolution sweep: follow the upstream
+  collision-free rename (`mnemosyne` package → `mnemosyne-memory`, Mnemosyne
+  `79cd882`/`be4aa64`, 2026-08-02) in hephaestus's integration. Scope: update
+  the CI checkout-local config template (`rocm-cargo-config.toml`) and the
+  shared Atlas overlay to patch the renamed packages, align any workspace
+  dependency declarations/features that name the pre-rename package, refresh
+  the local `repos/mnemosyne` checkout (currently 5 behind, still exposing the
+  stale `mnemosyne` package), and verify the graph resolves against the
+  current remote without the no-source lockfile crutch. Acceptance: all four
+  backend CI workflows reach their build/test steps (the configure step's
+  `cargo update --workspace` currently fails with "does not contain packages
+  matching `mnemosyne`"), and a fresh `cargo update --workspace` + full local
+  gate passes. Blocker currently failing every hephaestus PR including the
+  KS-6 lane's merged PR #180 (unblocked only because master is unprotected);
+  the last green master CI was 2026-08-02T04:25Z, before the remote moved.
+  Re-open trigger: none — this item is the cure.
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
   implementation are delivered; remaining work is the CUDA kernel/launch
