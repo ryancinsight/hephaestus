@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — Owner: Codex
+
+- [ ] Record the focused device-local copy value and source baselines.
+- [ ] Remove the post-copy whole-device synchronization while preserving the
+  synchronous HIP copy.
+- [ ] Add adapterless source coverage for the no-global-barrier contract.
+- [ ] Run formatting, focused Nextest, warning-denied Clippy, independent
+  review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-rocm-copy-sync`. Claimed files are
+ROCm memory transfer infrastructure, focused ROCm transfer contracts, and
+owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md`
+entries. KS-5 decomposition files remain excluded.
+
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Record non-empty and empty ROCm CSR round-trip baselines.
