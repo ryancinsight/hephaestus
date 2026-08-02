@@ -13,7 +13,7 @@
   those keys now match the published package identities. Hosted verification
   and merge remain.
 
-## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — implementation complete
+## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/hephaestus-wgpu-owned-readback`; scope: WGPU's
   synchronous staging readback, Metal delegation, shared transfer contracts,
@@ -28,6 +28,15 @@
   zero-sized values are safe; bit patterns survive round-trip; focused
   warning-denied gates, independent review, and exact-head WGPU/macOS Metal CI
   pass.
+- Delivery-blocker update: Themis changed its Cargo package identity to
+  `themis-topology` at upstream `a1c8231` while retaining the Rust library name
+  `themis`. Fresh hosted resolution therefore failed before provider builds.
+  This item absorbs the required dependency-alias cutover and lock/overlay
+  refresh; no backend API changes result.
+- Status: done 2026-08-02. Exact implementation head `1c4ac16` passes WGPU run
+  `30735730194`, CUDA run `30735731839`, ROCm run `30735732609`, and native
+  macOS Metal run `30735730960`. Hardware-only CUDA and ROCm jobs skipped
+  because this dispatch did not request self-hosted devices.
 
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — done
 

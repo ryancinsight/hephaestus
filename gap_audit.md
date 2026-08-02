@@ -28,14 +28,34 @@ architectural decision or a tracked future-work item:
   clauses; a mapped-consumer unwind regression proves the staging allocation is
   reusable afterward. WGPU, Metal, and conformance compile warning-clean under
   `-D warnings`; independent re-review reports no remaining findings. Native
-  Metal execution remains the hosted macOS gate. The source
-  change removes one `O(n)` host initialization pass but makes no runtime or
-  peak-memory improvement claim without controlled measurement.
+  Metal execution passes on native macOS in run `30735730960`; exact-head WGPU
+  run `30735730194`, CUDA run `30735731839`, and ROCm run `30735732609` also
+  pass. The source change removes one `O(n)` host initialization pass but makes
+  no runtime or peak-memory improvement claim without controlled measurement.
 - Residual: WGPU validation and physical execution are available locally;
-  native Metal execution is unavailable on this Windows host. Miri does not
-  execute WGPU device mapping, so safety evidence combines the explicit
-  initialized-byte invariant, value-semantic device execution, and independent
-  review.
+  native Metal execution is unavailable on this Windows host but is covered by
+  hosted macOS CI. Miri does not execute WGPU device mapping, so safety evidence
+  combines the explicit initialized-byte invariant, value-semantic device
+  execution, and independent review.
+
+## [HEPH-WGPU-METAL-OWNED-READBACK-1] Themis package identity blocker
+
+- Finding: exact-head Metal and ROCm CI failed before compilation because
+  upstream Themis renamed its Cargo package from `themis` to
+  `themis-topology` at `a1c8231`; Hephaestus still requested the old package
+  identity from the Git repository.
+- Resolution: keep the source-level `themis` crate alias and bind it explicitly
+  to `package = "themis-topology"`, version `0.10.1`. Refresh the generated
+  stack overlay and Hephaestus lockfile against the renamed package.
+- Evidence: fresh hosted resolution reaches and passes provider compilation and
+  contracts at exact head `1c4ac16`: CUDA run `30735731839`, ROCm run
+  `30735732609`, WGPU run `30735730194`, and native macOS Metal run
+  `30735730960`. The earlier failed Metal run `30733059974` and ROCm run
+  `30733059964` remain resolver evidence only, not backend evidence.
+- Follow-up: Mnemosyne subsequently renamed packages `mnemosyne` and
+  `mnemosyne-core` to `mnemosyne-memory` and `mnemosyne-memory-core` at
+  `be4aa64`. Direct consumers retain their Rust crate aliases, bind the new
+  Cargo identities, and pass the exact-head provider matrix recorded above.
 
 ## [HEPH-OWNED-DOWNLOAD-1] Host result initialization
 
