@@ -2931,6 +2931,11 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   KS-6 lane's merged PR #180 (unblocked only because master is unprotected);
   the last green master CI was 2026-08-02T04:25Z, before the remote moved.
   Re-open trigger: none — this item is the cure.
+  Status: in-progress (owner user session, lane `fix/ks10-mnemosyne-sweep`,
+  claimed 2026-08-02). Manifest/lockfile migration already landed via peer
+  PRs #179/#181/#182 (`mnemosyne-memory-core = { version = "0.2.0", git = … }`,
+  lock entries renamed); remaining scope per checklist: CI template patch
+  names + local checkout refresh + verification.
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
   implementation are delivered; remaining work is the CUDA kernel/launch

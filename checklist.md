@@ -56,6 +56,32 @@ Findings recorded (out of scope, not absorbed):
   (nested `if let`). CI never clippies the conformance crate, so it is
   latent debt; fix on a future conformance touch.
 
+## KS-10 [major] — Owner: user session (2026-08-02)
+
+`mnemosyne` co-evolution sweep: follow the upstream collision-free rename
+(`mnemosyne` → `mnemosyne-memory`, `mnemosyne-core` → `mnemosyne-memory-core`,
+Mnemosyne `79cd882`/`be4aa64`) in hephaestus's integration. The manifest and
+lockfile migration already landed via peer PRs (`mnemosyne-memory-core` =
+`{ version = "0.2.0", git = … }` in the workspace; crates inherit it; lockfile
+entries renamed); the code imports `mnemosyne_core` per the package's
+`[lib] name`. Remaining scope: the CI checkout-local config template still
+patches the pre-rename names, and the local `repos/mnemosyne` checkout is 5
+behind origin (stale packages), which breaks the shared overlay's patch
+resolution. Lane: `fix/ks10-mnemosyne-sweep` in `hephaestus-ks10-mnemosyne-sweep`.
+
+- [ ] Update `rocm-cargo-config.toml` (CI configure template) to patch
+  `mnemosyne-memory` and `mnemosyne-memory-core` instead of `mnemosyne` /
+  `mnemosyne-core`; refresh the stale migration comment.
+- [ ] Refresh `repos/mnemosyne` to origin/main so the overlay patch paths
+  resolve the renamed packages.
+- [ ] Verify: `cargo metadata --all-features` and the full local gate
+  (fmt/check/clippy/nextest core+wgpu/doctest/doc) on the lane.
+- [ ] Push, PR, confirm the four backend CI workflows pass their configure
+  step (the blocker: "does not contain packages matching `mnemosyne`"), merge.
+
+Acceptance: all four backend CI workflows reach their build/test steps; a
+fresh `cargo update --workspace` + full local gate passes.
+
 ## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Establish focused WGPU transfer and Metal delegation baselines.
