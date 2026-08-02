@@ -8,6 +8,10 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] ROCm CSR reconstruction routes values, column indices, and row
+  pointers through provider-owned host allocation, eliminating three
+  initialized host-vector passes before synchronous full-buffer HIP readback.
+
 - [patch] WGPU and Metal non-blocked decomposition paths route 16 full-vector
   host readbacks through provider-owned allocation, eliminating the initialized
   host-vector pass that mapped staging immediately overwrote.

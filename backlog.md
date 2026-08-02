@@ -1,5 +1,36 @@
 # Backlog — hephaestus
 
+## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-rocm-sparse-readback`; scope: ROCm CSR
+  device-to-host reconstruction, its focused source/value contracts, and
+  owner-keyed PM/release records.
+- Outcome: route CSR values, column indices, and row pointers through the
+  provider-owned readback seam, removing three initialized host-vector writes
+  that successful HIP transfers wholly overwrite.
+- Non-goals: sparse arithmetic or storage layout; transfer count or volume;
+  WGPU/Metal/CUDA; KS-5 decomposition files; and runtime or peak-memory claims
+  without matched hardware measurements.
+- Acceptance: all three full-vector CSR readbacks use `download_owned`; empty
+  and non-empty round trips retain exact Leto values; a source regression
+  prevents initialized readbacks from returning; focused Nextest,
+  warning-denied Clippy, formatting, independent review, and exact-head
+  WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; host initialization only. Allocation
+  count, transfer volume, device storage, and public API remain unchanged.
+- Status: implementation and focused local verification complete 2026-08-02.
+  All three CSR vectors use provider-owned readback. The adapterless source
+  contract passes 1/1, and the focused sparse contract remains green 1/1;
+  physical value execution is runner-gated on this Windows host. Formatting,
+  no-default-feature all-target warning-denied Clippy, doctests, and Rustdoc
+  complete; Rustdoc retains two pre-existing unrelated broken links.
+  Independent review approves with no findings and notes the documented lack
+  of local physical ROCm execution. Exact implementation head `922b05c` passes
+  WGPU run `30770979399`, CUDA run `30770979420`, ROCm run `30770979416`, and
+  native macOS Metal run `30770979385`. Hardware-only NVIDIA and AMD jobs skip
+  because this dispatch did not request self-hosted devices. PR #186's
+  docs-only closure head repeats the provider matrix as the merge gate.
+
 ## HEPH-METAL-ACQUISITION-1 [minor] — done
 
 - Owner: Codex on `codex/feat-metal-device-acquisition`; scope: Metal's shared

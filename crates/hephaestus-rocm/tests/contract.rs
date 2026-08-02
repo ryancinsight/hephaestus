@@ -2271,6 +2271,18 @@ fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
     assert_eq!(gpu_csr.nnz(), 4);
     assert_eq!(gpu_csr.to_cpu(&device).expect("HIP CSR download"), cpu_csr);
 
+    let zero_nnz_csr =
+        leto_ops::CsrMatrix::from_parts(Vec::<f32>::new(), Vec::new(), vec![0, 0, 0], 2, 3)
+            .expect("valid zero-nnz CSR fixture");
+    let zero_nnz_gpu =
+        GpuCsrMatrix::from_cpu(&device, &zero_nnz_csr).expect("zero-nnz HIP CSR upload");
+    assert_eq!(
+        zero_nnz_gpu
+            .to_cpu(&device)
+            .expect("zero-nnz HIP CSR download"),
+        zero_nnz_csr
+    );
+
     let x = device
         .upload(&[1.0_f32, 2.0, 3.0])
         .expect("SpMV input upload");

@@ -2,6 +2,35 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — Owner: Codex
+
+- [x] Record non-empty and empty ROCm CSR round-trip baselines.
+- [x] Replace initialized full-overwrite host vectors with `download_owned`.
+- [x] Add a source contract preventing direct heap-vector CSR readbacks.
+- [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
+  review.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-rocm-sparse-readback`. Claimed files
+are `crates/hephaestus-rocm/src/application/sparse/mod.rs`, focused ROCm sparse
+contracts, and owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+`gap_audit.md` entries. KS-5 decomposition files remain excluded.
+Baseline exact-source Nextest run `ef1d075a-0599-4143-bd2c-44722522605c`
+passes the existing focused sparse contract 1/1. Post-edit adapterless source
+run `f45eb76c-29a1-4038-b4e0-c5928d016862` passes 1/1, and focused sparse run
+`195c96d3-bf8e-4be9-b8d8-7af88f0ae75a` remains green 1/1. The latter exits at
+the existing device guard on this Windows host; physical non-empty and zero-nnz
+round trips remain hosted hardware evidence. Formatting, no-default-feature
+all-target warning-denied Clippy, doctests, and Rustdoc complete. Rustdoc
+retains two pre-existing unrelated broken links in sparse-seam and stencil
+documentation. Independent review approves with no findings; it confirms the
+three synchronous provider-owned transfers, unchanged conversion/reconstruction
+path, empty handling, and accurate evidence limits. Exact implementation head
+`922b05c` passes WGPU run `30770979399`, CUDA run `30770979420`, ROCm run
+`30770979416`, and native macOS Metal run `30770979385`. Hardware-only NVIDIA
+and AMD jobs skip because no self-hosted device was requested. PR #186's
+docs-only closure head repeats the provider matrix before merge.
+
 ## HEPH-METAL-ACQUISITION-1 [minor] — Owner: Codex
 
 - [x] Record the current Metal acquisition baseline and WGPU substrate closure.

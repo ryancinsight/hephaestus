@@ -77,11 +77,9 @@ impl<T: DialectScalar<HipC> + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
     /// Returns a transfer error or a typed reconstruction error when the
     /// downloaded CSR metadata cannot satisfy the Leto invariants.
     pub fn to_cpu(&self, device: &RocmDevice) -> Result<leto_ops::CsrMatrix<T>> {
-        let mut values = vec![T::zeroed(); self.values.len()];
-        device.download(&self.values, &mut values)?;
+        let values = device.download_owned(&self.values)?;
 
-        let mut col_indices_u32 = vec![0_u32; self.col_indices.len()];
-        device.download(&self.col_indices, &mut col_indices_u32)?;
+        let col_indices_u32 = device.download_owned(&self.col_indices)?;
         let col_indices = col_indices_u32
             .into_iter()
             .map(|index| {
@@ -91,8 +89,7 @@ impl<T: DialectScalar<HipC> + Pod + leto_ops::Scalar> GpuCsrMatrix<T> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let mut row_ptr_u32 = vec![0_u32; self.row_ptr.len()];
-        device.download(&self.row_ptr, &mut row_ptr_u32)?;
+        let row_ptr_u32 = device.download_owned(&self.row_ptr)?;
         let row_ptr = row_ptr_u32
             .into_iter()
             .map(|index| {

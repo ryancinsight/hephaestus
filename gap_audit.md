@@ -11,6 +11,31 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-ROCM-SPARSE-READBACK-1] CSR host initialization
+
+- Finding: `GpuCsrMatrix::to_cpu` allocated and zero-initialized values, column
+  indices, and row pointers immediately before synchronous HIP copies wholly
+  overwrote all three vectors.
+- Resolution: route each full-vector transfer through ROCm's failure-atomic
+  `ComputeDevice::download_owned` implementation. CSR index conversion and
+  Leto reconstruction remain unchanged.
+- Evidence: an adapterless source contract pins exactly three provider-owned
+  readbacks and rejects direct caller-initialized downloads in the CSR storage
+  module. The physical sparse contract value-checks non-empty and zero-nnz CSR
+  round trips when a ROCm device is available. Exact-source local runs pass the
+  source contract 1/1 and focused sparse contract 1/1; warning-denied Clippy,
+  formatting, doctests, and Rustdoc complete. Independent review approves with
+  no findings and confirms the provider's synchronous failure-atomic transfer
+  invariant plus the scope of the recorded evidence. Exact implementation head
+  `922b05c` passes WGPU run `30770979399`, CUDA run `30770979420`, ROCm run
+  `30770979416`, and native macOS Metal run `30770979385`.
+- Residual: the Windows host has no physical ROCm device, so the local sparse
+  test exits through its documented device guard. Hosted hardware execution is
+  reported separately. Allocation count, transfer count and volume, device
+  storage, and peak host storage are unchanged. The source removes three
+  linear initialization writes by construction; no runtime or peak-memory
+  improvement is claimed without matched hardware measurement.
+
 ## [HEPH-WGPU-METAL-OWNED-READBACK-1] Mapped host result initialization
 
 - Finding: WGPU and its Metal wrapper inherited the default
