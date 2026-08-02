@@ -11,6 +11,31 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-ROCM-COPY-SYNC-1] Device-local copy barrier
+
+- Finding: ROCm `ComputeDevice::copy_buffer` issued synchronous
+  `hipMemcpyDtoD`, submitted its no-op host command stream, then called
+  `hipDeviceSynchronize`, imposing a whole-device barrier after the copy had
+  already completed.
+- Resolution: retain the canonical command-stream copy and submission while
+  removing the redundant device-wide synchronization. AMD's HIP memory API
+  distinguishes synchronous `hipMemcpyDtoD` from the separate
+  `hipMemcpyDtoDAsync` stream API:
+  <https://rocm.docs.amd.com/projects/HIP/en/latest/doxygen/html/group___memory.html>.
+- Evidence: an adapterless source contract pins one device-local copy, one
+  submission, zero synchronization calls in the provider method, exactly one
+  synchronous `hipMemcpyDtoD`, and zero `hipMemcpyDtoDAsync` calls in the
+  underlying copy routine. The physical ROCm contract value-checks a
+  1,027-element copy, zero-length copy, and typed length mismatch. Corrected
+  focused source coverage passes 1/1; the complete no-default-feature transfer
+  and contract binaries pass 37/37, with warning-denied Clippy, doctests, and
+  formatting green. Independent re-review approves with no remaining findings.
+- Residual: the Windows host has no physical ROCm device. Hosted ROCm CI is the
+  execution oracle. The change removes one whole-device barrier call by
+  construction; transfer bytes, buffer ownership, and synchronous completion
+  remain unchanged. No runtime speedup is claimed without matched hardware
+  measurement.
+
 ## [HEPH-ROCM-SPARSE-READBACK-1] CSR host initialization
 
 - Finding: `GpuCsrMatrix::to_cpu` allocated and zero-initialized values, column

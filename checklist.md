@@ -4,17 +4,33 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
-- [ ] Record the focused device-local copy value and source baselines.
-- [ ] Remove the post-copy whole-device synchronization while preserving the
+- [x] Record the focused device-local copy value and source baselines.
+- [x] Remove the post-copy whole-device synchronization while preserving the
   synchronous HIP copy.
-- [ ] Add adapterless source coverage for the no-global-barrier contract.
-- [ ] Run formatting, focused Nextest, warning-denied Clippy, independent
-  review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+- [x] Add adapterless source coverage for the no-global-barrier contract.
+- [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
+  review.
+- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-rocm-copy-sync`. Claimed files are
 ROCm memory transfer infrastructure, focused ROCm transfer contracts, and
 owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md`
 entries. KS-5 decomposition files remain excluded.
+The first exact-source baseline attempt exceeded its command bound while many
+peer Cargo processes held the shared target lock; it did not reach test
+execution. The post-edit source run `2b1f039a-1d45-400e-9dc5-e40fd7d7a715`
+passes 1/1 in 18 ms, and focused value run
+`475095da-5570-4362-aa30-30c5722a8120` passes 1/1 in 13 ms after compilation.
+The latter exits through the existing device guard on this Windows host;
+physical value and empty-copy execution remain hosted ROCm evidence.
+The complete no-default-feature transfer and contract binaries pass 37/37 in
+run `5e6ab5b6-9334-4155-a129-dab9cf7fb454`. Independent review required the
+source regression to pin synchronous completion explicitly; corrected run
+`d4fe217b-0b9f-4a26-a6fa-44f2b729d244` passes 1/1 and rejects
+`hipMemcpyDtoDAsync`. All-target warning-denied Clippy, doctests, and formatting
+pass on the corrected diff. Independent re-review approves with no remaining
+findings and confirms synchronous completion, zero-byte handling, exact byte
+calculation, mismatch validation, and the limited performance claim.
 
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — Owner: Codex
 

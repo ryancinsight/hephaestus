@@ -8,6 +8,9 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] ROCm synchronous device-local copies no longer issue a redundant
+  whole-device synchronization after `hipMemcpyDtoD` has completed.
+
 - [patch] ROCm CSR reconstruction routes values, column indices, and row
   pointers through provider-owned host allocation, eliminating three
   initialized host-vector passes before synchronous full-buffer HIP readback.

@@ -18,7 +18,14 @@
   pass.
 - Risk/change class: `[patch] [perf]`; internal synchronization only. The HIP
   copy call, transfer bytes, buffer ownership, and public API remain unchanged.
-- Status: claimed 2026-08-02; baseline and implementation pending.
+- Status: implementation and focused local verification complete 2026-08-02.
+  `copy_buffer` retains one synchronous device-local copy and stream submission
+  without a following global barrier. The corrected adapterless regression
+  pins the synchronous HIP call and rejects its async counterpart. The complete
+  no-default-feature contract and transfer binaries pass 37/37, all-target
+  warning-denied Clippy and doctests pass, and formatting is clean. Physical
+  value execution remains hosted ROCm evidence. Independent re-review approves
+  with no remaining findings. Exact-head provider CI remains.
 
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — done
 
