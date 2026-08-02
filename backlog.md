@@ -1,5 +1,23 @@
 # Backlog — hephaestus
 
+## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — in-progress
+
+- Owner: Codex on shared `feat/topology-option`; scope: CUDA and ROCm
+  decomposition modules that allocate an initialized host vector immediately
+  before a successful full-buffer device download, plus focused contracts and
+  release records. Active topology/device files and WGPU/Metal are excluded.
+- Outcome: route decomposition readbacks through the provider-owned
+  `ComputeDevice::download_owned` implementation so CUDA/HIP copies publish
+  initialized vectors only after success and do not first write zero across
+  host storage that the device transfer wholly overwrites.
+- Acceptance: every in-scope direct full-buffer readback uses `download_owned`;
+  empty, invalid, factorization, solve, and decomposition values remain
+  unchanged; source regression prevents reintroduction; focused Nextest,
+  feature checks, warning-denied Clippy, and exact-head backend CI pass.
+- Risk/change class: `[patch] [perf]`; internal allocation placement only.
+  Allocation count and transfer volume remain unchanged. Runtime and peak-memory
+  changes require matched measurements and are not claimed.
+
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
 
 - Owner: Codex on `codex/hephaestus-zero-learning-rate`; scope: stateful-update

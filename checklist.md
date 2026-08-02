@@ -2,6 +2,19 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
+
+- [ ] Establish focused CUDA/ROCm decomposition baselines.
+- [ ] Replace initialized full-overwrite host readbacks with `download_owned`.
+- [ ] Add a source regression and preserve value-semantic decomposition tests.
+- [ ] Pass focused warning-denied gates and independent review.
+- [ ] Pass exact-head provider CI and merge.
+
+Claimed files are CUDA/ROCm decomposition application modules, focused
+contracts, and owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+`gap_audit.md` entries. Active topology/device files and WGPU/Metal are
+excluded.
+
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
 
 - [x] Admit finite zero learning rates without relaxing epsilon or domain
