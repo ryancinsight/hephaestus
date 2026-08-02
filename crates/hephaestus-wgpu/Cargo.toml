@@ -23,7 +23,7 @@ leto = { workspace = true }
 eunomia = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
-mnemosyne-core = { workspace = true }
+mnemosyne-memory-core = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 moirai = { workspace = true }

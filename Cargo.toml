@@ -2,7 +2,7 @@
 resolver = "3"
 members = [
     "crates/hephaestus",
-    "crates/hephaestus-conformance",
+    "crates/hephaestus-conformance", "crates/hephaestus-host",
     "crates/hephaestus-core",
     "crates/hephaestus-wgpu",
     "crates/hephaestus-cuda",
@@ -64,7 +64,7 @@ leto = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", d
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 leto-ops = { version = "0.40.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
+mnemosyne-memory-core = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai-gpu = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",

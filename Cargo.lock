@@ -660,10 +660,20 @@ dependencies = [
  "leto",
  "leto-ops",
  "libloading",
- "mnemosyne-core",
+ "mnemosyne-memory-core",
  "moirai-gpu",
  "moirai-sync",
  "smallvec",
+ "themis-topology",
+]
+
+[[package]]
+name = "hephaestus-host"
+version = "0.18.0"
+dependencies = [
+ "bytemuck",
+ "hephaestus-conformance",
+ "hephaestus-core",
  "themis-topology",
 ]
 
@@ -724,7 +734,7 @@ dependencies = [
  "hephaestus-core",
  "leto",
  "leto-ops",
- "mnemosyne-core",
+ "mnemosyne-memory-core",
  "moirai",
  "moirai-gpu",
  "moirai-sync",
@@ -753,7 +763,7 @@ version = "0.5.0"
 dependencies = [
  "bytemuck",
  "eunomia",
- "mnemosyne",
+ "mnemosyne-memory",
  "rkyv",
  "themis-topology",
 ]
@@ -841,7 +851,7 @@ dependencies = [
  "aequitas",
  "bytemuck",
  "eunomia",
- "mnemosyne",
+ "mnemosyne-memory",
  "serde",
  "thiserror 2.0.19",
 ]
@@ -933,27 +943,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "mnemosyne"
-version = "0.6.0"
-dependencies = [
- "eunomia",
- "mnemosyne-arena",
- "mnemosyne-backend",
- "mnemosyne-core",
- "mnemosyne-decay",
- "mnemosyne-hardened",
- "mnemosyne-heap",
- "mnemosyne-local",
- "mnemosyne-prof",
-]
-
-[[package]]
 name = "mnemosyne-arena"
 version = "0.3.0"
 dependencies = [
  "eunomia",
  "mnemosyne-backend",
- "mnemosyne-core",
+ "mnemosyne-memory-core",
  "themis-topology",
 ]
 
@@ -961,15 +956,11 @@ dependencies = [
 name = "mnemosyne-backend"
 version = "0.5.0"
 dependencies = [
- "mnemosyne-core",
+ "mnemosyne-memory-core",
 ]
 
 [[package]]
 name = "mnemosyne-build-util"
-version = "0.2.0"
-
-[[package]]
-name = "mnemosyne-core"
 version = "0.2.0"
 
 [[package]]
@@ -978,14 +969,14 @@ version = "0.2.0"
 dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
- "mnemosyne-core",
+ "mnemosyne-memory-core",
 ]
 
 [[package]]
 name = "mnemosyne-hardened"
 version = "0.2.0"
 dependencies = [
- "mnemosyne-core",
+ "mnemosyne-memory-core",
 ]
 
 [[package]]
@@ -995,8 +986,8 @@ dependencies = [
  "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
- "mnemosyne-core",
  "mnemosyne-local",
+ "mnemosyne-memory-core",
  "mnemosyne-prof",
  "themis-topology",
 ]
@@ -1009,11 +1000,30 @@ dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-build-util",
- "mnemosyne-core",
  "mnemosyne-decay",
+ "mnemosyne-memory-core",
  "mnemosyne-prof",
  "themis-topology",
 ]
+
+[[package]]
+name = "mnemosyne-memory"
+version = "0.6.0"
+dependencies = [
+ "eunomia",
+ "mnemosyne-arena",
+ "mnemosyne-backend",
+ "mnemosyne-decay",
+ "mnemosyne-hardened",
+ "mnemosyne-heap",
+ "mnemosyne-local",
+ "mnemosyne-memory-core",
+ "mnemosyne-prof",
+]
+
+[[package]]
+name = "mnemosyne-memory-core"
+version = "0.2.0"
 
 [[package]]
 name = "mnemosyne-prof"
@@ -1021,7 +1031,7 @@ version = "0.2.0"
 dependencies = [
  "backtrace",
  "mnemosyne-build-util",
- "mnemosyne-core",
+ "mnemosyne-memory-core",
 ]
 
 [[package]]
@@ -1070,7 +1080,7 @@ version = "0.4.0"
 dependencies = [
  "bytemuck",
  "libc",
- "mnemosyne",
+ "mnemosyne-memory",
  "moirai-utils",
 ]
 
@@ -1079,7 +1089,7 @@ name = "moirai-executor"
 version = "0.4.0"
 dependencies = [
  "melinoe",
- "mnemosyne",
+ "mnemosyne-memory",
  "moirai-core",
  "moirai-pal",
  "moirai-scheduler",
@@ -1090,7 +1100,7 @@ dependencies = [
 name = "moirai-gpu"
 version = "0.4.0"
 dependencies = [
- "mnemosyne-core",
+ "mnemosyne-memory-core",
  "moirai-core",
  "moirai-utils",
  "themis-topology",
@@ -1138,7 +1148,7 @@ dependencies = [
 name = "moirai-scheduler"
 version = "0.4.0"
 dependencies = [
- "mnemosyne",
+ "mnemosyne-memory",
  "moirai-core",
  "moirai-utils",
  "num_cpus",
@@ -2616,7 +2626,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
-name = "proteus"
+name = "apollo-fft"
+version = "0.25.0"
+
+[[patch.unused]]
+name = "apollo-nufft"
+version = "0.7.0"
+
+[[patch.unused]]
+name = "apollo-sht"
+version = "0.7.0"
+
+[[patch.unused]]
+name = "gaia"
+version = "0.3.0"
+
+[[patch.unused]]
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "coeus-autograd"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-core"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-nn"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-ops"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-optim"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "coeus-tensor"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "hyperion"
 version = "0.1.0"
 
 [[patch.unused]]
@@ -2628,48 +2686,20 @@ name = "athena-leto"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius"
+name = "horae"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius-coeus"
+name = "iris"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "hephaestus-core"
-version = "0.18.0"
+name = "proteus"
+version = "0.1.0"
 
 [[patch.unused]]
-name = "hephaestus-cuda"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-metal"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-rocm"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-wgpu"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "moirai-http"
-version = "0.4.0"
-
-[[patch.unused]]
-name = "apollo-fft"
-version = "0.25.0"
-
-[[patch.unused]]
-name = "apollo-nufft"
-version = "0.7.0"
-
-[[patch.unused]]
-name = "apollo-sht"
-version = "0.7.0"
+name = "tyche-core"
+version = "0.1.0"
 
 [[patch.unused]]
 name = "ritk-core"
@@ -2700,8 +2730,8 @@ name = "ritk-vtk"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris"
-version = "0.1.0"
+name = "moirai-http"
+version = "0.4.0"
 
 [[patch.unused]]
 name = "consus-compression"
@@ -2732,41 +2762,21 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "gaia"
-version = "0.3.0"
+name = "hephaestus-core"
+version = "0.18.0"
 
 [[patch.unused]]
-name = "coeus-autograd"
-version = "0.9.0"
+name = "hephaestus-cuda"
+version = "0.18.0"
 
 [[patch.unused]]
-name = "coeus-core"
-version = "0.9.0"
+name = "hephaestus-metal"
+version = "0.18.0"
 
 [[patch.unused]]
-name = "coeus-nn"
-version = "0.9.0"
+name = "hephaestus-rocm"
+version = "0.18.0"
 
 [[patch.unused]]
-name = "coeus-ops"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-optim"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-tensor"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "horae"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "hyperion"
-version = "0.1.0"
+name = "hephaestus-wgpu"
+version = "0.18.0"
