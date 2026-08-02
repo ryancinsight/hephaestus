@@ -2,7 +2,8 @@
 //!
 //! Metal delegates wholly to the WGPU implementation, matching the crate's
 //! other seam adapters: buffers unwrap to their inner WGPU handles and every
-//! method forwards to [`WgpuDenseProductOps`] on the device's WGPU handle.
+//! method forwards to [`hephaestus_wgpu::WgpuDenseProductOps`] on the device's
+//! WGPU handle.
 
 use bytemuck::Pod;
 use hephaestus_core::{DenseProductOps, DialectScalar, Result, StridedView, Wgsl};

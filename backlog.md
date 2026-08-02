@@ -1,5 +1,38 @@
 # Backlog — hephaestus
 
+## HEPH-METAL-ACQUISITION-1 [minor] — done
+
+- Owner: Codex on `codex/feat-metal-device-acquisition`; scope: Metal's shared
+  device-acquisition trait implementation, its WGPU Metal-only substrate,
+  focused conformance, and owner-keyed PM/release records.
+- Outcome: make Metal substitutable through `ComputeDeviceAcquisition`, honoring
+  device preference, optional features, required limits, and bounded
+  enumeration without selecting a non-Metal adapter.
+- Non-goals: KS-5 decomposition files; kernel behavior; CUDA/ROCm acquisition;
+  backend fallback; and runtime or memory claims.
+- Acceptance: `MetalDevice` implements the shared seam; every acquired device
+  is Metal-backed; optional features are intersected with adapter support;
+  required limits are enforced; zero-device enumeration returns no device;
+  focused Nextest, warning-denied Clippy, doctest/Rustdoc, independent review,
+  and exact-head WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[minor]`; additive backend capability and WGPU substrate
+  API, with no existing constructor behavior change.
+- Status: implementation and focused exact-source verification complete
+  2026-08-02. Metal implements the shared seam through Metal-only WGPU adapter
+  selection; WGPU and Metal enumeration now honor preference ordering and
+  return immediately for a zero-device bound. Focused acquisition contracts
+  pass 3/3 and the WGPU preference-policy unit passes 1/1; both affected crates
+  compile and pass all-target warning-denied Clippy, doctests, warning-clean
+  Rustdoc, and formatting. WGPU SemVer passes 196/196 applicable checks; Metal
+  SemVer is blocked before API analysis by an unexpected MSVC linker failure in
+  the tool's temporary rustdoc graph. Independent review approves after
+  requiring one-time limit selection, viable-adapter continuation, physical
+  identity/feature assertions, and preservation of `try_default`; all are
+  applied. Exact implementation head `3b8cc85` passes WGPU run `30762519498`,
+  CUDA run `30762519504`, ROCm run `30762519499`, and native macOS Metal run
+  `30762519503`. Hardware-only NVIDIA and AMD jobs skip because this dispatch
+  did not request self-hosted devices.
+
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-decomposition-readback`; scope: WGPU

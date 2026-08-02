@@ -39,7 +39,7 @@ impl Laplacian2DKernel {
     }
 }
 
-/// Provider-owned implementation of [`StencilOps`] for Metal.
+/// Provider-owned implementation of [`hephaestus_core::StencilOps`] for Metal.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetalStencilOps;
 

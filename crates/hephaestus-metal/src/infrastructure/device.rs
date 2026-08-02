@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 use hephaestus_core::{
-    ComputeDevice, ComputeDeviceCapabilities, DeviceFeature, DeviceLimits, Result,
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
+    DeviceLimits, DevicePreference, Result,
 };
 use hephaestus_wgpu::WgpuDevice;
 
@@ -127,5 +128,39 @@ impl ComputeDeviceCapabilities for MetalDevice {
     #[inline]
     fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
         ComputeDeviceCapabilities::supports_device_feature(&self.inner, feature)
+    }
+}
+
+impl ComputeDeviceAcquisition for MetalDevice {
+    fn try_acquire_device(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        WgpuDevice::try_metal_with_device_preference_and_optional_device_features_and_limits(
+            label,
+            device_preference,
+            optional_features,
+            required_limits,
+        )
+        .map(|inner| Self { inner })
+    }
+
+    fn try_acquire_devices(
+        label_prefix: &str,
+        max_devices: usize,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Vec<Self>> {
+        WgpuDevice::try_enumerate_metal_with_optional_device_features_and_limits(
+            label_prefix,
+            max_devices,
+            device_preference,
+            optional_features,
+            required_limits,
+        )
+        .map(|devices| devices.into_iter().map(|inner| Self { inner }).collect())
     }
 }

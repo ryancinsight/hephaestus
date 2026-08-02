@@ -64,6 +64,34 @@ architectural decision or a tracked future-work item:
   is claimed without controlled hardware measurement. Native Metal execution
   remains hosted macOS evidence.
 
+## [HEPH-METAL-ACQUISITION-1] Backend-neutral Metal device acquisition
+
+- Finding: WGPU, CUDA, and ROCm implemented `ComputeDeviceAcquisition`, while
+  Metal exposed only its backend-specific `try_default` constructor. Generic
+  consumers could query Metal capabilities but could not acquire it through the
+  shared provider seam.
+- Resolution: implement the shared seam by extending the WGPU substrate with
+  Metal-only single and bounded enumeration paths. Single acquisition maps the
+  shared power preference onto native adapter selection; enumeration ranks
+  discrete and integrated adapters by the same preference. Both paths intersect
+  optional features with adapter support and enforce the existing typed limit
+  translation. A zero-device bound returns before instance or adapter probing.
+- Evidence: focused contracts pin the zero bound, Metal backend identity,
+  optional feature mapping, exact requested limits, and one-device bound. The
+  WGPU policy unit test pins both preference orderings. Exact-source focused
+  Nextest passes 3/3 Metal contracts and the 1/1 WGPU policy unit; WGPU and
+  Metal all-target compilation, warning-denied Clippy, doctests, warning-clean
+  Rustdoc, and formatting pass. WGPU SemVer passes 196/196 applicable checks;
+  Metal SemVer is blocked before API analysis by an unexpected MSVC linker
+  failure in the tool's temporary rustdoc graph. Independent re-review reports
+  no remaining finding. Exact implementation head `3b8cc85` passes WGPU run
+  `30762519498`, CUDA run `30762519504`, ROCm run `30762519499`, and native
+  macOS Metal run `30762519503`. Hardware-only NVIDIA and AMD jobs skip because
+  this dispatch did not request self-hosted devices.
+- Residual: no Metal adapter is available on this Windows host. The change is
+  capability parity, not a runtime or memory optimization; no performance claim
+  is made.
+
 ## [HEPH-WGPU-METAL-OWNED-READBACK-1] Themis package identity blocker
 
 - Finding: exact-head Metal and ROCm CI failed before compilation because

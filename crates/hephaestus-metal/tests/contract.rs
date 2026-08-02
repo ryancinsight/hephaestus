@@ -10,10 +10,11 @@ use std::borrow::Cow;
 
 use hephaestus_core::{
     BinaryStorageKernel, Binding, BindingDecl, BlockWidth, CommandStream, ComputeDevice,
-    ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DispatchGrid, GroupedBinding,
-    GroupedBindingDecl, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
-    GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice, KernelInterface,
-    KernelSource, MultiStorageKernel, Result, UnaryStorageKernel, Wgsl,
+    ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DeviceLimits,
+    DevicePreference, DispatchGrid, GroupedBinding, GroupedBindingDecl, GroupedCommandStream,
+    GroupedKernelDevice, GroupedKernelInterface, GroupedKernelSequence, GroupedKernelSource,
+    HephaestusError, KernelDevice, KernelInterface, KernelSource, MultiStorageKernel, Result,
+    UnaryStorageKernel, Wgsl,
 };
 use hephaestus_metal::{
     AddOp, EluGradOp, EluOp, ExpNegOp, ExpOp, GeluTanhGradOp, GeluTanhOp, MatrixFunction,
@@ -32,6 +33,7 @@ use hephaestus_metal::{
 use hephaestus_metal::{
     MatrixDecompose, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
 };
+use hephaestus_wgpu::wgpu;
 use leto::Layout;
 
 #[repr(C)]
@@ -164,6 +166,120 @@ fn metal_capabilities_match_the_selected_wgpu_context() {
             device.supports_device_feature(feature),
             device.wgpu_device().supports_device_feature(feature)
         );
+    }
+}
+
+#[test]
+fn metal_zero_device_acquisition_does_not_probe_or_fabricate_a_device() {
+    let devices = MetalDevice::try_acquire_devices(
+        "hephaestus-metal-zero-acquisition",
+        0,
+        DevicePreference::LowPower,
+        &[],
+        DeviceLimits {
+            max_buffer_size: 0,
+            max_compute_workgroup_size_x: 0,
+            max_compute_workgroup_size_y: 0,
+            max_compute_workgroup_size_z: 0,
+            max_compute_invocations_per_workgroup: 0,
+            max_compute_workgroup_storage_size: 0,
+            max_storage_buffers_per_shader_stage: None,
+            max_buffers_and_acceleration_structures_per_shader_stage: None,
+            max_immediate_size: 0,
+        },
+    )
+    .expect("zero-device acquisition must terminate before adapter probing");
+
+    assert!(devices.is_empty());
+}
+
+#[test]
+fn metal_shared_acquisition_preserves_backend_features_and_limits() {
+    let Some(reference) = device("metal_shared_acquisition_preserves_backend_features_and_limits")
+    else {
+        return;
+    };
+    let features = [
+        DeviceFeature::TimestampQuery,
+        DeviceFeature::ShaderF64,
+        DeviceFeature::ShaderF16,
+        DeviceFeature::MappablePrimaryBuffers,
+        DeviceFeature::ImmediateData,
+    ];
+    assert!(reference.wgpu_device().adapter_info().is_none());
+    assert!(reference.wgpu_device().adapter_features().is_none());
+    assert!(reference.wgpu_device().adapter_limits().is_none());
+    let required_limits = reference.device_limits();
+    let acquired = MetalDevice::try_acquire_device(
+        "hephaestus-metal-shared-acquisition",
+        DevicePreference::HighPerformance,
+        &features,
+        required_limits,
+    )
+    .expect("shared acquisition must select the available Metal adapter");
+
+    assert_eq!(acquired.backend_name(), "metal");
+    assert_eq!(acquired.device_limits(), required_limits);
+    assert_eq!(
+        acquired
+            .wgpu_device()
+            .adapter_info()
+            .expect("shared acquisition must retain adapter identity")
+            .backend,
+        wgpu::Backend::Metal
+    );
+    let requested_features = wgpu::Features::TIMESTAMP_QUERY
+        | wgpu::Features::SHADER_F64
+        | wgpu::Features::SHADER_F16
+        | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+        | wgpu::Features::IMMEDIATES;
+    assert_eq!(
+        acquired.wgpu_device().features(),
+        acquired
+            .wgpu_device()
+            .adapter_features()
+            .expect("shared acquisition must retain adapter features")
+            & requested_features
+    );
+
+    let enumerated = MetalDevice::try_acquire_devices(
+        "hephaestus-metal-shared-enumeration",
+        1,
+        DevicePreference::HighPerformance,
+        &features,
+        required_limits,
+    )
+    .expect("bounded acquisition must enumerate the available Metal adapter");
+    assert_eq!(enumerated.len(), 1);
+    assert_eq!(enumerated[0].backend_name(), "metal");
+    assert_eq!(enumerated[0].device_limits(), required_limits);
+    assert_eq!(
+        enumerated[0]
+            .wgpu_device()
+            .adapter_info()
+            .expect("enumeration must retain adapter identity")
+            .backend,
+        wgpu::Backend::Metal
+    );
+    assert_eq!(
+        enumerated[0].wgpu_device().features(),
+        enumerated[0]
+            .wgpu_device()
+            .adapter_features()
+            .expect("enumeration must retain adapter features")
+            & requested_features
+    );
+
+    let mut impossible_limits = required_limits;
+    impossible_limits.max_buffer_size = u64::MAX;
+    match MetalDevice::try_acquire_device(
+        "hephaestus-metal-unsatisfiable-acquisition",
+        DevicePreference::HighPerformance,
+        &features,
+        impossible_limits,
+    ) {
+        Err(HephaestusError::AdapterUnavailable { .. }) => {}
+        other => panic!("unsatisfiable Metal limits must reject acquisition, got {other:?}"),
     }
 }
 
