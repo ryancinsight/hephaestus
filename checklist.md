@@ -2,6 +2,50 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## KS-6 [major] — Owner: user session (takeover from claude-seam)
+
+Residual KS-6 closure: module split (`2deb976`) and `split_packed_lu`
+eviction (`6a99625`) are merged; remaining work is auditing and evicting
+residual domain logic from the python leaf modules so `hephaestus-python`
+stays a thin typing/parity layer. Backend match-arm collapse rides on KS-5
+(in-progress, not claimed here). Lane: `refactor/ks6-python-eviction` in the
+re-purposed `hephaestus-crates-release` worktree; the `release/hephaestus-crates`
+branch is untouched.
+
+- [x] Audit all python leaf modules for residual domain math/validation.
+- [x] Evict in-scope domain logic into `hephaestus-core`:
+  `ColPivQrHandle::shape()` seam accessor replaces the python host-side
+  `sqrt`/`checked_div` reconstruction of `col_piv_qr` shapes (both wgpu and
+  cuda arms). Kept by design: `mean` reciprocal and `__rpow__` `ln` host
+  scalars (irreducible without new backend kernels — no full-array mean op
+  exists) and the PyO3-boundary shape validation (shape-slice helpers returning
+  `PyValueError` vs core's `leto::Layout`-based `validate_square_operand`;
+  distinct error domains, not duplicated math).
+- [x] Pass focused fmt/check/clippy/nextest gates and merge to default.
+  Evidence: `cargo fmt --check` clean; `cargo check` clean on core, wgpu,
+  cuda, rocm, metal, python, conformance; per-package clippy
+  `--all-targets --no-deps -- -D warnings` clean (rocm `rocm` feature is
+  Linux-only guard — CI-covered); wgpu nextest 215/215 including the generic
+  conformance decomposition clause with the new shape assertion.
+  Blocked locally (environment, pre-existing): `cargo test --doc`,
+  `cargo doc`, and core nextest all trip the themis git-package resolution
+  defect below; CI runs `--locked` against the committed lockfile and is
+  unaffected.
+
+Findings recorded (out of scope, not absorbed):
+- The workspace declares `themis = { git = "https://github.com/ryancinsight/themis" }`
+  but the themis repo's package is `themis-topology` (`[lib] name = "themis"`);
+  no package named `themis` exists anywhere. The committed Cargo.lock `themis`
+  entry (no `source` line) masks this under `--locked`, so CI resolves; any
+  re-resolution (`cargo metadata --all-features`, nextest for packages pulling
+  themis, doctest/doc builds) fails with "no matching package named themis".
+  Fix direction (outside KS-6): depend on `themis-topology` (lib name `themis`
+  keeps `use themis::…` valid) or add a rename; the overlay patch
+  `themis-topology = { path = "repos/themis" }` already covers the local tree.
+- Pre-existing `clippy::collapsible_if` in `hephaestus-conformance/src/transfer.rs:119`
+  (nested `if let`). CI never clippies the conformance crate, so it is
+  latent debt; fix on a future conformance touch.
+
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Establish focused CUDA/ROCm decomposition baselines.

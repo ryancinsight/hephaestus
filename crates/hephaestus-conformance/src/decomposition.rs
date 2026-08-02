@@ -485,6 +485,7 @@ where
     let qr = ops
         .col_piv_qr(device, StridedView::new(&deficient, &tall))
         .expect("rank-1 col-pivoted QR");
+    assert_eq!(qr.shape(), (3, 2), "{name}: QR shape");
     assert_eq!(qr.rank(), 1, "{name}: rank-1 fixture must reveal rank 1");
     let permutation = qr.permutation();
     assert_eq!(permutation.len(), 2, "{name}: permutation length");

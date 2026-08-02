@@ -5,7 +5,7 @@
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendDevice, clone_cuda_buffer};
-use hephaestus_core::{ComputeDevice, DeviceBuffer, split_packed_lu};
+use hephaestus_core::{ComputeDevice, split_packed_lu};
 use leto::Layout;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -394,10 +394,9 @@ pub(crate) fn col_piv_qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyAr
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::col_piv_qr(device, op)?;
+                let (m, n) = decomp.shape();
                 let q_buf = decomp.q().clone();
                 let r_buf = decomp.r().clone();
-                let m = (q_buf.len() as f64).sqrt() as usize;
-                let n = r_buf.len().checked_div(m).unwrap_or(0);
                 let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
                 Ok((
                     BackendBuffer::Wgpu(q_buf),
@@ -413,10 +412,7 @@ pub(crate) fn col_piv_qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyAr
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::col_piv_qr(device, op)?;
-                let q_len = decomp.q().len();
-                let r_len = decomp.r().len();
-                let m = (q_len as f64).sqrt() as usize;
-                let n = r_len.checked_div(m).unwrap_or(0);
+                let (m, n) = decomp.shape();
                 let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
                 Ok((
                     clone_cuda_buffer(device, decomp.q())?,

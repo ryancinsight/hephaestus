@@ -2645,7 +2645,25 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   16-thread contract, after the provider-owned initialization/context locks.
 - [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
   (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
-  Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).
+  Status: done (verified 2026-08-02, owner user session). The 12-leaf-module
+  split (`2deb976`), `split_packed_lu` eviction (`6a99625`), and the residual
+  audit/eviction (`4c6f89e`) are on origin/master. Eviction delivered in
+  `4c6f89e`: `ColPivQrHandle::shape()` seam accessor (core + wgpu/cuda/rocm/
+  metal + conformance shape clause) replaces the python host-side
+  `sqrt`/`checked_div` reconstruction of `col_piv_qr` shapes; python crate is
+  now ~98% thin binding surface. Kept by design (documented in `4c6f89e`):
+  `mean` reciprocal and `__rpow__` `ln` host scalars (irreducible without new
+  backend kernels; no full-array mean op exists) and the PyO3-boundary shape
+  validation (different error-domain binding helpers, not duplicated math).
+  Incidental findings: themis git-package resolution defect (workspace
+  declared git package `themis`, which upstream renamed to `themis-topology`
+  while keeping lib name `themis`; the committed no-source Cargo.lock entry
+  masked it under `--locked` — any re-resolution failed, including CI's
+  `cargo update` step). Fixed in `473dcf7`: `package = "themis-topology"` on
+  the workspace dependency; extern crate name unchanged. Pre-existing
+  `clippy::collapsible_if` debt in
+  `hephaestus-conformance/src/transfer.rs:119` remains (CI never clippies
+  conformance).
 - [KS-7] [minor] Perf batch from the audit: CUDA streams + pinned staging
   (CU-P1/P6/M3), batched-matmul `blockIdx.z` (CU-P5), typed CUDA cache keys
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
@@ -2857,6 +2875,22 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   public-surface change and would remove the Metal-specific required-device
   CI contract. The macOS workflow and README now carry the decision evidence.
 
+- [KS-10] [major] `mnemosyne` co-evolution sweep: follow the upstream
+  collision-free rename (`mnemosyne` package → `mnemosyne-memory`, Mnemosyne
+  `79cd882`/`be4aa64`, 2026-08-02) in hephaestus's integration. Scope: update
+  the CI checkout-local config template (`rocm-cargo-config.toml`) and the
+  shared Atlas overlay to patch the renamed packages, align any workspace
+  dependency declarations/features that name the pre-rename package, refresh
+  the local `repos/mnemosyne` checkout (currently 5 behind, still exposing the
+  stale `mnemosyne` package), and verify the graph resolves against the
+  current remote without the no-source lockfile crutch. Acceptance: all four
+  backend CI workflows reach their build/test steps (the configure step's
+  `cargo update --workspace` currently fails with "does not contain packages
+  matching `mnemosyne`"), and a fresh `cargo update --workspace` + full local
+  gate passes. Blocker currently failing every hephaestus PR including the
+  KS-6 lane's merged PR #180 (unblocked only because master is unprotected);
+  the last green master CI was 2026-08-02T04:25Z, before the remote moved.
+  Re-open trigger: none — this item is the cure.
 - [arch] Add a concrete CUDA implementor for multi-storage beamforming kernels
   when a CUDA beamforming kernel exists. The backend-neutral trait and WGPU
   implementation are delivered; remaining work is the CUDA kernel/launch

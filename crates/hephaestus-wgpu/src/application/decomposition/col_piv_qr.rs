@@ -26,6 +26,13 @@ impl GpuColPivQrDecomposition {
         self.rank
     }
 
+    /// `(rows, cols)` of the factored matrix.
+    #[must_use]
+    #[inline]
+    pub fn shape(&self) -> (usize, usize) {
+        (self.m, self.n)
+    }
+
     /// Borrow the orthogonal factor **Q** buffer on the device.
     #[must_use]
     #[inline]
