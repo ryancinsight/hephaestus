@@ -66,6 +66,12 @@ Target release: 0.18.0.
 
 ### Added
 
+- [minor] Metal implements the backend-neutral `ComputeDeviceAcquisition` seam,
+  including Metal-only adapter selection, device-preference ordering, optional
+  feature intersection, required limits, and bounded multi-device enumeration.
+  The shared acquisition and capability types are re-exported from the Metal
+  crate root alongside the existing compute seam.
+
 - [minor] `ComputeDevice::download_owned` allocates host-owned transfer results
   behind the provider seam while remaining source-compatible for external
   backend implementors through an initialized default. CUDA and ROCm override

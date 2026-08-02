@@ -4,10 +4,10 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-METAL-ACQUISITION-1 [minor] — Owner: Codex
 
-- [ ] Record the current Metal acquisition baseline and WGPU substrate closure.
-- [ ] Add Metal-only feature/limit-aware single and bounded multi-device
+- [x] Record the current Metal acquisition baseline and WGPU substrate closure.
+- [x] Add Metal-only feature/limit-aware single and bounded multi-device
   acquisition without fallback to another WGPU backend.
-- [ ] Implement `ComputeDeviceAcquisition` for `MetalDevice` and add
+- [x] Implement `ComputeDeviceAcquisition` for `MetalDevice` and add
   value-semantic capability/boundary contracts.
 - [ ] Run focused format, Nextest, warning-denied Clippy, doctest/Rustdoc,
   independent review, SemVer classification, and exact-head provider CI.
@@ -16,6 +16,18 @@ Implementation owner: Codex on `codex/feat-metal-device-acquisition`. Claimed
 files are WGPU device acquisition, Metal device infrastructure and contract
 tests, plus owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
 `gap_audit.md` entries. KS-5 decomposition files remain excluded.
+Baseline exact-source Nextest run `b8f7b647-4d6e-48fe-8cd1-03a8d5e94eaa`
+passes 1/1. Final focused WGPU run `a875a543-9f52-440b-a648-b490be28c166`
+passes the preference policy 1/1; Metal run
+`510d5e60-eefc-4dd8-a395-09bd6bfc3b9d` passes the zero-bound, shared
+acquisition, and capability contracts 3/3. WGPU and Metal all-target
+compilation, warning-denied Clippy, doctests, warning-clean Rustdoc, and
+formatting pass. WGPU SemVer passes 196/196 applicable checks; Metal SemVer is
+blocked before API analysis by an unexpected MSVC linker failure in the tool's
+temporary rustdoc graph, which was deleted with its 9.0 GiB repo-local cache.
+Physical adapter selection, optional-feature intersection, and required-limit
+enforcement remain native macOS CI evidence from this Windows host. Independent
+re-review approves with no remaining findings.
 
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — Owner: Codex
 

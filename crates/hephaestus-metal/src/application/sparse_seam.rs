@@ -2,9 +2,9 @@
 //!
 //! Metal delegates wholly to the WGPU implementation, matching
 //! [`crate::MetalScanOps`]: the buffer wrapper is unwrapped to its inner WGPU
-//! buffer and every method forwards to [`WgpuSparseOps`] on the device's WGPU
-//! handle. The device-resident matrix type is WGPU's, since both live on the
-//! same underlying device.
+//! buffer and every method forwards to [`hephaestus_wgpu::WgpuSparseOps`] on
+//! the device's WGPU handle. The device-resident matrix type is WGPU's, since
+//! both live on the same underlying device.
 
 use bytemuck::Pod;
 use hephaestus_core::{BatchSubmitOps, DialectScalar, Result, SparseOperatorOps, StridedView};

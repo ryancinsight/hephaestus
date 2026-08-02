@@ -103,4 +103,7 @@ pub use application::decomposition::{
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 
-pub use hephaestus_core::{ComputeDevice, DenseVectorOps, DeviceBuffer, HephaestusError, Result};
+pub use hephaestus_core::{
+    ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DenseVectorOps,
+    DeviceBuffer, DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, Result,
+};

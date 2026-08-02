@@ -17,6 +17,18 @@
   and exact-head WGPU/CUDA/ROCm/macOS Metal CI pass.
 - Risk/change class: `[minor]`; additive backend capability and WGPU substrate
   API, with no existing constructor behavior change.
+- Status: implementation and focused exact-source verification complete
+  2026-08-02. Metal implements the shared seam through Metal-only WGPU adapter
+  selection; WGPU and Metal enumeration now honor preference ordering and
+  return immediately for a zero-device bound. Focused acquisition contracts
+  pass 3/3 and the WGPU preference-policy unit passes 1/1; both affected crates
+  compile and pass all-target warning-denied Clippy, doctests, warning-clean
+  Rustdoc, and formatting. WGPU SemVer passes 196/196 applicable checks; Metal
+  SemVer is blocked before API analysis by an unexpected MSVC linker failure in
+  the tool's temporary rustdoc graph. Independent review approves after
+  requiring one-time limit selection, viable-adapter continuation, physical
+  identity/feature assertions, and preservation of `try_default`; all are
+  applied. Native Metal and exact-head provider CI remain.
 
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
 

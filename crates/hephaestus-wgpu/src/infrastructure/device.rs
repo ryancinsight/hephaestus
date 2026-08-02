@@ -66,6 +66,7 @@ pub struct WgpuDevice {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     adapter_info: Option<wgpu::AdapterInfo>,
+    adapter_features: Option<wgpu::Features>,
     adapter_limits: Option<wgpu::Limits>,
     topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: PipelineCache,
@@ -79,6 +80,21 @@ impl WgpuDevice {
         match preference {
             DevicePreference::HighPerformance => wgpu::PowerPreference::HighPerformance,
             DevicePreference::LowPower => wgpu::PowerPreference::LowPower,
+        }
+    }
+
+    const fn adapter_preference_rank(
+        device_type: wgpu::DeviceType,
+        preference: DevicePreference,
+    ) -> u8 {
+        match (preference, device_type) {
+            (DevicePreference::HighPerformance, wgpu::DeviceType::DiscreteGpu)
+            | (DevicePreference::LowPower, wgpu::DeviceType::IntegratedGpu) => 0,
+            (DevicePreference::HighPerformance, wgpu::DeviceType::IntegratedGpu)
+            | (DevicePreference::LowPower, wgpu::DeviceType::DiscreteGpu) => 1,
+            (_, wgpu::DeviceType::VirtualGpu) => 2,
+            (_, wgpu::DeviceType::Other) => 3,
+            (_, wgpu::DeviceType::Cpu) => 4,
         }
     }
 
@@ -180,6 +196,7 @@ impl WgpuDevice {
             device,
             queue,
             adapter_info: None,
+            adapter_features: None,
             adapter_limits: None,
             topology: None,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
@@ -244,6 +261,7 @@ impl WgpuDevice {
     fn with_adapter_metadata(mut self, adapter: &wgpu::Adapter) -> Self {
         self.topology = Some(Arc::new(Self::topology_from_adapter(adapter)));
         self.adapter_info = Some(adapter.get_info());
+        self.adapter_features = Some(adapter.features());
         self.adapter_limits = Some(adapter.limits());
         self
     }
@@ -256,6 +274,16 @@ impl WgpuDevice {
     #[inline]
     pub fn adapter_info(&self) -> Option<&wgpu::AdapterInfo> {
         self.adapter_info.as_ref()
+    }
+
+    /// The adapter features captured at acquisition, when available.
+    ///
+    /// `None` when the device was wrapped via [`new`](Self::new) (no adapter
+    /// to report from).
+    #[must_use]
+    #[inline]
+    pub const fn adapter_features(&self) -> Option<wgpu::Features> {
+        self.adapter_features
     }
 
     /// The adapter limits captured at acquisition, when available.
@@ -509,20 +537,44 @@ impl WgpuDevice {
         select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
         select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
     ) -> Result<Vec<Self>> {
+        Self::try_enumerate_with_adapter_config_and_rank(
+            label_prefix,
+            max_devices,
+            accept_adapter,
+            select_features,
+            select_limits,
+            |_| 0,
+        )
+    }
+
+    fn try_enumerate_with_adapter_config_and_rank(
+        label_prefix: &str,
+        max_devices: usize,
+        accept_adapter: impl Fn(&wgpu::AdapterInfo) -> bool,
+        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
+        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
+        rank_adapter: impl Fn(&wgpu::AdapterInfo) -> u8,
+    ) -> Result<Vec<Self>> {
+        if max_devices == 0 {
+            return Ok(Vec::new());
+        }
+
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
         desc.backends = wgpu::Backends::all();
         let instance = wgpu::Instance::new(desc);
         let mut devices = Vec::new();
+        let mut adapters = moirai::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        adapters.retain(|adapter| accept_adapter(&adapter.get_info()));
+        adapters.sort_by_key(|adapter| rank_adapter(&adapter.get_info()));
 
-        for adapter in moirai::block_on(instance.enumerate_adapters(wgpu::Backends::all())) {
+        for adapter in adapters {
             let info = adapter.get_info();
-            if !accept_adapter(&info) {
-                continue;
-            }
-
             let label = format!("{label_prefix}: {}", info.name);
             let required_features = select_features(&adapter);
             let required_limits = select_limits(&adapter);
+            if !required_limits.check_limits(&adapter.limits()) {
+                continue;
+            }
             devices.push(Self::try_from_adapter_with_features_and_limits(
                 &label,
                 &adapter,
@@ -536,6 +588,62 @@ impl WgpuDevice {
         }
 
         Ok(devices)
+    }
+
+    /// Acquire one Metal-backed adapter matching `device_preference`, enabling
+    /// optional features only when supported and enforcing backend-neutral
+    /// compute limits.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::AdapterUnavailable`] when no Metal adapter can satisfy
+    /// the request; [`HephaestusError::DeviceUnavailable`] when logical-device
+    /// creation fails.
+    pub fn try_metal_with_device_preference_and_optional_device_features_and_limits(
+        label: &str,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Self> {
+        Self::try_enumerate_metal_with_optional_device_features_and_limits(
+            label,
+            1,
+            device_preference,
+            optional_features,
+            required_limits,
+        )
+        .and_then(|mut devices| {
+            devices
+                .pop()
+                .ok_or_else(|| HephaestusError::AdapterUnavailable {
+                    message: "No compatible Metal GPU adapter or device could be acquired."
+                        .to_string(),
+                })
+        })
+    }
+
+    /// Acquire up to `max_devices` Metal-backed devices with optional features
+    /// and backend-neutral required limits.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::DeviceUnavailable`] when logical-device creation
+    /// fails for an enumerated Metal adapter.
+    pub fn try_enumerate_metal_with_optional_device_features_and_limits(
+        label_prefix: &str,
+        max_devices: usize,
+        device_preference: DevicePreference,
+        optional_features: &[DeviceFeature],
+        required_limits: DeviceLimits,
+    ) -> Result<Vec<Self>> {
+        Self::try_enumerate_with_adapter_config_and_rank(
+            label_prefix,
+            max_devices,
+            |info| matches!(info.backend, wgpu::Backend::Metal),
+            |adapter| adapter.features() & Self::wgpu_features(optional_features),
+            |_| Self::wgpu_limits_from_device_limits(required_limits),
+            |info| Self::adapter_preference_rank(info.device_type, device_preference),
+        )
     }
 
     /// Create a device from a caller-selected adapter, enabling optional
@@ -1242,16 +1350,17 @@ impl ComputeDeviceAcquisition for WgpuDevice {
     fn try_acquire_devices(
         label_prefix: &str,
         max_devices: usize,
-        _device_preference: DevicePreference,
+        device_preference: DevicePreference,
         optional_features: &[DeviceFeature],
         required_limits: DeviceLimits,
     ) -> Result<Vec<Self>> {
-        Self::try_enumerate_with_adapter_config(
+        Self::try_enumerate_with_adapter_config_and_rank(
             label_prefix,
             max_devices,
             |info| !matches!(info.backend, wgpu::Backend::BrowserWebGpu),
             |adapter| adapter.features() & Self::wgpu_features(optional_features),
             |_| Self::wgpu_limits_from_device_limits(required_limits),
+            |info| Self::adapter_preference_rank(info.device_type, device_preference),
         )
     }
 }
@@ -1418,6 +1527,28 @@ mod tests {
         assert_eq!(
             WgpuDevice::wgpu_features(&[DeviceFeature::ShaderF16, DeviceFeature::TimestampQuery,]),
             wgpu::Features::SHADER_F16 | wgpu::Features::TIMESTAMP_QUERY
+        );
+    }
+
+    #[test]
+    fn adapter_ranking_maps_both_device_preferences() {
+        assert!(
+            WgpuDevice::adapter_preference_rank(
+                wgpu::DeviceType::DiscreteGpu,
+                DevicePreference::HighPerformance,
+            ) < WgpuDevice::adapter_preference_rank(
+                wgpu::DeviceType::IntegratedGpu,
+                DevicePreference::HighPerformance,
+            )
+        );
+        assert!(
+            WgpuDevice::adapter_preference_rank(
+                wgpu::DeviceType::IntegratedGpu,
+                DevicePreference::LowPower,
+            ) < WgpuDevice::adapter_preference_rank(
+                wgpu::DeviceType::DiscreteGpu,
+                DevicePreference::LowPower,
+            )
         );
     }
 
