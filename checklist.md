@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## KS-5 blocked-LU slice [major] — Owner: user session
+
+- [ ] Hoist the blocked-LU host loop into `hephaestus-core` per ADR-0003:
+  `BlockedDecompositionBackend` trait (clone_device / download_region /
+  write_region / gemm_trailing), `PanelRegion`, `TrailingGemm`, and the
+  `blocked_lu` loop; wgpu reuse discipline (host scratch `Vec`s allocated once,
+  compact transfer buffer once).
+- [ ] Make `hephaestus-wgpu` and `hephaestus-cuda` blocked-LU entry points thin
+  calls into the core loop; cuda `download_region` fills caller `&mut Vec`
+  (ADR-0003's decided cuda behavior change).
+- [ ] Preserve test counts and value-semantic differential/negative contracts
+  (wgpu blocked-LU tests; cuda lu blocked contract tests).
+- [ ] Run focused gates: fmt/check/clippy `-D warnings` (core, wgpu, cuda),
+  nextest wgpu blocked-lu + core + cuda lu contracts.
+- [ ] Commit claim; update ADR-0003 status line; PR on merge.
+
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — Owner: Codex `/root`
 
 - [x] Bind the `moirai` Rust import to package `moirai-runtime`.

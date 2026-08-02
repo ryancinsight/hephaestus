@@ -2649,7 +2649,9 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   validation, and scalar pass-depth planning now live in
   `hephaestus_core::reduction`; WGPU and CUDA keep only dialect shaders, buffer
   ownership, and launch mechanics. Status: scan done; WGPU/CUDA reduction
-  parity done; blocked-decomposition host loops and wrappers remain. The O(L²)
+  parity done; blocked-decomposition host loops and wrappers remain. Claimed
+  2026-08-02 by user session: blocked LU host-loop slice first, per ADR-0003
+  sequencing (LU → QR → Cholesky). The O(L²)
   axis-scan ALGORITHM defect is
   fixed in both backends (2026-07-02): one-thread-per-line sequential scan,
   O(N) total work, combine order preserved so results are bitwise-identical
