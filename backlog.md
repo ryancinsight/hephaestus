@@ -9,7 +9,9 @@
   consumers.
 - Status: the exact external graph resolves Moirai `b7988419`, Leto
   `a5d53ca9`, and the published package identity; format and the focused locked
-  WGPU package check pass. Exact-head hosted verification and merge remain.
+  WGPU package check pass. Exact-head CI exposed stale Mnemosyne patch keys;
+  those keys now match the published package identities. Hosted verification
+  and merge remain.
 
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — done
 

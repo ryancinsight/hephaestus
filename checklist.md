@@ -7,6 +7,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Bind the `moirai` Rust import to package `moirai-runtime`.
 - [x] Refresh the lockfile and pass clean locked metadata plus the focused WGPU
   package check.
+- [x] Align the checkout-local CI patches with Mnemosyne's published packages.
 - [ ] Merge the provider identity fix before refreshing Apollo and Coeus.
 
 ## KS-6 [major] — Owner: user session (takeover from claude-seam)
