@@ -23,6 +23,17 @@ pub(crate) type PipelineCache = Arc<
     >,
 >;
 
+/// Cancels a pending map or releases an active mapping before pooled staging
+/// storage can be recycled, including error and unwind exits.
+struct MappingLifecycle<'a>(&'a wgpu::Buffer);
+
+impl Drop for MappingLifecycle<'_> {
+    #[inline]
+    fn drop(&mut self) {
+        self.0.unmap();
+    }
+}
+
 // Pool budgets. `ShardedResourcePool` divides both caps by its 4 thread-
 // affine shards and recycles to the CALLER's shard only, so the effective
 // single-threaded retention is `max_buffers / 4` buffers and an item larger
@@ -937,7 +948,7 @@ impl WgpuDevice {
                 device_len: buffer.len,
             });
         }
-        if out.is_empty() {
+        if out.is_empty() || core::mem::size_of::<T>() == 0 {
             return Ok(());
         }
 
@@ -951,8 +962,8 @@ impl WgpuDevice {
             byte_offset,
             padded,
             byte_len,
-            out,
             "hephaestus-download-sub",
+            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
         )
     }
 
@@ -1102,7 +1113,7 @@ impl ComputeDevice for WgpuDevice {
                 device_len: buffer.len,
             });
         }
-        if out.is_empty() {
+        if out.is_empty() || core::mem::size_of::<T>() == 0 {
             return Ok(());
         }
 
@@ -1113,9 +1124,48 @@ impl ComputeDevice for WgpuDevice {
             0,
             padded,
             byte_len,
-            out,
             "hephaestus-download",
+            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
         )
+    }
+
+    fn download_owned<T: Pod>(&self, buffer: &WgpuBuffer<T>) -> Result<Vec<T>> {
+        let len = buffer.len;
+        let mut out = Vec::new();
+        out.try_reserve_exact(len)
+            .map_err(|error| HephaestusError::AllocationFailed {
+                message: format!(
+                    "WGPU host download allocation for {len} elements failed: {error}"
+                ),
+            })?;
+        if core::mem::size_of::<T>() == 0 {
+            out.resize(len, bytemuck::Zeroable::zeroed());
+            return Ok(out);
+        }
+        let byte_len = Self::byte_size::<T>(len)?;
+        if byte_len == 0 {
+            return Ok(out);
+        }
+        let padded = Self::padded_size::<T>(len)?;
+        let destination = out.spare_capacity_mut().as_mut_ptr().cast::<u8>();
+        self.stage_and_read(
+            &buffer.buffer,
+            0,
+            padded,
+            byte_len,
+            "hephaestus-download-owned",
+            |bytes| {
+                // SAFETY: `try_reserve_exact` established writable capacity for
+                // `len` elements and `byte_len` is exactly `len * size_of::<T>()`.
+                // The source is a disjoint mapped staging allocation.
+                unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), destination, bytes.len()) };
+            },
+        )?;
+        // SAFETY: `T: Pod` admits every initialized bit pattern, and the
+        // successful synchronous staging read above wrote every byte of all
+        // `len` elements before the vector length becomes observable.
+        unsafe { out.set_len(len) };
+        Ok(out)
     }
 
     fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {
@@ -1208,20 +1258,21 @@ impl ComputeDeviceAcquisition for WgpuDevice {
 
 impl WgpuDevice {
     /// Core GPU→host transfer: copy `padded` bytes from `src_buf[byte_offset..]`
-    /// into a staging buffer, map it, and write exactly `byte_len` bytes into `out`.
+    /// into a staging buffer, map it, and pass exactly `byte_len` bytes to
+    /// `consume` before unmapping the staging allocation.
     ///
     /// `byte_len` ≤ `padded` must hold; `padded` must fit the alignment required by
     /// `wgpu::COPY_BUFFER_ALIGNMENT`. This is the SSOT for all synchronous
     /// device→host readback paths.
-    fn stage_and_read<T: Pod>(
+    fn stage_and_read<R>(
         &self,
         src_buf: &wgpu::Buffer,
         byte_offset: u64,
         padded: u64,
         byte_len: u64,
-        out: &mut [T],
         label: &str,
-    ) -> Result<()> {
+        consume: impl FnOnce(&[u8]) -> R,
+    ) -> Result<R> {
         let raw_staging = self.get_staging_buffer(padded)?;
         let staging_size = raw_staging.size();
         let staging = crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
@@ -1239,6 +1290,7 @@ impl WgpuDevice {
             // in the same synchronous frame until after poll() returns below.
             let _ = sender.send(result);
         });
+        let mapping = MappingLifecycle(&staging);
         self.device
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|e| HephaestusError::TransferFailed {
@@ -1261,11 +1313,19 @@ impl WgpuDevice {
             .map_err(|error| HephaestusError::TransferFailed {
                 message: format!("mapped-range acquisition failed: {error}"),
             })?;
-        out.copy_from_slice(bytemuck::cast_slice(&mapped[..byte_len_usize]));
+        let Some(bytes) = mapped.get(..byte_len_usize) else {
+            drop(mapped);
+            return Err(HephaestusError::TransferFailed {
+                message: format!(
+                    "mapped staging range is shorter than requested readback: {staging_size} < {byte_len} bytes"
+                ),
+            });
+        };
+        let result = consume(bytes);
         drop(mapped);
-        staging.unmap();
+        drop(mapping);
 
-        Ok(())
+        Ok(result)
     }
 }
 
@@ -1296,6 +1356,34 @@ mod tests {
         assert_eq!(payload.len(), 8);
         assert_eq!(&payload[..6], bytemuck::cast_slice::<u16, u8>(&host));
         assert_eq!(&payload[6..], [0, 0]);
+    }
+
+    #[test]
+    fn staging_mapping_is_reusable_after_consumer_unwind() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-staging-unwind") else {
+            return;
+        };
+        let expected = [1_u32, 2, 3, 4];
+        let buffer = device.upload(&expected).expect("upload");
+        let byte_len = WgpuDevice::byte_size::<u32>(expected.len()).expect("byte length");
+        let padded = WgpuDevice::padded_size::<u32>(expected.len()).expect("padded length");
+
+        let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = device.stage_and_read(
+                buffer.raw(),
+                0,
+                padded,
+                byte_len,
+                "hephaestus-staging-unwind",
+                |_| panic!("intentional mapped-consumer unwind"),
+            );
+        }));
+        assert!(unwind.is_err(), "mapped consumer must unwind");
+
+        let actual = device
+            .download_owned(&buffer)
+            .expect("staging buffer must remain reusable after unwind");
+        assert_eq!(actual, expected);
     }
 
     #[test]

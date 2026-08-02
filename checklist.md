@@ -56,10 +56,10 @@ Findings recorded (out of scope, not absorbed):
 
 ## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
-- [ ] Establish focused WGPU transfer and Metal delegation baselines.
-- [ ] Make mapped staging initialize reserved owned host capacity directly.
-- [ ] Cover bitwise, empty, zero-sized, and delegation contracts.
-- [ ] Pass focused warning-denied gates and independent review.
+- [x] Establish focused WGPU transfer and Metal delegation baselines.
+- [x] Make mapped staging initialize reserved owned host capacity directly.
+- [x] Cover bitwise, empty, zero-sized, and delegation contracts.
+- [x] Pass focused warning-denied gates and independent review.
 - [ ] Pass exact-head WGPU and native macOS Metal CI.
 
 Claimed files are WGPU and Metal device implementations, focused transfer

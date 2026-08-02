@@ -10,6 +10,10 @@
 
 use hephaestus_core::{ComputeDevice, DeviceBuffer};
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
+struct EmptyTransfer;
+
 /// Run every transfer clause against one backend.
 ///
 /// # Panics
@@ -147,5 +151,25 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
         owned_empty.capacity(),
         0,
         "{name}: empty owned download must not allocate"
+    );
+
+    // Zero-sized POD values carry logical length without physical transfer
+    // bytes. Both borrowed and owned readback preserve that element count.
+    let empty_values = [EmptyTransfer; 3];
+    let empty_value_buffer = device.upload(&empty_values).expect("ZST upload");
+    let mut empty_value_out = [EmptyTransfer; 3];
+    device
+        .download(&empty_value_buffer, &mut empty_value_out)
+        .expect("ZST download");
+    assert_eq!(
+        empty_value_out, empty_values,
+        "{name}: ZST borrowed download length"
+    );
+    let owned_empty_values = device
+        .download_owned(&empty_value_buffer)
+        .expect("ZST owned download");
+    assert_eq!(
+        owned_empty_values, empty_values,
+        "{name}: ZST owned download length"
     );
 }

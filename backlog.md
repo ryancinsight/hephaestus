@@ -13,7 +13,7 @@
   those keys now match the published package identities. Hosted verification
   and merge remain.
 
-## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — in progress
+## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — implementation complete
 
 - Owner: Codex on `codex/hephaestus-wgpu-owned-readback`; scope: WGPU's
   synchronous staging readback, Metal delegation, shared transfer contracts,
