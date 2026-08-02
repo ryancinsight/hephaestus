@@ -13,6 +13,22 @@
   those keys now match the published package identities. Hosted verification
   and merge remain.
 
+## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-wgpu-owned-readback`; scope: WGPU's
+  synchronous staging readback, Metal delegation, shared transfer contracts,
+  and owner-keyed PM/release records.
+- Outcome: let WGPU and Metal initialize reserved host result capacity directly
+  after successful mapped staging, removing the initialized zero-fill pass from
+  `download_owned` while preserving the existing `download` contract.
+- Non-goals: staging-pool policy, asynchronous transfers, CUDA/ROCm transfer
+  implementations, and active Python/KS-7 scopes.
+- Acceptance: one staging/map orchestration remains authoritative; owned
+  transfer publishes vector length only after every byte is copied; empty and
+  zero-sized values are safe; bit patterns survive round-trip; focused
+  warning-denied gates, independent review, and exact-head WGPU/macOS Metal CI
+  pass.
+
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on shared `feat/topology-option`; scope: CUDA and ROCm
