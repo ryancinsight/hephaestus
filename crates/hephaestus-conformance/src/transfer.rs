@@ -116,18 +116,18 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
     // sentinel), so every present value is a real device quantity and
     // the clause needs no sentinel branch; a backend with no snapshot at
     // all returns `None` for the topology itself.
-    if let Some(topology) = device.topology() {
-        if let Some(warp) = topology.warp_width() {
+    if let Some(topology) = device.topology()
+        && let Some(warp) = topology.warp_width()
+    {
+        assert!(
+            warp.get().is_power_of_two(),
+            "{name}: a reported warp width must be a power of two, got {warp}"
+        );
+        if let Some(threads) = topology.max_threads_per_unit() {
             assert!(
-                warp.get().is_power_of_two(),
-                "{name}: a reported warp width must be a power of two, got {warp}"
+                threads >= warp,
+                "{name}: a compute unit must hold at least one warp"
             );
-            if let Some(threads) = topology.max_threads_per_unit() {
-                assert!(
-                    threads >= warp,
-                    "{name}: a compute unit must hold at least one warp"
-                );
-            }
         }
     }
 

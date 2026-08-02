@@ -47,7 +47,6 @@ impl<T> HostBuffer<T> {
     /// Panics when a prior holder poisoned the lock by panicking — the
     /// reference substrate treats poisoned state as unrecoverable test
     /// wreckage, not a runtime condition.
-    #[must_use]
     pub fn read(&self) -> RwLockReadGuard<'_, Vec<T>> {
         self.cells
             .read()
