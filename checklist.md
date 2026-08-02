@@ -2,6 +2,20 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## KS-6 [major] — Owner: user session (takeover from claude-seam)
+
+Residual KS-6 closure: module split (`2deb976`) and `split_packed_lu`
+eviction (`6a99625`) are merged; remaining work is auditing and evicting
+residual domain logic from the python leaf modules so `hephaestus-python`
+stays a thin typing/parity layer. Backend match-arm collapse rides on KS-5
+(in-progress, not claimed here). Lane: `refactor/ks6-python-eviction` in the
+re-purposed `hephaestus-crates-release` worktree; the `release/hephaestus-crates`
+branch is untouched.
+
+- [ ] Audit all python leaf modules for residual domain math/validation.
+- [ ] Evict in-scope domain logic into `hephaestus-core`.
+- [ ] Pass focused fmt/check/clippy/nextest gates and merge to default.
+
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Establish focused CUDA/ROCm decomposition baselines.

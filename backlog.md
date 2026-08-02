@@ -2645,7 +2645,14 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   16-thread contract, after the provider-owned initialization/context locks.
 - [KS-6] [major] `hephaestus-python` module split + domain-logic eviction
   (`split_packed_lu` → core); backend match-arm collapse rides on KS-5.
-  Status: in-progress (owner claude-seam; scope `hephaestus-python/**`).
+  Status: in-progress (owner claude-seam, taken over by user session
+  2026-08-02; scope `hephaestus-python/**`). The 12-leaf-module split
+  (`2deb976`) and `split_packed_lu` eviction (`6a99625`) are merged into
+  origin/master; the remaining delta is the residual domain-logic audit and
+  eviction across the leaf modules. Executed in lane
+  `refactor/ks6-python-eviction`, re-purposing the parked
+  `release/hephaestus-crates` worktree (HEPH-PYTHON-RELEASE-1 stays blocked
+  on external authority; that branch is untouched).
 - [KS-7] [minor] Perf batch from the audit: CUDA streams + pinned staging
   (CU-P1/P6/M3), batched-matmul `blockIdx.z` (CU-P5), typed CUDA cache keys
   (CU-P9/P10), wgpu encoder-borrowing batching (WG-P4), fused dot/norms
