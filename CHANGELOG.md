@@ -23,6 +23,11 @@ Target release: 0.18.0.
   lifetime generic associated types. CUDA and ROCm implementations borrow the
   fixed device allocations instead of requiring cloneable buffer handles.
 
+- [minor] `ColPivQrHandle` gains the `shape()` accessor returning `(rows,
+  cols)` of the factored matrix. The Python `col_piv_qr` binding derives the
+  result shapes from the seam instead of reconstructing them from factor-buffer
+  lengths on the host.
+
 - [arch] General-eigenvalue device buffers now expose
   `eunomia::Complex<f32>` instead of `num_complex::Complex<f32>`.
 

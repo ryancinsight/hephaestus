@@ -32,6 +32,9 @@ pub struct MetalColPivQrDecomposition {
 }
 
 impl ColPivQrHandle<MetalDevice> for MetalColPivQrDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        self.inner.shape()
+    }
     fn rank(&self) -> usize {
         self.inner.rank()
     }

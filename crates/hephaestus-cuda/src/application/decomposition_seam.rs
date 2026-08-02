@@ -81,6 +81,9 @@ impl CholeskyHandle<CudaDevice> for GpuCholesky {
 }
 
 impl ColPivQrHandle<CudaDevice> for GpuColPivQrDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        Self::shape(self)
+    }
     fn rank(&self) -> usize {
         Self::rank(self)
     }

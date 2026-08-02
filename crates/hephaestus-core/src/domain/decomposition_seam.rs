@@ -343,6 +343,9 @@ pub trait DecompositionOps<D: ComputeDevice> {
 /// Oracle-minimal accessors on a column-pivoted QR result (ADR 0042
 /// staging, stage 1).
 pub trait ColPivQrHandle<D: ComputeDevice> {
+    /// `(rows, cols)` of the factored matrix.
+    fn shape(&self) -> (usize, usize);
+
     /// Numerical rank revealed by the pivoted factorization.
     fn rank(&self) -> usize;
 
