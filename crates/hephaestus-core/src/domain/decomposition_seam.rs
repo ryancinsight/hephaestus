@@ -161,6 +161,72 @@ pub trait DecompositionOps<D: ComputeDevice> {
         input: StridedView<'op, D::Buffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>>;
 
+    /// Real Schur result bound to this backend.
+    type Schur<'op>: SchurHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Hessenberg result bound to this backend.
+    type Hessenberg<'op>: HessenbergHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Bidiagonal result bound to this backend.
+    type Bidiagonal<'op>: BidiagonalHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Eigenvalues of a square rank-2 view as complex values.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn eigenvalues(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<eunomia::Complex<f32>>>;
+
+    /// Reduce a square rank-2 view to real Schur form `A = Q·T·Qᵀ`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn schur<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::Schur<'op>>;
+
+    /// Reduce a square rank-2 view to Hessenberg form `A = Q·H·Qᵀ`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a non-square rejection, a layout validation failure, or
+    /// the backend dispatch failure.
+    fn hessenberg<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::Hessenberg<'op>>;
+
+    /// Reduce a rank-2 view to bidiagonal form `A = U·B·Vᵀ`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout validation failure or the backend dispatch
+    /// failure.
+    fn bidiagonalize<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::Bidiagonal<'op>>;
+
     /// Bunch–Kaufman result bound to this backend.
     type BunchKaufman<'op>: BunchKaufmanHandle<D>
     where
@@ -401,4 +467,51 @@ pub trait UduHandle<D: ComputeDevice> {
     ///
     /// Returns a length mismatch or the backend dispatch failure.
     fn solve(&self, device: &D, rhs: &D::Buffer<f32>) -> Result<D::Buffer<f32>>;
+}
+
+/// Oracle-minimal accessors on a real Schur form `A = Q·T·Qᵀ`
+/// (ADR 0042 staging, stage 4).
+pub trait SchurHandle<D: ComputeDevice> {
+    /// Factored dimension `n`.
+    fn order(&self) -> usize;
+
+    /// Device-resident orthogonal factor `Q`, `n × n` row-major.
+    fn q_buffer(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident quasi-upper factor `T`, `n × n` row-major
+    /// (1×1/2×2 diagonal blocks; complex pairs stay as 2×2 blocks).
+    fn t_buffer(&self) -> &D::Buffer<f32>;
+}
+
+/// Oracle-minimal accessors on a Hessenberg reduction `A = Q·H·Qᵀ`
+/// (ADR 0042 staging, stage 4).
+pub trait HessenbergHandle<D: ComputeDevice> {
+    /// Factored dimension `n`.
+    fn order(&self) -> usize;
+
+    /// Device-resident orthogonal factor `Q`, `n × n` row-major.
+    fn q_buffer(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident upper-Hessenberg factor `H`, `n × n` row-major
+    /// (zero below the first subdiagonal).
+    fn h_buffer(&self) -> &D::Buffer<f32>;
+}
+
+/// Oracle-minimal accessors on a bidiagonal reduction `A = U·B·Vᵀ`
+/// (ADR 0042 staging, stage 4).
+pub trait BidiagonalHandle<D: ComputeDevice> {
+    /// `(rows, cols)` of the factored matrix.
+    fn shape(&self) -> (usize, usize);
+
+    /// Device-resident left orthogonal factor `U`, row-major.
+    fn u_buffer(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident bidiagonal core `B`, row-major (main diagonal and
+    /// the superdiagonal only; storage extent is the backend's, length
+    /// discriminates as with QR's `R`).
+    fn b_buffer(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident right orthogonal factor `V`, row-major with vector
+    /// `k` in column `k`.
+    fn v_buffer(&self) -> &D::Buffer<f32>;
 }

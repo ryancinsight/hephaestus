@@ -15,8 +15,9 @@
 //! the comparison itself adds no `f32` error.
 
 use hephaestus_core::{
-    CholeskyHandle, ColPivQrHandle, ComputeDevice, DecompositionOps, FullPivLuHandle, LuHandle,
-    QrHandle, StridedView, SymmetricEigenHandle,
+    BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, ComputeDevice,
+    DecompositionOps, FullPivLuHandle, HessenbergHandle, LuHandle, QrHandle, SchurHandle,
+    StridedView, SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 use leto::Layout;
 
@@ -42,6 +43,9 @@ where
     qr_solves_a_consistent_least_squares_system(device, ops);
     col_piv_qr_reveals_rank_and_solves(device, ops);
     symmetric_eigen_diagonalizes_exactly(device, ops);
+    svd_recovers_exact_spectra(device, ops);
+    symmetric_indefinite_factorizations_reconstruct(device, ops);
+    general_spectral_reductions_hold_their_invariants(device, ops);
     full_piv_lu_reveals_rank_and_reconstructs(device, ops);
     lu_matches_the_leto_reference(device, ops);
     cholesky_matches_the_leto_reference(device, ops);
@@ -679,4 +683,419 @@ where
             "{name}: values-only eigenvalue {index}: {fast} vs full path {full}"
         );
     }
+}
+
+/// SVD: the diagonal fixture `[[3,0],[0,4]]` has exact singular values
+/// `{4, 3}`; the rank-1 fixture `[[1,2],[2,4]]` has exact values
+/// `{5, 0}`. The clause asserts both multisets, the `f64` reconstruction
+/// `‖A − U·Σ·Vᵀ‖` and both orthogonalities under the column-vector
+/// convention, and values-only/full-path agreement.
+fn svd_recovers_exact_spectra<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let square = Layout::c_contiguous([2, 2]).expect("2x2 layout");
+
+    let a_host = [3.0f32, 0.0, 0.0, 4.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let svd = ops
+        .svd(device, StridedView::new(&a, &square))
+        .expect("diagonal SVD");
+    assert_eq!(svd.shape(), (2, 2), "{name}: SVD shape");
+
+    let mut sigma = [0.0f32; 2];
+    device
+        .download(svd.singular_values(), &mut sigma)
+        .expect("singular value download");
+    let mut sorted = sigma;
+    sorted.sort_by(f32::total_cmp);
+    assert!(
+        (sorted[0] - 3.0).abs() < DECOMP_BOUND && (sorted[1] - 4.0).abs() < DECOMP_BOUND,
+        "{name}: diagonal fixture spectrum must be {{3, 4}}, got {sigma:?}"
+    );
+    for value in &sigma {
+        assert!(*value >= 0.0, "{name}: singular values are non-negative");
+    }
+
+    let mut u = [0.0f32; 4];
+    let mut v = [0.0f32; 4];
+    device.download(svd.u(), &mut u).expect("U download");
+    device.download(svd.v(), &mut v).expect("V download");
+
+    let mut max_reconstruction = 0.0f64;
+    let mut max_u_ortho = 0.0f64;
+    let mut max_v_ortho = 0.0f64;
+    for row in 0..2 {
+        for col in 0..2 {
+            let mut acc = 0.0f64;
+            let mut utu = 0.0f64;
+            let mut vtv = 0.0f64;
+            for k in 0..2 {
+                acc += f64::from(u[row * 2 + k]) * f64::from(sigma[k]) * f64::from(v[col * 2 + k]);
+                utu += f64::from(u[k * 2 + row]) * f64::from(u[k * 2 + col]);
+                vtv += f64::from(v[k * 2 + row]) * f64::from(v[k * 2 + col]);
+            }
+            max_reconstruction =
+                max_reconstruction.max((acc - f64::from(a_host[row * 2 + col])).abs());
+            let identity = if row == col { 1.0 } else { 0.0 };
+            max_u_ortho = max_u_ortho.max((utu - identity).abs());
+            max_v_ortho = max_v_ortho.max((vtv - identity).abs());
+        }
+    }
+    assert!(
+        max_reconstruction < f64::from(DECOMP_BOUND),
+        "{name}: SVD reconstruction ‖A − U·Σ·Vᵀ‖ = {max_reconstruction}"
+    );
+    assert!(
+        max_u_ortho < f64::from(DECOMP_BOUND),
+        "{name}: left singular vectors ‖UᵀU − I‖ = {max_u_ortho}"
+    );
+    assert!(
+        max_v_ortho < f64::from(DECOMP_BOUND),
+        "{name}: right singular vectors ‖VᵀV − I‖ = {max_v_ortho}"
+    );
+
+    // Rank-1 fixture: exact spectrum {5, 0}.
+    let deficient = device
+        .upload(&[1.0f32, 2.0, 2.0, 4.0])
+        .expect("rank-1 upload");
+    let only = ops
+        .singular_values(device, StridedView::new(&deficient, &square))
+        .expect("values-only path");
+    let mut got = [0.0f32; 2];
+    device.download(&only, &mut got).expect("values download");
+    got.sort_by(f32::total_cmp);
+    assert!(
+        got[0].abs() < DECOMP_BOUND && (got[1] - 5.0).abs() < DECOMP_BOUND,
+        "{name}: rank-1 fixture spectrum must be {{5, 0}}, got {got:?}"
+    );
+}
+
+/// Symmetric-indefinite factorizations: `U·D·Uᵀ` on the SPD fixture
+/// `[[4,2],[2,3]]` (det 8, exact solve) with `f64` reconstruction, and
+/// Bunch–Kaufman on the indefinite fixture `[[1,2],[2,1]]` (spectrum
+/// `{3, −1}`, which plain Cholesky rejects) with permutation validity
+/// and `f64` reconstruction `P·A·Pᵀ = L·D·Lᵀ`. `D` storage is
+/// discriminated by buffer length (dense `n×n` vs packed diagonal), the
+/// same convention rule as QR's `R`.
+fn symmetric_indefinite_factorizations_reconstruct<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let square = Layout::c_contiguous([2, 2]).expect("2x2 layout");
+
+    // U·D·Uᵀ on the SPD fixture.
+    let a_host = [4.0f32, 2.0, 2.0, 3.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let udu = ops
+        .udu(device, StridedView::new(&a, &square))
+        .expect("UDU factorization");
+    assert_eq!(udu.order(), 2, "{name}: UDU order");
+    assert!(
+        (udu.det() - 8.0).abs() < DECOMP_BOUND,
+        "{name}: UDU det {} != 8",
+        udu.det()
+    );
+    let rhs = device.upload(&[6.0f32, 5.0]).expect("rhs upload");
+    let x = udu.solve(device, &rhs).expect("UDU solve");
+    let mut got = [0.0f32; 2];
+    device.download(&x, &mut got).expect("solution download");
+    for (index, value) in got.iter().enumerate() {
+        assert!(
+            (value - 1.0).abs() < DECOMP_BOUND,
+            "{name}: UDU solution component {index} = {value}, expected 1"
+        );
+    }
+    let mut u = [0.0f32; 4];
+    device.download(udu.u_buffer(), &mut u).expect("U download");
+    let d_values = download_diagonal(device, udu.d_buffer(), 2, name);
+    let mut max_err = 0.0f64;
+    for row in 0..2 {
+        for col in 0..2 {
+            let mut acc = 0.0f64;
+            for k in 0..2 {
+                let u_rk = unit_upper(&u, row, k);
+                let u_ck = unit_upper(&u, col, k);
+                acc += u_rk * d_values[k * 2 + k] * u_ck;
+            }
+            max_err = max_err.max((acc - f64::from(a_host[row * 2 + col])).abs());
+        }
+    }
+    assert!(
+        max_err < f64::from(DECOMP_BOUND),
+        "{name}: UDU reconstruction error {max_err}"
+    );
+
+    // Bunch–Kaufman on the indefinite fixture Cholesky rejects.
+    let ind_host = [1.0f32, 2.0, 2.0, 1.0];
+    let indefinite = device.upload(&ind_host).expect("indefinite upload");
+    let bk = ops
+        .bunch_kaufman(device, StridedView::new(&indefinite, &square))
+        .expect("Bunch-Kaufman of an indefinite matrix");
+    assert_eq!(bk.order(), 2, "{name}: Bunch-Kaufman order");
+    let permutation = bk.permutation();
+    assert_eq!(permutation.len(), 2, "{name}: BK permutation length");
+    let mut seen = [false; 2];
+    for &p in permutation {
+        assert!(
+            p < 2 && !seen[p],
+            "{name}: invalid BK permutation {permutation:?}"
+        );
+        seen[p] = true;
+    }
+    let mut l = [0.0f32; 4];
+    device.download(bk.l_buffer(), &mut l).expect("L download");
+    let d_values = download_diagonal(device, bk.d_buffer(), 2, name);
+    let mut max_err = 0.0f64;
+    for row in 0..2 {
+        for col in 0..2 {
+            let mut acc = 0.0f64;
+            for j in 0..2 {
+                for k in 0..2 {
+                    let l_rj = unit_lower(&l, row, j);
+                    let l_ck = unit_lower(&l, col, k);
+                    acc += l_rj * d_values[j * 2 + k] * l_ck;
+                }
+            }
+            let gathered = f64::from(ind_host[permutation[row] * 2 + permutation[col]]);
+            max_err = max_err.max((acc - gathered).abs());
+        }
+    }
+    assert!(
+        max_err < f64::from(DECOMP_BOUND),
+        "{name}: Bunch-Kaufman reconstruction error {max_err}"
+    );
+}
+
+/// Read a `D` factor stored either dense (`n×n`) or as a packed diagonal
+/// (`n`), returning dense `f64` storage.
+fn download_diagonal<D: ComputeDevice>(
+    device: &D,
+    buffer: &D::Buffer<f32>,
+    n: usize,
+    name: &str,
+) -> Vec<f64> {
+    use hephaestus_core::DeviceBuffer;
+    let len = buffer.len();
+    let mut host = vec![0.0f32; len];
+    device.download(buffer, &mut host).expect("D download");
+    let mut dense = vec![0.0f64; n * n];
+    if len == n {
+        for (k, value) in host.iter().enumerate() {
+            dense[k * n + k] = f64::from(*value);
+        }
+    } else if len == n * n {
+        for (index, value) in host.iter().enumerate() {
+            dense[index] = f64::from(*value);
+        }
+    } else {
+        panic!("{name}: D buffer must be n or n*n elements, got {len}");
+    }
+    dense
+}
+
+/// Unit-triangular element access: implicit ones on the diagonal, zeros
+/// beyond, stored values below (lower) in `f64`.
+fn unit_lower(storage: &[f32; 4], row: usize, col: usize) -> f64 {
+    match col.cmp(&row) {
+        std::cmp::Ordering::Less => f64::from(storage[row * 2 + col]),
+        std::cmp::Ordering::Equal => 1.0,
+        std::cmp::Ordering::Greater => 0.0,
+    }
+}
+
+/// Unit-upper access mirrors [`unit_lower`].
+fn unit_upper(storage: &[f32; 4], row: usize, col: usize) -> f64 {
+    match col.cmp(&row) {
+        std::cmp::Ordering::Greater => f64::from(storage[row * 2 + col]),
+        std::cmp::Ordering::Equal => 1.0,
+        std::cmp::Ordering::Less => 0.0,
+    }
+}
+
+/// General spectral reductions: complex eigenvalues of the rotation
+/// generator `[[0,-1],[1,0]]` are exactly `±i`; the Schur form of an
+/// already-upper fixture stays upper with similarity preserved;
+/// Hessenberg and bidiagonal reductions hold their structural zero
+/// patterns, orthogonality, and `f64` reconstruction at the derived
+/// bound.
+fn general_spectral_reductions_hold_their_invariants<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let square2 = Layout::c_contiguous([2, 2]).expect("2x2 layout");
+
+    // Complex eigenvalues: the rotation generator has spectrum ±i.
+    let rotation = device
+        .upload(&[0.0f32, -1.0, 1.0, 0.0])
+        .expect("rotation upload");
+    let values = ops
+        .eigenvalues(device, StridedView::new(&rotation, &square2))
+        .expect("complex eigenvalues");
+    let mut got = [eunomia::Complex::new(0.0f32, 0.0); 2];
+    device.download(&values, &mut got).expect("eigen download");
+    let mut imag: Vec<f32> = got.iter().map(|value| value.im).collect();
+    imag.sort_by(f32::total_cmp);
+    for value in &got {
+        assert!(
+            value.re.abs() < DECOMP_BOUND,
+            "{name}: rotation eigenvalues are purely imaginary, got {got:?}"
+        );
+    }
+    assert!(
+        (imag[0] + 1.0).abs() < DECOMP_BOUND && (imag[1] - 1.0).abs() < DECOMP_BOUND,
+        "{name}: rotation spectrum must be ±i, got {got:?}"
+    );
+
+    // Schur: real-spectrum fixture [[2,1],[0,3]] reduces with similarity
+    // preserved and T upper (distinct real eigenvalues force 1×1 blocks).
+    let a_host = [2.0f32, 1.0, 0.0, 3.0];
+    let a = device.upload(&a_host).expect("schur upload");
+    let schur = ops
+        .schur(device, StridedView::new(&a, &square2))
+        .expect("schur reduction");
+    assert_eq!(schur.order(), 2, "{name}: schur order");
+    let mut q = [0.0f32; 4];
+    let mut t = [0.0f32; 4];
+    device
+        .download(schur.q_buffer(), &mut q)
+        .expect("Q download");
+    device
+        .download(schur.t_buffer(), &mut t)
+        .expect("T download");
+    assert!(
+        t[2].abs() < DECOMP_BOUND,
+        "{name}: real distinct spectrum must give upper T, got subdiagonal {}",
+        t[2]
+    );
+    similarity_and_orthogonality(&a_host, &q, &t, 2, name, "schur");
+
+    // Hessenberg: a 3×3 fixture zeroes below the first subdiagonal.
+    let square3 = Layout::c_contiguous([3, 3]).expect("3x3 layout");
+    let h_host = [4.0f32, 1.0, 2.0, 2.0, 5.0, 1.0, 1.0, 2.0, 6.0];
+    let h_input = device.upload(&h_host).expect("hessenberg upload");
+    let hess = ops
+        .hessenberg(device, StridedView::new(&h_input, &square3))
+        .expect("hessenberg reduction");
+    assert_eq!(hess.order(), 3, "{name}: hessenberg order");
+    let mut hq = [0.0f32; 9];
+    let mut hh = [0.0f32; 9];
+    device
+        .download(hess.q_buffer(), &mut hq)
+        .expect("Q download");
+    device
+        .download(hess.h_buffer(), &mut hh)
+        .expect("H download");
+    assert!(
+        hh[6].abs() < DECOMP_BOUND,
+        "{name}: H must vanish below the first subdiagonal, got {}",
+        hh[6]
+    );
+    similarity_and_orthogonality(&h_host, &hq, &hh, 3, name, "hessenberg");
+
+    // Bidiagonal: a 3×2 fixture reduces to main + superdiagonal only,
+    // with two-sided orthogonality and reconstruction.
+    let tall = Layout::c_contiguous([3, 2]).expect("3x2 layout");
+    let b_host = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_input = device.upload(&b_host).expect("bidiagonal upload");
+    let bidiagonal = ops
+        .bidiagonalize(device, StridedView::new(&b_input, &tall))
+        .expect("bidiagonal reduction");
+    assert_eq!(bidiagonal.shape(), (3, 2), "{name}: bidiagonal shape");
+    use hephaestus_core::DeviceBuffer;
+    let b_len = bidiagonal.b_buffer().len();
+    let mut b = vec![0.0f32; b_len];
+    device
+        .download(bidiagonal.b_buffer(), &mut b)
+        .expect("B download");
+    // B rows beyond n and entries outside {diagonal, superdiagonal}
+    // vanish (row-major over the stored extent, columns = 2).
+    for (index, value) in b.iter().enumerate() {
+        let (row, col) = (index / 2, index % 2);
+        if col != row && col != row + 1 {
+            assert!(
+                value.abs() < DECOMP_BOUND,
+                "{name}: B entry ({row},{col}) = {value} must vanish"
+            );
+        }
+    }
+    let u_len = {
+        let mut u_probe = 0;
+        u_probe += bidiagonal.u_buffer().len();
+        u_probe
+    };
+    let mut u = vec![0.0f32; u_len];
+    device
+        .download(bidiagonal.u_buffer(), &mut u)
+        .expect("U download");
+    let mut v = [0.0f32; 4];
+    device
+        .download(bidiagonal.v_buffer(), &mut v)
+        .expect("V download");
+    // Reconstruction A = U·B·Vᵀ in f64, with U columns = stored width.
+    let u_cols = u_len / 3;
+    let b_rows = b_len / 2;
+    let mut max_err = 0.0f64;
+    for row in 0..3 {
+        for col in 0..2 {
+            let mut acc = 0.0f64;
+            for j in 0..u_cols.min(b_rows) {
+                for k in 0..2 {
+                    acc += f64::from(u[row * u_cols + j])
+                        * f64::from(b[j * 2 + k])
+                        * f64::from(v[col * 2 + k]);
+                }
+            }
+            max_err = max_err.max((acc - f64::from(b_host[row * 2 + col])).abs());
+        }
+    }
+    assert!(
+        max_err < f64::from(DECOMP_BOUND),
+        "{name}: bidiagonal reconstruction error {max_err}"
+    );
+}
+
+/// Shared `f64` similarity (`‖A − Q·T·Qᵀ‖`) and orthogonality
+/// (`‖QᵀQ − I‖`) checks for square reductions.
+fn similarity_and_orthogonality(
+    a: &[f32],
+    q: &[f32],
+    t: &[f32],
+    n: usize,
+    name: &str,
+    label: &str,
+) {
+    let mut max_similarity = 0.0f64;
+    let mut max_ortho = 0.0f64;
+    for row in 0..n {
+        for col in 0..n {
+            let mut qtqt = 0.0f64;
+            let mut qtq = 0.0f64;
+            for j in 0..n {
+                for k in 0..n {
+                    qtqt += f64::from(q[row * n + j])
+                        * f64::from(t[j * n + k])
+                        * f64::from(q[col * n + k]);
+                }
+                qtq += f64::from(q[j * n + row]) * f64::from(q[j * n + col]);
+            }
+            max_similarity = max_similarity.max((qtqt - f64::from(a[row * n + col])).abs());
+            let identity = if row == col { 1.0 } else { 0.0 };
+            max_ortho = max_ortho.max((qtq - identity).abs());
+        }
+    }
+    assert!(
+        max_similarity < f64::from(DECOMP_BOUND),
+        "{name}: {label} similarity ‖A − Q·T·Qᵀ‖ = {max_similarity}"
+    );
+    assert!(
+        max_ortho < f64::from(DECOMP_BOUND),
+        "{name}: {label} orthogonality ‖QᵀQ − I‖ = {max_ortho}"
+    );
 }

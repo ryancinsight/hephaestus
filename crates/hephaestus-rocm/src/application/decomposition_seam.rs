@@ -6,17 +6,20 @@
 //! `RocmDevice`, matching the crate's other seam adapters.
 
 use hephaestus_core::{
-    BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle,
-    LuHandle, QrHandle, Result, StridedView, SvdHandle, SymmetricEigenHandle, UduHandle,
+    BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps,
+    FullPivLuHandle, HessenbergHandle, LuHandle, QrHandle, Result, SchurHandle, StridedView,
+    SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
 use crate::application::decomposition::{
-    GpuBunchKaufmanDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
-    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition,
-    GpuUduDecomposition, bunch_kaufman, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose,
-    qr_decompose, singular_values, svd_decompose, symmetric_eigen_jacobi,
+    GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
+    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuHessenbergDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur, GpuSvdDecomposition,
+    GpuSymmetricEigenDecomposition, GpuUduDecomposition, bidiagonalize, bunch_kaufman,
+    cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu, hessenberg, lu_decompose,
+    qr_decompose, schur, singular_values, svd_decompose, symmetric_eigen_jacobi,
     symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use crate::application::strided::StridedOperand;
@@ -177,6 +180,45 @@ impl UduHandle<RocmDevice> for GpuUduDecomposition {
     }
 }
 
+impl SchurHandle<RocmDevice> for GpuRealSchur {
+    fn order(&self) -> usize {
+        self.n()
+    }
+    fn q_buffer(&self) -> &RocmBuffer<f32> {
+        Self::q_buffer(self)
+    }
+    fn t_buffer(&self) -> &RocmBuffer<f32> {
+        Self::t_buffer(self)
+    }
+}
+
+impl HessenbergHandle<RocmDevice> for GpuHessenbergDecomposition {
+    fn order(&self) -> usize {
+        self.n()
+    }
+    fn q_buffer(&self) -> &RocmBuffer<f32> {
+        Self::q_buffer(self)
+    }
+    fn h_buffer(&self) -> &RocmBuffer<f32> {
+        Self::h_buffer(self)
+    }
+}
+
+impl BidiagonalHandle<RocmDevice> for GpuBidiagonalDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        Self::shape(self)
+    }
+    fn u_buffer(&self) -> &RocmBuffer<f32> {
+        Self::u_buffer(self)
+    }
+    fn b_buffer(&self) -> &RocmBuffer<f32> {
+        Self::b_buffer(self)
+    }
+    fn v_buffer(&self) -> &RocmBuffer<f32> {
+        Self::v_buffer(self)
+    }
+}
+
 /// Convert the device-neutral view into this backend's operand pair.
 #[inline]
 fn operand<'a>(view: StridedView<'a, RocmBuffer<f32>, 2>) -> StridedOperand<'a, f32, 2> {
@@ -279,6 +321,42 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Udu<'op>> {
         udu_decompose(device, operand(input))
+    }
+
+    type Schur<'op> = GpuRealSchur;
+    type Hessenberg<'op> = GpuHessenbergDecomposition;
+    type Bidiagonal<'op> = GpuBidiagonalDecomposition;
+
+    fn eigenvalues(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'_, RocmBuffer<f32>, 2>,
+    ) -> Result<RocmBuffer<eunomia::Complex<f32>>> {
+        eigenvalues(device, operand(input))
+    }
+
+    fn schur<'op>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<f32>, 2>,
+    ) -> Result<Self::Schur<'op>> {
+        schur(device, operand(input))
+    }
+
+    fn hessenberg<'op>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<f32>, 2>,
+    ) -> Result<Self::Hessenberg<'op>> {
+        hessenberg(device, operand(input))
+    }
+
+    fn bidiagonalize<'op>(
+        &self,
+        device: &RocmDevice,
+        input: StridedView<'op, RocmBuffer<f32>, 2>,
+    ) -> Result<Self::Bidiagonal<'op>> {
+        bidiagonalize(device, operand(input))
     }
 
     fn cholesky<'op>(

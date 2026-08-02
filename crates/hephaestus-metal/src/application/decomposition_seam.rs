@@ -8,15 +8,18 @@
 //! a reference-count bump, not a copy).
 
 use hephaestus_core::{
-    BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle,
-    LuHandle, QrHandle, Result, StridedView, SvdHandle, SymmetricEigenHandle, UduHandle,
+    BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps,
+    FullPivLuHandle, HessenbergHandle, LuHandle, QrHandle, Result, SchurHandle, StridedView,
+    SvdHandle, SymmetricEigenHandle, UduHandle,
 };
 
 use crate::application::decomposition::{
-    GpuBunchKaufmanDecomposition, GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition,
-    GpuLuDecomposition, GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition,
-    GpuUduDecomposition, bunch_kaufman, cholesky_decompose, col_piv_qr, full_piv_lu, lu_decompose,
-    qr_decompose, singular_values, svd_decompose, symmetric_eigen_jacobi,
+    GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
+    GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuHessenbergDecomposition,
+    GpuLuDecomposition, GpuQrDecomposition, GpuRealSchur, GpuSvdDecomposition,
+    GpuSymmetricEigenDecomposition, GpuUduDecomposition, bidiagonalize, bunch_kaufman,
+    cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu, hessenberg, lu_decompose,
+    qr_decompose, schur, singular_values, svd_decompose, symmetric_eigen_jacobi,
     symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use crate::application::strided::StridedOperand;
@@ -171,6 +174,70 @@ impl UduHandle<MetalDevice> for MetalUduDecomposition {
         self.inner
             .solve(device.wgpu_device(), &rhs.inner)
             .map(|inner| MetalBuffer { inner })
+    }
+}
+
+/// Real Schur result: the WGPU handle plus its factors rewrapped for
+/// this device.
+pub struct MetalRealSchur {
+    inner: GpuRealSchur,
+    q: MetalBuffer<f32>,
+    t: MetalBuffer<f32>,
+}
+
+impl SchurHandle<MetalDevice> for MetalRealSchur {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn q_buffer(&self) -> &MetalBuffer<f32> {
+        &self.q
+    }
+    fn t_buffer(&self) -> &MetalBuffer<f32> {
+        &self.t
+    }
+}
+
+/// Hessenberg result: the WGPU handle plus its factors rewrapped for
+/// this device.
+pub struct MetalHessenbergDecomposition {
+    inner: GpuHessenbergDecomposition,
+    q: MetalBuffer<f32>,
+    h: MetalBuffer<f32>,
+}
+
+impl HessenbergHandle<MetalDevice> for MetalHessenbergDecomposition {
+    fn order(&self) -> usize {
+        self.inner.n()
+    }
+    fn q_buffer(&self) -> &MetalBuffer<f32> {
+        &self.q
+    }
+    fn h_buffer(&self) -> &MetalBuffer<f32> {
+        &self.h
+    }
+}
+
+/// Bidiagonal result: the WGPU handle plus its factors rewrapped for
+/// this device.
+pub struct MetalBidiagonalDecomposition {
+    inner: GpuBidiagonalDecomposition,
+    u: MetalBuffer<f32>,
+    b: MetalBuffer<f32>,
+    v: MetalBuffer<f32>,
+}
+
+impl BidiagonalHandle<MetalDevice> for MetalBidiagonalDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        self.inner.shape()
+    }
+    fn u_buffer(&self) -> &MetalBuffer<f32> {
+        &self.u
+    }
+    fn b_buffer(&self) -> &MetalBuffer<f32> {
+        &self.b
+    }
+    fn v_buffer(&self) -> &MetalBuffer<f32> {
+        &self.v
     }
 }
 
@@ -458,6 +525,90 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
             inner: inner.d_buffer().clone(),
         };
         Ok(MetalUduDecomposition { inner, u, d })
+    }
+
+    type Schur<'op> = MetalRealSchur;
+    type Hessenberg<'op> = MetalHessenbergDecomposition;
+    type Bidiagonal<'op> = MetalBidiagonalDecomposition;
+
+    fn eigenvalues(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'_, MetalBuffer<f32>, 2>,
+    ) -> Result<MetalBuffer<eunomia::Complex<f32>>> {
+        eigenvalues(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )
+    }
+
+    fn schur<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::Schur<'op>> {
+        let inner = schur(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let q = MetalBuffer {
+            inner: inner.q_buffer().clone(),
+        };
+        let t = MetalBuffer {
+            inner: inner.t_buffer().clone(),
+        };
+        Ok(MetalRealSchur { inner, q, t })
+    }
+
+    fn hessenberg<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::Hessenberg<'op>> {
+        let inner = hessenberg(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let q = MetalBuffer {
+            inner: inner.q_buffer().clone(),
+        };
+        let h = MetalBuffer {
+            inner: inner.h_buffer().clone(),
+        };
+        Ok(MetalHessenbergDecomposition { inner, q, h })
+    }
+
+    fn bidiagonalize<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::Bidiagonal<'op>> {
+        let inner = bidiagonalize(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let u = MetalBuffer {
+            inner: inner.u_buffer().clone(),
+        };
+        let b = MetalBuffer {
+            inner: inner.b_buffer().clone(),
+        };
+        let v = MetalBuffer {
+            inner: inner.v_buffer().clone(),
+        };
+        Ok(MetalBidiagonalDecomposition { inner, u, b, v })
     }
 
     fn cholesky<'op>(
