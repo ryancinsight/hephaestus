@@ -9,7 +9,7 @@
 //! classical backward-error bounds give reconstruction and solve errors of
 //! order `c(n)·ε·κ(A)` for modest constants `c(n)` (Higham, *Accuracy and
 //! Stability of Numerical Algorithms*, chs. 9–10). The fixtures here have
-//! `n ≤ 3` and infinity-norm condition numbers below 32 by construction,
+//! `n ≤ 4` and infinity-norm condition numbers below 32 by construction,
 //! so `c(n)·ε·κ ≤ 3²·1.2e-7·32 ≈ 3.5e-4`; the clauses assert `1e-3`,
 //! roughly 3× that bound, and reconstruction runs in `f64` on the host so
 //! the comparison itself adds no `f32` error.
@@ -50,6 +50,12 @@ where
     lu_matches_the_leto_reference(device, ops);
     cholesky_matches_the_leto_reference(device, ops);
     qr_matches_the_leto_reference(device, ops);
+    col_piv_qr_matches_the_leto_reference(device, ops);
+    full_piv_lu_matches_the_leto_reference(device, ops);
+    udu_matches_the_leto_reference(device, ops);
+    bunch_kaufman_matches_the_leto_reference(device, ops);
+    symmetric_eigen_matches_the_leto_reference(device, ops);
+    eigenvalues_match_the_leto_reference(device, ops);
     identity_factorizations_are_exact(device, ops);
 }
 
@@ -1099,4 +1105,358 @@ fn similarity_and_orthogonality(
         max_ortho < f64::from(DECOMP_BOUND),
         "{name}: {label} orthogonality ‖QᵀQ − I‖ = {max_ortho}"
     );
+}
+
+/// Column-pivoted QR of the rank-2 matrix `[[1,2,3],[4,5,6],[7,8,9]]`
+/// agrees with leto on the revealed rank and the pivot choice (column
+/// norms are distinct, so the choice is tie-free and deterministic).
+fn col_piv_qr_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("matrix layout");
+    let decomp = ops
+        .col_piv_qr(device, StridedView::new(&a, &layout))
+        .expect("device column-pivoted QR");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 3], a_host.to_vec()).expect("host matrix");
+    let host_decomp = leto_ops::col_piv_qr(&host_matrix.view()).expect("leto column-pivoted QR");
+
+    assert_eq!(
+        decomp.rank(),
+        host_decomp.rank(),
+        "{name}: column-pivoted QR rank diverges from leto"
+    );
+    assert_eq!(
+        decomp.permutation(),
+        host_decomp.permutation(),
+        "{name}: column-pivoted QR pivot choice diverges from leto"
+    );
+}
+
+/// Fully pivoted LU of `[[1,2],[3,4]]` agrees with leto on rank, both
+/// permutations, the packed factors, the determinant, and the solution
+/// of `A·x = [5,11]ᵀ` (which is `x = [1,2]ᵀ`).
+fn full_piv_lu_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [1.0f32, 2.0, 3.0, 4.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("matrix layout");
+    let decomp = ops
+        .full_piv_lu(device, StridedView::new(&a, &layout))
+        .expect("device fully pivoted LU");
+
+    let host_matrix = leto::Array::from_shape_vec([2, 2], a_host.to_vec()).expect("host matrix");
+    let host_decomp = leto_ops::full_piv_lu(&host_matrix.view()).expect("leto fully pivoted LU");
+
+    assert_eq!(decomp.order(), 2, "{name}: fully pivoted LU order");
+    assert_eq!(
+        decomp.rank(),
+        host_decomp.rank(),
+        "{name}: fully pivoted LU rank diverges from leto"
+    );
+    assert_eq!(
+        decomp.row_permutation(),
+        host_decomp.row_permutation(),
+        "{name}: fully pivoted LU row pivots diverge from leto"
+    );
+    assert_eq!(
+        decomp.col_permutation(),
+        host_decomp.col_permutation(),
+        "{name}: fully pivoted LU column pivots diverge from leto"
+    );
+    assert!(
+        (decomp.det() - host_decomp.det()).abs() < DECOMP_BOUND,
+        "{name}: fully pivoted LU det {} vs leto {}",
+        decomp.det(),
+        host_decomp.det()
+    );
+
+    let mut factors = [0.0f32; 4];
+    device
+        .download(decomp.factors(), &mut factors)
+        .expect("factor download");
+    for (index, (device_value, host_value)) in
+        factors.iter().zip(host_decomp.lu_factors()).enumerate()
+    {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: fully pivoted LU factor {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+
+    let rhs_host = [5.0f32, 11.0];
+    let rhs = device.upload(&rhs_host).expect("rhs upload");
+    let solution = decomp.solve(device, &rhs).expect("device solve");
+    let mut got = [0.0f32; 2];
+    device
+        .download(&solution, &mut got)
+        .expect("solution download");
+    let host_rhs = leto::Array::from_shape_vec([2], rhs_host.to_vec()).expect("host rhs");
+    let host_solution = host_decomp.solve(&host_rhs.view()).expect("leto solve");
+    for (index, (device_value, host_value)) in got
+        .iter()
+        .zip(leto::Storage::as_slice(host_solution.storage()))
+        .enumerate()
+    {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: fully pivoted LU solution {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+}
+
+/// UDUᵀ of the SPD matrix `[[4,12,-16],[12,37,-43],[-16,-43,98]]` agrees
+/// with leto on the unit-upper factor, the diagonal, and the determinant.
+fn udu_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [4.0f32, 12.0, -16.0, 12.0, 37.0, -43.0, -16.0, -43.0, 98.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("matrix layout");
+    let decomp = ops
+        .udu(device, StridedView::new(&a, &layout))
+        .expect("device UDU");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 3], a_host.to_vec()).expect("host matrix");
+    let host_decomp = leto_ops::udu_decompose(&host_matrix.view()).expect("leto UDU");
+
+    assert_eq!(decomp.order(), 3, "{name}: UDU order");
+
+    let mut u = [0.0f32; 9];
+    let mut d = [0.0f32; 3];
+    device
+        .download(decomp.u_buffer(), &mut u)
+        .expect("U download");
+    device
+        .download(decomp.d_buffer(), &mut d)
+        .expect("D download");
+    let u_view = host_decomp.u();
+    let expected_u = leto::Storage::as_slice(u_view.storage());
+    for (index, (device_value, host_value)) in u.iter().zip(expected_u).enumerate() {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: UDU U factor {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+    for (index, (device_value, host_value)) in d.iter().zip(host_decomp.diagonal()).enumerate() {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: UDU diagonal {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+    assert!(
+        (decomp.det() - host_decomp.det()).abs() < DECOMP_BOUND,
+        "{name}: UDU det {} vs leto {}",
+        decomp.det(),
+        host_decomp.det()
+    );
+}
+
+/// Bunch–Kaufman of the symmetric indefinite `[[1,2,3],[2,4,5],[3,5,6]]`
+/// agrees with leto on the pivot choice and the unit-lower factor; the
+/// block-diagonal factor is compared dense-to-dense when the backend
+/// stores it densely, and against leto's diagonal when the backend packs
+/// it (the packed form exists only when every 2×2 block is trivial, which
+/// the dense-form comparison then also witnesses).
+fn bunch_kaufman_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0, 3.0, 5.0, 6.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("matrix layout");
+    let decomp = ops
+        .bunch_kaufman(device, StridedView::new(&a, &layout))
+        .expect("device Bunch–Kaufman");
+
+    let host_matrix = leto::Array::from_shape_vec([3, 3], a_host.to_vec()).expect("host matrix");
+    let host_decomp = leto_ops::bunch_kaufman(&host_matrix.view()).expect("leto Bunch–Kaufman");
+
+    assert_eq!(decomp.order(), 3, "{name}: Bunch–Kaufman order");
+    assert_eq!(
+        decomp.permutation(),
+        host_decomp.permutation(),
+        "{name}: Bunch–Kaufman pivot choice diverges from leto"
+    );
+
+    let mut l = [0.0f32; 9];
+    device
+        .download(decomp.l_buffer(), &mut l)
+        .expect("L download");
+    let l_view = host_decomp.l();
+    let expected_l = leto::Storage::as_slice(l_view.storage());
+    for (index, (device_value, host_value)) in l.iter().zip(expected_l).enumerate() {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: Bunch–Kaufman L factor {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+
+    let d_view = host_decomp.d();
+    let expected_d = leto::Storage::as_slice(d_view.storage());
+    let d_len = hephaestus_core::DeviceBuffer::len(decomp.d_buffer());
+    if d_len == 9 {
+        let mut d = [0.0f32; 9];
+        device
+            .download(decomp.d_buffer(), &mut d)
+            .expect("D download");
+        for (index, (device_value, host_value)) in d.iter().zip(expected_d).enumerate() {
+            assert!(
+                (device_value - host_value).abs() < DECOMP_BOUND,
+                "{name}: Bunch–Kaufman D factor {index}: device {device_value} vs leto {host_value}"
+            );
+        }
+    } else {
+        assert_eq!(d_len, 3, "{name}: Bunch–Kaufman D is dense n² or packed n");
+        let mut d = [0.0f32; 3];
+        device
+            .download(decomp.d_buffer(), &mut d)
+            .expect("D download");
+        for (index, device_value) in d.iter().enumerate() {
+            let host_value = expected_d[index * 3 + index];
+            assert!(
+                (device_value - host_value).abs() < DECOMP_BOUND,
+                "{name}: Bunch–Kaufman packed D {index}: device {device_value} vs leto {host_value}"
+            );
+        }
+    }
+}
+
+/// Symmetric eigendecomposition of a diagonally dominant 4×4 agrees with
+/// leto on the sorted eigenvalue multiset (ordering is backend-owned),
+/// and every returned eigenpair satisfies `‖A·v − λ·v‖∞` within the
+/// derived bound, reconstructed in `f64`. The values-only entry point
+/// must agree with the paired decomposition.
+fn symmetric_eigen_matches_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [
+        4.0f32, 1.0, 0.5, 0.25, 1.0, 3.0, 0.25, 0.125, 0.5, 0.25, 2.0, 0.0625, 0.25, 0.125, 0.0625,
+        1.5,
+    ];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([4, 4]).expect("matrix layout");
+    let decomp = ops
+        .symmetric_eigen(device, StridedView::new(&a, &layout))
+        .expect("device symmetric eigendecomposition");
+
+    let host_matrix = leto::Array::from_shape_vec([4, 4], a_host.to_vec()).expect("host matrix");
+    let host_decomp =
+        leto_ops::symmetric_eigen_jacobi(&host_matrix.view()).expect("leto symmetric eigen");
+
+    assert_eq!(decomp.order(), 4, "{name}: symmetric eigen order");
+
+    let mut values = [0.0f32; 4];
+    device
+        .download(decomp.eigenvalues(), &mut values)
+        .expect("eigenvalue download");
+    let mut sorted_values = values;
+    sorted_values.sort_by(f32::total_cmp);
+    let mut host_values: [f32; 4] = host_decomp
+        .eigenvalues
+        .as_slice()
+        .try_into()
+        .expect("leto eigenvalue count");
+    host_values.sort_by(f32::total_cmp);
+    for (index, (device_value, host_value)) in
+        sorted_values.iter().zip(host_values.iter()).enumerate()
+    {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: sorted eigenvalue {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+
+    // Residual check pins the eigenvectors without assuming leto's
+    // ordering or sign: for each returned pair, ‖A·v − λ·v‖∞ ≤ bound.
+    let mut vectors = [0.0f32; 16];
+    device
+        .download(decomp.eigenvectors(), &mut vectors)
+        .expect("eigenvector download");
+    for pair in 0..4 {
+        let lambda = f64::from(values[pair]);
+        for row in 0..4 {
+            let mut accumulated = 0.0f64;
+            for col in 0..4 {
+                accumulated +=
+                    f64::from(a_host[row * 4 + col]) * f64::from(vectors[col * 4 + pair]);
+            }
+            let residual = (accumulated - lambda * f64::from(vectors[row * 4 + pair])).abs();
+            assert!(
+                residual < f64::from(DECOMP_BOUND),
+                "{name}: eigenpair {pair} residual row {row}: {residual}"
+            );
+        }
+    }
+
+    let values_only = ops
+        .symmetric_eigenvalues(device, StridedView::new(&a, &layout))
+        .expect("device values-only eigenvalues");
+    let mut got_values_only = [0.0f32; 4];
+    device
+        .download(&values_only, &mut got_values_only)
+        .expect("values-only download");
+    got_values_only.sort_by(f32::total_cmp);
+    for (index, (device_value, host_value)) in
+        got_values_only.iter().zip(host_values.iter()).enumerate()
+    {
+        assert!(
+            (device_value - host_value).abs() < DECOMP_BOUND,
+            "{name}: values-only eigenvalue {index}: device {device_value} vs leto {host_value}"
+        );
+    }
+}
+
+/// General eigenvalues of `[[0,1],[-2,3]]` (spectrum `{1, 2}`, exactly
+/// representable) agree with leto within the derived bound after sorting
+/// by real part (ordering is backend-owned; the spectrum is real and
+/// tie-free, so the sort is deterministic).
+fn eigenvalues_match_the_leto_reference<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    let name = device.backend_name();
+    let a_host = [0.0f32, 1.0, -2.0, 3.0];
+    let a = device.upload(&a_host).expect("matrix upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("matrix layout");
+    let spectrum = ops
+        .eigenvalues(device, StridedView::new(&a, &layout))
+        .expect("device eigenvalues");
+
+    let mut got = [eunomia::Complex::new(0.0f32, 0.0); 2];
+    device
+        .download(&spectrum, &mut got)
+        .expect("spectrum download");
+    got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
+
+    let host_matrix = leto::Array::from_shape_vec([2, 2], a_host.to_vec()).expect("host matrix");
+    let mut expected = leto_ops::eigenvalues(&host_matrix.view()).expect("leto eigenvalues");
+    expected.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
+
+    assert_eq!(got.len(), expected.len(), "{name}: spectrum length");
+    for (index, (device_value, host_value)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (device_value.re - host_value.re).abs() < DECOMP_BOUND
+                && (device_value.im - host_value.im).abs() < DECOMP_BOUND,
+            "{name}: eigenvalue {index}: device {device_value:?} vs leto {host_value:?}"
+        );
+    }
 }
