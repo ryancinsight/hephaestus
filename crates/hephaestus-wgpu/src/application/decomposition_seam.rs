@@ -7,13 +7,14 @@
 
 use hephaestus_core::{
     CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView, SymmetricEigenHandle,
+    StridedView, SvdHandle, SymmetricEigenHandle,
 };
 
 use crate::application::decomposition::{
     GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose, col_piv_qr,
-    full_piv_lu, lu_decompose, qr_decompose, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose,
+    col_piv_qr, full_piv_lu, lu_decompose, qr_decompose, singular_values, svd_decompose,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -127,6 +128,21 @@ impl SymmetricEigenHandle<WgpuDevice> for GpuSymmetricEigenDecomposition {
     }
 }
 
+impl SvdHandle<WgpuDevice> for GpuSvdDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        Self::shape(self)
+    }
+    fn u(&self) -> &WgpuBuffer<f32> {
+        Self::u(self)
+    }
+    fn v(&self) -> &WgpuBuffer<f32> {
+        Self::v(self)
+    }
+    fn singular_values(&self) -> &WgpuBuffer<f32> {
+        Self::singular_values(self)
+    }
+}
+
 /// Convert the device-neutral view into this backend's operand pair.
 #[inline]
 fn operand<'a>(view: StridedView<'a, WgpuBuffer<f32>, 2>) -> StridedOperand<'a, f32, 2> {
@@ -192,6 +208,24 @@ impl DecompositionOps<WgpuDevice> for WgpuDecompositionOps {
         input: StridedView<'_, WgpuBuffer<f32>, 2>,
     ) -> Result<WgpuBuffer<f32>> {
         symmetric_eigenvalues_jacobi(device, operand(input))
+    }
+
+    type Svd<'op> = GpuSvdDecomposition;
+
+    fn svd<'op>(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'op, WgpuBuffer<f32>, 2>,
+    ) -> Result<Self::Svd<'op>> {
+        svd_decompose(device, operand(input))
+    }
+
+    fn singular_values(
+        &self,
+        device: &WgpuDevice,
+        input: StridedView<'_, WgpuBuffer<f32>, 2>,
+    ) -> Result<WgpuBuffer<f32>> {
+        singular_values(device, operand(input))
     }
 
     fn cholesky<'op>(

@@ -9,13 +9,14 @@
 
 use hephaestus_core::{
     CholeskyHandle, ColPivQrHandle, DecompositionOps, FullPivLuHandle, LuHandle, QrHandle, Result,
-    StridedView, SymmetricEigenHandle,
+    StridedView, SvdHandle, SymmetricEigenHandle,
 };
 
 use crate::application::decomposition::{
     GpuCholesky, GpuColPivQrDecomposition, GpuFullPivLuDecomposition, GpuLuDecomposition,
-    GpuQrDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose, col_piv_qr,
-    full_piv_lu, lu_decompose, qr_decompose, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    GpuQrDecomposition, GpuSvdDecomposition, GpuSymmetricEigenDecomposition, cholesky_decompose,
+    col_piv_qr, full_piv_lu, lu_decompose, qr_decompose, singular_values, svd_decompose,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::MetalBuffer;
@@ -94,6 +95,30 @@ impl SymmetricEigenHandle<MetalDevice> for MetalSymmetricEigenDecomposition {
     }
     fn eigenvectors(&self) -> &MetalBuffer<f32> {
         &self.eigenvectors
+    }
+}
+
+/// SVD result: the WGPU handle plus its factors rewrapped for this
+/// device.
+pub struct MetalSvdDecomposition {
+    inner: GpuSvdDecomposition,
+    u: MetalBuffer<f32>,
+    v: MetalBuffer<f32>,
+    singular_values: MetalBuffer<f32>,
+}
+
+impl SvdHandle<MetalDevice> for MetalSvdDecomposition {
+    fn shape(&self) -> (usize, usize) {
+        self.inner.shape()
+    }
+    fn u(&self) -> &MetalBuffer<f32> {
+        &self.u
+    }
+    fn v(&self) -> &MetalBuffer<f32> {
+        &self.v
+    }
+    fn singular_values(&self) -> &MetalBuffer<f32> {
+        &self.singular_values
     }
 }
 
@@ -285,6 +310,51 @@ impl DecompositionOps<MetalDevice> for MetalDecompositionOps {
         input: StridedView<'_, MetalBuffer<f32>, 2>,
     ) -> Result<MetalBuffer<f32>> {
         symmetric_eigenvalues_jacobi(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )
+    }
+
+    type Svd<'op> = MetalSvdDecomposition;
+
+    fn svd<'op>(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'op, MetalBuffer<f32>, 2>,
+    ) -> Result<Self::Svd<'op>> {
+        let inner = svd_decompose(
+            device,
+            StridedOperand {
+                buffer: input.buffer,
+                layout: input.layout,
+            },
+        )?;
+        let u = MetalBuffer {
+            inner: inner.u().clone(),
+        };
+        let v = MetalBuffer {
+            inner: inner.v().clone(),
+        };
+        let singular_values = MetalBuffer {
+            inner: inner.singular_values().clone(),
+        };
+        Ok(MetalSvdDecomposition {
+            inner,
+            u,
+            v,
+            singular_values,
+        })
+    }
+
+    fn singular_values(
+        &self,
+        device: &MetalDevice,
+        input: StridedView<'_, MetalBuffer<f32>, 2>,
+    ) -> Result<MetalBuffer<f32>> {
+        singular_values(
             device,
             StridedOperand {
                 buffer: input.buffer,

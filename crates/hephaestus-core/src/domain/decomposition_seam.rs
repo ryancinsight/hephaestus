@@ -161,6 +161,39 @@ pub trait DecompositionOps<D: ComputeDevice> {
         input: StridedView<'op, D::Buffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>>;
 
+    /// Singular value decomposition result bound to this backend.
+    type Svd<'op>: SvdHandle<D>
+    where
+        Self: 'op,
+        D: 'op;
+
+    /// Factor a rank-2 view as `A = U·Σ·Vᵀ`.
+    ///
+    /// The rank-revealing entry points backends expose are algorithm
+    /// choices over this same contract, not distinct seam methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout validation failure or the backend dispatch
+    /// failure.
+    fn svd<'op>(
+        &self,
+        device: &D,
+        input: StridedView<'op, D::Buffer<f32>, 2>,
+    ) -> Result<Self::Svd<'op>>;
+
+    /// Singular values of a rank-2 view, without singular vectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout validation failure or the backend dispatch
+    /// failure.
+    fn singular_values(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<f32>>;
+
     /// Symmetric eigendecomposition result bound to this backend.
     type SymmetricEigen<'op>: SymmetricEigenHandle<D>
     where
@@ -269,4 +302,24 @@ pub trait SymmetricEigenHandle<D: ComputeDevice> {
     /// Device-resident eigenvectors, `n × n` row-major with eigenvector
     /// `k` in column `k`, paired index-for-index with `eigenvalues`.
     fn eigenvectors(&self) -> &D::Buffer<f32>;
+}
+
+/// Oracle-minimal accessors on a singular value decomposition result
+/// (ADR 0042 staging, stage 3).
+pub trait SvdHandle<D: ComputeDevice> {
+    /// `(rows, cols)` of the factored matrix.
+    fn shape(&self) -> (usize, usize);
+
+    /// Device-resident left singular vectors, row-major with vector `k`
+    /// in column `k`, paired index-for-index with `singular_values`.
+    fn u(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident right singular vectors, row-major with vector `k`
+    /// in column `k` (so reconstruction reads `V[j][k]`, not a stored
+    /// transpose).
+    fn v(&self) -> &D::Buffer<f32>;
+
+    /// Device-resident singular values, non-negative, paired with the
+    /// vector columns.
+    fn singular_values(&self) -> &D::Buffer<f32>;
 }
