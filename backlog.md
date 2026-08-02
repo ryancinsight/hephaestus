@@ -1,5 +1,23 @@
 # Backlog — hephaestus
 
+## HEPH-METAL-ACQUISITION-1 [minor] — in progress
+
+- Owner: Codex on `codex/feat-metal-device-acquisition`; scope: Metal's shared
+  device-acquisition trait implementation, its WGPU Metal-only substrate,
+  focused conformance, and owner-keyed PM/release records.
+- Outcome: make Metal substitutable through `ComputeDeviceAcquisition`, honoring
+  device preference, optional features, required limits, and bounded
+  enumeration without selecting a non-Metal adapter.
+- Non-goals: KS-5 decomposition files; kernel behavior; CUDA/ROCm acquisition;
+  backend fallback; and runtime or memory claims.
+- Acceptance: `MetalDevice` implements the shared seam; every acquired device
+  is Metal-backed; optional features are intersected with adapter support;
+  required limits are enforced; zero-device enumeration returns no device;
+  focused Nextest, warning-denied Clippy, doctest/Rustdoc, independent review,
+  and exact-head WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[minor]`; additive backend capability and WGPU substrate
+  API, with no existing constructor behavior change.
+
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-decomposition-readback`; scope: WGPU

@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-METAL-ACQUISITION-1 [minor] — Owner: Codex
+
+- [ ] Record the current Metal acquisition baseline and WGPU substrate closure.
+- [ ] Add Metal-only feature/limit-aware single and bounded multi-device
+  acquisition without fallback to another WGPU backend.
+- [ ] Implement `ComputeDeviceAcquisition` for `MetalDevice` and add
+  value-semantic capability/boundary contracts.
+- [ ] Run focused format, Nextest, warning-denied Clippy, doctest/Rustdoc,
+  independent review, SemVer classification, and exact-head provider CI.
+
+Implementation owner: Codex on `codex/feat-metal-device-acquisition`. Claimed
+files are WGPU device acquisition, Metal device infrastructure and contract
+tests, plus owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+`gap_audit.md` entries. KS-5 decomposition files remain excluded.
+
 ## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Record the exact non-blocked WGPU direct-readback inventory and preserve
