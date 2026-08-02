@@ -612,14 +612,14 @@ fn query_topology(device: &cuda_oxide::sys::CUdevice) -> Result<themis::GpuTopol
 
     Ok(themis::GpuTopology::from_provider(
         themis::GpuDeviceProperties {
-            compute_units,
-            warp_width,
-            max_threads_per_unit,
-            registers_per_unit,
-            shared_mem_per_unit_bytes,
-            l2_bytes,
+            compute_units: core::num::NonZeroU32::new(compute_units),
+            warp_width: core::num::NonZeroU32::new(warp_width),
+            max_threads_per_unit: core::num::NonZeroU32::new(max_threads_per_unit),
+            registers_per_unit: core::num::NonZeroU32::new(registers_per_unit),
+            shared_mem_per_unit_bytes: core::num::NonZeroUsize::new(shared_mem_per_unit_bytes),
+            l2_bytes: core::num::NonZeroUsize::new(l2_bytes),
             memory_tier: themis::MemoryTier::Device,
-            memory_bytes: total_bytes as u64,
+            memory_bytes: core::num::NonZeroU64::new(total_bytes as u64),
         },
     ))
 }

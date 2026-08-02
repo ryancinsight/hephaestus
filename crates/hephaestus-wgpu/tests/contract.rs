@@ -1776,13 +1776,18 @@ fn acquisition_reports_themis_topology_from_adapter() {
         .topology()
         .expect("acquisition path must capture a topology snapshot");
 
-    // Verify reported fields have reasonable defaults/values
-    assert!(topology.warp_width() == 0 || topology.warp_width().is_power_of_two());
+    // A reported warp width is a real power-of-two lane count.
+    assert!(
+        topology
+            .warp_width()
+            .is_none_or(|width| width.get().is_power_of_two())
+    );
 
-    // Unreported-by-wgpu capacities must be zero, never fabricated.
-    assert_eq!(topology.compute_units(), 0);
-    assert_eq!(topology.registers_per_unit(), 0);
-    assert_eq!(topology.shared_mem_per_unit_bytes(), 0);
+    // Capacities WebGPU cannot introspect are None by type, never
+    // fabricated (formerly a pinned zero-sentinel convention).
+    assert_eq!(topology.compute_units(), None);
+    assert_eq!(topology.registers_per_unit(), None);
+    assert_eq!(topology.shared_mem_per_unit_bytes(), None);
 
     // The Arc-wrapping constructor has no adapter and reports none.
     let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());

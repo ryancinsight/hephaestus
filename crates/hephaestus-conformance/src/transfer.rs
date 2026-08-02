@@ -110,25 +110,24 @@ pub fn assert_transfer_contract<D: ComputeDevice>(device: &D) {
         "{name}: rejected writes must not mutate the buffer"
     );
 
-    // A probed hardware topology's REPORTED fields are mutually
-    // consistent. Zero means unreported, never fabricated (wgpu's pinned
-    // convention: WebGPU exposes no SM/register introspection), so the
-    // clause constrains only fields the backend actually reported; `None`
-    // (no snapshot at all) is equally valid. Encoding unknowability in
-    // the type instead of a zero sentinel is filed upstream against
-    // themis (ATLAS-THEMIS-TOPOLOGY-OPTION-1).
+    // A probed hardware topology's REPORTED capacities are mutually
+    // consistent. Unreported capacities are `None` by type
+    // (ATLAS-THEMIS-TOPOLOGY-OPTION-1 resolved the former zero
+    // sentinel), so every present value is a real device quantity and
+    // the clause needs no sentinel branch; a backend with no snapshot at
+    // all returns `None` for the topology itself.
     if let Some(topology) = device.topology() {
-        let warp = topology.warp_width();
-        assert!(
-            warp == 0 || warp.is_power_of_two(),
-            "{name}: a reported warp width must be a power of two, got {warp}"
-        );
-        let threads = topology.max_threads_per_unit();
-        if warp > 0 && threads > 0 {
+        if let Some(warp) = topology.warp_width() {
             assert!(
-                threads >= warp,
-                "{name}: a compute unit must hold at least one warp"
+                warp.get().is_power_of_two(),
+                "{name}: a reported warp width must be a power of two, got {warp}"
             );
+            if let Some(threads) = topology.max_threads_per_unit() {
+                assert!(
+                    threads >= warp,
+                    "{name}: a compute unit must hold at least one warp"
+                );
+            }
         }
     }
 

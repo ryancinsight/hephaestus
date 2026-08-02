@@ -2616,15 +2616,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
+name = "hyperion"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "apollo-fft"
+version = "0.25.0"
+
+[[patch.unused]]
+name = "apollo-nufft"
+version = "0.7.0"
+
+[[patch.unused]]
+name = "apollo-sht"
+version = "0.7.0"
+
+[[patch.unused]]
 name = "coeus-autograd"
 version = "0.9.0"
 
 [[patch.unused]]
 name = "coeus-core"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-leto"
 version = "0.9.0"
 
 [[patch.unused]]
@@ -2644,23 +2656,15 @@ name = "coeus-tensor"
 version = "0.9.0"
 
 [[patch.unused]]
-name = "apollo-fft"
-version = "0.25.0"
+name = "moirai-http"
+version = "0.4.0"
 
 [[patch.unused]]
-name = "apollo-nufft"
-version = "0.7.0"
-
-[[patch.unused]]
-name = "apollo-sht"
-version = "0.7.0"
-
-[[patch.unused]]
-name = "horae"
+name = "asclepius"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "tyche-core"
+name = "asclepius-coeus"
 version = "0.1.0"
 
 [[patch.unused]]
@@ -2692,24 +2696,8 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "moirai-http"
-version = "0.4.0"
-
-[[patch.unused]]
 name = "proteus"
 version = "0.1.0"
-
-[[patch.unused]]
-name = "hyperion"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "iris"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "gaia"
-version = "0.3.0"
 
 [[patch.unused]]
 name = "athena-core"
@@ -2720,32 +2708,20 @@ name = "athena-leto"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "hephaestus-core"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-cuda"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-metal"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-rocm"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-wgpu"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "asclepius"
+name = "horae"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius-coeus"
+name = "tyche-core"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "iris"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gaia"
+version = "0.3.0"
 
 [[patch.unused]]
 name = "ritk-core"

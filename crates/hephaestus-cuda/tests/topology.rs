@@ -14,45 +14,39 @@ fn topology_reflects_real_device_properties() {
         .topology()
         .expect("acquired CUDA device must report a topology snapshot");
 
-    // Real driver-queried values: every modern CUDA device has at least one SM,
-    // a 32-lane warp, resident threads, registers, shared memory, and nonzero
-    // global memory. Zeros would mean the snapshot was fabricated rather than
-    // queried (the prior placeholder reported compute_units = 0, memory = 0).
+    // Real driver-queried values: every modern CUDA device reports every
+    // capacity, so each accessor is Some (an unreported capacity would be
+    // None by type, never a fabricated number).
     assert!(
-        topo.compute_units() > 0,
-        "compute_units must be queried (>0), got {}",
-        topo.compute_units()
+        topo.compute_units().is_some(),
+        "compute_units must be queried, got None"
     );
     assert_eq!(
-        topo.warp_width(),
-        32,
-        "every NVIDIA GPU has a 32-lane warp, got {}",
+        topo.warp_width().map(core::num::NonZeroU32::get),
+        Some(32),
+        "every NVIDIA GPU has a 32-lane warp, got {:?}",
         topo.warp_width()
     );
     assert!(
-        topo.max_threads_per_unit() > 0,
-        "max_threads_per_unit must be queried (>0), got {}",
-        topo.max_threads_per_unit()
+        topo.max_threads_per_unit().is_some(),
+        "max_threads_per_unit must be queried, got None"
     );
     assert!(
-        topo.registers_per_unit() > 0,
-        "registers_per_unit must be queried (>0), got {}",
-        topo.registers_per_unit()
+        topo.registers_per_unit().is_some(),
+        "registers_per_unit must be queried, got None"
     );
     assert!(
-        topo.shared_mem_per_unit_bytes() > 0,
-        "shared_mem_per_unit_bytes must be queried (>0), got {}",
-        topo.shared_mem_per_unit_bytes()
+        topo.shared_mem_per_unit_bytes().is_some(),
+        "shared_mem_per_unit_bytes must be queried, got None"
     );
     assert!(
-        topo.memory_bytes() > 0,
-        "device global memory must be queried (>0), got {}",
-        topo.memory_bytes()
+        topo.memory_bytes().is_some(),
+        "device global memory must be queried, got None"
     );
     // Derived occupancy figure must follow from the real capacities.
     assert!(
-        topo.max_resident_warps() > 0,
-        "max_resident_warps must follow from real capacities, got {}",
+        topo.max_resident_warps().is_some_and(|warps| warps > 0),
+        "max_resident_warps must follow from real capacities, got {:?}",
         topo.max_resident_warps()
     );
 }

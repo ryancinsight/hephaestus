@@ -282,14 +282,14 @@ fn device_capabilities_and_topology_are_driver_backed() {
     let topology = device
         .topology()
         .expect("an acquired ROCm device must have a topology snapshot");
-    assert!(topology.compute_units() > 0);
-    assert!(topology.warp_width() > 0);
-    assert!(topology.max_threads_per_unit() > 0);
-    assert!(topology.registers_per_unit() > 0);
-    assert!(topology.shared_mem_per_unit_bytes() > 0);
-    assert!(topology.memory_bytes() > 0);
+    assert!(topology.compute_units().is_some());
+    assert!(topology.warp_width().is_some());
+    assert!(topology.max_threads_per_unit().is_some());
+    assert!(topology.registers_per_unit().is_some());
+    assert!(topology.shared_mem_per_unit_bytes().is_some());
+    assert!(topology.memory_bytes().is_some());
     assert_eq!(topology.memory_tier(), themis::MemoryTier::Device);
-    assert!(topology.max_resident_warps() > 0);
+    assert!(topology.max_resident_warps().is_some_and(|warps| warps > 0));
 }
 
 #[test]

@@ -160,18 +160,18 @@ pub(super) fn query_topology(context: &RocmContext) -> Result<themis::GpuTopolog
 
     Ok(themis::GpuTopology::from_provider(
         themis::GpuDeviceProperties {
-            compute_units,
-            warp_width,
-            max_threads_per_unit,
-            registers_per_unit,
-            shared_mem_per_unit_bytes,
-            l2_bytes,
+            compute_units: core::num::NonZeroU32::new(compute_units),
+            warp_width: core::num::NonZeroU32::new(warp_width),
+            max_threads_per_unit: core::num::NonZeroU32::new(max_threads_per_unit),
+            registers_per_unit: core::num::NonZeroU32::new(registers_per_unit),
+            shared_mem_per_unit_bytes: core::num::NonZeroUsize::new(shared_mem_per_unit_bytes),
+            l2_bytes: core::num::NonZeroUsize::new(l2_bytes),
             memory_tier: themis::MemoryTier::Device,
-            memory_bytes: u64::try_from(total_bytes).map_err(|_| {
+            memory_bytes: core::num::NonZeroU64::new(u64::try_from(total_bytes).map_err(|_| {
                 HephaestusError::DeviceUnavailable {
                     message: format!("ROCm total memory {total_bytes} exceeds u64"),
                 }
-            })?,
+            })?),
         },
     ))
 }

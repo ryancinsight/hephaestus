@@ -200,15 +200,17 @@ impl WgpuDevice {
             wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::Cpu => themis::MemoryTier::Dram,
             _ => themis::MemoryTier::Device,
         };
+        // WebGPU exposes no SM/register/memory introspection: those
+        // capacities are unreported (`None` by type), never fabricated.
         themis::GpuTopology::from_provider(themis::GpuDeviceProperties {
-            compute_units: 0,
-            warp_width: info.subgroup_min_size,
-            max_threads_per_unit: 0,
-            registers_per_unit: 0,
-            shared_mem_per_unit_bytes: 0,
-            l2_bytes: 0,
+            compute_units: None,
+            warp_width: core::num::NonZeroU32::new(info.subgroup_min_size),
+            max_threads_per_unit: None,
+            registers_per_unit: None,
+            shared_mem_per_unit_bytes: None,
+            l2_bytes: None,
             memory_tier,
-            memory_bytes: 0,
+            memory_bytes: None,
         })
     }
 
