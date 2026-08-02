@@ -2031,12 +2031,19 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     dev.download(gpu_cholesky.lower(), &mut got_lower).unwrap();
     let expected_lower = leto::Storage::as_slice(leto_cholesky.lower().storage());
     for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
-        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        // Two backward-stable Choleskys of this strictly diagonally
+        // dominant fixture (κ∞ ≤ 1.01) differ elementwise by at most
+        // 2·c(n)·ε·κ∞·max(|L|, 1) with c(n) ≤ n (Higham, Accuracy and
+        // Stability, ch. 10); 4·n·ε keeps 2× slack over that bound.
+        let tolerance = 4.0 * n as f32 * f32::EPSILON * expected.abs().max(1.0);
         assert!(
             (got - expected).abs() <= tolerance,
             "blocked Cholesky lower mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
         );
     }
+    // Bitwise det equality pins provider identity: both dets come from
+    // the same leto elimination on the host, so any divergence means the
+    // adapter re-derived it.
     assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
 }
 
@@ -2221,8 +2228,9 @@ fn blocked_lu_matches_leto_reference() {
     )
     .unwrap();
 
-    // The host-side inner decomposition (on original matrix) must match leto-ops.
     assert_eq!(gpu_lu.n(), leto_lu.dim());
+    // Bitwise det equality pins provider identity (same leto elimination
+    // on the host feeds both sides).
     assert_eq!(gpu_lu.det(), leto_lu.det());
 
     // Solve via host-side decomposition must match.
@@ -2234,9 +2242,14 @@ fn blocked_lu_matches_leto_reference() {
     let mut got = vec![0.0f32; n];
     dev.download(&solution, &mut got).unwrap();
     let expected = leto::Storage::as_slice(expected_solution.storage());
+    // Two backward-stable solves of this strictly diagonally dominant
+    // system (κ∞ ≤ 1.03; growth ρ ≤ 2 ⇒ c(n) ≤ 3n, Higham ch. 9) differ
+    // by at most 2·c(n)·ε·κ∞·‖x‖∞; 12·n·ε·‖x‖∞ keeps ~2× slack.
+    let x_inf = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    let solve_bound = 12.0 * n as f32 * f32::EPSILON * x_inf;
     for i in 0..n {
         assert!(
-            (got[i] - expected[i]).abs() <= 1e-4,
+            (got[i] - expected[i]).abs() <= solve_bound,
             "blocked LU solve x[{i}] = {} expected {}",
             got[i],
             expected[i]
@@ -2307,8 +2320,12 @@ fn blocked_lu_solve_known_system_accurate() {
     dev.download(&solution, &mut got).unwrap();
     let expected = leto::Storage::as_slice(expected_solution.storage());
     for i in 0..2 {
+        // Every elimination and substitution step on this fixture is
+        // dyadic (pivot 4, multiplier 1/2, U₂₂ = −1/2), so both solves
+        // are exact; the bound admits one reciprocal-multiply rounding
+        // per step.
         assert!(
-            (got[i] - expected[i]).abs() <= 1e-5,
+            (got[i] - expected[i]).abs() <= 4.0 * f32::EPSILON * expected[i].abs(),
             "blocked LU solve x[{i}] = {} expected {}",
             got[i],
             expected[i]
@@ -2378,7 +2395,8 @@ fn blocked_qr_matches_leto_reference() {
 
     assert_eq!(gpu_qr.shape(), (m, n));
 
-    // R should be upper triangular — check lower triangle is zero.
+    // R's lower triangle is written as zeros, never computed; ε admits
+    // at most one rounded store.
     let mut got_r = vec![0.0f32; m * n];
     dev.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
     for i in 1..m {
@@ -2398,7 +2416,11 @@ fn blocked_qr_matches_leto_reference() {
         for j in 0..n {
             let got = got_r[i * n + j];
             let expected = expected_r[i * n + j];
-            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+            // Householder QR is columnwise backward stable:
+            // ‖ΔR·eⱼ‖₂ ≤ c(m,n)·ε·‖aⱼ‖₂ (Higham ch. 19) with ‖aⱼ‖₂ ≤ 5.1
+            // here, so 4·m·ε·max(|R|, 1) dominates the elementwise
+            // difference of two stable runs on this fixture.
+            let tolerance = 4.0 * m as f32 * f32::EPSILON * expected.abs().max(1.0);
             assert!(
                 (got - expected).abs() <= tolerance,
                 "blocked QR R[{i},{j}]: got {got}, expected {expected}"
@@ -2415,9 +2437,15 @@ fn blocked_qr_matches_leto_reference() {
     let mut got = vec![0.0f32; n];
     dev.download(&solution, &mut got).unwrap();
     let expected = leto::Storage::as_slice(expected_solution.storage());
+    // For this near-consistent, well-conditioned system (κ₂ ≈ 1, so the
+    // κ²·residual term of least-squares sensitivity is negligible) two
+    // backward-stable solves differ by ≤ 2·c(m)·ε·‖x‖∞ with c(m) ≤ 4·m;
+    // 8·m·ε·‖x‖∞ doubles that.
+    let x_inf = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    let solve_bound = 8.0 * m as f32 * f32::EPSILON * x_inf;
     for i in 0..n {
         assert!(
-            (got[i] - expected[i]).abs() <= 1e-3,
+            (got[i] - expected[i]).abs() <= solve_bound,
             "blocked QR solve x[{i}] = {} expected {}",
             got[i],
             expected[i]
@@ -2456,6 +2484,8 @@ fn blocked_qr_identity_yields_identity_r() {
     let r_ref = leto_qr.r();
     let expected_r = leto::Storage::as_slice(r_ref.storage());
     for i in 0..4 {
+        // Identity input reaches R through at most one Householder
+        // reflection over exact dyadic values: ≤ 4 roundings per entry.
         let tolerance = 8.0 * f32::EPSILON * expected_r[i].abs().max(1.0);
         assert!(
             (got_r[i] - expected_r[i]).abs() <= tolerance,
@@ -2495,20 +2525,23 @@ fn blocked_qr_solve_known_system_accurate() {
     let mut got = vec![0.0f32; 2];
     dev.download(&solution, &mut got).unwrap();
 
-    // Verify residual A*x ≈ b.
+    // The system is consistent with exact solution [1, 2]; Householder
+    // QR at m = 3 spends tens of flops per entry, so the residual is
+    // bounded by c·ε·‖b‖∞ with c ≲ 32.
+    let residual_bound = 32.0 * f32::EPSILON * 3.0;
     let residual_0 = 1.0 * got[0] + 0.0 * got[1] - 1.0;
     let residual_1 = 0.0 * got[0] + 1.0 * got[1] - 2.0;
     let residual_2 = 1.0 * got[0] + 1.0 * got[1] - 3.0;
     assert!(
-        residual_0.abs() <= 1e-4,
+        residual_0.abs() <= residual_bound,
         "blocked QR residual[0] = {residual_0}"
     );
     assert!(
-        residual_1.abs() <= 1e-4,
+        residual_1.abs() <= residual_bound,
         "blocked QR residual[1] = {residual_1}"
     );
     assert!(
-        residual_2.abs() <= 1e-4,
+        residual_2.abs() <= residual_bound,
         "blocked QR residual[2] = {residual_2}"
     );
 }

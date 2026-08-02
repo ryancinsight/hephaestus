@@ -2405,12 +2405,9 @@ fn det_of_near_singular_triangular_is_exact_pivot_product() {
 
 #[test]
 fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
-    eprintln!("TEST_CHOL: Start");
     let Some(device) = device_or_skip() else {
-        eprintln!("TEST_CHOL: Skipped");
         return;
     };
-    eprintln!("TEST_CHOL: Device ok");
     use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
     use leto::Layout;
 
@@ -2425,14 +2422,10 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
             };
         }
     }
-    eprintln!("TEST_CHOL: Matrix prepared");
     let matrix = device.upload(&matrix_host).unwrap();
-    eprintln!("TEST_CHOL: Matrix uploaded");
     let layout = Layout::c_contiguous([n, n]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
-    eprintln!("TEST_CHOL: Leto matrix created");
     let leto_cholesky = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
-    eprintln!("TEST_CHOL: Leto cholesky completed");
 
     let gpu_cholesky = cholesky_decompose_blocked(
         &device,
@@ -2442,7 +2435,6 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
         },
     )
     .unwrap();
-    eprintln!("TEST_CHOL: GPU cholesky completed");
 
     let mut got_lower = vec![0.0f32; n * n];
     device
@@ -2450,12 +2442,19 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
         .unwrap();
     let expected_lower = leto::Storage::as_slice(leto_cholesky.lower().storage());
     for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
-        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        // Two backward-stable Choleskys of this strictly diagonally
+        // dominant fixture (κ∞ ≤ 1.01) differ elementwise by at most
+        // 2·c(n)·ε·κ∞·max(|L|, 1) with c(n) ≤ n (Higham, Accuracy and
+        // Stability, ch. 10); 4·n·ε keeps 2× slack over that bound.
+        let tolerance = 4.0 * n as f32 * f32::EPSILON * expected.abs().max(1.0);
         assert!(
             (got - expected).abs() <= tolerance,
             "blocked Cholesky lower mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
         );
     }
+    // Bitwise det equality pins provider identity: both dets come from
+    // the same leto elimination on the host, so any divergence means the
+    // adapter re-derived it.
     assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
 }
 
@@ -3647,9 +3646,17 @@ fn blocked_lu_matches_leto_reference() {
             max_res = res;
         }
     }
-    println!("DB: Blocked LU residual norm = {}", max_res);
+    // Backward stability bounds the residual independently of κ:
+    // ‖A·x̂ − b‖∞ ≤ c(n)·ε·‖A‖∞·‖x̂‖∞ with c(n) ≤ 3·n·ρ and growth
+    // ρ ≤ 4 on this near-diagonal fixture even with the two forced
+    // pivot swaps (Higham ch. 9), giving c(n) ≤ 12·n.
+    let a_inf = (0..n)
+        .map(|i| (0..n).map(|j| matrix_host[i * n + j].abs()).sum::<f32>())
+        .fold(0.0f32, f32::max);
+    let x_inf = got.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    let residual_bound = 12.0 * n as f32 * f32::EPSILON * a_inf * x_inf;
     assert!(
-        max_res <= 1e-3,
+        max_res <= residual_bound,
         "blocked LU solve is inaccurate, residual norm = {}",
         max_res
     );
@@ -3716,8 +3723,12 @@ fn blocked_lu_solve_known_system_accurate() {
     device.download(&solution, &mut got).unwrap();
     let expected = leto::Storage::as_slice(expected_solution.storage());
     for i in 0..2 {
+        // Every elimination and substitution step on this fixture is
+        // dyadic (pivot 4, multiplier 1/2, U₂₂ = −1/2), so both solves
+        // are exact; the bound admits one reciprocal-multiply rounding
+        // per step.
         assert!(
-            (got[i] - expected[i]).abs() <= 1e-5,
+            (got[i] - expected[i]).abs() <= 4.0 * f32::EPSILON * expected[i].abs(),
             "blocked LU solve x[{i}] = {} expected {}",
             got[i],
             expected[i]
@@ -3785,7 +3796,8 @@ fn blocked_qr_matches_leto_reference() {
 
     assert_eq!(gpu_qr.shape(), (m, n));
 
-    // R should be upper triangular — check lower triangle is zero.
+    // R's lower triangle is written as zeros, never computed; ε admits
+    // at most one rounded store.
     let mut got_r = vec![0.0f32; m * n];
     device.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
     for i in 1..m {
@@ -3805,7 +3817,11 @@ fn blocked_qr_matches_leto_reference() {
         for j in 0..n {
             let got = got_r[i * n + j];
             let expected = expected_r[i * n + j];
-            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+            // Householder QR is columnwise backward stable:
+            // ‖ΔR·eⱼ‖₂ ≤ c(m,n)·ε·‖aⱼ‖₂ (Higham ch. 19) with ‖aⱼ‖₂ ≤ 5.1
+            // here, so 4·m·ε·max(|R|, 1) dominates the elementwise
+            // difference of two stable runs on this fixture.
+            let tolerance = 4.0 * m as f32 * f32::EPSILON * expected.abs().max(1.0);
             assert!(
                 (got - expected).abs() <= tolerance,
                 "blocked QR R[{i},{j}]: got {got}, expected {expected}"
@@ -3822,9 +3838,15 @@ fn blocked_qr_matches_leto_reference() {
     let mut got = vec![0.0f32; n];
     device.download(&solution, &mut got).unwrap();
     let expected = leto::Storage::as_slice(expected_solution.storage());
+    // For this near-consistent, well-conditioned system (κ₂ ≈ 1, so the
+    // κ²·residual term of least-squares sensitivity is negligible) two
+    // backward-stable solves differ by ≤ 2·c(m)·ε·‖x‖∞ with c(m) ≤ 4·m;
+    // 8·m·ε·‖x‖∞ doubles that.
+    let x_inf = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    let solve_bound = 8.0 * m as f32 * f32::EPSILON * x_inf;
     for i in 0..n {
         assert!(
-            (got[i] - expected[i]).abs() <= 1e-3,
+            (got[i] - expected[i]).abs() <= solve_bound,
             "blocked QR solve x[{i}] = {} expected {}",
             got[i],
             expected[i]
@@ -3959,6 +3981,8 @@ fn blocked_qr_identity_yields_identity_r() {
     let r_ref = leto_qr.r();
     let expected_r = leto::Storage::as_slice(r_ref.storage());
     for i in 0..4 {
+        // Identity input reaches R through at most one Householder
+        // reflection over exact dyadic values: ≤ 4 roundings per entry.
         let tolerance = 8.0 * f32::EPSILON * expected_r[i].abs().max(1.0);
         assert!(
             (got_r[i] - expected_r[i]).abs() <= tolerance,
@@ -3997,20 +4021,23 @@ fn blocked_qr_solve_known_system_accurate() {
     let mut got = vec![0.0f32; 2];
     device.download(&solution, &mut got).unwrap();
 
-    // Verify residual A*x ≈ b.
+    // The system is consistent with exact solution [1, 2]; Householder
+    // QR at m = 3 spends tens of flops per entry, so the residual is
+    // bounded by c·ε·‖b‖∞ with c ≲ 32.
+    let residual_bound = 32.0 * f32::EPSILON * 3.0;
     let residual_0 = 1.0 * got[0] + 0.0 * got[1] - 1.0;
     let residual_1 = 0.0 * got[0] + 1.0 * got[1] - 2.0;
     let residual_2 = 1.0 * got[0] + 1.0 * got[1] - 3.0;
     assert!(
-        residual_0.abs() <= 1e-4,
+        residual_0.abs() <= residual_bound,
         "blocked QR residual[0] = {residual_0}"
     );
     assert!(
-        residual_1.abs() <= 1e-4,
+        residual_1.abs() <= residual_bound,
         "blocked QR residual[1] = {residual_1}"
     );
     assert!(
-        residual_2.abs() <= 1e-4,
+        residual_2.abs() <= residual_bound,
         "blocked QR residual[2] = {residual_2}"
     );
 }
