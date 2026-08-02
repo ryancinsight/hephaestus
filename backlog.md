@@ -1,5 +1,24 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-DECOMP-READBACK-1 [patch] [perf] — in progress
+
+- Owner: Codex on `codex/perf-wgpu-decomposition-readback`; scope: WGPU
+  non-blocked decomposition full-vector readbacks, their source/value contract,
+  Metal inheritance, and owner-keyed PM/release records.
+- Outcome: route host-delegated decomposition inputs and solve right-hand sides
+  through `ComputeDevice::download_owned`, removing the initialized host-vector
+  pass that mapped staging wholly overwrites.
+- Non-goals: `lu`, `qr`, and `cholesky` files claimed by KS-5; core host-loop
+  consolidation; CUDA/ROCm; decomposition arithmetic; transfer staging policy;
+  and runtime or peak-memory claims without matched measurements.
+- Acceptance: every direct full-vector readback in the nine claimed families is
+  provider-owned; empty, invalid, factorization, solve, and reconstruction
+  values remain unchanged; a source regression prevents initialized heap
+  readbacks from returning; focused Nextest, warning-denied Clippy, formatting,
+  independent review, and exact-head WGPU/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; host allocation initialization only.
+  Allocation count, transfer volume, and device storage remain unchanged.
+
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
 
 - Owner: Codex `/root`; scope: root dependency package identities and registry
