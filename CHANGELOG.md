@@ -12,6 +12,11 @@ Target release: 0.18.0.
   identity while retaining the `moirai` Rust crate name, and align CI's local
   Mnemosyne patches with the published package identities.
 
+- [patch] WGPU and Metal owned device readback now copy mapped staging bytes
+  directly into reserved host result capacity and publish vector length only
+  after the synchronous transfer succeeds. Borrowed and owned transfers share
+  one staging/map implementation, including explicit zero-sized POD handling.
+
 - [patch] CUDA and ROCm decomposition paths route 53 heap-vector readbacks
   through provider-owned host allocation, eliminating the initialization pass
   that previously zero-filled each vector immediately before a synchronous

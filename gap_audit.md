@@ -11,6 +11,52 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-WGPU-METAL-OWNED-READBACK-1] Mapped host result initialization
+
+- Finding: WGPU and its Metal wrapper inherited the default
+  `ComputeDevice::download_owned`, which zero-filled initialized host storage
+  before mapped staging synchronously overwrote every result byte.
+- Resolution: WGPU reserves host vector capacity, maps and validates the staging
+  range through the same helper used by borrowed downloads, copies directly
+  into spare capacity, and publishes length only after the helper succeeds.
+  A mapping-lifecycle guard cancels pending maps or unmaps active ranges on
+  every error and unwind exit before pooled staging storage is recycled. Metal
+  delegates owned download explicitly to that implementation. Empty and
+  zero-sized POD results perform no physical transfer.
+- Evidence: the physical WGPU shared transfer contract passes with exact NaN
+  payload, signed-zero, logical-length, empty no-allocation, and zero-sized POD
+  clauses; a mapped-consumer unwind regression proves the staging allocation is
+  reusable afterward. WGPU, Metal, and conformance compile warning-clean under
+  `-D warnings`; independent re-review reports no remaining findings. Native
+  Metal execution passes on native macOS in run `30735730960`; exact-head WGPU
+  run `30735730194`, CUDA run `30735731839`, and ROCm run `30735732609` also
+  pass. The source change removes one `O(n)` host initialization pass but makes
+  no runtime or peak-memory improvement claim without controlled measurement.
+- Residual: WGPU validation and physical execution are available locally;
+  native Metal execution is unavailable on this Windows host but is covered by
+  hosted macOS CI. Miri does not execute WGPU device mapping, so safety evidence
+  combines the explicit initialized-byte invariant, value-semantic device
+  execution, and independent review.
+
+## [HEPH-WGPU-METAL-OWNED-READBACK-1] Themis package identity blocker
+
+- Finding: exact-head Metal and ROCm CI failed before compilation because
+  upstream Themis renamed its Cargo package from `themis` to
+  `themis-topology` at `a1c8231`; Hephaestus still requested the old package
+  identity from the Git repository.
+- Resolution: keep the source-level `themis` crate alias and bind it explicitly
+  to `package = "themis-topology"`, version `0.10.1`. Refresh the generated
+  stack overlay and Hephaestus lockfile against the renamed package.
+- Evidence: fresh hosted resolution reaches and passes provider compilation and
+  contracts at exact head `1c4ac16`: CUDA run `30735731839`, ROCm run
+  `30735732609`, WGPU run `30735730194`, and native macOS Metal run
+  `30735730960`. The earlier failed Metal run `30733059974` and ROCm run
+  `30733059964` remain resolver evidence only, not backend evidence.
+- Follow-up: Mnemosyne subsequently renamed packages `mnemosyne` and
+  `mnemosyne-core` to `mnemosyne-memory` and `mnemosyne-memory-core` at
+  `be4aa64`. Direct consumers retain their Rust crate aliases, bind the new
+  Cargo identities, and pass the exact-head provider matrix recorded above.
+
 ## [HEPH-OWNED-DOWNLOAD-1] Host result initialization
 
 - Finding: CUDA and ROCm pseudoinverse and matrix exponential each allocated a
@@ -21,7 +67,8 @@ architectural decision or a tracked future-work item:
   CUDA and ROCm reserve fallible host capacity, copy synchronously into spare
   capacity, and publish vector length only after success; zero-sized types use
   safe initialized resize. Four matrix-function consumers use the owned result
-  directly. WGPU and Metal retain the initialized default in this increment.
+  directly. WGPU and Metal retained the initialized default in that increment;
+  HEPH-WGPU-METAL-OWNED-READBACK-1 closes that residual.
 - Evidence: shared bitwise transfer conformance includes NaN payloads, signed
   zero, logical length, and empty no-allocation behavior. WGPU conformance passes
   1/1; physical CUDA conformance plus matrix functions pass 4/4; adapterless
@@ -33,8 +80,7 @@ architectural decision or a tracked future-work item:
   source change removes four `O(n)` host initialization writes but does not
   change allocation count or peak memory; no runtime gain is claimed without a
   controlled hardware benchmark. `hephaestus-core` is unpublished, so
-  `cargo-semver-checks` has no registry baseline. WGPU/Metal owned-download
-  zero-fill removal is a separate staging-readback slice. Implementation head
+  `cargo-semver-checks` has no registry baseline. Implementation head
   `dad12d6` passes CUDA run `30713948491`, ROCm run `30713948448`, WGPU run
   `30713948446`, and macOS Metal run `30713948456`; hardware-only NVIDIA and AMD
   jobs skip because no runner was dispatched. The external

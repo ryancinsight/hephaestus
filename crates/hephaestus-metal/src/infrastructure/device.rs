@@ -84,6 +84,11 @@ impl ComputeDevice for MetalDevice {
     }
 
     #[inline]
+    fn download_owned<T: Pod>(&self, buffer: &Self::Buffer<T>) -> Result<Vec<T>> {
+        self.inner.download_owned(&buffer.inner)
+    }
+
+    #[inline]
     fn write_buffer<T: Pod>(&self, buffer: &Self::Buffer<T>, host: &[T]) -> Result<()> {
         self.inner.write_buffer(&buffer.inner, host)
     }

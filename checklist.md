@@ -54,6 +54,26 @@ Findings recorded (out of scope, not absorbed):
   (nested `if let`). CI never clippies the conformance crate, so it is
   latent debt; fix on a future conformance touch.
 
+## HEPH-WGPU-METAL-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
+
+- [x] Establish focused WGPU transfer and Metal delegation baselines.
+- [x] Make mapped staging initialize reserved owned host capacity directly.
+- [x] Cover bitwise, empty, zero-sized, and delegation contracts.
+- [x] Pass focused warning-denied gates and independent review.
+- [x] Bind the Themis alias to its renamed Cargo package and restore the local
+      dependency graph.
+- [x] Bind the Mnemosyne aliases to their collision-free Cargo packages.
+- [x] Verify fresh hosted resolution reaches backend compilation.
+- [x] Pass exact-head WGPU and native macOS Metal CI.
+
+Claimed files are WGPU and Metal device implementations, focused transfer
+contracts, and owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
+`gap_audit.md` entries. CUDA/ROCm, Python, and active KS-7 files are excluded.
+Exact implementation head `1c4ac16` passes WGPU run `30735730194`, CUDA run
+`30735731839`, ROCm run `30735732609`, and native macOS Metal run
+`30735730960`. Hardware-only CUDA and ROCm jobs skipped because this dispatch
+did not request self-hosted devices.
+
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
 - [x] Establish focused CUDA/ROCm decomposition baselines.
