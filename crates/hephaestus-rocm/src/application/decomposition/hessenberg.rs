@@ -1,6 +1,6 @@
 //! ROCm Hessenberg reduction backed by the shared Leto provider.
 
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use crate::RocmDevice;
 use crate::application::decomposition::validate::validate_square;
@@ -50,8 +50,7 @@ pub fn hessenberg(
         return Ok(GpuHessenbergDecomposition { q, h, n });
     }
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner = leto_ops::hessenberg(&view).map_err(|error| HephaestusError::DispatchFailed {
         message: format!("Hessenberg reduction failed: {error}"),

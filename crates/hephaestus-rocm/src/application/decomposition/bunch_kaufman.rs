@@ -4,7 +4,7 @@
 //! the common device-resident L/D/permutation result contract and exposes no
 //! CPU or WGPU backend-selection fallback.
 
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 
 use crate::RocmDevice;
 use crate::application::decomposition::validate::validate_square;
@@ -64,8 +64,7 @@ pub fn bunch_kaufman(
         });
     }
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
     let inner =
         leto_ops::bunch_kaufman(&view).map_err(|error| HephaestusError::DispatchFailed {

@@ -101,8 +101,7 @@ impl GpuColPivQrDecomposition {
             return device.upload(&[] as &[f32]);
         }
 
-        let mut rhs_host = vec![0.0_f32; self.rows];
-        device.download(rhs, &mut rhs_host)?;
+        let rhs_host = device.download_owned(rhs)?;
         let rhs_view = leto::ArrayView::<f32, 1>::new(
             Layout::c_contiguous([self.rows]).map_err(|error| HephaestusError::DispatchFailed {
                 message: format!("column-pivoted QR solve RHS layout failed: {error}"),
@@ -378,11 +377,10 @@ pub fn col_piv_qr(
         .map_err(map_layout_err)?;
     let (rows_u32, cols_u32, pivots_u32, elements, q_elements) = checked_dimensions(rows, cols)?;
 
-    let mut host_data = vec![0.0_f32; matrix.buffer.len()];
     if rows == 0 || cols == 0 {
         let q = device.alloc_zeroed::<f32>(0)?;
         let r = device.alloc_zeroed::<f32>(0)?;
-        device.download(matrix.buffer, &mut host_data)?;
+        let host_data = device.download_owned(matrix.buffer)?;
         let inner =
             leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data))
                 .map_err(|error| HephaestusError::DispatchFailed {
@@ -477,8 +475,7 @@ pub fn col_piv_qr(
     let rank = usize::try_from(rank_host[0]).map_err(|_| HephaestusError::DispatchFailed {
         message: "column-pivoted QR rank exceeds host index range".to_string(),
     })?;
-    let mut permutation_host = vec![0_u32; cols];
-    device.download(&permutation, &mut permutation_host)?;
+    let permutation_host = device.download_owned(&permutation)?;
     let permutation = permutation_host
         .into_iter()
         .map(|value| {
@@ -488,7 +485,7 @@ pub fn col_piv_qr(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    device.download(matrix.buffer, &mut host_data)?;
+    let host_data = device.download_owned(matrix.buffer)?;
     let inner = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data))
         .map_err(|error| HephaestusError::DispatchFailed {
         message: format!("column-pivoted QR host contract failed: {error}"),

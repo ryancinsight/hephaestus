@@ -4,16 +4,28 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-DECOMP-OWNED-READBACK-1 [patch] [perf] — Owner: Codex
 
-- [ ] Establish focused CUDA/ROCm decomposition baselines.
-- [ ] Replace initialized full-overwrite host readbacks with `download_owned`.
-- [ ] Add a source regression and preserve value-semantic decomposition tests.
-- [ ] Pass focused warning-denied gates and independent review.
-- [ ] Pass exact-head provider CI and merge.
+- [x] Establish focused CUDA/ROCm decomposition baselines.
+- [x] Replace initialized full-overwrite host readbacks with `download_owned`.
+- [x] Add a source regression and preserve value-semantic decomposition tests.
+- [x] Pass focused warning-denied gates and independent review.
+- [x] Pass exact implementation-head provider CI.
 
 Claimed files are CUDA/ROCm decomposition application modules, focused
 contracts, and owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and
 `gap_audit.md` entries. Active topology/device files and WGPU/Metal are
 excluded.
+
+Physical CUDA baseline passes 1/1; post-edit physical CUDA value and structural
+contracts pass 2/2. Adapterless ROCm baseline check and post-edit structural
+contract pass. Both providers pass warning-denied decomposition Clippy, and all
+claimed files plus the full tree pass rustfmt.
+Independent review's exact-stack-read test correction is applied and approved.
+CUDA/ROCm doctests and Rustdoc builds pass; Rustdoc retains four unrelated
+pre-existing broken-link warnings in stencil and sparse modules.
+Implementation head `b685cc6` passes CUDA `30731767939`, ROCm `30731767934`,
+WGPU `30731767943`, and native macOS Metal `30731767923`; PR #178's docs-only
+head must pass the same matrix before merge.
+
 
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
 
