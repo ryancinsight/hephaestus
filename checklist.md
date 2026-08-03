@@ -2,6 +2,22 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — Owner: Codex
+
+- [ ] Record the current 32-column tile value and performance baselines.
+- [ ] Test a wider tile against the unchanged axis-0 workload and reject it if
+  matched samples do not improve.
+- [ ] Add focused source/value coverage for the selected geometry.
+- [ ] Run formatting, focused Nextest, warning-denied Clippy, benchmark smoke,
+  and independent review.
+- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-wgpu-axis-tile`. Claimed files are
+WGPU reduction geometry and focused contracts, the comparative benchmark only
+if measurement correctness requires it, and owner-keyed `CHANGELOG.md`,
+`backlog.md`, `checklist.md`, `gap_audit.md`, and `benchmark_results.md`
+entries. KS-5 decomposition files remain excluded.
+
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
 - [x] Record the focused device-local copy value and source baselines.
