@@ -35,11 +35,16 @@ architectural decision or a tracked future-work item:
   passes 1/1 and formatting passes. Independent re-review approves with no
   remaining findings. Exact-final-diff Clippy/doctest collection timed out
   behind peer-held shared-target locks; hosted exact-head CI remains the
-  warning/doc oracle.
+  warning/doc oracle. Exact implementation-head WGPU run `30774973252`, CUDA
+  run `30774973245`, ROCm run `30774973255`, and native macOS Metal run
+  `30774973240` pass.
 - Residual: the change replaces one context-wide barrier with one default-stream
   wait by construction; nonzero transfer bytes, buffer ownership, and
   host-visible completion remain unchanged. No runtime speedup is claimed
   without matched hardware measurement.
+  Hardware-only NVIDIA and AMD jobs skip because matching labeled runners are
+  unavailable; PR #188's documentation-only closeout head remains the merge
+  gate.
 
 ## [HEPH-ROCM-COPY-SYNC-1] Device-local copy barrier
 

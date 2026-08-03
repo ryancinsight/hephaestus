@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — in progress
+## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-cuda-copy-sync`; scope: CUDA's synchronous
   device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
@@ -29,8 +29,12 @@
   driver call, rejects its async counterpart, and requires stream-scoped
   completion. Final physical transfer conformance and formatting pass.
   Independent re-review approves with no remaining findings. Exact-final-diff
-  Clippy/doctest collection timed out behind peer-held shared-target locks;
-  exact-head provider CI remains the warning/doc oracle.
+  Clippy/doctest collection timed out behind peer-held shared-target locks.
+  Exact implementation-head WGPU run `30774973252`, CUDA run `30774973245`,
+  ROCm run `30774973255`, and native macOS Metal run `30774973240` pass and
+  supply the warning/doc oracle. Hardware-only NVIDIA and AMD jobs skip because
+  matching labeled runners are unavailable; PR #188's documentation-only
+  closeout head remains the merge gate.
 
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
 

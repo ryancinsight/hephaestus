@@ -9,9 +9,9 @@ Sprint target: 0.18.0. Phase: Closure.
   preserves host completion.
 - [x] Add adapterless source coverage for the no-global-barrier contract.
 - [x] Close the zero-sized POD transfer defect exposed by broader conformance.
-- [ ] Run formatting, focused Nextest, warning-denied Clippy, and independent
+- [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
   review.
-- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-cuda-copy-sync`. Claimed files are
 CUDA device-local transfer infrastructure, focused CUDA transfer contracts, and
@@ -42,6 +42,11 @@ hosted exact-head CI remains the warning/doc oracle. The local linker reports
 the existing NVIDIA static/dynamic CRT
 default-library conflict during test binary linking; warning-denied Clippy is
 clean because it performs metadata analysis without that external link step.
+Exact implementation-head WGPU run `30774973252`, CUDA run `30774973245`, ROCm
+run `30774973255`, and native macOS Metal run `30774973240` pass, supplying the
+final warning/doc evidence. Hardware-only NVIDIA and AMD jobs skip because
+matching labeled runners are unavailable; PR #188's documentation-only
+closeout head remains the merge gate.
 
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
