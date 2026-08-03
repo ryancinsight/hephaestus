@@ -5,20 +5,32 @@
 - Owner: Codex on `codex/perf-cuda-copy-sync`; scope: CUDA's synchronous
   device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
   and owner-keyed PM/release records.
-- Outcome: preserve the synchronous copy contract while removing the redundant
-  context-wide synchronization performed after synchronous `cuMemcpyDtoD_v2`.
+- Outcome: preserve host-visible copy completion while replacing context-wide
+  synchronization after `cuMemcpyDtoD_v2` with a default-stream wait.
 - Non-goals: asynchronous copy semantics; stream API redesign; WGPU/ROCm/Metal;
   transfer volume; KS-5 decomposition files; and runtime claims without matched
   CUDA hardware measurements.
 - Acceptance: `copy_buffer` returns after the CUDA device-to-device copy without
-  calling `cuCtxSynchronize`; exact values, zero-length copies, and typed length
-  rejection remain unchanged; an adapterless source contract prevents the
-  global barrier from returning; focused Nextest, warning-denied Clippy,
+  calling `cuCtxSynchronize`; a default-stream wait preserves host completion;
+  exact values, zero-length copies, and typed length rejection remain unchanged;
+  an adapterless source contract prevents the global barrier or an omitted wait
+  from returning; focused Nextest, warning-denied Clippy,
   formatting, independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI
   pass.
-- Risk/change class: `[patch] [perf]`; internal synchronization only. The CUDA
-  copy call, transfer bytes, buffer ownership, and public API remain unchanged.
-- Status: claimed 2026-08-02; baseline and implementation pending.
+- Risk/change class: `[patch] [perf]`; internal synchronization plus zero-byte
+  transfer correctness. Nonzero CUDA copy calls and bytes, buffer ownership,
+  and the public API remain unchanged.
+- Status: implementation and focused local verification complete 2026-08-02.
+  `copy_buffer` retains one device-local copy and stream submission, then waits
+  on the default stream instead of the whole context. Physical CUDA exact-value, empty-copy,
+  typed mismatch, and shared transfer conformance pass locally. The broader
+  transfer gate exposed and closed zero-sized POD allocation/transfer calls
+  while preserving their logical lengths. The adapterless regression pins the
+  driver call, rejects its async counterpart, and requires stream-scoped
+  completion. Final physical transfer conformance and formatting pass.
+  Independent re-review approves with no remaining findings. Exact-final-diff
+  Clippy/doctest collection timed out behind peer-held shared-target locks;
+  exact-head provider CI remains the warning/doc oracle.
 
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
 

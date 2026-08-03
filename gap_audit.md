@@ -11,6 +11,36 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-CUDA-COPY-SYNC-1] Device-local copy barrier
+
+- Finding: CUDA `ComputeDevice::copy_buffer` issued `cuMemcpyDtoD_v2`, submitted
+  its no-op host command stream, then called `cuCtxSynchronize`, imposing a
+  context-wide completion barrier.
+- Resolution: retain the canonical command-stream copy and submission while
+  replacing context synchronization with `cuStreamSynchronize` on the default
+  stream used by synchronous-form copies. NVIDIA documents that synchronous-form
+  device-to-device copies issue through the default stream but perform no
+  host-side synchronization:
+  <https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html>.
+- Evidence: an adapterless source contract pins one device-local copy, one
+  submission, zero context synchronization calls, exactly one default-stream
+  wait, exactly one `cuMemcpyDtoD_v2`, and zero `cuMemcpyDtoDAsync` calls in the
+  underlying copy routine. Physical CUDA coverage value-checks a 1,027-element
+  copy, zero-length copy, and typed length mismatch. Focused source and physical
+  value runs each pass 1/1. The broader shared transfer conformance exposed a
+  zero-sized POD defect: CUDA attempted `cuMemAlloc_v2(0)` for a nonzero logical
+  element count. Allocation, upload, borrowed download, and writes now preserve
+  the logical length while skipping every zero-byte driver call; corrected
+  physical transfer conformance passes 2/2. Final adapterless source coverage
+  passes 1/1 and formatting passes. Independent re-review approves with no
+  remaining findings. Exact-final-diff Clippy/doctest collection timed out
+  behind peer-held shared-target locks; hosted exact-head CI remains the
+  warning/doc oracle.
+- Residual: the change replaces one context-wide barrier with one default-stream
+  wait by construction; nonzero transfer bytes, buffer ownership, and
+  host-visible completion remain unchanged. No runtime speedup is claimed
+  without matched hardware measurement.
+
 ## [HEPH-ROCM-COPY-SYNC-1] Device-local copy barrier
 
 - Finding: ROCm `ComputeDevice::copy_buffer` issued synchronous
