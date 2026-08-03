@@ -329,6 +329,15 @@ fn device_local_copy_preserves_values_and_rejects_mismatch() {
         .expect("HIP copied-value download");
     assert_eq!(copied, host);
 
+    let empty_source = device.upload(&[] as &[f32]).expect("empty HIP source");
+    let empty_destination = device
+        .alloc_zeroed::<f32>(0)
+        .expect("empty HIP destination");
+    device
+        .copy_buffer(&empty_source, &empty_destination)
+        .expect("empty HIP device-local copy");
+    assert_eq!(empty_destination.len(), 0);
+
     let short = device
         .alloc_zeroed::<f32>(host.len() - 1)
         .expect("HIP short destination allocation");

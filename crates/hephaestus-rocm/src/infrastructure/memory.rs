@@ -260,8 +260,10 @@ impl ComputeDevice for RocmDevice {
     fn copy_buffer<T: Pod>(&self, src: &RocmBuffer<T>, dst: &RocmBuffer<T>) -> Result<()> {
         let mut stream = self.stream()?;
         stream.copy(src, dst)?;
-        stream.submit()?;
-        self.synchronize()
+        // `RocmCommandStream::copy` uses synchronous `hipMemcpyDtoD`, so the
+        // copy is complete before submission returns and no whole-device
+        // synchronization is required to satisfy the `ComputeDevice` contract.
+        stream.submit()
     }
 
     fn topology(&self) -> Option<&themis::GpuTopology> {

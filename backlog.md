@@ -1,5 +1,36 @@
 # Backlog — hephaestus
 
+## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-rocm-copy-sync`; scope: ROCm's synchronous
+  device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
+  and owner-keyed PM/release records.
+- Outcome: preserve the synchronous copy contract while removing the redundant
+  whole-device synchronization performed after synchronous `hipMemcpyDtoD`.
+- Non-goals: asynchronous copy semantics; stream API redesign; WGPU/CUDA/Metal;
+  transfer volume; KS-5 decomposition files; and runtime claims without matched
+  ROCm hardware measurements.
+- Acceptance: `copy_buffer` returns after the HIP device-to-device copy without
+  calling `hipDeviceSynchronize`; exact values, zero-length copies, and typed
+  length rejection remain unchanged; an adapterless source contract prevents
+  the global barrier from returning; focused Nextest, warning-denied Clippy,
+  formatting, independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI
+  pass.
+- Risk/change class: `[patch] [perf]`; internal synchronization only. The HIP
+  copy call, transfer bytes, buffer ownership, and public API remain unchanged.
+- Status: implementation and focused local verification complete 2026-08-02.
+  `copy_buffer` retains one synchronous device-local copy and stream submission
+  without a following global barrier. The corrected adapterless regression
+  pins the synchronous HIP call and rejects its async counterpart. The complete
+  no-default-feature contract and transfer binaries pass 37/37, all-target
+  warning-denied Clippy and doctests pass, and formatting is clean. Physical
+  value execution remains hosted ROCm evidence. Independent re-review approves
+  with no remaining findings. Exact implementation-head WGPU run `30772689478`,
+  CUDA run `30772689476`, ROCm run `30772689469`, and native macOS Metal run
+  `30772689455` pass. Hardware-only NVIDIA and AMD jobs skip because matching
+  labeled runners are unavailable; PR #187's documentation-only closeout head
+  remains the merge gate.
+
 ## HEPH-ROCM-SPARSE-READBACK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-rocm-sparse-readback`; scope: ROCm CSR
