@@ -1297,8 +1297,12 @@ host before uploading device buffers.
   submission, mixed scalar/axis submission, scalar final-pass collapse, and
   Leto's row-major rank-2 axis-0 CPU fast path. Mixed scalar/axis batches now
   remove one command encoder and queue submission without adding scratch
-  buffers. Current residual: scalar sum beats `ndarray` on the latest run, but
-  Leto CPU axis reductions remain faster than WGPU for 256x256 axis 0.
+  buffers. The measured 64-column axis-0 tile halves default-width workgroups
+  and lowers aggregate tree barriers from 32 to 12 for 256x256 inputs; local
+  three-sample medians improve from 55.522 to 39.212 microseconds for one
+  reduction and from 28.494 to 25.286 microseconds for eight. Current residual:
+  scalar sum beats `ndarray`, but Leto CPU axis reductions remain faster than
+  WGPU for 256x256 axis 0.
   Definition of ready for the next reduction slice: prototype a measured
   small-axis routing policy or fuse multiple axis statistics into one WGPU pass;
   do not target Hermes SIMD arithmetic until a CPU profile shows the arithmetic

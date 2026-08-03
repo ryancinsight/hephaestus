@@ -8,6 +8,10 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] WGPU rank-2 axis-zero reductions use a 64-column tile at the default
+  block width, halving workgroups and reducing tree barriers for the measured
+  256x256 workload without changing buffers or arithmetic.
+
 - [patch] CUDA device-local copies replace context-wide synchronization with a
   default-stream wait after `cuMemcpyDtoD_v2`, preserving host completion while
   avoiding a whole-context barrier.

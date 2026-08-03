@@ -1,5 +1,36 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-wgpu-axis-tile`; scope: WGPU rank-2 axis-0
+  reduction tile geometry, focused value contracts, matched comparative
+  measurements, and owner-keyed PM/release records.
+- Outcome: reduce fixed GPU dispatch and workgroup-barrier overhead for the
+  measured 256x256 axis-0 workload without adding buffers, submissions, CPU
+  routing, or backend-specific public API.
+- Non-goals: CPU fallback; fused multi-statistic API; arithmetic changes;
+  CUDA/ROCm/Metal kernels; KS-5 decomposition files; and performance claims
+  without matched measurements.
+- Acceptance: exact axis sum/min/max/mean values remain unchanged; a source
+  contract pins valid tile geometry; three matched benchmark samples show a
+  stable improvement or the experiment is rejected; formatting,
+  warning-denied Clippy, focused Nextest, independent review, and exact-head
+  WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; internal WGPU dispatch geometry only.
+  Stop condition: retain the current 32-column tile if a wider geometry does
+  not improve the unchanged workload without semantic regression.
+- Status: the 64-column geometry, host shape contract, and physical WGPU
+  256x256 exact sum/min/max/mean plus narrow-width regression pass locally.
+  Three interleaved samples reduce the single-reduction median from 55.522 to
+  39.212 microseconds and the eight-reduction median from 28.494 to 25.286
+  microseconds. Warning-denied all-target Clippy, focused Nextest, doctests,
+  formatting, and the comparative benchmark pass through the local Atlas
+  overlay. Independent re-review is clean after the physical multi-tile
+  regression closed its initial coverage finding. Exact implementation-head
+  WGPU run `30777848642`, CUDA run `30777848679`, ROCm run `30777848659`, and
+  native macOS Metal run `30777848666` pass at `eeebcf5`; PR #190's
+  documentation-only closeout head remains the merge gate.
+
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-cuda-copy-sync`; scope: CUDA's synchronous
