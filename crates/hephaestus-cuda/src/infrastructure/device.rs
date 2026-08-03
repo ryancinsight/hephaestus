@@ -365,7 +365,7 @@ impl CudaDevice {
                 device_len: buffer.len,
             });
         }
-        if out.is_empty() {
+        if out.is_empty() || core::mem::size_of::<T>() == 0 {
             return Ok(());
         }
         self.bind()?;
@@ -414,7 +414,7 @@ impl CudaDevice {
                 device_len: buffer.len,
             });
         }
-        if host.is_empty() {
+        if host.is_empty() || core::mem::size_of::<T>() == 0 {
             return Ok(());
         }
         self.bind()?;
@@ -686,14 +686,14 @@ impl ComputeDevice for CudaDevice {
         hint: themis::PlacementHint,
     ) -> Result<Self::Buffer<T>> {
         let buffer = self.alloc_uninitialized_with_hint::<T>(len, hint)?;
-        if len == 0 {
-            return Ok(buffer);
-        }
         let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
             HephaestusError::AllocationFailed {
                 message: format!("byte count overflow for {len} elements"),
             }
         })?;
+        if bytes == 0 {
+            return Ok(buffer);
+        }
         let byte_count = cuda_byte_count(bytes, "zero-init byte count")?;
         // SAFETY: `buffer.raw()` addresses `bytes` of device memory owned by
         // this buffer, and the checked byte count covers the allocation.
@@ -713,14 +713,14 @@ impl ComputeDevice for CudaDevice {
     ) -> Result<Self::Buffer<T>> {
         validate_buffer_size::<T>(len)?;
         let tier = Self::allocation_tier(hint)?;
-        if len == 0 {
-            return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
-        }
         let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {
             HephaestusError::AllocationFailed {
                 message: format!("byte count overflow for {len} elements"),
             }
         })?;
+        if bytes == 0 {
+            return Ok(CudaBuffer::new(0, len, tier, self.context.clone()));
+        }
         let ptr = self.alloc_bytes(bytes)?;
         Ok(CudaBuffer::new(ptr, len, tier, self.context.clone()))
     }
@@ -733,10 +733,10 @@ impl ComputeDevice for CudaDevice {
         validate_slice_alignment(host)?;
         let len = host.len();
         let tier = Self::allocation_tier(hint)?;
-        if len == 0 {
-            return Ok(CudaBuffer::new(0, 0, tier, self.context.clone()));
-        }
         let bytes = core::mem::size_of_val(host);
+        if bytes == 0 {
+            return Ok(CudaBuffer::new(0, len, tier, self.context.clone()));
+        }
         let ptr = self.alloc_bytes(bytes)?;
         let byte_count = cuda_byte_count(bytes, "upload byte count")?;
         // SAFETY: `ptr` addresses `bytes` of device memory just allocated;
@@ -766,10 +766,10 @@ impl ComputeDevice for CudaDevice {
                 device_len: buffer.len,
             });
         }
-        if buffer.len == 0 {
+        let bytes = core::mem::size_of_val(out);
+        if bytes == 0 {
             return Ok(());
         }
-        let bytes = core::mem::size_of_val(out);
         let byte_count = cuda_byte_count(bytes, "download byte count")?;
         self.bind()?;
         // SAFETY: `buffer.ptr` addresses `bytes` of device memory (len matches,
@@ -841,7 +841,7 @@ impl ComputeDevice for CudaDevice {
                 device_len: buffer.len,
             });
         }
-        if host.is_empty() {
+        if host.is_empty() || core::mem::size_of::<T>() == 0 {
             return Ok(());
         }
         self.bind()?;
@@ -878,7 +878,7 @@ impl ComputeDevice for CudaDevice {
         let mut stream = self.stream()?;
         stream.copy(src, dst)?;
         stream.submit()?;
-        self.synchronize()
+        self.synchronize_default_stream()
     }
 
     fn topology(&self) -> Option<&themis::GpuTopology> {
@@ -892,6 +892,21 @@ impl ComputeDevice for CudaDevice {
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("cuCtxSynchronize -> {res}"),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl CudaDevice {
+    fn synchronize_default_stream(&self) -> Result<()> {
+        self.bind()?;
+        // SAFETY: this device's context is current after `bind`; a null stream
+        // handle denotes the default stream used by synchronous-form copies.
+        let res = unsafe { cuda_oxide::sys::cuStreamSynchronize(core::ptr::null_mut()) };
+        if res != 0 {
+            return Err(HephaestusError::TransferFailed {
+                message: format!("cuStreamSynchronize(default) -> {res}"),
             });
         }
         Ok(())

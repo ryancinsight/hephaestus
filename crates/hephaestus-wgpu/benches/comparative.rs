@@ -21,6 +21,7 @@ const AXIS_BATCH_REDUCTIONS: usize = 8;
 const SCALAR_BATCH_REDUCTIONS: usize = 8;
 const SCALAR_REDUCTION_LEN: usize = 1 << 20;
 const NOOP_BATCH_REDUCTIONS: usize = 8;
+const DIRECT_NOOP_ITERATIONS: usize = 100_000;
 
 fn per_iteration(elapsed: Duration) -> Duration {
     elapsed / u32::try_from(ITERATIONS).expect("invariant: benchmark iterations fit u32")
@@ -334,6 +335,29 @@ fn benchmark_reduction(device: &WgpuDevice) {
         assert_eq!(actual, [0]);
     }
     assert_eq!(empty_axis_output.len(), 0);
+
+    empty_scalar_batch[0].dispatch(device).unwrap();
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    let start = Instant::now();
+    for _ in 0..DIRECT_NOOP_ITERATIONS {
+        black_box(empty_scalar_batch[0]).dispatch(device).unwrap();
+    }
+    device
+        .inner()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+    println!(
+        "WGPU direct empty prepared scalar reduction ({}-byte inline host plan): {:.3} ns/iter",
+        std::mem::size_of_val(empty_scalar_batch[0]),
+        start.elapsed().as_secs_f64() * 1.0e9
+            / f64::from(
+                u32::try_from(DIRECT_NOOP_ITERATIONS)
+                    .expect("invariant: direct no-op iterations fit u32"),
+            )
+    );
 
     let start = Instant::now();
     for _ in 0..ITERATIONS {

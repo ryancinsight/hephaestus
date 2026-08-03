@@ -1,5 +1,104 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-wgpu-prepared-work`; scope: WGPU prepared scalar
+  reduction work-state representation, empty-dispatch benchmark and contracts,
+  and owner-keyed PM/release records.
+- Outcome: encode empty, singleton-copy, and reduction-tree work as one valid
+  state; hoist type-independent command encoding out of `<T>`; and make direct
+  empty prepared dispatch return before command-encoder allocation or queue
+  submission.
+- Non-goals: reduction arithmetic or geometry; CUDA/ROCm/Metal kernels; public
+  API changes; KS-5 decomposition files; and runtime or memory claims without
+  matched measurement or structural evidence.
+- Acceptance: empty, singleton, and multi-pass values remain exact; the direct
+  empty-dispatch benchmark records matched samples; source structure cannot
+  represent conflicting prepared work; focused Nextest, warning-denied Clippy,
+  formatting, doctests, independent review, and exact-head WGPU/CUDA/ROCm/macOS
+  Metal CI pass.
+- Risk/change class: `[patch] [perf]`; internal WGPU state representation and
+  no-work dispatch routing only. Stop condition: reject the representation if
+  it increases `PreparedReduction<u32>` size or regresses non-empty contracts.
+- Status: implementation and focused local verification complete. Empty,
+  singleton, multi-pass, and mixed value contracts pass 2/2; warning-denied
+  default all-target and no-default library Clippy pass. Three matched samples
+  reduce the direct-empty median from 19.773 microseconds to 1.032 nanoseconds;
+  the measured inline host plan size falls from 80 to 72 bytes. Independent
+  review initially rejected warm-up accounting, iteration count, and ambiguous
+  size labeling; the calibrated harness fixes all three, and re-review reports
+  no remaining finding. No-default doctests pass 2/2. Exact implementation-head
+  provider CI passes at `21105e3`: CUDA `30783614385`, ROCm `30783614348`, WGPU
+  `30783614399`, and macOS Metal `30783614354`; hardware-only AMD and NVIDIA
+  jobs skip as designed on unlabelled hosted runners.
+
+## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-wgpu-axis-tile`; scope: WGPU rank-2 axis-0
+  reduction tile geometry, focused value contracts, matched comparative
+  measurements, and owner-keyed PM/release records.
+- Outcome: reduce fixed GPU dispatch and workgroup-barrier overhead for the
+  measured 256x256 axis-0 workload without adding buffers, submissions, CPU
+  routing, or backend-specific public API.
+- Non-goals: CPU fallback; fused multi-statistic API; arithmetic changes;
+  CUDA/ROCm/Metal kernels; KS-5 decomposition files; and performance claims
+  without matched measurements.
+- Acceptance: exact axis sum/min/max/mean values remain unchanged; a source
+  contract pins valid tile geometry; three matched benchmark samples show a
+  stable improvement or the experiment is rejected; formatting,
+  warning-denied Clippy, focused Nextest, independent review, and exact-head
+  WGPU/CUDA/ROCm/macOS Metal CI pass.
+- Risk/change class: `[patch] [perf]`; internal WGPU dispatch geometry only.
+  Stop condition: retain the current 32-column tile if a wider geometry does
+  not improve the unchanged workload without semantic regression.
+- Status: the 64-column geometry, host shape contract, and physical WGPU
+  256x256 exact sum/min/max/mean plus narrow-width regression pass locally.
+  Three interleaved samples reduce the single-reduction median from 55.522 to
+  39.212 microseconds and the eight-reduction median from 28.494 to 25.286
+  microseconds. Warning-denied all-target Clippy, focused Nextest, doctests,
+  formatting, and the comparative benchmark pass through the local Atlas
+  overlay. Independent re-review is clean after the physical multi-tile
+  regression closed its initial coverage finding. Exact implementation-head
+  WGPU run `30777848642`, CUDA run `30777848679`, ROCm run `30777848659`, and
+  native macOS Metal run `30777848666` pass at `eeebcf5`; PR #190's
+  documentation-only closeout head remains the merge gate.
+
+## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-cuda-copy-sync`; scope: CUDA's synchronous
+  device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
+  and owner-keyed PM/release records.
+- Outcome: preserve host-visible copy completion while replacing context-wide
+  synchronization after `cuMemcpyDtoD_v2` with a default-stream wait.
+- Non-goals: asynchronous copy semantics; stream API redesign; WGPU/ROCm/Metal;
+  transfer volume; KS-5 decomposition files; and runtime claims without matched
+  CUDA hardware measurements.
+- Acceptance: `copy_buffer` returns after the CUDA device-to-device copy without
+  calling `cuCtxSynchronize`; a default-stream wait preserves host completion;
+  exact values, zero-length copies, and typed length rejection remain unchanged;
+  an adapterless source contract prevents the global barrier or an omitted wait
+  from returning; focused Nextest, warning-denied Clippy,
+  formatting, independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI
+  pass.
+- Risk/change class: `[patch] [perf]`; internal synchronization plus zero-byte
+  transfer correctness. Nonzero CUDA copy calls and bytes, buffer ownership,
+  and the public API remain unchanged.
+- Status: implementation and focused local verification complete 2026-08-02.
+  `copy_buffer` retains one device-local copy and stream submission, then waits
+  on the default stream instead of the whole context. Physical CUDA exact-value, empty-copy,
+  typed mismatch, and shared transfer conformance pass locally. The broader
+  transfer gate exposed and closed zero-sized POD allocation/transfer calls
+  while preserving their logical lengths. The adapterless regression pins the
+  driver call, rejects its async counterpart, and requires stream-scoped
+  completion. Final physical transfer conformance and formatting pass.
+  Independent re-review approves with no remaining findings. Exact-final-diff
+  Clippy/doctest collection timed out behind peer-held shared-target locks.
+  Exact implementation-head WGPU run `30774973252`, CUDA run `30774973245`,
+  ROCm run `30774973255`, and native macOS Metal run `30774973240` pass and
+  supply the warning/doc oracle. Hardware-only NVIDIA and AMD jobs skip because
+  matching labeled runners are unavailable; PR #188's documentation-only
+  closeout head remains the merge gate.
+
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-rocm-copy-sync`; scope: ROCm's synchronous

@@ -8,6 +8,22 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] WGPU prepared scalar reductions encode empty, singleton-copy, and
+  reduction-tree work as mutually exclusive states; direct empty dispatches
+  now return without allocating an encoder or submitting an empty command
+  buffer.
+
+- [patch] WGPU rank-2 axis-zero reductions use a 64-column tile at the default
+  block width, halving workgroups and reducing tree barriers for the measured
+  256x256 workload without changing buffers or arithmetic.
+
+- [patch] CUDA device-local copies replace context-wide synchronization with a
+  default-stream wait after `cuMemcpyDtoD_v2`, preserving host completion while
+  avoiding a whole-context barrier.
+
+- [patch] CUDA zero-sized POD buffers preserve logical element counts without
+  issuing zero-byte device allocation or transfer calls.
+
 - [patch] ROCm synchronous device-local copies no longer issue a redundant
   whole-device synchronization after `hipMemcpyDtoD` has completed.
 

@@ -1,7 +1,7 @@
 use hephaestus_core::AttentionSemanticStatus;
 
 use super::GradientKernel;
-use super::common::prelude;
+use super::prelude::prelude;
 
 pub(crate) fn score_gradient_source(scalar: &str) -> String {
     format!(

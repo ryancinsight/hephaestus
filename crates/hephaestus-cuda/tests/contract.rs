@@ -140,6 +140,13 @@ fn device_local_copy_preserves_values_and_rejects_mismatch() {
         .expect("download copied values");
     assert_eq!(copied, host);
 
+    let empty_source = dev.upload::<f32>(&[]).expect("upload empty source");
+    let empty_destination = dev
+        .alloc_zeroed::<f32>(0)
+        .expect("allocate empty destination");
+    dev.copy_buffer(&empty_source, &empty_destination)
+        .expect("empty device-local copy");
+
     let short = dev
         .alloc_zeroed::<f32>(host.len() - 1)
         .expect("allocate short destination");

@@ -1,4 +1,4 @@
-use super::common::prelude;
+use super::prelude::prelude;
 
 pub(crate) fn forward_source(scalar: &str, exponential: &str) -> String {
     format!(

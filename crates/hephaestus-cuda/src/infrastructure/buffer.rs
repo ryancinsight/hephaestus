@@ -30,9 +30,9 @@ pub struct CudaBuffer<T> {
 impl<T> CudaBuffer<T> {
     /// Wrap a raw device pointer and element count.
     ///
-    /// `ptr` must be either `0` (the empty-buffer sentinel) or an address
-    /// returned by `cuMemAlloc` and not yet freed; the buffer takes ownership
-    /// and frees it on drop.
+    /// `ptr` must be either `0` (the zero-byte allocation sentinel, including
+    /// zero-sized element buffers) or an address returned by `cuMemAlloc` and
+    /// not yet freed; the buffer takes ownership and frees it on drop.
     #[must_use]
     #[inline]
     pub(crate) fn new(

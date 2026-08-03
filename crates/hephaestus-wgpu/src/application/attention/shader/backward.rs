@@ -1,4 +1,4 @@
-use super::common::prelude;
+use super::prelude::prelude;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::application::attention) enum BackwardStage {

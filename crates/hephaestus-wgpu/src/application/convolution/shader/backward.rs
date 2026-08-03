@@ -1,5 +1,5 @@
 use super::ConvolutionDirection;
-use super::common::prelude;
+use super::prelude::prelude;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in super::super) enum GradientTarget {

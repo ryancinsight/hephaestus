@@ -11,6 +11,69 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
+
+- Finding: WGPU prepared scalar reductions represented passes and singleton
+  copies as independent fields, permitting conflicting internal states and
+  monomorphizing type-independent encoding control for each scalar type. The
+  empty state also allocated an encoder and submitted an empty command buffer
+  on every direct dispatch.
+- Resolution: represent empty, singleton-copy, and tree work with one
+  non-generic enum; record singleton byte size at preparation; freeze tree
+  passes into a boxed slice; and return before encoder allocation for empty
+  direct dispatch. Existing batch and map-reduction callers reuse the same
+  state-owned encoding methods.
+- Evidence: exact empty, singleton, multi-pass, and mixed scalar/axis contracts
+  pass 2/2 on the physical WGPU device. Warning-denied default all-target and
+  no-default library Clippy pass. Three calibrated matched release samples
+  reduce the direct-empty median from 19.773 microseconds to 1.032 nanoseconds
+  and the inline host plan size from 80 to 72 bytes. The no-work command count
+  changes from one empty submission to zero by construction. Independent
+  re-review reports no remaining finding after the harness added a completed
+  warm-up, 100,000 timed calls, input black-boxing, and precise size labeling.
+  Exact implementation-head CI at `21105e3` passes CUDA `30783614385`, ROCm
+  `30783614348`, WGPU `30783614399`, and macOS Metal `30783614354`; hardware-only
+  AMD and NVIDIA jobs skip as designed on unlabelled hosted runners.
+- Residual: non-empty arithmetic, scratch buffers, transfer volume, and device
+  memory are unchanged. The latency samples are local wall-time measurements,
+  not Criterion confidence intervals, instruction-count evidence, or
+  cross-adapter performance evidence; the candidate is near the timer floor.
+
+## [HEPH-CUDA-COPY-SYNC-1] Device-local copy barrier
+
+- Finding: CUDA `ComputeDevice::copy_buffer` issued `cuMemcpyDtoD_v2`, submitted
+  its no-op host command stream, then called `cuCtxSynchronize`, imposing a
+  context-wide completion barrier.
+- Resolution: retain the canonical command-stream copy and submission while
+  replacing context synchronization with `cuStreamSynchronize` on the default
+  stream used by synchronous-form copies. NVIDIA documents that synchronous-form
+  device-to-device copies issue through the default stream but perform no
+  host-side synchronization:
+  <https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html>.
+- Evidence: an adapterless source contract pins one device-local copy, one
+  submission, zero context synchronization calls, exactly one default-stream
+  wait, exactly one `cuMemcpyDtoD_v2`, and zero `cuMemcpyDtoDAsync` calls in the
+  underlying copy routine. Physical CUDA coverage value-checks a 1,027-element
+  copy, zero-length copy, and typed length mismatch. Focused source and physical
+  value runs each pass 1/1. The broader shared transfer conformance exposed a
+  zero-sized POD defect: CUDA attempted `cuMemAlloc_v2(0)` for a nonzero logical
+  element count. Allocation, upload, borrowed download, and writes now preserve
+  the logical length while skipping every zero-byte driver call; corrected
+  physical transfer conformance passes 2/2. Final adapterless source coverage
+  passes 1/1 and formatting passes. Independent re-review approves with no
+  remaining findings. Exact-final-diff Clippy/doctest collection timed out
+  behind peer-held shared-target locks; hosted exact-head CI remains the
+  warning/doc oracle. Exact implementation-head WGPU run `30774973252`, CUDA
+  run `30774973245`, ROCm run `30774973255`, and native macOS Metal run
+  `30774973240` pass.
+- Residual: the change replaces one context-wide barrier with one default-stream
+  wait by construction; nonzero transfer bytes, buffer ownership, and
+  host-visible completion remain unchanged. No runtime speedup is claimed
+  without matched hardware measurement.
+  Hardware-only NVIDIA and AMD jobs skip because matching labeled runners are
+  unavailable; PR #188's documentation-only closeout head remains the merge
+  gate.
+
 ## [HEPH-ROCM-COPY-SYNC-1] Device-local copy barrier
 
 - Finding: ROCm `ComputeDevice::copy_buffer` issued synchronous
@@ -1275,8 +1338,12 @@ host before uploading device buffers.
   submission, mixed scalar/axis submission, scalar final-pass collapse, and
   Leto's row-major rank-2 axis-0 CPU fast path. Mixed scalar/axis batches now
   remove one command encoder and queue submission without adding scratch
-  buffers. Current residual: scalar sum beats `ndarray` on the latest run, but
-  Leto CPU axis reductions remain faster than WGPU for 256x256 axis 0.
+  buffers. The measured 64-column axis-0 tile halves default-width workgroups
+  and lowers aggregate tree barriers from 32 to 12 for 256x256 inputs; local
+  three-sample medians improve from 55.522 to 39.212 microseconds for one
+  reduction and from 28.494 to 25.286 microseconds for eight. Current residual:
+  scalar sum beats `ndarray`, but Leto CPU axis reductions remain faster than
+  WGPU for 256x256 axis 0.
   Definition of ready for the next reduction slice: prototype a measured
   small-axis routing policy or fuse multiple axis statistics into one WGPU pass;
   do not target Hermes SIMD arithmetic until a CPU profile shows the arithmetic

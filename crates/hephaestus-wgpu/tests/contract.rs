@@ -1514,6 +1514,69 @@ fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
 }
 
 #[test]
+fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    const EXTENT: usize = 256;
+    let host: Vec<f32> = (0..EXTENT)
+        .flat_map(|row| (0..EXTENT).map(move |col| (row + col) as f32))
+        .collect();
+    let input = device.upload(&host).unwrap();
+    let input_layout = Layout::c_contiguous([EXTENT, EXTENT]).unwrap();
+    let operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+
+    let expected_sum: Vec<f32> = (0..EXTENT)
+        .map(|col| 32_640.0 + 256.0 * col as f32)
+        .collect();
+    let expected_min: Vec<f32> = (0..EXTENT).map(|col| col as f32).collect();
+    let expected_max: Vec<f32> = (0..EXTENT).map(|col| 255.0 + col as f32).collect();
+    let expected_mean: Vec<f32> = (0..EXTENT).map(|col| 127.5 + col as f32).collect();
+
+    for (result, expected) in [
+        (
+            sum_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_sum,
+        ),
+        (
+            min_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_min,
+        ),
+        (
+            max_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_max,
+        ),
+        (
+            mean_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_mean,
+        ),
+    ] {
+        let output = result.unwrap();
+        let mut actual = vec![0.0; EXTENT];
+        device.download(&output, &mut actual).unwrap();
+        assert_eq!(&actual, expected);
+    }
+
+    let narrow = sum_axis(
+        &device,
+        operand,
+        0,
+        BlockWidth::new(32).expect("non-zero width"),
+    )
+    .unwrap();
+    let mut narrow_actual = vec![0.0; EXTENT];
+    device.download(&narrow, &mut narrow_actual).unwrap();
+    assert_eq!(narrow_actual, expected_sum);
+}
+
+#[test]
 fn axis_scans_match_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;

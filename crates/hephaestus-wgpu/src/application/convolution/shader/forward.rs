@@ -1,4 +1,4 @@
-use super::common::prelude;
+use super::prelude::prelude;
 use super::{BiasMode, ConvolutionDirection};
 
 pub(in super::super) fn forward_shader(

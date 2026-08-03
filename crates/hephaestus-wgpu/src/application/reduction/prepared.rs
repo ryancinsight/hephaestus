@@ -23,9 +23,8 @@ use crate::infrastructure::device::WgpuDevice;
 /// repeated reductions only encode the already-selected passes and submit the
 /// command buffer.
 pub struct PreparedReduction<T> {
-    passes: Vec<PreparedPass>,
+    work: PreparedWork,
     temp_buffers: Vec<WgpuBuffer<T>>,
-    singleton_source: Option<wgpu::Buffer>,
 }
 
 struct PreparedPass {
@@ -34,32 +33,75 @@ struct PreparedPass {
     groups: u32,
 }
 
+/// Type-independent command work for one prepared reduction.
+///
+/// The variants make empty, singleton-copy, and reduction-tree states
+/// mutually exclusive. Storing the singleton byte size at preparation time
+/// also keeps command encoding independent of the scalar monomorphization.
+enum PreparedWork {
+    Empty,
+    SingletonCopy {
+        source: wgpu::Buffer,
+        byte_size: u64,
+    },
+    Tree(Box<[PreparedPass]>),
+}
+
+impl PreparedWork {
+    fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    fn has_singleton_copy(&self) -> bool {
+        matches!(self, Self::SingletonCopy { .. })
+    }
+
+    fn tree_depth(&self) -> usize {
+        match self {
+            Self::Tree(passes) => passes.len(),
+            Self::Empty | Self::SingletonCopy { .. } => 0,
+        }
+    }
+
+    fn pass(&self, stage: usize) -> Option<&PreparedPass> {
+        match self {
+            Self::Tree(passes) => passes.get(stage),
+            Self::Empty | Self::SingletonCopy { .. } => None,
+        }
+    }
+
+    fn encode_singleton_copy(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::Buffer) {
+        if let Self::SingletonCopy { source, byte_size } = self {
+            encoder.copy_buffer_to_buffer(source, 0, output, 0, *byte_size);
+        }
+    }
+
+    fn encode(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::Buffer) {
+        match self {
+            Self::Empty => {}
+            Self::SingletonCopy { .. } => self.encode_singleton_copy(encoder, output),
+            Self::Tree(passes) => {
+                for pass in passes {
+                    encode_compute_pass(
+                        encoder,
+                        &pass.pipeline,
+                        &pass.bind_group,
+                        pass.groups,
+                        "hephaestus-prepared-reduction-pass",
+                    );
+                }
+            }
+        }
+    }
+}
+
 impl<T> PreparedReduction<T> {
     /// Encode this reduction into an existing command encoder.
     ///
     /// This is the canonical reduction-tree encoding path used by individual,
     /// batched, and fused map-reduction dispatch.
     pub(crate) fn encode(&self, encoder: &mut wgpu::CommandEncoder) -> Result<()> {
-        if let Some(source) = self.singleton_source.as_ref() {
-            encoder.copy_buffer_to_buffer(
-                source,
-                0,
-                &self.output().buffer,
-                0,
-                WgpuDevice::byte_size::<T>(1)?,
-            );
-            return Ok(());
-        }
-
-        for pass in &self.passes {
-            encode_compute_pass(
-                encoder,
-                &pass.pipeline,
-                &pass.bind_group,
-                pass.groups,
-                "hephaestus-prepared-reduction-pass",
-            );
-        }
+        self.work.encode(encoder, &self.output().buffer);
         Ok(())
     }
 
@@ -70,6 +112,9 @@ impl<T> PreparedReduction<T> {
     /// Returns a typed dispatch error if command encoding or submission cannot
     /// be completed by the backend.
     pub fn dispatch(&self, device: &WgpuDevice) -> Result<()> {
+        if self.work.is_empty() {
+            return Ok(());
+        }
         let mut encoder = device
             .inner()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -159,8 +204,8 @@ pub fn submit_prepared_mixed_reduction_batch<ScalarT, AxisT>(
             .iter()
             .fold((false, 0), |(has_singleton, max_depth), reduction| {
                 (
-                    has_singleton || reduction.singleton_source.is_some(),
-                    max_depth.max(reduction.passes.len()),
+                    has_singleton || reduction.work.has_singleton_copy(),
+                    max_depth.max(reduction.work.tree_depth()),
                 )
             });
     let has_axis_dispatch = axis_reductions
@@ -177,15 +222,9 @@ pub fn submit_prepared_mixed_reduction_batch<ScalarT, AxisT>(
         });
 
     for reduction in scalar_reductions {
-        if let Some(source) = reduction.singleton_source.as_ref() {
-            encoder.copy_buffer_to_buffer(
-                source,
-                0,
-                &reduction.output().buffer,
-                0,
-                WgpuDevice::byte_size::<ScalarT>(1)?,
-            );
-        }
+        reduction
+            .work
+            .encode_singleton_copy(&mut encoder, &reduction.output().buffer);
     }
 
     let compute_pass_count = scalar_tree_depth.max(usize::from(has_axis_dispatch));
@@ -208,7 +247,7 @@ pub fn submit_prepared_mixed_reduction_batch<ScalarT, AxisT>(
             }
         }
         for reduction in scalar_reductions {
-            let Some(prepared_pass) = reduction.passes.get(stage) else {
+            let Some(prepared_pass) = reduction.work.pass(stage) else {
                 continue;
             };
             compute_pass.set_pipeline(&prepared_pass.pipeline);
@@ -242,17 +281,18 @@ where
     if input.len == 0 {
         let output = device.upload(&[T::IDENTITY])?;
         return Ok(PreparedReduction {
-            passes: Vec::new(),
+            work: PreparedWork::Empty,
             temp_buffers: vec![output],
-            singleton_source: None,
         });
     }
     if input.len == 1 {
         let output = device.alloc_zeroed::<T>(1)?;
         return Ok(PreparedReduction {
-            passes: Vec::new(),
+            work: PreparedWork::SingletonCopy {
+                source: input.buffer.clone(),
+                byte_size: WgpuDevice::byte_size::<T>(1)?,
+            },
             temp_buffers: vec![output],
-            singleton_source: Some(input.buffer.clone()),
         });
     }
 
@@ -338,9 +378,8 @@ where
     }
 
     Ok(PreparedReduction {
-        passes,
+        work: PreparedWork::Tree(passes.into_boxed_slice()),
         temp_buffers,
-        singleton_source: None,
     })
 }
 

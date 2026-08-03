@@ -1,6 +1,6 @@
 use hephaestus_core::AttentionSemanticStatus;
 
-use super::common::prelude;
+use super::prelude::prelude;
 
 pub(crate) fn forward_preflight_source(scalar: &str, exponential: &str) -> String {
     format!(
