@@ -10,6 +10,12 @@
 //! both backends share the same dispatch preconditions. All are used by both
 //! the wgpu and CUDA backends.
 
+pub mod blocked;
+
+pub use blocked::{
+    BlockedDecompositionBackend, BlockedLuFactors, PanelRegion, TrailingGemm, blocked_lu,
+};
+
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::planning::map_layout_err;
 use leto::Layout;

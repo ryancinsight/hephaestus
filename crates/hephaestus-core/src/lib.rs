@@ -29,9 +29,10 @@ pub use domain::convolution::{
     plan_transposed_convolution_forward,
 };
 pub use domain::decomposition::{
-    apply_packed_qr_panel_left, factor_cholesky_panel, factor_lu_panel, panel_cholesky_packed,
-    panel_lu_packed, panel_qr_packed, require_dense_operand, split_packed_lu,
-    validate_square_operand,
+    BlockedDecompositionBackend, BlockedLuFactors, PanelRegion, TrailingGemm,
+    apply_packed_qr_panel_left, blocked_lu, factor_cholesky_panel, factor_lu_panel,
+    panel_cholesky_packed, panel_lu_packed, panel_qr_packed, require_dense_operand,
+    split_packed_lu, validate_square_operand,
 };
 pub use domain::decomposition_seam::{
     BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps,

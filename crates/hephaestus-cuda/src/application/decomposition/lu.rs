@@ -36,9 +36,7 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
-use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
-#[cfg(feature = "cuda")]
-use hephaestus_core::factor_lu_panel;
+use hephaestus_core::{BlockedDecompositionBackend, blocked_lu};
 
 #[cfg(feature = "cuda")]
 use super::validate::validate_dense_operand;
@@ -46,8 +44,6 @@ use super::validate::validate_square;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-#[cfg(feature = "cuda")]
-use crate::infrastructure::device::cuda_byte_count;
 
 /// LU decomposition result: device-resident packed factors with host-side
 /// decomposition for solve/inv/det.
@@ -226,118 +222,21 @@ pub fn lu_decompose_blocked(
             });
         }
 
-        let factors_buf = device.alloc_uninitialized::<f32>(n * n)?;
-        device.bind()?;
-        let bytes = n * n * std::mem::size_of::<f32>();
-        let byte_count = cuda_byte_count(bytes, "blocked LU startup copy byte count")?;
-        // SAFETY: this device's context is current (`bind` above).
-        // `factors_buf` is a live, freshly allocated `n * n`-element device
-        // allocation, and `matrix.buffer` holds at least `n * n` elements:
-        // the operand is enforced dense C-contiguous at offset 0
-        // (`validate_dense_operand` above), so the layout's validated
-        // storage extent (`validate_square`) equals the `bytes` read here.
-        // The copy is asynchronous on the null stream; both allocations
-        // outlive it because frees route through synchronizing
-        // `cuMemFree`-family calls.
-        let res = unsafe {
-            cuda_oxide::sys::cuMemcpyDtoD_v2(factors_buf.raw(), matrix.buffer.raw(), byte_count)
-        };
-        if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!("LU startup cuMemcpyDtoD_v2 failed: {res}"),
-            });
-        }
+        // Copy the (dense, validated) operand into a fresh device working
+        // buffer; the shared core loop owns all host bookkeeping.
+        let factors_buf = device.clone_device(matrix.buffer, n * n)?;
 
-        let block_size = LU_BLOCK_SIZE.min(n);
-
-        let mut perm: Vec<usize> = (0..n).collect();
-        let mut sign = 1i8;
-
-        for k in (0..n).step_by(block_size) {
-            let b = block_size.min(n - k);
-            let trail = n - k - b;
-
-            // Download active column panel A[k..n, k..k+b] (size: (n-k) * b)
-            let col_region = MatrixRegion {
-                stride: n,
-                row_start: k,
-                col_start: k,
-                rows: n - k,
-                cols: b,
-            };
-            let mut col_panel = download_matrix_region_compact(device, &factors_buf, col_region)?;
-
-            // Download active row panel A[k..k+b, 0..n] (size: b * n)
-            let row_region = MatrixRegion {
-                stride: n,
-                row_start: k,
-                col_start: 0,
-                rows: b,
-                cols: n,
-            };
-            let mut row_panel = download_matrix_region_compact(device, &factors_buf, row_region)?;
-
-            // Factor this panel on the host (diagonal block, pivots, L₂₁/U₁₂
-            // triangular solves) — the backend-neutral shared computation.
-            let mut diag = vec![0.0f32; b * b];
-            factor_lu_panel(
-                &mut col_panel,
-                &mut row_panel,
-                &mut diag,
-                k,
-                b,
-                n,
-                trail,
-                &mut perm,
-                &mut sign,
-            )?;
-
-            if trail == 0 {
-                write_matrix_region_compact(device, &factors_buf, &row_panel, row_region)?;
-                continue;
-            }
-
-            // Upload updated panels
-            let col_write_region = MatrixRegion {
-                stride: n,
-                row_start: k + b,
-                col_start: k,
-                rows: trail,
-                cols: b,
-            };
-            let col_write_data = &col_panel[(b * b)..];
-            write_matrix_region_compact(device, &factors_buf, col_write_data, col_write_region)?;
-            write_matrix_region_compact(device, &factors_buf, &row_panel, row_region)?;
-
-            gemm_impl::gemm_trailing_update(
-                device,
-                &factors_buf,
-                (k + b) * n + k,
-                n,
-                trail,
-                b,
-                &factors_buf,
-                k * n + (k + b),
-                n,
-                trail,
-                &factors_buf,
-                (k + b) * n + (k + b),
-                n,
-            )?;
-        }
-
-        // Download the final factored matrix back to host.
-        let host = device.download_owned(&factors_buf)?;
+        let result = blocked_lu(device, factors_buf, n, LU_BLOCK_SIZE.min(n))?;
 
         let inner = leto_ops::LuDecomposition::from_raw_parts(
-            leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
-            perm,
-            sign,
+            leto::Array2::from_shape_vec([n, n], result.host).expect("valid square factor"),
+            result.perm,
+            result.sign,
         );
 
         Ok(GpuLuDecomposition {
             inner,
-            factors: factors_buf,
+            factors: result.factors,
             n,
         })
     }
@@ -356,7 +255,7 @@ pub fn lu_decompose_blocked(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "cuda")]
-mod gemm_impl {
+pub(crate) mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
     use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};

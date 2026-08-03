@@ -1251,6 +1251,19 @@ remaining gaps are native-GPU-kernel and/or performance parity (`[major]`
 effort), not correctness. Factorization/solve currently delegate to Leto on the
 host before uploading device buffers.
 
+- [patch] CUDA ZST/empty upload defect (surfaced by KS-5 verification,
+  2026-08-02): `cuda_satisfies_the_transfer_contract` (conformance clause 001m)
+  fails on this Windows driver because a zero-byte `upload` reaches
+  `cuMemAlloc_v2(0 bytes) -> 1` (CUDA_ERROR_INVALID_VALUE) in the CUDA device
+  allocation path. The empty `lu_decompose_blocked`/`lu_decompose` paths avoid
+  it, but the general upload/allocation path must handle the zero-byte case
+  (allocate a zero-size handle or skip allocation, matching the empty-upload
+  contracts other providers satisfy). Pre-existing on origin/master (no
+  infrastructure/transfer code differs between this branch and origin/master);
+  filed here rather than absorbed into the KS-5 LU slice. Evidence tier:
+  `cargo nextest run -p hephaestus-cuda --all-features` — 143/144 pass, this
+  one fails with `ZST upload: AllocationFailed { cuMemAlloc_v2(0 bytes) -> 1 }`.
+
 - [arch] CUDA multi-storage beamforming dispatch is still a future concrete
   provider implementation. The generic trait and WGPU implementation are
   delivered; adding CUDA requires a real CUDA beamforming kernel and launch path,

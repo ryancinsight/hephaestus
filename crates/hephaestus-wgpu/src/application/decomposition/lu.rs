@@ -46,11 +46,9 @@
 
 use std::any::TypeId;
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
+use hephaestus_core::blocked_lu;
+use hephaestus_core::{BlockedDecompositionBackend, ComputeDevice, HephaestusError, Result};
 
-use super::region::{
-    MatrixRegion, download_matrix_region_compact_into, write_matrix_region_compact_reusable,
-};
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -253,19 +251,19 @@ fn main(
 
 struct GemmKernel;
 
-struct GemmTrailingUpdate<'a> {
-    a_buf: &'a WgpuBuffer<f32>,
-    a_offset: usize,
-    a_stride: usize,
-    a_rows: usize,
-    a_cols: usize,
-    b_buf: &'a WgpuBuffer<f32>,
-    b_offset: usize,
-    b_stride: usize,
-    b_cols: usize,
-    c_buf: &'a WgpuBuffer<f32>,
-    c_offset: usize,
-    c_stride: usize,
+pub(crate) struct GemmTrailingUpdate<'a> {
+    pub(crate) a_buf: &'a WgpuBuffer<f32>,
+    pub(crate) a_offset: usize,
+    pub(crate) a_stride: usize,
+    pub(crate) a_rows: usize,
+    pub(crate) a_cols: usize,
+    pub(crate) b_buf: &'a WgpuBuffer<f32>,
+    pub(crate) b_offset: usize,
+    pub(crate) b_stride: usize,
+    pub(crate) b_cols: usize,
+    pub(crate) c_buf: &'a WgpuBuffer<f32>,
+    pub(crate) c_offset: usize,
+    pub(crate) c_stride: usize,
 }
 
 /// GPU dispatch for the trailing GEMM:  **C -= A · B**
@@ -273,7 +271,10 @@ struct GemmTrailingUpdate<'a> {
 /// A is (m×k) starting at `a_offset` with row stride `a_stride`,
 /// B is (k×n) starting at `b_offset` with row stride `b_stride`,
 /// C is (m×n) starting at `c_offset` with row stride `c_stride`.
-fn gemm_trailing_update(device: &WgpuDevice, update: GemmTrailingUpdate<'_>) -> Result<()> {
+pub(crate) fn gemm_trailing_update(
+    device: &WgpuDevice,
+    update: GemmTrailingUpdate<'_>,
+) -> Result<()> {
     let m = update.a_rows;
     let k = update.a_cols;
     let n = update.b_cols;
@@ -449,8 +450,6 @@ pub fn lu_decompose(
 /// launch overhead.
 const LU_BLOCK_SIZE: usize = 64;
 
-use hephaestus_core::factor_lu_panel;
-
 /// Blocked LU factorization **P A = L U** with GPU-accelerated trailing-matrix
 /// GEMM updates.
 ///
@@ -497,168 +496,20 @@ pub fn lu_decompose_blocked(
         });
     }
 
-    // Allocate the device-resident buffer and copy matrix.buffer into it on the GPU
-    let factors_buf = device.alloc_uninitialized::<f32>(n * n)?;
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-lu-copy"),
-        });
-    // Raw whole-matrix copy: sound only for dense C-contiguous
-    // zero-offset operands, enforced by `validate_dense_operand` at the
-    // entry point (a strided/offset/broadcast view would copy the wrong
-    // elements or exceed the operand's storage extent).
-    encoder.copy_buffer_to_buffer(
-        &matrix.buffer.buffer,
-        0,
-        &factors_buf.buffer,
-        0,
-        WgpuDevice::byte_size::<f32>(n * n)?,
-    );
-    device.queue().submit(Some(encoder.finish()));
-
-    let block_size = LU_BLOCK_SIZE.min(n);
-
-    // Pre-allocate a single reusable compact transfer buffer for the maximum panel size (n * block_size)
-    // to avoid O(n/b) device allocations inside the loop.
-    let temp_compact_buf = device.alloc_uninitialized::<f32>(n * block_size)?;
-
-    // Track cumulative row permutation applied to the full matrix.
-    let mut perm: Vec<usize> = (0..n).collect();
-    let mut sign = 1i8;
-
-    let mut host = vec![0.0f32; n * n];
-
-    // Per-panel host scratch, allocated once and refilled each iteration instead
-    // of allocating a fresh `Vec` per panel: `col_panel`/`row_panel` are resized
-    // by the region download, and `diag` (max `block_size²`) is sliced to the
-    // active `b²` each panel.
-    let mut col_panel: Vec<f32> = Vec::with_capacity(n * block_size);
-    let mut row_panel: Vec<f32> = Vec::with_capacity(block_size * n);
-    let mut diag = vec![0.0f32; block_size * block_size];
-
-    for k in (0..n).step_by(block_size) {
-        let b = block_size.min(n - k);
-        let trail = n - k - b;
-
-        // Download active column panel A[k..n, k..k+b] (size: (n-k) * b)
-        let col_region = MatrixRegion {
-            stride: n,
-            row_start: k,
-            col_start: k,
-            rows: n - k,
-            cols: b,
-        };
-        download_matrix_region_compact_into(
-            device,
-            &factors_buf,
-            &temp_compact_buf,
-            col_region,
-            &mut col_panel,
-        )?;
-
-        // Download active row panel A[k..k+b, 0..n] (size: b * n)
-        let row_region = MatrixRegion {
-            stride: n,
-            row_start: k,
-            col_start: 0,
-            rows: b,
-            cols: n,
-        };
-        download_matrix_region_compact_into(
-            device,
-            &factors_buf,
-            &temp_compact_buf,
-            row_region,
-            &mut row_panel,
-        )?;
-
-        // Factor this panel on the host (diagonal block, pivots, L₂₁/U₁₂
-        // triangular solves) — the backend-neutral shared computation.
-        factor_lu_panel(
-            &mut col_panel,
-            &mut row_panel,
-            &mut diag,
-            k,
-            b,
-            n,
-            trail,
-            &mut perm,
-            &mut sign,
-        )?;
-
-        // Copy the finalized rows to the host-side packed matrix.
-        for i in 0..b {
-            let row = k + i;
-            for j in 0..n {
-                host[row * n + j] = row_panel[i * n + j];
-            }
-        }
-
-        if trail == 0 {
-            write_matrix_region_compact_reusable(
-                device,
-                &factors_buf,
-                &temp_compact_buf,
-                &row_panel,
-                row_region,
-            )?;
-            continue;
-        }
-
-        // Upload updated panels
-        let col_write_region = MatrixRegion {
-            stride: n,
-            row_start: k + b,
-            col_start: k,
-            rows: trail,
-            cols: b,
-        };
-        let col_write_data = &col_panel[(b * b)..];
-        write_matrix_region_compact_reusable(
-            device,
-            &factors_buf,
-            &temp_compact_buf,
-            col_write_data,
-            col_write_region,
-        )?;
-        write_matrix_region_compact_reusable(
-            device,
-            &factors_buf,
-            &temp_compact_buf,
-            &row_panel,
-            row_region,
-        )?;
-
-        // C -= A · B trailing GEMM update done directly on factors_buf.
-        gemm_trailing_update(
-            device,
-            GemmTrailingUpdate {
-                a_buf: &factors_buf,
-                a_offset: (k + b) * n + k,
-                a_stride: n,
-                a_rows: trail,
-                a_cols: b,
-                b_buf: &factors_buf,
-                b_offset: k * n + (k + b),
-                b_stride: n,
-                b_cols: trail,
-                c_buf: &factors_buf,
-                c_offset: (k + b) * n + (k + b),
-                c_stride: n,
-            },
-        )?;
-    }
+    // Copy the (dense, validated) operand into a fresh device working buffer
+    // on the GPU; the shared loop owns all host bookkeeping.
+    let factors = device.clone_device(matrix.buffer, n * n)?;
+    let result = blocked_lu(device, factors, n, LU_BLOCK_SIZE.min(n))?;
 
     let inner = leto_ops::LuDecomposition::from_raw_parts(
-        leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
-        perm,
-        sign,
+        leto::Array2::from_shape_vec([n, n], result.host).expect("valid square factor"),
+        result.perm,
+        result.sign,
     );
 
     Ok(GpuLuDecomposition {
         inner,
-        factors: factors_buf,
+        factors: result.factors,
         n,
     })
 }

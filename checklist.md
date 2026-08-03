@@ -128,19 +128,31 @@ self-hosted devices.
 
 ## KS-5 blocked-LU slice [major] — Owner: user session
 
-- [ ] Hoist the blocked-LU host loop into `hephaestus-core` per ADR-0003:
+- [x] Hoist the blocked-LU host loop into `hephaestus-core` per ADR-0003:
   `BlockedDecompositionBackend` trait (clone_device / download_region /
   write_region / gemm_trailing), `PanelRegion`, `TrailingGemm`, and the
   `blocked_lu` loop; wgpu reuse discipline (host scratch `Vec`s allocated once,
-  compact transfer buffer once).
-- [ ] Make `hephaestus-wgpu` and `hephaestus-cuda` blocked-LU entry points thin
+  compact transfer buffer once). Delivered in
+  `crates/hephaestus-core/src/domain/decomposition/blocked.rs`; the core loop
+  allocs scratch via `backend.alloc(n * block_size)`; wgpu keeps its compact
+  device scratch buffer allocated once per call.
+- [x] Make `hephaestus-wgpu` and `hephaestus-cuda` blocked-LU entry points thin
   calls into the core loop; cuda `download_region` fills caller `&mut Vec`
-  (ADR-0003's decided cuda behavior change).
-- [ ] Preserve test counts and value-semantic differential/negative contracts
-  (wgpu blocked-LU tests; cuda lu blocked contract tests).
-- [ ] Run focused gates: fmt/check/clippy `-D warnings` (core, wgpu, cuda),
-  nextest wgpu blocked-lu + core + cuda lu contracts.
-- [ ] Commit claim; update ADR-0003 status line; PR on merge.
+  (ADR-0003's decided cuda behavior change). Both entry points now delegate:
+  `let factors = device.clone_device(matrix.buffer, n * n)?; blocked_lu(device,
+  factors, n, LU_BLOCK_SIZE.min(n))` (cuda keeps the `n == 0` early return).
+- [x] Preserve test counts and value-semantic differential/negative contracts
+  (wgpu blocked-LU tests; cuda lu blocked contract tests). wgpu nextest
+  294/294 pass including `blocked_lu` contracts 5/5; cuda `blocked_lu` tests
+  5/5 pass; full cuda suite 143/144 with the pre-existing ZST transfer-contract
+  failure (unrelated, identical on origin/master, filed in `gap_audit.md`).
+- [x] Run focused gates: fmt/check/clippy `-D warnings` (core, wgpu, cuda),
+  nextest wgpu blocked-lu + core + cuda lu contracts. `cargo fmt --check`
+  clean; clippy `-D warnings` passes for core, wgpu, and cuda (default and
+  all-features); nextest runs pass as recorded above. `Cargo.lock` overlay
+  re-resolution churn reverted (KS-10 convention; committed lock keeps git pins).
+- [x] Commit claim; update ADR-0003 status line; PR on merge. (This line
+  records completion; the commit/PR follow immediately in this session.)
 
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — Owner: Codex `/root`
 

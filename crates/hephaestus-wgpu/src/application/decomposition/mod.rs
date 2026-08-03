@@ -146,6 +146,8 @@
 
 pub(crate) mod validate;
 
+mod blocked;
+
 pub mod bidiagonal;
 pub mod bunch_kaufman;
 pub mod cholesky;
