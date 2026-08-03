@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — in progress
+## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — verification
 
 - Owner: Codex on `codex/perf-wgpu-axis-tile`; scope: WGPU rank-2 axis-0
   reduction tile geometry, focused value contracts, matched comparative
@@ -19,6 +19,15 @@
 - Risk/change class: `[patch] [perf]`; internal WGPU dispatch geometry only.
   Stop condition: retain the current 32-column tile if a wider geometry does
   not improve the unchanged workload without semantic regression.
+- Status: the 64-column geometry, host shape contract, and physical WGPU
+  256x256 exact sum/min/max/mean plus narrow-width regression pass locally.
+  Three interleaved samples reduce the single-reduction median from 55.522 to
+  39.212 microseconds and the eight-reduction median from 28.494 to 25.286
+  microseconds. Warning-denied all-target Clippy, focused Nextest, doctests,
+  formatting, and the comparative benchmark pass through the local Atlas
+  overlay. Independent re-review is clean after the physical multi-tile
+  regression closed its initial coverage finding. Standalone locked provider
+  CI remains.
 
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
 

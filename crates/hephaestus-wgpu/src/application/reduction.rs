@@ -29,7 +29,7 @@ struct AxisReductionAxis0TiledKernel<Op>(PhantomData<Op>);
 struct MeanAxisParallelKernel<T>(PhantomData<T>);
 struct MeanAxis0TiledKernel<T>(PhantomData<T>);
 
-const AXIS0_TILE_COLUMNS: u32 = 32;
+const AXIS0_TILE_COLUMNS: u32 = 64;
 
 /// Prepared rank-2 axis reduction over fixed input/output buffers and layouts.
 ///
@@ -1155,4 +1155,18 @@ where
     let prepared = prepare_reduction_with_width::<Op, T>(device, input, width)?;
     prepared.dispatch(device)?;
     Ok(prepared.into_output())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axis_zero_tile_preserves_the_requested_workgroup_width() {
+        assert_eq!(axis0_tile_shape(BlockWidth::DEFAULT), (64, 4));
+        assert_eq!(
+            axis0_tile_shape(BlockWidth::new(32).expect("non-zero width")),
+            (32, 1)
+        );
+    }
 }

@@ -4,11 +4,11 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — Owner: Codex
 
-- [ ] Record the current 32-column tile value and performance baselines.
-- [ ] Test a wider tile against the unchanged axis-0 workload and reject it if
+- [x] Record the current 32-column tile value and performance baselines.
+- [x] Test a wider tile against the unchanged axis-0 workload and reject it if
   matched samples do not improve.
-- [ ] Add focused source/value coverage for the selected geometry.
-- [ ] Run formatting, focused Nextest, warning-denied Clippy, benchmark smoke,
+- [x] Add focused source/value coverage for the selected geometry.
+- [x] Run formatting, focused Nextest, warning-denied Clippy, benchmark smoke,
   and independent review.
 - [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
@@ -17,6 +17,22 @@ WGPU reduction geometry and focused contracts, the comparative benchmark only
 if measurement correctness requires it, and owner-keyed `CHANGELOG.md`,
 `backlog.md`, `checklist.md`, `gap_audit.md`, and `benchmark_results.md`
 entries. KS-5 decomposition files remain excluded.
+The 32-column samples are 55.522, 56.684, and 53.114 microseconds for one
+reduction and 28.494, 26.922, and 44.332 microseconds for eight. The
+64-column samples are 57.038, 39.212, and 37.848 microseconds for one and
+25.286, 25.440, and 24.284 microseconds for eight. Medians improve by 29.4%
+and 11.3%, respectively; shared-cache contention limits confidence in the
+exact ratios, while the workgroup/barrier reduction is deterministic. Focused
+Nextest run `68f93864-221b-468a-9854-e7d306a548e0` passes the geometry and
+existing differential contracts 3/3. Independent review required a real
+multi-tile oracle; follow-up run `c21d59e4-5467-494d-8d6a-e19eece26750`
+passes exact 256x256 sum/min/max/mean plus narrow-width axis zero 1/1. The
+final device-required run `74439c81-b819-45f0-967a-0657f1a43384` passes 1/1,
+and focused warning-denied Clippy for the changed contract binary passes.
+Independent re-review reports no findings. The
+local `--locked` gate is incompatible with the Atlas development overlay,
+which replaces committed Git lock entries with local packages; standalone CI
+remains the locked oracle.
 
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 

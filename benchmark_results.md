@@ -9,6 +9,29 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## WGPU Axis-Zero Tile Geometry
+
+The unchanged comparative workload reduces a contiguous 256x256 `f32` matrix
+along axis zero. At the default 256-thread width, a 32-column tile launches
+eight workgroups with eight row lanes and three tree barriers per workgroup; a
+64-column tile launches four workgroups with four row lanes and two tree
+barriers. Both geometries retain 256 threads and the same shared-memory array.
+Runs were interleaved on the same MSVC release executable and local dependency
+graph; every output was checked against Leto before timing.
+
+| Geometry | Single samples | Single median | Eight-reduction samples | Batch median |
+| --- | --- | --- | --- | --- |
+| 32 columns x 8 rows | 55.522 µs, 56.684 µs, 53.114 µs | 55.522 µs | 28.494 µs, 26.922 µs, 44.332 µs | 28.494 µs |
+| 64 columns x 4 rows | 57.038 µs, 39.212 µs, 37.848 µs | **39.212 µs** | 25.286 µs, 25.440 µs, 24.284 µs | **25.286 µs** |
+
+The wider tile lowers the observed single-reduction median by 29.4% and the
+batch median by 11.3%, without adding buffers, command submissions, or public
+API. This is a three-sample local host/GPU comparison, not a Criterion
+confidence interval or cross-adapter claim. Concurrent shared-cache workloads
+were present; the deterministic reduction from eight workgroups and 32
+aggregate tree barriers to four workgroups and 12 aggregate tree barriers is
+stronger evidence than the exact latency ratios.
+
 ## Prepared Mixed-Reduction Batch Submission
 
 The mixed workload combines eight independent 1,048,576-element `u32` scalar
