@@ -3781,11 +3781,11 @@ Execution owner: Codex on `codex/perf-wgpu-prepared-work`. Claimed files:
 `crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
 `gap_audit.md`, `CHANGELOG.md`, `backlog.md`, and this section.
 
-- [ ] Record the exact empty, singleton, and tree work-state invariants.
-- [ ] Add and value-check the direct empty-dispatch benchmark workload.
-- [ ] Record the unchanged implementation baseline and type size.
-- [ ] Replace parallel work fields with one non-generic state and no-work exit.
-- [ ] Preserve exact singleton and multi-pass values under focused contracts.
+- [x] Record the exact empty, singleton, and tree work-state invariants.
+- [x] Add and value-check the direct empty-dispatch benchmark workload.
+- [x] Record the unchanged implementation baseline and type size.
+- [x] Replace parallel work fields with one non-generic state and no-work exit.
+- [x] Preserve exact singleton and multi-pass values under focused contracts.
 - [ ] Run focused gates, matched measurements, independent review, and exact-head CI.
 
 # HEPH-WGPU-AXIS-BATCH-PASS-1

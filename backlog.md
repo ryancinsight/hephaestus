@@ -20,6 +20,15 @@
 - Risk/change class: `[patch] [perf]`; internal WGPU state representation and
   no-work dispatch routing only. Stop condition: reject the representation if
   it increases `PreparedReduction<u32>` size or regresses non-empty contracts.
+- Status: implementation and focused local verification complete. Empty,
+  singleton, multi-pass, and mixed value contracts pass 2/2; warning-denied
+  default all-target and no-default library Clippy pass. Three matched samples
+  reduce the direct-empty median from 19.773 microseconds to 1.032 nanoseconds;
+  the measured inline host plan size falls from 80 to 72 bytes. Independent
+  review initially rejected warm-up accounting, iteration count, and ambiguous
+  size labeling; the calibrated harness fixes all three, and re-review reports
+  no remaining finding. No-default doctests pass 2/2. Exact-head provider CI
+  remains.
 
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
 

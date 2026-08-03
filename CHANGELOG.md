@@ -8,6 +8,11 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] WGPU prepared scalar reductions encode empty, singleton-copy, and
+  reduction-tree work as mutually exclusive states; direct empty dispatches
+  now return without allocating an encoder or submitting an empty command
+  buffer.
+
 - [patch] WGPU rank-2 axis-zero reductions use a 64-column tile at the default
   block width, halving workgroups and reducing tree barriers for the measured
   256x256 workload without changing buffers or arithmetic.
