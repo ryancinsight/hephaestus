@@ -3773,6 +3773,21 @@ In-flight item: none. Next concrete increment: strided-layout-aware dispatch (ba
 - [x] Gates: `cargo fmt --check`, `clippy --all-targets -- -D warnings`,
   `cargo test`, `cargo doc --no-deps` — all clean.
 - [x] Pushed to GitHub; apollo delegation integration (see backlog Phase 4).
+# HEPH-WGPU-PREPARED-WORK-1
+
+Execution owner: Codex on `codex/perf-wgpu-prepared-work`. Claimed files:
+`crates/hephaestus-wgpu/src/application/reduction/prepared.rs`,
+`crates/hephaestus-wgpu/tests/contract.rs`,
+`crates/hephaestus-wgpu/benches/comparative.rs`, `benchmark_results.md`,
+`gap_audit.md`, `CHANGELOG.md`, `backlog.md`, and this section.
+
+- [ ] Record the exact empty, singleton, and tree work-state invariants.
+- [ ] Add and value-check the direct empty-dispatch benchmark workload.
+- [ ] Record the unchanged implementation baseline and type size.
+- [ ] Replace parallel work fields with one non-generic state and no-work exit.
+- [ ] Preserve exact singleton and multi-pass values under focused contracts.
+- [ ] Run focused gates, matched measurements, independent review, and exact-head CI.
+
 # HEPH-WGPU-AXIS-BATCH-PASS-1
 
 Execution owner: Codex on `codex/hephaestus-axis-batch-pass`. Claimed files:
