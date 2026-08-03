@@ -1541,10 +1541,22 @@ fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
     let expected_mean: Vec<f32> = (0..EXTENT).map(|col| 127.5 + col as f32).collect();
 
     for (result, expected) in [
-        (sum_axis(&device, operand, 0, BlockWidth::DEFAULT), &expected_sum),
-        (min_axis(&device, operand, 0, BlockWidth::DEFAULT), &expected_min),
-        (max_axis(&device, operand, 0, BlockWidth::DEFAULT), &expected_max),
-        (mean_axis(&device, operand, 0, BlockWidth::DEFAULT), &expected_mean),
+        (
+            sum_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_sum,
+        ),
+        (
+            min_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_min,
+        ),
+        (
+            max_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_max,
+        ),
+        (
+            mean_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_mean,
+        ),
     ] {
         let output = result.unwrap();
         let mut actual = vec![0.0; EXTENT];
