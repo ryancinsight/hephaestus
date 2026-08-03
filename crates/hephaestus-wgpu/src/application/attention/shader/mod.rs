@@ -1,7 +1,7 @@
 mod backward;
-mod prelude;
 mod forward;
 mod preflight;
+mod prelude;
 
 pub(super) use backward::{BackwardStage, backward_shader};
 pub(super) use forward::{ForwardStage, forward_shader};

@@ -1,6 +1,6 @@
 mod backward;
-mod prelude;
 mod forward;
+mod prelude;
 
 pub(super) use backward::{GradientTarget, backward_shader};
 pub(super) use forward::forward_shader;
