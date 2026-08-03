@@ -2,6 +2,21 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — Owner: Codex
+
+- [ ] Record the focused device-local copy value and source baselines.
+- [ ] Remove the post-copy context-wide synchronization while preserving the
+  synchronous CUDA copy.
+- [ ] Add adapterless source coverage for the no-global-barrier contract.
+- [ ] Run formatting, focused Nextest, warning-denied Clippy, and independent
+  review.
+- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-cuda-copy-sync`. Claimed files are
+CUDA device-local transfer infrastructure, focused CUDA transfer contracts, and
+owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md`
+entries. KS-5 decomposition files remain excluded.
+
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
 - [x] Record the focused device-local copy value and source baselines.
