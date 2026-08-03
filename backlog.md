@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — verification
+## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-axis-tile`; scope: WGPU rank-2 axis-0
   reduction tile geometry, focused value contracts, matched comparative
@@ -26,8 +26,10 @@
   microseconds. Warning-denied all-target Clippy, focused Nextest, doctests,
   formatting, and the comparative benchmark pass through the local Atlas
   overlay. Independent re-review is clean after the physical multi-tile
-  regression closed its initial coverage finding. Standalone locked provider
-  CI remains.
+  regression closed its initial coverage finding. Exact implementation-head
+  WGPU run `30777848642`, CUDA run `30777848679`, ROCm run `30777848659`, and
+  native macOS Metal run `30777848666` pass at `eeebcf5`; PR #190's
+  documentation-only closeout head remains the merge gate.
 
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
 

@@ -10,7 +10,7 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Add focused source/value coverage for the selected geometry.
 - [x] Run formatting, focused Nextest, warning-denied Clippy, benchmark smoke,
   and independent review.
-- [ ] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
 
 Implementation owner: Codex on `codex/perf-wgpu-axis-tile`. Claimed files are
 WGPU reduction geometry and focused contracts, the comparative benchmark only
@@ -32,7 +32,10 @@ and focused warning-denied Clippy for the changed contract binary passes.
 Independent re-review reports no findings. The
 local `--locked` gate is incompatible with the Atlas development overlay,
 which replaces committed Git lock entries with local packages; standalone CI
-remains the locked oracle.
+remains the locked oracle. Exact implementation-head WGPU run `30777848642`,
+CUDA run `30777848679`, ROCm run `30777848659`, and native macOS Metal run
+`30777848666` pass at `eeebcf5`. PR #190's documentation-only closeout head
+remains the merge gate.
 
 ## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
