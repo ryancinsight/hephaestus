@@ -1,6 +1,6 @@
 # ADR 0003 — Blocked-decomposition host-loop consolidation
 
-- Status: **Accepted; in progress** — LU + Cholesky per-panel compute extracted (`factor_lu_panel`, `factor_cholesky_panel`/`panel_cholesky_packed`, 2026-07-03/04); QR compute + loop-structure trait hoist pending
+- Status: **Accepted; in progress** — LU + Cholesky per-panel compute extracted (`factor_lu_panel`, `factor_cholesky_panel`/`panel_cholesky_packed`, 2026-07-03/04); blocked-LU host loop hoisted into `hephaestus-core` as `blocked_lu` over `BlockedDecompositionBackend`, wgpu + cuda entry points reduced to thin delegators (2026-08-02); QR compute + loop-structure trait hoist pending
 - Date: 2026-07-03
 - Scope: `hephaestus-core`, `hephaestus-wgpu`, `hephaestus-cuda`
 - Refs: KS-5 (backlog), audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md` §5.1
@@ -38,27 +38,31 @@ points become thin calls into the core loop.
 ### Trait surface
 
 ```rust
-// hephaestus-core::domain::decomposition (or a `blocked` submodule)
-pub struct PanelRegion { pub row0: usize, pub col0: usize, pub rows: usize, pub cols: usize }
+// hephaestus-core::domain::decomposition::blocked
+pub struct PanelRegion { pub stride: usize, pub row0: usize, pub col0: usize, pub rows: usize, pub cols: usize }
 
 /// Backend operations the blocked decomposition loops need. `Buffer` is the
 /// backend's device f32 buffer; the loop owns all host bookkeeping.
 pub trait BlockedDecompositionBackend {
     type Buffer;
 
-    /// Allocate an n-element device buffer, zero-initialized.
+    /// Allocate an len-element device buffer, zero-initialized.
     fn alloc(&self, len: usize) -> Result<Self::Buffer>;
 
     /// Device→device copy of the whole `src` into a fresh working buffer.
     fn clone_device(&self, src: &Self::Buffer, len: usize) -> Result<Self::Buffer>;
 
-    /// Gather a compact row-major `region` from `buf` into `out` (host),
+    /// Gather a compact row-major `region` of `buf` into `out` (host),
     /// resizing `out` to `region.rows * region.cols`. Reuses `out`'s capacity.
-    fn download_region(&self, buf: &Self::Buffer, region: PanelRegion, out: &mut Vec<f32>)
-        -> Result<()>;
+    /// `scratch` is the loop-allocated compact device transfer buffer; a
+    /// backend that stages region transfers through it (wgpu) reuses it, one
+    /// that transfers via pinned host staging (CUDA) ignores it.
+    fn download_region(&self, buf: &Self::Buffer, region: PanelRegion, scratch: &Self::Buffer,
+        out: &mut Vec<f32>) -> Result<()>;
 
     /// Scatter a compact row-major `data` into `region` of `buf`.
-    fn write_region(&self, buf: &Self::Buffer, region: PanelRegion, data: &[f32]) -> Result<()>;
+    fn write_region(&self, buf: &Self::Buffer, region: PanelRegion, scratch: &Self::Buffer,
+        data: &[f32]) -> Result<()>;
 
     /// Trailing update on the device. The concrete math differs per
     /// decomposition, so each blocked loop declares the exact method it needs
@@ -79,9 +83,12 @@ opaque callback) keeps each backend impl a direct wrapper of its existing
 
 The core loop adopts the **wgpu reuse discipline** (host scratch `Vec`s allocated once above the
 loop, refilled by `download_region`; the compact transfer buffer allocated once). This is the
-better behavior (removes CUDA's O(n/b) per-panel host allocations, audit M-class). CUDA's
+better behavior (removes CUDA's O(n/b) per-panel host `Vec` allocations, audit M-class). CUDA's
 `download_region` therefore changes from "allocate and return `Vec`" to "fill caller's `&mut Vec`"
-— a behavior improvement, recorded here so it is an intended change, not accidental drift.
+— a behavior improvement, recorded here so it is an intended change, not accidental drift. Note:
+CUDA's pinned host staging buffer is still allocated per panel inside
+`download_matrix_region_compact`; the per-panel host `Vec` allocations are what the reuse
+discipline removes, not the pinned staging.
 
 ### What stays in the backends
 
