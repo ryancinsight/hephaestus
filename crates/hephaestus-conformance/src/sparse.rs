@@ -198,7 +198,7 @@ where
 /// operation individually, in order; an empty batch is a valid no-op.
 ///
 /// Split out from [`assert_sparse_operator_contract`] because batching is
-/// its own seam ([`BatchSubmitOps`], ADR 0045).
+/// its own seam ([`BatchSubmitOps`], ADR 0048).
 ///
 /// # Panics
 ///

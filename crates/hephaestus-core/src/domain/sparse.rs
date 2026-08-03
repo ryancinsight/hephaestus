@@ -132,7 +132,7 @@ pub trait SparseOperatorOps<D: ComputeDevice, T: Pod> {
     fn dispatch_apply(&self, device: &D, prepared: &Self::PreparedApply<'_>) -> Result<()>;
 }
 
-/// Batched submission of prepared sparse dispatches (ADR 0045).
+/// Batched submission of prepared sparse dispatches (ADR 0048).
 ///
 /// One submission amortizes per-dispatch overhead: WGPU encodes the batch
 /// into a single command buffer, CUDA/HIP launch back-to-back without
