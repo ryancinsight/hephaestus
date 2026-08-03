@@ -2,6 +2,52 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — Owner: Codex
+
+- [x] Record the focused device-local copy value and source baselines.
+- [x] Replace post-copy context synchronization with a default-stream wait that
+  preserves host completion.
+- [x] Add adapterless source coverage for the no-global-barrier contract.
+- [x] Close the zero-sized POD transfer defect exposed by broader conformance.
+- [x] Run formatting, focused Nextest, warning-denied Clippy, and independent
+  review.
+- [x] Pass exact-head WGPU/CUDA/ROCm/macOS Metal CI.
+
+Implementation owner: Codex on `codex/perf-cuda-copy-sync`. Claimed files are
+CUDA device-local transfer infrastructure, focused CUDA transfer contracts, and
+owner-keyed `CHANGELOG.md`, `backlog.md`, `checklist.md`, and `gap_audit.md`
+entries. KS-5 decomposition files remain excluded.
+Physical CUDA baseline run `3e499cc3-6987-4f75-849f-e630211d18fd` passes the
+1,027-element exact-value and typed-mismatch contract 1/1. Post-edit physical
+run `60b18918-de3a-405b-b3a1-26416ead4c59` passes 1/1 after adding the empty
+copy clause. Adapterless source run `a33e7626-5afd-4966-8021-6ae169d9bf2b`
+passes 1/1 for the initial no-context-barrier shape. Independent review then
+corrected the premise: CUDA documents no host synchronization for device-to-device
+copies in the synchronous API, so the final regression requires a default-stream
+wait and rejects both context-wide synchronization and an omitted wait.
+The first broader physical transfer run found ZST upload calling
+`cuMemAlloc_v2(0)`; the provider now represents every zero-byte allocation with
+a null physical pointer and the requested logical length, and skips zero-byte
+upload/download/write calls. Corrected physical transfer run
+`a223e058-ffbd-4a44-b364-0368d9f73a1a` passes 2/2. Default-feature all-target
+warning-denied Clippy and formatting pass under the directory-local Rust 1.97.0
+MSVC toolchain.
+Final adapterless source run `b1375558-292f-408f-ace9-170ca90bb278` passes 1/1,
+and final physical transfer run `baa9c998-eca1-49ae-a433-e3790b2b8519` passes
+2/2 with default-stream completion and ZST clauses. CUDA doctests pass (0
+doctests). Independent re-review approves with high confidence and no remaining
+findings. The exact-final-diff Clippy/doctest bundle timed out before acquiring
+the shared target lock while peer Cargo processes held the single Atlas cache;
+hosted exact-head CI remains the warning/doc oracle. The local linker reports
+the existing NVIDIA static/dynamic CRT
+default-library conflict during test binary linking; warning-denied Clippy is
+clean because it performs metadata analysis without that external link step.
+Exact implementation-head WGPU run `30774973252`, CUDA run `30774973245`, ROCm
+run `30774973255`, and native macOS Metal run `30774973240` pass, supplying the
+final warning/doc evidence. Hardware-only NVIDIA and AMD jobs skip because
+matching labeled runners are unavailable; PR #188's documentation-only
+closeout head remains the merge gate.
+
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — Owner: Codex
 
 - [x] Record the focused device-local copy value and source baselines.

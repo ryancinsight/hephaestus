@@ -1,5 +1,41 @@
 # Backlog — hephaestus
 
+## HEPH-CUDA-COPY-SYNC-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-cuda-copy-sync`; scope: CUDA's synchronous
+  device-local `ComputeDevice::copy_buffer` path, focused transfer contracts,
+  and owner-keyed PM/release records.
+- Outcome: preserve host-visible copy completion while replacing context-wide
+  synchronization after `cuMemcpyDtoD_v2` with a default-stream wait.
+- Non-goals: asynchronous copy semantics; stream API redesign; WGPU/ROCm/Metal;
+  transfer volume; KS-5 decomposition files; and runtime claims without matched
+  CUDA hardware measurements.
+- Acceptance: `copy_buffer` returns after the CUDA device-to-device copy without
+  calling `cuCtxSynchronize`; a default-stream wait preserves host completion;
+  exact values, zero-length copies, and typed length rejection remain unchanged;
+  an adapterless source contract prevents the global barrier or an omitted wait
+  from returning; focused Nextest, warning-denied Clippy,
+  formatting, independent review, and exact-head WGPU/CUDA/ROCm/macOS Metal CI
+  pass.
+- Risk/change class: `[patch] [perf]`; internal synchronization plus zero-byte
+  transfer correctness. Nonzero CUDA copy calls and bytes, buffer ownership,
+  and the public API remain unchanged.
+- Status: implementation and focused local verification complete 2026-08-02.
+  `copy_buffer` retains one device-local copy and stream submission, then waits
+  on the default stream instead of the whole context. Physical CUDA exact-value, empty-copy,
+  typed mismatch, and shared transfer conformance pass locally. The broader
+  transfer gate exposed and closed zero-sized POD allocation/transfer calls
+  while preserving their logical lengths. The adapterless regression pins the
+  driver call, rejects its async counterpart, and requires stream-scoped
+  completion. Final physical transfer conformance and formatting pass.
+  Independent re-review approves with no remaining findings. Exact-final-diff
+  Clippy/doctest collection timed out behind peer-held shared-target locks.
+  Exact implementation-head WGPU run `30774973252`, CUDA run `30774973245`,
+  ROCm run `30774973255`, and native macOS Metal run `30774973240` pass and
+  supply the warning/doc oracle. Hardware-only NVIDIA and AMD jobs skip because
+  matching labeled runners are unavailable; PR #188's documentation-only
+  closeout head remains the merge gate.
+
 ## HEPH-ROCM-COPY-SYNC-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-rocm-copy-sync`; scope: ROCm's synchronous

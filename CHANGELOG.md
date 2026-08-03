@@ -8,6 +8,13 @@ Target release: 0.18.0.
 
 ### Fixed
 
+- [patch] CUDA device-local copies replace context-wide synchronization with a
+  default-stream wait after `cuMemcpyDtoD_v2`, preserving host completion while
+  avoiding a whole-context barrier.
+
+- [patch] CUDA zero-sized POD buffers preserve logical element counts without
+  issuing zero-byte device allocation or transfer calls.
+
 - [patch] ROCm synchronous device-local copies no longer issue a redundant
   whole-device synchronization after `hipMemcpyDtoD` has completed.
 
