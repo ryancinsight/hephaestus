@@ -31,6 +31,9 @@ architectural decision or a tracked future-work item:
   changes from one empty submission to zero by construction. Independent
   re-review reports no remaining finding after the harness added a completed
   warm-up, 100,000 timed calls, input black-boxing, and precise size labeling.
+  Exact implementation-head CI at `21105e3` passes CUDA `30783614385`, ROCm
+  `30783614348`, WGPU `30783614399`, and macOS Metal `30783614354`; hardware-only
+  AMD and NVIDIA jobs skip as designed on unlabelled hosted runners.
 - Residual: non-empty arithmetic, scratch buffers, transfer volume, and device
   memory are unchanged. The latency samples are local wall-time measurements,
   not Criterion confidence intervals, instruction-count evidence, or

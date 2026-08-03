@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — in-progress
+## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-prepared-work`; scope: WGPU prepared scalar
   reduction work-state representation, empty-dispatch benchmark and contracts,
@@ -27,8 +27,10 @@
   the measured inline host plan size falls from 80 to 72 bytes. Independent
   review initially rejected warm-up accounting, iteration count, and ambiguous
   size labeling; the calibrated harness fixes all three, and re-review reports
-  no remaining finding. No-default doctests pass 2/2. Exact-head provider CI
-  remains.
+  no remaining finding. No-default doctests pass 2/2. Exact implementation-head
+  provider CI passes at `21105e3`: CUDA `30783614385`, ROCm `30783614348`, WGPU
+  `30783614399`, and macOS Metal `30783614354`; hardware-only AMD and NVIDIA
+  jobs skip as designed on unlabelled hosted runners.
 
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
 

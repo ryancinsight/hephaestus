@@ -3786,7 +3786,11 @@ Execution owner: Codex on `codex/perf-wgpu-prepared-work`. Claimed files:
 - [x] Record the unchanged implementation baseline and type size.
 - [x] Replace parallel work fields with one non-generic state and no-work exit.
 - [x] Preserve exact singleton and multi-pass values under focused contracts.
-- [ ] Run focused gates, matched measurements, independent review, and exact-head CI.
+- [x] Run focused gates, matched measurements, independent review, and exact-head CI.
+
+Implementation-head provider evidence at `21105e3`: CUDA `30783614385`, ROCm
+`30783614348`, WGPU `30783614399`, and macOS Metal `30783614354` all pass;
+hardware-only AMD and NVIDIA jobs skip as designed on unlabelled hosted runners.
 
 # HEPH-WGPU-AXIS-BATCH-PASS-1
 
