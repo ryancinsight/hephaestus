@@ -50,5 +50,6 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0043](0043-special-value-semantics-capability.md) | Special-value semantics as a dialect capability | Accepted |
 | [0044](0044-device-neutral-dense-product-seam.md) | Device-neutral dense product seam | Accepted |
 | [0045](0045-prepared-batch-submission-seam.md) | Prepared batch submission seam | Accepted |
-| [0046](0046-host-reference-device.md) | Host reference device and the Leto implementor | Accepted |
 | [0045](0045-provider-owned-stateful-updates.md) | Provider-owned stateful elementwise updates | Accepted |
+| [0046](0046-host-reference-device.md) | Host reference device and the Leto implementor | Accepted |
+| [0047](0047-metal-as-a-wgpu-adapter-preference.md) | Metal is a WGPU adapter preference, not a backend crate | Accepted |
