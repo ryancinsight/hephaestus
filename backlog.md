@@ -1,5 +1,37 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
+
+- Owner: Codex on `codex/perf-wgpu-prepared-work`; scope: WGPU prepared scalar
+  reduction work-state representation, empty-dispatch benchmark and contracts,
+  and owner-keyed PM/release records.
+- Outcome: encode empty, singleton-copy, and reduction-tree work as one valid
+  state; hoist type-independent command encoding out of `<T>`; and make direct
+  empty prepared dispatch return before command-encoder allocation or queue
+  submission.
+- Non-goals: reduction arithmetic or geometry; CUDA/ROCm/Metal kernels; public
+  API changes; KS-5 decomposition files; and runtime or memory claims without
+  matched measurement or structural evidence.
+- Acceptance: empty, singleton, and multi-pass values remain exact; the direct
+  empty-dispatch benchmark records matched samples; source structure cannot
+  represent conflicting prepared work; focused Nextest, warning-denied Clippy,
+  formatting, doctests, independent review, and exact-head WGPU/CUDA/ROCm/macOS
+  Metal CI pass.
+- Risk/change class: `[patch] [perf]`; internal WGPU state representation and
+  no-work dispatch routing only. Stop condition: reject the representation if
+  it increases `PreparedReduction<u32>` size or regresses non-empty contracts.
+- Status: implementation and focused local verification complete. Empty,
+  singleton, multi-pass, and mixed value contracts pass 2/2; warning-denied
+  default all-target and no-default library Clippy pass. Three matched samples
+  reduce the direct-empty median from 19.773 microseconds to 1.032 nanoseconds;
+  the measured inline host plan size falls from 80 to 72 bytes. Independent
+  review initially rejected warm-up accounting, iteration count, and ambiguous
+  size labeling; the calibrated harness fixes all three, and re-review reports
+  no remaining finding. No-default doctests pass 2/2. Exact implementation-head
+  provider CI passes at `21105e3`: CUDA `30783614385`, ROCm `30783614348`, WGPU
+  `30783614399`, and macOS Metal `30783614354`; hardware-only AMD and NVIDIA
+  jobs skip as designed on unlabelled hosted runners.
+
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-axis-tile`; scope: WGPU rank-2 axis-0

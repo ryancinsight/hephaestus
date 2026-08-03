@@ -11,6 +11,34 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
+
+- Finding: WGPU prepared scalar reductions represented passes and singleton
+  copies as independent fields, permitting conflicting internal states and
+  monomorphizing type-independent encoding control for each scalar type. The
+  empty state also allocated an encoder and submitted an empty command buffer
+  on every direct dispatch.
+- Resolution: represent empty, singleton-copy, and tree work with one
+  non-generic enum; record singleton byte size at preparation; freeze tree
+  passes into a boxed slice; and return before encoder allocation for empty
+  direct dispatch. Existing batch and map-reduction callers reuse the same
+  state-owned encoding methods.
+- Evidence: exact empty, singleton, multi-pass, and mixed scalar/axis contracts
+  pass 2/2 on the physical WGPU device. Warning-denied default all-target and
+  no-default library Clippy pass. Three calibrated matched release samples
+  reduce the direct-empty median from 19.773 microseconds to 1.032 nanoseconds
+  and the inline host plan size from 80 to 72 bytes. The no-work command count
+  changes from one empty submission to zero by construction. Independent
+  re-review reports no remaining finding after the harness added a completed
+  warm-up, 100,000 timed calls, input black-boxing, and precise size labeling.
+  Exact implementation-head CI at `21105e3` passes CUDA `30783614385`, ROCm
+  `30783614348`, WGPU `30783614399`, and macOS Metal `30783614354`; hardware-only
+  AMD and NVIDIA jobs skip as designed on unlabelled hosted runners.
+- Residual: non-empty arithmetic, scratch buffers, transfer volume, and device
+  memory are unchanged. The latency samples are local wall-time measurements,
+  not Criterion confidence intervals, instruction-count evidence, or
+  cross-adapter performance evidence; the candidate is near the timer floor.
+
 ## [HEPH-CUDA-COPY-SYNC-1] Device-local copy barrier
 
 - Finding: CUDA `ComputeDevice::copy_buffer` issued `cuMemcpyDtoD_v2`, submitted

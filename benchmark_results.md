@@ -9,6 +9,33 @@ Focused sparse harness: `crates/hephaestus-wgpu/benches/sparse_comparative.rs` (
 Inputs: Contiguous `f32` vectors/matrices of varying shapes (scaled to prevent overflow).
 Machine Class: Windows 11 x86_64 dev workstation (GeForce RTX 5080).
 
+## WGPU Direct Empty Prepared Reduction
+
+The workload prepares one empty `u32` sum, validates its exact additive
+identity, executes and polls one warm-up, then calls the direct
+prepared-dispatch method 100,000 times before one final device poll. The plan
+reference crosses `black_box` before dispatch. The baseline represented work
+through independent pass and singleton fields and submitted an empty command
+buffer on every call. The candidate uses one mutually exclusive work-state
+enum and returns before encoder allocation for the empty variant. Matched
+release runs use the same physical WGPU device and benchmark source.
+
+| Representation | Samples | Median | Inline host size |
+| --- | --- | --- | --- |
+| Parallel `Vec` / `Option` fields | 19.527 µs, 20.676 µs, 19.773 µs | 19.773 µs | 80 bytes |
+| Non-generic `PreparedWork` state | 1.563 ns, 0.942 ns, 1.032 ns | **1.032 ns** | **72 bytes** |
+
+The measured median falls by more than 99.99% because the no-work path performs
+no encoder allocation or queue submission; the plan's measured inline host
+footprint falls by 8 bytes (10%). This size excludes owned heap/device
+allocations, which are unchanged for the empty plan. The non-generic state owns
+command encoding once rather than inside each scalar monomorphization, and its
+tree variant freezes prepared passes as `Box<[PreparedPass]>`. These are
+three-sample local measurements, not Criterion confidence intervals,
+instruction-count evidence, or cross-adapter evidence. The structural
+one-submission-to-zero transition and exclusive state representation are
+stronger evidence than the near-timer-floor candidate timings.
+
 ## WGPU Axis-Zero Tile Geometry
 
 The unchanged comparative workload reduces a contiguous 256x256 `f32` matrix
