@@ -1,6 +1,6 @@
 use hephaestus_core::AttentionSemanticStatus;
 
-use super::super::common::prelude;
+use super::super::prelude::prelude;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::application::attention) enum FiniteOperand {

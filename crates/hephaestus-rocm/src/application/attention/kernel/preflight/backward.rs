@@ -1,7 +1,7 @@
 use hephaestus_core::AttentionSemanticStatus;
 
 use super::super::GradientTarget;
-use super::super::common::prelude;
+use super::super::prelude::prelude;
 
 pub(in crate::application::attention) const PROBABILITY_ENTRY: &str =
     "hephaestus_attention_backward_probability_preflight";

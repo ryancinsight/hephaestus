@@ -1,4 +1,4 @@
-use super::common::prelude;
+use super::prelude::prelude;
 use hephaestus_core::AttentionSemanticStatus;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

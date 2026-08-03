@@ -1,4 +1,4 @@
-use super::common::prelude;
+use super::prelude::prelude;
 
 pub(in crate::application::attention) const ENTRY: &str = "hephaestus_attention_forward";
 

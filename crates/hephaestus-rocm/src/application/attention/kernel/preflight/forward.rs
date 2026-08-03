@@ -1,6 +1,6 @@
 use hephaestus_core::AttentionSemanticStatus;
 
-use super::super::common::prelude;
+use super::super::prelude::prelude;
 
 fn helpers(scalar: &str) -> String {
     format!(
