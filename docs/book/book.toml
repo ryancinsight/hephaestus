@@ -1,0 +1,19 @@
+# mdBook configuration for the hephaestus accelerator book.
+[book]
+title = "hephaestus: GPU Accelerator Substrate for Atlas"
+authors = ["Ryan Clanton"]
+description = "Device contracts, buffer management, and GPU kernel dispatch for the Atlas simulation stack."
+src = "."
+language = "en"
+
+[build]
+build-dir = "../../target/book/hephaestus"
+create-missing = false
+
+[output.html]
+no-section-label = false
+mathjax-support = false
+site-url = "/hephaestus/"
+git-repository-url = "https://github.com/ryancinsight/hephaestus"
+edit-url-template = "https://github.com/ryancinsight/hephaestus/edit/master/docs/book/{path}"
+default-theme = "rust"
