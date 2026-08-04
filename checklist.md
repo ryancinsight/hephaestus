@@ -2,6 +2,14 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — Owner: Codex
+
+- [x] Claim the provider boundary and record ADR 0049.
+- [ ] Add one device-neutral forward/backward loss seam and shared validation.
+- [ ] Implement WGPU/CUDA/ROCm/Metal provider dispatch without host fallback.
+- [ ] Add shared conformance and provider-specific source/device contracts.
+- [ ] Pass focused gates, SemVer checks, independent review, and exact-head CI.
+
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — Owner: Codex
 
 - [x] Record the current 32-column tile value and performance baselines.

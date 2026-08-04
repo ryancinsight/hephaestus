@@ -11,6 +11,21 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-CROSS-ENTROPY-PROVIDER-1] Accelerator cross-entropy ownership
+
+- Finding: Hephaestus exposes no classification-loss role, forcing a downstream
+  consumer to download accelerator logits and compute forward/backward on the
+  host.
+- Impact: selected backend identity does not match the executing provider;
+  logits and gradients incur full-payload transfers and probabilities live in
+  consumer-owned host memory.
+- Resolution in progress: ADR 0049 assigns one device-neutral mean
+  cross-entropy seam to Hephaestus with provider-resident probabilities and
+  vendor-only device implementations for WGPU, CUDA, ROCm, and Metal.
+- Residual: no runtime or memory improvement is claimed until the complete
+  consumer cutover has matched measurements; provider conformance and exact-head
+  CI remain open.
+
 ## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
 
 - Finding: WGPU prepared scalar reductions represented passes and singleton

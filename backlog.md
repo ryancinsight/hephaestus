@@ -1,5 +1,23 @@
 # Backlog — hephaestus
 
+## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — in-progress
+
+- Owner: Codex on `codex/hephaestus-cross-entropy-provider`; claimed
+  2026-08-04. Scope: device-neutral cross-entropy planning, WGPU/CUDA/ROCm/Metal
+  implementations, conformance, and owner-keyed PM/ADR records.
+- Outcome: execute stable mean cross-entropy forward and additive backward on
+  the selected accelerator while probabilities and gradients remain provider
+  resident.
+- Non-goals: CPU execution, consumer autograd wiring, silent provider changes,
+  class weighting or ignored labels, and performance claims without matched
+  measurement.
+- Acceptance: one core loss seam validates complete requests before dispatch;
+  all four providers pass shared f32 forward/backward and typed rejection
+  contracts without host payload transfer or fallback; warning-denied gates,
+  Nextest, doctests, SemVer checks, independent review, and exact-head provider
+  CI pass before merge.
+- Status: provider seam and implementations pending under ADR 0049.
+
 ## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
 
 - Owner: Codex on `codex/perf-wgpu-prepared-work`; scope: WGPU prepared scalar
