@@ -47,6 +47,9 @@ pub use application::linalg::{
 };
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub use application::linalg::{matexp, pinv};
+pub use application::loss::{
+    PreparedCrossEntropyBackward, PreparedCrossEntropyForward, WgpuCrossEntropyOps,
+};
 pub use application::parameterized_elementwise::{
     WgpuParameterizedUnaryOps, parameterized_unary_strided_into,
 };

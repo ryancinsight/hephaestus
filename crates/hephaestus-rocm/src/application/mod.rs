@@ -27,6 +27,8 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
+/// Native HIP mean cross-entropy.
+pub mod loss;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 pub(crate) mod pipeline;

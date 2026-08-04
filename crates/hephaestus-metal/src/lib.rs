@@ -40,6 +40,7 @@ pub use application::linalg_traits::MatrixDecompose;
 pub use application::linalg_traits::{
     AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
 };
+pub use application::loss::MetalCrossEntropyOps;
 pub use application::parameterized_elementwise::{
     MetalParameterizedUnaryOps, parameterized_unary_strided_into,
 };

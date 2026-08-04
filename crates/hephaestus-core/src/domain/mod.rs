@@ -26,6 +26,8 @@ pub mod interface;
 pub mod kernel;
 /// Launch-shape vocabulary for occupancy-planned dispatch.
 pub mod launch;
+/// Device-neutral classification-loss operands, planning, and dispatch seam.
+pub mod loss;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
 /// Runtime-parameter unary expressions and their backend-neutral dispatch seam.

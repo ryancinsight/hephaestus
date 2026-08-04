@@ -24,6 +24,8 @@ pub mod full_reduction_seam;
 pub mod linalg;
 /// Fluent dense-matrix traits.
 pub mod linalg_traits;
+/// Zero-copy mean cross-entropy delegation to Metal-selected WGPU.
+pub mod loss;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 /// Reusable dot-product and L2-norm map-reduction plans.

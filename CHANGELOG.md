@@ -6,6 +6,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 Target release: 0.18.0.
 
+### Added
+
+- [minor] Add one statically dispatched mean cross-entropy contract across
+  WGPU/Metal, CUDA, and ROCm with provider-resident tensors, shared semantic
+  preflight, stable forward probabilities, and additive backward gradients.
+
 ### Fixed
 
 - [patch] WGPU prepared scalar reductions encode empty, singleton-copy, and

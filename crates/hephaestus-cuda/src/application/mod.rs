@@ -19,6 +19,8 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
+/// Native mean cross-entropy operations.
+pub mod loss;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 /// Pipeline compilation and launch helpers.
