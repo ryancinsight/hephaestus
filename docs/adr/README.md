@@ -53,4 +53,4 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0046](0046-host-reference-device.md) | Host reference device and the Leto implementor | Accepted |
 | [0047](0047-metal-as-a-wgpu-adapter-preference.md) | Metal is a WGPU adapter preference, not a backend crate | Accepted |
 | [0048](0048-prepared-batch-submission-seam.md) | Prepared batch submission seam | Accepted |
-| [0049](0049-provider-owned-cross-entropy.md) | Provider-owned accelerator cross-entropy | Proposed |
+| [0049](0049-provider-owned-cross-entropy.md) | Provider-owned accelerator cross-entropy | Accepted |

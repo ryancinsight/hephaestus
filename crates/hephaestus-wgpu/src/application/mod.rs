@@ -28,6 +28,8 @@ pub mod dense_product_seam;
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Native WGSL mean cross-entropy.
+pub mod loss;
 /// Runtime-parameter unary elementwise dispatch.
 pub mod parameterized_elementwise;
 pub(crate) mod prepared;

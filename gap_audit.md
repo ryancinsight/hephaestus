@@ -19,12 +19,13 @@ architectural decision or a tracked future-work item:
 - Impact: selected backend identity does not match the executing provider;
   logits and gradients incur full-payload transfers and probabilities live in
   consumer-owned host memory.
-- Resolution in progress: ADR 0049 assigns one device-neutral mean
-  cross-entropy seam to Hephaestus with provider-resident probabilities and
-  vendor-only device implementations for WGPU, CUDA, ROCm, and Metal.
+- Resolution delivered: accepted ADR 0049 assigns one device-neutral mean
+  cross-entropy seam to Hephaestus with provider-resident probabilities, one
+  shared semantic-status and numerical-tolerance protocol, and vendor-only
+  device implementations for WGPU, CUDA, ROCm, and Metal.
 - Residual: no runtime or memory improvement is claimed until the complete
-  consumer cutover has matched measurements; provider conformance and exact-head
-  CI remain open.
+  consumer cutover has matched measurements; exact-head hosted provider CI and
+  the Coeus consumer cutover remain open.
 
 ## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
 

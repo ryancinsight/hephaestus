@@ -14,8 +14,8 @@
 //! rank-2 axis-reduction, scan, map-reduction, Kronecker-product,
 //! matrix-power, matrix-multiplication, and CSR sparse matrix products
 //! operation families. The ROCm feature also provides native HIP scaled
-//! dot-product attention and regular and transposed convolution with additive
-//! gradients. Additional operator
+//! dot-product attention, mean cross-entropy, and regular and transposed
+//! convolution with additive gradients. Additional operator
 //! families are separate parity increments with their own value-semantic
 //! contracts. The optional
 //! `decomposition` feature adds device-resident Cholesky, LU, and QR
@@ -82,6 +82,9 @@ pub use application::linalg::{
     matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, trace,
 };
 pub use application::linalg::{matexp, pinv};
+pub use application::loss::{
+    PreparedRocmCrossEntropyBackward, PreparedRocmCrossEntropyForward, RocmCrossEntropyOps,
+};
 pub use application::parameterized_elementwise::RocmParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{

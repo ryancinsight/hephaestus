@@ -55,6 +55,11 @@ pub use domain::kernel::{
     BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, UnaryStorageKernel,
 };
 pub use domain::launch::BlockWidth;
+pub use domain::loss::{
+    CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps, CrossEntropyPlan,
+    CrossEntropyScalar, CrossEntropyStatus, plan_cross_entropy_backward,
+    plan_cross_entropy_forward,
+};
 pub use domain::ops::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, CeilOp,
     CombineExpr, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ErfOp, ErfcOp,

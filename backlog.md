@@ -11,12 +11,18 @@
 - Non-goals: CPU execution, consumer autograd wiring, silent provider changes,
   class weighting or ignored labels, and performance claims without matched
   measurement.
+- Dependencies: merged Leto 0.40 cross-entropy oracle and its Eunomia 0.8/rkyv
+  0.8 provider graph; WGPU 30, cuda-oxide 0.4, and the existing HIP toolchain.
 - Acceptance: one core loss seam validates complete requests before dispatch;
   all four providers pass shared f32 forward/backward and typed rejection
   contracts without host payload transfer or fallback; warning-denied gates,
   Nextest, doctests, SemVer checks, independent review, and exact-head provider
   CI pass before merge.
-- Status: provider seam and implementations pending under ADR 0049.
+- Status: provider seam, implementations, conformance, warning-denied checks,
+  doctests, focused Nextest, core SemVer, and independent review complete.
+  Exact-head hosted provider CI remains; the local full affected-package launch
+  did not reach test execution within its five-minute shared-cache contention
+  budget and is not counted as evidence.
 
 ## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
 

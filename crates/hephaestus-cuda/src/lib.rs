@@ -69,6 +69,7 @@ pub use application::linalg::{
     kron, kron_into, matexp, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
     norm_l1, norm_l2, norm_max, pinv, trace,
 };
+pub use application::loss::CudaCrossEntropyOps;
 pub use application::parameterized_elementwise::CudaParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
