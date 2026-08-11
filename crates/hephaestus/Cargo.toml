@@ -20,16 +20,16 @@ publish = false
 # Declared directly rather than inherited: `default-features = false` cannot
 # override a workspace dependency, and the facade must be able to strip the
 # contract layer's defaults so `--no-default-features` means what it says.
-hephaestus-core = { path = "../hephaestus-core", version = "0.18.0", default-features = false }
+hephaestus-core = { path = "../hephaestus-core", version = "0.19.0", default-features = false }
 
 # Backends are optional so a consumer pays for only the devices it targets, and
 # so `cuda`/`rocm` -- which need a vendor toolkit present at build time -- are
 # never pulled in by default. Runtime backend selection still probes the actual
 # machine; these features govern what is compiled in, not what is chosen.
-hephaestus-wgpu = { path = "../hephaestus-wgpu", version = "0.18.0", default-features = false, optional = true }
-hephaestus-cuda = { path = "../hephaestus-cuda", version = "0.18.0", default-features = false, optional = true }
-hephaestus-rocm = { path = "../hephaestus-rocm", version = "0.18.0", default-features = false, optional = true }
-hephaestus-metal = { path = "../hephaestus-metal", version = "0.18.0", default-features = false, optional = true }
+hephaestus-wgpu = { path = "../hephaestus-wgpu", version = "0.19.0", default-features = false, optional = true }
+hephaestus-cuda = { path = "../hephaestus-cuda", version = "0.19.0", default-features = false, optional = true }
+hephaestus-rocm = { path = "../hephaestus-rocm", version = "0.19.0", default-features = false, optional = true }
+hephaestus-metal = { path = "../hephaestus-metal", version = "0.19.0", default-features = false, optional = true }
 
 [features]
 # No backend by default: the contract layer alone compiles everywhere, and a
