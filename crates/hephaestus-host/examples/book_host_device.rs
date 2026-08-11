@@ -59,7 +59,9 @@ fn main() {
         .expect("alloc copy");
     device.copy_buffer(&buf, &copy).expect("copy");
     let mut copy_out = vec![0.0_f32; 8];
-    device.download(&copy, &mut copy_out).expect("download copy");
+    device
+        .download(&copy, &mut copy_out)
+        .expect("download copy");
     assert_eq!(copy_out[2], 99.0);
     println!("copy verified: {:?}", copy_out);
 
