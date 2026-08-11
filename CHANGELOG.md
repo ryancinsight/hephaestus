@@ -426,7 +426,8 @@ Target release: 0.18.0.
 - [minor] Add shared exact `GeluOp` and `GeluGradOp` expression markers for
   WGPU, CUDA, ROCm, and Metal. The forward operation uses the existing
   Abramowitz–Stegun `erf` composition and the gradient uses the analytic normal
-  density term; Coeus ROCm/Metal consumer verification remains in progress.
+  density term; Coeus ROCm/Metal consumer verification passed against the Leto
+  CPU oracle in PR #230.
 
 - [minor] Add shared `ErfOp` and `ErfcOp` expression markers for WGPU, CUDA,
   ROCm, and Metal. WGPU uses the existing approximation contract; CUDA and

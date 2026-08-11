@@ -410,11 +410,17 @@ architectural decision or a tracked future-work item:
   Coeus WGPU explicitly rejected it.
 - Resolution: add `LgammaOp`; CUDA and HIP use native `lgamma`, while WGPU and
   Metal use the provider-owned Lanczos/reflection expression.
-- Residual: Coeus consumer routing, exact-head provider CI, f64/reduced/vector
-  contracts, and digamma gradients remain open.
-- Evidence target: core expression tests, Coeus differential tests for positive,
-  reflected, and pole inputs, and exact-head WGPU, CUDA, ROCm, and Metal jobs.
-- Status: provider implementation in progress.
+- Residual: f64/reduced/vector contracts and digamma gradients remain open;
+  the f32 provider and Coeus consumer paths are complete.
+- Evidence: core expression tests cover native forms, Lanczos coefficients, and
+  pole/infinity selection. Hephaestus PR #118 passed WGPU `90086428952`, CUDA
+  `90086430178`, ROCm `90086430143`, and Metal `90086428160`. Coeus PR #231
+  merged at `971fab9614b97bd708a716d01684da58fd1331ba`; its consumer jobs
+  passed WGPU `90088836682`, CUDA `90088836688`, ROCm `90088836731`, and Metal
+  `90088836675`. Required-device ROCm job `90088837591` was skipped; no
+  physical-device execution claim is made.
+- Status: resolved for f32 provider and consumer parity; extended scalar/vector
+  contracts and digamma remain future work.
 
 ## [HEPH-GELU-EXPRESSION-PARITY-1] Exact GELU vocabulary
 
@@ -424,12 +430,17 @@ architectural decision or a tracked future-work item:
 - Resolution: add provider-owned `GeluOp` and `GeluGradOp` markers. WGPU uses
   the existing Abramowitz–Stegun `erf` composition; CUDA and HIP use `erff`
   with the exact `x/sqrt(2)` contract; Metal delegates through WGPU.
-- Residual: Coeus consumer routing, exact-head provider CI, `lgamma`,
-  tail-stable `erfc`, and non-f32 contracts remain open.
-- Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
-  tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
-  execution is reported separately from adapterless provider CI.
-- Status: provider implementation in progress.
+- Residual: f64/vector contracts, parameterized activations, and unrelated
+  expression families remain outside this f32 increment; the provider and Coeus
+  consumer paths are complete.
+- Evidence: core expression tests cover the scaled-error-function and analytic
+  derivative forms. Hephaestus PR #123 passed WGPU `90115184352`, CUDA
+  `90115253352`, ROCm `90115183816`, and Metal `90115184178`. Coeus PR #230
+  merged at `e26ba668`; its consumer jobs passed WGPU `90061390522`, CUDA
+  `90061390565`, ROCm `90061390546`, and Metal `90061390499`. AMD and NVIDIA
+  hardware jobs were skipped; no physical-device execution claim is made.
+- Status: resolved for f32 provider and consumer parity; extended scalar/vector
+  contracts and parameterized activations remain future work.
 
 ## [HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1] Error-function vocabulary
 
@@ -439,9 +450,14 @@ architectural decision or a tracked future-work item:
 - Resolution: add `ErfOp` and `ErfcOp`; WGPU uses the existing
   Abramowitz–Stegun expression, CUDA and HIP use native intrinsics, and Metal
   delegates through WGPU.
-- Residual: tail-stable `erfc`, `lgamma`, and non-f32 contracts remain open.
-- Evidence target: core expression tests plus exact-head WGPU, CUDA, ROCm, and
-  Metal workflows, followed by Coeus ROCm/Metal differential tests.
+- Residual: broader non-f32 contracts and unrelated expression families remain
+  open; the f32 provider and Coeus consumer paths are complete.
+- Evidence: provider docs head `df8a896` passed WGPU `90028947591`, CUDA
+  `90028946846`, ROCm `90028946770`, and Metal `90028947450`. Coeus PR #228
+  merged at `aca9a5a8`; final docs head `08614299` passed run `30283857017`
+  with CUDA `90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU
+  `90036655846`. Required hardware jobs skipped because no physical device
+  runner was selected.
 - Status: resolved. Provider implementation and Coeus consumer routing are
   complete.
 - Evidence: provider docs head `df8a896` passed WGPU job `90028947591`, CUDA
@@ -459,9 +475,9 @@ architectural decision or a tracked future-work item:
   it through WGPU, CUDA, ROCm, and Metal. The current implementation covers
   tangent, inverse and hyperbolic functions, logarithm/exponential bases,
   `expm1`, `log1p`, sign, and rounding.
-- Residual: `lgamma`, parameterized activations, and f64/vector contracts
-  remain outside the current common baseline; `erf`/`erfc` are tracked by
-  `HEPH-ERROR-FUNCTION-EXPRESSION-PARITY-1`.
+- Residual: parameterized activations and f64/vector contracts remain outside
+  the current common baseline; the Lgamma, GELU, and error-function increments
+  are tracked by their resolved parity records.
 - Evidence target: core expression tests, Coeus ROCm/Metal Leto differential
   tests, and exact-head WGPU, CUDA, ROCm, and Metal workflows. Physical-device
   runner execution is reported separately from adapterless provider CI.
