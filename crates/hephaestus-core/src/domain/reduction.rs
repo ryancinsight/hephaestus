@@ -22,7 +22,7 @@ use crate::domain::device::ComputeDevice;
 use crate::domain::dialect::KernelDialect;
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::launch::BlockWidth;
-use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity, ProdOp, SumOp};
+use crate::domain::ops::{CombineExpr, IdentityToken, MaxOp, MinOp, OpIdentity, ProdOp, SumOp};
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use crate::domain::vector::DenseVectorOps;
 use crate::domain::view::StridedView;
@@ -143,6 +143,50 @@ pub trait AxisReductionOps<D: ComputeDevice, T: Pod> {
     where
         SumOp: CombineExpr<Self::Dialect>,
         T: OpIdentity<SumOp> + IdentityToken<SumOp, Self::Dialect>;
+
+    /// Min-reduce `input` along `axis` into `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the axis is out of range, the
+    /// output shape does not match the reduced shape, a layout is unsupported,
+    /// or the backend dispatch fails.
+    fn min_axis_into(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<()>
+    where
+        MinOp: CombineExpr<Self::Dialect>,
+        T: OpIdentity<MinOp> + IdentityToken<MinOp, Self::Dialect>,
+    {
+        let prepared = self.prepare_reduce_axis_into::<MinOp>(device, input, axis, output)?;
+        self.dispatch_prepared(device, &prepared)
+    }
+
+    /// Max-reduce `input` along `axis` into `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the axis is out of range, the
+    /// output shape does not match the reduced shape, a layout is unsupported,
+    /// or the backend dispatch fails.
+    fn max_axis_into(
+        &self,
+        device: &D,
+        input: StridedView<'_, D::Buffer<T>, 2>,
+        axis: usize,
+        output: StridedView<'_, D::Buffer<T>, 2>,
+    ) -> Result<()>
+    where
+        MaxOp: CombineExpr<Self::Dialect>,
+        T: OpIdentity<MaxOp> + IdentityToken<MaxOp, Self::Dialect>,
+    {
+        let prepared = self.prepare_reduce_axis_into::<MaxOp>(device, input, axis, output)?;
+        self.dispatch_prepared(device, &prepared)
+    }
 
     /// Bind dispatch resources for reducing `input` along `axis` into `output`
     /// under the combining operator `Op`.
