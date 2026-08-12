@@ -4,7 +4,6 @@
 pub mod attention;
 /// Rank-2 axis reductions over leto layouts.
 pub mod axis_reduction;
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Native HIP regular and transposed convolution.
@@ -19,7 +18,6 @@ pub mod decomposition_seam;
 /// Device-neutral dense product seam implementation.
 pub mod dense_product_seam;
 pub mod elementwise;
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
 #[cfg(all(feature = "rocm", target_os = "linux"))]

@@ -40,7 +40,6 @@ pub use application::axis_reduction::{
     ProdOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
     prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::axis_reduction_seam::RocmAxisReductionOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::convolution::RocmConvolutionOps;
@@ -69,7 +68,6 @@ pub use application::elementwise::{
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
-#[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::elementwise_seam::RocmElementwiseOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
