@@ -24,8 +24,10 @@ architectural decision or a tracked future-work item:
   shared semantic-status and numerical-tolerance protocol, and vendor-only
   device implementations for WGPU, CUDA, ROCm, and Metal.
 - Residual: no runtime or memory improvement is claimed until the complete
-  consumer cutover has matched measurements; exact-head hosted provider CI and
-  the Coeus consumer cutover remain open.
+  consumer cutover has matched measurements. Exact-head hosted provider CI is
+  closed at `bc6dfcf` by WGPU, CUDA, ROCm, Metal, and mdBook workflows
+  (`31646386129`, `31646386243`, `31646386123`, `31646386192`,
+  `31646386586`); the Coeus consumer cutover remains open.
 
 ## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
 

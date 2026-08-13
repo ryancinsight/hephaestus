@@ -1,10 +1,11 @@
 # Backlog — hephaestus
 
-## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — in-progress
+## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — done 2026-08-12
 
-- Owner: Codex on `codex/hephaestus-cross-entropy-provider`; claimed
-  2026-08-04. Scope: device-neutral cross-entropy planning, WGPU/CUDA/ROCm/Metal
-  implementations, conformance, and owner-keyed PM/ADR records.
+- Owner: Codex. The implementation merged through PR #192 at `1e1f12c`;
+  this closeout records the final exact-head evidence. Scope: device-neutral
+  cross-entropy planning, WGPU/CUDA/ROCm/Metal implementations, conformance,
+  and owner-keyed PM/ADR records.
 - Outcome: execute stable mean cross-entropy forward and additive backward on
   the selected accelerator while probabilities and gradients remain provider
   resident.
@@ -19,10 +20,12 @@
   Nextest, doctests, SemVer checks, independent review, and exact-head provider
   CI pass before merge.
 - Status: provider seam, implementations, conformance, warning-denied checks,
-  doctests, focused Nextest, core SemVer, and independent review complete.
-  Exact-head hosted provider CI remains; the local full affected-package launch
-  did not reach test execution within its five-minute shared-cache contention
-  budget and is not counted as evidence.
+  doctests, focused Nextest, core SemVer, independent review, and exact-head
+  hosted provider CI are complete. The final WGPU, CUDA, ROCm, Metal, and
+  mdBook workflows pass at `bc6dfcf` (`31646386129`, `31646386243`,
+  `31646386123`, `31646386192`, `31646386586`). The local full
+  affected-package launch did not reach test execution within its five-minute
+  shared-cache contention budget and is not counted as evidence.
 
 ## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
 
