@@ -21,8 +21,13 @@ architectural decision or a tracked future-work item:
   mask literals in the shared operation vocabulary and instantiate them
   through the CUDA seam. Do not revive the deleted NVRTC compatibility path or
   add a consumer-local expression.
-- Status: in progress on the provider branch; consumer cutover and physical
-  device execution remain separate evidence scopes.
+- Status: resolved at provider default `b34b50787df636891d281b5011c6a17dd46edcb0`
+  through PR #204. Exact-head hosted runs `31669318548` (CUDA), `31669318571`
+  (WGPU), `31669318539` (ROCm), and `31669318537` (Metal) pass. The provider
+  source contains value-semantic assertions for all six `CudaC, f64` typed
+  expressions and retains the provider-owned path without a host or legacy
+  NVRTC adapter. Coeus consumer cutover and physical-device execution remain
+  separate evidence scopes.
 
 ## [HEPH-CROSS-ENTROPY-PROVIDER-1] Accelerator cross-entropy ownership
 
