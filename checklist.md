@@ -8,7 +8,9 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Add one device-neutral forward/backward loss seam and shared validation.
 - [x] Implement WGPU/CUDA/ROCm/Metal provider dispatch without host fallback.
 - [x] Add shared conformance and provider-specific source/device contracts.
-- [ ] Pass focused gates, SemVer checks, independent review, and exact-head CI.
+- [x] Pass focused gates, SemVer checks, independent review, and exact-head CI.
+      Final provider workflows pass at `bc6dfcf` (WGPU, CUDA, ROCm, Metal,
+      and mdBook).
 
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — Owner: Codex
 
