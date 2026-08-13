@@ -1,15 +1,20 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-F64-COMPARISON-1 [minor] — in progress
+## HEPH-CUDA-F64-COMPARISON-1 [minor] — done 2026-08-13
 
 - Owner: Atlas integration; scope: the provider-owned typed CUDA comparison
   expressions and CUDA contract instantiation. The Coeus consumer refresh is a
-  separate dependent increment after this provider merges.
+  separate dependent increment after this provider merge.
 - Acceptance: `Eq`, `Ne`, `Lt`, `Gt`, `Le`, and `Ge` compile for `CudaC, f64`
   with double-valued result masks; no host or legacy NVRTC path is added.
-- Verification: core expression-value tests, CUDA typed-seam tests, locked
-  warning-denied checks, Nextest, doctests, rustdoc, and the exact provider
-  matrix. Physical-device execution is reported independently.
+- Verification: the merged provider head `b34b50787df636891d281b5011c6a17dd46edcb0`
+  contains the shared six-operation `CudaC, f64` typed expression contract and
+  the CUDA value-semantic instantiation test. Exact-head hosted runs
+  `31669318548` (CUDA), `31669318571` (WGPU), `31669318539` (ROCm), and
+  `31669318537` (Metal) all pass. These runs establish hosted backend CI only;
+  no physical CUDA-device execution claim is added. PR #204 merged the
+  implementation at `b34b507`; the remaining Coeus consumer cutover is tracked
+  separately.
 
 ## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — done 2026-08-12
 

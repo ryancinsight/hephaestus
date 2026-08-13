@@ -4,6 +4,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] CUDA now provides all six typed `f64` comparison expressions through
+  the provider-owned operation vocabulary, with exact backend CI recorded at
+  the merged default head `b34b507`.
+
 Target release: 0.18.0.
 
 ### Added
