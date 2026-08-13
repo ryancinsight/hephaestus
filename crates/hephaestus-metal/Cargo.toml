@@ -6,7 +6,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Metal backend for the Atlas accelerator substrate: macOS device acquisition, typed buffers, and compute kernels."
+description = "Retired by ADR 0047: a forwarding layer over hephaestus-wgpu with the Metal adapter selected. Use hephaestus-wgpu directly."
+readme = "README.md"
+keywords = ["gpu", "metal", "macos", "wgpu", "compute"]
+categories.workspace = true
 
 [features]
 default = ["parallel", "mnemosyne-memory", "decomposition"]

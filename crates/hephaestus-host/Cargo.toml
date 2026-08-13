@@ -1,6 +1,9 @@
 [package]
 name = "hephaestus-host"
 description = "Host reference device for the Hephaestus seams: conformance-grade CPU implementors over leto (ADR 0046)"
+readme = "README.md"
+keywords = ["gpu", "cpu", "reference", "conformance", "compute"]
+categories.workspace = true
 version.workspace = true
 rust-version.workspace = true
 edition.workspace = true

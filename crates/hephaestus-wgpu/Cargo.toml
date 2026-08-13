@@ -7,6 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "wgpu backend for the Atlas accelerator substrate: device acquisition, typed buffers, and monomorphized compute dispatch."
+readme = "README.md"
+keywords = ["gpu", "wgpu", "compute", "wgsl", "vulkan"]
+categories.workspace = true
 
 [features]
 default = ["parallel", "mnemosyne-memory", "decomposition", "sparse"]

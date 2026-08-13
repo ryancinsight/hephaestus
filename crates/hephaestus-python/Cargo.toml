@@ -6,6 +6,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Python bindings for the Atlas accelerator substrate: typed GPU device buffers and compute dispatch over WGPU and CUDA."
+readme = "README.md"
+# Wheel-only artifact (PyPI as `pyhephaestus`); never published to crates.io.
 publish = false
 
 [lib]

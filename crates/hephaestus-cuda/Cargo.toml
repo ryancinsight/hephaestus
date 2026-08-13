@@ -7,6 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "CUDA backend for the Atlas accelerator substrate: dynamic-loaded driver device acquisition, typed device buffers, and host/device transfer."
+readme = "README.md"
+keywords = ["gpu", "cuda", "nvidia", "compute", "kernel"]
+categories.workspace = true
 
 [features]
 # Default includes the CUDA toolchain so the crate builds and runs with CUDA

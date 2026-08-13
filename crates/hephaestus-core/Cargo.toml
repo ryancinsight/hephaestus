@@ -7,6 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "GPU-dependency-free device, buffer, and dispatch contracts for the Atlas accelerator substrate."
+readme = "README.md"
+keywords = ["gpu", "compute", "contracts", "buffer", "device"]
+categories.workspace = true
 
 [features]
 default = ["parallel", "mnemosyne-memory"]

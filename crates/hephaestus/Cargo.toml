@@ -7,9 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Atlas accelerator substrate: device, buffer, transfer, and kernel contracts with optional WGPU, CUDA, ROCm, and Metal backends."
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["gpu", "wgpu", "cuda", "compute", "simulation"]
-categories = ["science", "hardware-support"]
+categories.workspace = true
 # Ordering guard, not an oversight (ADR 0037 §4): a crate can publish only once
 # its first-party dependencies are on crates.io, and hephaestus-core is not yet
 # published. `scripts/publish-order.py` in the Atlas meta-repo derives the wave

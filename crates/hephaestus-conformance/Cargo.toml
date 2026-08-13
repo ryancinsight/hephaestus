@@ -7,9 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Backend-neutral conformance suite for the Atlas accelerator seams: one set of contract clauses every ComputeDevice implementation is held to."
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["gpu", "conformance", "testing", "compute"]
-categories = ["science", "hardware-support"]
+categories.workspace = true
 # Ordering guard, not an oversight (ADR 0037 §4): a crate can publish only once
 # its first-party dependencies are on crates.io, and hephaestus-core is not yet
 # published. The flag is removed as the last step of that publish.

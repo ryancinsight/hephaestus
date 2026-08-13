@@ -24,24 +24,24 @@
 //!
 //! ```toml
 //! # portable compute, no vendor toolkit needed
-//! hephaestus = { version = "0.18", features = ["wgpu"] }
+//! hephaestus = { version = "0.19", features = ["wgpu"] }
 //!
 //! # NVIDIA; needs a CUDA toolkit at build time for headers
-//! hephaestus = { version = "0.18", features = ["cuda"] }
+//! hephaestus = { version = "0.19", features = ["cuda"] }
 //! ```
 //!
 //! No backend is enabled by default. A default backend would make every
 //! consumer of the traits pull a device stack, and `cuda`/`rocm` additionally
 //! require vendor toolkits present at build time.
 //!
-//! # Feature flags select what is compiled, not what runs
+//! # Feature flags select what is compiled
 //!
-//! Enabling a backend feature compiles it in. It does not select it: backend
-//! choice is a runtime decision made by probing the actual machine, so a build
-//! with several backends enabled still dispatches to whichever hardware is
-//! present. A feature that is absent means that device can never be chosen,
-//! which is why capability-varying backends are compiled in rather than
-//! feature-gated away when the hardware might exist.
+//! Enabling a backend feature compiles it in. This facade performs no backend
+//! selection: it contains no logic, only re-exports. Select a backend
+//! explicitly by naming its device type (`WgpuDevice::try_default`,
+//! `CudaDevice::try_default`, …); each returns a typed unavailable-device error
+//! on a host without that hardware, so a caller that wants a preference order
+//! writes that order itself.
 //!
 //! | Feature | Effect |
 //! | --- | --- |

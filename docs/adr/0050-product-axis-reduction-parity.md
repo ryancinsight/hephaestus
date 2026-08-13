@@ -1,7 +1,11 @@
-# ADR 0028: Product-axis reduction parity
+# ADR 0050: Product-axis reduction parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
+- Revision (2026-08-13): renumbered 0028 → 0050. It was drafted against a
+  number already claimed by ADR 0028 (unary math-expression parity, landed
+  2026-07-27), so it collided on landing 2026-07-30 and was never indexed.
+  Content unchanged; the decision itself is not revisited.
 - Scope: WGPU, CUDA, ROCm, and Metal rank-2 reduction application modules
 - Change class: `[minor]`
 
