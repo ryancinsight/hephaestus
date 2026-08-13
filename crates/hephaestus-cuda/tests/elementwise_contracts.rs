@@ -7,6 +7,7 @@
 #![cfg(feature = "cuda")]
 
 use hephaestus_conformance::assert_elementwise_contract;
+use hephaestus_core::{CudaC, EqOp, GeOp, GtOp, LeOp, LtOp, NeOp, TypedBinaryExpr};
 use hephaestus_cuda::{CudaDevice, CudaElementwiseOps};
 
 #[test]
@@ -20,4 +21,32 @@ fn cuda_satisfies_the_elementwise_contract() {
         Err(error) => panic!("CUDA elementwise conformance requires a physical device: {error}"),
     };
     assert_elementwise_contract(&device, &CudaElementwiseOps);
+}
+
+#[test]
+fn cuda_f64_comparison_expressions_are_provider_typed() {
+    assert_eq!(
+        <EqOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs == rhs ? 1.0 : 0.0"
+    );
+    assert_eq!(
+        <NeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs != rhs ? 1.0 : 0.0"
+    );
+    assert_eq!(
+        <LtOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs < rhs ? 1.0 : 0.0"
+    );
+    assert_eq!(
+        <GtOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs > rhs ? 1.0 : 0.0"
+    );
+    assert_eq!(
+        <LeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs <= rhs ? 1.0 : 0.0"
+    );
+    assert_eq!(
+        <GeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+        "lhs >= rhs ? 1.0 : 0.0"
+    );
 }

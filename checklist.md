@@ -2,6 +2,14 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CUDA-F64-COMPARISON-1 — in progress
+
+- [ ] Add all six typed CUDA `f64` comparison expressions in the shared
+      provider operation vocabulary.
+- [ ] Instantiate and assert the six expressions through the CUDA crate's
+      typed seam.
+- [ ] Run the local provider gates, merge, and record exact hosted evidence.
+
 ## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — Owner: Codex
 
 - [x] Claim the provider boundary and record ADR 0049.
