@@ -11,6 +11,19 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-CUDA-F64-COMPARISON-1] CUDA f64 typed comparisons
+
+- Finding: the typed CUDA comparison vocabulary covered `f32`, `u32`, and
+  `i32`, but not `f64`, although CUDA's dialect and buffer path support native
+  double values. Coeus consequently could not restore its provider-owned
+  `ElementwiseProvider<f64>` declaration.
+- Resolution target: add the six comparison expressions with double-valued
+  mask literals in the shared operation vocabulary and instantiate them
+  through the CUDA seam. Do not revive the deleted NVRTC compatibility path or
+  add a consumer-local expression.
+- Status: in progress on the provider branch; consumer cutover and physical
+  device execution remain separate evidence scopes.
+
 ## [HEPH-CROSS-ENTROPY-PROVIDER-1] Accelerator cross-entropy ownership
 
 - Finding: Hephaestus exposes no classification-loss role, forcing a downstream

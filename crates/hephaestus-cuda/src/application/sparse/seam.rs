@@ -1,6 +1,6 @@
 //! CUDA implementation of the device-neutral sparse operator seam.
 //!
-//! The kernels live in this module's [`spmv`](super::spmv) family; this file
+//! The kernels live in this module's `spmv` family; this file
 //! only adapts them to [`hephaestus_core::SparseOperatorOps`] so a consumer —
 //! or the conformance suite — can run CSR products without naming
 //! `CudaDevice`, matching the WGPU seam shape.
