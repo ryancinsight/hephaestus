@@ -810,10 +810,9 @@ dependencies = [
 [[package]]
 name = "leto"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#d9e674fc6492cef57a527afba30692ac2fc17467"
+source = "git+https://github.com/ryancinsight/leto.git#143696d309ea9e542a6b7acba0b84baf33fd1ddc"
 dependencies = [
  "aequitas",
- "bytemuck",
  "eunomia",
  "mnemosyne-memory",
  "serde",
@@ -823,9 +822,8 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#d9e674fc6492cef57a527afba30692ac2fc17467"
+source = "git+https://github.com/ryancinsight/leto.git#143696d309ea9e542a6b7acba0b84baf33fd1ddc"
 dependencies = [
- "bytemuck",
  "eunomia",
  "hermes-simd",
  "leto",
