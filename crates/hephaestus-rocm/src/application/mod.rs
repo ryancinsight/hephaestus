@@ -17,6 +17,8 @@ pub mod decomposition;
 pub mod decomposition_seam;
 /// Device-neutral dense product seam implementation.
 pub mod dense_product_seam;
+/// Device-API seam backing the generic accelerator layer.
+pub mod device_api;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
@@ -44,10 +46,6 @@ pub mod random;
 pub mod random_seam;
 /// Contiguous multi-pass tree reductions.
 pub mod reduction;
-/// Rank-2 prefix and suffix scans over strided layouts.
-pub mod scan;
-/// Device-neutral scan seam implementation.
-pub mod scan_seam;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
 /// Provider-owned stateful parameter updates.

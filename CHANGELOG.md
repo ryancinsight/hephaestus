@@ -8,7 +8,7 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   the provider-owned operation vocabulary, with exact backend CI recorded at
   the merged default head `b34b507`.
 
-Target release: 0.18.0.
+Target release: 0.19.0 (the current workspace version).
 
 ### Added
 

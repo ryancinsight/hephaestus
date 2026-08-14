@@ -18,6 +18,10 @@ rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ryancinsight/hephaestus.git"
+# Shared registry classification. `readme` is deliberately NOT inherited: an
+# inherited `readme` path resolves against the workspace root, which would point
+# every member at the root README instead of its own landing page.
+categories = ["science", "hardware-support"]
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──

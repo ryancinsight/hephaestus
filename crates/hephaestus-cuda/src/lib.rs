@@ -90,11 +90,18 @@ pub use application::reduction::{
     min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,
     reduction_with_width, sum_axis, sum_axis_into,
 };
-pub use application::scan::{
-    CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
-    scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+// Scans are the generic accelerator layer's, instantiated at this device
+// through its `DeviceApi` implementation; the backend adds no scan code.
+pub use hephaestus_core::domain::accelerator::scan::{
+    cumprod, cumprod_into, cumsum, cumsum_into, scan_axis, scan_axis_into, suffix_prod,
+    suffix_prod_into, suffix_sum, suffix_sum_into,
 };
-pub use application::scan_seam::{CudaPreparedScan, CudaScanOps};
+pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
+
+/// The scan seam for this device.
+pub type CudaScanOps = hephaestus_core::AxisScanOps<CudaDevice>;
+/// A scan prepared against one operand pair on this device.
+pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaDevice, T>;
 pub use application::sparse::seam::CudaSparseOps;
 pub use application::stateful_update::CudaStatefulUpdateOps;
 pub use application::stencil::CudaStencilOps;

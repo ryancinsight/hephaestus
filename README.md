@@ -22,20 +22,23 @@ backend, so a consumer names one dependency rather than assembling sub-crates
 
 ```toml
 # contracts only — compiles on a machine with no accelerator
-hephaestus = "0.18"
+hephaestus = "0.19"
 
 # portable compute
-hephaestus = { version = "0.18", features = ["wgpu", "decomposition", "sparse"] }
+hephaestus = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; needs a CUDA toolkit at build time for headers
-hephaestus = { version = "0.18", features = ["cuda", "decomposition"] }
+hephaestus = { version = "0.19", features = ["cuda", "decomposition"] }
 ```
 
 No backend is enabled by default: a default backend would make every consumer of
 the traits pull a device stack, and `cuda`/`rocm` additionally require vendor
-toolkits present at build time. Enabling a backend feature compiles it in; it
-does not select it, because backend choice stays a runtime decision made by
-probing the actual machine.
+toolkits present at build time.
+
+Feature gating determines what is compiled in; the facade performs no backend
+selection. Select a backend explicitly by naming its device type
+(`WgpuDevice::try_default`, `CudaDevice::try_default`, …), and handle the typed
+unavailable-device error each returns on a host without that hardware.
 
 Contracts appear at facade paths — `hephaestus::DeviceBuffer` — and backends
 under a module named for the device API: `hephaestus::wgpu`, `hephaestus::cuda`,
@@ -44,15 +47,21 @@ consumer *can* take a narrower dependency; the facade is what it should reach fo
 
 ## Workspace
 
-| Crate | Responsibility |
+Each crate's own README and rustdoc carry its operation inventory; the table
+states role and ownership only, so adding an operation does not require editing
+this file.
+
+| Crate | Role |
 | --- | --- |
-| `hephaestus` | Facade and entry point. Re-exports `hephaestus-core` flat and each backend behind a feature (`wgpu`, `cuda`, `rocm`, `metal`); forwards `parallel`, `mnemosyne-memory`, `decomposition`, and `sparse`. Contains no logic. |
-| `hephaestus-core` | GPU-dependency-free contracts: `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, shared volume ray geometry/validation, shared 2D Laplacian parameters, and distinct error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
-| `hephaestus-wgpu` | Portable wgpu backend (wgpu 30): adapter/device acquisition, typed `WgpuBuffer<T>` (PhantomData-typed over `wgpu::Buffer`), upload/download with pooled staging, monomorphized elementwise/reduction/scan dispatch via ZST op markers + per-`(Op, T, BlockWidth)` WGSL generation including common activation expressions, rank-2 cumulative sum/product scans, reusable prepared dot/L2, scalar and rank-2 axis sum/min/max/mean/product reductions, prepared CSR sparse SpMV/SpMM and mixed batching, blocked and pivoted decomposition contracts, and the shared volume/Laplacian contracts. |
-| `hephaestus-metal` | macOS Metal backend: `MetalDevice`/`MetalBuffer` ownership and the shared application contracts through `hephaestus-wgpu` with the native Metal backend selected, including common activation expressions, rank-2 cumulative sum/product scans, seeded uniform/normal initializers, prepared dot/L2, CSR sparse products with prepared SpMV/SpMM batching, direct output-buffer and prepared scalar plus rank-2 axis sum/min/max/mean reductions, and immediate rank-2 axis product reductions, volume ray integrals, the 2D Laplacian stencil, Metal-owned storage kernels, authored-kernel streams with grouped sequencing, and blocked pivoted decomposition wrappers. |
-| `hephaestus-cuda` | CUDA backend: cuda-oxide device acquisition, context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, host/device transfer, and monomorphized elementwise/reduction/scan/linalg/sparse/volume/Laplacian dispatch via ZST op markers, including common activation expressions, rank-2 cumulative sum/product scans, reusable prepared dot/L2, scalar and rank-2 axis sum/min/max/mean/product reductions, and CSR sparse SpMV/SpMM plans with batching, shared geometry and stencil contracts, blocked and pivoted decomposition contracts, and cutile kernel authoring. Dynamic-rank strided elementwise entry points let runtime-shaped consumers delegate their GPU tensor layout kernels without depending on Coeus-local CUDA generators. The `decomposition` feature includes the `cuda` substrate it launches. |
-| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, transfer/synchronization, and hipRTC/module-launched contiguous and rank-≤4 strided binary, unary, and scalar elementwise operations, including common activation expressions, contiguous sum/min/max and reusable prepared dot/L2, scalar and rank-2 axis sum/min/max/mean/product reductions, and CSR sparse SpMV/SpMM plans with batching, rank-2 prefix/suffix scans, tiled rank-2 and batched matrix multiplication, strided Kronecker products, matrix powers, finite rank estimation, determinants, pseudoinverses, matrix exponentials, seeded uniform/normal initializers, strided dot/trace/L1/L2/max norms, device-resident CSR matrices, HIP SpMV/SpMM dispatch, native volume ray integrals, native 2D Laplacian stencils, backend-neutral multi-storage HIP kernels, authored-kernel streams with grouped sequencing, and optional HIP Cholesky, partial/complete-pivot LU, Householder/column-pivoted QR, Golub–Kahan bidiagonalization, SVD, UDU, Bunch–Kaufman, Hessenberg, real Schur, symmetric Jacobi eigen, and general complex eigenvalue decomposition surfaces. Enable the optional `rocm` feature on a ROCm host; add `decomposition` for the factorization surface. |
-| `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. |
+| `hephaestus` | Facade and entry point. Re-exports `hephaestus-core` flat and each backend behind a feature; forwards `parallel`, `mnemosyne-memory`, `decomposition`, and `sparse`. Contains no logic. |
+| `hephaestus-core` | GPU-dependency-free contracts: the `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, the shared volume-ray and 2D-Laplacian parameter vocabulary, and the error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
+| `hephaestus-host` | CPU **reference** device (ADR 0046). Implements the seams over plain host memory via leto so conformance can instantiate a CPU pair for every clause. Correctness first, never a performance path — consumers wanting fast CPU execution use leto directly. |
+| `hephaestus-conformance` | The shared clause suite. One set of contract clauses, generic over `ComputeDevice` and the operation seam, that every backend runs by instantiating rather than re-authoring (ADR 0041). |
+| `hephaestus-wgpu` | Portable wgpu backend (wgpu 30) and the reference implementation of the seam: adapter/device acquisition, typed `WgpuBuffer<T>`, pooled staging transfer, and monomorphized dispatch through ZST op markers with per-`(Op, T, BlockWidth)` WGSL generation. Also owns Metal adapter selection (`WgpuDevice::try_metal`). |
+| `hephaestus-cuda` | Native NVIDIA backend: cuda-oxide device acquisition and context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, transfer, cutile kernel authoring, and monomorphized dispatch across the operation families. `decomposition` implies `cuda`, since its kernels need that substrate. |
+| `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, and hipRTC/module-launched kernels across the operation families. Needs the `rocm` feature on a ROCm host; `decomposition` adds the factorization surface. |
+| `hephaestus-metal` | **Retired by Accepted [ADR 0047](docs/adr/0047-metal-as-a-wgpu-adapter-preference.md); use `hephaestus-wgpu` directly.** Contains no Metal device API — no `metal::`, no `objc`, no MSL. `MetalDevice` is a newtype over `WgpuDevice` acquired through `WgpuDevice::try_metal`, and every operation forwards to `hephaestus-wgpu`. Metal is an adapter preference of the wgpu backend, not a backend. |
+| `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. Wheel-only; not published to crates.io. |
 
 ## Python Releases
 
@@ -236,7 +245,7 @@ allocation/resource-budget vocabulary (mnemosyne), ownership proofs (melinoe —
 planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
 (hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
 GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
-expose Themis topology snapshots. Hephaestus owns its concrete WGPU 26 runtime
+expose Themis topology snapshots. Hephaestus owns its concrete WGPU 30 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
 mechanics, elementwise kernels, reductions, scans, map-reductions, Kronecker
 products, matrix powers, matrix properties, seeded random initializers, tiled
@@ -327,5 +336,5 @@ are empirical timing tools, not stored regression baselines.
 
 - `apollo`: `apollo-wgpu-helpers` delegates adapter/device acquisition here
   (public API preserved for the 16+ `-wgpu` transform crates).
-- `coeus`: GPU `ComputeBackend` implementations re-base here when coeus bumps
-  to wgpu 26 (currently on 23); tracked in coeus MS-60+ Stage D.
+- `coeus`: GPU `ComputeBackend` implementations are based here through the
+  `coeus-hephaestus` crate, on the same wgpu 30 ABI.

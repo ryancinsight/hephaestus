@@ -1,5 +1,5 @@
-//! Kernel-dialect vocabulary: sealed dialect markers and per-dialect scalar
-//! type tokens.
+//! Kernel-dialect vocabulary: dialect markers and per-dialect scalar type
+//! tokens.
 //!
 //! A [`KernelDialect`](crate::KernelDialect) is the shading/kernel language a backend compiles —
 //! WGSL for wgpu (native and Metal-pinned), CUDA C++ for the NVRTC-compiled
@@ -10,22 +10,22 @@
 //! others — dispatching it on the wrong backend is a compile error, not a
 //! runtime failure.
 //!
-//! The trait is sealed: a new dialect is a deliberate substrate extension
-//! (new backend crate), not a consumer-side extension point.
+//! The trait is deliberately **open**. [`KernelDialect`](crate::KernelDialect)
+//! is a mandatory associated type of the device seam
+//! ([`KernelDevice::Dialect`](crate::KernelDevice::Dialect)), so sealing it
+//! would make a backend crate outside this one unable to name its own device
+//! API at all — every new vendor would require an upstream edit and release of
+//! `hephaestus-core`. The companion vocabularies a new dialect must populate
+//! ([`DialectScalar`](crate::DialectScalar),
+//! [`CombineExpr`](crate::CombineExpr),
+//! [`IdentityToken`](crate::IdentityToken)) are open for the same reason, and
+//! their impls are reachable from a backend crate under the orphan rule
+//! because the dialect marker is that crate's local type.
 
 use bytemuck::Pod;
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::Wgsl {}
-    impl Sealed for super::CudaC {}
-    impl Sealed for super::HipC {}
-}
-
 /// A kernel-source dialect a backend can compile.
-pub trait KernelDialect:
-    sealed::Sealed + Copy + Clone + core::fmt::Debug + Default + Send + Sync + 'static
-{
+pub trait KernelDialect: Copy + Clone + core::fmt::Debug + Default + Send + Sync + 'static {
     /// Human-readable dialect name for diagnostics.
     const NAME: &'static str;
 

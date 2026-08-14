@@ -1,5 +1,7 @@
 //! Domain contracts: errors, typed device buffers, and accelerator seams.
 
+/// One generic accelerator layer over the narrow device-API seam.
+pub mod accelerator;
 /// Device-neutral scaled dot-product attention contracts and planning.
 pub mod attention;
 /// Typed device-buffer contract.

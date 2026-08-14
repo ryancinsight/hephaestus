@@ -18,5 +18,5 @@ fn rocm_satisfies_the_scan_contract() {
         }
         Err(error) => panic!("ROCm scan conformance requires a physical device: {error}"),
     };
-    assert_scan_contract(&device, &RocmScanOps);
+    assert_scan_contract(&device, &RocmScanOps::default());
 }

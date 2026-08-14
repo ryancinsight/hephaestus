@@ -54,3 +54,4 @@ Statuses use the canonical `Proposed`, `Accepted`, and `Rejected` terms.
 | [0047](0047-metal-as-a-wgpu-adapter-preference.md) | Metal is a WGPU adapter preference, not a backend crate | Accepted |
 | [0048](0048-prepared-batch-submission-seam.md) | Prepared batch submission seam | Accepted |
 | [0049](0049-provider-owned-cross-entropy.md) | Provider-owned accelerator cross-entropy | Accepted |
+| [0050](0050-product-axis-reduction-parity.md) | Product-axis reduction parity | Accepted |

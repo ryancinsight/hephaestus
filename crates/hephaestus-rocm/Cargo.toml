@@ -7,6 +7,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "ROCm/HIP backend for the Atlas accelerator substrate: typed device buffers and runtime-compiled operator kernels."
+readme = "README.md"
+keywords = ["gpu", "rocm", "hip", "amd", "compute"]
+categories.workspace = true
 
 [features]
 default = []

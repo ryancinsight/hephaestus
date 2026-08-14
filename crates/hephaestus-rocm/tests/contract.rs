@@ -1549,7 +1549,7 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
     assert_eq!(forward_output, [1, 3, 6, 10, 5, 11, 18, 26]);
 
     let reverse =
-        scan_axis::<CumSumOp, _>(&device, input_operand, 1, ScanDirection::Reverse, width)
+        scan_axis::<_, CumSumOp, _>(&device, input_operand, 1, ScanDirection::Reverse, width)
             .expect("HIP reverse cumulative sum");
     let mut reverse_output = [0_i32; 8];
     device
@@ -1650,7 +1650,7 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
     let long_input: Vec<i32> = (0..1_025).map(|index| index % 7 - 3).collect();
     let long_buffer = device.upload(&long_input).expect("HIP long scan upload");
     let long_layout = Layout::c_contiguous([1, 1_025]).expect("long scan layout");
-    let long_output = scan_axis::<CumSumOp, _>(
+    let long_output = scan_axis::<_, CumSumOp, _>(
         &device,
         StridedOperand {
             buffer: &long_buffer,
@@ -1679,7 +1679,7 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
         .alloc_zeroed::<i32>(8)
         .expect("wrong scan output buffer");
     assert!(matches!(
-        scan_axis_into::<CumSumOp, _>(
+        scan_axis_into::<_, CumSumOp, _>(
             &device,
             input_operand,
             1,
@@ -1695,7 +1695,7 @@ fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
     ));
 
     assert!(matches!(
-        scan_axis_into::<CumSumOp, _>(
+        scan_axis_into::<_, CumSumOp, _>(
             &device,
             input_operand,
             1,
@@ -3574,7 +3574,7 @@ fn svd_surfaces_match_leto_values_and_rank_contracts() {
         },
     )
     .expect("ROCm rank-revealing SVD");
-    let rank_expected = leto_ops::svd_rank_revealing(&leto::ArrayView::<f32, 2>::new(
+    let rank_expected = leto_ops::svd_decompose(&leto::ArrayView::<f32, 2>::new(
         layout,
         &rank_deficient_values,
     ))

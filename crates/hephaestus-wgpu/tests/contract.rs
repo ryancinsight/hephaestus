@@ -2838,7 +2838,7 @@ fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     .unwrap();
 
     let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host).unwrap();
-    let leto_svd = leto_ops::svd_rank_revealing(&leto_matrix.view()).unwrap();
+    let leto_svd = leto_ops::svd_decompose(&leto_matrix.view()).unwrap();
     let rank = leto_svd.singular_values.len();
     let mut got_singular = vec![0.0f32; rank];
     device

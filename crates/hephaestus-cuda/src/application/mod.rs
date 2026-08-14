@@ -11,6 +11,8 @@ pub mod convolution;
 pub mod decomposition_seam;
 /// Device-neutral dense product seam implementation.
 pub mod dense_product_seam;
+/// Device-API seam backing the generic accelerator layer.
+pub mod device_api;
 /// Contiguous elementwise operations.
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
@@ -37,10 +39,6 @@ pub mod prepared_strided_elementwise;
 pub mod random_seam;
 /// Multi-pass tree reductions.
 pub mod reduction;
-/// Prefix/suffix scan operations.
-pub mod scan;
-/// Device-neutral scan seam implementation.
-pub mod scan_seam;
 /// Device-neutral stateful-update seam implementation.
 pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.
