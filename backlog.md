@@ -3191,6 +3191,19 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   consumers. Collapsing it to `WgpuDevice::try_metal` would be a breaking
   public-surface change and would remove the Metal-specific required-device
   CI contract. The macOS workflow and README now carry the decision evidence.
+  - **Revision 2026-08-14: superseded by Accepted ADR 0047**, which retires the
+    crate as a WGPU adapter preference. Leaving this entry as `done` had the
+    board asserting both positions at once. Two things were wrong here beyond
+    the outcome. The crate does not "own" `MetalDevice`/`MetalBuffer` in any
+    load-bearing sense - `MetalDevice` is a newtype around `WgpuDevice`
+    acquired through `WgpuDevice::try_metal`, with zero native Metal API calls
+    across 5 449 lines. And "would be a breaking public-surface change" is a
+    prohibited tiebreaker: breaking-surface cost is what a `[major]` class
+    exists to carry, not a reason to retain a forwarding layer.
+    Retirement is tracked as ATLAS-ARCH-011 and is blocked on
+    ATLAS-SUBSTRATE-002 (the `coeus-metal` consumer), not on anything in
+    hephaestus - the removal was executed here, verified green, and reverted
+    solely for that consumer.
 
 - [KS-10] [major] `mnemosyne` co-evolution sweep: follow the upstream
   collision-free rename (`mnemosyne` package → `mnemosyne-memory`, Mnemosyne
