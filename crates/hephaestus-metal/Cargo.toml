@@ -32,3 +32,6 @@ themis = { workspace = true }
 hephaestus-conformance = { workspace = true }
 leto-ops = { workspace = true }
 aequitas = { workspace = true }
+
+[lints]
+workspace = true

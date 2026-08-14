@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Contract tests for the scalar-typed elementwise dispatch entry points.
 //!
 //! `binary_elementwise_typed`, `binary_elementwise_typed_into`,

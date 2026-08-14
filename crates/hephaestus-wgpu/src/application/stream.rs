@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! WGPU implementation of the backend-neutral kernel command stream.
 
 use std::marker::PhantomData;

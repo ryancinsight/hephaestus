@@ -27,3 +27,6 @@ themis = { workspace = true }
 # dispatch planning (axis scan) so backends do not each duplicate it. Layout
 # and error types only — no GPU dependency, keeping core GPU-free.
 leto = { workspace = true, default-features = false, features = ["std"] }
+
+[lints]
+workspace = true

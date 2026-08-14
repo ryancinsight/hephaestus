@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Backend-neutral axis-reduction planning and the device-neutral seam.
 //!
 //! Both GPU backends reduce a rank-2 strided operand along one axis with the

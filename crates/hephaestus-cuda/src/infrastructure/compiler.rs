@@ -160,13 +160,20 @@ fn find_nvrtc_library() -> Option<Library> {
                     if path.is_file()
                         && let Some(filename) = path.file_name().and_then(|s| s.to_str())
                     {
+                        let extension = path.extension().and_then(|s| s.to_str());
                         let matches = if cfg!(windows) {
-                            filename.starts_with("nvrtc")
-                                && !filename.contains("builtins")
-                                && filename.ends_with(".dll")
+                            // Windows paths are case-insensitive, so the
+                            // whole comparison folds case: some toolkit
+                            // installers ship `NVRTC64_120_0.DLL`. Extension
+                            // matching goes through `Path::extension` rather
+                            // than `str::ends_with` for the same reason.
+                            let lowered = filename.to_ascii_lowercase();
+                            lowered.starts_with("nvrtc")
+                                && !lowered.contains("builtins")
+                                && extension.is_some_and(|e| e.eq_ignore_ascii_case("dll"))
                         } else {
                             filename.starts_with("libnvrtc")
-                                && (filename.ends_with(".so") || filename.contains(".so."))
+                                && (extension == Some("so") || filename.contains(".so."))
                         };
                         if matches {
                             // SAFETY: as above (NVRTC library under

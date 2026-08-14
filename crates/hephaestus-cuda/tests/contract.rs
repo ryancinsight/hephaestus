@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Contract tests for the CUDA `ComputeDevice` substrate and application operations.
 //!
 //! These run real device dispatch differentially against host references.

@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 use super::{MatmulZero, MatrixIdentityScalar, identity_buffer_layout, identity_shader_source};
 use hephaestus_core::{DialectScalar, Wgsl};
 

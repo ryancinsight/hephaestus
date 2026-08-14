@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Provider benchmark: CUDA execution against the canonical Leto CPU path.
 
 use std::hint::black_box;

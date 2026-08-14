@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Shared CPU-side panel factorisation routines for blocked decomposition,
 //! plus backend-neutral operand validation.
 //!

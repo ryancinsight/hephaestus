@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Seeded random-number initialisers (uniform, normal).
 
 use crate::array::PyArray;

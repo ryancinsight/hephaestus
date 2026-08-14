@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Python-visible `SparseMatrix` (CSR) class and sparse products
 //! (spmv, spmm, batched spmv).
 
@@ -37,7 +45,7 @@ impl PyCsrMatrix {
                 let mut host_data = vec![0.0f32; len];
                 device
                     .download_f32(&buffer, &mut host_data)
-                    .map(|_| host_data)
+                    .map(|()| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 

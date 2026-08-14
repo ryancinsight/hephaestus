@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! ROCm implementation of the backend-neutral authored-kernel streams.
 
 use std::hash::{Hash, Hasher};

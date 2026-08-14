@@ -424,8 +424,7 @@ fn regular_dimensions<const R: usize, const S: usize>(
             .ok_or_else(|| invalid("convolution padded input extent overflows"))?;
         let output_extent = padded_input
             .checked_sub(effective_kernel)
-            .map(|extent| extent / parameters.stride()[axis] + 1)
-            .unwrap_or(0);
+            .map_or(0, |extent| extent / parameters.stride()[axis] + 1);
         input_spatial[axis] = input_extent;
         kernel_spatial[axis] = kernel_extent;
         output_spatial[axis] = output_extent;

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Differential tests for the volume ray-integral kernel.
 //!
 //! Oracles: a uniform field integrates to `value × chord length` (exact for any

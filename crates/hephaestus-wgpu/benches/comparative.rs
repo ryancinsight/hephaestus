@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Provider benchmark: WGPU execution against the canonical Leto CPU path.
 //!
 //! The benchmark keeps the reference implementation inside Atlas. It measures

@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 use crate::domain::device::ComputeDevice;
 use crate::domain::error::{HephaestusError, Result};
 use bytemuck::Pod;

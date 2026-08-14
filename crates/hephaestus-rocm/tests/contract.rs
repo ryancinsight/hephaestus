@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Value-semantic contracts for the ROCm device substrate.
 //!
 //! The default build verifies the typed unavailable path. With `--features

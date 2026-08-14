@@ -22,3 +22,6 @@ aequitas = { workspace = true }
 eunomia = { workspace = true }
 leto = { workspace = true, default-features = false, features = ["std"] }
 leto-ops = { workspace = true }
+
+[lints]
+workspace = true

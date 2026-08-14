@@ -29,3 +29,6 @@ cubecl-hip-sys = { workspace = true, optional = true }
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
 aequitas = { workspace = true }
+
+[lints]
+workspace = true

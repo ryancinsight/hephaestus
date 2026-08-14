@@ -55,3 +55,6 @@ required-features = ["cuda"]
 [[example]]
 name = "cuda_raw"
 required-features = ["cuda"]
+
+[lints]
+workspace = true

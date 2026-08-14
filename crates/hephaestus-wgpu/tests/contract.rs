@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Differential contract tests: wgpu dispatch vs CPU reference.
 //!
 //! Tests acquire a real adapter; on hosts without one (headless CI without

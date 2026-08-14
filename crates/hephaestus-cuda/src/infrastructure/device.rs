@@ -157,7 +157,7 @@ impl CudaDevice {
                 message: format!("CUDA device {device_ordinal} unavailable: {status}"),
             });
         }
-        let _context_guard =
+        let context_guard =
             CONTEXT_CREATE_LOCK
                 .lock()
                 .map_err(|_| HephaestusError::DeviceUnavailable {
@@ -165,7 +165,7 @@ impl CudaDevice {
                 })?;
         let context = Arc::new(CudaContext::create(device)?);
         context.bind()?;
-        drop(_context_guard);
+        drop(context_guard);
         let limits = query_device_limits(&device)?;
         let features = query_device_features(&device)?;
         let topology = Some(Arc::new(query_topology(&device)?));
@@ -633,10 +633,10 @@ impl ComputeDeviceCapabilities for CudaDevice {
     #[inline]
     fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
         match feature {
-            DeviceFeature::TimestampQuery => false,
+            DeviceFeature::TimestampQuery
+            | DeviceFeature::ShaderF16
+            | DeviceFeature::MappablePrimaryBuffers => false,
             DeviceFeature::ShaderF64 => self.features.shader_f64,
-            DeviceFeature::ShaderF16 => false,
-            DeviceFeature::MappablePrimaryBuffers => false,
             DeviceFeature::ImmediateData => self.features.immediate_data,
         }
     }

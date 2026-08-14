@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Host device: allocation, upload, and download.
 //!
 //! [`HostDevice`] implements the full [`ComputeDevice`] contract over plain

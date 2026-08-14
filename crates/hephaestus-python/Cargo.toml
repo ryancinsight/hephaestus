@@ -35,3 +35,6 @@ numpy = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["numpy"] }
 leto-ops = { workspace = true }
+
+[lints]
+workspace = true

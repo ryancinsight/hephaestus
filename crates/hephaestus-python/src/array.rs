@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Python-visible `Array` class: GPU-resident `f32` array with host
 //! transfer, shape bookkeeping, and shared shape-validation helpers.
 //! Operation families (elementwise, reduction, scan, linalg, ...) extend
@@ -131,7 +139,7 @@ impl PyArray {
         let host_data = py
             .detach(move || {
                 let mut host_data = vec![0.0f32; len];
-                dev.download_f32(&buf, &mut host_data).map(|_| host_data)
+                dev.download_f32(&buf, &mut host_data).map(|()| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data)
@@ -145,7 +153,7 @@ impl PyArray {
         let host_data = py
             .detach(move || {
                 let mut host_data = vec![0.0f32; len];
-                dev.download_f32(&buf, &mut host_data).map(|_| host_data)
+                dev.download_f32(&buf, &mut host_data).map(|()| host_data)
             })
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))

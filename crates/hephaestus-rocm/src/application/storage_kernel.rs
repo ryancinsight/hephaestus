@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! ROCm implementation of backend-neutral multi-storage kernels.
 
 use std::hash::{Hash, Hasher};

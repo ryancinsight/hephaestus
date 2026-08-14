@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet HEPH-UNWRAP-1: pre-existing debt"
+)]
+
 //! Differential tests for the 2D Laplacian stencil kernel.
 //!
 //! The provider-owned kernel is dispatched on a live wgpu device and its

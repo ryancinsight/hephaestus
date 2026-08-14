@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 /// Compute-kernel block width (threads per block / workgroup).
 ///
 /// The typed parameter through which occupancy planning (atlas ADR 0002:

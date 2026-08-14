@@ -20,3 +20,6 @@ themis = { workspace = true }
 
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
+
+[lints]
+workspace = true

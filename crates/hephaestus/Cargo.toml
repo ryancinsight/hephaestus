@@ -75,3 +75,6 @@ sparse = ["hephaestus-wgpu?/sparse"]
 # Document the portable backend so the rendered surface is not contract-only,
 # without requiring a vendor toolkit on the docs builder.
 features = ["wgpu", "decomposition", "sparse"]
+
+[lints]
+workspace = true

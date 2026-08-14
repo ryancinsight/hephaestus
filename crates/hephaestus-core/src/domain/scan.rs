@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet HEPH-UNWRAP-1: pre-existing test-only debt"
+    )
+)]
+
 //! Backend-neutral axis-scan planning.
 //!
 //! Both GPU backends dispatch one workgroup/block per scan line. Each lane
