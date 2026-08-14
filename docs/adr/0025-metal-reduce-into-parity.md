@@ -1,6 +1,6 @@
 # ADR 0025 (hephaestus): Metal axis-reduction output parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-26
 

@@ -1,6 +1,6 @@
 # ADR 0031: Log-gamma expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: Hephaestus `LgammaOp` across WGPU, CUDA, ROCm, and Metal
 - Change class: `[minor]`

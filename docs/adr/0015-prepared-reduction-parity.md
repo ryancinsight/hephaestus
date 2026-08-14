@@ -1,6 +1,6 @@
 # ADR 0015 (hephaestus): prepared scalar reduction parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

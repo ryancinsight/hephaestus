@@ -1,6 +1,6 @@
 # ADR 0024 (hephaestus): blocked pivoted-decomposition parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

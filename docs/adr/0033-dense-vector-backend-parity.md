@@ -1,6 +1,6 @@
 # ADR 0033: Dense-vector backend parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: `DenseVectorOps` in Hephaestus core, CUDA, and ROCm
 - Change class: `[arch]` and `[minor]`

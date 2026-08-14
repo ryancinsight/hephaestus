@@ -1,6 +1,6 @@
 # ADR 0018 (hephaestus): prepared map-reduction parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

@@ -1,6 +1,6 @@
 # ADR 0023 (hephaestus): Metal fused negated exponential parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

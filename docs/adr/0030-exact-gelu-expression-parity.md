@@ -1,6 +1,6 @@
 # ADR 0030: Exact GELU expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: Hephaestus exact GELU forward and gradient markers and WGPU, CUDA,
   ROCm, and Metal elementwise providers

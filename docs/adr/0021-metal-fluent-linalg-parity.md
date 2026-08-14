@@ -1,6 +1,6 @@
 # ADR 0021 (hephaestus): Metal fluent linear-algebra parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

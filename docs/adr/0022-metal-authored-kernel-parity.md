@@ -1,6 +1,6 @@
 # ADR 0022 (hephaestus): Metal authored-kernel parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

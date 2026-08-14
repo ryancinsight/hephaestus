@@ -1,6 +1,6 @@
 # ADR 0029: Error-function expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: Hephaestus unary `erf` and `erfc` expression vocabulary and WGPU,
   CUDA, ROCm, and Metal elementwise providers

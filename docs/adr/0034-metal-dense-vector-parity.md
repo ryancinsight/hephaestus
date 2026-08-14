@@ -1,6 +1,6 @@
 # ADR 0034: Metal dense-vector parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: `DenseVectorOps` in the Metal provider
 - Change class: `[arch]` and `[minor]`

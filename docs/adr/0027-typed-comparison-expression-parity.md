@@ -1,6 +1,6 @@
 # ADR 0027: Typed comparison expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-26
 - Scope: Hephaestus elementwise expression vocabulary and WGPU, CUDA, ROCm,
   and Metal binary providers

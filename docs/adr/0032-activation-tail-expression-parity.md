@@ -1,6 +1,6 @@
 # ADR 0032: Activation-tail expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: Hephaestus parameter-free and runtime-parameter activation expression
   markers across WGPU, CUDA, ROCm, and Metal elementwise providers
