@@ -100,11 +100,18 @@ pub use application::prepared_strided_elementwise::{PreparedStridedBinary, Prepa
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::random_seam::RocmRandomOps;
 pub use application::reduction::{MaxOp, MinOp, SumOp, reduction, reduction_with_width};
-pub use application::scan::{
-    CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
-    scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+// Scans are the generic accelerator layer's, instantiated at this device
+// through its `DeviceApi` implementation; the backend adds no scan code.
+pub use hephaestus_core::domain::accelerator::scan::{
+    cumprod, cumprod_into, cumsum, cumsum_into, scan_axis, scan_axis_into, suffix_prod,
+    suffix_prod_into, suffix_sum, suffix_sum_into,
 };
-pub use application::scan_seam::{RocmPreparedScan, RocmScanOps};
+pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
+
+/// The scan seam for this device.
+pub type RocmScanOps = hephaestus_core::AxisScanOps<RocmDevice>;
+/// A scan prepared against one operand pair on this device.
+pub type RocmPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, RocmDevice, T>;
 pub use application::sparse::seam::RocmSparseOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,

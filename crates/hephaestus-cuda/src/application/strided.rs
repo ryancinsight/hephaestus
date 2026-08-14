@@ -15,13 +15,11 @@ use crate::infrastructure::buffer::CudaBuffer;
 pub const MAX_STRIDED_RANK: usize = 4;
 
 /// A device buffer paired with the leto layout describing its logical view.
-#[derive(Clone, Copy)]
-pub struct StridedOperand<'a, T, const N: usize> {
-    /// The device buffer.
-    pub buffer: &'a CudaBuffer<T>,
-    /// The logical layout over that buffer.
-    pub layout: &'a Layout<N>,
-}
+///
+/// This device's instantiation of the device-neutral
+/// [`StridedView`](hephaestus_core::StridedView), so an operand built here
+/// passes straight into the generic accelerator layer without conversion.
+pub type StridedOperand<'a, T, const N: usize> = hephaestus_core::StridedView<'a, CudaBuffer<T>, N>;
 
 /// Borrowed dynamic-rank layout metadata for runtime-shaped consumers.
 ///

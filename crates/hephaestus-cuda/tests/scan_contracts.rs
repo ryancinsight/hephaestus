@@ -18,5 +18,5 @@ fn cuda_satisfies_the_scan_contract() {
         }
         Err(error) => panic!("CUDA scan conformance requires a physical device: {error}"),
     };
-    assert_scan_contract(&device, &CudaScanOps);
+    assert_scan_contract(&device, &CudaScanOps::default());
 }

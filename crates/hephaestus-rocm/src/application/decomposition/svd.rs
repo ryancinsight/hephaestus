@@ -92,7 +92,6 @@ fn empty_result(device: &RocmDevice, rows: usize, cols: usize) -> Result<GpuSvdD
 fn decompose(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
-    rank_revealing: bool,
 ) -> Result<GpuSvdDecomposition> {
     let [rows, cols] = matrix.layout.shape;
     matrix
@@ -105,21 +104,15 @@ fn decompose(
 
     let host_data = device.download_owned(matrix.buffer)?;
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
-    let inner = if rank_revealing {
-        leto_ops::svd_rank_revealing(&view)
-    } else {
-        leto_ops::svd_decompose(&view)
-    }
-    .map_err(|error| HephaestusError::DispatchFailed {
-        message: format!(
-            "{} SVD failed: {error}",
-            if rank_revealing {
-                "rank-revealing"
-            } else {
-                "thin"
-            }
-        ),
-    })?;
+    // leto collapsed its two SVD paths onto `svd_decompose` (leto ADR 0005),
+    // so the thin and rank-revealing entry points below are the same routine:
+    // rank deficiency surfaces as a zero singular value rather than an error,
+    // and `U` stays orthonormal at deficient rank where the retired one-sided
+    // Jacobi path did not.
+    let inner =
+        leto_ops::svd_decompose(&view).map_err(|error| HephaestusError::DispatchFailed {
+            message: format!("SVD failed: {error}"),
+        })?;
     let u = device.upload(leto::Storage::as_slice(
         inner.left_singular_vectors.storage(),
     ))?;
@@ -142,7 +135,7 @@ pub fn svd_decompose(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSvdDecomposition> {
-    decompose(device, matrix, false)
+    decompose(device, matrix)
 }
 
 /// Compute the rank-revealing SVD through the shared Leto provider.
@@ -150,7 +143,7 @@ pub fn svd_rank_revealing(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSvdDecomposition> {
-    decompose(device, matrix, true)
+    decompose(device, matrix)
 }
 
 /// Compute only singular values through the shared Leto provider.

@@ -150,10 +150,13 @@ pub fn svd_rank_revealing(
     let host_data = device.download_owned(matrix.buffer)?;
 
     let view = leto::ArrayView::<f32, 2>::new(*matrix.layout, &host_data);
-    let inner =
-        leto_ops::svd_rank_revealing(&view).map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("SVD rank-revealing failed: {e}"),
-        })?;
+    // leto collapsed its two SVD paths onto `svd_decompose` (leto ADR 0005).
+    // Rank deficiency is data, not an error: it surfaces as a zero singular
+    // value, and unlike the retired one-sided Jacobi path this one keeps `U`
+    // orthonormal at deficient rank.
+    let inner = leto_ops::svd_decompose(&view).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("SVD failed: {e}"),
+    })?;
 
     let u_slice = leto::Storage::as_slice(inner.left_singular_vectors.storage());
     let v_slice = leto::Storage::as_slice(inner.right_singular_vectors.storage());
