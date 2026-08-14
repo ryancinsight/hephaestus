@@ -1,6 +1,6 @@
 # ADR 0026: Reverse cumulative-sum convenience parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-26
 - Scope: WGPU, CUDA, ROCm, and Metal scan application modules
 - Change class: `[minor]`

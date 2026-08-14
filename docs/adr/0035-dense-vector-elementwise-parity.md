@@ -1,6 +1,6 @@
 # ADR 0035: Dense-vector elementwise parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: `DenseVectorOps` elementwise operations in Hephaestus core, WGPU,
   CUDA, ROCm, and Metal

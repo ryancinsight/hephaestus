@@ -1,6 +1,6 @@
 # ADR 0017 (hephaestus): prepared sparse parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

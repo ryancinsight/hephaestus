@@ -1,6 +1,7 @@
 # ADR 0004 — WG-P4 composite-op submit batching (norm_l2 / matpow)
 
-- Status: **Amended** — prepared encoder seam implemented 2026-07-21
+- Status: Accepted
+- Revision (2026-08-14): The 2026-07-21 amendment is the current implementation: prepared reduction, map-reduction, dot, and L2-norm operations own the canonical encoder/submission seam. The amendment remains recorded below; no parallel ad-hoc encoder family is introduced.
 - Date: 2026-07-08
 - Scope: `hephaestus-wgpu` (`application/linalg.rs`, `application/reduction.rs`, `application/elementwise/`)
 - Refs: WG-P4 (backlog, KS-7 perf batch), audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md` §WG-P4, KS-3/KS-4/KS-4G (backlog, the authored-kernel seam)

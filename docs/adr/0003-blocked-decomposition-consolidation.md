@@ -1,6 +1,7 @@
 # ADR 0003 — Blocked-decomposition host-loop consolidation
 
-- Status: **Accepted; in progress** — LU + Cholesky per-panel compute extracted (`factor_lu_panel`, `factor_cholesky_panel`/`panel_cholesky_packed`, 2026-07-03/04); blocked-LU host loop hoisted into `hephaestus-core` as `blocked_lu` over `BlockedDecompositionBackend`, wgpu + cuda entry points reduced to thin delegators (2026-08-02); QR compute + loop-structure trait hoist pending
+- Status: Accepted
+- Revision (2026-08-14): LU and Cholesky per-panel extraction plus the blocked-LU host-loop hoist are implemented. QR compute and the loop-structure trait hoist remain pending; this status records the accepted architecture, not completion of every sequenced increment.
 - Date: 2026-07-03
 - Scope: `hephaestus-core`, `hephaestus-wgpu`, `hephaestus-cuda`
 - Refs: KS-5 (backlog), audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md` §5.1

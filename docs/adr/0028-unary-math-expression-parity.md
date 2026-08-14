@@ -1,6 +1,6 @@
 # ADR 0028: Unary math expression parity
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-27
 - Scope: Hephaestus unary expression vocabulary and WGPU, CUDA, ROCm, and
   Metal elementwise providers

@@ -1,6 +1,6 @@
 # ADR 0019 (hephaestus): cumulative-product scan parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-26
 

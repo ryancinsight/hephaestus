@@ -1,6 +1,6 @@
 # ADR 0020 (hephaestus): Metal seeded-random parity
 
-- Status: accepted
+- Status: Accepted
 - Class: [minor]
 - Date: 2026-07-25
 

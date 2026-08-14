@@ -1,6 +1,7 @@
 # ADR 0005: Immutable WGPU staging callbacks
 
-Status: superseded by ADR 0006 and Mnemosyne ADR 0003 (2026-07-13)
+Status: Rejected
+Revision (2026-08-14): This original callback decision is superseded by ADR 0006 and Mnemosyne ADR 0003 (2026-07-13); the supersession is retained here as historical context.
 
 ## Context
 

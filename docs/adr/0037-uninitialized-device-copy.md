@@ -1,6 +1,6 @@
 # ADR 0037: Separate overwrite-before-read device allocation
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-28
 - Scope: `ComputeDevice` allocation and device-local Coeus COW replacement
 - Change class: `[arch]`/`[minor]`

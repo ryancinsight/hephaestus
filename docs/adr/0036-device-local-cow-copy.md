@@ -1,6 +1,6 @@
 # ADR 0036: Keep accelerator COW copies on-device
 
-- Status: accepted
+- Status: Accepted
 - Date: 2026-07-28
 - Scope: `ComputeDevice` whole-buffer copies and Coeus Hephaestus storage
   uniqueness

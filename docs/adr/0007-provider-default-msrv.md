@@ -1,5 +1,7 @@
 # Provider default source and MSRV
 
+- Status: Accepted
+
 ## Context
 
 Hephaestus consumes Atlas providers through Git source dependencies. Fixed
