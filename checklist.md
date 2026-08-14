@@ -2,13 +2,26 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CUDA-F64-COMPARISON-1 — complete 2026-08-13
+
+- [x] Add all six typed CUDA `f64` comparison expressions in the shared
+      provider operation vocabulary.
+- [x] Instantiate and assert the six expressions through the CUDA crate's
+      typed seam.
+- [x] Record PR #204 merged as provider default `b34b507` and exact-head
+      hosted runs `31669318548` (CUDA), `31669318571` (WGPU), `31669318539`
+      (ROCm), and `31669318537` (Metal). Hosted backend CI passes; physical
+      CUDA execution is not claimed.
+
 ## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — Owner: Codex
 
 - [x] Claim the provider boundary and record ADR 0049.
 - [x] Add one device-neutral forward/backward loss seam and shared validation.
 - [x] Implement WGPU/CUDA/ROCm/Metal provider dispatch without host fallback.
 - [x] Add shared conformance and provider-specific source/device contracts.
-- [ ] Pass focused gates, SemVer checks, independent review, and exact-head CI.
+- [x] Pass focused gates, SemVer checks, independent review, and exact-head CI.
+      Final provider workflows pass at `bc6dfcf` (WGPU, CUDA, ROCm, Metal,
+      and mdBook).
 
 ## HEPH-WGPU-AXIS-TILE-2 [patch] [perf] — Owner: Codex
 

@@ -177,7 +177,7 @@ impl Laplacian2DKernel {
     }
 }
 
-/// Provider-owned implementation of [`StencilOps`] for Cuda.
+/// Provider-owned implementation of [`hephaestus_core::StencilOps`] for Cuda.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaStencilOps;
 

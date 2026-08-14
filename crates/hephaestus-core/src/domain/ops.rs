@@ -632,7 +632,7 @@ macro_rules! impl_typed_comparison_exprs {
     (
         $(
             ($op:ty, $wgsl_f32:literal, $wgsl_u32:literal, $wgsl_i32:literal,
-                $cuda_f32:literal, $cuda_u32:literal, $cuda_i32:literal)
+                $cuda_f32:literal, $cuda_f64:literal, $cuda_u32:literal, $cuda_i32:literal)
         ),+ $(,)?
     ) => {
         $(
@@ -647,6 +647,9 @@ macro_rules! impl_typed_comparison_exprs {
             }
             impl TypedBinaryExpr<CudaC, f32> for $op {
                 const EXPR: &'static str = $cuda_f32;
+            }
+            impl TypedBinaryExpr<CudaC, f64> for $op {
+                const EXPR: &'static str = $cuda_f64;
             }
             impl TypedBinaryExpr<CudaC, u32> for $op {
                 const EXPR: &'static str = $cuda_u32;
@@ -674,6 +677,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs == rhs)",
         "select(0, 1, lhs == rhs)",
         "lhs == rhs ? 1.0f : 0.0f",
+        "lhs == rhs ? 1.0 : 0.0",
         "lhs == rhs ? 1u : 0u",
         "lhs == rhs ? 1 : 0"
     ),
@@ -683,6 +687,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs != rhs)",
         "select(0, 1, lhs != rhs)",
         "lhs != rhs ? 1.0f : 0.0f",
+        "lhs != rhs ? 1.0 : 0.0",
         "lhs != rhs ? 1u : 0u",
         "lhs != rhs ? 1 : 0"
     ),
@@ -692,6 +697,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs < rhs)",
         "select(0, 1, lhs < rhs)",
         "lhs < rhs ? 1.0f : 0.0f",
+        "lhs < rhs ? 1.0 : 0.0",
         "lhs < rhs ? 1u : 0u",
         "lhs < rhs ? 1 : 0"
     ),
@@ -701,6 +707,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs > rhs)",
         "select(0, 1, lhs > rhs)",
         "lhs > rhs ? 1.0f : 0.0f",
+        "lhs > rhs ? 1.0 : 0.0",
         "lhs > rhs ? 1u : 0u",
         "lhs > rhs ? 1 : 0"
     ),
@@ -710,6 +717,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs <= rhs)",
         "select(0, 1, lhs <= rhs)",
         "lhs <= rhs ? 1.0f : 0.0f",
+        "lhs <= rhs ? 1.0 : 0.0",
         "lhs <= rhs ? 1u : 0u",
         "lhs <= rhs ? 1 : 0"
     ),
@@ -719,6 +727,7 @@ impl_typed_comparison_exprs!(
         "select(0u, 1u, lhs >= rhs)",
         "select(0, 1, lhs >= rhs)",
         "lhs >= rhs ? 1.0f : 0.0f",
+        "lhs >= rhs ? 1.0 : 0.0",
         "lhs >= rhs ? 1u : 0u",
         "lhs >= rhs ? 1 : 0"
     ),
@@ -1200,6 +1209,30 @@ mod tests {
         assert_eq!(
             <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
             "lhs >= rhs ? 1.0f : 0.0f"
+        );
+        assert_eq!(
+            <EqOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs == rhs ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <NeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs != rhs ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <LtOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs < rhs ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <GtOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs > rhs ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <LeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs <= rhs ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <GeOp as TypedBinaryExpr<CudaC, f64>>::EXPR,
+            "lhs >= rhs ? 1.0 : 0.0"
         );
         assert_eq!(
             <GeOp as TypedBinaryExpr<CudaC, u32>>::EXPR,

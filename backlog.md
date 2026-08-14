@@ -1,10 +1,27 @@
 # Backlog — hephaestus
 
-## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — in-progress
+## HEPH-CUDA-F64-COMPARISON-1 [minor] — done 2026-08-13
 
-- Owner: Codex on `codex/hephaestus-cross-entropy-provider`; claimed
-  2026-08-04. Scope: device-neutral cross-entropy planning, WGPU/CUDA/ROCm/Metal
-  implementations, conformance, and owner-keyed PM/ADR records.
+- Owner: Atlas integration; scope: the provider-owned typed CUDA comparison
+  expressions and CUDA contract instantiation. The Coeus consumer refresh is a
+  separate dependent increment after this provider merge.
+- Acceptance: `Eq`, `Ne`, `Lt`, `Gt`, `Le`, and `Ge` compile for `CudaC, f64`
+  with double-valued result masks; no host or legacy NVRTC path is added.
+- Verification: the merged provider head `b34b50787df636891d281b5011c6a17dd46edcb0`
+  contains the shared six-operation `CudaC, f64` typed expression contract and
+  the CUDA value-semantic instantiation test. Exact-head hosted runs
+  `31669318548` (CUDA), `31669318571` (WGPU), `31669318539` (ROCm), and
+  `31669318537` (Metal) all pass. These runs establish hosted backend CI only;
+  no physical CUDA-device execution claim is added. PR #204 merged the
+  implementation at `b34b507`; the remaining Coeus consumer cutover is tracked
+  separately.
+
+## HEPH-CROSS-ENTROPY-PROVIDER-1 [minor] [arch] — done 2026-08-12
+
+- Owner: Codex. The implementation merged through PR #192 at `1e1f12c`;
+  this closeout records the final exact-head evidence. Scope: device-neutral
+  cross-entropy planning, WGPU/CUDA/ROCm/Metal implementations, conformance,
+  and owner-keyed PM/ADR records.
 - Outcome: execute stable mean cross-entropy forward and additive backward on
   the selected accelerator while probabilities and gradients remain provider
   resident.
@@ -19,10 +36,12 @@
   Nextest, doctests, SemVer checks, independent review, and exact-head provider
   CI pass before merge.
 - Status: provider seam, implementations, conformance, warning-denied checks,
-  doctests, focused Nextest, core SemVer, and independent review complete.
-  Exact-head hosted provider CI remains; the local full affected-package launch
-  did not reach test execution within its five-minute shared-cache contention
-  budget and is not counted as evidence.
+  doctests, focused Nextest, core SemVer, independent review, and exact-head
+  hosted provider CI are complete. The final WGPU, CUDA, ROCm, Metal, and
+  mdBook workflows pass at `bc6dfcf` (`31646386129`, `31646386243`,
+  `31646386123`, `31646386192`, `31646386586`). The local full
+  affected-package launch did not reach test execution within its five-minute
+  shared-cache contention budget and is not counted as evidence.
 
 ## HEPH-WGPU-PREPARED-WORK-1 [patch] [perf] — done
 

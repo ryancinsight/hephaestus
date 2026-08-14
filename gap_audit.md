@@ -11,6 +11,24 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-CUDA-F64-COMPARISON-1] CUDA f64 typed comparisons
+
+- Finding: the typed CUDA comparison vocabulary covered `f32`, `u32`, and
+  `i32`, but not `f64`, although CUDA's dialect and buffer path support native
+  double values. Coeus consequently could not restore its provider-owned
+  `ElementwiseProvider<f64>` declaration.
+- Resolution target: add the six comparison expressions with double-valued
+  mask literals in the shared operation vocabulary and instantiate them
+  through the CUDA seam. Do not revive the deleted NVRTC compatibility path or
+  add a consumer-local expression.
+- Status: resolved at provider default `b34b50787df636891d281b5011c6a17dd46edcb0`
+  through PR #204. Exact-head hosted runs `31669318548` (CUDA), `31669318571`
+  (WGPU), `31669318539` (ROCm), and `31669318537` (Metal) pass. The provider
+  source contains value-semantic assertions for all six `CudaC, f64` typed
+  expressions and retains the provider-owned path without a host or legacy
+  NVRTC adapter. Coeus consumer cutover and physical-device execution remain
+  separate evidence scopes.
+
 ## [HEPH-CROSS-ENTROPY-PROVIDER-1] Accelerator cross-entropy ownership
 
 - Finding: Hephaestus exposes no classification-loss role, forcing a downstream
@@ -24,8 +42,10 @@ architectural decision or a tracked future-work item:
   shared semantic-status and numerical-tolerance protocol, and vendor-only
   device implementations for WGPU, CUDA, ROCm, and Metal.
 - Residual: no runtime or memory improvement is claimed until the complete
-  consumer cutover has matched measurements; exact-head hosted provider CI and
-  the Coeus consumer cutover remain open.
+  consumer cutover has matched measurements. Exact-head hosted provider CI is
+  closed at `bc6dfcf` by WGPU, CUDA, ROCm, Metal, and mdBook workflows
+  (`31646386129`, `31646386243`, `31646386123`, `31646386192`,
+  `31646386586`); the Coeus consumer cutover remains open.
 
 ## [HEPH-WGPU-PREPARED-WORK-1] Prepared no-work dispatch
 
