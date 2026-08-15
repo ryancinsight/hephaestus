@@ -142,7 +142,7 @@ where
     let out_layout = output.layout;
     let a_layout = input
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(input.buffer.len)
@@ -165,14 +165,14 @@ where
     }
 
     let meta = crate::application::strided::StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
+        shape: pad_shape(out_layout.shape())?,
+        a_strides: pad_strides(a_layout.strides())?,
         b_strides: [0; 4],
-        out_strides: pad_strides(out_layout.strides)?,
+        out_strides: pad_strides(out_layout.strides())?,
         offsets: [
-            crate::application::strided::to_u32(a_layout.offset, "input offset")?,
+            crate::application::strided::to_u32(a_layout.offset(), "input offset")?,
             0,
-            crate::application::strided::to_u32(out_layout.offset, "output offset")?,
+            crate::application::strided::to_u32(out_layout.offset(), "output offset")?,
             crate::application::strided::to_u32(len, "dispatch size")?,
         ],
     };
@@ -268,7 +268,7 @@ where
     let out_layout = output.layout;
     let a_layout = input
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(input.buffer.len)
@@ -291,14 +291,14 @@ where
     }
 
     let meta = crate::application::strided::StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
+        shape: pad_shape(out_layout.shape())?,
+        a_strides: pad_strides(a_layout.strides())?,
         b_strides: [0; 4],
-        out_strides: pad_strides(out_layout.strides)?,
+        out_strides: pad_strides(out_layout.strides())?,
         offsets: [
-            crate::application::strided::to_u32(a_layout.offset, "input offset")?,
+            crate::application::strided::to_u32(a_layout.offset(), "input offset")?,
             0,
-            crate::application::strided::to_u32(out_layout.offset, "output offset")?,
+            crate::application::strided::to_u32(out_layout.offset(), "output offset")?,
             crate::application::strided::to_u32(len, "dispatch size")?,
         ],
     };
@@ -379,11 +379,11 @@ where
     let out_layout = output.layout;
     let a_layout = lhs
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     let b_layout = rhs
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(lhs.buffer.len)
@@ -409,14 +409,14 @@ where
     }
 
     let meta = crate::application::strided::StridedMeta {
-        shape: pad_shape(out_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
-        b_strides: pad_strides(b_layout.strides)?,
-        out_strides: pad_strides(out_layout.strides)?,
+        shape: pad_shape(out_layout.shape())?,
+        a_strides: pad_strides(a_layout.strides())?,
+        b_strides: pad_strides(b_layout.strides())?,
+        out_strides: pad_strides(out_layout.strides())?,
         offsets: [
-            crate::application::strided::to_u32(a_layout.offset, "input offset")?,
-            crate::application::strided::to_u32(b_layout.offset, "input offset")?,
-            crate::application::strided::to_u32(out_layout.offset, "output offset")?,
+            crate::application::strided::to_u32(a_layout.offset(), "input offset")?,
+            crate::application::strided::to_u32(b_layout.offset(), "input offset")?,
+            crate::application::strided::to_u32(out_layout.offset(), "output offset")?,
             crate::application::strided::to_u32(len, "dispatch size")?,
         ],
     };

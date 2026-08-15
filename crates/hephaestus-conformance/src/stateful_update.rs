@@ -46,7 +46,7 @@ impl CpuRule for CpuSgd {
     const STATE_COUNT: usize = 1;
 
     fn step(operands: &mut HostOperands, parameters: Self::Parameters) {
-        let layout = Layout::new([2, 2], [3, 1], 1);
+        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
         cpu_update::<f32, Self, 2>(
             ArrayViewMut::new(layout, &mut operands.parameter),
             ArrayView::new(layout, &operands.gradient),
@@ -62,7 +62,7 @@ impl CpuRule for CpuAdam {
     const STATE_COUNT: usize = 2;
 
     fn step(operands: &mut HostOperands, parameters: Self::Parameters) {
-        let layout = Layout::new([2, 2], [3, 1], 1);
+        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
         cpu_update::<f32, Self, 2>(
             ArrayViewMut::new(layout, &mut operands.parameter),
             ArrayView::new(layout, &operands.gradient),
@@ -81,7 +81,7 @@ impl CpuRule for CpuAdamW {
     const STATE_COUNT: usize = 2;
 
     fn step(operands: &mut HostOperands, parameters: Self::Parameters) {
-        let layout = Layout::new([2, 2], [3, 1], 1);
+        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
         cpu_update::<f32, Self, 2>(
             ArrayViewMut::new(layout, &mut operands.parameter),
             ArrayView::new(layout, &operands.gradient),
@@ -100,7 +100,7 @@ impl CpuRule for CpuRmsProp {
     const STATE_COUNT: usize = 1;
 
     fn step(operands: &mut HostOperands, parameters: Self::Parameters) {
-        let layout = Layout::new([2, 2], [3, 1], 1);
+        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
         cpu_update::<f32, Self, 2>(
             ArrayViewMut::new(layout, &mut operands.parameter),
             ArrayView::new(layout, &operands.gradient),
@@ -116,7 +116,7 @@ impl CpuRule for CpuAdaGrad {
     const STATE_COUNT: usize = 1;
 
     fn step(operands: &mut HostOperands, parameters: Self::Parameters) {
-        let layout = Layout::new([2, 2], [3, 1], 1);
+        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
         cpu_update::<f32, Self, 2>(
             ArrayViewMut::new(layout, &mut operands.parameter),
             ArrayView::new(layout, &operands.gradient),
@@ -146,7 +146,7 @@ where
     O: StatefulUpdateOps<D>,
     Rule: StatefulUpdateRule<O::Dialect>,
 {
-    let layout = Layout::new([2, 2], [3, 1], 1);
+    let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
     let seeded = HostOperands::seeded();
     let parameter = device.upload(&seeded.parameter).expect("parameter upload");
     let gradient = device.upload(&seeded.gradient).expect("gradient upload");

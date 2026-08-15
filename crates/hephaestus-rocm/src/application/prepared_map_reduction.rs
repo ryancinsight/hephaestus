@@ -68,11 +68,12 @@ pub fn prepare_dot<'a, T>(
 where
     T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
 {
-    if lhs.layout.shape != rhs.layout.shape {
+    if lhs.layout.shape() != rhs.layout.shape() {
         return Err(hephaestus_core::HephaestusError::DispatchFailed {
             message: format!(
                 "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                lhs.layout.shape, rhs.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape()
             ),
         });
     }

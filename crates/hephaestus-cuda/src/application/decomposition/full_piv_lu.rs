@@ -109,7 +109,7 @@ pub fn full_piv_lu(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuFullPivLuDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("FullPivLU requires square matrix, got shape [{rows}, {cols}]"),

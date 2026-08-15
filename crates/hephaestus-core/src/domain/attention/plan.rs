@@ -77,18 +77,18 @@ where
     reject_aliasing(illegal_aliasing)?;
 
     let plan = dimensions(
-        operands.query.layout.shape,
-        operands.key.layout.shape,
-        operands.value.layout.shape,
+        operands.query.layout.shape(),
+        operands.key.layout.shape(),
+        operands.value.layout.shape(),
     )?;
     expect_shape(
         "output",
-        operands.output.layout.shape,
+        operands.output.layout.shape(),
         [plan.batch, plan.query_sequence, plan.value_feature],
     )?;
     expect_shape(
         "weights",
-        operands.weights.layout.shape,
+        operands.weights.layout.shape(),
         [plan.batch, plan.query_sequence, plan.key_sequence],
     )?;
     validate_scale(operands.scale)?;
@@ -130,18 +130,18 @@ where
     reject_aliasing(illegal_aliasing)?;
 
     let plan = dimensions(
-        operands.query.layout.shape,
-        operands.key.layout.shape,
-        operands.value.layout.shape,
+        operands.query.layout.shape(),
+        operands.key.layout.shape(),
+        operands.value.layout.shape(),
     )?;
     expect_shape(
         "output gradient",
-        operands.grad_output.layout.shape,
+        operands.grad_output.layout.shape(),
         [plan.batch, plan.query_sequence, plan.value_feature],
     )?;
     expect_shape(
         "weights",
-        operands.weights.layout.shape,
+        operands.weights.layout.shape(),
         [plan.batch, plan.query_sequence, plan.key_sequence],
     )?;
     validate_gradients::<T, _>(&operands.gradients, operands, plan)?;
@@ -195,7 +195,7 @@ where
     };
     let view = keep.view();
     validate_readonly::<T, _, 2>(view.buffer, view.layout)?;
-    let [mask_batch, mask_key_sequence] = view.layout.shape;
+    let [mask_batch, mask_key_sequence] = view.layout.shape();
     if mask_key_sequence != plan.key_sequence {
         return Err(invalid(format!(
             "attention keep-mask key extent {mask_key_sequence} must equal {}",
@@ -227,19 +227,23 @@ where
         validate_writable::<T, _>(query.buffer, query.layout, "query gradient")?;
         expect_shape(
             "query gradient",
-            query.layout.shape,
-            operands.query.layout.shape,
+            query.layout.shape(),
+            operands.query.layout.shape(),
         )?;
     }
     if let Some(key) = gradients.key {
         validate_writable::<T, _>(key.buffer, key.layout, "key gradient")?;
-        expect_shape("key gradient", key.layout.shape, operands.key.layout.shape)?;
+        expect_shape(
+            "key gradient",
+            key.layout.shape(),
+            operands.key.layout.shape(),
+        )?;
     }
     if let Some(value) = gradients.value {
         validate_writable::<T, _>(value.buffer, value.layout, "value gradient")?;
         expect_shape(
             "value gradient",
-            value.layout.shape,
+            value.layout.shape(),
             [plan.batch, plan.key_sequence, plan.value_feature],
         )?;
     }

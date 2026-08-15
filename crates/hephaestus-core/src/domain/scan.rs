@@ -104,11 +104,12 @@ pub fn plan_axis_scan(
             message: format!("scan axis {axis} is out of bounds for rank-2 scan"),
         });
     }
-    if input_layout.shape != output_layout.shape {
+    if input_layout.shape() != output_layout.shape() {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "scan output shape mismatch: input {:?}, out {:?}",
-                input_layout.shape, output_layout.shape
+                input_layout.shape(),
+                output_layout.shape()
             ),
         });
     }
@@ -142,24 +143,24 @@ pub fn plan_axis_scan(
     // tiled kernel launches one workgroup/block per line; every lane then
     // owns a contiguous chunk of that line. Non-zero here because output_len
     // > 0.
-    let line_count = input_layout.shape[1 - axis];
+    let line_count = input_layout.shape()[1 - axis];
     let meta = AxisScanMeta {
         input_shape: [
-            to_u32(input_layout.shape[0], "input rows")?,
-            to_u32(input_layout.shape[1], "input columns")?,
+            to_u32(input_layout.shape()[0], "input rows")?,
+            to_u32(input_layout.shape()[1], "input columns")?,
         ],
         input_strides: [
-            to_i32(input_layout.strides[0], "input row stride")?,
-            to_i32(input_layout.strides[1], "input column stride")?,
+            to_i32(input_layout.strides()[0], "input row stride")?,
+            to_i32(input_layout.strides()[1], "input column stride")?,
         ],
         output_strides: [
-            to_i32(output_layout.strides[0], "output row stride")?,
-            to_i32(output_layout.strides[1], "output column stride")?,
+            to_i32(output_layout.strides()[0], "output row stride")?,
+            to_i32(output_layout.strides()[1], "output column stride")?,
         ],
         _pre_offsets_pad: [0; 2],
         offsets: [
-            to_u32(input_layout.offset, "input offset")?,
-            to_u32(output_layout.offset, "output offset")?,
+            to_u32(input_layout.offset(), "input offset")?,
+            to_u32(output_layout.offset(), "output offset")?,
             to_u32(axis | direction_bit, "axis and direction")?,
             to_u32(line_count, "scan line count")?,
         ],

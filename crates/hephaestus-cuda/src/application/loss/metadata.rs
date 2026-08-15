@@ -23,15 +23,15 @@ impl LayoutMeta {
         let mut shape = [1_i64; 2];
         let mut strides = [0_i64; 2];
         for axis in 0..R {
-            shape[axis] = i64::try_from(layout.shape[axis])
+            shape[axis] = i64::try_from(layout.shape()[axis])
                 .map_err(|_| invalid("cross-entropy extent exceeds i64"))?;
-            strides[axis] = i64::try_from(layout.strides[axis])
+            strides[axis] = i64::try_from(layout.strides()[axis])
                 .map_err(|_| invalid("cross-entropy stride exceeds i64"))?;
         }
         Ok(Self {
             shape,
             strides,
-            offset: i64::try_from(layout.offset)
+            offset: i64::try_from(layout.offset())
                 .map_err(|_| invalid("cross-entropy offset exceeds i64"))?,
         })
     }

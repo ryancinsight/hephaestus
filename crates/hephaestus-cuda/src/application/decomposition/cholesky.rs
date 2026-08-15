@@ -252,11 +252,12 @@ pub fn cholesky_decompose_blocked(
             write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
 
             // ── Step 3: trailing SYRK update on GPU ──
-            let trail_layout = leto::Layout::new(
+            let trail_layout = leto::Layout::try_new(
                 [trail_rows, trail_rows],
                 [n as isize, 1],
                 (k + b) * n + (k + b),
-            );
+            )
+            .expect("invariant: submatrix layout derives from a validated parent");
             syrk_trailing_update(
                 device,
                 &lower_buf,
@@ -394,7 +395,7 @@ mod syrk_impl {
         panel_offset: usize,
         panel_stride: usize,
     ) -> Result<()> {
-        let [rows, cols] = trail_layout.shape;
+        let [rows, cols] = trail_layout.shape();
         if rows == 0 || cols == 0 || panel_cols == 0 {
             return Ok(());
         }
@@ -402,10 +403,10 @@ mod syrk_impl {
         let meta = SyrkMeta {
             shape: [to_u32(rows, "SYRK rows")?, to_u32(cols, "SYRK cols")?],
             strides: [
-                to_i32(trail_layout.strides[0], "SYRK row stride")?,
-                to_i32(trail_layout.strides[1], "SYRK col stride")?,
+                to_i32(trail_layout.strides()[0], "SYRK row stride")?,
+                to_i32(trail_layout.strides()[1], "SYRK col stride")?,
             ],
-            offset: to_u32(trail_layout.offset, "SYRK offset")?,
+            offset: to_u32(trail_layout.offset(), "SYRK offset")?,
             panel_cols: to_u32(panel_cols, "SYRK panel cols")?,
             panel_offset: to_u32(panel_offset, "SYRK panel offset")?,
             panel_stride: to_u32(panel_stride, "SYRK panel stride")?,

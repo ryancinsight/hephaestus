@@ -289,15 +289,15 @@ where
     })?;
     let partial = device.alloc_uninitialized::<T>(partial_len)?;
     let meta = MapReductionMeta {
-        shape: pad_shape(a_layout.shape)?,
-        a_strides: pad_strides(a_layout.strides)?,
-        b_strides: pad_strides(b_layout.strides)?,
+        shape: pad_shape(a_layout.shape())?,
+        a_strides: pad_strides(a_layout.strides())?,
+        b_strides: pad_strides(b_layout.strides())?,
         offsets: [
-            u32::try_from(a_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("input offset {} exceeds u32 range", a_layout.offset),
+            u32::try_from(a_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("input offset {} exceeds u32 range", a_layout.offset()),
             })?,
-            u32::try_from(b_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("input offset {} exceeds u32 range", b_layout.offset),
+            u32::try_from(b_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("input offset {} exceeds u32 range", b_layout.offset()),
             })?,
             0,
             u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
@@ -363,11 +363,12 @@ pub fn dot<T>(
 where
     T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
-    if a.layout.shape != b.layout.shape {
+    if a.layout.shape() != b.layout.shape() {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                a.layout.shape, b.layout.shape
+                a.layout.shape(),
+                b.layout.shape()
             ),
         });
     }
@@ -380,12 +381,12 @@ pub fn trace<T>(device: &CudaDevice, matrix: StridedOperand<'_, T, 2>) -> Result
 where
     T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "trace requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
@@ -394,12 +395,13 @@ where
         return device.upload(&[T::IDENTITY]);
     }
 
-    let diagonal_stride = matrix.layout.strides[0]
-        .checked_add(matrix.layout.strides[1])
+    let diagonal_stride = matrix.layout.strides()[0]
+        .checked_add(matrix.layout.strides()[1])
         .ok_or_else(|| HephaestusError::DispatchFailed {
             message: "trace diagonal stride overflows isize".to_string(),
         })?;
-    let diag_layout = Layout::new([rows], [diagonal_stride], matrix.layout.offset);
+    let diag_layout = Layout::try_new([rows], [diagonal_stride], matrix.layout.offset())
+        .expect("invariant: submatrix layout derives from a validated parent");
     let diag_operand = StridedOperand {
         buffer: matrix.buffer,
         layout: &diag_layout,

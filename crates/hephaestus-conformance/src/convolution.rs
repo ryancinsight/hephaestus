@@ -58,10 +58,13 @@ where
     let weight_host = [2.0_f32, -1.0];
     let bias_host = [1.0_f32];
     let grad_output_host = [1.0_f32, -2.0, 3.0];
-    let input_layout = Layout::new([1, 1, 4], [4, 4, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
-    let output_layout = Layout::new([1, 1, 3], [3, 3, 1], 0);
-    let bias_layout = Layout::new([1], [1], 0);
+    let input_layout =
+        Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid conformance fixture layout");
+    let weight_layout =
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout");
+    let output_layout =
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout");
+    let bias_layout = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let parameters = ConvolutionParameters::new([1], [0], [1]).expect("valid regular parameters");
 
     let mut expected_output = [0.0_f32; 3];
@@ -181,10 +184,13 @@ where
     let weight_host = [1.0_f32, 2.0];
     let bias_host = [-1.0_f32];
     let grad_output_host = [1.0_f32, 2.0, -1.0, 1.0, 3.0];
-    let input_layout = Layout::new([1, 1, 3], [3, 3, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
-    let output_layout = Layout::new([1, 1, 5], [5, 5, 1], 0);
-    let bias_layout = Layout::new([1], [1], 0);
+    let input_layout =
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout");
+    let weight_layout =
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout");
+    let output_layout =
+        Layout::try_new([1, 1, 5], [5, 5, 1], 0).expect("valid conformance fixture layout");
+    let bias_layout = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let parameters = TransposedConvolutionParameters::new([2], [1], [1], [1])
         .expect("valid transposed parameters");
 
@@ -300,9 +306,12 @@ where
     let initial = [1.0_f32, 2.0, 3.0, 4.0];
     let shared = device.upload(&initial).expect("shared buffer upload");
     let weight = device.upload(&[2.0_f32, -1.0]).expect("weight upload");
-    let input_layout = Layout::new([1, 1, 4], [4, 4, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
-    let output_layout = Layout::new([1, 1, 3], [3, 3, 1], 0);
+    let input_layout =
+        Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid conformance fixture layout");
+    let weight_layout =
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout");
+    let output_layout =
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout");
     let parameters = ConvolutionParameters::new([1], [0], [1]).expect("valid regular parameters");
     let result = operations.prepare_convolution_forward(
         device,

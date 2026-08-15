@@ -97,7 +97,7 @@ pub fn udu_decompose(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuUduDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(

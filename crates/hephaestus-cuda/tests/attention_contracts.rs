@@ -34,7 +34,7 @@ fn native_double_precision_supports_strided_views() {
     let Some(device) = device("native f64 strided contract") else {
         return;
     };
-    let layout = Layout::new([1, 2, 2], [6, 3, 1], 1);
+    let layout = Layout::try_new([1, 2, 2], [6, 3, 1], 1).expect("valid test layout");
     let query = device
         .upload(&[91.0_f64, 0.0, 0.0, 92.0, 0.0, 0.0])
         .expect("query upload");

@@ -372,11 +372,11 @@ pub(crate) fn binary_strided_meta<T, const N: usize>(
     let out_layout = out.layout;
     let a_layout = a
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     let b_layout = b
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(a.buffer.len())
@@ -390,14 +390,14 @@ pub(crate) fn binary_strided_meta<T, const N: usize>(
     }
     Ok(Some((
         StridedMeta {
-            shape: pad_shape(out_layout.shape)?,
-            a_strides: pad_strides(a_layout.strides)?,
-            b_strides: pad_strides(b_layout.strides)?,
-            out_strides: pad_strides(out_layout.strides)?,
+            shape: pad_shape(out_layout.shape())?,
+            a_strides: pad_strides(a_layout.strides())?,
+            b_strides: pad_strides(b_layout.strides())?,
+            out_strides: pad_strides(out_layout.strides())?,
             offsets: [
-                to_u32(a_layout.offset, "input offset")?,
-                to_u32(b_layout.offset, "input offset")?,
-                to_u32(out_layout.offset, "output offset")?,
+                to_u32(a_layout.offset(), "input offset")?,
+                to_u32(b_layout.offset(), "input offset")?,
+                to_u32(out_layout.offset(), "output offset")?,
                 to_u32(len, "dispatch size")?,
             ],
         },
@@ -414,7 +414,7 @@ pub(crate) fn unary_strided_meta<T, const N: usize>(
     let out_layout = out.layout;
     let a_layout = a
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(a.buffer.len())
@@ -425,14 +425,14 @@ pub(crate) fn unary_strided_meta<T, const N: usize>(
     }
     Ok(Some((
         StridedMeta {
-            shape: pad_shape(out_layout.shape)?,
-            a_strides: pad_strides(a_layout.strides)?,
+            shape: pad_shape(out_layout.shape())?,
+            a_strides: pad_strides(a_layout.strides())?,
             b_strides: [0; 4],
-            out_strides: pad_strides(out_layout.strides)?,
+            out_strides: pad_strides(out_layout.strides())?,
             offsets: [
-                to_u32(a_layout.offset, "input offset")?,
+                to_u32(a_layout.offset(), "input offset")?,
                 0,
-                to_u32(out_layout.offset, "output offset")?,
+                to_u32(out_layout.offset(), "output offset")?,
                 to_u32(len, "dispatch size")?,
             ],
         },
@@ -962,7 +962,7 @@ where
     let out_layout = out.layout;
     let a_layout = a
         .layout
-        .broadcast(out_layout.shape)
+        .broadcast(out_layout.shape())
         .map_err(map_layout_err)?;
     a_layout
         .validate_storage_len(a.buffer.len())
@@ -973,14 +973,14 @@ where
     }
     Ok(Some((
         StridedMeta {
-            shape: pad_shape(out_layout.shape)?,
-            a_strides: pad_strides(a_layout.strides)?,
+            shape: pad_shape(out_layout.shape())?,
+            a_strides: pad_strides(a_layout.strides())?,
             b_strides: [0; 4],
-            out_strides: pad_strides(out_layout.strides)?,
+            out_strides: pad_strides(out_layout.strides())?,
             offsets: [
-                to_u32(a_layout.offset, "input offset")?,
+                to_u32(a_layout.offset(), "input offset")?,
                 0,
-                to_u32(out_layout.offset, "output offset")?,
+                to_u32(out_layout.offset(), "output offset")?,
                 to_u32(len, "dispatch size")?,
             ],
         },

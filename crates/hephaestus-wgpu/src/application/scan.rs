@@ -220,7 +220,7 @@ where
     if len == 0 {
         return device.alloc_zeroed::<T>(0);
     }
-    let output_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+    let output_layout = Layout::c_contiguous(input.layout.shape()).map_err(map_layout_err)?;
     let output = device.alloc_uninitialized::<T>(len)?;
     scan_axis_into::<Op, T>(
         device,

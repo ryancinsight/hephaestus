@@ -21,9 +21,12 @@ fn strided_forward_and_additive_backward_match_analytical_values() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let matrix_layout = Layout::new([2, 3], [4, 1], 1);
-    let target_layout = Layout::new([2], [2], 1);
-    let scalar_layout = Layout::new([1], [2], 1);
+    let matrix_layout = Layout::try_new([2, 3], [4, 1], 1)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let target_layout = Layout::try_new([2], [2], 1)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let scalar_layout = Layout::try_new([1], [2], 1)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let logits_host = [91.0, 1.0, 2.0, 3.0, 91.0, -1.0, 0.0, 2.0, 91.0];
     let targets_host = [99_u32, 2, 99, 0];
     let loss_initial = [71.0_f32, -5.0, 71.0];

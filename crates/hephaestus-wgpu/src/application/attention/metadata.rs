@@ -21,23 +21,23 @@ impl LayoutMeta {
         let mut shape = [1_u32; 4];
         let mut strides = [0_i32; 4];
         for axis in 0..R {
-            shape[axis] = u32::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = u32::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention extent {} on axis {axis} exceeds u32 range",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            strides[axis] = i32::try_from(layout.strides[axis]).map_err(|_| {
+            strides[axis] = i32::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention stride {} on axis {axis} exceeds i32 range",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
         }
-        let offset = i32::try_from(layout.offset).map_err(|_| {
+        let offset = i32::try_from(layout.offset()).map_err(|_| {
             invalid(format!(
                 "attention offset {} exceeds signed WGSL address range",
-                layout.offset
+                layout.offset()
             ))
         })?;
         let (minimum, maximum) = layout.checked_min_max_offsets().map_err(|error| {

@@ -15,8 +15,8 @@ fn grouped_causal_strided_forward_matches_leto_and_zeroes_fully_masked_rows() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let tensor_layout = Layout::new([4, 2, 2], [5, 2, 1], 1);
-    let score_layout = Layout::new([4, 2, 2], [5, 2, 1], 1);
+    let tensor_layout = Layout::try_new([4, 2, 2], [5, 2, 1], 1).expect("valid test layout");
+    let score_layout = Layout::try_new([4, 2, 2], [5, 2, 1], 1).expect("valid test layout");
     let query_host = backing(&tensor_layout, |batch, sequence, feature| {
         0.1 + batch as f32 * 0.2 + sequence as f32 * 0.3 - feature as f32 * 0.15
     });
@@ -26,7 +26,7 @@ fn grouped_causal_strided_forward_matches_leto_and_zeroes_fully_masked_rows() {
     let value_host = backing(&tensor_layout, |batch, sequence, feature| {
         0.4 - batch as f32 * 0.05 + sequence as f32 * 0.4 + feature as f32 * 0.1
     });
-    let mask_layout = Layout::new([2, 2], [3, 1], 1);
+    let mask_layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid test layout");
     let mask_host = [9.0_f32, 1.0, 0.0, 9.0, 0.0, 0.0];
     let output_initial = vec![7.0_f32; backing_len(&tensor_layout)];
     let weights_initial = vec![7.0_f32; backing_len(&score_layout)];
@@ -98,9 +98,9 @@ fn grouped_causal_strided_forward_matches_leto_and_zeroes_fully_masked_rows() {
 
 fn backing(layout: &Layout<3>, value: impl Fn(usize, usize, usize) -> f32) -> Vec<f32> {
     let mut storage = vec![13.0_f32; backing_len(layout)];
-    for batch in 0..layout.shape[0] {
-        for sequence in 0..layout.shape[1] {
-            for feature in 0..layout.shape[2] {
+    for batch in 0..layout.shape()[0] {
+        for sequence in 0..layout.shape()[1] {
+            for feature in 0..layout.shape()[2] {
                 storage[physical(layout, [batch, sequence, feature])] =
                     value(batch, sequence, feature);
             }
@@ -118,10 +118,10 @@ fn backing_len(layout: &Layout<3>) -> usize {
 }
 
 fn physical(layout: &Layout<3>, index: [usize; 3]) -> usize {
-    let offset = layout.offset as isize
+    let offset = layout.offset() as isize
         + index
             .into_iter()
-            .zip(layout.strides)
+            .zip(layout.strides())
             .map(|(coordinate, stride)| coordinate as isize * stride)
             .sum::<isize>();
     usize::try_from(offset).expect("valid test offset")

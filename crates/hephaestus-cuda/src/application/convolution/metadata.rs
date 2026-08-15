@@ -39,29 +39,29 @@ impl LayoutMeta {
         let mut shape = [0; TENSOR_AXES];
         let mut strides = [0; TENSOR_AXES];
         for axis in 0..R {
-            shape[axis] = i32::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = i32::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "layout extent {} on axis {axis} exceeds i32 range",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            strides[axis] = i32::try_from(layout.strides[axis]).map_err(|_| {
+            strides[axis] = i32::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "layout stride {} on axis {axis} exceeds i32 range",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
-            validate_axis_span(layout.shape[axis], layout.strides[axis], axis)?;
+            validate_axis_span(layout.shape()[axis], layout.strides()[axis], axis)?;
         }
         validate_products(&shape[..R])?;
 
         Ok(Self {
             shape,
             strides,
-            offset: i32::try_from(layout.offset).map_err(|_| {
+            offset: i32::try_from(layout.offset()).map_err(|_| {
                 invalid(format!(
                     "layout offset {} exceeds signed CUDA address range",
-                    layout.offset
+                    layout.offset()
                 ))
             })?,
             rank: i32::try_from(R).expect("invariant: CUDA metadata rank fits i32"),

@@ -48,14 +48,14 @@ pub(super) struct GpuMatrixLayout {
 pub(super) fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
     Ok(GpuMatrixLayout {
         shape: [
-            to_u32(layout.shape[0], "dimension")?,
-            to_u32(layout.shape[1], "dimension")?,
+            to_u32(layout.shape()[0], "dimension")?,
+            to_u32(layout.shape()[1], "dimension")?,
         ],
         strides: [
-            to_i32(layout.strides[0], "stride")?,
-            to_i32(layout.strides[1], "stride")?,
+            to_i32(layout.strides()[0], "stride")?,
+            to_i32(layout.strides()[1], "stride")?,
         ],
-        offset: to_u32(layout.offset, "offset")?,
+        offset: to_u32(layout.offset(), "offset")?,
         _pad: [0; 3],
     })
 }

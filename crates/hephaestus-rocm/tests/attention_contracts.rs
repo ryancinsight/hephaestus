@@ -33,7 +33,7 @@ fn native_double_forward_is_exact() {
     let Some(device) = device("ROCm f64 attention") else {
         return;
     };
-    let layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let layout = Layout::try_new([1, 1, 1], [1, 1, 1], 0).expect("valid test layout");
     let query = device.upload(&[2.0_f64]).expect("query upload");
     let key = device.upload(&[3.0_f64]).expect("key upload");
     let value = device.upload(&[7.0_f64]).expect("value upload");
@@ -72,7 +72,7 @@ fn repeated_prepared_dispatch_resets_semantic_status() {
     let Some(device) = device("ROCm repeated attention dispatch") else {
         return;
     };
-    let layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let layout = Layout::try_new([1, 1, 1], [1, 1, 1], 0).expect("valid test layout");
     let query = device.upload(&[f32::NAN]).expect("query upload");
     let finite = device.upload(&[1.0_f32]).expect("finite upload");
     let output = device.upload(&[7.0_f32]).expect("output upload");

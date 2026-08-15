@@ -76,8 +76,8 @@ pub fn kron_into<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [lhs_rows, lhs_cols] = lhs.layout.shape;
-    let [rhs_rows, rhs_cols] = rhs.layout.shape;
+    let [lhs_rows, lhs_cols] = lhs.layout.shape();
+    let [rhs_rows, rhs_cols] = rhs.layout.shape();
     let expected_rows =
         lhs_rows
             .checked_mul(rhs_rows)
@@ -91,11 +91,13 @@ where
                 message: format!("Kronecker column count overflows usize: {lhs_cols} * {rhs_cols}"),
             })?;
 
-    if out.layout.shape != [expected_rows, expected_cols] {
+    if out.layout.shape() != [expected_rows, expected_cols] {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "Kronecker output shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -178,8 +180,8 @@ pub fn kron<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [lhs_rows, lhs_cols] = lhs.layout.shape;
-    let [rhs_rows, rhs_cols] = rhs.layout.shape;
+    let [lhs_rows, lhs_cols] = lhs.layout.shape();
+    let [rhs_rows, rhs_cols] = rhs.layout.shape();
     let expected_rows =
         lhs_rows
             .checked_mul(rhs_rows)

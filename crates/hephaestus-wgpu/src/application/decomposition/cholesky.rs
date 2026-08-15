@@ -164,7 +164,7 @@ fn syrk_trailing_update(
     panel_offset: usize,
     panel_stride: usize,
 ) -> Result<()> {
-    let [rows, cols] = trail_layout.shape;
+    let [rows, cols] = trail_layout.shape();
     if rows == 0 || cols == 0 || panel_cols == 0 {
         return Ok(());
     }
@@ -179,20 +179,20 @@ fn syrk_trailing_update(
             })?,
         ],
         strides: [
-            u32::try_from(trail_layout.strides[0]).map_err(|_| {
+            u32::try_from(trail_layout.strides()[0]).map_err(|_| {
                 HephaestusError::DispatchFailed {
-                    message: format!("SYRK row stride {} exceeds u32", trail_layout.strides[0]),
+                    message: format!("SYRK row stride {} exceeds u32", trail_layout.strides()[0]),
                 }
             })?,
-            u32::try_from(trail_layout.strides[1]).map_err(|_| {
+            u32::try_from(trail_layout.strides()[1]).map_err(|_| {
                 HephaestusError::DispatchFailed {
-                    message: format!("SYRK col stride {} exceeds u32", trail_layout.strides[1]),
+                    message: format!("SYRK col stride {} exceeds u32", trail_layout.strides()[1]),
                 }
             })?,
         ],
-        offset: u32::try_from(trail_layout.offset).map_err(|_| {
+        offset: u32::try_from(trail_layout.offset()).map_err(|_| {
             HephaestusError::DispatchFailed {
-                message: format!("SYRK offset {} exceeds u32", trail_layout.offset),
+                message: format!("SYRK offset {} exceeds u32", trail_layout.offset()),
             }
         })?,
         panel_cols: u32::try_from(panel_cols).map_err(|_| HephaestusError::DispatchFailed {
@@ -559,11 +559,12 @@ pub fn cholesky_decompose_blocked(
         )?;
 
         // ── Step 3: trailing SYRK update on GPU ──
-        let trail_layout = leto::Layout::new(
+        let trail_layout = leto::Layout::try_new(
             [trail_rows, trail_rows],
             [n as isize, 1],
             (k + b) * n + (k + b),
-        );
+        )
+        .expect("invariant: submatrix layout derives from a validated parent");
 
         let mut encoder = device
             .inner()

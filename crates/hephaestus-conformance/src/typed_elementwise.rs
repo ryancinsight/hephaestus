@@ -384,7 +384,7 @@ where
     let source = device
         .upload(&[1u32, 2, 3, 4, 5, 6])
         .expect("source upload");
-    let transposed = Layout::new([3, 2], [1, 3], 0);
+    let transposed = Layout::try_new([3, 2], [1, 3], 0).expect("valid conformance fixture layout");
 
     // Compare against the transpose's own values with two deliberate
     // mismatches.

@@ -38,7 +38,7 @@ impl GpuRealSchur {
 
 /// Compute the real Schur decomposition on the GPU.
 pub fn schur(device: &CudaDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<GpuRealSchur> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(

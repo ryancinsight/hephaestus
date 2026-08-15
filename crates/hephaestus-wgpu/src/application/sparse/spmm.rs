@@ -176,7 +176,7 @@ pub fn prepare_spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatri
 ) -> Result<PreparedSpmm<T>> {
     let (nrows, ncols) = a.shape();
     let b_op = b.as_operand();
-    let [b_rows, bcols] = b_op.layout.shape;
+    let [b_rows, bcols] = b_op.layout.shape();
 
     if b_rows != ncols {
         return Err(HephaestusError::LengthMismatch {
@@ -211,11 +211,11 @@ pub fn prepare_spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatri
             to_u32(bcols, "dense rhs column count")?,
         ],
         b_strides: [
-            to_i32(b_op.layout.strides[0], "dense rhs row stride")?,
-            to_i32(b_op.layout.strides[1], "dense rhs column stride")?,
+            to_i32(b_op.layout.strides()[0], "dense rhs row stride")?,
+            to_i32(b_op.layout.strides()[1], "dense rhs column stride")?,
         ],
         offsets: [
-            to_u32(b_op.layout.offset, "dense rhs offset")?,
+            to_u32(b_op.layout.offset(), "dense rhs offset")?,
             to_u32(a.row_ptr_offset(), "CSR row pointer offset")?,
         ],
     };
@@ -319,7 +319,7 @@ pub fn spmm_into<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOp
 ) -> Result<()> {
     let (nrows, ncols) = a.shape();
     let b_op = b.as_operand();
-    let [b_rows, bcols] = b_op.layout.shape;
+    let [b_rows, bcols] = b_op.layout.shape();
 
     if b_rows != ncols {
         return Err(HephaestusError::LengthMismatch {
@@ -375,7 +375,7 @@ pub fn spmm<'a, T: DialectScalar<Wgsl> + MatmulZero + Pod, B: AsGpuMatrixOperand
 ) -> Result<WgpuBuffer<T>> {
     let (nrows, _) = a.shape();
     let b_op = b.as_operand();
-    let [_, bcols] = b_op.layout.shape;
+    let [_, bcols] = b_op.layout.shape();
 
     let c_len = nrows
         .checked_mul(bcols)

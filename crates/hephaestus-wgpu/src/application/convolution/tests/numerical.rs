@@ -13,10 +13,10 @@ fn reordered_forward_matches_leto_with_derived_roundoff_bound() {
     let input_host = [0.1_f32, -0.2, 0.3, 0.4];
     let weight_host = [0.15_f32, -0.35];
     let bias_host = [0.05_f32];
-    let input_layout = Layout::new([1, 1, 4], [4, 4, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
-    let bias_layout = Layout::new([1], [1], 0);
-    let output_layout = Layout::new([1, 1, 3], [3, 3, 1], 0);
+    let input_layout = Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid test layout");
+    let weight_layout = Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid test layout");
+    let bias_layout = Layout::try_new([1], [1], 0).expect("valid test layout");
+    let output_layout = Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid test layout");
     let parameters = ConvolutionParameters::new([1], [0], [1]).expect("valid parameters");
     let mut expected = [0.0_f32; 3];
     convolution_forward_into(

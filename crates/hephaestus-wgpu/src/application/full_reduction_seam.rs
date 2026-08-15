@@ -46,7 +46,7 @@ where
         return Ok(input.buffer.clone());
     }
 
-    let out_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+    let out_layout = Layout::c_contiguous(input.layout.shape()).map_err(map_layout_err)?;
     let contig = device.alloc_uninitialized::<T>(logical_len)?;
     WgpuElementwiseOps.unary_into::<IdentityOp, N>(
         device,
@@ -95,7 +95,7 @@ where
             owner: device_owner(device),
             inner: prepared,
             output_buffer: output.buffer.clone(),
-            output_byte_offset: WgpuDevice::byte_size::<T>(output.layout.offset)?,
+            output_byte_offset: WgpuDevice::byte_size::<T>(output.layout.offset())?,
             _source: source,
         })
     }

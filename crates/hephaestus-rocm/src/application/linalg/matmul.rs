@@ -100,14 +100,16 @@ pub fn matmul_into<T>(
 where
     T: DialectScalar<HipC> + Pod,
 {
-    let [rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_shared, cols] = rhs.layout.shape;
-    let [out_rows, out_cols] = out.layout.shape;
+    let [rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_shared, cols] = rhs.layout.shape();
+    let [out_rows, out_cols] = out.layout.shape();
     if lhs_shared != rhs_shared || rows != out_rows || cols != out_cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -190,13 +192,14 @@ pub fn matmul<T>(
 where
     T: DialectScalar<HipC> + Pod,
 {
-    let [rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_shared, cols] = rhs.layout.shape;
+    let [rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_shared, cols] = rhs.layout.shape();
     if lhs_shared != rhs_shared {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}",
-                lhs.layout.shape, rhs.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape()
             ),
         });
     }

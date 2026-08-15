@@ -175,7 +175,7 @@ where
 {
     let input = device.upload(&fixture()).expect("fixture upload");
     // The 4x3 transpose: same bytes, swapped strides.
-    let transposed = Layout::new([4, 3], [1, 4], 0);
+    let transposed = Layout::try_new([4, 3], [1, 4], 0).expect("valid conformance fixture layout");
 
     let out = device.alloc_zeroed::<f32>(4).expect("transposed output");
     let out_layout = Layout::c_contiguous([4, 1]).expect("transposed output layout");

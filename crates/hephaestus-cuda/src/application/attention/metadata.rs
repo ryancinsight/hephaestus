@@ -23,23 +23,23 @@ impl LayoutMeta {
         let mut shape = [1_i64; 3];
         let mut strides = [0_i64; 3];
         for axis in 0..R {
-            shape[axis] = i64::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = i64::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention extent {} on axis {axis} exceeds i64",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            strides[axis] = i64::try_from(layout.strides[axis]).map_err(|_| {
+            strides[axis] = i64::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention stride {} on axis {axis} exceeds i64",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
         }
         Ok(Self {
             shape,
             strides,
-            offset: i64::try_from(layout.offset)
+            offset: i64::try_from(layout.offset())
                 .map_err(|_| invalid("attention layout offset exceeds i64"))?,
         })
     }
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn layout_metadata_preserves_signed_strides_and_offset() {
-        let layout = Layout::new([2, 3, 4], [20, -4, 1], 11);
+        let layout = Layout::try_new([2, 3, 4], [20, -4, 1], 11).expect("valid test layout");
         let metadata = LayoutMeta::new(&layout).expect("rank-3 metadata");
         assert_eq!(metadata.shape, [2, 3, 4]);
         assert_eq!(metadata.strides, [20, -4, 1]);
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn rank_two_metadata_pads_the_unused_axis() {
-        let layout = Layout::new([2, 3], [5, 1], 2);
+        let layout = Layout::try_new([2, 3], [5, 1], 2).expect("valid test layout");
         let metadata = LayoutMeta::new(&layout).expect("rank-2 metadata");
         assert_eq!(metadata.shape, [2, 3, 1]);
         assert_eq!(metadata.strides, [5, 1, 0]);

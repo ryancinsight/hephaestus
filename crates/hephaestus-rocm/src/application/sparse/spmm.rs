@@ -105,7 +105,7 @@ pub fn spmm_into<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     c: &mut RocmBuffer<T>,
 ) -> Result<()> {
     let (nrows, ncols) = matrix.shape();
-    let [b_rows, bcols] = b.layout.shape;
+    let [b_rows, bcols] = b.layout.shape();
     if b_rows != ncols {
         return Err(HephaestusError::LengthMismatch {
             host_len: ncols,
@@ -139,9 +139,9 @@ pub fn spmm_into<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     let meta = SpmmMeta {
         rows: to_u32(nrows, "CSR row count")?,
         cols: to_u32(bcols, "dense RHS column count")?,
-        b_stride_row: to_i32(b.layout.strides[0], "dense RHS row stride")?,
-        b_stride_col: to_i32(b.layout.strides[1], "dense RHS column stride")?,
-        b_offset: to_u32(b.layout.offset, "dense RHS offset")?,
+        b_stride_row: to_i32(b.layout.strides()[0], "dense RHS row stride")?,
+        b_stride_col: to_i32(b.layout.strides()[1], "dense RHS column stride")?,
+        b_offset: to_u32(b.layout.offset(), "dense RHS offset")?,
     };
     let width = BlockWidth::DEFAULT;
     let grid = grid_size(expected_c_len, width)?;
@@ -184,7 +184,7 @@ pub fn spmm<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     b: StridedOperand<'_, T, 2>,
 ) -> Result<RocmBuffer<T>> {
     let (nrows, _) = matrix.shape();
-    let bcols = b.layout.shape[1];
+    let bcols = b.layout.shape()[1];
     let output_len = nrows
         .checked_mul(bcols)
         .ok_or_else(|| HephaestusError::DispatchFailed {

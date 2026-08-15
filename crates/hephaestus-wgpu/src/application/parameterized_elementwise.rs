@@ -71,7 +71,7 @@ where
     }
     let input_layout = input
         .layout
-        .broadcast(output.layout.shape)
+        .broadcast(output.layout.shape())
         .map_err(map_layout_err)?;
     input_layout
         .validate_storage_len(input.buffer.len)
@@ -87,14 +87,14 @@ where
     }
 
     let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(input_layout.strides)?,
+        shape: pad_shape(output.layout.shape())?,
+        a_strides: pad_strides(input_layout.strides())?,
         b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides)?,
+        out_strides: pad_strides(output.layout.strides())?,
         offsets: [
-            to_u32(input_layout.offset, "input offset")?,
+            to_u32(input_layout.offset(), "input offset")?,
             0,
-            to_u32(output.layout.offset, "output offset")?,
+            to_u32(output.layout.offset(), "output offset")?,
             to_u32(len, "dispatch size")?,
         ],
     };

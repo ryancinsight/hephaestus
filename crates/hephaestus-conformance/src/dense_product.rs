@@ -61,7 +61,7 @@ where
     let out = device.alloc_zeroed::<f32>(4).expect("output alloc");
     let two = Layout::c_contiguous([2, 2]).expect("2x2 layout");
     // Aᵀ = [[1,3],[2,4]]; Aᵀ·B = [[26,30],[38,44]].
-    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid conformance fixture layout");
     ops.matmul_into(
         device,
         StridedView::new(&lhs, &transposed),

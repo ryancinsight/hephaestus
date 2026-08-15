@@ -18,7 +18,8 @@ fn canonical_contiguous_matrix_reuses_downloaded_storage() {
 
 #[test]
 fn strided_matrix_compacts_into_independent_row_major_storage() {
-    let layout = Layout::new([2, 2], [3, 1], 1);
+    let layout = Layout::try_new([2, 2], [3, 1], 1)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let mut downloaded = vec![99.0_f32, 1.0, 2.0, 99.0, 3.0, 4.0];
     let downloaded_pointer = downloaded.as_mut_ptr();
 

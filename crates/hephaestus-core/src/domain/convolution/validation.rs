@@ -56,24 +56,27 @@ pub(super) fn validate_channel_shapes<const R: usize>(
     dimensions: ChannelDimensions,
 ) -> Result<()> {
     let weight_channels_match = match dimensions.weight_order {
-        WeightChannelOrder::OutputThenInput => weight.shape[1] == dimensions.input_channels,
-        WeightChannelOrder::InputThenOutput => weight.shape[0] == dimensions.input_channels,
+        WeightChannelOrder::OutputThenInput => weight.shape()[1] == dimensions.input_channels,
+        WeightChannelOrder::InputThenOutput => weight.shape()[0] == dimensions.input_channels,
     };
     if !weight_channels_match
-        || output.shape[0] != dimensions.batch
-        || output.shape[1] != dimensions.output_channels
+        || output.shape()[0] != dimensions.batch
+        || output.shape()[1] != dimensions.output_channels
     {
         return Err(invalid(format!(
             "convolution channel shape mismatch: input {:?}, weight {:?}, output {:?}",
-            input.shape, weight.shape, output.shape
+            input.shape(),
+            weight.shape(),
+            output.shape()
         )));
     }
     if let Some(bias) = bias
-        && bias.shape != [dimensions.output_channels]
+        && bias.shape() != [dimensions.output_channels]
     {
         return Err(invalid(format!(
             "convolution bias shape {:?} must equal [{}]",
-            bias.shape, dimensions.output_channels
+            bias.shape(),
+            dimensions.output_channels
         )));
     }
     Ok(())
@@ -95,10 +98,10 @@ pub(super) fn validate_output_spatial<const R: usize, const S: usize>(
     output: &Layout<R>,
     expected: &[usize; S],
 ) -> Result<()> {
-    if output.shape[2..] != *expected {
+    if output.shape()[2..] != *expected {
         return Err(invalid(format!(
             "convolution output spatial shape {:?} must equal {expected:?}",
-            &output.shape[2..]
+            &output.shape()[2..]
         )));
     }
     Ok(())
@@ -129,7 +132,7 @@ fn writable_layout_is_nonoverlapping<const R: usize>(layout: &Layout<R>) -> Resu
 
     let mut axes = [(0_usize, 0_usize); R];
     let mut active = 0;
-    for (&extent, &stride) in layout.shape.iter().zip(&layout.strides) {
+    for (&extent, &stride) in layout.shape().iter().zip(&layout.strides()) {
         if extent <= 1 {
             continue;
         }
@@ -165,11 +168,11 @@ where
 {
     if let Some(target) = operands.gradients.input {
         validate_writable(target.layout, target.buffer.len(), "input gradient")?;
-        validate_target_shape(target.layout.shape, input_shape, "input gradient")?;
+        validate_target_shape(target.layout.shape(), input_shape, "input gradient")?;
     }
     if let Some(target) = operands.gradients.weight {
         validate_writable(target.layout, target.buffer.len(), "weight gradient")?;
-        validate_target_shape(target.layout.shape, weight_shape, "weight gradient")?;
+        validate_target_shape(target.layout.shape(), weight_shape, "weight gradient")?;
     }
     if let Some(target) = operands.gradients.bias {
         validate_writable(target.layout, target.buffer.len(), "bias gradient")?;
@@ -182,7 +185,7 @@ pub(super) fn validate_bias_gradient(
     output_channels: usize,
 ) -> Result<()> {
     if let Some(layout) = layout {
-        validate_target_shape(layout.shape, [output_channels], "bias gradient")?;
+        validate_target_shape(layout.shape(), [output_channels], "bias gradient")?;
     }
     Ok(())
 }

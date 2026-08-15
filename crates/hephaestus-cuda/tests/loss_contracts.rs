@@ -34,9 +34,9 @@ fn stable_forward_and_additive_backward_preserve_strided_padding() {
     let Some(device) = device("strided value contract") else {
         return;
     };
-    let matrix = Layout::new([2, 2], [3, 1], 1);
-    let targets_layout = Layout::new([2], [2], 1);
-    let scalar = Layout::new([1], [1], 1);
+    let matrix = Layout::try_new([2, 2], [3, 1], 1).expect("valid test layout");
+    let targets_layout = Layout::try_new([2], [2], 1).expect("valid test layout");
+    let scalar = Layout::try_new([1], [1], 1).expect("valid test layout");
     let logits = device
         .upload(&[91.0_f32, 0.0, 0.0, 92.0, 0.0, 0.0])
         .expect("logits upload");

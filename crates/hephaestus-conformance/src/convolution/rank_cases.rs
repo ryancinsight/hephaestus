@@ -59,22 +59,22 @@ where
         device,
         operations,
         &fixture::<T>(&[1, -2, 3, 1]),
-        Layout::new([1, 1, 4], [4, 4, 1], 0),
+        Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[2, -1]),
-        Layout::new([1, 1, 2], [2, 2, 1], 0),
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -2, 3]),
-        Layout::new([1, 1, 3], [3, 3, 1], 0),
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout"),
         ConvolutionParameters::new([1], [0], [1]).expect("valid rank-one parameters"),
     );
     verify_transposed(
         device,
         operations,
         &fixture::<T>(&[1, -2, 3]),
-        Layout::new([1, 1, 3], [3, 3, 1], 0),
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, 2]),
-        Layout::new([1, 1, 2], [2, 2, 1], 0),
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, 2, -1, 1, 3]),
-        Layout::new([1, 1, 5], [5, 5, 1], 0),
+        Layout::try_new([1, 1, 5], [5, 5, 1], 0).expect("valid conformance fixture layout"),
         TransposedConvolutionParameters::new([2], [1], [1], [1])
             .expect("valid rank-one transposed parameters"),
     );
@@ -90,22 +90,22 @@ where
         device,
         operations,
         &fixture::<T>(&[1, -2, 3, 1, 4, -1, 2, 1, -3]),
-        Layout::new([1, 1, 3, 3], [9, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3], [9, 9, 3, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -1, 2, 1]),
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -2, 1, 3]),
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0).expect("valid conformance fixture layout"),
         ConvolutionParameters::new([1, 1], [0, 0], [1, 1]).expect("valid rank-two parameters"),
     );
     verify_transposed(
         device,
         operations,
         &fixture::<T>(&[1, -2, 1, 3]),
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -1, 2, 1]),
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0).expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -2, 1, 3, -1, 2, 1, -1, 4]),
-        Layout::new([1, 1, 3, 3], [9, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3], [9, 9, 3, 1], 0).expect("valid conformance fixture layout"),
         TransposedConvolutionParameters::new([2, 1], [1, 0], [1, 0], [1, 1])
             .expect("valid rank-two transposed parameters"),
     );
@@ -124,11 +124,14 @@ where
             1, -2, 3, 1, 4, -1, 2, 1, -3, 1, -1, 2, 1, -1, 1, 3, -2, 1, -1, 2, -3, 4, -1, 1, 1, -2,
             3,
         ]),
-        Layout::new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0)
+            .expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -1, 2, 1, -1, 1, -2, 1]),
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -2, 1, 3, -1, 2, 1, -1]),
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("valid conformance fixture layout"),
         ConvolutionParameters::new([1, 1, 1], [0, 0, 0], [1, 1, 1])
             .expect("valid rank-three parameters"),
     );
@@ -136,14 +139,17 @@ where
         device,
         operations,
         &fixture::<T>(&[1, -2, 1, 3, -1, 2, 1, -1]),
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("valid conformance fixture layout"),
         &fixture::<T>(&[1, -1, 2, 1, -1, 1, -2, 1]),
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("valid conformance fixture layout"),
         &fixture::<T>(&[
             1, -2, 1, 3, -1, 2, 1, -1, 4, -1, 1, -2, 3, 1, -1, 2, -3, 4, 1, -1, 1, -1, 1, -1, 1,
             -1, 1,
         ]),
-        Layout::new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0)
+            .expect("valid conformance fixture layout"),
         TransposedConvolutionParameters::new([2, 1, 2], [1, 0, 1], [1, 0, 1], [1, 1, 1])
             .expect("valid rank-three transposed parameters"),
     );

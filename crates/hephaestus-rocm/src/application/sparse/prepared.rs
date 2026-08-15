@@ -224,7 +224,7 @@ where
 {
     let rhs = rhs.as_operand();
     let (nrows, ncols) = matrix.shape();
-    let [rhs_rows, rhs_cols] = rhs.layout.shape;
+    let [rhs_rows, rhs_cols] = rhs.layout.shape();
     if rhs_rows != ncols {
         return Err(HephaestusError::LengthMismatch {
             host_len: ncols,
@@ -249,9 +249,9 @@ where
     let meta = SpmmMeta {
         rows: super::spmm::to_u32(nrows, "CSR row count")?,
         cols: super::spmm::to_u32(rhs_cols, "dense RHS column count")?,
-        b_stride_row: super::spmm::to_i32(rhs.layout.strides[0], "dense RHS row stride")?,
-        b_stride_col: super::spmm::to_i32(rhs.layout.strides[1], "dense RHS column stride")?,
-        b_offset: super::spmm::to_u32(rhs.layout.offset, "dense RHS offset")?,
+        b_stride_row: super::spmm::to_i32(rhs.layout.strides()[0], "dense RHS row stride")?,
+        b_stride_col: super::spmm::to_i32(rhs.layout.strides()[1], "dense RHS column stride")?,
+        b_offset: super::spmm::to_u32(rhs.layout.offset(), "dense RHS offset")?,
     };
     let width = BlockWidth::DEFAULT;
     let grid = grid_size(output_len, width)?;

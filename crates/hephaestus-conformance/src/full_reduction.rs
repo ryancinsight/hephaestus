@@ -132,7 +132,7 @@ where
 
     // A strided (transposed) view reduces the same multiset: same bytes,
     // different traversal, identical exact result.
-    let transposed = Layout::new([4, 3], [1, 4], 0);
+    let transposed = Layout::try_new([4, 3], [1, 4], 0).expect("valid conformance fixture layout");
     assert_eq!(
         reduce::<_, _, SumOp>(device, ops, &source, &transposed),
         24.0,
@@ -152,7 +152,7 @@ where
     let square = device
         .upload(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
         .expect("square upload");
-    let diagonal = Layout::new([3], [4], 0);
+    let diagonal = Layout::try_new([3], [4], 0).expect("valid conformance fixture layout");
     let trace_out = device.alloc_zeroed::<f32>(1).expect("trace output");
     let scalar_layout = Layout::c_contiguous([1]).expect("scalar layout");
     ops.reduce_full_into::<SumOp, 1>(

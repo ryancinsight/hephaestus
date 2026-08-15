@@ -114,7 +114,7 @@ extern "C" __global__ void mean_axis_kernel(
 pub(crate) fn axis_len<T>(input: StridedOperand<'_, T, 2>, axis: usize) -> Result<usize> {
     input
         .layout
-        .shape
+        .shape()
         .get(axis)
         .copied()
         .ok_or_else(|| HephaestusError::DispatchFailed {
@@ -276,7 +276,7 @@ where
             message: format!("axis {axis} is out of bounds for rank-2 reduction"),
         });
     }
-    let mut output_shape = input.layout.shape;
+    let mut output_shape = input.layout.shape();
     output_shape[axis] = 1;
     let output_layout =
         Layout::c_contiguous(output_shape).map_err(|error| HephaestusError::DispatchFailed {
@@ -440,7 +440,7 @@ where
     T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
-    let mut output_shape = input.layout.shape;
+    let mut output_shape = input.layout.shape();
     output_shape[axis] = 1;
     let output_layout =
         Layout::c_contiguous(output_shape).map_err(|error| HephaestusError::DispatchFailed {

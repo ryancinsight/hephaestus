@@ -9,7 +9,7 @@ use crate::infrastructure::RocmBuffer;
 
 /// Compute the Moore–Penrose pseudoinverse **A⁺** through the shared provider.
 pub fn pinv(device: &RocmDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<RocmBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     matrix
         .layout
         .validate_storage_len(matrix.buffer.len())
@@ -29,7 +29,7 @@ pub fn pinv(device: &RocmDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<R
 
 /// Compute the matrix exponential **eᴬ** through the shared provider.
 pub fn matexp(device: &RocmDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<RocmBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(

@@ -277,7 +277,7 @@ pub fn qr_decompose(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuQrDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows < cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("QR requires m ≥ n, got shape [{rows}, {cols}]"),
@@ -358,7 +358,7 @@ pub fn qr_decompose_blocked(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuQrDecomposition> {
-    let [m, n] = matrix.layout.shape;
+    let [m, n] = matrix.layout.shape();
     if m < n {
         return Err(HephaestusError::DispatchFailed {
             message: format!("QR requires m ≥ n, got shape [{m}, {n}]"),

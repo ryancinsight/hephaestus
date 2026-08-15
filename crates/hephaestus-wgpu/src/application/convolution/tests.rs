@@ -33,21 +33,27 @@ fn matches_leto_regular_and_transposed_forward_backward() {
     verify_regular_case(
         &device,
         &[1.0, 2.0, 3.0, 4.0],
-        Layout::new([1, 1, 4], [4, 4, 1], 0),
+        Layout::try_new([1, 1, 4], [4, 4, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[2.0, -1.0],
-        Layout::new([1, 1, 2], [2, 2, 1], 0),
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[1.0, -2.0, 3.0],
-        Layout::new([1, 1, 3], [3, 3, 1], 0),
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         ConvolutionParameters::new([1], [0], [1]).expect("valid regular parameters"),
     );
     verify_transposed_case(
         &device,
         &[1.0, -2.0, 3.0],
-        Layout::new([1, 1, 3], [3, 3, 1], 0),
+        Layout::try_new([1, 1, 3], [3, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[0.5, 2.0],
-        Layout::new([1, 1, 2], [2, 2, 1], 0),
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[1.0, 2.0, -1.0, 0.5, 3.0],
-        Layout::new([1, 1, 5], [5, 5, 1], 0),
+        Layout::try_new([1, 1, 5], [5, 5, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         TransposedConvolutionParameters::new([2], [1], [1], [1])
             .expect("valid transposed parameters"),
     );
@@ -61,22 +67,28 @@ fn matches_leto_spatial_ranks_two_and_three() {
     verify_regular_case(
         &device,
         &[1.0, -2.0, 3.0, 0.5, 4.0, -1.0, 2.0, 1.5, -3.0],
-        Layout::new([1, 1, 3, 3], [9, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3], [9, 9, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[0.5, -1.0, 2.0, 0.25],
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[1.0, -2.0, 0.5, 3.0],
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         ConvolutionParameters::new([1, 1], [0, 0], [1, 1])
             .expect("valid rank-two regular parameters"),
     );
     verify_transposed_case(
         &device,
         &[1.0, -2.0, 0.5, 3.0],
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[0.5, -1.0, 2.0, 0.25],
-        Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[1.0, -2.0, 0.5, 3.0, -1.5, 2.5, 0.25, -0.75, 4.0],
-        Layout::new([1, 1, 3, 3], [9, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3], [9, 9, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         TransposedConvolutionParameters::new([2, 1], [1, 0], [1, 0], [1, 1])
             .expect("valid rank-two transposed parameters"),
     );
@@ -86,25 +98,31 @@ fn matches_leto_spatial_ranks_two_and_three() {
             1.0, -2.0, 3.0, 0.5, 4.0, -1.0, 2.0, 1.5, -3.0, 0.25, -0.5, 2.5, 1.25, -1.25, 0.75,
             3.5, -2.5, 1.75, -0.25, 2.25, -3.25, 4.25, -1.5, 0.5, 1.0, -2.0, 3.0,
         ],
-        Layout::new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[0.5, -1.0, 2.0, 0.25, -0.75, 1.5, -2.0, 0.125],
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[1.0, -2.0, 0.5, 3.0, -1.5, 2.5, 0.25, -0.75],
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         ConvolutionParameters::new([1, 1, 1], [0, 0, 0], [1, 1, 1])
             .expect("valid rank-three regular parameters"),
     );
     verify_transposed_case(
         &device,
         &[1.0, -2.0, 0.5, 3.0, -1.5, 2.5, 0.25, -0.75],
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[0.5, -1.0, 2.0, 0.25, -0.75, 1.5, -2.0, 0.125],
-        Layout::new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0),
+        Layout::try_new([1, 1, 2, 2, 2], [8, 8, 4, 2, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         &[
             1.0, -2.0, 0.5, 3.0, -1.5, 2.5, 0.25, -0.75, 4.0, -0.5, 1.5, -2.5, 3.5, 0.75, -1.25,
             2.25, -3.25, 4.25, 0.125, -0.25, 0.375, -0.5, 0.625, -0.75, 0.875, -1.0, 1.125,
         ],
-        Layout::new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0),
+        Layout::try_new([1, 1, 3, 3, 3], [27, 27, 9, 3, 1], 0)
+            .expect("invariant: submatrix layout derives from a validated parent"),
         TransposedConvolutionParameters::new([2, 1, 2], [1, 0, 1], [1, 0, 1], [1, 1, 1])
             .expect("valid rank-three transposed parameters"),
     );
@@ -120,9 +138,12 @@ fn rejects_forward_buffer_alias_before_mutation() {
     let weight = device
         .upload(&[0.5_f32, -1.0, 2.0, 0.25])
         .expect("weight upload");
-    let input_layout = Layout::new([1, 1, 3, 3], [9, 9, 3, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0);
-    let output_layout = Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 0);
+    let input_layout = Layout::try_new([1, 1, 3, 3], [9, 9, 3, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let weight_layout = Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let output_layout = Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let operands = ConvolutionForwardOperands {
         input: StridedView::new(&shared, &input_layout),
         weight: StridedView::new(&weight, &weight_layout),
@@ -166,9 +187,12 @@ fn rejects_prepared_kernel_on_a_different_device() {
     let output = source_device
         .alloc_zeroed::<f32>(2)
         .expect("output allocation");
-    let input_layout = Layout::new([1, 1, 3], [3, 3, 1], 0);
-    let weight_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
-    let output_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
+    let input_layout = Layout::try_new([1, 1, 3], [3, 3, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let weight_layout = Layout::try_new([1, 1, 2], [2, 2, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
+    let output_layout = Layout::try_new([1, 1, 2], [2, 2, 1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let parameters = ConvolutionParameters::new([1], [0], [1]).expect("valid regular parameters");
     let operations = WgpuConvolutionOps;
     let prepared = operations
@@ -213,7 +237,8 @@ fn verify_regular_case<const R: usize, const S: usize>(
     parameters: ConvolutionParameters<S>,
 ) {
     let bias_host = [0.5_f32];
-    let bias_layout = Layout::new([1], [1], 0);
+    let bias_layout = Layout::try_new([1], [1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let mut expected_output = vec![0.0_f32; grad_output_host.len()];
     convolution_forward_into(
         &ArrayView::new(input_layout, input_host),
@@ -331,7 +356,8 @@ fn verify_transposed_case<const R: usize, const S: usize>(
     parameters: TransposedConvolutionParameters<S>,
 ) {
     let bias_host = [-1.0_f32];
-    let bias_layout = Layout::new([1], [1], 0);
+    let bias_layout = Layout::try_new([1], [1], 0)
+        .expect("invariant: submatrix layout derives from a validated parent");
     let mut expected_output = vec![0.0_f32; grad_output_host.len()];
     convolution_transposed_forward_into(
         &ArrayView::new(input_layout, input_host),

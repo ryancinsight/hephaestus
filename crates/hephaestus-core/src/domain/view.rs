@@ -68,17 +68,17 @@ mod tests {
 
         // Copying the view must not require anything of the buffer type.
         let copied = view;
-        assert_eq!(copied.layout.shape, view.layout.shape);
+        assert_eq!(copied.layout.shape(), view.layout.shape());
         assert!(core::ptr::eq(copied.buffer, view.buffer));
     }
 
     #[test]
     fn view_preserves_layout_metadata() {
         let buffer = [0u8; 6];
-        let transposed = Layout::new([3, 2], [1, 3], 0);
+        let transposed = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
         let view = StridedView::new(&buffer, &transposed);
 
-        assert_eq!(view.layout.shape, [3, 2]);
-        assert_eq!(view.layout.strides, [1, 3]);
+        assert_eq!(view.layout.shape(), [3, 2]);
+        assert_eq!(view.layout.strides(), [1, 3]);
     }
 }

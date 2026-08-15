@@ -1057,7 +1057,7 @@ fn axis_reductions_match_leto_reference() {
         .unwrap();
     assert_eq!(got_product_axis1_into, [6.0, 120.0]);
 
-    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let transposed = StridedOperand {
         buffer: &input,
         layout: &transposed_layout,
@@ -1716,7 +1716,7 @@ fn cumprod_convenience_preserves_strided_and_empty_contract() {
 
     let physical = vec![1_i32, 2, 3, 4, 5, 6];
     let input = device.upload(&physical).unwrap();
-    let transposed_layout = Layout::new([2, 3], [1, 2], 0);
+    let transposed_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let output_layout = Layout::c_contiguous([2, 3]).unwrap();
     let output = device.alloc_zeroed::<i32>(6).unwrap();
     cumprod_into(
@@ -1765,7 +1765,7 @@ fn cumprod_convenience_preserves_strided_and_empty_contract() {
     .unwrap();
     assert_eq!(empty_output.len(), 0);
 
-    let invalid_layout = Layout::new([2, 3], [1, 2], 1);
+    let invalid_layout = Layout::try_new([2, 3], [1, 2], 1).expect("valid test layout");
     assert!(matches!(
         cumprod(
             &device,
@@ -3614,7 +3614,7 @@ fn linalg_reductions_accept_strided_views() {
     let b_host = vec![10.0f32, 20.0, 30.0, 40.0];
     let a = device.upload(&a_host).unwrap();
     let b = device.upload(&b_host).unwrap();
-    let reversed = Layout::new([4], [-1], 3);
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let contiguous = Layout::c_contiguous([4]).unwrap();
     let reversed_a = StridedOperand {
         buffer: &a,
@@ -4858,9 +4858,9 @@ where
     let small_host = [1.0f32, 2.0, 3.0, 4.0];
     let small_buf = device.upload(&small_host).unwrap();
 
-    let transposed = Layout::new([4, 4], [1, 4], 0);
-    let offset = Layout::new([3, 3], [4, 1], 5);
-    let broadcast = Layout::new([4, 4], [0, 1], 0);
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let offset = Layout::try_new([3, 3], [4, 1], 5).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
 
     for (name, layout, buffer) in [
         ("transposed", &transposed, &dense_buf),

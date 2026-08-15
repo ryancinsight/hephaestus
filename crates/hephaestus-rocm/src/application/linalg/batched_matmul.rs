@@ -114,9 +114,9 @@ pub fn batched_matmul_into<T>(
 where
     T: DialectScalar<HipC> + Pod,
 {
-    let [lhs_batch, rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_batch, rhs_shared, cols] = rhs.layout.shape;
-    let [out_batch, out_rows, out_cols] = out.layout.shape;
+    let [lhs_batch, rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_batch, rhs_shared, cols] = rhs.layout.shape();
+    let [out_batch, out_rows, out_cols] = out.layout.shape();
     let batch = out_batch;
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
     let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
@@ -129,7 +129,9 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -160,29 +162,32 @@ where
     let lhs_batch_stride = if lhs_batch == 1 {
         0
     } else {
-        lhs.layout.strides[0]
+        lhs.layout.strides()[0]
     };
     let rhs_batch_stride = if rhs_batch == 1 {
         0
     } else {
-        rhs.layout.strides[0]
+        rhs.layout.strides()[0]
     };
-    let out_batch_stride = out.layout.strides[0];
-    let lhs_matrix_layout = Layout::new(
+    let out_batch_stride = out.layout.strides()[0];
+    let lhs_matrix_layout = Layout::try_new(
         [rows, lhs_shared],
-        [lhs.layout.strides[1], lhs.layout.strides[2]],
-        lhs.layout.offset,
-    );
-    let rhs_matrix_layout = Layout::new(
+        [lhs.layout.strides()[1], lhs.layout.strides()[2]],
+        lhs.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
+    let rhs_matrix_layout = Layout::try_new(
         [rhs_shared, cols],
-        [rhs.layout.strides[1], rhs.layout.strides[2]],
-        rhs.layout.offset,
-    );
-    let out_matrix_layout = Layout::new(
+        [rhs.layout.strides()[1], rhs.layout.strides()[2]],
+        rhs.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
+    let out_matrix_layout = Layout::try_new(
         [out_rows, out_cols],
-        [out.layout.strides[1], out.layout.strides[2]],
-        out.layout.offset,
-    );
+        [out.layout.strides()[1], out.layout.strides()[2]],
+        out.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
     let a_meta = map_layout(&lhs_matrix_layout)?;
     let b_meta = map_layout(&rhs_matrix_layout)?;
     let c_meta = map_layout(&out_matrix_layout)?;
@@ -273,8 +278,8 @@ pub fn batched_matmul<T>(
 where
     T: DialectScalar<HipC> + Pod,
 {
-    let [lhs_batch, rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_batch, rhs_shared, cols] = rhs.layout.shape;
+    let [lhs_batch, rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_batch, rhs_shared, cols] = rhs.layout.shape();
     let batch = lhs_batch.max(rhs_batch);
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
     let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
@@ -282,7 +287,8 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}",
-                lhs.layout.shape, rhs.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape()
             ),
         });
     }

@@ -641,7 +641,7 @@ fn strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts() {
     let rhs_buffer = device
         .upload(&rhs_values)
         .expect("HIP broadcast rhs upload");
-    let lhs_layout = Layout::new([2, 2], [1, 2], 1);
+    let lhs_layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
     let rhs_layout = Layout::c_contiguous([1, 2]).expect("broadcast rhs layout");
     let lhs = StridedOperand {
         buffer: &lhs_buffer,
@@ -790,7 +790,7 @@ fn strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts() {
             if message == "output buffer must not alias input buffer"
     ));
 
-    let aliased_layout = Layout::new([2, 2], [0, 1], 0);
+    let aliased_layout = Layout::try_new([2, 2], [0, 1], 0).expect("valid test layout");
     let aliased_output = device.alloc_zeroed::<i32>(2).expect("zero-stride output");
     assert!(matches!(
         unary_elementwise_strided_into::<IdentityOp, _, 2>(
@@ -978,7 +978,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(got, [52.0]);
     assert_eq!(dot_output, prepared_dot.output() as *const _);
 
-    let reversed = Layout::new([4], [-1], 3);
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let reversed_dot = prepare_dot(
         &device,
         StridedOperand {
@@ -1002,7 +1002,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     let norm_input = device
         .upload(&[1.0_f32, 2.0, 3.0, 4.0])
         .expect("HIP norm input upload");
-    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid test layout");
     let prepared_norm = prepare_norm_l2(
         &device,
         StridedOperand {
@@ -1095,7 +1095,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
             if message.starts_with("dot product shape mismatch:")
     ));
 
-    let invalid_layout = Layout::new([3], [1], 2);
+    let invalid_layout = Layout::try_new([3], [1], 2).expect("valid test layout");
     assert!(matches!(
         prepare_norm_l2(
             &device,
@@ -1187,7 +1187,7 @@ fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
         .expect("HIP caller-owned product download");
     assert_eq!(product_rows_into_output, [24, 240_000, 3465]);
 
-    let transposed_layout = Layout::new([4, 3], [1, 4], 0);
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
     let transposed_product = prod_axis(
         &device,
         StridedOperand {
@@ -1359,7 +1359,7 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
         .expect("HIP repeated column sum download");
     assert_eq!(got_axis0, [15.0, 18.0, 21.0, 24.0]);
 
-    let transposed_layout = Layout::new([4, 3], [1, 4], 0);
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
     let transposed_input = StridedOperand {
         buffer: &input,
         layout: &transposed_layout,
@@ -1921,7 +1921,7 @@ fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contr
     let rhs_values = [5_i32, 6, 7, 8];
     let lhs_buffer = device.upload(&lhs_values).expect("HIP kron lhs upload");
     let rhs_buffer = device.upload(&rhs_values).expect("HIP kron rhs upload");
-    let lhs_layout = Layout::new([2, 2], [2, 1], 1);
+    let lhs_layout = Layout::try_new([2, 2], [2, 1], 1).expect("valid test layout");
     let rhs_layout = Layout::c_contiguous([2, 2]).expect("kron rhs layout");
     let lhs = StridedOperand {
         buffer: &lhs_buffer,
@@ -1942,7 +1942,7 @@ fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contr
         .expect("HIP kron download");
     assert_eq!(output_values, expected);
 
-    let strided_output_layout = Layout::new([4, 4], [8, 2], 0);
+    let strided_output_layout = Layout::try_new([4, 4], [8, 2], 0).expect("valid test layout");
     let strided_output = device
         .alloc_zeroed::<i32>(31)
         .expect("HIP strided kron output");
@@ -2012,7 +2012,7 @@ fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contr
             if message == "output buffer must not alias either input buffer"
     ));
 
-    let aliased_output_layout = Layout::new([4, 4], [0, 1], 0);
+    let aliased_output_layout = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
     let aliased_output = device
         .alloc_zeroed::<i32>(4)
         .expect("zero-stride kron output buffer");
@@ -2063,7 +2063,7 @@ fn matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square() {
     let strided_buffer = device
         .upload(&strided_values)
         .expect("HIP strided matpow upload");
-    let strided_layout = Layout::new([2, 2], [1, 2], 1);
+    let strided_layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
     let strided_power = matpow(
         &device,
         StridedOperand {
@@ -2161,7 +2161,7 @@ fn matrix_rank_and_det_match_cpu_values_and_tolerance_contracts() {
 
     let values = [99.0_f32, 1.0, 2.0, 3.0, 4.0];
     let buffer = device.upload(&values).expect("HIP matrix-rank upload");
-    let layout = Layout::new([2, 2], [1, 2], 1);
+    let layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
     let matrix = StridedOperand {
         buffer: &buffer,
         layout: &layout,
@@ -2401,7 +2401,7 @@ fn prepared_sparse_dispatch_matches_reference() {
     let b = device
         .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
         .expect("SpMM input upload");
-    let b_layout = Layout::new([3, 2], [1, 3], 0);
+    let b_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let b_operand = StridedOperand {
         buffer: &b,
         layout: &b_layout,
@@ -2445,7 +2445,7 @@ fn prepared_sparse_dispatch_matches_reference() {
         Err(error) => panic!("expected SpMV length rejection, got {error:?}"),
         Ok(_) => panic!("expected SpMV length rejection, got success"),
     }
-    let bad_layout = Layout::new([3, 2], [2, 1], 5);
+    let bad_layout = Layout::try_new([3, 2], [2, 1], 5).expect("valid test layout");
     let bad_operand = StridedOperand {
         buffer: &b,
         layout: &bad_layout,
@@ -2651,7 +2651,7 @@ fn map_reductions_match_cpu_values_for_strided_views_and_reject_invalid_shapes()
     let dot_right_buffer = device
         .upload(&dot_right_values)
         .expect("HIP strided dot rhs upload");
-    let dot_left_layout = Layout::new([5], [1], 1);
+    let dot_left_layout = Layout::try_new([5], [1], 1).expect("valid test layout");
     let dot_right_layout = Layout::c_contiguous([5]).expect("dot rhs layout");
     let dot_value_buffer = dot(
         &device,
@@ -2822,7 +2822,7 @@ fn cholesky_strided_input_and_blocked_density_contracts_are_enforced() {
     let strided_buffer = device
         .upload(&strided_values)
         .expect("HIP strided Cholesky input upload");
-    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
     let factor = cholesky_decompose(
         &device,
         StridedOperand {
@@ -2999,7 +2999,7 @@ fn lu_strided_and_invalid_contracts_are_enforced() {
     let strided_buffer = device
         .upload(&strided_values)
         .expect("HIP strided LU upload");
-    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
     let factor = lu_decompose(
         &device,
         StridedOperand {
@@ -3235,7 +3235,7 @@ fn full_piv_lu_preserves_strided_and_rank_contracts() {
     let strided_buffer = device
         .upload(&strided_values)
         .expect("HIP strided complete-pivot LU upload");
-    let strided_layout = Layout::new([2, 2], [3, 1], 0);
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
     let factor = full_piv_lu(
         &device,
         StridedOperand {
@@ -3394,8 +3394,8 @@ fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     let small = device
         .upload(&[1.0_f32; 4])
         .expect("HIP broadcast blocked pivoted input upload");
-    let transposed = Layout::new([4, 4], [1, 4], 0);
-    let broadcast = Layout::new([4, 4], [0, 1], 0);
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
 
     let lu_result = full_piv_lu_blocked(
         &device,
@@ -4337,7 +4337,7 @@ fn fluent_matrix_traits_match_operation_contracts() {
         layout: &layout,
     };
     let normalized_operand = a_operand.as_operand();
-    assert_eq!(normalized_operand.layout.shape, [2, 2]);
+    assert_eq!(normalized_operand.layout.shape(), [2, 2]);
 
     let product = a_operand
         .matmul(&device, &b_operand)

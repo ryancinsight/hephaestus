@@ -115,15 +115,17 @@ pub fn matmul_into<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_shared, cols] = rhs.layout.shape;
-    let [out_rows, out_cols] = out.layout.shape;
+    let [rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_shared, cols] = rhs.layout.shape();
+    let [out_rows, out_cols] = out.layout.shape();
 
     if lhs_shared != rhs_shared || rows != out_rows || cols != out_cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -300,9 +302,9 @@ pub fn batched_matmul_into<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [lhs_batch, m, lhs_k] = lhs.layout.shape;
-    let [rhs_batch, rhs_k, n] = rhs.layout.shape;
-    let [out_batch, out_m, out_n] = out.layout.shape;
+    let [lhs_batch, m, lhs_k] = lhs.layout.shape();
+    let [rhs_batch, rhs_k, n] = rhs.layout.shape();
+    let [out_batch, out_m, out_n] = out.layout.shape();
 
     let batch = out_batch;
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
@@ -311,7 +313,9 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -333,33 +337,36 @@ where
     let lhs_batch_stride = if lhs_batch == 1 {
         0
     } else {
-        lhs.layout.strides[0]
+        lhs.layout.strides()[0]
     };
     let rhs_batch_stride = if rhs_batch == 1 {
         0
     } else {
-        rhs.layout.strides[0]
+        rhs.layout.strides()[0]
     };
-    let out_batch_stride = out.layout.strides[0];
+    let out_batch_stride = out.layout.strides()[0];
 
     // Per-matrix layout at batch index 0; the kernel adds `batch_idx *
     // {a,b,c}_batch_stride` on the device side, so the host only maps the
     // base (rank-2) slice once.
-    let lhs_mat_layout = Layout::new(
+    let lhs_mat_layout = Layout::try_new(
         [m, lhs_k],
-        [lhs.layout.strides[1], lhs.layout.strides[2]],
-        lhs.layout.offset,
-    );
-    let rhs_mat_layout = Layout::new(
+        [lhs.layout.strides()[1], lhs.layout.strides()[2]],
+        lhs.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
+    let rhs_mat_layout = Layout::try_new(
         [rhs_k, n],
-        [rhs.layout.strides[1], rhs.layout.strides[2]],
-        rhs.layout.offset,
-    );
-    let out_mat_layout = Layout::new(
+        [rhs.layout.strides()[1], rhs.layout.strides()[2]],
+        rhs.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
+    let out_mat_layout = Layout::try_new(
         [out_m, out_n],
-        [out.layout.strides[1], out.layout.strides[2]],
-        out.layout.offset,
-    );
+        [out.layout.strides()[1], out.layout.strides()[2]],
+        out.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
 
     let a_meta = map_layout(&lhs_mat_layout)?;
     let b_meta = map_layout(&rhs_mat_layout)?;
@@ -435,13 +442,14 @@ pub fn matmul<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [rows, lhs_shared] = lhs.layout.shape;
-    let [rhs_shared, cols] = rhs.layout.shape;
+    let [rows, lhs_shared] = lhs.layout.shape();
+    let [rhs_shared, cols] = rhs.layout.shape();
     if lhs_shared != rhs_shared {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}",
-                lhs.layout.shape, rhs.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape()
             ),
         });
     }
@@ -472,8 +480,8 @@ pub fn batched_matmul<T>(
 where
     T: DialectScalar<CudaC> + Pod,
 {
-    let [lhs_batch, m, lhs_k] = lhs.layout.shape;
-    let [rhs_batch, rhs_k, n] = rhs.layout.shape;
+    let [lhs_batch, m, lhs_k] = lhs.layout.shape();
+    let [rhs_batch, rhs_k, n] = rhs.layout.shape();
     let batch = lhs_batch.max(rhs_batch);
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
     let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
@@ -481,7 +489,8 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}",
-                lhs.layout.shape, rhs.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape()
             ),
         });
     }

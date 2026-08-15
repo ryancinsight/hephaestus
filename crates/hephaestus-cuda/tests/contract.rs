@@ -985,7 +985,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(got, [52.0]);
     assert_eq!(dot_output, prepared_dot.output() as *const _);
 
-    let reversed = Layout::new([4], [-1], 3);
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let reversed_dot = prepare_dot(
         &dev,
         StridedOperand {
@@ -1003,7 +1003,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(got, [52.0]);
 
     let norm_input = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
-    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid test layout");
     let prepared_norm = prepare_norm_l2(
         &dev,
         StridedOperand {
@@ -1076,7 +1076,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
             if message.starts_with("dot product shape mismatch:")
     ));
 
-    let invalid_layout = Layout::new([3], [1], 2);
+    let invalid_layout = Layout::try_new([3], [1], 2).expect("valid test layout");
     assert!(matches!(
         prepare_norm_l2(
             &dev,
@@ -1132,7 +1132,7 @@ fn linalg_fused_map_reductions_accept_reversed_views() {
 
     let values = dev.upload(&[-1.0_f32, 2.0, -3.0, 4.0]).unwrap();
     let weights = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
-    let reversed = Layout::new([4], [-1], 3);
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let contiguous = Layout::c_contiguous([4]).unwrap();
 
     let reversed_operand = StridedOperand {
@@ -1262,7 +1262,7 @@ fn linalg_matpow_matches_leto_and_strided_references() {
 
     let strided_values = [99.0_f32, 1.0, 2.0, 3.0, 4.0];
     let strided = dev.upload(&strided_values).unwrap();
-    let strided_layout = Layout::new([2, 2], [1, 2], 1);
+    let strided_layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
     let strided_power = matpow(
         &dev,
         StridedOperand {
@@ -1486,7 +1486,7 @@ fn reduction_axis_reduction_generic_matches_cpu() {
         .unwrap();
     assert_eq!(got_product_into, [6.0, 120.0]);
 
-    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let transposed_product = prod_axis(
         &dev,
         StridedOperand {
@@ -1576,7 +1576,7 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     dev.download(&axis0_out, &mut got_axis0).unwrap();
     assert_eq!(got_axis0, [15.0, 18.0, 21.0, 24.0]);
 
-    let transposed_layout = Layout::new([4, 3], [1, 4], 0);
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
     let transposed_input = StridedOperand {
         buffer: &input,
         layout: &transposed_layout,
@@ -1811,7 +1811,7 @@ fn scan_cumprod_convenience_preserves_strided_and_empty_contract() {
 
     let physical = vec![1_i32, 2, 3, 4, 5, 6];
     let input = dev.upload(&physical).unwrap();
-    let transposed_layout = Layout::new([2, 3], [1, 2], 0);
+    let transposed_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let output_layout = Layout::c_contiguous([2, 3]).unwrap();
     let output = dev.alloc_zeroed::<i32>(6).unwrap();
     cumprod_into(
@@ -1893,7 +1893,7 @@ fn scan_cumprod_convenience_preserves_strided_and_empty_contract() {
     .unwrap();
     assert_eq!(empty_output.len(), 0);
 
-    let invalid_layout = Layout::new([2, 3], [1, 2], 1);
+    let invalid_layout = Layout::try_new([2, 3], [1, 2], 1).expect("valid test layout");
     assert!(matches!(
         cumprod(
             &dev,
@@ -3567,7 +3567,7 @@ fn test_cuda_prepared_sparse_dispatch_matches_reference() {
     prepared_spmv.dispatch().unwrap();
 
     let b = dev.upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-    let b_layout = Layout::new([3, 2], [1, 3], 0);
+    let b_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let b_operand = StridedOperand {
         buffer: &b,
         layout: &b_layout,
@@ -3596,7 +3596,7 @@ fn test_cuda_prepared_sparse_dispatch_matches_reference() {
     let wrong_x = dev.upload(&[1.0_f32, 2.0]).unwrap();
     let wrong_output = dev.upload(&[0.0_f32; 3]).unwrap();
     assert_length_mismatch(prepare_spmv(&dev, &gpu_csr, &wrong_x, &wrong_output), 3, 2);
-    let bad_layout = Layout::new([3, 2], [2, 1], 5);
+    let bad_layout = Layout::try_new([3, 2], [2, 1], 5).expect("valid test layout");
     let bad_operand = StridedOperand {
         buffer: &b,
         layout: &bad_layout,
@@ -3631,9 +3631,9 @@ where
     let small_host = [1.0f32, 2.0, 3.0, 4.0];
     let small_buf = dev.upload(&small_host).unwrap();
 
-    let transposed = Layout::new([4, 4], [1, 4], 0);
-    let offset = Layout::new([3, 3], [4, 1], 5);
-    let broadcast = Layout::new([4, 4], [0, 1], 0);
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let offset = Layout::try_new([3, 3], [4, 1], 5).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
 
     for (name, layout, buffer) in [
         ("transposed", &transposed, &dense_buf),

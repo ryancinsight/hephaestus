@@ -71,14 +71,14 @@ where
     )?;
     reject_aliasing(illegal_aliasing)?;
 
-    let [batch, classes] = operands.logits.layout.shape;
+    let [batch, classes] = operands.logits.layout.shape();
     let plan = dimensions(batch, classes)?;
-    expect_shape("targets", operands.targets.layout.shape, [batch])?;
-    expect_shape("loss", operands.loss.layout.shape, [1])?;
+    expect_shape("targets", operands.targets.layout.shape(), [batch])?;
+    expect_shape("loss", operands.loss.layout.shape(), [1])?;
     expect_shape(
         "probabilities",
-        operands.probabilities.layout.shape,
-        operands.logits.layout.shape,
+        operands.probabilities.layout.shape(),
+        operands.logits.layout.shape(),
     )?;
 
     Ok(CrossEntropyPlan {
@@ -121,18 +121,18 @@ where
     )?;
     reject_aliasing(illegal_aliasing)?;
 
-    let [batch, classes] = operands.probabilities.layout.shape;
+    let [batch, classes] = operands.probabilities.layout.shape();
     let plan = dimensions(batch, classes)?;
     expect_shape(
         "output gradient",
-        operands.output_gradient.layout.shape,
+        operands.output_gradient.layout.shape(),
         [1],
     )?;
-    expect_shape("targets", operands.targets.layout.shape, [batch])?;
+    expect_shape("targets", operands.targets.layout.shape(), [batch])?;
     expect_shape(
         "logit gradient",
-        operands.logit_gradient.layout.shape,
-        operands.probabilities.layout.shape,
+        operands.logit_gradient.layout.shape(),
+        operands.probabilities.layout.shape(),
     )?;
 
     Ok(CrossEntropyPlan {

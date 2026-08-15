@@ -53,7 +53,7 @@ pub fn symmetric_eigen_jacobi(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSymmetricEigenDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
@@ -112,7 +112,7 @@ pub fn symmetric_eigenvalues_jacobi(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<CudaBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
@@ -146,7 +146,7 @@ pub fn eigenvalues(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<CudaBuffer<Complex<f32>>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("Eigenvalues require square matrix, got shape [{rows}, {cols}]"),

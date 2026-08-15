@@ -68,9 +68,9 @@ fn cpu_reference<const N: usize>(
     out_layout: &Layout<N>,
     op: impl Fn(f32, f32) -> f32,
 ) {
-    let a_l = a_layout.broadcast(out_layout.shape).unwrap();
-    let b_l = b_layout.broadcast(out_layout.shape).unwrap();
-    let shape = out_layout.shape;
+    let a_l = a_layout.broadcast(out_layout.shape()).unwrap();
+    let b_l = b_layout.broadcast(out_layout.shape()).unwrap();
+    let shape = out_layout.shape();
     let size: usize = shape.iter().product();
     for flat in 0..size {
         let mut index = [0usize; N];
@@ -92,7 +92,7 @@ fn strided_add_transposed_input_matches_cpu() {
         return;
     };
     let a_host: Vec<f32> = vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0];
-    let a_layout = Layout::new([2, 3], [1, 2], 0);
+    let a_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let b_host: Vec<f32> = (0..6).map(|i| 10.0 * i as f32).collect();
     let b_layout = Layout::c_contiguous([2, 3]).unwrap();
     let out_layout = Layout::c_contiguous([2, 3]).unwrap();
@@ -200,7 +200,7 @@ fn strided_offset_output_writes_only_selected_region() {
     let a_layout = Layout::c_contiguous([2, 2]).unwrap();
     let b_host = vec![5.0f32, 6.0, 7.0, 8.0];
     let b_layout = Layout::c_contiguous([2, 2]).unwrap();
-    let out_layout = Layout::new([2, 2], [3, 1], 4);
+    let out_layout = Layout::try_new([2, 2], [3, 1], 4).expect("valid test layout");
 
     let a = dev.upload(&a_host).unwrap();
     let b = dev.upload(&b_host).unwrap();
@@ -228,7 +228,7 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
     let b = dev.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
     let out = dev.alloc_zeroed::<f32>(4).unwrap();
 
-    let aliasing = Layout::new([2, 2], [0, 1], 0);
+    let aliasing = Layout::try_new([2, 2], [0, 1], 0).expect("valid test layout");
     let flat = Layout::c_contiguous([2, 2]).unwrap();
     assert_dispatch_message(
         binary_elementwise_strided_into::<AddOp, f32, 2>(
@@ -248,7 +248,7 @@ fn strided_rank3_batched_matches_cpu() {
         return;
     };
     let a_host: Vec<f32> = (0..24).map(|i| i as f32 * 0.5).collect();
-    let a_layout = Layout::new([2, 3, 4], [12, 1, 3], 0);
+    let a_layout = Layout::try_new([2, 3, 4], [12, 1, 3], 0).expect("valid test layout");
     let b_host: Vec<f32> = (0..24).map(|i| 100.0 - i as f32).collect();
     let b_layout = Layout::c_contiguous([2, 3, 4]).unwrap();
     let out_layout = Layout::c_contiguous([2, 3, 4]).unwrap();
@@ -287,7 +287,7 @@ fn strided_unary_transposed_matches_cpu() {
         return;
     };
     let a_host = vec![1.0f32, 9.0, 25.0, 4.0, 16.0, 36.0];
-    let a_layout = Layout::new([2, 3], [1, 2], 0);
+    let a_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let out_layout = Layout::c_contiguous([2, 3]).unwrap();
 
     let a = dev.upload(&a_host).unwrap();
@@ -357,7 +357,7 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
         return;
     };
     let a_host = vec![1.0f32, 4.0, 2.0, 5.0, 3.0, 6.0];
-    let a_layout = Layout::new([2, 3], [1, 2], 0);
+    let a_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let out_layout = Layout::c_contiguous([2, 3]).unwrap();
 
     let a = dev.upload(&a_host).unwrap();
@@ -382,7 +382,7 @@ fn allocating_strided_forms_fully_overwrite_dense_outputs() {
         return;
     };
     let input = dev.upload(&[1_i32, 4, 2, 5, 3, 6]).unwrap();
-    let transposed = Layout::new([2, 3], [1, 2], 0);
+    let transposed = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let rhs = dev.upload(&[10_i32, 20, 30, 40, 50, 60]).unwrap();
     let dense = Layout::c_contiguous([2, 3]).unwrap();
     let probe = dev.upload(&[1_i32, 9, 3, 4, 0, 6]).unwrap();

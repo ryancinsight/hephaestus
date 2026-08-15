@@ -64,12 +64,12 @@ where
         });
     }
 
-    let shape = operands.parameter.layout.shape;
-    if operands.gradient.layout.shape != shape
+    let shape = operands.parameter.layout.shape();
+    if operands.gradient.layout.shape() != shape
         || operands
             .states
             .iter()
-            .any(|state| state.layout.shape != shape)
+            .any(|state| state.layout.shape() != shape)
     {
         return Err(HephaestusError::DispatchFailed {
             message: "stateful update operand shapes must match exactly".to_string(),
@@ -124,13 +124,13 @@ where
             }
         }
         offsets[operand] =
-            u32::try_from(view.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(view.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: format!(
                     "operand {operand} offset {} exceeds u32 range",
-                    view.layout.offset
+                    view.layout.offset()
                 ),
             })?;
-        for (axis, &stride) in view.layout.strides.iter().enumerate() {
+        for (axis, &stride) in view.layout.strides().iter().enumerate() {
             let target = 8 - N + axis;
             strides[operand][target / 4][target % 4] =
                 i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn accepts_distinct_strided_views() {
-        let layout = Layout::new([2, 2], [1, 2], 0);
+        let layout = Layout::try_new([2, 2], [1, 2], 0).expect("valid test layout");
         let parameter = Buffer(4);
         let gradient = Buffer(4);
         let state = Buffer(4);

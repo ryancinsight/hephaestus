@@ -221,11 +221,11 @@ where
 {
     let lhs_layout = lhs
         .layout
-        .broadcast(output.layout.shape)
+        .broadcast(output.layout.shape())
         .map_err(map_layout_err)?;
     let rhs_layout = rhs
         .layout
-        .broadcast(output.layout.shape)
+        .broadcast(output.layout.shape())
         .map_err(map_layout_err)?;
     lhs_layout
         .validate_storage_len(lhs.buffer.len())
@@ -243,18 +243,18 @@ where
         return Ok(None);
     }
     let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(lhs_layout.strides)?,
-        b_strides: pad_strides(rhs_layout.strides)?,
-        out_strides: pad_strides(output.layout.strides)?,
+        shape: pad_shape(output.layout.shape())?,
+        a_strides: pad_strides(lhs_layout.strides())?,
+        b_strides: pad_strides(rhs_layout.strides())?,
+        out_strides: pad_strides(output.layout.strides())?,
         offsets: [
-            u32::try_from(lhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(lhs_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: "input offset exceeds u32 range".to_string(),
             })?,
-            u32::try_from(rhs_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(rhs_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: "input offset exceeds u32 range".to_string(),
             })?,
-            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(output.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: "output offset exceeds u32 range".to_string(),
             })?,
             dispatch_len(len)?,
@@ -274,7 +274,7 @@ where
 {
     let input_layout = input
         .layout
-        .broadcast(output.layout.shape)
+        .broadcast(output.layout.shape())
         .map_err(map_layout_err)?;
     input_layout
         .validate_storage_len(input.buffer.len())
@@ -289,16 +289,16 @@ where
         return Ok(None);
     }
     let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape)?,
-        a_strides: pad_strides(input_layout.strides)?,
+        shape: pad_shape(output.layout.shape())?,
+        a_strides: pad_strides(input_layout.strides())?,
         b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides)?,
+        out_strides: pad_strides(output.layout.strides())?,
         offsets: [
-            u32::try_from(input_layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(input_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: "input offset exceeds u32 range".to_string(),
             })?,
             0,
-            u32::try_from(output.layout.offset).map_err(|_| HephaestusError::DispatchFailed {
+            u32::try_from(output.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
                 message: "output offset exceeds u32 range".to_string(),
             })?,
             dispatch_len(len)?,
@@ -652,7 +652,7 @@ where
 {
     let input_layout = input
         .layout
-        .broadcast(output.layout.shape)
+        .broadcast(output.layout.shape())
         .map_err(map_layout_err)?;
     input_layout
         .validate_storage_len(input.buffer.len())
@@ -668,18 +668,18 @@ where
     }
     Ok(Some((
         StridedMeta {
-            shape: pad_shape(output.layout.shape)?,
-            a_strides: pad_strides(input_layout.strides)?,
+            shape: pad_shape(output.layout.shape())?,
+            a_strides: pad_strides(input_layout.strides())?,
             b_strides: [0; 4],
-            out_strides: pad_strides(output.layout.strides)?,
+            out_strides: pad_strides(output.layout.strides())?,
             offsets: [
-                u32::try_from(input_layout.offset).map_err(|_| {
+                u32::try_from(input_layout.offset()).map_err(|_| {
                     HephaestusError::DispatchFailed {
                         message: "input offset exceeds u32 range".to_string(),
                     }
                 })?,
                 0,
-                u32::try_from(output.layout.offset).map_err(|_| {
+                u32::try_from(output.layout.offset()).map_err(|_| {
                     HephaestusError::DispatchFailed {
                         message: "output offset exceeds u32 range".to_string(),
                     }

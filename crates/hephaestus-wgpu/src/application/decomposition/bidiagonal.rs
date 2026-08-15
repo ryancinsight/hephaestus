@@ -50,7 +50,7 @@ pub fn bidiagonalize(
     device: &WgpuDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuBidiagonalDecomposition> {
-    let [m, n] = matrix.layout.shape;
+    let [m, n] = matrix.layout.shape();
     if m < n {
         return Err(HephaestusError::DispatchFailed {
             message: format!("Bidiagonalization requires m ≥ n, got shape [{m}, {n}]"),

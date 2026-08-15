@@ -31,7 +31,7 @@ fn full_reduction_honors_output_offset() {
     let input = device.upload(&[1.0_f32, 2.0, 3.0]).expect("input");
     let output = device.upload(&[17.0_f32, 19.0, 23.0]).expect("output");
     let input_layout = Layout::c_contiguous([3]).expect("input layout");
-    let output_layout = Layout::new([1], [1], 1);
+    let output_layout = Layout::try_new([1], [1], 1).expect("valid test layout");
 
     WgpuFullReductionOps
         .reduce_full_into::<SumOp, 1>(
@@ -50,8 +50,8 @@ fn empty_full_reductions_write_operator_identities() {
     let input = device.alloc_uninitialized::<f32>(0).expect("empty input");
     let output = device.upload(&[7.0_f32, 11.0]).expect("output");
     let input_layout = Layout::c_contiguous([0]).expect("empty layout");
-    let sum_layout = Layout::new([1], [1], 0);
-    let product_layout = Layout::new([1], [1], 1);
+    let sum_layout = Layout::try_new([1], [1], 0).expect("valid test layout");
+    let product_layout = Layout::try_new([1], [1], 1).expect("valid test layout");
 
     WgpuFullReductionOps
         .reduce_full_into::<SumOp, 1>(
@@ -161,7 +161,7 @@ fn overlapping_writable_layouts_fail_before_mutation() {
     let input = device.upload(&[1.0_f32, 2.0, 3.0, 4.0]).expect("input");
     let output = device.upload(&[29.0_f32, 31.0, 37.0]).expect("output");
     let input_layout = Layout::c_contiguous([2, 2]).expect("input layout");
-    let overlapping = Layout::new([2, 2], [1, 1], 0);
+    let overlapping = Layout::try_new([2, 2], [1, 1], 0).expect("valid test layout");
 
     let elementwise_error = WgpuElementwiseOps
         .unary_into::<IdentityOp, 2>(

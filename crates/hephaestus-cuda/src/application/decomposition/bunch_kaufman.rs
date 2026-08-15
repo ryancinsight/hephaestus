@@ -49,7 +49,7 @@ pub fn bunch_kaufman(
     device: &CudaDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuBunchKaufmanDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("Bunch-Kaufman requires square matrix, got shape [{rows}, {cols}]"),

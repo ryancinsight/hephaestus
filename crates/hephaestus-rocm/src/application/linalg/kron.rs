@@ -64,24 +64,24 @@ extern "C" __global__ void kron_kernel(
 }
 
 fn output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
-    let rows =
-        lhs.shape[0]
-            .checked_mul(rhs.shape[0])
-            .ok_or_else(|| HephaestusError::DispatchFailed {
-                message: format!(
-                    "Kronecker row count overflows usize: {} * {}",
-                    lhs.shape[0], rhs.shape[0]
-                ),
-            })?;
-    let cols =
-        lhs.shape[1]
-            .checked_mul(rhs.shape[1])
-            .ok_or_else(|| HephaestusError::DispatchFailed {
-                message: format!(
-                    "Kronecker column count overflows usize: {} * {}",
-                    lhs.shape[1], rhs.shape[1]
-                ),
-            })?;
+    let rows = lhs.shape()[0].checked_mul(rhs.shape()[0]).ok_or_else(|| {
+        HephaestusError::DispatchFailed {
+            message: format!(
+                "Kronecker row count overflows usize: {} * {}",
+                lhs.shape()[0],
+                rhs.shape()[0]
+            ),
+        }
+    })?;
+    let cols = lhs.shape()[1].checked_mul(rhs.shape()[1]).ok_or_else(|| {
+        HephaestusError::DispatchFailed {
+            message: format!(
+                "Kronecker column count overflows usize: {} * {}",
+                lhs.shape()[1],
+                rhs.shape()[1]
+            ),
+        }
+    })?;
     Ok([rows, cols])
 }
 
@@ -107,11 +107,13 @@ where
     T: DialectScalar<HipC> + Pod,
 {
     let expected_shape = output_shape(lhs.layout, rhs.layout)?;
-    if out.layout.shape != expected_shape {
+    if out.layout.shape() != expected_shape {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "Kronecker output shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }

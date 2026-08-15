@@ -356,7 +356,7 @@ where
     if len == 0 {
         return device.alloc_zeroed::<T>(0);
     }
-    let output_layout = Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+    let output_layout = Layout::c_contiguous(input.layout.shape()).map_err(map_layout_err)?;
     let output = device.alloc_uninitialized::<T>(len)?;
     scan_axis_into::<D, Op, T>(
         device,
@@ -527,16 +527,18 @@ where
         // The rank guard above proves N == 2, so the rank-2 components are
         // total; rebuilding a Layout<2> avoids reinterpreting &Layout<N> and
         // keeps the featureless build under forbid(unsafe_code).
-        let input_layout = Layout::new(
-            [input.layout.shape[0], input.layout.shape[1]],
-            [input.layout.strides[0], input.layout.strides[1]],
-            input.layout.offset,
-        );
-        let output_layout = Layout::new(
-            [output.layout.shape[0], output.layout.shape[1]],
-            [output.layout.strides[0], output.layout.strides[1]],
-            output.layout.offset,
-        );
+        let input_layout = Layout::try_new(
+            [input.layout.shape()[0], input.layout.shape()[1]],
+            [input.layout.strides()[0], input.layout.strides()[1]],
+            input.layout.offset(),
+        )
+        .expect("invariant: rank guard proves the rank-2 components are total");
+        let output_layout = Layout::try_new(
+            [output.layout.shape()[0], output.layout.shape()[1]],
+            [output.layout.strides()[0], output.layout.strides()[1]],
+            output.layout.offset(),
+        )
+        .expect("invariant: rank guard proves the rank-2 components are total");
         let plan = plan_axis_scan_launch::<D, Op, T>(
             device,
             StridedView::new(input.buffer, &input_layout),

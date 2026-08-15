@@ -174,7 +174,7 @@ where
     // Storage [1,2,3,4] viewed as the transpose of the row-major 2x2, so the
     // logical matrix is [[1,3],[2,4]].
     let a = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).expect("upload");
-    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid conformance fixture layout");
     let dense = Layout::c_contiguous([2, 2]).expect("dense layout");
 
     let out = device.alloc_zeroed::<f32>(4).expect("output alloc");

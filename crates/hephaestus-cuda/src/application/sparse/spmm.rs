@@ -94,7 +94,7 @@ pub fn spmm_into<
 ) -> Result<()> {
     let (nrows, ncols) = a.shape();
     let b_op = b.as_operand();
-    let [b_rows, bcols] = b_op.layout.shape;
+    let [b_rows, bcols] = b_op.layout.shape();
 
     if b_rows != ncols {
         return Err(HephaestusError::LengthMismatch {
@@ -121,9 +121,9 @@ pub fn spmm_into<
     let meta = SpmmMeta {
         rows: to_u32(nrows, "CSR row count")?,
         cols: to_u32(bcols, "dense rhs column count")?,
-        b_stride_row: to_i32(b_op.layout.strides[0], "dense rhs row stride")?,
-        b_stride_col: to_i32(b_op.layout.strides[1], "dense rhs column stride")?,
-        b_offset: to_u32(b_op.layout.offset, "dense rhs offset")?,
+        b_stride_row: to_i32(b_op.layout.strides()[0], "dense rhs row stride")?,
+        b_stride_col: to_i32(b_op.layout.strides()[1], "dense rhs column stride")?,
+        b_offset: to_u32(b_op.layout.offset(), "dense rhs offset")?,
     };
 
     let width = BlockWidth::DEFAULT;
@@ -190,7 +190,7 @@ pub fn spmm<'a, T: DialectScalar<CudaC> + leto_ops::Scalar + Pod, B: AsGpuMatrix
 ) -> Result<CudaBuffer<T>> {
     let (nrows, _) = a.shape();
     let b_op = b.as_operand();
-    let [_, bcols] = b_op.layout.shape;
+    let [_, bcols] = b_op.layout.shape();
 
     let mut c = device.alloc_uninitialized::<T>(nrows * bcols)?;
     spmm_into(device, a, b, &mut c)?;

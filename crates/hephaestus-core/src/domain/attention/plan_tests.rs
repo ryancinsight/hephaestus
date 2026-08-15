@@ -69,8 +69,8 @@ fn rejects_colliding_output_and_preserves_exact_injective_layouts() {
     let key = layout([1, 1, 2]);
     let value = layout([1, 1, 2]);
     let weights = layout([1, 3, 1]);
-    let colliding = Layout::new([1, 3, 2], [6, 2, 4], 0);
-    let injective = Layout::new([1, 3, 2], [6, 2, 3], 0);
+    let colliding = Layout::try_new([1, 3, 2], [6, 2, 4], 0).expect("valid test layout");
+    let injective = Layout::try_new([1, 3, 2], [6, 2, 3], 0).expect("valid test layout");
 
     let make_operands = |output_layout| AttentionForwardOperands {
         query: StridedView::new(&input_buffer, &input),

@@ -430,13 +430,14 @@ pub fn plan_axis_reduction(
         });
     }
 
-    let mut expected_shape = input_layout.shape;
+    let mut expected_shape = input_layout.shape();
     expected_shape[axis] = 1;
-    if output_layout.shape != expected_shape {
+    if output_layout.shape() != expected_shape {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "axis reduction output shape mismatch: input {:?}, axis {axis}, out {:?}",
-                input_layout.shape, output_layout.shape
+                input_layout.shape(),
+                output_layout.shape()
             ),
         });
     }
@@ -475,21 +476,21 @@ pub fn plan_axis_reduction(
 
     let meta = AxisReductionMeta {
         input_shape: [
-            to_u32(input_layout.shape[0], "input rows")?,
-            to_u32(input_layout.shape[1], "input columns")?,
+            to_u32(input_layout.shape()[0], "input rows")?,
+            to_u32(input_layout.shape()[1], "input columns")?,
         ],
         input_strides: [
-            to_i32(input_layout.strides[0], "input row stride")?,
-            to_i32(input_layout.strides[1], "input column stride")?,
+            to_i32(input_layout.strides()[0], "input row stride")?,
+            to_i32(input_layout.strides()[1], "input column stride")?,
         ],
         output_strides: [
-            to_i32(output_layout.strides[0], "output row stride")?,
-            to_i32(output_layout.strides[1], "output column stride")?,
+            to_i32(output_layout.strides()[0], "output row stride")?,
+            to_i32(output_layout.strides()[1], "output column stride")?,
         ],
         _pre_offsets_pad: [0; 2],
         offsets: [
-            to_u32(input_layout.offset, "input offset")?,
-            to_u32(output_layout.offset, "output offset")?,
+            to_u32(input_layout.offset(), "input offset")?,
+            to_u32(output_layout.offset(), "output offset")?,
             to_u32(axis, "axis")?,
             to_u32(output_len, "output length")?,
         ],

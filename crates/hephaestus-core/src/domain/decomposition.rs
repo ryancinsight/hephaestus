@@ -35,7 +35,7 @@ use leto::Layout;
 /// Returns [`HephaestusError::DispatchFailed`] when the shape is not square or
 /// the layout does not fit `buf_len` elements.
 pub fn validate_square_operand(layout: &Layout<2>, buf_len: usize) -> Result<usize> {
-    let [rows, cols] = layout.shape;
+    let [rows, cols] = layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("Decomposition requires a square matrix, got shape [{rows}, {cols}]"),
@@ -69,7 +69,9 @@ pub fn require_dense_operand(label: &str, layout: &Layout<2>) -> Result<()> {
             "{label} blocked decomposition requires a dense C-contiguous zero-offset operand; \
              got shape {:?}, strides {:?}, offset {} — materialize the view first (e.g. an \
              identity strided copy into a fresh buffer)",
-            layout.shape, layout.strides, layout.offset
+            layout.shape(),
+            layout.strides(),
+            layout.offset()
         ),
     })
 }
@@ -665,13 +667,13 @@ mod tests {
         let dense = Layout::c_contiguous([4, 4]).expect("contiguous");
         assert!(require_dense_operand("lu", &dense).is_ok());
 
-        let transposed = Layout::new([4, 4], [1, 4], 0);
+        let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
         assert!(require_dense_operand("lu", &transposed).is_err());
 
-        let offset = Layout::new([2, 2], [2, 1], 3);
+        let offset = Layout::try_new([2, 2], [2, 1], 3).expect("valid test layout");
         assert!(require_dense_operand("qr", &offset).is_err());
 
-        let broadcast = Layout::new([4, 4], [0, 1], 0);
+        let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
         assert!(require_dense_operand("cholesky", &broadcast).is_err());
     }
 

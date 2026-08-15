@@ -80,7 +80,7 @@ pub fn validate_parameterized_output<const N: usize>(
 fn separable_nonoverlap<const N: usize>(layout: &Layout<N>) -> Result<bool> {
     let mut axes = [(0_usize, 0_usize); N];
     let mut active = 0;
-    for (&extent, &stride) in layout.shape.iter().zip(&layout.strides) {
+    for (&extent, &stride) in layout.shape().iter().zip(&layout.strides()) {
         if extent <= 1 {
             continue;
         }
@@ -169,7 +169,7 @@ fn for_each_offset<const N: usize>(
     for linear in 0..len {
         let mut index = [0_usize; N];
         let mut remainder = linear;
-        for (coordinate, &extent) in index.iter_mut().zip(&layout.shape).rev() {
+        for (coordinate, &extent) in index.iter_mut().zip(&layout.shape()).rev() {
             *coordinate = remainder % extent;
             remainder /= extent;
         }
@@ -280,14 +280,14 @@ mod tests {
 
     #[test]
     fn writable_layout_validation_accepts_injective_interleaving() {
-        let layout = Layout::new([2, 3], [3, 2], 0);
+        let layout = Layout::try_new([2, 3], [3, 2], 0).expect("valid test layout");
         let len = validate_parameterized_output(&layout, 8).expect("injective layout");
         assert_eq!(len, 6);
     }
 
     #[test]
     fn writable_layout_validation_rejects_nonzero_stride_aliasing() {
-        let layout = Layout::new([2, 2], [1, 1], 0);
+        let layout = Layout::try_new([2, 2], [1, 1], 0).expect("valid test layout");
         assert!(matches!(
             validate_parameterized_output(&layout, 3),
             Err(HephaestusError::DispatchFailed { message })
@@ -297,11 +297,11 @@ mod tests {
 
     #[test]
     fn writable_layout_validation_uses_bounded_sparse_fallback() {
-        let injective = Layout::new([2, 3], [300, 200], 0);
+        let injective = Layout::try_new([2, 3], [300, 200], 0).expect("valid test layout");
         let len = validate_parameterized_output(&injective, 701).expect("injective sparse layout");
         assert_eq!(len, 6);
 
-        let overlapping = Layout::new([2, 3], [300, 150], 0);
+        let overlapping = Layout::try_new([2, 3], [300, 150], 0).expect("valid test layout");
         assert!(matches!(
             validate_parameterized_output(&overlapping, 601),
             Err(HephaestusError::DispatchFailed { message })

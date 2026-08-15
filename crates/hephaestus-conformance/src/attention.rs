@@ -43,7 +43,8 @@ where
     let query_host = [0.0_f32; 4];
     let key_host = [0.0_f32; 4];
     let value_host = [2.0_f32, 4.0, 6.0, 10.0];
-    let tensor_layout = Layout::new([1, 2, 2], [4, 2, 1], 0);
+    let tensor_layout =
+        Layout::try_new([1, 2, 2], [4, 2, 1], 0).expect("valid conformance fixture layout");
 
     let fixture = MaskPolicyFixture {
         query: &query_host,
@@ -133,13 +134,15 @@ where
     let key_host = query_host;
     let value_host = [9.0, 2.0, 4.0, 8.0, 6.0, 10.0, 7.0, 1.0, 3.0, 6.0, 5.0, 7.0];
     let mask_host = [1.0_f32, 0.0];
-    let query_layout = Layout::new([2, 2, 2], [6, 3, 1], 1);
+    let query_layout =
+        Layout::try_new([2, 2, 2], [6, 3, 1], 1).expect("valid conformance fixture layout");
     let key_layout = query_layout;
     let value_layout = query_layout;
     let output_layout = query_layout;
     let weights_layout = query_layout;
-    let mask_layout = Layout::new([1, 2], [2, 1], 0);
-    let mask_layout_leto = Layout::new([1, 1, 2], [2, 2, 1], 0);
+    let mask_layout = Layout::try_new([1, 2], [2, 1], 0).expect("valid conformance fixture layout");
+    let mask_layout_leto =
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout");
     let scale = 0.5_f32;
 
     let mut expected_output = [-3.0_f32; 12];
@@ -265,8 +268,9 @@ where
 {
     let input_host = [0.0_f32; 4];
     let mask_host = [0.0_f32, 0.0];
-    let tensor_layout = Layout::new([1, 2, 2], [4, 2, 1], 0);
-    let mask_layout = Layout::new([1, 2], [2, 1], 0);
+    let tensor_layout =
+        Layout::try_new([1, 2, 2], [4, 2, 1], 0).expect("valid conformance fixture layout");
+    let mask_layout = Layout::try_new([1, 2], [2, 1], 0).expect("valid conformance fixture layout");
     let input = device.upload(&input_host).expect("input upload");
     let mask = device.upload(&mask_host).expect("mask upload");
     let output = device
@@ -302,9 +306,12 @@ where
     D: ComputeDevice,
     O: AttentionOps<D, f32>,
 {
-    let query_layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
-    let key_layout = Layout::new([1, 2, 1], [2, 1, 1], 0);
-    let weights_layout = Layout::new([1, 1, 2], [2, 2, 1], 0);
+    let query_layout =
+        Layout::try_new([1, 1, 1], [1, 1, 1], 0).expect("valid conformance fixture layout");
+    let key_layout =
+        Layout::try_new([1, 2, 1], [2, 1, 1], 0).expect("valid conformance fixture layout");
+    let weights_layout =
+        Layout::try_new([1, 1, 2], [2, 2, 1], 0).expect("valid conformance fixture layout");
     let expected = 0.75 * f32::MAX;
     let query = device.upload(&[0.0_f32]).expect("query upload");
     let key = device.upload(&[0.0_f32; 2]).expect("key upload");
@@ -334,8 +341,9 @@ where
     D: ComputeDevice,
     O: AttentionOps<D, f32>,
 {
-    let scalar_layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
-    let mask_layout = Layout::new([1, 1], [1, 1], 0);
+    let scalar_layout =
+        Layout::try_new([1, 1, 1], [1, 1, 1], 0).expect("valid conformance fixture layout");
+    let mask_layout = Layout::try_new([1, 1], [1, 1], 0).expect("valid conformance fixture layout");
     let finite = device.upload(&[1.0_f32]).expect("finite input upload");
     let nonfinite = device.upload(&[f32::NAN]).expect("non-finite input upload");
     let output = device.upload(&[7.0_f32]).expect("sentinel output upload");
@@ -420,7 +428,8 @@ where
     D: ComputeDevice,
     O: AttentionOps<D, f32>,
 {
-    let layout = Layout::new([1, 1, 1], [1, 1, 1], 0);
+    let layout =
+        Layout::try_new([1, 1, 1], [1, 1, 1], 0).expect("valid conformance fixture layout");
     let one = device.upload(&[1.0_f32]).expect("unit input upload");
     let invalid_weights = device.upload(&[-0.25_f32]).expect("invalid weights upload");
     let destination = device.upload(&[3.0_f32]).expect("gradient sentinel upload");

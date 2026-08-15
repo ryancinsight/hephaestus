@@ -106,14 +106,14 @@ pub use map_reduction::{
 fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
     Ok(GpuMatrixLayout {
         shape: [
-            to_u32(layout.shape[0], "dimension")?,
-            to_u32(layout.shape[1], "dimension")?,
+            to_u32(layout.shape()[0], "dimension")?,
+            to_u32(layout.shape()[1], "dimension")?,
         ],
         strides: [
-            to_i32(layout.strides[0], "stride")?,
-            to_i32(layout.strides[1], "stride")?,
+            to_i32(layout.strides()[0], "stride")?,
+            to_i32(layout.strides()[1], "stride")?,
         ],
-        offset: to_u32(layout.offset, "offset")?,
+        offset: to_u32(layout.offset(), "offset")?,
         _pad: [0; 3],
     })
 }
@@ -384,7 +384,7 @@ where
         return Ok(operation(scratch));
     }
 
-    let [rows, cols] = layout.shape;
+    let [rows, cols] = layout.shape();
     let mut scratch = Vec::with_capacity(logical_len);
     for row in 0..rows {
         for col in 0..cols {
@@ -405,8 +405,8 @@ where
 }
 
 fn kron_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
-    let [lhs_rows, lhs_cols] = lhs.shape;
-    let [rhs_rows, rhs_cols] = rhs.shape;
+    let [lhs_rows, lhs_cols] = lhs.shape();
+    let [rhs_rows, rhs_cols] = rhs.shape();
     let rows = lhs_rows
         .checked_mul(rhs_rows)
         .ok_or_else(|| HephaestusError::DispatchFailed {
@@ -435,11 +435,13 @@ where
 {
     let [expected_rows, expected_cols] = kron_output_shape(lhs.layout, rhs.layout)?;
 
-    if out.layout.shape != [expected_rows, expected_cols] {
+    if out.layout.shape() != [expected_rows, expected_cols] {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "Kronecker output shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -579,13 +581,14 @@ where
 }
 
 fn matmul_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
-    let [rows, lhs_shared] = lhs.shape;
-    let [rhs_shared, cols] = rhs.shape;
+    let [rows, lhs_shared] = lhs.shape();
+    let [rhs_shared, cols] = rhs.shape();
     if lhs_shared != rhs_shared {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}",
-                lhs.shape, rhs.shape
+                lhs.shape(),
+                rhs.shape()
             ),
         });
     }
@@ -606,14 +609,16 @@ where
     T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let [rows, cols] = matmul_output_shape(lhs.layout, rhs.layout)?;
-    let lhs_shared = lhs.layout.shape[1];
-    let [out_rows, out_cols] = out.layout.shape;
+    let lhs_shared = lhs.layout.shape()[1];
+    let [out_rows, out_cols] = out.layout.shape();
 
     if rows != out_rows || cols != out_cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matmul dimension mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -754,8 +759,8 @@ where
 }
 
 fn batched_matmul_output_shape(lhs: &Layout<3>, rhs: &Layout<3>) -> Result<[usize; 3]> {
-    let [lhs_batch, m, lhs_k] = lhs.shape;
-    let [rhs_batch, rhs_k, n] = rhs.shape;
+    let [lhs_batch, m, lhs_k] = lhs.shape();
+    let [rhs_batch, rhs_k, n] = rhs.shape();
     let batch = lhs_batch.max(rhs_batch);
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
     let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
@@ -763,7 +768,8 @@ fn batched_matmul_output_shape(lhs: &Layout<3>, rhs: &Layout<3>) -> Result<[usiz
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}",
-                lhs.shape, rhs.shape
+                lhs.shape(),
+                rhs.shape()
             ),
         });
     }
@@ -781,9 +787,9 @@ where
     T: DialectScalar<Wgsl> + Pod + MatmulZero,
 {
     let expected_shape = batched_matmul_output_shape(lhs.layout, rhs.layout)?;
-    let [lhs_batch, m, lhs_k] = lhs.layout.shape;
-    let [rhs_batch, rhs_k, n] = rhs.layout.shape;
-    let [out_batch, out_m, out_n] = out.layout.shape;
+    let [lhs_batch, m, lhs_k] = lhs.layout.shape();
+    let [rhs_batch, rhs_k, n] = rhs.layout.shape();
+    let [out_batch, out_m, out_n] = out.layout.shape();
 
     let batch = out_batch;
     let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
@@ -796,7 +802,9 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "batched matmul shape mismatch: lhs {:?}, rhs {:?}, out {:?}",
-                lhs.layout.shape, rhs.layout.shape, out.layout.shape
+                lhs.layout.shape(),
+                rhs.layout.shape(),
+                out.layout.shape()
             ),
         });
     }
@@ -818,14 +826,14 @@ where
     let lhs_batch_stride = if lhs_batch == 1 {
         0
     } else {
-        lhs.layout.strides[0]
+        lhs.layout.strides()[0]
     };
     let rhs_batch_stride = if rhs_batch == 1 {
         0
     } else {
-        rhs.layout.strides[0]
+        rhs.layout.strides()[0]
     };
-    let out_batch_stride = out.layout.strides[0];
+    let out_batch_stride = out.layout.strides()[0];
 
     let key = (TypeId::of::<MatmulKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = cached_pipeline(device, key, "hephaestus-matmul", || {
@@ -842,21 +850,24 @@ where
     let mut uniform_guards = Vec::with_capacity(3 * batch);
 
     for b in 0..batch {
-        let lhs_mat_layout = Layout::new(
+        let lhs_mat_layout = Layout::try_new(
             [m, lhs_k],
-            [lhs.layout.strides[1], lhs.layout.strides[2]],
-            (lhs.layout.offset as isize + b as isize * lhs_batch_stride) as usize,
-        );
-        let rhs_mat_layout = Layout::new(
+            [lhs.layout.strides()[1], lhs.layout.strides()[2]],
+            (lhs.layout.offset() as isize + b as isize * lhs_batch_stride) as usize,
+        )
+        .expect("valid test layout");
+        let rhs_mat_layout = Layout::try_new(
             [rhs_k, n],
-            [rhs.layout.strides[1], rhs.layout.strides[2]],
-            (rhs.layout.offset as isize + b as isize * rhs_batch_stride) as usize,
-        );
-        let out_mat_layout = Layout::new(
+            [rhs.layout.strides()[1], rhs.layout.strides()[2]],
+            (rhs.layout.offset() as isize + b as isize * rhs_batch_stride) as usize,
+        )
+        .expect("valid test layout");
+        let out_mat_layout = Layout::try_new(
             [out_m, out_n],
-            [out.layout.strides[1], out.layout.strides[2]],
-            (out.layout.offset as isize + b as isize * out_batch_stride) as usize,
-        );
+            [out.layout.strides()[1], out.layout.strides()[2]],
+            (out.layout.offset() as isize + b as isize * out_batch_stride) as usize,
+        )
+        .expect("valid test layout");
 
         lhs_mat_layout
             .validate_storage_len(lhs.buffer.len)
@@ -1104,8 +1115,8 @@ where
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(
-            to_u32(layout.shape[1].div_ceil(16), "identity workgroups x")?,
-            to_u32(layout.shape[0].div_ceil(16), "identity workgroups y")?,
+            to_u32(layout.shape()[1].div_ceil(16), "identity workgroups x")?,
+            to_u32(layout.shape()[0].div_ceil(16), "identity workgroups y")?,
             1,
         );
     }
@@ -1129,12 +1140,12 @@ pub fn matpow<T>(
 where
     T: DialectScalar<Wgsl> + MatrixIdentityScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matpow requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
@@ -1226,12 +1237,12 @@ fn matrix_properties_with_tolerance<T>(
 where
     T: MatrixRankScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows == 0 || cols == 0 {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matrix rank is undefined for empty matrix with shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
@@ -1319,12 +1330,12 @@ pub fn det<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result<W
 where
     T: MatrixRankScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "det requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
@@ -1339,7 +1350,7 @@ where
 /// is O(rows·cols) each way.
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     matrix
         .layout
         .validate_storage_len(matrix.buffer.len)
@@ -1368,7 +1379,7 @@ pub fn pinv(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<W
 /// is O(n²) each way.
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub fn matexp(device: &WgpuDevice, matrix: StridedOperand<'_, f32, 2>) -> Result<WgpuBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(

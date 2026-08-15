@@ -156,12 +156,12 @@ fn matrix_properties_with_tolerance<T>(
 where
     T: MatrixRankScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows == 0 || cols == 0 {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matrix rank/det is undefined for empty matrix with shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
@@ -188,10 +188,10 @@ where
             to_u32(cols, "rank column count")?,
         ],
         strides: [
-            to_i32(matrix.layout.strides[0], "rank row stride")?,
-            to_i32(matrix.layout.strides[1], "rank column stride")?,
+            to_i32(matrix.layout.strides()[0], "rank row stride")?,
+            to_i32(matrix.layout.strides()[1], "rank column stride")?,
         ],
-        offset: to_u32(matrix.layout.offset, "rank input offset")?,
+        offset: to_u32(matrix.layout.offset(), "rank input offset")?,
         tolerance: relative_tolerance,
         _pad: [0; 2],
     };
@@ -263,12 +263,12 @@ pub fn det<T>(device: &CudaDevice, matrix: StridedOperand<'_, T, 2>) -> Result<C
 where
     T: MatrixRankScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "det requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }

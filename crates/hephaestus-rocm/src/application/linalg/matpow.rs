@@ -113,12 +113,12 @@ pub fn matpow<T>(
 where
     T: MatrixIdentityScalar,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "matpow requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }

@@ -228,7 +228,7 @@ fn typed_comparison_strided_into_respects_source_strides() {
     // Buffer holds a 2x3 C-contiguous matrix [[1,2,3],[4,5,6]].
     let source = device.upload(&[1u32, 2, 3, 4, 5, 6]).unwrap();
     // Read as its 3x2 transpose [[1,4],[2,5],[3,6]] — same bytes, swapped strides.
-    let transposed = Layout::new([3, 2], [1, 3], 0);
+    let transposed = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
 
     // Compare against the transpose's own values with two deliberate mismatches.
     let probe = device.upload(&[1u32, 4, 9, 5, 3, 9]).unwrap();
@@ -260,7 +260,7 @@ fn typed_comparison_strided_broadcasts_into_dense_output() {
 
     // One row broadcast down two rows via a zero stride on axis 0.
     let row = device.upload(&[1u32, 2, 3]).unwrap();
-    let broadcast = Layout::new([2, 3], [0, 1], 0);
+    let broadcast = Layout::try_new([2, 3], [0, 1], 0).expect("valid test layout");
 
     let matrix = device.upload(&[1u32, 9, 3, 9, 2, 3]).unwrap();
     let dense = Layout::c_contiguous([2, 3]).unwrap();

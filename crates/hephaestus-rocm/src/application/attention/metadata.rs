@@ -37,26 +37,26 @@ impl LayoutMeta {
         let mut shape = [0; TENSOR_RANK];
         let mut strides = [0; TENSOR_RANK];
         for axis in 0..R {
-            shape[axis] = i32::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = i32::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention extent {} on axis {axis} exceeds i32 range",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            strides[axis] = i32::try_from(layout.strides[axis]).map_err(|_| {
+            strides[axis] = i32::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "attention stride {} on axis {axis} exceeds i32 range",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
         }
         Ok(Self {
             shape,
             strides,
-            offset: i32::try_from(layout.offset).map_err(|_| {
+            offset: i32::try_from(layout.offset()).map_err(|_| {
                 invalid(format!(
                     "attention layout offset {} exceeds signed ROCm address range",
-                    layout.offset
+                    layout.offset()
                 ))
             })?,
             rank: i32::try_from(R).expect("invariant: attention rank fits i32"),
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn layout_metadata_preserves_negative_strides_and_offsets() {
-        let layout = Layout::new([2, 3, 4], [20, -4, 1], 8);
+        let layout = Layout::try_new([2, 3, 4], [20, -4, 1], 8).expect("valid test layout");
         let metadata = LayoutMeta::new(&layout).expect("valid reversed attention view");
 
         assert_eq!(metadata.shape, [2, 3, 4]);

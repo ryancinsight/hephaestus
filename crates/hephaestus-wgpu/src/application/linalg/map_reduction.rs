@@ -141,7 +141,10 @@ where
         });
     }
 
-    let b_layout = b.layout.broadcast(a.layout.shape).map_err(map_layout_err)?;
+    let b_layout = b
+        .layout
+        .broadcast(a.layout.shape())
+        .map_err(map_layout_err)?;
     a.layout
         .validate_storage_len(a.buffer.len)
         .map_err(map_layout_err)?;
@@ -155,13 +158,13 @@ where
         .expect("invariant: supported WGPU targets have at least 32-bit usize");
     let partial = device.alloc_uninitialized::<T>(partial_len)?;
     let meta = StridedMeta {
-        shape: pad_shape(a.layout.shape)?,
-        a_strides: pad_strides(a.layout.strides)?,
-        b_strides: pad_strides(b_layout.strides)?,
+        shape: pad_shape(a.layout.shape())?,
+        a_strides: pad_strides(a.layout.strides())?,
+        b_strides: pad_strides(b_layout.strides())?,
         out_strides: [1, 1, 1, 1],
         offsets: [
-            to_u32(a.layout.offset, "input offset")?,
-            to_u32(b_layout.offset, "input offset")?,
+            to_u32(a.layout.offset(), "input offset")?,
+            to_u32(b_layout.offset(), "input offset")?,
             0,
             to_u32(len, "dispatch size")?,
         ],
@@ -308,11 +311,12 @@ pub fn prepare_dot<T>(
 where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
-    if a.layout.shape != b.layout.shape {
+    if a.layout.shape() != b.layout.shape() {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                a.layout.shape, b.layout.shape
+                a.layout.shape(),
+                b.layout.shape()
             ),
         });
     }
@@ -340,23 +344,24 @@ pub fn trace<T>(device: &WgpuDevice, matrix: StridedOperand<'_, T, 2>) -> Result
 where
     T: DialectScalar<Wgsl> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
 {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows != cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "trace requires a square matrix, got shape {:?}",
-                matrix.layout.shape
+                matrix.layout.shape()
             ),
         });
     }
     if rows == 0 {
         return device.upload(&[T::IDENTITY]);
     }
-    let diag_layout = Layout::new(
+    let diag_layout = Layout::try_new(
         [rows],
-        [matrix.layout.strides[0] + matrix.layout.strides[1]],
-        matrix.layout.offset,
-    );
+        [matrix.layout.strides()[0] + matrix.layout.strides()[1]],
+        matrix.layout.offset(),
+    )
+    .expect("invariant: submatrix layout derives from a validated parent");
     let diag = StridedOperand {
         buffer: matrix.buffer,
         layout: &diag_layout,

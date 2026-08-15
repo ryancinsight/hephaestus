@@ -23,9 +23,9 @@ fn plans_strided_forward_without_materialization() {
     let values = Buffer { len: 12 };
     let targets = Buffer { len: 2 };
     let loss = Buffer { len: 2 };
-    let logits = Layout::new([2, 3], [6, 2], 1);
+    let logits = Layout::try_new([2, 3], [6, 2], 1).expect("valid test layout");
     let target_layout = Layout::c_contiguous([2]).expect("target layout");
-    let loss_layout = Layout::new([1], [1], 1);
+    let loss_layout = Layout::try_new([1], [1], 1).expect("valid test layout");
     let operands = CrossEntropyForwardOperands {
         logits: StridedView::new(&values, &logits),
         targets: StridedView::new(&targets, &target_layout),
@@ -47,7 +47,7 @@ fn plans_strided_forward_without_materialization() {
 fn rejects_empty_class_support_and_target_shape_mismatch() {
     let values = Buffer { len: 1 };
     let targets = Buffer { len: 1 };
-    let logits = Layout::new([1, 0], [0, 1], 0);
+    let logits = Layout::try_new([1, 0], [0, 1], 0).expect("valid test layout");
     let target_layout = Layout::c_contiguous([1]).expect("target layout");
     let scalar = Layout::c_contiguous([1]).expect("scalar layout");
     let operands = CrossEntropyForwardOperands {
@@ -85,7 +85,7 @@ fn rejects_aliasing_and_noninjective_destinations() {
     let logits = Layout::c_contiguous([1, 2]).expect("logits layout");
     let target_layout = Layout::c_contiguous([1]).expect("target layout");
     let scalar = Layout::c_contiguous([1]).expect("scalar layout");
-    let colliding = Layout::new([1, 2], [0, 0], 0);
+    let colliding = Layout::try_new([1, 2], [0, 0], 0).expect("valid test layout");
     let operands = CrossEntropyForwardOperands {
         logits: StridedView::new(&values, &logits),
         targets: StridedView::new(&targets, &target_layout),

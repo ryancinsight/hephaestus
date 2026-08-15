@@ -281,8 +281,8 @@ where
     )?;
     validate_gradient_targets(
         operands,
-        operands.input.layout.shape,
-        operands.weight.layout.shape,
+        operands.input.layout.shape(),
+        operands.weight.layout.shape(),
     )?;
     reject_aliasing(illegal_aliasing)?;
 
@@ -367,8 +367,8 @@ where
     )?;
     validate_gradient_targets(
         operands,
-        operands.input.layout.shape,
-        operands.weight.layout.shape,
+        operands.input.layout.shape(),
+        operands.weight.layout.shape(),
     )?;
     reject_aliasing(illegal_aliasing)?;
 
@@ -394,9 +394,9 @@ fn regular_dimensions<const R: usize, const S: usize>(
     output: &Layout<R>,
     parameters: ConvolutionParameters<S>,
 ) -> Result<ConvolutionPlan<S>> {
-    let batch = input.shape[0];
-    let input_channels = input.shape[1];
-    let output_channels = weight.shape[0];
+    let batch = input.shape()[0];
+    let input_channels = input.shape()[1];
+    let output_channels = weight.shape()[0];
     validate_channel_shapes(
         input,
         weight,
@@ -409,8 +409,8 @@ fn regular_dimensions<const R: usize, const S: usize>(
     let mut kernel_spatial = [0; S];
     let mut output_spatial = [0; S];
     for axis in 0..S {
-        let input_extent = input.shape[axis + 2];
-        let kernel_extent = weight.shape[axis + 2];
+        let input_extent = input.shape()[axis + 2];
+        let kernel_extent = weight.shape()[axis + 2];
         if kernel_extent == 0 {
             return Err(invalid("convolution kernel extents must be nonzero"));
         }
@@ -450,9 +450,9 @@ fn transposed_dimensions<const R: usize, const S: usize>(
     output: &Layout<R>,
     parameters: TransposedConvolutionParameters<S>,
 ) -> Result<TransposedConvolutionPlan<S>> {
-    let batch = input.shape[0];
-    let input_channels = input.shape[1];
-    let output_channels = weight.shape[1];
+    let batch = input.shape()[0];
+    let input_channels = input.shape()[1];
+    let output_channels = weight.shape()[1];
     validate_channel_shapes(
         input,
         weight,
@@ -465,8 +465,8 @@ fn transposed_dimensions<const R: usize, const S: usize>(
     let mut kernel_spatial = [0; S];
     let mut output_spatial = [0; S];
     for axis in 0..S {
-        let input_extent = input.shape[axis + 2];
-        let kernel_extent = weight.shape[axis + 2];
+        let input_extent = input.shape()[axis + 2];
+        let kernel_extent = weight.shape()[axis + 2];
         if input_extent == 0 || kernel_extent == 0 {
             return Err(invalid(
                 "transposed convolution spatial and kernel extents must be nonzero",

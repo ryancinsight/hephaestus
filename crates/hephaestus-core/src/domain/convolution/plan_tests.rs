@@ -156,7 +156,7 @@ fn address_limit_covers_physical_offsets_and_parameters() {
     let output_buffer = Buffer { len: 16 };
     let input = layout([1, 1, 3, 3]);
     let weight = layout([1, 1, 2, 2]);
-    let output = Layout::new([1, 1, 2, 2], [4, 4, 2, 1], 12);
+    let output = Layout::try_new([1, 1, 2, 2], [4, 4, 2, 1], 12).expect("valid test layout");
     let operands = ConvolutionForwardOperands {
         input: StridedView::new(&input_buffer, &input),
         weight: StridedView::new(&weight_buffer, &weight),
@@ -186,7 +186,8 @@ fn writable_layout_must_prove_nonoverlap() {
     let output_buffer = Buffer { len: 3 };
     let input = layout([1, 1, 2, 2]);
     let weight = layout([1, 1, 1, 1]);
-    let overlapping_output = Layout::new([1, 1, 2, 2], [4, 4, 1, 1], 0);
+    let overlapping_output =
+        Layout::try_new([1, 1, 2, 2], [4, 4, 1, 1], 0).expect("valid test layout");
     let operands = ConvolutionForwardOperands {
         input: StridedView::new(&input_buffer, &input),
         weight: StridedView::new(&weight_buffer, &weight),
@@ -203,7 +204,8 @@ fn writable_layout_must_prove_nonoverlap() {
         "invalid configuration: convolution output layout must be non-overlapping"
     );
 
-    let transposed_output = Layout::new([1, 1, 2, 2], [4, 4, 1, 2], 0);
+    let transposed_output =
+        Layout::try_new([1, 1, 2, 2], [4, 4, 1, 2], 0).expect("valid test layout");
     let safe_output_buffer = Buffer { len: 4 };
     let safe_operands = ConvolutionForwardOperands {
         input: operands.input,

@@ -19,23 +19,23 @@ impl LayoutMeta {
         let mut shape = [1_u32; 4];
         let mut address = [0_i32; 4];
         for axis in 0..R {
-            shape[axis] = u32::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = u32::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "cross-entropy extent {} on axis {axis} exceeds u32 range",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            address[axis] = i32::try_from(layout.strides[axis]).map_err(|_| {
+            address[axis] = i32::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "cross-entropy stride {} on axis {axis} exceeds i32 range",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
         }
-        address[2] = i32::try_from(layout.offset).map_err(|_| {
+        address[2] = i32::try_from(layout.offset()).map_err(|_| {
             invalid(format!(
                 "cross-entropy offset {} exceeds signed WGSL address range",
-                layout.offset
+                layout.offset()
             ))
         })?;
         let (minimum, maximum) = layout.checked_min_max_offsets().map_err(|error| {

@@ -24,12 +24,16 @@ impl LayoutMeta {
             )));
         }
 
-        let offset = u32::try_from(layout.offset)
-            .map_err(|_| invalid(format!("layout offset {} exceeds u32 range", layout.offset)))?;
-        i32::try_from(layout.offset).map_err(|_| {
+        let offset = u32::try_from(layout.offset()).map_err(|_| {
+            invalid(format!(
+                "layout offset {} exceeds u32 range",
+                layout.offset()
+            ))
+        })?;
+        i32::try_from(layout.offset()).map_err(|_| {
             invalid(format!(
                 "layout offset {} exceeds signed WGSL address range",
-                layout.offset
+                layout.offset()
             ))
         })?;
         let (_, maximum_offset) = layout.checked_min_max_offsets().map_err(|error| {
@@ -46,19 +50,19 @@ impl LayoutMeta {
         let mut shape = [0_u32; METADATA_AXES];
         let mut strides = [0_i32; METADATA_AXES];
         for axis in 0..R {
-            shape[axis] = u32::try_from(layout.shape[axis]).map_err(|_| {
+            shape[axis] = u32::try_from(layout.shape()[axis]).map_err(|_| {
                 invalid(format!(
                     "layout extent {} on axis {axis} exceeds u32 range",
-                    layout.shape[axis]
+                    layout.shape()[axis]
                 ))
             })?;
-            strides[axis] = i32::try_from(layout.strides[axis]).map_err(|_| {
+            strides[axis] = i32::try_from(layout.strides()[axis]).map_err(|_| {
                 invalid(format!(
                     "layout stride {} on axis {axis} exceeds i32 range",
-                    layout.strides[axis]
+                    layout.strides()[axis]
                 ))
             })?;
-            validate_axis_span(layout.shape[axis], layout.strides[axis], axis)?;
+            validate_axis_span(layout.shape()[axis], layout.strides()[axis], axis)?;
         }
         validate_shader_products(&shape[..R])?;
 
@@ -324,7 +328,7 @@ mod tests {
     fn rejects_stride_spans_outside_signed_wgsl_addressing() {
         let maximum_stride =
             isize::try_from(i32::MAX).expect("invariant: 64-bit isize represents i32");
-        let layout = Layout::new([2], [maximum_stride + 1], 0);
+        let layout = Layout::try_new([2], [maximum_stride + 1], 0).expect("valid test layout");
         let error = LayoutMeta::new(&layout).expect_err("stride exceeds i32");
         assert_eq!(
             error.to_string(),
@@ -343,7 +347,7 @@ mod tests {
 
     #[test]
     fn rejects_overlapping_reads_with_unaddressable_logical_products() {
-        let layout = Layout::new([46_341, 46_341, 1], [0, 0, 0], 0);
+        let layout = Layout::try_new([46_341, 46_341, 1], [0, 0, 0], 0).expect("valid test layout");
         let error = LayoutMeta::new(&layout).expect_err("logical product exceeds i32");
         assert_eq!(
             error.to_string(),

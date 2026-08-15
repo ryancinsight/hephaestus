@@ -77,9 +77,9 @@ impl CrossEntropyMeta {
 impl Layout1Meta {
     fn new(layout: &Layout<1>) -> Result<Self> {
         Ok(Self {
-            shape: narrow(layout.shape[0], "rank-1 extent")?,
-            stride: narrow_stride(layout.strides[0], "rank-1 stride")?,
-            offset: narrow(layout.offset, "rank-1 offset")?,
+            shape: narrow(layout.shape()[0], "rank-1 extent")?,
+            stride: narrow_stride(layout.strides()[0], "rank-1 stride")?,
+            offset: narrow(layout.offset(), "rank-1 offset")?,
         })
     }
 
@@ -95,11 +95,11 @@ impl Layout1Meta {
 impl Layout2Meta {
     fn new(layout: &Layout<2>) -> Result<Self> {
         Ok(Self {
-            rows: narrow(layout.shape[0], "row extent")?,
-            columns: narrow(layout.shape[1], "column extent")?,
-            row_stride: narrow_stride(layout.strides[0], "row stride")?,
-            column_stride: narrow_stride(layout.strides[1], "column stride")?,
-            offset: narrow(layout.offset, "rank-2 offset")?,
+            rows: narrow(layout.shape()[0], "row extent")?,
+            columns: narrow(layout.shape()[1], "column extent")?,
+            row_stride: narrow_stride(layout.strides()[0], "row stride")?,
+            column_stride: narrow_stride(layout.strides()[1], "column stride")?,
+            offset: narrow(layout.offset(), "rank-2 offset")?,
         })
     }
 
@@ -142,8 +142,8 @@ mod tests {
 
     #[test]
     fn metadata_preserves_permuted_and_negative_strides() {
-        let permuted = Layout::new([2, 3], [1, 2], 0);
-        let reversed = Layout::new([2, 3], [3, -1], 2);
+        let permuted = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
+        let reversed = Layout::try_new([2, 3], [3, -1], 2).expect("valid test layout");
 
         let permuted = Layout2Meta::new(&permuted).expect("permuted layout metadata");
         let reversed = Layout2Meta::new(&reversed).expect("reversed layout metadata");

@@ -63,8 +63,10 @@ where
         99.0_f32, -2.0, 98.0, -0.75, 97.0, -0.25, 96.0, 0.5, 95.0, 1.25, 94.0, 2.0,
     ];
     let input = device.upload(&physical).expect("input upload");
-    let input_layout = Layout::new([2, 3], [6, 2], 1);
-    let output_layout = Layout::new([2, 3], [6, 2], 0);
+    let input_layout =
+        Layout::try_new([2, 3], [6, 2], 1).expect("valid conformance fixture layout");
+    let output_layout =
+        Layout::try_new([2, 3], [6, 2], 0).expect("valid conformance fixture layout");
     let name = device.backend_name();
 
     assert_eq!(
@@ -141,8 +143,10 @@ where
     );
 
     let overlapping_output = device.alloc_zeroed::<f32>(4).expect("output allocation");
-    let overlapping_layout = Layout::new([2, 2], [1, 1], 0);
-    let overlapping_input_layout = Layout::new([2, 2], [6, 2], 1);
+    let overlapping_layout =
+        Layout::try_new([2, 2], [1, 1], 0).expect("valid conformance fixture layout");
+    let overlapping_input_layout =
+        Layout::try_new([2, 2], [6, 2], 1).expect("valid conformance fixture layout");
     let error = operations
         .parameterized_unary_into::<HardtanhOp, 2>(
             device,

@@ -566,7 +566,7 @@ fn prepared_sparse_dispatch_matches_reference() {
     let b = device
         .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
         .expect("SpMM input upload");
-    let b_layout = Layout::new([3, 2], [1, 3], 0);
+    let b_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let b_operand = StridedOperand {
         buffer: &b,
         layout: &b_layout,
@@ -610,7 +610,7 @@ fn prepared_sparse_dispatch_matches_reference() {
         Err(error) => panic!("expected SpMV length rejection, got {error:?}"),
         Ok(_) => panic!("expected SpMV length rejection, got success"),
     }
-    let bad_layout = Layout::new([3, 2], [2, 1], 5);
+    let bad_layout = Layout::try_new([3, 2], [2, 1], 5).expect("valid test layout");
     let bad_operand = StridedOperand {
         buffer: &b,
         layout: &bad_layout,
@@ -750,7 +750,7 @@ fn scan_cumprod_convenience_preserves_strided_and_empty_contract() {
 
     let physical = vec![1_i32, 2, 3, 4, 5, 6];
     let input = device.upload(&physical).unwrap();
-    let transposed_layout = Layout::new([2, 3], [1, 2], 0);
+    let transposed_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let output_layout = Layout::c_contiguous([2, 3]).unwrap();
     let output = device.alloc_zeroed::<i32>(6).unwrap();
     cumprod_into(
@@ -869,7 +869,7 @@ fn scan_cumprod_convenience_preserves_strided_and_empty_contract() {
     .unwrap();
     assert_eq!(empty_output.len(), 0);
 
-    let invalid_layout = Layout::new([2, 3], [1, 2], 1);
+    let invalid_layout = Layout::try_new([2, 3], [1, 2], 1).expect("valid test layout");
     assert!(matches!(
         cumprod(
             &device,
@@ -1209,7 +1209,7 @@ fn reduction_axis_into_matches_cpu_reference() {
     d.download(&product, &mut got_product).unwrap();
     assert_eq!(got_product, [6.0, 120.0]);
 
-    let transposed_layout = Layout::new([3, 2], [1, 3], 0);
+    let transposed_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
     let transposed_product = prod_axis(
         &d,
         StridedOperand {
@@ -1326,7 +1326,7 @@ fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
     d.download(&axis0_out, &mut got_axis0).unwrap();
     assert_eq!(got_axis0, [15.0, 18.0, 21.0, 24.0]);
 
-    let transposed_layout = Layout::new([4, 3], [1, 4], 0);
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
     let transposed_input = StridedOperand {
         buffer: &input,
         layout: &transposed_layout,
@@ -1647,8 +1647,8 @@ fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     };
     let dense = device.upload(&[1.0f32; 16]).unwrap();
     let small = device.upload(&[1.0f32; 4]).unwrap();
-    let transposed = Layout::new([4, 4], [1, 4], 0);
-    let broadcast = Layout::new([4, 4], [0, 1], 0);
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
 
     let lu_result = full_piv_lu_blocked(
         &device,
@@ -1722,7 +1722,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(got, [52.0]);
     assert_eq!(&dot_output, dot_buffer.wgpu_buffer().raw());
 
-    let reversed = Layout::new([4], [-1], 3);
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let reversed_dot = prepare_dot(
         &device,
         StridedOperand {
@@ -1741,7 +1741,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
     assert_eq!(got, [52.0]);
 
     let norm_input = device.upload(&[1.0_f32, 2.0, 3.0, 4.0]).unwrap();
-    let transposed = Layout::new([2, 2], [1, 2], 0);
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid test layout");
     let prepared_norm = prepare_norm_l2(
         &device,
         StridedOperand {
@@ -1814,7 +1814,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
             if message.starts_with("dot product shape mismatch:")
     ));
 
-    let invalid_layout = Layout::new([3], [1], 2);
+    let invalid_layout = Layout::try_new([3], [1], 2).expect("valid test layout");
     assert!(matches!(
         prepare_norm_l2(
             &device,

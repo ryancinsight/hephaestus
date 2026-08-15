@@ -31,10 +31,12 @@ where
 {
     let logits_host = [91.0_f32, 0.0, 2.0, 1.0, 92.0, -1.0, 3.0, 0.0, 93.0];
     let targets_host = [7_u32, 2, 7, 0];
-    let logits_layout = Layout::new([2, 3], [4, 1], 1);
-    let targets_layout = Layout::new([2], [2], 1);
-    let loss_layout = Layout::new([1], [2], 1);
-    let probability_layout = Layout::new([2, 3], [4, 1], 1);
+    let logits_layout =
+        Layout::try_new([2, 3], [4, 1], 1).expect("valid conformance fixture layout");
+    let targets_layout = Layout::try_new([2], [2], 1).expect("valid conformance fixture layout");
+    let loss_layout = Layout::try_new([1], [2], 1).expect("valid conformance fixture layout");
+    let probability_layout =
+        Layout::try_new([2, 3], [4, 1], 1).expect("valid conformance fixture layout");
 
     let mut expected_loss = [-7.0_f32; 3];
     let mut expected_probabilities = [-8.0_f32; 9];
@@ -111,8 +113,8 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    let scalar = Layout::new([1], [1], 0);
-    let matrix = Layout::new([1, 1], [1, 1], 0);
+    let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
+    let matrix = Layout::try_new([1, 1], [1, 1], 0).expect("valid conformance fixture layout");
     let upstream = device.upload(&[f32::MAX]).expect("upstream upload");
     let probabilities = device.upload(&[1.0_f32]).expect("probability upload");
     let targets = device.upload(&[0_u32]).expect("target upload");
@@ -141,8 +143,8 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    let scalar = Layout::new([1], [1], 0);
-    let matrix = Layout::new([1, 1], [1, 1], 0);
+    let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
+    let matrix = Layout::try_new([1, 1], [1, 1], 0).expect("valid conformance fixture layout");
     let upstream = device.upload(&[f32::NAN]).expect("upstream upload");
     let probabilities = device.upload(&[1.0_f32]).expect("probability upload");
     let targets = device.upload(&[1_u32]).expect("target upload");
@@ -170,8 +172,8 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    let scalar = Layout::new([1], [1], 0);
-    let matrix = Layout::new([1, 2], [2, 1], 0);
+    let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
+    let matrix = Layout::try_new([1, 2], [2, 1], 0).expect("valid conformance fixture layout");
     let upstream = device.upload(&[f32::MAX]).expect("upstream upload");
     let probabilities = device
         .upload(&[1.0_f32, f32::NAN])
