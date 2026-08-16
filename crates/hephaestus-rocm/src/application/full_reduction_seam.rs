@@ -93,7 +93,7 @@ where
             input: input.buffer,
             input_layout: *input.layout,
             output: output.buffer,
-            output_offset: output.layout.offset,
+            output_offset: output.layout.offset(),
             staging,
             plan,
         })
