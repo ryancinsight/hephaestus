@@ -11,11 +11,11 @@ impl ComputeDeviceCapabilities for RocmDevice {
     #[inline]
     fn supports_device_feature(&self, feature: DeviceFeature) -> bool {
         match feature {
-            DeviceFeature::TimestampQuery => false,
-            DeviceFeature::ShaderF64 => false,
-            DeviceFeature::ShaderF16 => false,
+            DeviceFeature::TimestampQuery
+            | DeviceFeature::ShaderF64
+            | DeviceFeature::ShaderF16
+            | DeviceFeature::ImmediateData => false,
             DeviceFeature::MappablePrimaryBuffers => self.features.mappable_primary_buffers,
-            DeviceFeature::ImmediateData => false,
         }
     }
 }

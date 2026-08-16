@@ -93,7 +93,7 @@ fn decompose(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuSvdDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     matrix
         .layout
         .validate_storage_len(matrix.buffer.len())
@@ -151,7 +151,7 @@ pub fn singular_values(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<RocmBuffer<f32>> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     matrix
         .layout
         .validate_storage_len(matrix.buffer.len())

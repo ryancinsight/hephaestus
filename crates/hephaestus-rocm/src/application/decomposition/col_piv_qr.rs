@@ -377,7 +377,7 @@ pub fn col_piv_qr(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuColPivQrDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     matrix
         .layout
         .validate_storage_len(matrix.buffer.len())

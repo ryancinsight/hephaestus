@@ -256,7 +256,7 @@ fn factor_on_device(
     matrix: StridedOperand<'_, f32, 2>,
     require_dense: bool,
 ) -> Result<GpuQrDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows < cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("QR requires m ≥ n, got shape [{rows}, {cols}]"),
