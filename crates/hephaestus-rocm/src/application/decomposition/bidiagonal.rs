@@ -61,7 +61,7 @@ pub fn bidiagonalize(
     device: &RocmDevice,
     matrix: StridedOperand<'_, f32, 2>,
 ) -> Result<GpuBidiagonalDecomposition> {
-    let [rows, cols] = matrix.layout.shape;
+    let [rows, cols] = matrix.layout.shape();
     if rows < cols {
         return Err(HephaestusError::DispatchFailed {
             message: format!("Bidiagonalization requires m ≥ n, got shape [{rows}, {cols}]"),
