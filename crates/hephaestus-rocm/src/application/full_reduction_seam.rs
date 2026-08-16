@@ -81,7 +81,7 @@ where
             None
         } else {
             let staging_layout =
-                Layout::c_contiguous(input.layout.shape).map_err(map_layout_err)?;
+                Layout::c_contiguous(input.layout.shape()).map_err(map_layout_err)?;
             Some((
                 device.alloc_uninitialized::<T>(logical_len)?,
                 staging_layout,
