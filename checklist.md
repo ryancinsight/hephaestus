@@ -506,8 +506,10 @@ so exact native values remain covered by macOS CI run `30674702295`. Exact head
       backends and supported scalars.
 - [ ] Cut Coeus CPU dispatch directly to Leto and accelerator dispatch directly
       to Hephaestus; delete superseded local kernels and fallbacks.
-- [ ] Pass focused and full warning-denied, Nextest, doctest, SemVer, and
-      exact-head hosted gates with independent review.
+- [x] Pass provider-side warning-denied, focused contract, and exact-head
+      CUDA/ROCm/WGPU/Metal gates; source `702eba8` merges at default `4714b8c`
+      with runs `32026666522`, `32026666500`, `32026666544`, and
+      `32026666549`.
 
 Implementation owner: Codex on `codex/hephaestus-attention-provider`.
 Claimed files are ADR 0040; the Hephaestus core attention domain; WGPU, CUDA,

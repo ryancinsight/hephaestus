@@ -18,6 +18,10 @@ Target release: 0.19.0 (the current workspace version).
 
 ### Fixed
 
+- [patch] Split the provider attention contract's shared download assertion
+  into a dedicated module, restoring the implementation-file size target at
+  merged provider default `4714b8c`.
+
 - [patch] WGPU prepared scalar reductions encode empty, singleton-copy, and
   reduction-tree work as mutually exclusive states; direct empty dispatches
   now return without allocating an encoder or submitting an empty command
