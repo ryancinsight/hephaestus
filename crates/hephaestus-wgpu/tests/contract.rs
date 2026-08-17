@@ -10,12 +10,13 @@
 //! Hosted software-adapter CI sets `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1` so an
 //! unavailable adapter fails that lane instead of being reported as evidence.
 
-use hephaestus_core::BlockWidth;
+use bytemuck::Zeroable;
+use hephaestus_core::{BlockWidth, Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 use hephaestus_wgpu::{
     AbsOp, AddOp, ComputeDevice, DeviceBuffer, EluGradOp, EluOp, ExpNegOp, ExpOp, GeluTanhGradOp,
     GeluTanhOp, HephaestusError, LgammaOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, ProdOp,
     RecipOp, SiluGradOp, SiluOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, SumOp, WgpuDevice,
-    binary_elementwise, binary_elementwise_into, cumsum_into, matrix_rank,
+    WgpuFdtd3dOps, binary_elementwise, binary_elementwise_into, cumsum_into, matrix_rank,
     matrix_rank_with_tolerance, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
     min_axis_into, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
     prepare_reduction, prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis, reduction,
@@ -4950,5 +4951,108 @@ fn empty_qr_preserves_shape_and_identity() {
         assert_eq!(qr.inner().shape(), (3, 0));
         assert_eq!(leto::Storage::as_slice(qr.inner().q().storage()), identity);
         assert_eq!(qr.inner().r().shape(), [3, 0]);
+    }
+}
+
+#[test]
+fn fdtd_3d_provider_matches_one_step_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let params = Fdtd3dParams::new(5, 5, 5, 1.0, 1.0, 1.0, 0.01).expect("valid FDTD grid");
+    let len = params.storage_len().expect("valid FDTD storage");
+    let mut pressure = vec![0.0_f32; len];
+    let velocity = vec![FdtdVelocity::zeroed(); len];
+    let medium = vec![FdtdMedium::new(2.0, 3.0).expect("valid medium"); len];
+    for z in 0..5 {
+        for y in 0..5 {
+            for x in 0..5 {
+                pressure[x + y * 5 + z * 25] = (x * 3 + y * 2 + z) as f32;
+            }
+        }
+    }
+
+    let mut expected_velocity = velocity.clone();
+    let mut expected_pressure = pressure.clone();
+    for z in 0..5 {
+        for y in 0..5 {
+            for x in 0..5 {
+                let index = x + y * 5 + z * 25;
+                if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                    expected_velocity[index] = FdtdVelocity::zeroed();
+                    continue;
+                }
+                let gradient = [
+                    (pressure[index + 1] - pressure[index - 1]) * 0.5,
+                    (pressure[index + 5] - pressure[index - 5]) * 0.5,
+                    (pressure[index + 25] - pressure[index - 25]) * 0.5,
+                ];
+                expected_velocity[index] = FdtdVelocity {
+                    components: [
+                        -0.01 * gradient[0] / 2.0,
+                        -0.01 * gradient[1] / 2.0,
+                        -0.01 * gradient[2] / 2.0,
+                    ],
+                    padding: 0.0,
+                };
+            }
+        }
+    }
+    for z in 0..5 {
+        for y in 0..5 {
+            for x in 0..5 {
+                let index = x + y * 5 + z * 25;
+                if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                    expected_pressure[index] = 0.0;
+                    continue;
+                }
+                let divergence = (expected_velocity[index + 1].components[0]
+                    - expected_velocity[index - 1].components[0])
+                    * 0.5
+                    + (expected_velocity[index + 5].components[1]
+                        - expected_velocity[index - 5].components[1])
+                        * 0.5
+                    + (expected_velocity[index + 25].components[2]
+                        - expected_velocity[index - 25].components[2])
+                        * 0.5;
+                expected_pressure[index] = pressure[index] - 0.01 * 2.0 * 9.0 * divergence;
+            }
+        }
+    }
+
+    let pressure_buffer = device.upload(&pressure).expect("upload pressure");
+    let velocity_buffer = device.upload(&velocity).expect("upload velocity");
+    let medium_buffer = device.upload(&medium).expect("upload medium");
+    let kernel = WgpuFdtd3dOps
+        .prepare_fdtd_3d(&device)
+        .expect("compile FDTD provider kernels");
+    WgpuFdtd3dOps
+        .step_fdtd_3d(
+            &device,
+            &kernel,
+            &pressure_buffer,
+            &velocity_buffer,
+            &medium_buffer,
+            &params,
+        )
+        .expect("dispatch FDTD provider step");
+    device.synchronize().expect("synchronize FDTD step");
+
+    let mut actual_pressure = vec![0.0_f32; len];
+    let mut actual_velocity = vec![FdtdVelocity::zeroed(); len];
+    device
+        .download(&pressure_buffer, &mut actual_pressure)
+        .expect("download pressure");
+    device
+        .download(&velocity_buffer, &mut actual_velocity)
+        .expect("download velocity");
+    let tolerance = 32.0 * f32::EPSILON;
+    for (actual, expected) in actual_pressure.iter().zip(&expected_pressure) {
+        assert_close(*actual, *expected, tolerance);
+    }
+    for (actual, expected) in actual_velocity.iter().zip(&expected_velocity) {
+        for (actual, expected) in actual.components.iter().zip(expected.components) {
+            assert_close(*actual, expected, tolerance);
+        }
     }
 }

@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-FDTD-PROVIDER-1 — Owner: Codex
+
+- [x] Add validated provider-neutral 3D FDTD geometry, medium, and velocity
+      storage types.
+- [x] Add the `Fdtd3dOps` provider seam with explicit in-place step ordering.
+- [x] Implement WGPU central-difference velocity and pressure kernels with
+      spacing and medium coefficients owned by the provider.
+- [x] Add invalid-storage and independent one-step value contracts.
+- [x] Synchronize ADR, gap audit, changelog, and board records.
+- [ ] Pass exact-head hosted device-required WGPU CI.
+- [ ] Migrate Kwavers and close the cross-repository integration item.
+
 ## HEPH-CUDA-F64-COMPARISON-1 — complete 2026-08-13
 
 - [x] Add all six typed CUDA `f64` comparison expressions in the shared

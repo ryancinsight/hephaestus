@@ -1,5 +1,23 @@
 # Backlog — hephaestus
 
+## HEPH-FDTD-PROVIDER-1 [minor] [arch] — in progress
+
+- Owner: Codex on `codex/hephaestus-fdtd-107`; scope: the device-neutral
+  collocated 3D FDTD contract, WGPU implementation, provider value contract,
+  and owner-keyed PM/ADR records. Kwavers consumer cutover is a dependent
+  increment.
+- Outcome: make Hephaestus the single owner of typed FDTD buffers, geometry,
+  stencil dispatch, and provider execution ordering.
+- Non-goals: CPU solver ownership, source injection, medium construction,
+  consumer comparison policy, CUDA/ROCm kernels, or runtime performance claims.
+- Acceptance: validated f32 `Fdtd3dParams`, `FdtdMedium`, and `FdtdVelocity`
+  types; one `Fdtd3dOps` seam; WGPU velocity-then-pressure dispatch with
+  spacing-aware central differences; invalid-storage rejection; and a
+  provider-versus-independent-one-step contract test. Hosted provider CI and
+  the Kwavers integration sweep remain required for closure.
+- Verification: local formatting, core/WGPU compilation, focused Nextest, and
+  a device-required hosted WGPU contract run at the exact implementation head.
+
 ## HEPH-CUDA-F64-COMPARISON-1 [minor] — done 2026-08-13
 
 - Owner: Atlas integration; scope: the provider-owned typed CUDA comparison

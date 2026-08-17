@@ -35,6 +35,7 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::{PreparedElementwise, WgpuElementwiseOps};
+pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;

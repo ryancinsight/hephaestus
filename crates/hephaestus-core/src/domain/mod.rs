@@ -22,6 +22,9 @@ pub mod dialect;
 pub mod elementwise;
 /// Error contracts shared by all backends.
 pub mod error;
+/// Backend-neutral volume ray-integral geometry and validation.
+/// Provider-neutral three-dimensional acoustic FDTD contracts.
+pub mod fdtd;
 /// Backend-neutral kernel authoring: interface and source declarations.
 pub mod interface;
 /// Kernel-dispatch contracts shared by accelerator backends.
@@ -42,7 +45,6 @@ pub mod random;
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
-/// Backend-neutral volume ray-integral geometry and validation.
 /// Device-neutral sparse operator contracts.
 pub mod sparse;
 /// Provider-owned stateful parameter-update rules and dispatch seam.

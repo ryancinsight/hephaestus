@@ -56,3 +56,4 @@
 | [0048](0048-prepared-batch-submission-seam.md) | Prepared batch submission seam | Accepted |
 | [0049](0049-provider-owned-cross-entropy.md) | Own accelerator cross-entropy in Hephaestus | Accepted |
 | [0050](0050-product-axis-reduction-parity.md) | Product-axis reduction parity | Accepted |
+| [0051](0051-provider-owned-fdtd.md) | Own accelerator 3D FDTD in Hephaestus | Accepted |
