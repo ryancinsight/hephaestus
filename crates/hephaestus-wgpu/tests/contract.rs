@@ -4955,7 +4955,7 @@ fn empty_qr_preserves_shape_and_identity() {
 }
 
 #[test]
-fn fdtd_3d_provider_matches_one_step_cpu_reference() {
+fn fdtd_3d_provider_matches_sequential_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4974,48 +4974,53 @@ fn fdtd_3d_provider_matches_one_step_cpu_reference() {
 
     let mut expected_velocity = velocity.clone();
     let mut expected_pressure = pressure.clone();
-    for z in 0..5 {
-        for y in 0..5 {
-            for x in 0..5 {
-                let index = x + y * 5 + z * 25;
-                if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
-                    expected_velocity[index] = FdtdVelocity::zeroed();
-                    continue;
+    for _ in 0..2 {
+        let previous_pressure = expected_pressure.clone();
+        for z in 0..5 {
+            for y in 0..5 {
+                for x in 0..5 {
+                    let index = x + y * 5 + z * 25;
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        expected_velocity[index] = FdtdVelocity::zeroed();
+                        continue;
+                    }
+                    let gradient = [
+                        (previous_pressure[index + 1] - previous_pressure[index - 1]) * 0.5,
+                        (previous_pressure[index + 5] - previous_pressure[index - 5]) * 0.5,
+                        (previous_pressure[index + 25] - previous_pressure[index - 25]) * 0.5,
+                    ];
+                    let previous = expected_velocity[index];
+                    expected_velocity[index] = FdtdVelocity {
+                        components: [
+                            previous.components[0] - 0.01 * gradient[0] / 2.0,
+                            previous.components[1] - 0.01 * gradient[1] / 2.0,
+                            previous.components[2] - 0.01 * gradient[2] / 2.0,
+                        ],
+                        padding: 0.0,
+                    };
                 }
-                let gradient = [
-                    (pressure[index + 1] - pressure[index - 1]) * 0.5,
-                    (pressure[index + 5] - pressure[index - 5]) * 0.5,
-                    (pressure[index + 25] - pressure[index - 25]) * 0.5,
-                ];
-                expected_velocity[index] = FdtdVelocity {
-                    components: [
-                        -0.01 * gradient[0] / 2.0,
-                        -0.01 * gradient[1] / 2.0,
-                        -0.01 * gradient[2] / 2.0,
-                    ],
-                    padding: 0.0,
-                };
             }
         }
-    }
-    for z in 0..5 {
-        for y in 0..5 {
-            for x in 0..5 {
-                let index = x + y * 5 + z * 25;
-                if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
-                    expected_pressure[index] = 0.0;
-                    continue;
-                }
-                let divergence = (expected_velocity[index + 1].components[0]
-                    - expected_velocity[index - 1].components[0])
-                    * 0.5
-                    + (expected_velocity[index + 5].components[1]
-                        - expected_velocity[index - 5].components[1])
+        for z in 0..5 {
+            for y in 0..5 {
+                for x in 0..5 {
+                    let index = x + y * 5 + z * 25;
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        expected_pressure[index] = 0.0;
+                        continue;
+                    }
+                    let divergence = (expected_velocity[index + 1].components[0]
+                        - expected_velocity[index - 1].components[0])
                         * 0.5
-                    + (expected_velocity[index + 25].components[2]
-                        - expected_velocity[index - 25].components[2])
-                        * 0.5;
-                expected_pressure[index] = pressure[index] - 0.01 * 2.0 * 9.0 * divergence;
+                        + (expected_velocity[index + 5].components[1]
+                            - expected_velocity[index - 5].components[1])
+                            * 0.5
+                        + (expected_velocity[index + 25].components[2]
+                            - expected_velocity[index - 25].components[2])
+                            * 0.5;
+                    expected_pressure[index] =
+                        previous_pressure[index] - 0.01 * 2.0 * 9.0 * divergence;
+                }
             }
         }
     }
@@ -5026,16 +5031,18 @@ fn fdtd_3d_provider_matches_one_step_cpu_reference() {
     let kernel = WgpuFdtd3dOps
         .prepare_fdtd_3d(&device)
         .expect("compile FDTD provider kernels");
-    WgpuFdtd3dOps
-        .step_fdtd_3d(
-            &device,
-            &kernel,
-            &pressure_buffer,
-            &velocity_buffer,
-            &medium_buffer,
-            &params,
-        )
-        .expect("dispatch FDTD provider step");
+    for _ in 0..2 {
+        WgpuFdtd3dOps
+            .step_fdtd_3d(
+                &device,
+                &kernel,
+                &pressure_buffer,
+                &velocity_buffer,
+                &medium_buffer,
+                &params,
+            )
+            .expect("dispatch FDTD provider step");
+    }
     device.synchronize().expect("synchronize FDTD step");
 
     let mut actual_pressure = vec![0.0_f32; len];
