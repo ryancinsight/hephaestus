@@ -29,6 +29,20 @@ architectural decision or a tracked future-work item:
   NVRTC adapter. Coeus consumer cutover and physical-device execution remain
   separate evidence scopes.
 
+## [HEPH-ATTENTION-CONFORMANCE-STRUCTURE-101] Attention contract file structure
+
+- Finding: the provider attention contract exceeded the repository's 500-line
+  implementation-file target after the merged attention work added a shared
+  download assertion helper.
+- Resolution: move the shared assertion into
+  `crates/hephaestus-conformance/src/attention/assertions.rs`, leaving the
+  attention contract manifest and backend-neutral logic below the target.
+- Evidence: the local conformance scan reports `oversized_files=38` at source
+  `702eba8`, down from 39. Exact-head CUDA `32026666522`, ROCm `32026666500`,
+  WGPU `32026666544`, and Metal `32026666549` pass at merged default `4714b8c`.
+  The direct Coeus cutover remains separately open under
+  `HEPH-ATTENTION-PROVIDER-1`.
+
 ## [HEPH-CROSS-ENTROPY-PROVIDER-1] Accelerator cross-entropy ownership
 
 - Finding: Hephaestus exposes no classification-loss role, forcing a downstream

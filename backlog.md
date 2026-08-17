@@ -641,7 +641,7 @@ cuda-oxide + cutile).
   output ULP while retaining exact arithmetic assertions elsewhere.
 - Status: done 2026-07-31. Delivered by PR #168, merge commit `b7ff88b`.
 
-## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — in-progress
+## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — provider side complete; Coeus cutover open
 
 - Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
   `a23ee9b` on this lane bundles the attention frontier's uncommitted
@@ -669,13 +669,13 @@ cuda-oxide + cutile).
   pass.
 - Risk/change class: `[minor] [arch]`; additive provider contract and direct
   consumer cutover under ADR 0040.
-- Status: in-progress 2026-07-31.
-- Provider evidence (2026-07-31): WGPU and physical CUDA execute the shared
-  semantic conformance suite; CUDA additionally verifies native `f64` additive
-  backward. ROCm passes its Windows no-default-feature source/static contract;
-  native HIP execution remains a hosted Linux gate. Every provider resets one
-  device status word per prepared dispatch, validates in parallel before any
-  caller-visible mutation, and reads back only that status word.
+- Status: provider implementation and exact-head hosted gates complete at source
+  `702eba8`, merged provider default `4714b8c` on 2026-08-17. The shared
+  attention contract was structurally cleaned by moving its download assertion
+  into `src/attention/assertions.rs`; the provider conformance scan returns
+  `oversized_files=38`, down from 39. CUDA `32026666522`, ROCm `32026666500`,
+  WGPU `32026666544`, and Metal `32026666549` pass. The direct Coeus cutover
+  remains the open dependent item.
 
 ## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
 
