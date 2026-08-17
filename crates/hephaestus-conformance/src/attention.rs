@@ -16,6 +16,10 @@ use leto_ops::{
     scaled_dot_product_attention_backward_accumulate, scaled_dot_product_attention_into,
 };
 
+mod assertions;
+
+use assertions::assert_download_eq;
+
 /// Run the shared forward, fully-masked, strided, and additive-backward clauses.
 ///
 /// # Panics
@@ -489,14 +493,4 @@ where
         &[f32::MAX],
         "gradient overflow atomicity",
     );
-}
-
-fn assert_download_eq<D, T>(device: &D, buffer: &D::Buffer<T>, expected: &[T], clause: &str)
-where
-    D: ComputeDevice,
-    T: bytemuck::Pod + Default + Copy + PartialEq + core::fmt::Debug,
-{
-    let mut actual = vec![T::default(); expected.len()];
-    device.download(buffer, &mut actual).expect(clause);
-    assert_eq!(actual, expected, "{clause}");
 }
