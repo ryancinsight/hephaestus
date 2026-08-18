@@ -10,6 +10,8 @@ pub mod elementwise;
 pub mod linalg;
 pub(crate) mod pipeline;
 
+/// Provider-owned three-dimensional acoustic FDTD kernels.
+pub mod fdtd;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 

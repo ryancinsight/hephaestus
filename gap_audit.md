@@ -11,6 +11,22 @@ architectural decision or a tracked future-work item:
   native-kernel/performance parity, not correctness.
 - **Environment / toolchain limitations** — blockers outside the source tree.
 
+## [HEPH-FDTD-PROVIDER-1] Provider-owned 3D FDTD seam
+
+- Finding: Hephaestus had no typed three-dimensional FDTD contract, leaving
+  downstream consumers to own raw WGPU pipelines and making GPU/CPU
+  equivalence unverifiable against the selected provider.
+- Resolution: `hephaestus-core::domain::fdtd` now owns validated f32 grid
+  parameters, medium and velocity storage layouts, and the `Fdtd3dOps` seam;
+  `hephaestus-wgpu::application::fdtd` owns the prepared velocity-then-pressure
+  kernels. Consumers retain source injection, medium population, CPU reference,
+  and comparison policy.
+- Evidence: local core/WGPU compilation, focused provider contract, and the
+  independent one-step central-difference oracle pass. Device-required hosted
+  WGPU CI and Kwavers cutover remain open.
+- Residual: CUDA/ROCm implementations and multi-step consumer integration are
+  separate dependent increments; no runtime or memory improvement is claimed.
+
 ## [HEPH-CUDA-F64-COMPARISON-1] CUDA f64 typed comparisons
 
 - Finding: the typed CUDA comparison vocabulary covered `f32`, `u32`, and
