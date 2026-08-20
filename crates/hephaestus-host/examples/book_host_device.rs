@@ -20,7 +20,7 @@ extern crate hephaestus_core;
 extern crate hephaestus_host;
 extern crate themis;
 
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError};
+use hephaestus_core::{ComputeDevice, HephaestusError};
 use hephaestus_host::HostDevice;
 use themis::PlacementHint;
 

@@ -13,7 +13,7 @@
 extern crate hephaestus_core;
 extern crate hephaestus_host;
 
-use hephaestus_core::{ComputeDevice, ComputeDeviceCapabilities};
+use hephaestus_core::ComputeDevice;
 use hephaestus_host::HostDevice;
 
 fn print_backend(dev: &impl ComputeDevice) {
