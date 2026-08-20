@@ -16,6 +16,10 @@
 //! 3. Modify the buffer in-place via `write_sub_buffer`.
 //! 4. Download back to a host slice with `download`.
 
+extern crate hephaestus_core;
+extern crate hephaestus_host;
+extern crate themis;
+
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError};
 use hephaestus_host::HostDevice;
 use themis::PlacementHint;

@@ -1,5 +1,16 @@
 # Backlog — hephaestus
 
+## HEPH-BOOK-TEST-2026-08-20 [patch] — in progress
+
+- PR #214 exposed a real mdBook 0.5.4 contract defect after the package build
+  passed: the included HostDevice and capabilities examples lacked explicit
+  extern crate declarations for their staged provider crates.
+- The bounded fix adds the declarations to both included examples and repins
+  the shared Atlas workflow to hash-preserving staging revision 20c9398.
+- Local formatting, mdBook build, strict links, and diff checks pass. Hosted
+  exact-head rerun remains required; local locked Cargo verification remains
+  subject to the shared Atlas overlay lock-form mismatch.
+
 ## HEPH-FDTD-PROVIDER-1 [minor] [arch] — in progress
 
 - Owner: Codex on `codex/hephaestus-fdtd-107`; scope: the device-neutral
