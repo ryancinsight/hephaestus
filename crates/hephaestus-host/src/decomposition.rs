@@ -1,6 +1,6 @@
 //! Leto as a decomposition-seam implementor (ADR 0046 / ADR 0039 §3).
 //!
-//! [`HostDecompositionOps`] adapts leto-ops' fourteen decomposition entry
+//! [`HostDecompositionOps`] adapts leto-ops' fifteen decomposition entry
 //! points onto [`DecompositionOps<HostDevice>`](hephaestus_core::DecompositionOps), so the CPU substrate joins
 //! the same role trait the GPU backends implement and the conformance
 //! suite's decomposition clauses run on the host pair. Factor storage
