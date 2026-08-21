@@ -1,5 +1,25 @@
 # Backlog — hephaestus
 
+## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
+
+- Owner: current Atlas session on `fix/hephaestus-book-reground-1`; the dirty
+  primary checkout remains outside this scope.
+- Outcome: every `docs/book/` chapter describes the API this repository ships,
+  and the book gate cannot pass over a fabricated chapter.
+- Scope: `docs/book/{compute_device,capabilities,device_buffer,elementwise_ops,`
+  `dense_reductions,decomposition_seam,wgpu_backend,cuda_rocm,stack_position}.md`,
+  the affected executable examples, and this provider PM record.
+- Non-goals: new chapters for uncovered seams, Rust source changes, or
+  `SUMMARY.md` restructuring.
+- Acceptance: every named identifier resolves in the source or a named
+  dependency; executable fences compile or are explicitly `rust,no_run` for
+  device-only paths; `mdbook test docs/book` passes; and the Pages workflow
+  runs that gate.
+- Verification plan: exact-source API audit, `cargo fmt --all -- --check`,
+  locked package build, `mdbook build`, strict link check, and hosted exact-head
+  book verification. The shared Atlas target may make local mdBook dependency
+  discovery non-representative; hosted clean-run evidence remains authoritative.
+
 ## HEPH-BOOK-TEST-2026-08-20 [patch] — in progress
 
 - PR #214 exposed a real mdBook 0.5.4 contract defect after the package build
