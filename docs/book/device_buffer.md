@@ -25,7 +25,7 @@ operations that accept non-contiguous layouts. View validation belongs to the
 operation seam; the buffer itself remains a logical contiguous allocation.
 
 The host reference example exercises these value contracts, including a
-negative length case:
+length-mismatch case for a short host output slice:
 
 ```rust
 {{#include ../../crates/hephaestus-host/examples/book_host_device.rs}}

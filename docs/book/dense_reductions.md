@@ -26,6 +26,8 @@ non-empty requirement for a mean. It reports failures through the typed
 ## Shared launch planning
 
 The `plan_axis_reduction` function contains the backend-neutral launch
-metadata calculation used by the accelerator implementations. Only dialect,
-shader, and raw dispatch details remain in each backend. This keeps the
-mathematical shape contract in one implementation.
+metadata calculation used by the accelerator implementations. Backends still
+own allocation, device-specific validation, dialect, shader, and raw dispatch
+details. Centralizing the launch metadata keeps the mathematical shape
+contract in one implementation without claiming that backend orchestration is
+otherwise identical.

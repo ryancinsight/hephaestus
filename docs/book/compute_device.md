@@ -48,5 +48,5 @@ fn main() -> hephaestus_core::Result<()> {
 }
 ```
 
-The complete allocation, subrange-write, copy, and negative-length example is
+The complete allocation, subrange-write, copy, and length-mismatch example is
 the [Host Device example](examples/host_device.md).
