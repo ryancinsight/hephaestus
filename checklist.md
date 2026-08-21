@@ -2,6 +2,16 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BOOK-TEST-2026-08-20 [patch]
+
+- [x] Diagnose PR #214 job 96544627958: package build passed; mdBook
+      compilation failed because included examples lacked explicit extern crate
+      declarations for their staged crates.
+- [x] Add declarations for Hephaestus Core/Host and Themis and repin the
+      shared workflow to Atlas 20c9398.
+- [x] Pass local formatting, mdBook build, strict links, and diff checks.
+- [ ] Collect the exact-head hosted rerun, then merge and verify the default.
+
 ## HEPH-FDTD-PROVIDER-1 — Owner: Codex
 
 - [x] Add validated provider-neutral 3D FDTD geometry, medium, and velocity

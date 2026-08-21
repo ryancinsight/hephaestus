@@ -10,6 +10,9 @@
 //! surface and confirms that `synchronize()` is infallible on the host
 //! (host operations complete before returning; there is no asynchronous queue).
 
+extern crate hephaestus_core;
+extern crate hephaestus_host;
+
 use hephaestus_core::{ComputeDevice, ComputeDeviceCapabilities};
 use hephaestus_host::HostDevice;
 
