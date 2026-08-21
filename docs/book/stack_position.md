@@ -1,52 +1,40 @@
 # Position in the Stack
 
-## What Hephaestus Owns
+## Hephaestus owns
 
-Hephaestus is the Atlas accelerator seam. It owns:
+Hephaestus owns the accelerator boundary: `ComputeDevice`,
+`ComputeDeviceCapabilities`, `ComputeDeviceAcquisition`,
+`DeviceBuffer<T>`, the typed operation seams, prepared dispatch contracts,
+backend device implementations, and the shared conformance clauses.
 
-- **Device acquisition** — `ComputeDevice`, `ComputeDeviceAcquisition`
-- **Typed command streams** — `CommandStream<K>` for kernel dispatch
-- **Op trait contracts** — `ElementwiseOps`, `DenseProductOps`,
-  `AxisReductionOps`, `ConvolutionOps`, `AttentionOps`,
-  `DecompositionOps`, and 15 other traits
-- **Plan types** — `AttentionPlan`, `ConvolutionPlan`, etc.
-- **Device buffer abstraction** — `DeviceBuffer<T>`
-- **All backend implementations** — wgpu, CUDA, ROCm, Metal, host
+The operation families documented here include `ElementwiseOps`,
+`FullReductionOps`, `AxisReductionOps`, `DenseVectorOps`, and
+`DecompositionOps`. The operation traits are generic over a device and
+scalar where the contract supports that variation; the backend implementation
+is selected at the operation boundary and is monomorphized by Rust.
 
-Hephaestus does **not** own tensor semantics (Coeus), transform algorithms
-(Apollo), runtime scheduling (Moirai), or memory allocation policy (Mnemosyne).
+Hephaestus does not own tensor semantics, uncertainty laws, transform-domain
+algorithms, scheduling policy, or memory-placement vocabulary. Those concerns
+remain in their owning Atlas crates and cross this boundary through typed
+contracts such as `themis::PlacementHint` and `themis::GpuTopology`.
 
-## Where Hephaestus Sits
+## Dependency direction
 
-`	ext
-mnemosyne (allocator) + themis (placement vocab)
-  |
-  v
-hephaestus-core (op trait contracts)
-  |                   |
-  v                   v
-hephaestus-wgpu   hephaestus-cuda   hephaestus-rocm   hephaestus-metal
-  |
-  v (consumed by)
-coeus-wgpu   apollo-fft(wgpu)   moirai-gpu
-`
+```text
+themis placement vocabulary
+          |
+          v
+hephaestus-core: device, buffer, and operation contracts
+          |
+          +--> hephaestus-host   (reference implementation)
+          +--> hephaestus-wgpu   (portable GPU implementation)
+          +--> hephaestus-cuda   (CUDA implementation)
+          +--> hephaestus-rocm   (ROCm implementation)
+          +--> hephaestus-metal  (Metal implementation)
+```
 
-## Consumers
-
-| Consumer | How Hephaestus is used |
-|----------|------------------------|
-| `coeus-cuda/wgpu/rocm/metal` | ML tensor op dispatch |
-| `apollo-fft` | GPU transform backend (`WgpuTransformBackend`) |
-| `moirai-gpu` | GPU task scheduling and stream management |
-
-## Themis Feedback Loop
-
-Hephaestus reads device properties at acquisition time and creates
-`GpuDeviceProperties` for Themis `GpuTopology`. Moirai then reads
-`GpuTopology` to decide whether to route tensor operations to GPU workers.
-
-## `hephaestus-conformance`
-
-The conformance crate runs the complete op-trait test suite against every
-backend to verify parity. All backends must pass the same oracle tests
-before a release.
+Consumers depend on the core contracts or a selected backend crate. They do
+not duplicate device acquisition, buffer ownership, or operation validation.
+`hephaestus-conformance` runs the same value-semantic clauses against each
+available implementation; a provider-specific test is not a substitute for
+the shared oracle.

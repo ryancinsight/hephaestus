@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-BOOK-REGROUND-1 [patch] [docs] — Owner: current Atlas session
+
+- [x] Compare the affected chapters with the current core device, buffer,
+      capability, operation, decomposition, and backend APIs.
+- [x] Remove fabricated identifiers, stale dynamic-buffer claims, and
+      unsupported cross-provider ownership statements from the affected book
+      chapters and README.
+- [x] Pass the formatter, locked hephaestus-host build, warning-denied Clippy,
+      host Nextest (2/2), mdBook build, and strict internal-link checking.
+- [ ] Collect a clean hosted mdBook test result and reconcile the parallel
+      host-backend chapter closeout before merging.
+
 ## HEPH-BOOK-TEST-2026-08-20 [patch]
 
 - [x] Diagnose PR #214 job 96544627958: package build passed; mdBook

@@ -1,46 +1,26 @@
 # Decomposition Seam
 
-Hephaestus provides a rich set of dense matrix decompositions through the
-`DecompositionOps` and `BlockedDecompositionBackend` traits.
+`DecompositionOps<D>` is the device-neutral factorization seam. The current
+core contract uses rank-2 `f32` operands and returns typed associated handles;
+it does not expose a boxed, scalar-suffixed, or backend-specific result type.
 
-## Decomposition Handles
+The primary entry points are:
 
-Each factorization returns a typed handle containing the computed factors:
+- `lu` for partial-pivoted `P·A = L·U`;
+- `qr` for `A = Q·R` with `m >= n`;
+- `col_piv_qr` for rank-revealing column-pivoted QR; and
+- `full_piv_lu` for rank-revealing fully pivoted LU.
 
-| Handle | Decomposition |
-|--------|--------------|
-| `LuHandle` | LU factorization (partial pivoting) |
-| `FullPivLuHandle` | LU with full pivoting |
-| `CholeskyHandle` | Cholesky factorization (positive-definite) |
-| `QrHandle` | QR factorization |
-| `ColPivQrHandle` | QR with column pivoting |
-| `SvdHandle` | Singular value decomposition |
-| `SchurHandle` | Schur decomposition |
-| `SymmetricEigenHandle` | Symmetric eigenvalue decomposition |
-| `HessenbergHandle` | Hessenberg reduction |
-| `BidiagonalHandle` | Bidiagonalization |
-| `UduHandle` | UDU factorization (for Kalman filtering) |
-| `BunchKaufmanHandle` | Bunch-Kaufman factorization (indefinite matrices) |
+The returned `LuHandle`, `QrHandle`, and related handle traits expose only
+the factor, shape, pivot, determinant, and solve capabilities required by
+consumers and conformance tests. A solve returns a typed result and rejects
+length or singularity failures.
 
-## Plan-Then-Dispatch
+The core also owns the `BlockedDecompositionBackend` seam and the
+`blocked_lu` orchestration. Backend implementations supply the panel and
+trailing-update operations; the host-side blocked algorithm is not copied once
+per device.
 
-```rust,ignore
-// Factor once
-let lu = device.lu_factorize(&matrix_buf, shape)?;
-
-// Solve multiple right-hand sides with the same factorization
-for rhs in &right_hand_sides {
-    device.lu_solve(&lu, rhs, &mut solution)?;
-}
-```
-
-## Blocked Panel Algorithms
-
-`BlockedDecompositionBackend` provides blocked panel-based implementations
-(`blocked_lu`, `factor_cholesky_panel`, `panel_qr_packed`) that cache
-intermediate panels in Mnemosyne scratch pools to maximize cache utilization.
-
-## Consumers
-
-`coeus-tensor` uses decompositions for gradient computations (SVD backward,
-Cholesky gradient). `CFDrs` uses LU/Cholesky for implicit timestepping.
+Consumer crates bind to these traits and keep their own domain semantics. A
+consumer must not reconstruct factorization state from raw buffers or teach the
+book an API that is absent from `hephaestus-core`.

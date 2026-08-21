@@ -1,49 +1,31 @@
 # WGPU Backend
 
-`hephaestus-wgpu` is the cross-platform GPU backend using wgpu.
-It supports Vulkan, Metal, DirectX 12, and WebGPU in a single codebase.
+`hephaestus-wgpu` implements the core device and operation seams over
+`wgpu`. The backend owns the adapter, device, queue, pipeline cache, and
+transfer staging resources; consumers see `WgpuDevice` and the
+backend-neutral traits.
 
-## Device Acquisition
+## Acquisition
 
-```rust,ignore
-use hephaestus_wgpu::WgpuDevice;
+`WgpuDevice` implements `ComputeDeviceAcquisition`. Callers select
+`DevicePreference`, optional `DeviceFeature` values, and required
+`DeviceLimits` through `try_acquire_device` or `try_acquire_devices`.
+Acquisition returns a typed error when probing, feature selection, or requested
+limits fail. There is no implicit WGPU-to-host downgrade in this boundary.
 
-let device = WgpuDevice::acquire(DevicePreference::Discrete)?;
-```
+`default_device_limits` provides the WGPU backend's mapped default request.
+The actual device snapshot is available through `device_limits`,
+`supports_device_feature`, and `topology`.
 
-## Kernel Language
+## Kernel dialect and operation seams
 
-wgpu kernels are written in WGSL (WebGPU Shading Language). The
-`KernelDialect::Wgsl` marker type selects the WGSL compile path.
+WGPU operation implementations use the core `Wgsl` `KernelDialect` marker
+and WGSL shader sources. The core `ElementwiseOps`,
+`AxisReductionOps`, `FullReductionOps`, and `DecompositionOps` contracts
+remain the authoritative shape and error boundary. Prepared operation values
+retain backend resources and can be dispatched again when the operand contract
+permits it.
 
-## Shared Validation Helpers
-
-`WgpuTransformBackend` exposes three canonical validation helpers
-(delivered in Apollo PR #shared-validation):
-
-| Helper | Description |
-|--------|-------------|
-| `validate_plan(plan)` | Rejects empty or invalid plans |
-| `require_len(buf, len)` | Asserts buffer length equals required length |
-| `validate_storage_profile(profile)` | Validates the storage tier and precision profile |
-
-These helpers are consumed by `apollo-fft` and `apollo-gft` to avoid
-duplicated validation logic.
-
-## GPU Transform Backend
-
-`WgpuTransformBackend` is also the base for Apollo's GPU FFT dispatch:
-
-```rust,ignore
-use apollo_fft::WgpuTransformBackend;
-
-let backend = WgpuTransformBackend::new(&device)?;
-let plan = backend.plan_1d(4096, PrecisionProfile::default())?;
-backend.execute(&plan, &mut input_buf, &mut output_buf)?;
-```
-
-## Plan Cache
-
-`WgpuTransformPlan` is cached by `GpuTransformPlanner` to avoid
-re-compiling WGSL shader pipelines on every call. The planner key is
-`(shape, precision_profile, direction)`.
+The WGPU backend requires a real adapter for execution. The host reference
+backend is the deterministic local oracle for transfer and generic contract
+tests; it is not a silent runtime fallback for a failed WGPU acquisition.

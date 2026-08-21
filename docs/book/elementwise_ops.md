@@ -1,50 +1,29 @@
 # Elementwise Operations
 
-Elementwise ops apply a scalar function independently to each element of an
-operand buffer. Hephaestus implements them through the `ElementwiseOps` trait.
+`ElementwiseOps<D, T>` is the device-neutral seam for unary, binary, and
+scalar-aware operations over `StridedView` operands. `D` is a
+`ComputeDevice`; `T` is a `bytemuck::Pod` element type.
 
-## `ElementwiseOps` Trait
+The operation expression is a type parameter constrained by the backend's
+`KernelDialect`. `UnaryExpr`, `BinaryExpr`, and `TypedBinaryExpr`
+therefore describe the operation without pretending that WGSL, CUDA C, HIP C,
+and Metal share one shader syntax.
 
-```rust,ignore
-pub trait ElementwiseOps {
-    fn elementwise_unary<Op: UnaryStorageKernel>(
-        &self, op: Op, input: &dyn DeviceBuffer<f32>, output: &mut dyn DeviceBuffer<f32>,
-    ) -> Result<()>;
+## One-shot and prepared calls
 
-    fn elementwise_binary<Op: BinaryStorageKernel>(
-        &self, op: Op,
-        lhs: &dyn DeviceBuffer<f32>, rhs: &dyn DeviceBuffer<f32>,
-        output: &mut dyn DeviceBuffer<f32>,
-    ) -> Result<()>;
-}
-```
+The trait's one-shot methods are `unary_into` and `binary_into`. They
+validate the input/output shapes and layouts, reject an aliased output, prepare
+the backend resources, and dispatch once. Repeated work uses
+`prepare_unary_into` or `prepare_binary_into`, followed by
+`dispatch_unary` or `dispatch_binary`; the prepared associated types are
+lifetime-parameterized so a backend can borrow its operands without a boxed
+trait object.
 
-## Built-In Op Types
+Empty views are no-ops. Binary views must be aligned, and output views may not
+alias an input. These are operation contracts rather than backend-specific
+conventions.
 
-**Arithmetic:** `AddOp`, `SubOp`, `MulOp`, `DivOp`, `NegOp`, `AbsOp`
-
-**Math:** `SqrtOp`, `ExpOp`, `LogOp`, `SinOp`, `CosOp`, `TanhOp`
-
-**Activations:** `ReluOp`, `GeluOp`, `SigmoidOp`, `SiluOp`, `MishOp`,
-`EluOp`, `HardtanhOp`, `ThresholdOp`
-
-**Gradient variants:** Every activation has a corresponding backward op
-(e.g. `ReluGradOp`, `GeluGradOp`).
-
-## Plan-Then-Dispatch Pattern
-
-For activations with parameters (e.g. `HardtanhOp { min_val, max_val }`),
-Hephaestus validates the parameters once in a `ParameterizedUnaryOps::plan`
-call, then dispatches on the hot path with the pre-validated plan:
-
-```rust,ignore
-let plan = device.plan_hardtanh(-6.0, 6.0)?;
-for batch in batches {
-    device.elementwise_unary_planned(&plan, &input, &mut output)?;
-}
-```
-
-## GELU / LGAMMA / Error Function Parity
-
-GELU, LGAMMA, and the error function are verified to produce parity results
-across WGPU, CUDA, ROCm, and Metal backends (closed by PR #228 and #231).
+Floating-point special-value behavior is stated by the selected
+`KernelDialect::IEEE_SPECIAL_VALUES` capability. A caller that needs a
+particular NaN or infinity result must select a dialect/backend contract that
+provides it and test that contract explicitly.

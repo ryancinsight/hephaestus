@@ -19,6 +19,14 @@
   locked package build, `mdbook build`, strict link check, and hosted exact-head
   book verification. The shared Atlas target may make local mdBook dependency
   discovery non-representative; hosted clean-run evidence remains authoritative.
+- Local evidence: the affected chapters are source-rewritten; formatting,
+  warning-denied `hephaestus-host` Clippy, locked package build, host Nextest
+  `2/2`, mdBook HTML build, and `mdbook-linkcheck2 --standalone` pass. Local
+  `mdbook test` reaches the executable chapters but cannot be counted because
+  the shared Windows target contains multiple historical `hephaestus-core` and
+  `themis` rlibs and does not stage Windows proc-macro DLLs; the clean Linux
+  hosted job remains the acceptance oracle. The parallel `host_backend.md`
+  cleanup is intentionally outside this lane.
 
 ## HEPH-BOOK-TEST-2026-08-20 [patch] — in progress
 
