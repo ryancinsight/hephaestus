@@ -712,83 +712,123 @@ impl WgpuDevice {
         select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
         select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
     ) -> Result<Self> {
-        let try_acquire = |instance: &wgpu::Instance| -> Option<Result<Self>> {
+        // Each attempt records why it failed. Acquisition has three independent
+        // failure modes -- the backend enumerates no adapter, the adapter
+        // rejects the requested features or limits, or the operator selected a
+        // backend this host does not have -- and collapsing them into one
+        // message costs a bisection every time acquisition breaks.
+        let mut failures: Vec<String> = Vec::new();
+
+        let try_acquire = |backends: wgpu::Backends, failures: &mut Vec<String>| -> Option<Self> {
+            let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+            descriptor.backends = backends;
+            let instance = wgpu::Instance::new(descriptor);
+
             let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                let required_features = select_features(adapter);
-                let required_limits = select_limits(adapter);
                 moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
-                    required_features,
-                    required_limits,
+                    required_features: select_features(adapter),
+                    required_limits: select_limits(adapter),
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::default(),
                     trace: wgpu::Trace::Off,
                 }))
             };
 
-            // Try High Performance hardware adapter first
-            if let Ok(adapter) =
-                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference,
-                    compatible_surface: None,
-                    force_fallback_adapter: false,
-                    apply_limit_buckets: false,
-                }))
-                && let Ok((device, queue)) = try_device(&adapter)
-            {
-                return Some(Ok(
-                    Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(&adapter)
-                ));
-            }
+            // Hardware first, then the software fallback adapter. The fallback
+            // is a different adapter rather than a different backend, so both
+            // attempts share one instance.
+            let candidates = [
+                (
+                    "hardware",
+                    wgpu::RequestAdapterOptions {
+                        power_preference,
+                        compatible_surface: None,
+                        force_fallback_adapter: false,
+                        apply_limit_buckets: false,
+                    },
+                ),
+                (
+                    "fallback",
+                    wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::LowPower,
+                        compatible_surface: None,
+                        force_fallback_adapter: true,
+                        apply_limit_buckets: false,
+                    },
+                ),
+            ];
 
-            // Fallback to software/fallback adapter
-            if let Ok(fallback_adapter) =
-                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::LowPower,
-                    compatible_surface: None,
-                    force_fallback_adapter: true,
-                    apply_limit_buckets: false,
-                }))
-                && let Ok((device, queue)) = try_device(&fallback_adapter)
-            {
-                return Some(Ok(Self::new(Arc::new(device), Arc::new(queue))
-                    .with_adapter_metadata(&fallback_adapter)));
+            for (kind, options) in candidates {
+                match moirai::block_on(instance.request_adapter(&options)) {
+                    Err(error) => {
+                        failures.push(format!("{backends:?}/{kind}: no adapter ({error})"));
+                    }
+                    Ok(adapter) => match try_device(&adapter) {
+                        Ok((device, queue)) => {
+                            return Some(
+                                Self::new(Arc::new(device), Arc::new(queue))
+                                    .with_adapter_metadata(&adapter),
+                            );
+                        }
+                        Err(error) => {
+                            let info = adapter.get_info();
+                            failures.push(format!(
+                                "{backends:?}/{kind}: adapter {name:?} ({backend:?}) rejected the \
+                                 device request ({error})",
+                                name = info.name,
+                                backend = info.backend,
+                            ));
+                        }
+                    },
+                }
             }
             None
         };
 
-        let has_env =
-            std::env::var("WGPU_BACKENDS").is_ok() || std::env::var("WGPU_BACKEND").is_ok();
-
-        if cfg!(target_os = "windows") && !has_env {
-            // Try DX12 first to completely avoid Vulkan driver access violations in parallel nextest runs.
-            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-            desc.backends = wgpu::Backends::DX12;
-            let instance = wgpu::Instance::new(desc);
-            if let Some(device) = try_acquire(&instance) {
-                return device;
+        // An operator-selected backend is honoured exactly; otherwise Windows
+        // tries DX12 before Vulkan and every other host takes wgpu's own
+        // default set.
+        //
+        // The DX12 rung is currently inert: the workspace builds `wgpu` with
+        // `vulkan` and `metal` only, so DX12 reports "dx12 support not compiled
+        // in" and Windows always lands on Vulkan. The rung is kept because it
+        // costs one instance creation and becomes live the moment the feature
+        // is enabled; enabling it today fails to build, because
+        // `gpu-allocator 0.28`'s d3d12 module and the `windows` crate version
+        // unified into this graph disagree on `ID3D12Device`. Until that is
+        // resolved, an operator selecting DX12 gets a typed error naming the
+        // missing backend rather than a silent fallback to a backend they did
+        // not ask for.
+        //
+        // Selection reads `wgpu::Backends::from_env`, which is the single
+        // variable wgpu itself consults (`WGPU_BACKEND`). Testing for a
+        // variable wgpu does not read -- `WGPU_BACKENDS`, say -- would send
+        // acquisition down the operator-selected path while wgpu quietly used
+        // its defaults.
+        let ladder: Vec<wgpu::Backends> = match wgpu::Backends::from_env() {
+            Some(requested) => vec![requested],
+            None if cfg!(target_os = "windows") => {
+                vec![wgpu::Backends::DX12, wgpu::Backends::VULKAN]
             }
+            None => vec![wgpu::Backends::all()],
+        };
 
-            // Fallback to Vulkan if DX12 is unavailable on the host
-            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-            desc.backends = wgpu::Backends::VULKAN;
-            let instance = wgpu::Instance::new(desc);
-            if let Some(device) = try_acquire(&instance) {
-                return device;
-            }
-        } else {
-            let desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-            let instance = wgpu::Instance::new(desc);
-            if let Some(device) = try_acquire(&instance) {
-                return device;
+        for backends in ladder {
+            if let Some(device) = try_acquire(backends, &mut failures) {
+                return Ok(device);
             }
         }
 
         Err(HephaestusError::AdapterUnavailable {
-            message: "No compatible GPU adapter or device could be acquired.".to_string(),
+            message: format!(
+                "no compatible GPU adapter or device could be acquired for {label:?}; \
+                 attempts: [{}]",
+                failures.join("; ")
+            ),
         })
     }
 
