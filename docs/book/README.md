@@ -4,8 +4,8 @@
 `ComputeDevice` contract, typed `DeviceBuffer<T>`, and operation seams such
 as `ElementwiseOps`, `FullReductionOps`, `AxisReductionOps`, and
 `DecompositionOps` that backend crates implement. The workspace keeps the
-portable WGPU, CUDA, ROCm, Metal, and host implementations separate from the
-core contract crate.
+portable WGPU, CUDA, ROCm, and host implementations separate from the core
+contract crate; Metal selection is a WGPU adapter preference.
 
 ## Design goals
 

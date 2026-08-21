@@ -21,10 +21,12 @@ and capability contracts and reports typed acquisition or transfer failures.
 
 ## Metal
 
-`hephaestus-metal::MetalDevice` implements the acquisition seam for the
-native Metal path. Its public consumer contract remains the same core
-`ComputeDevice` family; Metal-specific command encoding stays in the
-provider.
+`hephaestus-metal` is retired by ADR 0047. It contains no native Metal API;
+`MetalDevice` forwards to `WgpuDevice`, and Metal is selected as a WGPU
+adapter preference. New consumers use `hephaestus-wgpu` directly, for example
+through its `try_metal` acquisition family. A selected Metal adapter still
+executes through the WGPU provider; this is not a separate
+`hephaestus-metal` command-encoding implementation.
 
 These backends require their respective runtime/toolchain support. The
 `hephaestus-host` reference device is used for deterministic tests on

@@ -30,11 +30,11 @@ hephaestus-core: device, buffer, and operation contracts
           +--> hephaestus-wgpu   (portable GPU implementation)
           +--> hephaestus-cuda   (CUDA implementation)
           +--> hephaestus-rocm   (ROCm implementation)
-          +--> hephaestus-metal  (Metal implementation)
 ```
 
 Consumers depend on the core contracts or a selected backend crate. They do
 not duplicate device acquisition, buffer ownership, or operation validation.
 `hephaestus-conformance` runs the same value-semantic clauses against each
-available implementation; a provider-specific test is not a substitute for
-the shared oracle.
+available implementation. Metal selection is part of `hephaestus-wgpu`, not a
+separate implementation in this graph. A provider-specific test is not a
+substitute for the shared oracle.
