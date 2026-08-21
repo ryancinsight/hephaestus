@@ -1,46 +1,34 @@
-# CUDA and ROCm Backends
+# CUDA, ROCm, and Metal Backends
 
-Hephaestus provides CUDA and ROCm backends through `hephaestus-cuda` and
-`hephaestus-rocm` respectively. Both implement the full op trait surface
-and expose device-native APIs where available.
+The accelerator workspace keeps vendor implementations behind the same core
+seams. The vendor crates expose concrete device handles for backend-specific
+work and implement `ComputeDevice`, `ComputeDeviceCapabilities`, and the
+operation traits they support.
 
-## CUDA Backend (`hephaestus-cuda`)
+## CUDA
 
-CUDA kernels are compiled at build time using `cuda-build`. The kernel
-language is `CudaC` (C++ with CUDA extensions):
+`hephaestus-cuda::CudaDevice::try_with_ordinal` acquires a CUDA device by
+ordinal. `CudaDevice` also implements the generic
+`ComputeDeviceAcquisition` contract. The CUDA provider owns its driver
+context, typed buffers, kernel compilation, and synchronization; callers do
+not pass a raw driver context through `hephaestus-core`.
 
-```rust,ignore
-use hephaestus_cuda::CudaDevice;
+## ROCm
 
-let device = CudaDevice::acquire(0)?;  // acquire CUDA device 0
-```
+`hephaestus-rocm::RocmDevice::try_with_ordinal` is the explicit ordinal
+constructor for the HIP runtime. `RocmDevice` implements the same core device
+and capability contracts and reports typed acquisition or transfer failures.
 
-The CUDA backend supports:
-- Device memory allocation through `MemoryTier::Gddr`
-- Host-pinned memory for DMA staging (`MemoryTier::HostPinned`)
-- CUDA unified memory (`MemoryTier::Device`)
-- cuBLAS for dense matrix operations where available
+## Metal
 
-## ROCm Backend (`hephaestus-rocm`)
+`hephaestus-metal` is retired by ADR 0047. It contains no native Metal API;
+`MetalDevice` forwards to `WgpuDevice`, and Metal is selected as a WGPU
+adapter preference. New consumers use `hephaestus-wgpu` directly, for example
+through its `try_metal` acquisition family. A selected Metal adapter still
+executes through the WGPU provider; this is not a separate
+`hephaestus-metal` command-encoding implementation.
 
-The ROCm backend uses HIP kernels (`KernelDialect::HipC`):
-
-```rust,ignore
-use hephaestus_rocm::RocmDevice;
-
-let device = RocmDevice::acquire(0)?;
-```
-
-ROCm supports AMD GPU devices (RDNA, CDNA architectures). The backend
-provides rocBLAS for dense matrix operations where available.
-
-## Metal Backend (`hephaestus-metal`)
-
-`hephaestus-metal` targets Apple Silicon and discrete AMD GPUs on macOS.
-Metal kernels use MSL (Metal Shading Language).
-
-## Expression Parity
-
-GELU, LGAMMA, and error function expressions have been verified to produce
-matching results across all four backends (WGPU, CUDA, ROCm, Metal) with
-hosted CI evidence from Coeus PRs #228 and #231.
+These backends require their respective runtime/toolchain support. The
+`hephaestus-host` reference device is used for deterministic tests on
+machines without CUDA, ROCm, Metal, or a WGPU adapter. A missing vendor
+runtime is an environment result, not evidence that another backend ran.

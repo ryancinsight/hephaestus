@@ -1,21 +1,22 @@
 # hephaestus — GPU Accelerator Substrate for Atlas
 
-`hephaestus` is the GPU accelerator substrate of the Atlas stack.  It defines
-the `ComputeDevice` contract, typed `DeviceBuffer`, and operation seams
-(`ElementwiseOps`, `DecompositionOps`, `DenseProductOps`) that accelerator
-backends implement.  Backends — `wgpu` (portable), `cuda` (NVIDIA), `rocm`
-(AMD) — are feature-gated; no backend is enabled by default.
+`hephaestus` is the accelerator substrate of the Atlas stack. It defines the
+`ComputeDevice` contract, typed `DeviceBuffer<T>`, and operation seams such
+as `ElementwiseOps`, `FullReductionOps`, `AxisReductionOps`, and
+`DecompositionOps` that backend crates implement. The workspace keeps the
+portable WGPU, CUDA, ROCm, and host implementations separate from the core
+contract crate; Metal selection is a WGPU adapter preference.
 
 ## Design goals
 
 - **Backend-neutral contracts** — `hephaestus-core` has no GPU API dependency;
   code generic over `ComputeDevice` compiles without any vendor toolkit.
 - **HostDevice for testing** — `hephaestus-host` implements `ComputeDevice`
-  over plain host memory, so every conformance test and every `book_*.rs`
-  example runs on a machine without a GPU.
-- **Type-level correctness** — buffer lengths are checked at every boundary;
-  the only way to produce a `DeviceBuffer` is via the device's constructor, so
-  buffer ownership is tied to the device that allocated it.
+  over plain host memory, so transfer and generic conformance tests run on a
+  machine without a GPU.
+- **Type-level correctness** — the associated `ComputeDevice::Buffer<T>` type
+  ties a buffer to its backend and element type; transfer methods validate
+  logical lengths before copying.
 
 ## What this book covers
 
