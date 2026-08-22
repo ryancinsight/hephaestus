@@ -4,6 +4,23 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] WGPU device acquisition now reports why it failed. Every
+  `request_adapter` and `request_device` error was discarded behind
+  `if let Ok(...)` and replaced with one generic "No compatible GPU adapter or
+  device could be acquired", which hides three distinct causes: the backend
+  enumerates no adapter, the adapter rejects the requested features or limits,
+  and the operator selected a backend that is not compiled in. The error now
+  names each attempted backend, whether it was the hardware or fallback
+  adapter, and the backend's own message. The missing diagnostic cost a
+  bisection downstream: `coeus-wgpu` set `WGPU_BACKEND=dx12` and its whole GPU
+  suite failed at device construction because this workspace builds `wgpu`
+  without the `dx12` feature, which the old message could not say.
+
+  Backend selection also now reads `wgpu::Backends::from_env`, the single
+  variable wgpu itself consults, instead of testing for `WGPU_BACKENDS` as
+  well. Testing for a variable wgpu does not read sent acquisition down the
+  operator-selected path while wgpu quietly used its defaults.
+
 - [minor] Add the provider-owned typed f32 3D FDTD contract and WGPU
   velocity/pressure implementation with validated geometry, storage checks, and
   an independent one-step value contract.
