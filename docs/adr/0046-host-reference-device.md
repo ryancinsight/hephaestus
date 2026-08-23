@@ -35,7 +35,7 @@ across a CPU reference implementor, and keeps the per-backend
    hephaestus-core and leto-ops; core stays free of leto-ops and of any
    provider machinery, exactly like the GPU backend crates.
 3. **`HostDecompositionOps` first.** The initial implementor surface is
-   `DecompositionOps<HostDevice>` adapting leto-ops' fourteen entry points
+   `DecompositionOps<HostDevice>` adapting leto-ops' fifteen entry points
    — Leto becomes a role-trait implementor per ADR 0039 §3 without leto
    itself learning anything about hephaestus (the adapter lives above it).
 4. **The suite instantiates the host pair.** `hephaestus-conformance`'s

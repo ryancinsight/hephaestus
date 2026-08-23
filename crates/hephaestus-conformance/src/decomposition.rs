@@ -47,16 +47,63 @@ where
     symmetric_indefinite_factorizations_reconstruct(device, ops);
     general_spectral_reductions_hold_their_invariants(device, ops);
     full_piv_lu_reveals_rank_and_reconstructs(device, ops);
-    lu_matches_the_leto_reference(device, ops);
-    cholesky_matches_the_leto_reference(device, ops);
-    qr_matches_the_leto_reference(device, ops);
-    col_piv_qr_matches_the_leto_reference(device, ops);
-    full_piv_lu_matches_the_leto_reference(device, ops);
-    udu_matches_the_leto_reference(device, ops);
-    bunch_kaufman_matches_the_leto_reference(device, ops);
-    symmetric_eigen_matches_the_leto_reference(device, ops);
-    eigenvalues_match_the_leto_reference(device, ops);
+    assert_leto_differential_contract(device, ops);
     identity_factorizations_are_exact(device, ops);
+}
+
+/// The closed set of decomposition operations with an independent Leto oracle.
+///
+/// The remaining decomposition operations are checked through analytical
+/// invariants above. Keeping this set explicit makes the differential coverage
+/// auditable while one parameterized clause owns its execution for every
+/// backend.
+#[derive(Clone, Copy)]
+enum LetoDifferential {
+    Lu,
+    Cholesky,
+    Qr,
+    ColPivQr,
+    FullPivLu,
+    Udu,
+    BunchKaufman,
+    SymmetricEigen,
+    Eigenvalues,
+}
+
+const LETO_DIFFERENTIALS: [LetoDifferential; 9] = [
+    LetoDifferential::Lu,
+    LetoDifferential::Cholesky,
+    LetoDifferential::Qr,
+    LetoDifferential::ColPivQr,
+    LetoDifferential::FullPivLu,
+    LetoDifferential::Udu,
+    LetoDifferential::BunchKaufman,
+    LetoDifferential::SymmetricEigen,
+    LetoDifferential::Eigenvalues,
+];
+
+/// Runs the complete parameterized differential clause against the Leto
+/// reference for every backend.
+fn assert_leto_differential_contract<D, R>(device: &D, ops: &R)
+where
+    D: ComputeDevice,
+    R: DecompositionOps<D>,
+{
+    for case in LETO_DIFFERENTIALS {
+        match case {
+            LetoDifferential::Lu => lu_matches_the_leto_reference(device, ops),
+            LetoDifferential::Cholesky => cholesky_matches_the_leto_reference(device, ops),
+            LetoDifferential::Qr => qr_matches_the_leto_reference(device, ops),
+            LetoDifferential::ColPivQr => col_piv_qr_matches_the_leto_reference(device, ops),
+            LetoDifferential::FullPivLu => full_piv_lu_matches_the_leto_reference(device, ops),
+            LetoDifferential::Udu => udu_matches_the_leto_reference(device, ops),
+            LetoDifferential::BunchKaufman => bunch_kaufman_matches_the_leto_reference(device, ops),
+            LetoDifferential::SymmetricEigen => {
+                symmetric_eigen_matches_the_leto_reference(device, ops);
+            }
+            LetoDifferential::Eigenvalues => eigenvalues_match_the_leto_reference(device, ops),
+        }
+    }
 }
 
 /// LU with a forced pivot: `A = [[0,2,1],[1,1,1],[2,4,1]]` has `a₀₀ = 0`,
