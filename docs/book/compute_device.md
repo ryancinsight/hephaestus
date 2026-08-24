@@ -1,52 +1,52 @@
 # Compute Device
 
-`ComputeDevice` is the handle to an acquired accelerator device. It carries
-device identity and the capability surface that all Hephaestus op traits
-dispatch through.
+`ComputeDevice` is the backend-neutral transfer and synchronization
+contract. It owns a typed associated buffer family, so a buffer allocated by
+one device implementation cannot be passed to a kernel for another device
+type.
 
 ## Acquisition
 
-```rust,ignore
-use hephaestus_core::{ComputeDeviceAcquisition, DevicePreference};
+`ComputeDeviceAcquisition` exposes two fallible entry points:
 
-let acq = ComputeDeviceAcquisition::acquire(DevicePreference::Discrete)?;
-let device = acq.device;
-```
+- `try_acquire_device` acquires one device from a label, a
+  `DevicePreference`, optional `DeviceFeature` values, and required
+  `DeviceLimits`.
+- `try_acquire_devices` requests up to a bounded number of matching devices.
 
-`DevicePreference` guides selection:
+`DevicePreference` has two variants: `HighPerformance` and `LowPower`.
+They are selection hints; they do not claim that a particular vendor or
+device type is present.
 
-| Variant | Description |
-|---------|-------------|
-| `Any` | First available device |
-| `Integrated` | Integrated GPU (shared DRAM) |
-| `Discrete` | Discrete GPU (own VRAM) |
-| `Cuda` | NVIDIA CUDA device |
-| `Hip` | AMD HIP/ROCm device |
-| `Metal` | Apple Metal device |
-| `Wgpu` | wgpu cross-platform device |
+## Transfers and lifetime
 
-## `ComputeDeviceCapabilities`
+`ComputeDevice` exposes `alloc_zeroed`, `alloc_uninitialized`, `upload`,
+`download`, `download_owned`, `write_buffer`, `write_sub_buffer`,
+`copy_buffer`, `topology`, and `synchronize`. Length and byte-size
+failures are returned as typed `HephaestusError` values.
+`alloc_uninitialized` is reserved for producers that overwrite every
+element before a read; callers needing defined contents use `alloc_zeroed`.
 
-Reports the feature set of the acquired device:
+The host reference backend makes this contract executable without accelerator
+hardware:
 
-```rust,ignore
-let caps = acq.capabilities;
-if caps.supports(DeviceFeature::F16) {
-    // half-precision compute available
+```rust
+extern crate hephaestus_core;
+extern crate hephaestus_host;
+
+use hephaestus_core::ComputeDevice;
+use hephaestus_host::HostDevice;
+
+fn main() -> hephaestus_core::Result<()> {
+    let device = HostDevice::new();
+    let source = [1.0_f32, 2.0, 3.0];
+    let buffer = device.upload(&source)?;
+    let mut restored = [0.0_f32; 3];
+    device.download(&buffer, &mut restored)?;
+    assert_eq!(restored, source);
+    Ok(())
 }
 ```
 
-`DeviceLimits` exposes hardware constants: max buffer size, max workgroup
-size, max compute units, etc.
-
-## `DeviceBuffer<T>`
-
-`DeviceBuffer<T>` is the core buffer abstraction for device-resident
-storage. It is the input/output type for all Hephaestus ops:
-
-```rust,ignore
-let buf: Box<dyn DeviceBuffer<f32>> = device.allocate(1024)?;
-```
-
-All ops take `&dyn DeviceBuffer<T>` or `&mut dyn DeviceBuffer<T>` as
-operand references.
+The complete allocation, subrange-write, copy, and length-mismatch example is
+the [Host Device example](examples/host_device.md).

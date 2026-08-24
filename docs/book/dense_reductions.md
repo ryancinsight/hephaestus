@@ -1,51 +1,33 @@
 # Dense Reductions
 
-Dense reductions collapse one or more axes of a buffer into a scalar or
-lower-rank result. Hephaestus implements them through two traits.
+Hephaestus separates full-array reduction from rank-2 axis reduction while
+using the same typed device and strided-view boundaries.
 
-## `FullReductionOps`
+## Full reduction
 
-Reduces an entire buffer to a single scalar:
+`FullReductionOps<D, T>::reduce_full_into` reduces an `N`-rank input into a
+rank-1 output view of length one. The output shape is part of the contract, so
+an arbitrary output buffer cannot receive a scalar by accident. Repeated calls
+can use `prepare_reduce_full` and `dispatch_full`.
 
-```rust,ignore
-let sum: f32 = device.reduce_sum(&input_buf)?;
-let max: f32 = device.reduce_max(&input_buf)?;
-```
+## Axis reduction
 
-## `AxisReductionOps`
+`AxisReductionOps<D, T>` provides `reduce_axis_into`,
+`prod_axis_into`, `mean_axis_into`, `min_axis_into`, and
+`max_axis_into`. The input is rank two; the reduced axis remains present at
+length one. For example, reducing a `[3, 4]` input along axis `0` writes a
+`[1, 4]` output. The prepared form is `prepare_reduce_axis_into` followed
+by `dispatch_prepared`.
 
-Reduces along a specified axis:
+The seam validates the axis, output shape, strided layout, aliasing, and the
+non-empty requirement for a mean. It reports failures through the typed
+`HephaestusError` result rather than returning an invented scalar.
 
-```rust,ignore
-let plan = device.plan_axis_reduction(input_shape, axis)?;
-device.reduce_sum_axis(&plan, &input_buf, &mut output_buf)?;
-```
+## Shared launch planning
 
-`plan_axis_reduction` computes the dispatch shape and pass count ahead of
-time. The plan is reusable across calls with the same shape.
-
-## `AxisScanOps`
-
-Cumulative sum/product along an axis:
-
-```rust,ignore
-let plan = device.plan_axis_scan(input_shape, axis)?;
-device.scan_sum(&plan, &input_buf, &mut output_buf)?;
-```
-
-## `RetainedReductions`
-
-`RetainedReductions` caches intermediate reduction state for multi-pass
-algorithms (e.g., layer normalization mean/variance for the backward pass).
-The retained state avoids re-computing the forward statistics during backward.
-
-## `DenseVectorOps`
-
-BLAS-1 style operations on flat buffers:
-
-| Op | Description |
-|----|-------------|
-| `dot(a, b)` | Inner product |
-| `axpy(alpha, x, y)` | `y = alpha*x + y` in-place |
-| `norm2(x)` | Euclidean norm |
-| `scale(alpha, x)` | Scale in-place |
+The `plan_axis_reduction` function contains the backend-neutral launch
+metadata calculation used by the accelerator implementations. Backends still
+own allocation, device-specific validation, dialect, shader, and raw dispatch
+details. Centralizing the launch metadata keeps the mathematical shape
+contract in one implementation without claiming that backend orchestration is
+otherwise identical.

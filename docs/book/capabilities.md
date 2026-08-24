@@ -1,62 +1,43 @@
 # Device Capabilities
 
-Hephaestus exposes device capabilities through a structured query surface
-so that callers can probe hardware features before dispatch.
+`ComputeDeviceCapabilities` keeps capability queries in the same backend
+neutral vocabulary as [`ComputeDevice`](compute_device.md).
 
-## `DeviceFeature`
+## Optional features
 
-`DeviceFeature` is an enum of optional hardware capabilities:
+`DeviceFeature` currently contains these values:
 
-| Feature | Description |
-|---------|-------------|
-| `F16` | Half-precision (fp16) arithmetic |
-| `Bf16` | BFloat16 arithmetic |
-| `F64` | Double-precision arithmetic |
-| `SubgroupOps` | Subgroup / warp-level operations |
-| `IndirectDispatch` | GPU-driven indirect dispatch |
-| `AtomicFloat` | Atomic floating-point operations |
-| `CooperativeMatrix` | Tensor core / matrix acceleration unit |
+| Value | Meaning |
+|---|---|
+| `TimestampQuery` | GPU timestamp queries |
+| `ShaderF64` | 64-bit floating-point shader arithmetic |
+| `ShaderF16` | 16-bit floating-point shader arithmetic |
+| `MappablePrimaryBuffers` | host-mappable primary buffers |
+| `ImmediateData` | immediate shader-data support |
 
-## `DeviceLimits`
+`supports_device_feature` reports the features enabled on the acquired
+device. It does not report every feature that another adapter might support.
 
-`DeviceLimits` carries hardware constants read from the device API:
+## Limits
 
-| Field | Description |
-|-------|-------------|
-| `max_buffer_bytes` | Maximum allocatable buffer |
-| `max_workgroup_size` | Maximum threads per workgroup |
-| `max_compute_units` | Streaming multiprocessors / compute units |
-| `subgroup_size` | Warp / wavefront / subgroup width |
+`device_limits` returns a `DeviceLimits` value with the common compute
+limits: `max_buffer_size`, the three
+`max_compute_workgroup_size_*` fields,
+`max_compute_invocations_per_workgroup`,
+`max_compute_workgroup_storage_size`, the optional
+`max_storage_buffers_per_shader_stage`, the optional
+`max_buffers_and_acceleration_structures_per_shader_stage`, and
+`max_immediate_size`. Optional fields stay `None` when a backend has no
+corresponding limit; a backend does not fabricate a value from a different
+API.
 
-## Probing Capabilities
+## Topology
 
-```rust,ignore
-let caps = acq.capabilities;
-if caps.has_feature(DeviceFeature::CooperativeMatrix) {
-    // use tensor-core path
-} else {
-    // use general GEMM path
-}
-```
+`ComputeDevice::topology` returns an optional `themis::GpuTopology`
+snapshot. The host reference device returns `None` because it is not an
+accelerator. GPU backends return a snapshot when their initialization probe
+captured one. The topology is separate from the capability limits: a zero or
+absent topology field means that the backend did not report that capacity.
 
-## Themis Integration
-
-Hephaestus populates `GpuDeviceProperties` from the acquired device's
-capabilities and passes the snapshot to Themis:
-
-```rust,ignore
-let props = GpuDeviceProperties {
-    compute_units:         Some(NonZeroU32::new(128).unwrap()),
-    warp_width:            Some(NonZeroU32::new(32).unwrap()),
-    max_threads_per_unit:  Some(NonZeroU32::new(2048).unwrap()),
-    registers_per_unit:    Some(NonZeroU32::new(65536).unwrap()),
-    shared_mem_per_unit_bytes: Some(NonZeroUsize::new(98304).unwrap()),
-    l2_bytes:              Some(NonZeroUsize::new(4_194_304).unwrap()),
-    memory_tier:           MemoryTier::Gddr,
-    memory_bytes:          Some(NonZeroU64::new(8_589_934_592).unwrap()),
-};
-let gpu_topo = GpuTopology::from_provider(props);
-```
-
-Moirai reads `GpuTopology` to decide whether to route a tensor operation
-to a GPU worker.
+The deterministic host query and its value assertions are maintained in the
+[Capabilities example](examples/capabilities.md).

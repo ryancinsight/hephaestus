@@ -21,6 +21,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   well. Testing for a variable wgpu does not read sent acquisition down the
   operator-selected path while wgpu quietly used its defaults.
 
+- [patch] Re-ground the accelerator book's device, capability, buffer,
+  elementwise, reduction, decomposition, backend, and stack chapters against
+  the current Hephaestus contracts; remove fabricated API claims and retain
+  executable host examples.
+
 - [minor] Add the provider-owned typed f32 3D FDTD contract and WGPU
   velocity/pressure implementation with validated geometry, storage checks, and
   an independent one-step value contract.

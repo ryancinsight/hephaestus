@@ -3,9 +3,9 @@
 **Crate**: `hephaestus-host`
 **Source**: `crates/hephaestus-host/examples/book_capabilities.rs`
 
-Query `backend_name`, `topology`, and `device_limits` from a device that is
-generic over the backend.  The same `print_backend` function works for
-`HostDevice`, `WgpuDevice`, or any future backend.
+Query `backend_name`, `topology`, and `device_limits` from a device generic
+over the `ComputeDevice` contract. The example uses `HostDevice`, which
+gives deterministic values without requiring an accelerator.
 
 ## Source
 
@@ -28,9 +28,7 @@ all capability assertions passed
 ## What to notice
 
 - `print_backend` is generic over `impl ComputeDevice`, so it accepts any
-  backend without knowing which one.  This is the primary use case for the
-  contract layer: physics kernels write `fn compute<D: ComputeDevice>(device:
-  &D, ...)` and let the caller choose the backend.
+  backend that implements the core transfer contract.
 
 - `topology()` returns `None` for `HostDevice` because it is not a GPU;
   real backends return `Some(&GpuTopology)` populated from driver queries.
@@ -38,5 +36,5 @@ all capability assertions passed
 - `synchronize()` on the host is always `Ok(())` — host operations complete
   before the function returns, so there is no asynchronous queue to drain.
 
-- `HostDevice` is `Copy` and zero-sized; real backends hold an `Arc`-shared
-  device handle.  Passing by value never deep-copies device state.
+- `HostDevice` is `Copy` and zero-sized. Accelerator handles retain their
+  own provider-specific ownership and synchronization state.
