@@ -1,0 +1,16 @@
+name: Lockfile integrity
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    name: Lockfile integrity
+    uses: ryancinsight/atlas/.github/workflows/lockfile-guard.yml@886d85b0e4bea20c8e5ec4b4239e6ba9cdbcf74d
+    permissions:
+      contents: read
