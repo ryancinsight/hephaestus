@@ -1,0 +1,75 @@
+name: CI
+
+# The four backend workflows each own one GPU architecture and run on the
+# hardware for it: `cuda.yml` and `rocm.yml` on self-hosted devices,
+# `metal.yml` on macOS, `wgpu.yml` on a Linux runner with software Vulkan.
+# Between them they run `hephaestus-{wgpu,cuda,rocm,metal}` -- 483 tests.
+#
+# Nothing ran the rest. `hephaestus-core` (100 tests) and `hephaestus-host`
+# (2) had no workflow, and no workflow anywhere ran `cargo fmt`, clippy,
+# doctests or `cargo doc`.
+#
+# This job is host-side only and deliberately does not touch the device
+# packages' tests: those need their architectures and already have them. What
+# it does cover the whole workspace with is the checks that need no device --
+# every backend loads its driver dynamically (`cuda` is `cuda-oxide` plus
+# `libloading`, `rocm`'s HIP dependency is behind an off-by-default feature),
+# so all of it compiles and lints on a bare runner.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hephaestus-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  host:
+    name: Host-side verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.8.1
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      - uses: taiki-e/install-action@ea4c0b50b0d394ee91c5bb68a6a295b0556feb8e # nextest
+        with:
+          tool: nextest
+
+      # Cheapest first: a formatting slip costs seconds, not a build.
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      # Workspace-wide, backends included. They compile without their devices,
+      # so a lint regression in a vendor crate is caught here rather than
+      # waiting for that architecture's runner.
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      # Only the packages no other workflow runs. The device packages' tests
+      # belong to the runners that have the hardware.
+      - name: Host-side tests
+        run: cargo nextest run --locked -p hephaestus-core -p hephaestus-host -p hephaestus
+
+      - name: Documentation tests
+        run: cargo test --locked --doc --workspace
+
+      - name: Documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --locked --workspace --no-deps

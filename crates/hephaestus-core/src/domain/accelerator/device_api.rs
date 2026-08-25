@@ -59,7 +59,7 @@ impl LaunchGeometry {
 /// The seam is deliberately open — no private supertrait — because a device
 /// API is exactly the component a new vendor crate supplies. Its
 /// [`Dialect`](Self::Dialect) is likewise open (see
-/// [`KernelDialect`](crate::KernelDialect)).
+/// [`KernelDialect`]).
 ///
 /// # Scalar parameterization
 ///
