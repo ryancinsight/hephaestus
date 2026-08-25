@@ -66,8 +66,13 @@ jobs:
       - name: Host-side tests
         run: cargo nextest run --locked -p hephaestus-core -p hephaestus-host -p hephaestus
 
+      # `hephaestus-python` is excluded: PyO3's `extension-module` tells it not
+      # to link libpython, because a loaded extension takes those symbols from
+      # the interpreter, and a doctest binary has no interpreter. It links on
+      # Windows, which pulls pythonXY.lib regardless, so this fails only on the
+      # runner. `python-release.yml` owns that crate.
       - name: Documentation tests
-        run: cargo test --locked --doc --workspace
+        run: cargo test --locked --doc --workspace --exclude hephaestus-python
 
       - name: Documentation
         env:
