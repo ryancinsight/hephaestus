@@ -3,7 +3,9 @@ name: WGPU Backend
 on:
   push:
     branches: [master]
+    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml"]
   pull_request:
+    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml"]
   workflow_dispatch:
 
 permissions:

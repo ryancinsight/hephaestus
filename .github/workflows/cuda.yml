@@ -3,7 +3,9 @@ name: CUDA Backend
 on:
   push:
     branches: [master]
+    paths: ["crates/hephaestus-cuda/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/cuda.yml"]
   pull_request:
+    paths: ["crates/hephaestus-cuda/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/cuda.yml"]
   workflow_dispatch:
     inputs:
       run_hardware:

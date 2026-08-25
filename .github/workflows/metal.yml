@@ -3,7 +3,9 @@ name: Metal Backend
 on:
   push:
     branches: [master]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/metal.yml"]
   pull_request:
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/metal.yml"]
   workflow_dispatch:
 
 permissions:
