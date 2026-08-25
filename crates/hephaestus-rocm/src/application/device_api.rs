@@ -1,7 +1,7 @@
 //! ROCm's implementation of the generic accelerator layer's device-API seam.
 //!
 //! This is the whole vendor-specific half of every op family built on
-//! [`DeviceApi`]: hipRTC-backed kernel caching, HIP's device-address
+//! [`DeviceApi`](hephaestus_core::DeviceApi): hipRTC-backed kernel caching, HIP's device-address
 //! representation, and the HIP calling convention. The host-side
 //! orchestration those families need lives once in `hephaestus-core`.
 

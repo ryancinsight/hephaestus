@@ -1,8 +1,8 @@
-//! Rank-2 prefix/suffix scans, written once over the [`DeviceApi`] seam.
+//! Rank-2 prefix/suffix scans, written once over the [`DeviceApi`](crate::DeviceApi) seam.
 //!
 //! Kernel source is selected by *dialect* rather than by device, because two
 //! backends compiling the same language want the same source: CUDA C++ and
-//! HIP C++ share [`c_family_axis_scan_source`] verbatim. Host orchestration —
+//! HIP C++ share [`c_family_axis_scan_source`](crate::c_family_axis_scan_source) verbatim. Host orchestration —
 //! validation, cache keying, shared-memory sizing, launch, and the allocating
 //! entry points — is selected by nothing at all; it is one implementation
 //! monomorphized per backend.

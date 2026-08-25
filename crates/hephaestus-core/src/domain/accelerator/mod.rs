@@ -8,7 +8,7 @@
 //! geometry, the allocating and non-allocating entry points, and the
 //! convenience operators) is one algorithm.
 //!
-//! [`DeviceApi`] is that axis. Op families in this module are written once
+//! [`DeviceApi`](crate::DeviceApi) is that axis. Op families in this module are written once
 //! against it and monomorphize per backend, so a vendor crate contains only
 //! its device-API implementation and never a copy of the orchestration.
 //!

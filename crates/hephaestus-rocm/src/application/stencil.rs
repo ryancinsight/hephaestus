@@ -170,7 +170,7 @@ impl Laplacian2DKernel {
     }
 }
 
-/// Provider-owned implementation of [`StencilOps`] for Rocm.
+/// Provider-owned implementation of [`StencilOps`](hephaestus_core::StencilOps) for Rocm.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmStencilOps;
 

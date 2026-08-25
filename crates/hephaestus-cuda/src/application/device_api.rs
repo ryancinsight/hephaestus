@@ -1,7 +1,7 @@
 //! CUDA's implementation of the generic accelerator layer's device-API seam.
 //!
 //! This is the whole vendor-specific half of every op family built on
-//! [`DeviceApi`]: NVRTC-backed kernel caching, the driver's device-address
+//! [`DeviceApi`](hephaestus_core::DeviceApi): NVRTC-backed kernel caching, the driver's device-address
 //! representation, and the driver calling convention. The host-side
 //! orchestration those families need lives once in `hephaestus-core`.
 
