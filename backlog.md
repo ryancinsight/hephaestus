@@ -3,10 +3,10 @@
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
 - Owner: Codex on `codex/hephaestus-fft-provider`; last update: 2026-08-26.
-- Lease: Codex owns `docs/adr/0053-*`, `crates/hephaestus-core/src/domain/fft/`,
-  `crates/hephaestus-wgpu/src/application/fft/`, their module/re-export seams,
-  focused FFT conformance/tests/benchmarks, and this item's PM/CHANGELOG entries
-  through the next verified commit.
+- Lease: Codex owns `crates/hephaestus-wgpu/src/application/fft/`, its
+  module/re-export seams, focused WGPU FFT tests, and this item's PM/CHANGELOG
+  entries through the next verified commit. The core contract increment is
+  complete at the preceding item commit.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -38,6 +38,12 @@
 - Dependencies: Apollo PR #130 may merge independently; it does not change the
   GPU provider contract. Consumer deletion waits for provider parity, not for a
   compatibility adapter.
+- Local evidence: the core FFT planner and operation seam are warning-clean;
+  configured Nextest passes 106/106 `hephaestus-core` tests in 0.683 seconds,
+  including ranks one through three plus rank/layout/alias/address rejection;
+  warning-denied core rustdoc passes. Commands ran standalone against the
+  committed lockfile to avoid the Atlas development overlay rewriting Git
+  sources as local paths.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 

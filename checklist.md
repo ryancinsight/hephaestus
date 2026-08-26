@@ -8,7 +8,7 @@ Sprint target: 0.18.0. Phase: Closure.
       duplicated WGPU kernels, dependency direction, and existing conformance.
 - [x] Record the provider ownership, rank-generic contract, staged cutover, and
       no-fallback rule in ADR 0053.
-- [ ] Add the device-neutral split-complex FFT plan, validation, and prepared
+- [x] Add the device-neutral split-complex FFT plan, validation, and prepared
       operation seam to `hephaestus-core` with boundary/adversarial tests.
 - [ ] Port and consolidate WGPU radix/Bluestein execution into
       `hephaestus-wgpu`, extending the current 3-D-only consumer surface to the

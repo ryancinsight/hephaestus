@@ -25,6 +25,8 @@ pub mod error;
 /// Backend-neutral volume ray-integral geometry and validation.
 /// Provider-neutral three-dimensional acoustic FDTD contracts.
 pub mod fdtd;
+/// Device-neutral dense complex Fourier-transform contracts.
+pub mod fft;
 /// Backend-neutral kernel authoring: interface and source declarations.
 pub mod interface;
 /// Kernel-dispatch contracts shared by accelerator backends.

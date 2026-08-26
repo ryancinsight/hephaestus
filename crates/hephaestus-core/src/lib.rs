@@ -53,6 +53,7 @@ pub use domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
 pub use domain::elementwise::ElementwiseOps;
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
+pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
     KernelInterface, KernelSource,
