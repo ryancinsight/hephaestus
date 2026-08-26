@@ -1,5 +1,44 @@
 # Backlog — hephaestus
 
+## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-fft-provider`; last update: 2026-08-26.
+- Lease: Codex owns `docs/adr/0053-*`, `crates/hephaestus-core/src/domain/fft/`,
+  `crates/hephaestus-wgpu/src/application/fft/`, their module/re-export seams,
+  focused FFT conformance/tests/benchmarks, and this item's PM/CHANGELOG entries
+  through the next verified commit.
+- Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
+  execution, exposes one prepared device-neutral contract for ranks one through
+  three, and provides the WGPU implementation needed by Kwavers. Kwavers then
+  selects `Leto` (Apollo CPU FFT over Leto arrays) or `Hephaestus` at the
+  operation boundary without fallback.
+- Scope: provider-neutral split-complex operands, shape/direction/normalization
+  validation, prepared caller-owned device dispatch, WGPU radix and Bluestein
+  execution, 1-D/2-D/3-D conformance, warm-allocation and device-residency
+  evidence, and the dependent Apollo/Kwavers cutover that deletes their
+  superseded WGPU FFT implementations.
+- Non-goals: moving FFT arithmetic into Leto; a Leto-to-Hephaestus dependency;
+  hidden accelerator-to-host fallback; real-to-complex packing; vendor-specific
+  consumer APIs; or a performance claim before matched end-to-end evidence.
+- Acceptance: ADR 0053 is accepted; the core contract validates ranks 1..=3,
+  nonzero checked shapes, dense split-complex storage, non-aliasing components,
+  and fixed forward/inverse normalization before mutation; prepared WGPU plans
+  execute power-of-two and non-power-of-two axes with no allocation, pipeline
+  compilation, host transfer, or capability probe in repeated dispatch; one
+  generic conformance suite covers 1-D/2-D/3-D analytical spectra, Apollo/Leto
+  differential results, inverse round trips, invalid shapes/layouts/aliases,
+  and unchanged outputs on preparation rejection; Kwavers exposes closed
+  `Leto`/`Hephaestus` selection and its PSTD path uses Hephaestus; Apollo and
+  Kwavers retain no consumer-owned WGPU FFT shader or plan after cutover.
+- Verification plan: warning-denied core/WGPU checks, configured Nextest,
+  doctests, SemVer checks for the additive provider surface, real-device WGPU
+  conformance, allocation instrumentation after plan preparation, codegen/source
+  residue scans, matched rank/shape benchmarks, independent architecture review,
+  and exact-head hosted provider plus Kwavers consumer CI.
+- Dependencies: Apollo PR #130 may merge independently; it does not change the
+  GPU provider contract. Consumer deletion waits for provider parity, not for a
+  compatibility adapter.
+
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 
 - Owner: current Atlas session on `fix/hephaestus-book-reground-1`; the dirty
