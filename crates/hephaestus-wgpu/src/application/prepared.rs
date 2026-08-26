@@ -67,6 +67,15 @@ pub(crate) fn checked_submit(
     label: &'static str,
     encoder: wgpu::CommandEncoder,
 ) -> Result<()> {
+    checked_submit_with_timeout(device, label, encoder, None)
+}
+
+pub(crate) fn checked_submit_with_timeout(
+    device: &WgpuDevice,
+    label: &'static str,
+    encoder: wgpu::CommandEncoder,
+    timeout: Option<std::time::Duration>,
+) -> Result<()> {
     let out_of_memory = device
         .inner()
         .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
@@ -74,12 +83,29 @@ pub(crate) fn checked_submit(
     let validation = device
         .inner()
         .push_error_scope(wgpu::ErrorFilter::Validation);
-    device.queue().submit(Some(encoder.finish()));
+    let submission_index = device.queue().submit(Some(encoder.finish()));
+    let validation = validation.pop();
+    let internal = internal.pop();
+    let out_of_memory = out_of_memory.pop();
 
+    if let Some(timeout) = timeout {
+        device
+            .inner()
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission_index),
+                timeout: Some(timeout),
+            })
+            .map_err(|error| HephaestusError::DispatchFailed {
+                message: format!("{label} submission wait failed: {error}"),
+            })?;
+    }
+
+    // The bounded path has already completed the indexed submission and its
+    // error-scope callbacks, so these executor calls cannot extend its deadline.
     if let Some(error) = [
-        moirai::block_on(validation.pop()),
-        moirai::block_on(internal.pop()),
-        moirai::block_on(out_of_memory.pop()),
+        moirai::block_on(validation),
+        moirai::block_on(internal),
+        moirai::block_on(out_of_memory),
     ]
     .into_iter()
     .flatten()

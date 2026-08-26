@@ -2,6 +2,15 @@
 
 - Status: Accepted
 - Date: 2026-08-26
+- Revision 2026-08-26: The executable WGPU increment prebinds pipelines,
+  immutable parameter buffers, bind groups, and dispatch grids during plan
+  creation. The provider-neutral `FftOps::encode_fft` records into a
+  caller-owned command stream, so composed consumers allocate no FFT-owned
+  transient resources and can submit the transform with adjacent work.
+  Bluestein phases are reduced modulo `2N` in integer arithmetic, evaluated in
+  `f64`, narrowed once, and uploaded as direct complex factors. Benchmark
+  submission and readback use explicit deadlines, and the required-device CI
+  job executes the benchmark binary under a 60-second process bound.
 - Board item: `HEPH-FFT-PROVIDER-1`
 - Cross-repository drivers: Apollo GPU FFT and Kwavers PSTD/backend selection
 - Change class: `[arch] [minor]` in Hephaestus; breaking consumer cleanup in
@@ -28,7 +37,7 @@ consumer would preserve the duplication.
 ## Decision
 
 `hephaestus-core::domain::fft` owns one device-neutral dense complex FFT
-contract over `D: ComputeDevice`, scalar storage, and const rank. The admitted
+contract over `D: KernelDevice`, scalar storage, and const rank. The admitted
 ranks are one through three. A plan records a nonzero checked shape and the
 product of its axes. Operands are two same-layout `StridedView`s for real and
 imaginary components. The first provider contract admits dense C-order storage;
@@ -47,9 +56,12 @@ Direction is selected when preparing an operation, outside the dispatch loop.
 Preparation validates operands, selects every axis strategy, compiles pipelines,
 and allocates provider-owned scratch. Dispatch only encodes/submits work against
 caller-owned device buffers; repeated dispatch performs no allocation, pipeline
-compilation, capability probe, host transfer, or provider switch. The prepared
-operation remains bound to the validated operand storage and shape, matching the
-existing Hephaestus prepared-operation model.
+compilation, capability probe, host transfer, or provider switch for FFT-owned
+resources. A standalone dispatch still creates the command encoder required for
+one WGPU submission; composed consumers call `FftOps::encode_fft` with an
+existing provider command stream. The prepared operation remains bound to the
+validated operand storage and shape, matching the existing Hephaestus
+prepared-operation model.
 
 `hephaestus-wgpu` is the first executable provider. It consolidates Apollo's
 general radix/Bluestein implementation and Kwavers's PSTD requirements into one
@@ -57,10 +69,12 @@ rank-generic axis-pass plan. One-dimensional and two-dimensional transforms are
 not wrappers around a three-dimensional public API: all ranks instantiate the
 same axis planner, and only their actual axes are dispatched. All axis passes
 are encoded into one command stream submission. Bluestein coefficient
-preparation is Hephaestus-owned and cannot call Apollo or silently execute the
-requested transform on the host. Metal continues to use the WGPU provider over
-its selected adapter. CUDA and ROCm implement the same seam in later provider
-increments; unsupported providers return a typed capability error.
+preparation is Hephaestus-owned; integer modulo reduction bounds the quadratic
+phase before `f64` evaluation and one `f32` narrowing. It cannot call Apollo or
+silently execute the requested transform on the host. Metal continues to use
+the WGPU provider over its selected adapter. CUDA and ROCm implement the same
+seam in later provider increments; unsupported providers return a typed
+capability error.
 
 Kwavers owns the closed runtime selector `Leto | Hephaestus` at its Fourier
 operation boundary. `Leto` names the host array route and delegates Fourier
@@ -116,18 +130,26 @@ device-resident timed regions, allocation counts, and confidence intervals.
   constants, single Fourier modes, inverse round trips, and Apollo/Leto
   differential outputs. It includes power-of-two and prime/composite
   non-power-of-two axes.
+- FFT is the dependency-cycle exception recorded by the 2026-08-26 revision of
+  ADR 0046: Hephaestus uses the analytical oracle here, while the Apollo/Leto
+  differential test runs at the consumer boundary.
 - Error bounds derive from scalar epsilon, transform length, and the radix or
   Bluestein operation depth; reordered floating-point results are not compared
   bitwise.
 - Real-device WGPU tests prove one-, two-, and three-dimensional dispatch and
-  PSTD integration. Source/codegen audits prove one operation-boundary provider
-  selection and no host fallback or per-axis capability probe.
+  large-prime Bluestein phase accuracy. Planner tests reject workgroup counts
+  beyond the acquired device limit. Source/codegen audits prove one
+  operation-boundary provider selection and no host fallback or per-axis
+  capability probe.
 - Allocation and preparation instrumentation proves zero host and device
   allocation plus zero pipeline compilation during repeated dispatch. Buffer
   identities remain stable across iterations.
 - Matched benchmarks compare Apollo/Leto and Hephaestus end to end at
   cache-/device-relevant shapes, reporting medians and confidence intervals;
   no benchmark changes its workload or statistical acceptance to obtain a win.
+  Each instrument first checks independent forward DFT bins with a standard
+  `gamma(k)` bound derived from radix/Bluestein depth, so an identity/no-op path
+  cannot satisfy validation.
 - Residue scans prove Apollo and Kwavers retain no WGPU FFT shader, plan,
   dispatch helper, or compatibility re-export after cutover.
 - Warning-denied checks, configured Nextest, doctests, SemVer checks,

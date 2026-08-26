@@ -15,6 +15,7 @@ pub enum FftDirection {
 
 /// Validated dense complex FFT shape and backend address bounds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FftPlan<const R: usize> {
     /// Transform extents in C-order axis order.
     pub shape: [usize; R],

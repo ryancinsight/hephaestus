@@ -117,3 +117,5 @@ jobs:
           cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-wgpu --locked
           cargo "+$RUST_TOOLCHAIN" test --package hephaestus-wgpu --doc --locked
           cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-wgpu --no-deps --locked
+          timeout 60s cargo "+$RUST_TOOLCHAIN" test --package hephaestus-wgpu \
+            --bench fft_prepared --locked -- --test

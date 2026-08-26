@@ -18,6 +18,9 @@ use hephaestus_core::{
 };
 
 use crate::application::bindings::{BindGroupEntries, BindGroups, UniformBuffers};
+use crate::application::prepared::{
+    checked_bind_group, checked_submit, checked_submit_with_timeout,
+};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -93,6 +96,111 @@ pub struct WgpuCommandStream<'d> {
     device: &'d WgpuDevice,
     encoder: wgpu::CommandEncoder,
     uniform_buffers: UniformBuffers,
+}
+
+/// A fully bound WGPU dispatch whose immutable resources are prepared once.
+///
+/// Device provenance is held and checked once by the enclosing prepared
+/// operation before this crate-private command is encoded.
+pub(crate) struct WgpuBoundDispatch {
+    pipeline: wgpu::ComputePipeline,
+    bind_group: wgpu::BindGroup,
+    _parameters: wgpu::Buffer,
+    grid: DispatchGrid,
+}
+
+impl WgpuCommandStream<'_> {
+    pub(crate) const fn device(&self) -> &WgpuDevice {
+        self.device
+    }
+
+    pub(crate) fn encode_bound_sequence(
+        &mut self,
+        label: &str,
+        prepared: &[WgpuBoundDispatch],
+    ) -> Result<()> {
+        let mut pass = self
+            .encoder
+            .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some(label),
+                timestamp_writes: None,
+            });
+        for command in prepared {
+            if command.grid.x == 0 || command.grid.y == 0 || command.grid.z == 0 {
+                continue;
+            }
+            pass.set_pipeline(&command.pipeline);
+            pass.set_bind_group(0, &command.bind_group, &[]);
+            pass.dispatch_workgroups(command.grid.x, command.grid.y, command.grid.z);
+        }
+        Ok(())
+    }
+
+    /// Submit this stream and wait at most `timeout` for device completion.
+    ///
+    /// This bounded form is intended for hosts and measurement harnesses whose
+    /// external waits must have an explicit deadline.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::DispatchFailed`] when submission, device
+    /// completion, or a scoped WGPU error fails before the deadline.
+    pub fn submit_with_timeout(self, timeout: std::time::Duration) -> Result<()> {
+        checked_submit_with_timeout(
+            self.device,
+            "hephaestus-command-stream",
+            self.encoder,
+            Some(timeout),
+        )?;
+        for buffer in self.uniform_buffers {
+            self.device.recycle_uniform_buffer(buffer);
+        }
+        Ok(())
+    }
+}
+
+impl WgpuDevice {
+    pub(crate) fn bind<K: KernelSource<Wgsl>>(
+        &self,
+        prepared: &WgpuPrepared<K>,
+        bindings: &[Binding<'_, WgpuDevice>],
+        params: &K::Params,
+        grid: DispatchGrid,
+    ) -> Result<WgpuBoundDispatch> {
+        validate_bindings::<WgpuDevice>(K::LABEL, K::BINDINGS, bindings)?;
+        let parameter_size = Self::byte_size::<K::Params>(1)?.max(wgpu::COPY_BUFFER_ALIGNMENT);
+        let parameters = self.inner().create_buffer(&wgpu::BufferDescriptor {
+            label: Some(K::LABEL),
+            size: parameter_size,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue()
+            .write_buffer(&parameters, 0, bytemuck::bytes_of(params));
+
+        let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
+        for (binding, bound) in bindings.iter().enumerate() {
+            entries.push(wgpu::BindGroupEntry {
+                binding: u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
+                    message: format!("{}: binding index exceeds u32::MAX", K::LABEL),
+                })?,
+                resource: bound.handle.as_entire_binding(),
+            });
+        }
+        entries.push(wgpu::BindGroupEntry {
+            binding: prepared.parameter_binding,
+            resource: parameters.as_entire_binding(),
+        });
+        let bind_group = checked_bind_group(self, &prepared.pipeline, prepared.label, &entries)?;
+        drop(entries);
+
+        Ok(WgpuBoundDispatch {
+            pipeline: prepared.pipeline.clone(),
+            bind_group,
+            _parameters: parameters,
+            grid,
+        })
+    }
 }
 
 /// Active WGPU grouped-kernel sequence encoded into one compute pass.
@@ -368,7 +476,7 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
     }
 
     fn submit(self) -> Result<()> {
-        self.device.queue().submit(Some(self.encoder.finish()));
+        checked_submit(self.device, "hephaestus-command-stream", self.encoder)?;
         for buffer in self.uniform_buffers {
             self.device.recycle_uniform_buffer(buffer);
         }

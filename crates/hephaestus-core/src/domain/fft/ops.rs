@@ -1,7 +1,7 @@
 use bytemuck::Pod;
 
-use crate::domain::device::ComputeDevice;
 use crate::domain::error::Result;
+use crate::domain::stream::{CommandStream, KernelDevice};
 
 use super::{FftDirection, FftOperands};
 
@@ -10,7 +10,7 @@ use super::{FftDirection, FftOperands};
 /// Implementors are backend-owned zero-sized markers. Preparation validates
 /// fixed operands, selects every axis strategy, compiles pipelines, and owns
 /// all scratch required by repeated dispatch.
-pub trait FftOps<D: ComputeDevice, T: Pod> {
+pub trait FftOps<D: KernelDevice, T: Pod> {
     /// Prepared resources bound to fixed split-complex operands and one rank.
     type Prepared<'a, const R: usize>
     where
@@ -45,15 +45,35 @@ pub trait FftOps<D: ComputeDevice, T: Pod> {
         direction: FftDirection,
     ) -> Result<Self::Prepared<'a, R>>;
 
+    /// Encode a prepared transform into an existing provider command stream.
+    ///
+    /// This is the provider-neutral composition boundary for consumers that
+    /// combine an FFT with adjacent accelerator kernels in one submission.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backend's typed ownership or command-encoding failure.
+    fn encode_fft<const R: usize>(
+        &self,
+        device: &D,
+        prepared: &Self::Prepared<'_, R>,
+        stream: &mut D::Stream<'_>,
+    ) -> Result<()>;
+
     /// Dispatch a prepared transform without changing its provider or shape.
     ///
     /// # Errors
     ///
-    /// Returns the backend's typed command-encoding, submission, or device
-    /// execution failure.
+    /// Returns the backend's typed command-encoding or submission failure.
+    /// Completion and asynchronous execution failures are observed through
+    /// [`crate::ComputeDevice::synchronize`] or a synchronizing transfer.
     fn dispatch_fft<const R: usize>(
         &self,
         device: &D,
         prepared: &Self::Prepared<'_, R>,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        let mut stream = device.stream()?;
+        self.encode_fft(device, prepared, &mut stream)?;
+        stream.submit()
+    }
 }

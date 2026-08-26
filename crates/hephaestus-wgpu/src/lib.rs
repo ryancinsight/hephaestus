@@ -3,8 +3,8 @@
 //!
 //! The portable wgpu backend of the Atlas accelerator substrate (atlas ADR
 //! 0001). Implements the `hephaestus-core` [`ComputeDevice`] seam over a
-//! wgpu device/queue pair: adapter acquisition, typed device buffers, and
-//! monomorphized elementwise compute dispatch.
+//! wgpu device/queue pair: adapter acquisition, typed device buffers,
+//! monomorphized compute kernels, and prepared multidimensional FFT dispatch.
 //!
 //! The crate re-exports the exact [`wgpu`] crate version it builds against so
 //! downstream migration code can author provider-owned WGPU bindings without
@@ -12,7 +12,7 @@
 //!
 //! [`ComputeDevice`]: hephaestus_core::ComputeDevice
 
-/// Elementwise compute dispatch.
+/// Provider compute operations and prepared command streams.
 pub mod application;
 /// wgpu device, queue, and buffer infrastructure.
 pub mod infrastructure;
@@ -36,6 +36,7 @@ pub use application::elementwise::{
 };
 pub use application::elementwise_seam::{PreparedElementwise, WgpuElementwiseOps};
 pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
+pub use application::fft::{WgpuFftOps, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
@@ -119,8 +120,8 @@ pub use application::decomposition::{
 pub use hephaestus_core::{
     BinaryExpr, BinaryStorageKernel, CombineExpr, ComputeDevice, ComputeDeviceAcquisition,
     ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer, DeviceFeature, DeviceLimits,
-    DevicePreference, DialectScalar, DispatchGrid, GroupedBinding, GroupedCommandStream,
-    GroupedKernelDevice, GroupedKernelInterface, GroupedKernelSource, HephaestusError,
-    IdentityToken, KernelDialect, MultiStorageKernel, OpIdentity, Result, UnaryExpr,
-    UnaryStorageKernel, Wgsl,
+    DevicePreference, DialectScalar, DispatchGrid, FftDirection, FftOperands, FftOps, FftPlan,
+    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelInterface,
+    GroupedKernelSource, HephaestusError, IdentityToken, KernelDialect, MultiStorageKernel,
+    OpIdentity, Result, UnaryExpr, UnaryStorageKernel, Wgsl, plan_fft,
 };

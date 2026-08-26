@@ -4,6 +4,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] Add the provider-owned dense split-complex FFT seam and prepared WGPU
+  implementation for ranks one through three. Power-of-two and Bluestein axes
+  share one rank-generic plan; repeated encoding reuses caller-owned operands,
+  provider scratch, pipelines, immutable parameters, bind groups, and dispatch
+  grids, and can compose into an existing command stream without an intermediate
+  submission. Bluestein phases are range-reduced before narrowing and upload so
+  large non-power-of-two transforms do not accumulate shader-side `f32` phase
+  construction error. WGPU command streams and readback also expose explicit
+  deadline-aware forms for bounded host and benchmark integration.
+
 - [patch] WGPU device acquisition now reports why it failed. Every
   `request_adapter` and `request_device` error was discarded behind
   `if let Ok(...)` and replaced with one generic "No compatible GPU adapter or
