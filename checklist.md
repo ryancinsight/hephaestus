@@ -25,6 +25,10 @@ Sprint target: 0.18.0. Phase: Closure.
       evidence passes 11/11 focused FFT and 231/231 full real-device WGPU tests,
       warning-denied all-target Clippy and rustdoc, and 196/196 minor-policy
       SemVer checks against `origin/master`.
+      Provider PR #222 merged as `cfadc373`; the next provider increment adds a
+      matched 256x128x128 repeated-pair workload against Kwavers's measured
+      10.09 ms/step pre-cutover baseline and removes any provider-side workspace
+      duplication it exposes before the consumer kernel is deleted.
 - [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
       the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
       implementations.

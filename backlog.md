@@ -2,12 +2,12 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
-- Owner: Codex on `codex/hephaestus-fft-provider`; last update: 2026-08-26.
-- Lease: Codex owns `crates/hephaestus-wgpu/src/application/fft/`, the prepared
-  command binding in `application/stream.rs`, its module/re-export seams, the
-  focused benchmark, and this item's PM/CHANGELOG entries through the next
-  verified commit. The core contract increment is complete at the preceding
-  item commit.
+- Owner: Codex on `codex/hephaestus-fft-pstd-throughput`; last update:
+  2026-08-26.
+- Lease: Codex owns `crates/hephaestus-wgpu/src/application/fft/`,
+  `crates/hephaestus-wgpu/benches/fft_prepared.rs`, and this item's
+  PM/CHANGELOG entries through the next verified commit. The merged provider
+  increment remains the basis for the consumer throughput gate.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -76,6 +76,11 @@
   focused and 231/231 full real-device WGPU tests pass, including dropped
   source handles and in-pass consumer composition. Warning-denied all-target
   WGPU Clippy and rustdoc pass; the minor-policy SemVer check passes 196/196.
+  Provider PR #222 merged as `cfadc373`. The pre-cutover Kwavers WGPU PSTD
+  baseline is 10.09 ms/step for 50 steps on a 256x128x128 lossless grid. Before
+  deleting that consumer kernel, the matched Hephaestus prepared-transform
+  workload must establish that its staged global-memory plan does not consume
+  the complete step budget or duplicate forward/inverse workspaces unnecessarily.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
 
