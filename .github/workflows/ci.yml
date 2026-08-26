@@ -31,6 +31,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  # `rust-toolchain.toml` pins 1.97.0, so every cargo call here uses it whatever
+  # the action installs. Without this input the action defaults to `stable` and
+  # rustup then fetches 1.97.0 as a second toolchain on first use, with the
+  # action's `components:` installed for the one that does not run. The backend
+  # workflows in this repository already pin the same way.
+  RUST_TOOLCHAIN: 1.97.0
 
 jobs:
   host:
