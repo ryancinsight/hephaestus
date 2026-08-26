@@ -18,8 +18,13 @@ Sprint target: 0.18.0. Phase: Closure.
       Direct analytical, round-trip, real-device, prepared-resource, and
       bounded benchmark-smoke coverage is complete. The benchmark calls the
       provider-neutral encode seam and checks independent forward DFT bins with
-      a depth-derived error bound. Apollo/Leto differential, explicit dispatch
-      allocation instrumentation, and matched timing remain.
+      a depth-derived error bound. Prepared plans own fixed operand handles;
+      static inspection and an in-pass real-device regression prove the removal
+      of duplicate volumes and warm copies. Apollo/Leto differential, explicit
+      device-allocation instrumentation, and matched timing remain. Post-change
+      evidence passes 11/11 focused FFT and 231/231 full real-device WGPU tests,
+      warning-denied all-target Clippy and rustdoc, and 196/196 minor-policy
+      SemVer checks against `origin/master`.
 - [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
       the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
       implementations.

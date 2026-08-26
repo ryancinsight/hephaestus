@@ -14,11 +14,10 @@ use super::{
 
 pub(crate) struct WgpuFftPlan {
     pub(crate) rank: usize,
-    pub(crate) elements: usize,
+    pub(crate) real: WgpuBuffer<f32>,
+    pub(crate) imaginary: WgpuBuffer<f32>,
     pub(crate) workspace_real: WgpuBuffer<f32>,
     pub(crate) workspace_imaginary: WgpuBuffer<f32>,
-    pub(crate) volume_real: WgpuBuffer<f32>,
-    pub(crate) volume_imaginary: WgpuBuffer<f32>,
     pub(crate) strategy: [AxisStrategy; 3],
     pub(crate) pack: [PackParams; 3],
     pub(crate) chirp: [Option<ChirpData>; 3],
@@ -284,7 +283,12 @@ fn build_chirp_data(
 }
 
 impl WgpuFftPlan {
-    pub(crate) fn new<const R: usize>(device: &WgpuDevice, plan: FftPlan<R>) -> Result<Self> {
+    pub(crate) fn new<const R: usize>(
+        device: &WgpuDevice,
+        plan: FftPlan<R>,
+        real: WgpuBuffer<f32>,
+        imaginary: WgpuBuffer<f32>,
+    ) -> Result<Self> {
         let mut dimensions = [1usize; 3];
         dimensions[..R].copy_from_slice(&plan.shape);
         let axes = [Axis::X, Axis::Y, Axis::Z];
@@ -340,11 +344,10 @@ impl WgpuFftPlan {
         let inverse = matches!(plan.direction, FftDirection::Inverse);
         let mut prepared = Self {
             rank: R,
-            elements: plan.elements,
+            real,
+            imaginary,
             workspace_real: device.alloc_zeroed(workspace_elements)?,
             workspace_imaginary: device.alloc_zeroed(workspace_elements)?,
-            volume_real: device.alloc_zeroed(plan.elements)?,
-            volume_imaginary: device.alloc_zeroed(plan.elements)?,
             chirp: [
                 build_chirp_data(device, strategy[0], batch[0])?,
                 build_chirp_data(device, strategy[1], batch[1])?,
@@ -359,12 +362,16 @@ impl WgpuFftPlan {
             pack,
             commands: Box::default(),
         };
-        prepared.commands = prepared.prepare_commands(device, &pipelines, plan.direction)?;
+        prepared.commands = prepared.prepare_commands(
+            device,
+            &pipelines,
+            plan.direction,
+            super::dispatch::FftComponents {
+                real: &prepared.real,
+                imaginary: &prepared.imaginary,
+            },
+        )?;
         Ok(prepared)
-    }
-
-    pub(crate) const fn element_count(&self) -> usize {
-        self.elements
     }
 
     pub(crate) const fn axis_is_active(&self, axis: Axis) -> bool {

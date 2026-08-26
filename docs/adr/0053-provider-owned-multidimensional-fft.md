@@ -11,6 +11,13 @@
   `f64`, narrowed once, and uploaded as direct complex factors. Benchmark
   submission and readback use explicit deadlines, and the required-device CI
   job executes the benchmark binary under a 60-second process bound.
+- Revision 2026-08-26: Prepared WGPU plans own cloned handles to their fixed
+  operands and bind pack/unpack commands directly to those allocations. This
+  removes two full-volume scratch allocations (`8N` bytes for split `f32`) and
+  four full-volume device copies (`16N` bytes per warm transform). The concrete
+  WGPU plan also encodes into a provenance-carrying consumer sequence so
+  Kwavers PSTD can retain one pass across adjacent kernels and FFT stages
+  without accepting a separately asserted device identity.
 - Board item: `HEPH-FFT-PROVIDER-1`
 - Cross-repository drivers: Apollo GPU FFT and Kwavers PSTD/backend selection
 - Change class: `[arch] [minor]` in Hephaestus; breaking consumer cleanup in
@@ -59,9 +66,13 @@ caller-owned device buffers; repeated dispatch performs no allocation, pipeline
 compilation, capability probe, host transfer, or provider switch for FFT-owned
 resources. A standalone dispatch still creates the command encoder required for
 one WGPU submission; composed consumers call `FftOps::encode_fft` with an
-existing provider command stream. The prepared operation remains bound to the
-validated operand storage and shape, matching the existing Hephaestus
-prepared-operation model.
+existing provider command stream. WGPU consumers already composing raw WGSL
+kernels may use the concrete grouped sequence's raw pass between prepared-plan
+encodes; the sequence carries its owning device so the FFT validates actual pass
+provenance. The operation still owns its validated operand handles and all
+prebound commands. The prepared operation remains bound to the validated
+operand storage and shape, matching the existing Hephaestus prepared-operation
+model.
 
 `hephaestus-wgpu` is the first executable provider. It consolidates Apollo's
 general radix/Bluestein implementation and Kwavers's PSTD requirements into one
@@ -117,8 +128,10 @@ array operation without importing transform concepts. WGPU is initially the
 only native FFT provider, so selecting another Hephaestus device reports
 unsupported capability until that provider implements this seam.
 
-No speed or memory improvement is claimed from ownership movement alone.
-Performance claims require identical input/output addresses, prebuilt plans,
+Ownership movement alone establishes no speed claim. The executable plan's
+static resource delta is exact: direct fixed-buffer binding removes two `N`
+element `f32` allocations and four `N` element device copies per dispatch.
+Runtime claims still require identical input/output addresses, prebuilt plans,
 device-resident timed regions, allocation counts, and confidence intervals.
 
 ## Verification

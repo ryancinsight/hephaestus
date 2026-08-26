@@ -9,7 +9,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   share one rank-generic plan; repeated encoding reuses caller-owned operands,
   provider scratch, pipelines, immutable parameters, bind groups, and dispatch
   grids, and can compose into an existing command stream without an intermediate
-  submission. Bluestein phases are range-reduced before narrowing and upload so
+  submission or into a provenance-carrying WGPU compute-pass sequence. Plans
+  own cloned fixed operand handles and bind them directly, removing two full-volume allocations
+  (`8N` bytes) and four full-volume device copies (`16N` bytes per warm
+  transform). Bluestein phases are range-reduced before narrowing and upload so
   large non-power-of-two transforms do not accumulate shader-side `f32` phase
   construction error. WGPU command streams and readback also expose explicit
   deadline-aware forms for bounded host and benchmark integration.

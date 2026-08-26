@@ -1,9 +1,9 @@
 use hephaestus_core::{FftDirection, FftOperands, FftOps, HephaestusError, Result, plan_fft};
 
-use crate::WgpuCommandStream;
 use crate::application::prepared::{device_owner, validate_device_owner};
 use crate::infrastructure::device::PipelineCache;
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
+use crate::{WgpuCommandStream, WgpuGroupedSequence};
 
 use super::plan::WgpuFftPlan;
 
@@ -12,10 +12,8 @@ use super::plan::WgpuFftPlan;
 pub struct WgpuFftOps;
 
 /// Prepared WGPU FFT resources bound to fixed split-complex device buffers.
-pub struct WgpuPreparedFft<'a, const R: usize> {
+pub struct WgpuPreparedFft<const R: usize> {
     plan: WgpuFftPlan,
-    real: &'a WgpuBuffer<f32>,
-    imaginary: &'a WgpuBuffer<f32>,
     owner: PipelineCache,
 }
 
@@ -25,7 +23,7 @@ fn invalid(message: impl Into<String>) -> HephaestusError {
     }
 }
 
-impl<const R: usize> WgpuPreparedFft<'_, R> {
+impl<const R: usize> WgpuPreparedFft<R> {
     fn validate_device(&self, device: &WgpuDevice) -> Result<()> {
         validate_device_owner(&self.owner, device, "FFT")
     }
@@ -40,12 +38,30 @@ impl<const R: usize> WgpuPreparedFft<'_, R> {
     /// Returns a typed ownership or command-encoding failure.
     pub(crate) fn encode_into(&self, stream: &mut WgpuCommandStream<'_>) -> Result<()> {
         self.validate_device(stream.device())?;
-        self.plan.encode(stream, self.real, self.imaginary)
+        self.plan.encode(stream)
+    }
+
+    /// Encode the prepared FFT into an active WGPU grouped sequence.
+    ///
+    /// This WGPU-specific composition boundary lets a provider consumer keep
+    /// adjacent kernels and every FFT stage in one provenance-carrying compute
+    /// pass. The prepared plan owns cloned handles to its fixed operands, so no
+    /// Hephaestus-managed resource allocation, pipeline compilation, bind-group
+    /// construction, or device copy occurs.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed ownership error when the sequence was not opened by the
+    /// preparation device.
+    pub fn encode_in_sequence(&self, sequence: &mut WgpuGroupedSequence<'_>) -> Result<()> {
+        self.validate_device(sequence.device())?;
+        self.plan.encode_in_pass(sequence.raw_pass_mut());
+        Ok(())
     }
 }
 
 impl FftOps<WgpuDevice, f32> for WgpuFftOps {
-    type Prepared<'a, const R: usize> = WgpuPreparedFft<'a, R>;
+    type Prepared<'a, const R: usize> = WgpuPreparedFft<R>;
 
     fn prepare_fft<'a, const R: usize>(
         &self,
@@ -67,9 +83,12 @@ impl FftOps<WgpuDevice, f32> for WgpuFftOps {
         )?;
         logical.validate_address_limit(u32::MAX as usize)?;
         Ok(WgpuPreparedFft {
-            plan: WgpuFftPlan::new(device, logical)?,
-            real: operands.real.buffer,
-            imaginary: operands.imaginary.buffer,
+            plan: WgpuFftPlan::new(
+                device,
+                logical,
+                operands.real.buffer.clone(),
+                operands.imaginary.buffer.clone(),
+            )?,
             owner: device_owner(device),
         })
     }

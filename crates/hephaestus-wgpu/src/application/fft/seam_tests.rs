@@ -1,7 +1,8 @@
 use std::sync::OnceLock;
 
 use hephaestus_core::{
-    FftDirection, FftOperands, FftOps, HephaestusError, KernelDevice, StridedView,
+    FftDirection, FftOperands, FftOps, GroupedCommandStream, HephaestusError, KernelDevice,
+    StridedView,
 };
 use leto::Layout;
 
@@ -130,7 +131,7 @@ fn prepare<'a, const R: usize>(
     imaginary: &'a WgpuBuffer<f32>,
     layout: &'a Layout<R>,
     direction: FftDirection,
-) -> WgpuPreparedFft<'a, R> {
+) -> WgpuPreparedFft<R> {
     ops.prepare_fft(device, operands(real, imaginary, layout), direction)
         .expect("invariant: FFT preparation succeeds")
 }
@@ -306,10 +307,76 @@ fn prepared_fft_rejects_cross_device_dispatch() {
         FftDirection::Forward,
     );
 
+    let expected = "kernel dispatch failed: prepared WGPU FFT belongs to a different device";
     assert_eq!(
         ops.dispatch_fft(&other, &prepared)
             .expect_err("cross-device dispatch must fail")
             .to_string(),
-        "kernel dispatch failed: prepared WGPU FFT belongs to a different device"
+        expected
+    );
+
+    let mut stream = other.stream().expect("invariant: command stream");
+    assert_eq!(
+        stream
+            .encode_grouped_sequence("hephaestus-fft-cross-device-pass", |sequence| {
+                prepared.encode_in_sequence(sequence)
+            })
+            .expect_err("cross-device in-pass encoding must fail")
+            .to_string(),
+        expected
+    );
+}
+
+#[test]
+fn prepared_fft_owns_operands_and_encodes_in_existing_pass() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let shape = [2, 2, 2];
+    let real_host = [0.25, 0.5, 0.75, 1.0, -0.25, -0.5, -0.75, -1.0];
+    let imaginary_host = [0.0; 8];
+    let expected = direct_forward(shape, &real_host, &imaginary_host);
+    let real = device.upload(&real_host).expect("invariant: real upload");
+    let imaginary = device
+        .upload(&imaginary_host)
+        .expect("invariant: imaginary upload");
+    let retained_real = real.clone();
+    let retained_imaginary = imaginary.clone();
+    let layout = Layout::c_contiguous(shape).expect("invariant: dense layout");
+    let ops = WgpuFftOps;
+    let prepared = prepare(
+        &ops,
+        &device,
+        &real,
+        &imaginary,
+        &layout,
+        FftDirection::Forward,
+    );
+
+    drop(real);
+    drop(imaginary);
+
+    let mut stream = device.stream().expect("invariant: command stream");
+    stream
+        .encode_grouped_sequence("hephaestus-fft-consumer-pass", |sequence| {
+            sequence
+                .raw_pass_mut()
+                .insert_debug_marker("consumer-before-fft");
+            prepared.encode_in_sequence(sequence)?;
+            sequence
+                .raw_pass_mut()
+                .insert_debug_marker("consumer-after-fft");
+            Ok(())
+        })
+        .expect("invariant: pass device owns the prepared FFT");
+    stream
+        .submit_with_timeout(std::time::Duration::from_secs(10))
+        .expect("invariant: consumer pass submission completes");
+
+    assert_complex_close(
+        &download(&device, &retained_real),
+        &download(&device, &retained_imaginary),
+        &expected,
+        shape.into_iter().product(),
     );
 }

@@ -25,7 +25,10 @@ as `hephaestus::wgpu`.
   and prebind pipelines, parameter buffers, bind groups, and dispatch grids.
   Bluestein phases are range-reduced in `f64` before one `f32` narrowing and
   upload. `FftOps::encode_fft` composes a prepared plan into an existing command
-  stream without provider-owned transient resources.
+  stream without provider-owned transient resources. Fixed operand handles are
+  owned by the plan and bound directly, eliminating duplicate volume storage
+  and per-transform device copies; WGPU consumers can also encode the plan into
+  a provenance-carrying grouped sequence while interleaving raw WGPU commands.
 - Deadline-aware stream submission and device readback for bounded hosts and
   measurement harnesses.
 - The shared backend-neutral volume ray-integral and 2D Laplacian contracts.

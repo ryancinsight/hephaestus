@@ -161,9 +161,9 @@ fn assert_round_trip<const R: usize>(
     }
 }
 
-struct PreparedValidation<'view, 'plan, const R: usize> {
-    forward: &'view WgpuPreparedFft<'plan, R>,
-    inverse: &'view WgpuPreparedFft<'plan, R>,
+struct PreparedValidation<'view, const R: usize> {
+    forward: &'view WgpuPreparedFft<R>,
+    inverse: &'view WgpuPreparedFft<R>,
     real: &'view WgpuBuffer<f32>,
     imaginary: &'view WgpuBuffer<f32>,
     real_host: &'view [f32],
@@ -171,10 +171,7 @@ struct PreparedValidation<'view, 'plan, const R: usize> {
     shape: [usize; R],
 }
 
-fn validate_prepared<const R: usize>(
-    device: &WgpuDevice,
-    validation: PreparedValidation<'_, '_, R>,
-) {
+fn validate_prepared<const R: usize>(device: &WgpuDevice, validation: PreparedValidation<'_, R>) {
     let PreparedValidation {
         forward,
         inverse,

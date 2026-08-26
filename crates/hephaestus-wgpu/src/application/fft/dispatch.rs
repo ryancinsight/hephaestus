@@ -1,6 +1,6 @@
 //! Allocation-free ordered WGPU dispatch for prepared dense complex FFT plans.
 
-use hephaestus_core::{Binding, CommandStream, DeviceBuffer, DispatchGrid, FftDirection, Result};
+use hephaestus_core::{Binding, DispatchGrid, FftDirection, Result};
 
 use crate::{
     application::stream::{WgpuBoundDispatch, WgpuCommandStream},
@@ -13,6 +13,12 @@ use super::{
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
 };
+
+#[derive(Clone, Copy)]
+pub(super) struct FftComponents<'a> {
+    pub(super) real: &'a WgpuBuffer<f32>,
+    pub(super) imaginary: &'a WgpuBuffer<f32>,
+}
 
 fn grid(elements: usize) -> Result<DispatchGrid> {
     DispatchGrid::covering_domain([elements, 1, 1], [256, 1, 1])
@@ -33,13 +39,14 @@ impl WgpuFftPlan {
         device: &WgpuDevice,
         pipelines: &FftPipelines,
         axis: Axis,
+        components: FftComponents<'_>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
         let bindings = [
             Binding::read_write(&self.workspace_real),
             Binding::read_write(&self.workspace_imaginary),
-            Binding::read_write(&self.volume_real),
-            Binding::read_write(&self.volume_imaginary),
+            Binding::read_write(components.real),
+            Binding::read_write(components.imaginary),
         ];
         device.bind(
             &pipelines.pack,
@@ -54,13 +61,14 @@ impl WgpuFftPlan {
         device: &WgpuDevice,
         pipelines: &FftPipelines,
         axis: Axis,
+        components: FftComponents<'_>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
         let bindings = [
             Binding::read_write(&self.workspace_real),
             Binding::read_write(&self.workspace_imaginary),
-            Binding::read_write(&self.volume_real),
-            Binding::read_write(&self.volume_imaginary),
+            Binding::read_write(components.real),
+            Binding::read_write(components.imaginary),
         ];
         device.bind(
             &pipelines.unpack,
@@ -197,9 +205,10 @@ impl WgpuFftPlan {
         pipelines: &FftPipelines,
         axis: Axis,
         inverse: bool,
+        components: FftComponents<'_>,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
-        commands.push(self.bind_pack(device, pipelines, axis)?);
+        commands.push(self.bind_pack(device, pipelines, axis, components)?);
         let index = axis.shader_index() as usize;
         match self.strategy[index] {
             AxisStrategy::Radix2 => {
@@ -216,7 +225,7 @@ impl WgpuFftPlan {
                 self.bind_chirp(device, pipelines, chirp, inverse, commands)?;
             }
         }
-        commands.push(self.bind_unpack(device, pipelines, axis)?);
+        commands.push(self.bind_unpack(device, pipelines, axis, components)?);
         Ok(())
     }
 
@@ -225,6 +234,7 @@ impl WgpuFftPlan {
         device: &WgpuDevice,
         pipelines: &FftPipelines,
         direction: FftDirection,
+        components: FftComponents<'_>,
     ) -> Result<Box<[WgpuBoundDispatch]>> {
         let mut commands = Vec::new();
         let axes = match direction {
@@ -238,6 +248,7 @@ impl WgpuFftPlan {
                     pipelines,
                     axis,
                     matches!(direction, FftDirection::Inverse),
+                    components,
                     &mut commands,
                 )?;
             }
@@ -245,27 +256,13 @@ impl WgpuFftPlan {
         Ok(commands.into_boxed_slice())
     }
 
-    pub(crate) fn encode(
-        &self,
-        stream: &mut WgpuCommandStream<'_>,
-        real: &WgpuBuffer<f32>,
-        imaginary: &WgpuBuffer<f32>,
-    ) -> Result<()> {
-        let expected = self.element_count();
-        if real.len() != expected || imaginary.len() != expected {
-            return Err(hephaestus_core::HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "prepared FFT expects {expected} elements; real has {}, imaginary has {}",
-                    real.len(),
-                    imaginary.len()
-                ),
-            });
-        }
+    pub(crate) fn encode(&self, stream: &mut WgpuCommandStream<'_>) -> Result<()> {
+        stream.encode_bound_sequence("hephaestus-fft", &self.commands)
+    }
 
-        stream.copy(real, &self.volume_real)?;
-        stream.copy(imaginary, &self.volume_imaginary)?;
-        stream.encode_bound_sequence("hephaestus-fft", &self.commands)?;
-        stream.copy(&self.volume_real, real)?;
-        stream.copy(&self.volume_imaginary, imaginary)
+    pub(crate) fn encode_in_pass(&self, pass: &mut wgpu::ComputePass<'_>) {
+        for command in &self.commands {
+            command.encode_in_pass(pass);
+        }
     }
 }

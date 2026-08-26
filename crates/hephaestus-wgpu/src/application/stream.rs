@@ -109,6 +109,17 @@ pub(crate) struct WgpuBoundDispatch {
     grid: DispatchGrid,
 }
 
+impl WgpuBoundDispatch {
+    pub(crate) fn encode_in_pass(&self, pass: &mut wgpu::ComputePass<'_>) {
+        if self.grid.x == 0 || self.grid.y == 0 || self.grid.z == 0 {
+            return;
+        }
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(self.grid.x, self.grid.y, self.grid.z);
+    }
+}
+
 impl WgpuCommandStream<'_> {
     pub(crate) const fn device(&self) -> &WgpuDevice {
         self.device
@@ -126,12 +137,7 @@ impl WgpuCommandStream<'_> {
                 timestamp_writes: None,
             });
         for command in prepared {
-            if command.grid.x == 0 || command.grid.y == 0 || command.grid.z == 0 {
-                continue;
-            }
-            pass.set_pipeline(&command.pipeline);
-            pass.set_bind_group(0, &command.bind_group, &[]);
-            pass.dispatch_workgroups(command.grid.x, command.grid.y, command.grid.z);
+            command.encode_in_pass(&mut pass);
         }
         Ok(())
     }
@@ -208,6 +214,20 @@ pub struct WgpuGroupedSequence<'s> {
     device: &'s WgpuDevice,
     pass: wgpu::ComputePass<'s>,
     uniform_buffers: &'s mut UniformBuffers,
+}
+
+impl<'s> WgpuGroupedSequence<'s> {
+    pub(crate) const fn device(&self) -> &WgpuDevice {
+        self.device
+    }
+
+    /// Borrow the active pass for WGPU-specific consumer commands.
+    ///
+    /// The sequence retains the device provenance established by its owning
+    /// [`WgpuCommandStream`]. Raw commands remain subject to WGPU validation.
+    pub fn raw_pass_mut(&mut self) -> &mut wgpu::ComputePass<'s> {
+        &mut self.pass
+    }
 }
 
 impl KernelDevice for WgpuDevice {

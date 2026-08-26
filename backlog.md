@@ -68,6 +68,14 @@
   and hosted exact-head verification remain open. Independent blocker-only
   re-review is clean after correction of benchmark-oracle, bounded-wait,
   provider-neutral composition, and fallible host-allocation findings.
+  A consumer integration audit then exposed two warm-path costs hidden by the
+  first prepared shape: cloned operand handles now make plans independently
+  storable, pack/unpack binds those fixed buffers directly, and the two duplicate
+  full-volume allocations plus four per-transform copies are gone. The exact
+  static reductions are `8N` prepared bytes and `16N` warm-copy bytes; 11/11
+  focused and 231/231 full real-device WGPU tests pass, including dropped
+  source handles and in-pass consumer composition. Warning-denied all-target
+  WGPU Clippy and rustdoc pass; the minor-policy SemVer check passes 196/196.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
 
