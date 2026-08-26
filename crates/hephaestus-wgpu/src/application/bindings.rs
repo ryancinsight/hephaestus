@@ -2,9 +2,9 @@
 
 use smallvec::SmallVec;
 
-/// Common dispatches have at most four resources including their parameter
+/// Common dispatches have at most seven resources including their parameter
 /// uniform. Larger kernels spill to the heap without changing the API.
-pub(crate) const INLINE_BIND_GROUP_ENTRIES: usize = 4;
+pub(crate) const INLINE_BIND_GROUP_ENTRIES: usize = 8;
 
 /// Bind-group entries with inline storage for the common dispatch shapes.
 pub(crate) type BindGroupEntries<'a> =

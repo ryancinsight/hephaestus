@@ -27,6 +27,13 @@ pub(crate) type PipelineCache = Arc<
 /// storage can be recycled, including error and unwind exits.
 struct MappingLifecycle<'a>(&'a wgpu::Buffer);
 
+#[derive(Clone, Copy)]
+struct ReadbackRegion {
+    byte_offset: u64,
+    padded: u64,
+    byte_len: u64,
+}
+
 impl Drop for MappingLifecycle<'_> {
     #[inline]
     fn drop(&mut self) {
@@ -1067,6 +1074,54 @@ impl WgpuDevice {
         self.uniform_pool.clear();
     }
 
+    fn download_into<T: Pod>(
+        &self,
+        buffer: &WgpuBuffer<T>,
+        out: &mut [T],
+        timeout: Option<std::time::Duration>,
+    ) -> Result<()> {
+        validate_slice_alignment(out)?;
+        if out.len() != buffer.len {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: out.len(),
+                device_len: buffer.len,
+            });
+        }
+        if out.is_empty() || core::mem::size_of::<T>() == 0 {
+            return Ok(());
+        }
+
+        let byte_len = Self::byte_size::<T>(buffer.len)?;
+        let padded = Self::padded_size::<T>(buffer.len)?;
+        self.stage_and_read(
+            &buffer.buffer,
+            ReadbackRegion {
+                byte_offset: 0,
+                padded,
+                byte_len,
+            },
+            timeout,
+            "hephaestus-download",
+            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
+        )
+    }
+
+    /// Copy a device buffer into a host slice with an explicit completion deadline.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same validation and transfer errors as
+    /// [`ComputeDevice::download`], including [`HephaestusError::TransferFailed`]
+    /// when the device does not complete before `timeout`.
+    pub fn download_with_timeout<T: Pod>(
+        &self,
+        buffer: &WgpuBuffer<T>,
+        out: &mut [T],
+        timeout: std::time::Duration,
+    ) -> Result<()> {
+        self.download_into(buffer, out, Some(timeout))
+    }
+
     /// Copy a subset of a device buffer's contents into a host slice (device→host).
     ///
     /// The transfer starts at element `offset` in the device buffer and copies
@@ -1107,9 +1162,12 @@ impl WgpuDevice {
         let padded = Self::padded_size::<T>(out.len())?;
         self.stage_and_read(
             &buffer.buffer,
-            byte_offset,
-            padded,
-            byte_len,
+            ReadbackRegion {
+                byte_offset,
+                padded,
+                byte_len,
+            },
+            None,
             "hephaestus-download-sub",
             |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
         )
@@ -1254,27 +1312,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn download<T: Pod>(&self, buffer: &WgpuBuffer<T>, out: &mut [T]) -> Result<()> {
-        validate_slice_alignment(out)?;
-        if out.len() != buffer.len {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: out.len(),
-                device_len: buffer.len,
-            });
-        }
-        if out.is_empty() || core::mem::size_of::<T>() == 0 {
-            return Ok(());
-        }
-
-        let byte_len = Self::byte_size::<T>(buffer.len)?;
-        let padded = Self::padded_size::<T>(buffer.len)?;
-        self.stage_and_read(
-            &buffer.buffer,
-            0,
-            padded,
-            byte_len,
-            "hephaestus-download",
-            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
-        )
+        self.download_into(buffer, out, None)
     }
 
     fn download_owned<T: Pod>(&self, buffer: &WgpuBuffer<T>) -> Result<Vec<T>> {
@@ -1298,9 +1336,12 @@ impl ComputeDevice for WgpuDevice {
         let destination = out.spare_capacity_mut().as_mut_ptr().cast::<u8>();
         self.stage_and_read(
             &buffer.buffer,
-            0,
-            padded,
-            byte_len,
+            ReadbackRegion {
+                byte_offset: 0,
+                padded,
+                byte_len,
+            },
+            None,
             "hephaestus-download-owned",
             |bytes| {
                 // SAFETY: `try_reserve_exact` established writable capacity for
@@ -1416,12 +1457,16 @@ impl WgpuDevice {
     fn stage_and_read<R>(
         &self,
         src_buf: &wgpu::Buffer,
-        byte_offset: u64,
-        padded: u64,
-        byte_len: u64,
+        region: ReadbackRegion,
+        timeout: Option<std::time::Duration>,
         label: &str,
         consume: impl FnOnce(&[u8]) -> R,
     ) -> Result<R> {
+        let ReadbackRegion {
+            byte_offset,
+            padded,
+            byte_len,
+        } = region;
         let raw_staging = self.get_staging_buffer(padded)?;
         let staging_size = raw_staging.size();
         let staging = crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
@@ -1430,7 +1475,7 @@ impl WgpuDevice {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
         encoder.copy_buffer_to_buffer(src_buf, byte_offset, &staging, 0, padded);
-        self.queue.submit(Some(encoder.finish()));
+        let submission_index = self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..staging_size);
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -1441,14 +1486,19 @@ impl WgpuDevice {
         });
         let mapping = MappingLifecycle(&staging);
         self.device
-            .poll(wgpu::PollType::wait_indefinitely())
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission_index),
+                timeout,
+            })
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("device poll failed: {e:?}"),
             })?;
         receiver
-            .recv()
-            .map_err(|_| HephaestusError::TransferFailed {
-                message: "map_async callback dropped".to_string(),
+            .try_recv()
+            .map_err(|error| HephaestusError::TransferFailed {
+                message: format!(
+                    "map_async callback was not delivered after device completion: {error}"
+                ),
             })?
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("buffer mapping failed: {e:?}"),
@@ -1520,9 +1570,12 @@ mod tests {
         let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = device.stage_and_read(
                 buffer.raw(),
-                0,
-                padded,
-                byte_len,
+                ReadbackRegion {
+                    byte_offset: 0,
+                    padded,
+                    byte_len,
+                },
+                None,
                 "hephaestus-staging-unwind",
                 |_| panic!("intentional mapped-consumer unwind"),
             );

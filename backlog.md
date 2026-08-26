@@ -1,5 +1,101 @@
 # Backlog — hephaestus
 
+## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
+
+- Owner: Codex on `codex/hephaestus-fft-provider`; last update: 2026-08-26.
+- Lease: Codex owns `crates/hephaestus-wgpu/src/application/fft/`, the prepared
+  command binding in `application/stream.rs`, its module/re-export seams, the
+  focused benchmark, and this item's PM/CHANGELOG entries through the next
+  verified commit. The core contract increment is complete at the preceding
+  item commit.
+- Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
+  execution, exposes one prepared device-neutral contract for ranks one through
+  three, and provides the WGPU implementation needed by Kwavers. Kwavers then
+  selects `Leto` (Apollo CPU FFT over Leto arrays) or `Hephaestus` at the
+  operation boundary without fallback.
+- Scope: provider-neutral split-complex operands, shape/direction/normalization
+  validation, prepared caller-owned device dispatch, WGPU radix and Bluestein
+  execution, 1-D/2-D/3-D conformance, warm-allocation and device-residency
+  evidence, and the dependent Apollo/Kwavers cutover that deletes their
+  superseded WGPU FFT implementations.
+- Non-goals: moving FFT arithmetic into Leto; a Leto-to-Hephaestus dependency;
+  hidden accelerator-to-host fallback; real-to-complex packing; vendor-specific
+  consumer APIs; or a performance claim before matched end-to-end evidence.
+- Acceptance: ADR 0053 is accepted; the core contract validates ranks 1..=3,
+  nonzero checked shapes, dense split-complex storage, non-aliasing components,
+  and fixed forward/inverse normalization before mutation; prepared WGPU plans
+  execute power-of-two and non-power-of-two axes with no allocation, pipeline
+  compilation, host transfer, or capability probe in repeated dispatch; one
+  generic conformance suite covers 1-D/2-D/3-D analytical spectra, Apollo/Leto
+  differential results, inverse round trips, invalid shapes/layouts/aliases,
+  and unchanged outputs on preparation rejection; Kwavers exposes closed
+  `Leto`/`Hephaestus` selection and its PSTD path uses Hephaestus; Apollo and
+  Kwavers retain no consumer-owned WGPU FFT shader or plan after cutover.
+- Verification plan: warning-denied core/WGPU checks, configured Nextest,
+  doctests, SemVer checks for the additive provider surface, real-device WGPU
+  conformance, allocation instrumentation after plan preparation, codegen/source
+  residue scans, matched rank/shape benchmarks, independent architecture review,
+  and exact-head hosted provider plus Kwavers consumer CI.
+- Dependencies: Apollo PR #130 may merge independently; it does not change the
+  GPU provider contract. Consumer deletion waits for provider parity, not for a
+  compatibility adapter.
+- Local evidence: the core FFT planner and operation seam are warning-clean;
+  configured Nextest passes 106/106 `hephaestus-core` tests in 0.683 seconds,
+  including ranks one through three plus rank/layout/alias/address rejection;
+  warning-denied core rustdoc passes. Commands ran standalone against the
+  committed lockfile to avoid the Atlas development overlay rewriting Git
+  sources as local paths. The WGPU implementation now runs one rank-generic
+  axis plan for ranks one through three, prebinding pipelines, immutable
+  parameter buffers, bind groups, and dispatch grids at preparation. Direct-DFT
+  and inverse-round-trip device tests pass for radix and Bluestein shapes at all
+  three ranks; a sparse impulse at prime length 262,147 checks selected bins
+  against the closed form after range-reduced Bluestein phase preparation.
+  Prepared forward and inverse plans encode into one provider-neutral command
+  stream, cross-device dispatch is rejected, and the planner rejects dispatch
+  grids beyond the acquired device's actual workgroup limit. All 10 FFT tests
+  pass in an exact post-review 3.404 seconds; the full required-device WGPU
+  package passes 230/230 with no skips in 61.075 seconds before the final
+  composition-test strengthening. Warning-denied all-target Clippy and rustdoc
+  pass. Core and WGPU SemVer checks each pass all
+  196 applicable minor checks against the clean `b9ace296` baseline. The
+  required-device bounded benchmark smoke passes 1D 1,024, 1D 1,000 Bluestein,
+  1D 65,536, 2D 256x256, 3D 64x64x64, and 3D 32x32x33 Bluestein. The benchmark
+  calls the provider-neutral composition seam, checks independent forward DFT
+  bins under a depth-derived `gamma(k)` bound, and bounds submission, readback,
+  and CI process time. Optimized timing is not claimed because Cargo requests a
+  lockfile rewrite for the release profile despite locked standalone resolution;
+  Apollo/Leto differential and dispatch-allocation coverage, consumer deletion,
+  and hosted exact-head verification remain open. Independent blocker-only
+  re-review is clean after correction of benchmark-oracle, bounded-wait,
+  provider-neutral composition, and fallible host-allocation findings.
+  A consumer integration audit then exposed two warm-path costs hidden by the
+  first prepared shape: cloned operand handles now make plans independently
+  storable, pack/unpack binds those fixed buffers directly, and the two duplicate
+  full-volume allocations plus four per-transform copies are gone. The exact
+  static reductions are `8N` prepared bytes and `16N` warm-copy bytes; 11/11
+  focused and 231/231 full real-device WGPU tests pass, including dropped
+  source handles and in-pass consumer composition. Warning-denied all-target
+  WGPU Clippy and rustdoc pass; the minor-policy SemVer check passes 196/196.
+
+## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
+
+- Outcome: reduce WGPU package-gate latency by consolidating the current 26 test
+  binaries into the fewest cohesive harnesses and reusing one acquired logical
+  device per harness while preserving isolated buffers and parallel-test
+  determinism.
+- Scope/non-goals: integration-test topology, fixtures, and acquisition only; no
+  production device singleton, test deletion, workload reduction, timeout
+  increase, or assertion weakening.
+- Acceptance: profile attributes the 61.075-second/26-binary baseline, focused
+  tests prove independent buffer state under concurrent execution, and the
+  unchanged 230-test package suite completes materially below that baseline
+  under the committed Nextest budget.
+- Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
+  lifetime.
+- Status: todo; dependency: `HEPH-FFT-PROVIDER-1` provider commit. Audit evidence:
+  the main `contract.rs` harness already uses `OnceLock`; the remaining cost is
+  dominated by separate integration binaries and their independent devices.
+
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 
 - Owner: current Atlas session on `fix/hephaestus-book-reground-1`; the dirty

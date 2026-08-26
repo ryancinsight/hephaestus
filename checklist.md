@@ -2,6 +2,37 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
+
+- [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
+      duplicated WGPU kernels, dependency direction, and existing conformance.
+- [x] Record the provider ownership, rank-generic contract, staged cutover, and
+      no-fallback rule in ADR 0053.
+- [x] Add the device-neutral split-complex FFT plan, validation, and prepared
+      operation seam to `hephaestus-core` with boundary/adversarial tests.
+- [x] Port and consolidate WGPU radix/Bluestein execution into
+      `hephaestus-wgpu`, extending the current 3-D-only consumer surface to the
+      same 1-D/2-D/3-D implementation.
+- [ ] Add generic analytical, round-trip, Apollo/Leto differential, real-device,
+      allocation, and matched performance coverage.
+      Direct analytical, round-trip, real-device, prepared-resource, and
+      bounded benchmark-smoke coverage is complete. The benchmark calls the
+      provider-neutral encode seam and checks independent forward DFT bins with
+      a depth-derived error bound. Prepared plans own fixed operand handles;
+      static inspection and an in-pass real-device regression prove the removal
+      of duplicate volumes and warm copies. Apollo/Leto differential, explicit
+      device-allocation instrumentation, and matched timing remain. Post-change
+      evidence passes 11/11 focused FFT and 231/231 full real-device WGPU tests,
+      warning-denied all-target Clippy and rustdoc, and 196/196 minor-policy
+      SemVer checks against `origin/master`.
+- [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
+      the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
+      implementations.
+- [ ] Pass independent architecture review, focused/full gates, exact-head
+      hosted provider and consumer CI, then merge dependency-order commits.
+      The local provider blocker-only re-review is clean; hosted exact-head and
+      consumer closure remain.
+
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — Owner: current Atlas session
 
 - [x] Compare the affected chapters with the current core device, buffer,

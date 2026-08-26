@@ -78,5 +78,9 @@ harness = false
 name = "prepared_map_reduction"
 harness = false
 
+[[bench]]
+name = "fft_prepared"
+harness = false
+
 [lints]
 workspace = true

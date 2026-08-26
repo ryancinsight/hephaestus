@@ -1,6 +1,11 @@
 # ADR 0046 — Host reference device and the Leto implementor
 
 - Status: Accepted
+- Revision 2026-08-26: ADR 0053 exempts FFT from a `HostDevice` implementor.
+  Apollo already owns the CPU FFT over Leto and depends on Hephaestus for its
+  accelerator surface, so a `hephaestus-host` adapter over Apollo would create
+  a dependency cycle. FFT conformance instead uses an analytical direct-DFT
+  oracle and consumer-side Apollo/Leto differential tests.
 - Revision 2026-08-02: Accepted on delivery of HostDecompositionOps — the
   full decomposition conformance suite passes on the host pair, joining the
   transfer clauses shipped with `HostDevice`.
@@ -45,8 +50,11 @@ across a CPU reference implementor, and keeps the per-backend
    and the remaining hand-written `matches_leto_reference` tests migrate
    to instantiations as ADR 0039 §3 requires.
 5. **Staged growth.** Other seam families (elementwise, reductions, scans,
-   products) gain host implementors only as consumers or clauses need
-   them; nothing speculative ships.
+   products) gain host implementors only as consumers or clauses need them;
+   nothing speculative ships. A family whose canonical CPU implementation
+   already depends on Hephaestus uses an independent analytical oracle plus
+   consumer differential coverage instead of introducing a dependency cycle.
+   ADR 0053 applies this exception to FFT.
 
 ## Alternatives
 
@@ -65,8 +73,9 @@ across a CPU reference implementor, and keeps the per-backend
 
 ## Consequences
 
-Every conformance module gains an optional CPU reference instantiation
-path; SUBSTRATE-003's residual reduces to the adapter plus the
-differential-migration sweep; and future substrate pairs (ADR 0039's
-other obligations) have the pattern: role trait in core, reference
-implementor in hephaestus-host, GPU implementors per vendor crate.
+Conformance modules gain a CPU reference instantiation when dependency
+direction permits it. SUBSTRATE-003's residual reduces to the adapter plus the
+differential-migration sweep. Future substrate pairs normally use a role trait
+in core, a reference implementor in hephaestus-host, and GPU implementors per
+vendor crate; a dependency cycle requires an explicitly recorded analytical
+oracle exception rather than duplicated CPU arithmetic.

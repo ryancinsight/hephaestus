@@ -12,6 +12,8 @@ pub(crate) mod pipeline;
 
 /// Provider-owned three-dimensional acoustic FDTD kernels.
 pub mod fdtd;
+/// Provider-owned dense complex Fourier transforms.
+pub mod fft;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 
