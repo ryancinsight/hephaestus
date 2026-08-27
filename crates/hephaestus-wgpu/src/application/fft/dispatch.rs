@@ -8,8 +8,9 @@ use crate::{
 };
 
 use super::{
+    kernel::FusedParams,
     pipelines::FftPipelines,
-    plan::WgpuFftPlan,
+    plan::{FftWorkspace, WgpuFftPlan},
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
 };
@@ -34,6 +35,14 @@ fn product_grid(left: u32, right: u32) -> Result<DispatchGrid> {
 }
 
 impl WgpuFftPlan {
+    fn workspace(&self) -> Result<&FftWorkspace> {
+        self.workspace
+            .as_ref()
+            .ok_or_else(|| hephaestus_core::HephaestusError::DispatchFailed {
+                message: "staged FFT command requires prepared workspace".to_owned(),
+            })
+    }
+
     fn bind_pack(
         &self,
         device: &WgpuDevice,
@@ -42,9 +51,10 @@ impl WgpuFftPlan {
         components: FftComponents<'_>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
+        let workspace = self.workspace()?;
         let bindings = [
-            Binding::read_write(&self.workspace_real),
-            Binding::read_write(&self.workspace_imaginary),
+            Binding::read_write(&workspace.real),
+            Binding::read_write(&workspace.imaginary),
             Binding::read_write(components.real),
             Binding::read_write(components.imaginary),
         ];
@@ -64,9 +74,10 @@ impl WgpuFftPlan {
         components: FftComponents<'_>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
+        let workspace = self.workspace()?;
         let bindings = [
-            Binding::read_write(&self.workspace_real),
-            Binding::read_write(&self.workspace_imaginary),
+            Binding::read_write(&workspace.real),
+            Binding::read_write(&workspace.imaginary),
             Binding::read_write(components.real),
             Binding::read_write(components.imaginary),
         ];
@@ -88,9 +99,10 @@ impl WgpuFftPlan {
         if stages.fft_len == 0 {
             return Ok(());
         }
+        let workspace = self.workspace()?;
         let bindings = [
-            Binding::read_write(&self.workspace_real),
-            Binding::read_write(&self.workspace_imaginary),
+            Binding::read_write(&workspace.real),
+            Binding::read_write(&workspace.imaginary),
         ];
         let element_grid = product_grid(stages.batch_count, stages.fft_len)?;
         if stages.radix_four {
@@ -140,15 +152,16 @@ impl WgpuFftPlan {
         inverse: bool,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
+        let workspace = self.workspace()?;
         let kernel_bindings = [
-            Binding::read_write(&self.workspace_real),
-            Binding::read_write(&self.workspace_imaginary),
+            Binding::read_write(&workspace.real),
+            Binding::read_write(&workspace.imaginary),
             Binding::read(&chirp.real_kernel),
             Binding::read(&chirp.imaginary_kernel),
         ];
         let direct_bindings = [
-            Binding::read_write(&self.workspace_real),
-            Binding::read_write(&self.workspace_imaginary),
+            Binding::read_write(&workspace.real),
+            Binding::read_write(&workspace.imaginary),
             Binding::read(&chirp.direct_real),
             Binding::read(&chirp.direct_imaginary),
         ];
@@ -199,6 +212,53 @@ impl WgpuFftPlan {
         Ok(())
     }
 
+    fn bind_fused(
+        &self,
+        device: &WgpuDevice,
+        pipelines: &FftPipelines,
+        axis: Axis,
+        inverse: bool,
+        components: FftComponents<'_>,
+    ) -> Result<WgpuBoundDispatch> {
+        let pipeline = pipelines.fused.as_ref().ok_or_else(|| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: "fused FFT strategy requires the prepared fused pipeline".to_owned(),
+            }
+        })?;
+        let twiddle = self.fused_twiddle.as_ref().ok_or_else(|| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: "fused FFT strategy requires prepared twiddle roots".to_owned(),
+            }
+        })?;
+        let pack = self.pack[axis.shader_index() as usize];
+        let max_grid_x = device.inner().limits().max_compute_workgroups_per_dimension;
+        let grid_x = pack.batch_count.min(max_grid_x);
+        let grid_y = pack.batch_count.div_ceil(grid_x);
+        let params = FusedParams {
+            n: pack.n,
+            log2n: pack.n.trailing_zeros(),
+            inverse: u32::from(inverse),
+            batch_count: pack.batch_count,
+            nx: pack.nx,
+            ny: pack.ny,
+            nz: pack.nz,
+            axis: pack.axis,
+            batch_grid_x: grid_x,
+            padding: [0; 3],
+        };
+        let bindings = [
+            Binding::read_write(components.real),
+            Binding::read_write(components.imaginary),
+            Binding::read(twiddle),
+        ];
+        device.bind(
+            pipeline,
+            &bindings,
+            &params,
+            DispatchGrid::new(grid_x, grid_y, 1),
+        )
+    }
+
     fn bind_axis(
         &self,
         device: &WgpuDevice,
@@ -208,13 +268,18 @@ impl WgpuFftPlan {
         components: FftComponents<'_>,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
-        commands.push(self.bind_pack(device, pipelines, axis, components)?);
         let index = axis.shader_index() as usize;
         match self.strategy[index] {
-            AxisStrategy::Radix2 => {
+            AxisStrategy::FusedRadix2 => {
+                commands.push(self.bind_fused(device, pipelines, axis, inverse, components)?);
+                return Ok(());
+            }
+            AxisStrategy::StagedRadix2 => {
+                commands.push(self.bind_pack(device, pipelines, axis, components)?);
                 self.bind_radix(device, pipelines, &self.stages[index], commands)?;
             }
             AxisStrategy::ChirpZ { .. } => {
+                commands.push(self.bind_pack(device, pipelines, axis, components)?);
                 let chirp = self.chirp[index].as_ref().ok_or_else(|| {
                     hephaestus_core::HephaestusError::DispatchFailed {
                         message: format!(

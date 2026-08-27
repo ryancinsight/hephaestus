@@ -18,6 +18,17 @@
   WGPU plan also encodes into a provenance-carrying consumer sequence so
   Kwavers PSTD can retain one pass across adjacent kernels and FFT stages
   without accepting a separately asserted device identity.
+- Revision 2026-08-26: The matched 256x128x128 lossless PSTD workload exposed
+  the staged radix plan as structurally unsuitable for bounded power-of-two
+  axes: six forward/inverse pairs took 13.810 ms median, exceeding Kwavers's
+  complete 10.09 ms step before any physics kernels ran. WGPU plans now select
+  a device-limit-checked fused workgroup radix for power-of-two axes up to 1,024
+  elements. Each active axis becomes one dispatch with no pack/unpack passes or
+  full-volume workspace; singleton axes emit no command. The same benchmark is
+  7.9974 ms median (42.1% lower), and a forward/inverse plan pair replaces 64
+  MiB of full-volume workspace at this shape with two 4 KiB root tables. The
+  staged radix and Bluestein strategies remain for unsupported lengths or
+  limits.
 - Board item: `HEPH-FFT-PROVIDER-1`
 - Cross-repository drivers: Apollo GPU FFT and Kwavers PSTD/backend selection
 - Change class: `[arch] [minor]` in Hephaestus; breaking consumer cleanup in
@@ -76,7 +87,12 @@ model.
 
 `hephaestus-wgpu` is the first executable provider. It consolidates Apollo's
 general radix/Bluestein implementation and Kwavers's PSTD requirements into one
-rank-generic axis-pass plan. One-dimensional and two-dimensional transforms are
+rank-generic axis-pass plan. Power-of-two axes up to 1,024 elements use one
+workgroup-local dispatch when the acquired device exposes the required 64
+invocations, 12 KiB workgroup storage, and dispatch grid. Other power-of-two
+axes use the staged global-memory radix plan; arbitrary axes use Bluestein.
+Singleton axes are identity operations and emit no command or workspace.
+One-dimensional and two-dimensional transforms are
 not wrappers around a three-dimensional public API: all ranks instantiate the
 same axis planner, and only their actual axes are dispatched. All axis passes
 are encoded into one command stream submission. Bluestein coefficient
@@ -108,9 +124,11 @@ Hephaestus keeps accelerator FFT execution.
   provider and Kwavers's second implementation would remain tempting.
 - Move all FFTs into Leto. Rejected because Leto is below Apollo and owns layout,
   not transform arithmetic or accelerator APIs.
-- Keep the PSTD kernel as a specialized fast path. Rejected unless a matched
-  benchmark later proves a workload contract the generic provider cannot
-  represent; retaining it now creates two authorities before such evidence.
+- Keep the PSTD kernel as a consumer-owned specialized fast path. Rejected after
+  the matched benchmark proved a workgroup-local requirement that the generic
+  provider can represent as an internal axis strategy. The optimized kernel now
+  lives under the same prepared rank-generic plan and conformance suite as the
+  staged radix and Bluestein strategies.
 - Permit Hephaestus-to-Leto fallback. Rejected because backend identity would
   not describe the provider that executed the transform and device residency
   would be lost silently.
@@ -131,8 +149,10 @@ unsupported capability until that provider implements this seam.
 Ownership movement alone establishes no speed claim. The executable plan's
 static resource delta is exact: direct fixed-buffer binding removes two `N`
 element `f32` allocations and four `N` element device copies per dispatch.
-Runtime claims still require identical input/output addresses, prebuilt plans,
-device-resident timed regions, allocation counts, and confidence intervals.
+The matched PSTD instrument holds the input/output addresses and prebuilt plans
+fixed, records all six pairs into one device-resident timed command stream, and
+reports Criterion confidence intervals. Complete-step parity remains a consumer
+cutover gate because the provider benchmark excludes Kwavers physics kernels.
 
 ## Verification
 
@@ -160,9 +180,12 @@ device-resident timed regions, allocation counts, and confidence intervals.
 - Matched benchmarks compare Apollo/Leto and Hephaestus end to end at
   cache-/device-relevant shapes, reporting medians and confidence intervals;
   no benchmark changes its workload or statistical acceptance to obtain a win.
-  Each instrument first checks independent forward DFT bins with a standard
-  `gamma(k)` bound derived from radix/Bluestein depth, so an identity/no-op path
-  cannot satisfy validation.
+  Small and medium instruments first check independent forward DFT bins with a
+  standard `gamma(k)` bound derived from radix/Bluestein depth. The four-million
+  element PSTD case uses an inverse round trip to avoid an O(N) trigonometric
+  oracle in the benchmark binary; the same fused rank paths remain covered by
+  direct analytical tests at smaller shapes, so an identity/no-op path cannot
+  satisfy the combined validation.
 - Residue scans prove Apollo and Kwavers retain no WGPU FFT shader, plan,
   dispatch helper, or compatibility re-export after cutover.
 - Warning-denied checks, configured Nextest, doctests, SemVer checks,

@@ -27,8 +27,14 @@ Sprint target: 0.18.0. Phase: Closure.
       SemVer checks against `origin/master`.
       Provider PR #222 merged as `cfadc373`; the next provider increment adds a
       matched 256x128x128 repeated-pair workload against Kwavers's measured
-      10.09 ms/step pre-cutover baseline and removes any provider-side workspace
-      duplication it exposes before the consumer kernel is deleted.
+      10.09 ms/step pre-cutover baseline. The staged plan measured 13.810 ms and
+      was rejected. The fused workgroup radix measures 7.9974 ms (42.1% lower),
+      emits one dispatch per active axis, removes 64 MiB of paired-plan workspace,
+      and passes direct-oracle rank plus singleton/no-workspace tests. The full
+      required-device WGPU package passes 233/233 with no skips in 62.109
+      seconds; the separately tracked test-topology item owns reducing that
+      runtime without weakening coverage or budgets. The full Kwavers step
+      remains the deletion gate.
 - [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
       the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
       implementations.

@@ -16,6 +16,7 @@ use hephaestus_wgpu::{
 use leto::Layout;
 
 const GPU_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+const PSTD_LOSSLESS_TRANSFORM_PAIRS: u64 = 6;
 // A radix stage performs at most one complex multiply and a butterfly per
 // component. Sixteen rounded real operations conservatively covers that work;
 // Bluestein counts its two convolution FFTs and three pointwise passes below.
@@ -171,7 +172,17 @@ struct PreparedValidation<'view, const R: usize> {
     shape: [usize; R],
 }
 
-fn validate_prepared<const R: usize>(device: &WgpuDevice, validation: PreparedValidation<'_, R>) {
+#[derive(Clone, Copy)]
+enum Validation {
+    ForwardAndRoundTrip,
+    RoundTrip,
+}
+
+fn validate_prepared<const R: usize>(
+    device: &WgpuDevice,
+    validation: PreparedValidation<'_, R>,
+    mode: Validation,
+) {
     let PreparedValidation {
         forward,
         inverse,
@@ -185,12 +196,13 @@ fn validate_prepared<const R: usize>(device: &WgpuDevice, validation: PreparedVa
     let mut stream = device.stream().expect("invariant: validation stream");
     ops.encode_fft(device, forward, &mut stream)
         .expect("invariant: validation forward encoding");
-    stream
-        .submit_with_timeout(GPU_WAIT_TIMEOUT)
-        .expect("invariant: bounded validation forward submission");
-    assert_forward_bins(device, real, imaginary, real_host, imaginary_host, shape);
-
-    let mut stream = device.stream().expect("invariant: validation stream");
+    if matches!(mode, Validation::ForwardAndRoundTrip) {
+        stream
+            .submit_with_timeout(GPU_WAIT_TIMEOUT)
+            .expect("invariant: bounded validation forward submission");
+        assert_forward_bins(device, real, imaginary, real_host, imaginary_host, shape);
+        stream = device.stream().expect("invariant: validation stream");
+    }
     ops.encode_fft(device, inverse, &mut stream)
         .expect("invariant: validation inverse encoding");
     stream
@@ -205,6 +217,8 @@ fn bench_shape<const R: usize>(
     device: &WgpuDevice,
     label: &str,
     shape: [usize; R],
+    transform_pairs: u64,
+    validation: Validation,
 ) {
     let elements = shape.into_iter().product();
     let real_host = (0..elements)
@@ -249,26 +263,35 @@ fn bench_shape<const R: usize>(
             imaginary_host: &imaginary_host,
             shape,
         },
+        validation,
     );
 
     group.throughput(Throughput::Elements(
         u64::try_from(elements)
             .expect("benchmark element count fits u64")
-            .saturating_mul(2),
+            .checked_mul(2)
+            .and_then(|elements| elements.checked_mul(transform_pairs))
+            .expect("benchmark throughput element count fits u64"),
     ));
-    group.bench_with_input(BenchmarkId::new("forward_inverse", label), &(), |b, ()| {
-        b.iter(|| {
-            let mut stream = device.stream().expect("invariant: benchmark stream");
-            ops.encode_fft(device, &forward, &mut stream)
-                .expect("invariant: forward encoding");
-            ops.encode_fft(device, &inverse, &mut stream)
-                .expect("invariant: inverse encoding");
-            stream
-                .submit_with_timeout(GPU_WAIT_TIMEOUT)
-                .expect("invariant: bounded benchmark submission");
-            black_box((real.raw(), imaginary.raw()))
-        });
-    });
+    group.bench_with_input(
+        BenchmarkId::new(format!("forward_inverse_x{transform_pairs}"), label),
+        &(),
+        |b, ()| {
+            b.iter(|| {
+                let mut stream = device.stream().expect("invariant: benchmark stream");
+                for _ in 0..transform_pairs {
+                    ops.encode_fft(device, &forward, &mut stream)
+                        .expect("invariant: forward encoding");
+                    ops.encode_fft(device, &inverse, &mut stream)
+                        .expect("invariant: inverse encoding");
+                }
+                stream
+                    .submit_with_timeout(GPU_WAIT_TIMEOUT)
+                    .expect("invariant: bounded benchmark submission");
+                black_box((real.raw(), imaginary.raw()))
+            });
+        },
+    );
 }
 
 fn prepared_fft(c: &mut Criterion) {
@@ -283,12 +306,66 @@ fn prepared_fft(c: &mut Criterion) {
         }
     };
     let mut group = c.benchmark_group("prepared_fft");
-    bench_shape(&mut group, &device, "1d_1024", [1024]);
-    bench_shape(&mut group, &device, "1d_1000_bluestein", [1000]);
-    bench_shape(&mut group, &device, "1d_65536", [65_536]);
-    bench_shape(&mut group, &device, "2d_256x256", [256, 256]);
-    bench_shape(&mut group, &device, "3d_64x64x64", [64, 64, 64]);
-    bench_shape(&mut group, &device, "3d_32x32x33_bluestein", [32, 32, 33]);
+    bench_shape(
+        &mut group,
+        &device,
+        "1d_1024",
+        [1024],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    bench_shape(
+        &mut group,
+        &device,
+        "1d_1000_bluestein",
+        [1000],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    bench_shape(
+        &mut group,
+        &device,
+        "1d_65536",
+        [65_536],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    bench_shape(
+        &mut group,
+        &device,
+        "2d_256x256",
+        [256, 256],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    bench_shape(
+        &mut group,
+        &device,
+        "3d_64x64x64",
+        [64, 64, 64],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    bench_shape(
+        &mut group,
+        &device,
+        "3d_32x32x33_bluestein",
+        [32, 32, 33],
+        1,
+        Validation::ForwardAndRoundTrip,
+    );
+    // A lossless PSTD step transforms pressure for three velocity gradients
+    // and three velocity components for density divergence. The large case
+    // uses the independently verified round trip because a direct DFT bin is
+    // O(N) trigonometric work per sampled bin at this four-million-point size.
+    bench_shape(
+        &mut group,
+        &device,
+        "3d_256x128x128_pstd_lossless",
+        [256, 128, 128],
+        PSTD_LOSSLESS_TRANSFORM_PAIRS,
+        Validation::RoundTrip,
+    );
     group.finish();
 }
 
