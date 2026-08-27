@@ -256,18 +256,17 @@ pub(crate) use backend_reduction;
 pub(crate) use backend_scalar;
 pub(crate) use backend_unary;
 
-/// Clone a CUDA buffer via a full host round-trip (download then upload).
-///
-/// Cost: two host<->device transfers of `buffer.len() * 4` bytes each,
-/// staged through host memory. Superseded by a device-side copy when
-/// `CommandStream::copy` lands in the CUDA backend.
+/// Clone a CUDA buffer on-device: allocate an equal-length destination and
+/// issue the backend's device-to-device copy, complete before returning.
+/// No host staging occurs.
 pub(crate) fn clone_cuda_buffer(
     device: &CudaDevice,
     buffer: &CudaBuffer<f32>,
 ) -> hephaestus_core::Result<BackendBuffer> {
-    let mut host = vec![0.0f32; buffer.len()];
-    device.download(buffer, &mut host)?;
-    device
-        .upload(&host)
-        .map(|buffer| BackendBuffer::Cuda(Arc::new(buffer)))
+    // Uninitialized allocation is sound here: `copy_buffer` overwrites every
+    // element before the clone is observable, per its complete-on-return
+    // contract.
+    let clone = device.alloc_uninitialized::<f32>(buffer.len())?;
+    device.copy_buffer(buffer, &clone)?;
+    Ok(BackendBuffer::Cuda(Arc::new(clone)))
 }
