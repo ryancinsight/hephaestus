@@ -43,10 +43,10 @@ impl<T: Pod> PinnedHostBuffer<T> {
     ///
     /// # Safety
     ///
-    /// The caller must fully initialize the buffer (e.g. via `cuMemcpy*`)
-    /// before reading through `Deref`/`DerefMut`. The zero-fill from
-    /// [`zeroed`](Self::zeroed) is skipped, so uninitialized bytes produce
-    /// undefined values on read.
+    /// The caller must fully initialize all `len` elements (e.g. as the
+    /// destination of a completed `cuMemcpy*` device-to-host transfer, or by
+    /// writing every element through the raw pointer) before any read through
+    /// `Deref`/`DerefMut`; until then the contents are uninitialized bytes.
     ///
     /// # Errors
     /// Returns [`HephaestusError::AllocationFailed`] if the byte size
@@ -106,10 +106,12 @@ impl<T: Pod> core::ops::Deref for PinnedHostBuffer<T> {
         if self.len == 0 {
             return &[];
         }
-        // SAFETY: `ptr` is non-null (the `len == 0` case returns above),
-        // points to `len` initialized `T` values (zeroed at construction,
-        // subsequently only ever overwritten with valid `T` bytes via
-        // `DerefMut`/`cuMemcpy*` into this same allocation), and this shared
+        // SAFETY: `ptr` is non-null (the `len == 0` case returns above) and
+        // points to `len` values of `T` that the caller fully initialized
+        // before this read, per [`uninitialized`](Self::uninitialized)'s
+        // caller-upheld contract (every construction site completes its
+        // `cuMemcpy*` writes into the allocation before any `Deref`);
+        // `T: Pod` admits every initialized bit pattern, and this shared
         // borrow's lifetime is tied to `&self`.
         unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
     }
@@ -121,7 +123,8 @@ impl<T: Pod> core::ops::DerefMut for PinnedHostBuffer<T> {
         if self.len == 0 {
             return &mut [];
         }
-        // SAFETY: as `deref` above, with unique access via `&mut self`.
+        // SAFETY: as `deref` above (caller-upheld full initialization before
+        // any read), with unique access via `&mut self`.
         unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 }
