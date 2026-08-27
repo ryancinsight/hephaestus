@@ -21,6 +21,124 @@
   the branch; each fix an atomic commit with the Item trailer; PR opened
   against master for integrator review (no self-merge).
 
+## HEPH-CUDA-LAUNCH-DRAIN-REEVAL [patch] [perf] — todo
+
+- Owner: unclaimed.
+- Outcome: remove — or re-justify against current evidence — the Windows
+  per-launch `cuCtxSynchronize` drain in
+  `crates/hephaestus-cuda/src/application/pipeline.rs:250-260`.
+- Evidence (audit 2026-08-27): the drain's justification cites managed-memory
+  faults, but the backend now allocates only `cuMemAlloc_v2`
+  (infrastructure/device.rs `alloc_bytes`, :381) and the managed path was
+  removed (KS-8 closure). The drain serializes every launch and blocks CU-P1
+  stream overlap (KS-7).
+- Scope: the pipeline launch path only; allocation strategy is
+  HEPH-CUDA-STREAM-ORDERED-ALLOC's concern.
+- Acceptance: drain removed with kernel correctness and stress tests green on
+  a Windows CUDA host, or a re-derived justification recorded at the drain
+  site; either way the decision cites the run evidence.
+- Dependencies: a Windows host with a runtime CUDA device — the current
+  development machine compile-gates CUDA only, so removal cannot be validated
+  here.
+
+## HEPH-CUDA-STREAM-ORDERED-ALLOC [minor] [perf] — todo
+
+- Owner: unclaimed.
+- Outcome: device-buffer pooling or stream-ordered allocation for the CUDA
+  backend so per-op alloc/free traffic stops serializing the device.
+- Evidence (audit 2026-08-27): every op allocates `cuMemAlloc_v2` and frees
+  `cuMemFree_v2` fresh (application/elementwise/unary.rs:99;
+  application/reduction.rs:92, :121 — a fresh buffer per reduction pass);
+  each free is an implicit device-wide synchronization.
+- Direction: `cuMemAllocAsync`/`cuMemFreeAsync` on the legacy stream, or a
+  sharded pool mirroring the wgpu backend's.
+- Constraint (soundness): free-is-implicit-sync is currently the argument for
+  dropping buffers referenced by in-flight kernels
+  (application/pipeline.rs:206-213 with infrastructure/buffer.rs:82-98). Any
+  move to async frees must first make that invariant API-contractual
+  (event-ordered frees), not incidental.
+- Acceptance: alloc/free no longer device-wide syncs on hot paths, drop
+  soundness argument recorded at the free site, differential and stress tests
+  green on a CUDA host.
+
+## HEPH-WGPU-DEFAULT-DEADLINES [minor] — todo
+
+- Owner: unclaimed.
+- Outcome: a decided, enforced deadline policy for the wgpu default wait
+  paths.
+- Evidence (audit 2026-08-27): `synchronize`, `download`, and
+  `download_owned` default paths in
+  `crates/hephaestus-wgpu/src/infrastructure/device.rs` wait indefinitely
+  (`timeout: None`); bounded forms exist but nothing routes defaults through
+  a deadline, so a TDR/driver hang blocks the host forever — the unbounded
+  wait the bounded-resource rule prohibits.
+- Acceptance: an ADR fixing the default bound (value derivation, timeout
+  error semantics, opt-out surface if any) and the default paths routed
+  through it; hang-path behavior covered by a test with an injected
+  never-completing wait or documented as untestable with the limit stated.
+
+## HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf] — todo
+
+- Owner: unclaimed.
+- Outcome: age/watermark decay for the wgpu staging pool so burst allocations
+  stop parking memory for the device's lifetime.
+- Evidence (audit 2026-08-27):
+  `crates/hephaestus-wgpu/src/infrastructure/device.rs` —
+  `STAGING_POOL_MAX_BYTES = 512 MiB` (:58) retained for device lifetime with
+  no age/decay/watermark trim; only the manual `clear_transient_pools`
+  (:1072) releases it. One readback burst parks hundreds of MiB of MAP_READ
+  memory in long-lived sessions.
+- Acceptance: a decay/watermark policy with derivation for its constants,
+  steady-state memory evidence (burst then idle returns to the watermark),
+  and pool-hit-rate evidence showing no regression on sustained readback.
+
+## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — todo
+
+- Owner: unclaimed.
+- Outcome: split packed factorization outputs on-device in the Python
+  bindings instead of the host round-trip.
+- Evidence (audit 2026-08-27): `crates/hephaestus-python/src/decomposition.rs`
+  lu/full_piv_lu (and the qr host-factor uploads) download the packed factor,
+  split on host (`split_packed_lu`), and re-upload L and U: three full-matrix
+  PCIe transfers per factorization. A device-side strided unpack (triangular
+  masks writing L and U from the packed buffer) keeps the factors resident.
+- Acceptance: no host staging in the factor-split path on either backend,
+  value-semantic parity with `split_packed_lu` in differential tests, and
+  transfer-count evidence (before/after) attached.
+
+## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — todo (external blocker)
+
+- Owner: unclaimed; root cause is upstream (cuda-oxide), outside the
+  allowlist — external integration requirement.
+- Outcome: replace the per-row 2-D region-copy workaround with one
+  `cuMemcpy2DAsync` per region once upstream fixes the ABI.
+- Evidence (audit 2026-08-27):
+  `crates/hephaestus-cuda/src/application/decomposition/region.rs` enqueues
+  per-row 1-D copies because cuda-oxide 0.4.0 generates `size_t` as
+  `c_ulong`, making `CUDA_MEMCPY2D` layout-incompatible with the CUDA driver
+  ABI on Windows/MSVC (module doc records this).
+- Re-open trigger: a cuda-oxide release with a corrected `CUDA_MEMCPY2D`
+  layout on Windows/MSVC; verify the struct layout against the driver header
+  before adopting.
+
+## HEPH-CUDA-LIMITS-SEMANTICS [minor] — todo
+
+- Owner: unclaimed.
+- Outcome: `max_buffer_size` reports a stable per-device capacity, with free
+  memory exposed as a separate runtime query.
+- Evidence (audit 2026-08-27):
+  `crates/hephaestus-cuda/src/infrastructure/device.rs:556` sets
+  `max_buffer_size: free_bytes as u64` — the free-VRAM snapshot at
+  acquisition, stale after any allocation and semantically different from
+  wgpu's hard per-buffer limit, so `require_limits` (:267-269) can
+  spuriously reject on a busy device.
+- Direction: report total device memory (already queried via
+  `current_memory_info`, device.rs:653) as the limit; expose free memory as
+  a runtime query.
+- Dependencies: a consumer sweep (athena, coeus) before the semantic change —
+  callers currently reading `max_buffer_size` as "free now" must migrate to
+  the runtime query in the same co-evolution unit.
+
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
 - Owner: Codex on `codex/hephaestus-fft-pstd-throughput`; last update:

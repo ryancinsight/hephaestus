@@ -38,15 +38,9 @@ impl PyCsrMatrix {
             Layout::c_contiguous([rows, cols]).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let device = arr.device.clone();
         let buffer = arr.buffer.clone();
-        let len = arr.buffer.len();
 
         let host_data = py
-            .detach(move || {
-                let mut host_data = vec![0.0f32; len];
-                device
-                    .download_f32(&buffer, &mut host_data)
-                    .map(|()| host_data)
-            })
+            .detach(move || device.download_f32(&buffer))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let view = leto::ArrayView2::new(layout, &host_data);

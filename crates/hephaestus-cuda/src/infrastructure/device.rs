@@ -80,6 +80,48 @@ impl Drop for CudaContext {
     }
 }
 
+/// Snapshot of the context current on this thread, for restoring around a
+/// drop-time bind.
+///
+/// RAII drops (`CudaBuffer`, `PinnedHostBuffer`, `SafeCachedKernel`) must
+/// bind their owned allocation's context to free it. Leaving that context
+/// current would silently retarget the dropping thread: a drop running
+/// between a consumer's `device.bind()` and a raw-handle driver call (e.g.
+/// `cuLaunchKernel` over `CudaBuffer::raw`) would redirect that call to the
+/// dropped allocation's context. Capture before the bind, restore after,
+/// so drops stay invisible to the thread's context state.
+pub(crate) struct CurrentContext(cuda_oxide::sys::CUcontext);
+
+impl CurrentContext {
+    /// Capture the context current on this thread (null when none is bound).
+    ///
+    /// Returns `None` when the driver query itself fails; the caller then
+    /// skips restoration, since no trustworthy prior state exists.
+    pub(crate) fn capture() -> Option<Self> {
+        let mut raw: cuda_oxide::sys::CUcontext = std::ptr::null_mut();
+        // SAFETY: `raw` is a valid out-pointer for one context handle; the
+        // call only reads thread-local driver state.
+        let status = unsafe { cuda_oxide::sys::cuCtxGetCurrent(&mut raw) };
+        debug_assert_eq!(status, 0, "cuCtxGetCurrent failed with code {status}");
+        (status == 0).then_some(Self(raw))
+    }
+
+    /// Restore the captured context as this thread's current context.
+    pub(crate) fn restore(self) {
+        // SAFETY: `self.0` is either null (legally clears the current
+        // context) or an opaque handle that was current on this same thread
+        // at capture time; the handle is never dereferenced in Rust, and the
+        // driver validates it — a context destroyed since capture yields an
+        // error status, not undefined behavior. Setting a context current
+        // does not transfer ownership.
+        let status = unsafe { cuda_oxide::sys::cuCtxSetCurrent(self.0) };
+        debug_assert_eq!(
+            status, 0,
+            "cuCtxSetCurrent(restore) failed with code {status}"
+        );
+    }
+}
+
 /// An acquired CUDA device.
 ///
 /// Holds a cuda-oxide-created context for the selected device ordinal.
@@ -899,7 +941,12 @@ impl ComputeDevice for CudaDevice {
 }
 
 impl CudaDevice {
-    fn synchronize_default_stream(&self) -> Result<()> {
+    /// Wait for every operation enqueued on the legacy/null default stream.
+    ///
+    /// Crate-internal barrier for async-copy paths whose enqueued transfers
+    /// must not outlive their enclosing frame (2-D region copies drain it on
+    /// every exit, error exits included).
+    pub(crate) fn synchronize_default_stream(&self) -> Result<()> {
         self.bind()?;
         // SAFETY: this device's context is current after `bind`; a null stream
         // handle denotes the default stream used by synchronous-form copies.

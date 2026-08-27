@@ -67,15 +67,18 @@ pub(crate) fn checked_submit(
     label: &'static str,
     encoder: wgpu::CommandEncoder,
 ) -> Result<()> {
-    checked_submit_with_timeout(device, label, encoder, None)
+    checked_submit_with_timeout(device, label, encoder, None).map(|_| ())
 }
 
+/// Submit `encoder` under scoped error detection, returning the submission's
+/// queue index so callers can wait on exactly this submission instead of
+/// draining the whole queue.
 pub(crate) fn checked_submit_with_timeout(
     device: &WgpuDevice,
     label: &'static str,
     encoder: wgpu::CommandEncoder,
     timeout: Option<std::time::Duration>,
-) -> Result<()> {
+) -> Result<wgpu::SubmissionIndex> {
     let out_of_memory = device
         .inner()
         .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
@@ -92,7 +95,7 @@ pub(crate) fn checked_submit_with_timeout(
         device
             .inner()
             .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission_index),
+                submission_index: Some(submission_index.clone()),
                 timeout: Some(timeout),
             })
             .map_err(|error| HephaestusError::DispatchFailed {
@@ -115,5 +118,5 @@ pub(crate) fn checked_submit_with_timeout(
             message: format!("{label} submission failed: {error}"),
         });
     }
-    Ok(())
+    Ok(submission_index)
 }
