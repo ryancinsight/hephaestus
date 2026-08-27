@@ -1,5 +1,26 @@
 # Backlog — hephaestus
 
+## HEPH-QUALITY-WAVE-2026-08-27 — Audit-adjudicated safety/perf fixes [patch] — in-progress
+
+- Integrator: claude-fable session 03d80d33 subagent; last-update: 2026-08-27.
+- Lease: crates/hephaestus-cuda/src/application/decomposition/region.rs,
+  crates/hephaestus-cuda/src/infrastructure/{pinned.rs,buffer.rs,compiler.rs},
+  crates/hephaestus-python/src/{backend.rs,array.rs,decomposition.rs,
+  spectral.rs,sparse.rs}, crates/hephaestus-wgpu/src/infrastructure/device.rs,
+  backlog.md.
+- Outcome: implement the accepted audit findings — synchronize the CUDA stream
+  on every 2-D region-copy error exit before pinned/borrowed DMA targets are
+  released; replace the Python clone_cuda_buffer host round-trip with the
+  device-to-device copy; correct the pinned-buffer Deref SAFETY contract to the
+  real caller-initialization obligation; route Python readbacks through
+  `download_owned` instead of zero-filled pre-allocation; scope the WGPU
+  copy_buffer wait to the copy's own submission index; preserve the caller's
+  current CUDA context across RAII drop-time binds. Deferred findings filed as
+  DoR board items.
+- Acceptance: warning-denied clippy, configured nextest, and doctests green on
+  the branch; each fix an atomic commit with the Item trailer; PR opened
+  against master for integrator review (no self-merge).
+
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
 - Owner: Codex on `codex/hephaestus-fft-pstd-throughput`; last update:
