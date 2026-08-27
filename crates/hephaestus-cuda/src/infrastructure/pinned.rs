@@ -10,7 +10,7 @@
 //! asynchronous instead of silently degrading to synchronous behavior on
 //! pageable memory.
 
-use crate::infrastructure::device::{CudaContext, cuda_byte_count};
+use crate::infrastructure::device::{CudaContext, CurrentContext, cuda_byte_count};
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use hephaestus_core::{HephaestusError, Result};
@@ -134,6 +134,11 @@ impl<T> Drop for PinnedHostBuffer<T> {
         if self.ptr.is_null() {
             return;
         }
+        // Freeing requires the owning context current, but this drop can run
+        // between a consumer's `device.bind()` and a raw-handle driver call;
+        // restore the previously current context so the drop-time bind cannot
+        // silently retarget the dropping thread.
+        let previous = CurrentContext::capture();
         if self.context.bind().is_ok() {
             // SAFETY: `self.ptr` is non-null and was returned by
             // `cuMemAllocHost_v2` in this context; this buffer owns that
@@ -143,6 +148,9 @@ impl<T> Drop for PinnedHostBuffer<T> {
             debug_assert_eq!(res, 0, "cuMemFreeHost failed with code {res}");
         } else {
             debug_assert!(false, "PinnedHostBuffer drop: context bind failed");
+        }
+        if let Some(previous) = previous {
+            previous.restore();
         }
     }
 }

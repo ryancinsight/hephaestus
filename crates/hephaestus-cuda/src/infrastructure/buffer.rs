@@ -1,4 +1,4 @@
-use crate::infrastructure::device::CudaContext;
+use crate::infrastructure::device::{CudaContext, CurrentContext};
 use core::marker::PhantomData;
 use std::sync::Arc;
 
@@ -84,6 +84,12 @@ impl<T> Drop for CudaBuffer<T> {
         if self.ptr != 0
             && let Some(context) = self.context.take()
         {
+            // Freeing requires the owning context current, but this drop can
+            // run between a consumer's `device.bind()` and a raw-handle
+            // driver call (`cuLaunchKernel` over `raw`); restore the
+            // previously current context so the drop-time bind cannot
+            // silently retarget the dropping thread.
+            let previous = CurrentContext::capture();
             if context.bind().is_ok() {
                 // SAFETY: `self.ptr` is non-null (guarded above), was
                 // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
@@ -92,6 +98,9 @@ impl<T> Drop for CudaBuffer<T> {
                 debug_assert_eq!(res, 0, "cuMemFree_v2 failed with code {res}");
             } else {
                 debug_assert!(false, "CudaBuffer drop: context bind failed");
+            }
+            if let Some(previous) = previous {
+                previous.restore();
             }
         }
     }

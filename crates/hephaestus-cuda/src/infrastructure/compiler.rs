@@ -1,7 +1,7 @@
 use libloading::Library;
 use std::sync::OnceLock;
 
-use crate::infrastructure::device::CudaContext;
+use crate::infrastructure::device::{CudaContext, CurrentContext};
 
 #[allow(non_camel_case_types)]
 pub type nvrtcProgram = *mut std::ffi::c_void;
@@ -78,7 +78,11 @@ impl Drop for SafeCachedKernel {
         // Unloading requires the owning context current on this thread. Drop
         // cannot surface errors; a failed bind or unload leaks the module
         // (bounded: at most one per cache key per device lifetime) and trips
-        // the debug assertion in dev/test builds.
+        // the debug assertion in dev/test builds. The drop can run between a
+        // consumer's `device.bind()` and a raw-handle driver call; restore
+        // the previously current context so the drop-time bind cannot
+        // silently retarget the dropping thread.
+        let previous = CurrentContext::capture();
         if self.context.bind().is_ok() {
             // SAFETY: `module` is a live handle owned by this value, the
             // owning context is current (bind above), and no other user
@@ -87,6 +91,9 @@ impl Drop for SafeCachedKernel {
             debug_assert_eq!(res, 0, "cuModuleUnload failed with code {res}");
         } else {
             debug_assert!(false, "SafeCachedKernel drop: context bind failed");
+        }
+        if let Some(previous) = previous {
+            previous.restore();
         }
     }
 }
