@@ -1,0 +1,11 @@
+# One line-ending policy across the stack, applied to the blobs as well as
+# declared (ATLAS-GITATTRIBUTES-DRIFT). LF on every platform so Windows and
+# Linux agents produce identical blobs and CRLF-replacement warnings vanish.
+#
+# Hephaestus's committed blobs are already 100% LF (676 text files), so this
+# is declarative: it pins the policy so the next agent check-in cannot regress
+# it. No renormalization was needed.
+* text=auto eol=lf
+
+# Compiled Python extension modules — binary, never normalized.
+*.pyd binary
