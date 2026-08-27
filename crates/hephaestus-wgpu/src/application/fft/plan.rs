@@ -1,12 +1,17 @@
 //! WGPU planning and provider-owned storage for dense complex FFTs.
 
 use bytemuck::Zeroable;
-use hephaestus_core::{ComputeDevice, FftDirection, FftPlan, HephaestusError, Result};
+use hephaestus_core::{
+    ComputeDevice, DeviceLimits, FftDirection, FftPlan, HephaestusError, Result,
+};
 
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
 
 use super::{
-    kernel::{ChirpParams, PackParams, WORKGROUP_SIZE},
+    kernel::{
+        ChirpParams, FUSED_MAX_LENGTH, FUSED_WORKGROUP_SIZE, FUSED_WORKGROUP_STORAGE_BYTES,
+        PackParams, WORKGROUP_SIZE,
+    },
     pipelines::FftPipelines,
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
@@ -16,13 +21,18 @@ pub(crate) struct WgpuFftPlan {
     pub(crate) rank: usize,
     pub(crate) real: WgpuBuffer<f32>,
     pub(crate) imaginary: WgpuBuffer<f32>,
-    pub(crate) workspace_real: WgpuBuffer<f32>,
-    pub(crate) workspace_imaginary: WgpuBuffer<f32>,
+    pub(crate) workspace: Option<FftWorkspace>,
+    pub(crate) fused_twiddle: Option<WgpuBuffer<f32>>,
     pub(crate) strategy: [AxisStrategy; 3],
     pub(crate) pack: [PackParams; 3],
     pub(crate) chirp: [Option<ChirpData>; 3],
     pub(crate) stages: [RadixStages; 3],
     pub(crate) commands: Box<[crate::application::stream::WgpuBoundDispatch]>,
+}
+
+pub(crate) struct FftWorkspace {
+    pub(crate) real: WgpuBuffer<f32>,
+    pub(crate) imaginary: WgpuBuffer<f32>,
 }
 
 fn invalid(message: impl Into<String>) -> HephaestusError {
@@ -55,7 +65,7 @@ fn next_power_of_two(n: usize) -> Result<usize> {
 
 fn axis_strategy_for(n: usize) -> Result<AxisStrategy> {
     if n.is_power_of_two() {
-        return Ok(AxisStrategy::Radix2);
+        return Ok(AxisStrategy::StagedRadix2);
     }
     let convolution_len = n
         .checked_mul(2)
@@ -71,6 +81,29 @@ fn axis_strategy_for(n: usize) -> Result<AxisStrategy> {
     })
 }
 
+fn select_fused_strategy(
+    strategy: AxisStrategy,
+    axis_len: usize,
+    batch_count: u32,
+    limits: DeviceLimits,
+    max_workgroups_per_dimension: u32,
+) -> AxisStrategy {
+    let grid_capacity = u64::from(max_workgroups_per_dimension)
+        .saturating_mul(u64::from(max_workgroups_per_dimension));
+    if matches!(strategy, AxisStrategy::StagedRadix2)
+        && axis_len > 1
+        && axis_len <= FUSED_MAX_LENGTH
+        && limits.max_compute_workgroup_size_x >= FUSED_WORKGROUP_SIZE
+        && limits.max_compute_invocations_per_workgroup >= FUSED_WORKGROUP_SIZE
+        && limits.max_compute_workgroup_storage_size >= FUSED_WORKGROUP_STORAGE_BYTES
+        && u64::from(batch_count) <= grid_capacity
+    {
+        AxisStrategy::FusedRadix2
+    } else {
+        strategy
+    }
+}
+
 fn dimension(value: usize, name: &str) -> Result<u32> {
     u32::try_from(value)
         .map_err(|_| invalid(format!("FFT {name}={value} exceeds the shader u32 domain")))
@@ -80,9 +113,13 @@ fn axis_workspace_elements(
     dimensions: [usize; 3],
     axis: Axis,
     strategy: AxisStrategy,
-) -> Result<usize> {
+) -> Result<Option<usize>> {
+    if axis.len(dimensions) == 1 {
+        return Ok(None);
+    }
     let transform_len = match strategy {
-        AxisStrategy::Radix2 => axis.len(dimensions),
+        AxisStrategy::FusedRadix2 => return Ok(None),
+        AxisStrategy::StagedRadix2 => axis.len(dimensions),
         AxisStrategy::ChirpZ { m, .. } => m,
     };
     transform_len
@@ -95,6 +132,7 @@ fn axis_workspace_elements(
                 "FFT workspace element count overflows for {axis:?}"
             ))
         })
+        .map(Some)
 }
 
 fn validate_storage_limit(
@@ -103,7 +141,7 @@ fn validate_storage_limit(
     volume_elements: usize,
     dimensions: [usize; 3],
     strategies: [AxisStrategy; 3],
-) -> Result<usize> {
+) -> Result<Option<usize>> {
     for (name, value) in [
         ("x extent", dimensions[0]),
         ("y extent", dimensions[1]),
@@ -117,17 +155,18 @@ fn validate_storage_limit(
         axis_workspace_elements(dimensions, Axis::Z, strategies[2])?,
     ]
     .into_iter()
-    .max()
-    .expect("invariant: the fixed axis set is non-empty");
-    if workspace_elements > u32::MAX as usize {
+    .flatten()
+    .max();
+    if let Some(workspace_elements) = workspace_elements
+        && workspace_elements > u32::MAX as usize
+    {
         return Err(invalid(format!(
             "FFT workspace element count {workspace_elements} exceeds the shader u32 address domain"
         )));
     }
-    for (name, elements) in [
-        ("volume", volume_elements),
-        ("workspace", workspace_elements),
-    ] {
+    for (name, elements) in core::iter::once(("volume", volume_elements))
+        .chain(workspace_elements.map(|workspace| ("workspace", workspace)))
+    {
         let bytes = u64::try_from(elements)
             .map_err(|_| invalid(format!("FFT {name} element count exceeds u64")))?
             .checked_mul(4)
@@ -138,11 +177,13 @@ fn validate_storage_limit(
             )));
         }
     }
-    let workgroups = workspace_elements.div_ceil(WORKGROUP_SIZE as usize);
-    if workgroups > max_workgroups_per_dimension as usize {
-        return Err(invalid(format!(
-            "FFT dispatch requires {workgroups} x workgroups, exceeding device max_compute_workgroups_per_dimension={max_workgroups_per_dimension}"
-        )));
+    if let Some(workspace_elements) = workspace_elements {
+        let workgroups = workspace_elements.div_ceil(WORKGROUP_SIZE as usize);
+        if workgroups > max_workgroups_per_dimension as usize {
+            return Err(invalid(format!(
+                "FFT dispatch requires {workgroups} x workgroups, exceeding device max_compute_workgroups_per_dimension={max_workgroups_per_dimension}"
+            )));
+        }
     }
     Ok(workspace_elements)
 }
@@ -153,7 +194,7 @@ fn radix_stages(
     batch_count: u32,
     inverse: bool,
 ) -> Result<RadixStages> {
-    if !matches!(strategy, AxisStrategy::Radix2) {
+    if !matches!(strategy, AxisStrategy::StagedRadix2) {
         return Ok(RadixStages::empty());
     }
     let fft_len = dimension(axis_len, "radix axis length")?;
@@ -162,6 +203,16 @@ fn radix_stages(
     } else {
         Ok(RadixStages::radix_two(fft_len, batch_count, inverse))
     }
+}
+
+fn build_fused_twiddle(device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
+    let mut roots = [0.0_f32; FUSED_MAX_LENGTH];
+    for index in 0..(FUSED_MAX_LENGTH / 2) {
+        let angle = -core::f64::consts::TAU * index as f64 / FUSED_MAX_LENGTH as f64;
+        roots[index] = angle.cos() as f32;
+        roots[FUSED_MAX_LENGTH / 2 + index] = angle.sin() as f32;
+    }
+    device.upload(&roots)
 }
 
 fn forward_radix_two(values: &mut [[f64; 2]]) {
@@ -292,12 +343,9 @@ impl WgpuFftPlan {
         let mut dimensions = [1usize; 3];
         dimensions[..R].copy_from_slice(&plan.shape);
         let axes = [Axis::X, Axis::Y, Axis::Z];
-        let strategy = [
-            axis_strategy_for(dimensions[0])?,
-            axis_strategy_for(dimensions[1])?,
-            axis_strategy_for(dimensions[2])?,
-        ];
         let limits = device.device_limits();
+        let max_workgroups_per_dimension =
+            device.inner().limits().max_compute_workgroups_per_dimension;
         if limits.max_compute_workgroup_size_x < WORKGROUP_SIZE
             || limits.max_compute_invocations_per_workgroup < WORKGROUP_SIZE
         {
@@ -306,25 +354,52 @@ impl WgpuFftPlan {
                 limits.max_compute_workgroup_size_x, limits.max_compute_invocations_per_workgroup
             )));
         }
-        let workspace_elements = validate_storage_limit(
-            limits.max_buffer_size,
-            device.inner().limits().max_compute_workgroups_per_dimension,
-            plan.elements,
-            dimensions,
-            strategy,
-        )?;
-        let pipelines = FftPipelines::new(device)?;
-
         let mut batch = [0u32; 3];
-        let mut pack = [PackParams::zeroed(); 3];
         for (index, axis) in axes.into_iter().enumerate() {
             batch[index] = dimension(
                 axis.batch_count(dimensions)
                     .ok_or_else(|| invalid("FFT axis batch count overflows"))?,
                 "axis batch count",
             )?;
+        }
+        let strategy = [
+            select_fused_strategy(
+                axis_strategy_for(dimensions[0])?,
+                dimensions[0],
+                batch[0],
+                limits,
+                max_workgroups_per_dimension,
+            ),
+            select_fused_strategy(
+                axis_strategy_for(dimensions[1])?,
+                dimensions[1],
+                batch[1],
+                limits,
+                max_workgroups_per_dimension,
+            ),
+            select_fused_strategy(
+                axis_strategy_for(dimensions[2])?,
+                dimensions[2],
+                batch[2],
+                limits,
+                max_workgroups_per_dimension,
+            ),
+        ];
+        let workspace_elements = validate_storage_limit(
+            limits.max_buffer_size,
+            max_workgroups_per_dimension,
+            plan.elements,
+            dimensions,
+            strategy,
+        )?;
+        let pipelines = FftPipelines::new(device)?;
+
+        let mut pack = [PackParams::zeroed(); 3];
+        for (index, axis) in axes.into_iter().enumerate() {
             let fft_len = match strategy[index] {
-                AxisStrategy::Radix2 => dimension(axis.len(dimensions), "axis length")?,
+                AxisStrategy::FusedRadix2 | AxisStrategy::StagedRadix2 => {
+                    dimension(axis.len(dimensions), "axis length")?
+                }
                 AxisStrategy::ChirpZ { m, .. } => dimension(m, "Bluestein workspace length")?,
             };
             pack[index] = PackParams {
@@ -342,12 +417,25 @@ impl WgpuFftPlan {
         }
 
         let inverse = matches!(plan.direction, FftDirection::Inverse);
+        let workspace = workspace_elements
+            .map(|elements| {
+                Ok(FftWorkspace {
+                    real: device.alloc_zeroed(elements)?,
+                    imaginary: device.alloc_zeroed(elements)?,
+                })
+            })
+            .transpose()?;
+        let fused_twiddle = if strategy.contains(&AxisStrategy::FusedRadix2) {
+            Some(build_fused_twiddle(device)?)
+        } else {
+            None
+        };
         let mut prepared = Self {
             rank: R,
             real,
             imaginary,
-            workspace_real: device.alloc_zeroed(workspace_elements)?,
-            workspace_imaginary: device.alloc_zeroed(workspace_elements)?,
+            workspace,
+            fused_twiddle,
             chirp: [
                 build_chirp_data(device, strategy[0], batch[0])?,
                 build_chirp_data(device, strategy[1], batch[1])?,
@@ -374,105 +462,12 @@ impl WgpuFftPlan {
         Ok(prepared)
     }
 
-    pub(crate) const fn axis_is_active(&self, axis: Axis) -> bool {
-        axis.shader_index() < self.rank as u32
+    pub(crate) fn axis_is_active(&self, axis: Axis) -> bool {
+        let index = axis.shader_index() as usize;
+        index < self.rank && self.pack[index].n > 1
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strategy_selects_radix_and_bluestein_without_rank_clones() {
-        assert_eq!(
-            axis_strategy_for(64).expect("valid radix strategy"),
-            AxisStrategy::Radix2
-        );
-        assert_eq!(
-            axis_strategy_for(12).expect("valid Bluestein strategy"),
-            AxisStrategy::ChirpZ { n: 12, m: 32 }
-        );
-    }
-
-    #[test]
-    fn host_chirp_preparation_fft_matches_impulse_spectrum() {
-        let mut values = vec![[0.0, 0.0]; 8];
-        values[0] = [1.0, 0.0];
-        forward_radix_two(&mut values);
-        for value in values {
-            assert!((value[0] - 1.0).abs() <= f64::EPSILON);
-            assert!(value[1].abs() <= f64::EPSILON);
-        }
-    }
-
-    #[test]
-    fn workspace_accounts_for_axis_batch_geometry() {
-        let dimensions = [2, 3, 4];
-        assert_eq!(
-            axis_workspace_elements(dimensions, Axis::Y, AxisStrategy::ChirpZ { n: 3, m: 8 })
-                .expect("valid workspace geometry"),
-            64
-        );
-    }
-
-    #[test]
-    fn storage_validation_covers_bluestein_workspace_and_dispatch_limits() {
-        let dimensions = [3, 1, 1];
-        let strategies = [
-            AxisStrategy::ChirpZ { n: 3, m: 8 },
-            AxisStrategy::Radix2,
-            AxisStrategy::Radix2,
-        ];
-        assert!(validate_storage_limit(31, u32::MAX, 3, dimensions, strategies).is_err());
-        assert!(validate_storage_limit(u64::MAX, 0, 3, dimensions, strategies).is_err());
-        assert_eq!(
-            validate_storage_limit(u64::MAX, 1, 3, dimensions, strategies)
-                .expect("one workgroup covers the prepared workspace"),
-            8
-        );
-        assert!(
-            validate_storage_limit(
-                u64::MAX,
-                65_535,
-                1 << 24,
-                [1 << 24, 1, 1],
-                [AxisStrategy::Radix2; 3],
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn host_preparation_allocation_failure_is_typed() {
-        match try_host_vector::<u8>(usize::MAX, "test staging") {
-            Err(HephaestusError::AllocationFailed { message }) => {
-                assert!(message.contains("FFT test staging host allocation"));
-                assert!(message.contains(&usize::MAX.to_string()));
-            }
-            other => panic!("expected typed allocation failure, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn chirp_phase_is_range_reduced_before_precision_narrowing() {
-        let n = 1_000_003_u32;
-        let index = 980_700_u32;
-        let reduced = chirp_angle(index, n);
-        let direct = core::f64::consts::PI * f64::from(index) * f64::from(index) / f64::from(n);
-        // The unreduced reference's argument reduction grows with its roughly
-        // three-million-radian input; bound that path by epsilon times angle.
-        let reference_bound = 16.0 * f64::EPSILON * direct.abs().max(1.0);
-        assert!((reduced.cos() - direct.cos()).abs() <= reference_bound);
-        assert!((reduced.sin() - direct.sin()).abs() <= reference_bound);
-
-        let shader_precision = core::f32::consts::PI * index as f32 * index as f32 / n as f32;
-        let shader_reduced = f64::from(shader_precision).rem_euclid(core::f64::consts::TAU);
-        let phase_delta = (shader_reduced - reduced).abs();
-        let wrapped_delta = phase_delta.min(core::f64::consts::TAU - phase_delta);
-        assert!(
-            wrapped_delta > 0.05,
-            "regression input must distinguish range-reduced preparation from shader f32 phase construction"
-        );
-    }
-}
+#[path = "plan_tests.rs"]
+mod tests;

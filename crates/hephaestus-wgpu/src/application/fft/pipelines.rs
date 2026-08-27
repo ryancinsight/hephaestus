@@ -6,11 +6,13 @@ use crate::{WgpuDevice, WgpuPrepared};
 
 use super::kernel::{
     BitReverse, Butterfly, ChirpKernel, ChirpNegateImaginary, ChirpPointMultiply,
-    ChirpPostmultiply, ChirpPremultiply, ChirpScale, FftKernel, Pack, PackKernel,
-    RadixFourBitReverse, RadixFourButterfly, Scale, Unpack,
+    ChirpPostmultiply, ChirpPremultiply, ChirpScale, FUSED_WORKGROUP_SIZE,
+    FUSED_WORKGROUP_STORAGE_BYTES, FftKernel, FusedKernel, Pack, PackKernel, RadixFourBitReverse,
+    RadixFourButterfly, Scale, Unpack,
 };
 
 pub(crate) struct FftPipelines {
+    pub(crate) fused: Option<WgpuPrepared<FusedKernel>>,
     pub(crate) pack: WgpuPrepared<PackKernel<Pack>>,
     pub(crate) unpack: WgpuPrepared<PackKernel<Unpack>>,
     pub(crate) bit_reverse: WgpuPrepared<FftKernel<BitReverse>>,
@@ -27,7 +29,14 @@ pub(crate) struct FftPipelines {
 
 impl FftPipelines {
     pub(crate) fn new(device: &WgpuDevice) -> Result<Self> {
+        let limits = device.device_limits();
+        let fused = (limits.max_compute_workgroup_size_x >= FUSED_WORKGROUP_SIZE
+            && limits.max_compute_invocations_per_workgroup >= FUSED_WORKGROUP_SIZE
+            && limits.max_compute_workgroup_storage_size >= FUSED_WORKGROUP_STORAGE_BYTES)
+            .then(|| device.prepare(&FusedKernel))
+            .transpose()?;
         Ok(Self {
+            fused,
             pack: device.prepare(&PackKernel::<Pack>::new())?,
             unpack: device.prepare(&PackKernel::<Unpack>::new())?,
             bit_reverse: device.prepare(&FftKernel::<BitReverse>::new())?,

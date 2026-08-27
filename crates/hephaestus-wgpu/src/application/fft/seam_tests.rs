@@ -228,6 +228,46 @@ fn prepared_fft_matches_direct_oracles_for_every_supported_rank() {
     verify_shape(&device, [2, 2, 4]);
 }
 
+fn assert_fused_plan_shape<const R: usize>(
+    device: &WgpuDevice,
+    shape: [usize; R],
+    active_axes: usize,
+) {
+    let elements = shape.into_iter().product();
+    let real = device
+        .upload(&vec![0.0_f32; elements])
+        .expect("invariant: fused-plan real upload");
+    let imaginary = device
+        .upload(&vec![0.0_f32; elements])
+        .expect("invariant: fused-plan imaginary upload");
+    let layout = Layout::c_contiguous(shape).expect("invariant: dense fused-plan layout");
+    let prepared = prepare(
+        &WgpuFftOps,
+        device,
+        &real,
+        &imaginary,
+        &layout,
+        FftDirection::Forward,
+    );
+    assert!(prepared.plan.workspace.is_none());
+    assert_eq!(prepared.plan.fused_twiddle.is_some(), active_axes > 0);
+    assert_eq!(prepared.plan.commands.len(), active_axes);
+}
+
+#[test]
+fn fused_fft_skips_singleton_axes_and_allocates_no_volume_workspace() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    for shape in [[8, 1, 1], [1, 8, 1], [1, 1, 8]] {
+        verify_shape(&device, shape);
+        assert_fused_plan_shape(&device, shape, 1);
+    }
+    verify_shape(&device, [1, 1, 1]);
+    assert_fused_plan_shape(&device, [1, 1, 1], 0);
+    assert_fused_plan_shape(&device, [8, 4, 2], 3);
+}
+
 #[test]
 fn prepared_bluestein_fft_matches_direct_oracles() {
     let Some(device) = device_or_skip() else {

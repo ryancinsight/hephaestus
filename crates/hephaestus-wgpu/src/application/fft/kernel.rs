@@ -6,6 +6,9 @@ use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, KernelInterface, KernelSource, Wgsl};
 
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
+pub(crate) const FUSED_WORKGROUP_SIZE: u32 = 64;
+pub(crate) const FUSED_MAX_LENGTH: usize = 1024;
+pub(crate) const FUSED_WORKGROUP_STORAGE_BYTES: u32 = 12 * 1024;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -92,6 +95,44 @@ pub(crate) struct PackParams {
 }
 
 const _: () = assert!(core::mem::size_of::<PackParams>() == 48);
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub(crate) struct FusedParams {
+    pub(crate) n: u32,
+    pub(crate) log2n: u32,
+    pub(crate) inverse: u32,
+    pub(crate) batch_count: u32,
+    pub(crate) nx: u32,
+    pub(crate) ny: u32,
+    pub(crate) nz: u32,
+    pub(crate) axis: u32,
+    pub(crate) batch_grid_x: u32,
+    pub(crate) padding: [u32; 3],
+}
+
+const _: () = assert!(core::mem::size_of::<FusedParams>() == 48);
+
+pub(crate) struct FusedKernel;
+
+impl KernelInterface for FusedKernel {
+    type Params = FusedParams;
+    const LABEL: &'static str = "hephaestus-fft-fused-radix";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_only::<f32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [FUSED_WORKGROUP_SIZE, 1, 1];
+}
+
+impl KernelSource<Wgsl> for FusedKernel {
+    const ENTRY: &'static str = "fft_fused_axis";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(include_str!("shader/fused.wgsl"))
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]

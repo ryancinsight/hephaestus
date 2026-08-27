@@ -12,7 +12,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   submission or into a provenance-carrying WGPU compute-pass sequence. Plans
   own cloned fixed operand handles and bind them directly, removing two full-volume allocations
   (`8N` bytes) and four full-volume device copies (`16N` bytes per warm
-  transform). Bluestein phases are range-reduced before narrowing and upload so
+  transform). Device-limit-qualified power-of-two axes up to 1,024 elements now
+  execute as one fused workgroup-local dispatch per non-singleton axis, with no
+  full-volume workspace, pack, or unpack pass. On the 256x128x128 lossless PSTD
+  workload, six forward/inverse pairs decrease from 13.810 ms to 7.9974 ms
+  median and remove 64 MiB of paired-plan workspace; singleton axes allocate no
+  workspace and emit no command. Bluestein phases are range-reduced before narrowing and upload so
   large non-power-of-two transforms do not accumulate shader-side `f32` phase
   construction error. WGPU command streams and readback also expose explicit
   deadline-aware forms for bounded host and benchmark integration.

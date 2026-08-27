@@ -2,12 +2,11 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
-- Owner: Codex on `codex/hephaestus-fft-provider`; last update: 2026-08-26.
-- Lease: Codex owns `crates/hephaestus-wgpu/src/application/fft/`, the prepared
-  command binding in `application/stream.rs`, its module/re-export seams, the
-  focused benchmark, and this item's PM/CHANGELOG entries through the next
-  verified commit. The core contract increment is complete at the preceding
-  item commit.
+- Owner: Codex on `codex/hephaestus-fft-pstd-throughput`; last update:
+  2026-08-26.
+- Lease: no uncommitted provider-region lease remains after the fused-radix
+  increment. The merged provider increment remains the basis for the consumer
+  throughput gate; the next active region is the dependent Kwavers cutover.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -76,6 +75,18 @@
   focused and 231/231 full real-device WGPU tests pass, including dropped
   source handles and in-pass consumer composition. Warning-denied all-target
   WGPU Clippy and rustdoc pass; the minor-policy SemVer check passes 196/196.
+  Provider PR #222 merged as `cfadc373`. The pre-cutover Kwavers WGPU PSTD
+  baseline is 10.09 ms/step for 50 steps on a 256x128x128 lossless grid. The
+  initial matched Hephaestus workload took 13.810 ms median for the six transform
+  pairs, falsifying direct staged-plan cutover. A device-qualified fused radix
+  strategy reduces the same workload to 7.9974 ms median (42.1%), one dispatch
+  per active axis, and no full-volume workspace; at this shape the forward and
+  inverse plans remove 64 MiB of workspace and retain only two 4 KiB root tables.
+  Direct-oracle rank tests and singleton-axis/no-workspace tests pass. The full
+  required-device WGPU package passes 233/233 with no skips in 62.109 seconds;
+  this preserves coverage but confirms the separately tracked 26-binary device
+  acquisition/topology defect. Complete step timing remains the consumer cutover
+  gate before the old shader is deleted.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
 
@@ -86,9 +97,9 @@
 - Scope/non-goals: integration-test topology, fixtures, and acquisition only; no
   production device singleton, test deletion, workload reduction, timeout
   increase, or assertion weakening.
-- Acceptance: profile attributes the 61.075-second/26-binary baseline, focused
+- Acceptance: profile attributes the 62.109-second/26-binary baseline, focused
   tests prove independent buffer state under concurrent execution, and the
-  unchanged 230-test package suite completes materially below that baseline
+  unchanged 233-test package suite completes materially below that baseline
   under the committed Nextest budget.
 - Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
   lifetime.
