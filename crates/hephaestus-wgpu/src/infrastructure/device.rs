@@ -1383,8 +1383,18 @@ impl ComputeDevice for WgpuDevice {
     fn copy_buffer<T: Pod>(&self, src: &WgpuBuffer<T>, dst: &WgpuBuffer<T>) -> Result<()> {
         let mut stream = self.stream()?;
         stream.copy(src, dst)?;
-        stream.submit()?;
-        self.synchronize()
+        // Wait on this copy's own submission index; a whole-queue
+        // `synchronize` would also drain every unrelated prior submission.
+        let submission_index = stream.submit_indexed()?;
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission_index),
+                timeout: None,
+            })
+            .map_err(|e| HephaestusError::TransferFailed {
+                message: format!("copy_buffer submission wait failed: {e:?}"),
+            })?;
+        Ok(())
     }
 
     fn topology(&self) -> Option<&themis::GpuTopology> {

@@ -18,9 +18,7 @@ use hephaestus_core::{
 };
 
 use crate::application::bindings::{BindGroupEntries, BindGroups, UniformBuffers};
-use crate::application::prepared::{
-    checked_bind_group, checked_submit, checked_submit_with_timeout,
-};
+use crate::application::prepared::{checked_bind_group, checked_submit_with_timeout};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -162,6 +160,22 @@ impl WgpuCommandStream<'_> {
             self.device.recycle_uniform_buffer(buffer);
         }
         Ok(())
+    }
+
+    /// Submit this stream and return the submission's queue index, so the
+    /// caller can wait on exactly this submission (index-scoped poll)
+    /// instead of draining the whole queue.
+    pub(crate) fn submit_indexed(self) -> Result<wgpu::SubmissionIndex> {
+        let submission_index = checked_submit_with_timeout(
+            self.device,
+            "hephaestus-command-stream",
+            self.encoder,
+            None,
+        )?;
+        for buffer in self.uniform_buffers {
+            self.device.recycle_uniform_buffer(buffer);
+        }
+        Ok(submission_index)
     }
 }
 
@@ -496,11 +510,7 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
     }
 
     fn submit(self) -> Result<()> {
-        checked_submit(self.device, "hephaestus-command-stream", self.encoder)?;
-        for buffer in self.uniform_buffers {
-            self.device.recycle_uniform_buffer(buffer);
-        }
-        Ok(())
+        self.submit_indexed().map(|_| ())
     }
 }
 
