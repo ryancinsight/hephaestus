@@ -12,6 +12,13 @@
 //! transfers instead of the driver's implicit pageable-memory staging copy,
 //! and enqueuing every row before the single sync lets the driver pipeline
 //! the per-row copies instead of serializing a blocking call per row.
+//!
+//! SAFETY invariant (both directions): no async copy may outlive its
+//! enclosing frame on any exit path. Error exits after the first enqueue
+//! drain the legacy stream before returning — otherwise the download side
+//! would `cuMemFreeHost` a pinned DMA destination still in flight (host
+//! use-after-free) and the write side would release the borrowed DMA source
+//! while driver reads are pending.
 
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::{CudaDevice, cuda_byte_count};
@@ -82,7 +89,7 @@ pub(crate) fn download_matrix_region_compact(
         // into the matching row of `compact`'s pinned allocation, which
         // outlives this loop (owned by `compact`, not freed until its own
         // `Drop`). The copy is enqueued asynchronously on the legacy stream;
-        // `cuStreamSynchronize` below waits for every enqueued row before any
+        // the stream drain below waits for every enqueued row before any
         // host read of `compact`.
         let res = unsafe {
             cuda_oxide::sys::cuMemcpyDtoHAsync_v2(
@@ -93,21 +100,38 @@ pub(crate) fn download_matrix_region_compact(
             )
         };
         if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!(
-                    "download_matrix_region_compact row {row} cuMemcpyDtoHAsync_v2 failed: {res}"
-                ),
-            });
+            // Module SAFETY invariant: rows already enqueued still target
+            // `compact`'s pinned allocation, whose `Drop` frees the DMA
+            // destination — drain the legacy stream before this error exit.
+            let enqueue_failure = format!(
+                "download_matrix_region_compact row {row} cuMemcpyDtoHAsync_v2 failed: {res}"
+            );
+            let message = match device.synchronize_default_stream() {
+                Ok(()) => enqueue_failure,
+                Err(drain_err) => {
+                    // The barrier itself failed, so earlier rows may still be
+                    // in flight; freeing the pinned destination would be a
+                    // host use-after-free. Leaking the allocation is the
+                    // sound exit.
+                    std::mem::forget(compact);
+                    format!(
+                        "{enqueue_failure}; stream drain also failed ({drain_err}), \
+                         pinned staging leaked"
+                    )
+                }
+            };
+            return Err(HephaestusError::TransferFailed { message });
         }
     }
-    // SAFETY: context is current (`bind` above); waits on the legacy/null
-    // stream every enqueued row above was issued on, making the transfers
-    // host-visible before this function returns `compact` for host reads.
-    let sync_res = unsafe { cuda_oxide::sys::cuStreamSynchronize(std::ptr::null_mut()) };
-    if sync_res != 0 {
+    // Module SAFETY invariant: this drain makes every enqueued row
+    // host-visible before `compact` is returned for host reads.
+    if let Err(sync_err) = device.synchronize_default_stream() {
+        // Failed barrier: in-flight rows may still target the pinned
+        // allocation, so its `Drop` would free a live DMA destination.
+        std::mem::forget(compact);
         return Err(HephaestusError::TransferFailed {
             message: format!(
-                "download_matrix_region_compact cuStreamSynchronize failed: {sync_res}"
+                "download_matrix_region_compact stream drain failed ({sync_err}), pinned staging leaked"
             ),
         });
     }
@@ -165,7 +189,7 @@ pub(crate) fn write_matrix_region_compact(
         // SAFETY: this device's context is current (`bind` above). Each row
         // reads `cols` contiguous f32 values from the length-checked compact
         // host slice into the matching bounds-checked device row. The copy is
-        // enqueued asynchronously on the legacy stream; `cuStreamSynchronize`
+        // enqueued asynchronously on the legacy stream; the stream drain
         // below waits for every enqueued row before this function returns, so
         // `compact_host` (borrowed only for this call) stays valid for the
         // driver's read regardless of whether the caller's backing storage
@@ -179,20 +203,26 @@ pub(crate) fn write_matrix_region_compact(
             )
         };
         if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!(
-                    "write_matrix_region_compact row {row} cuMemcpyHtoDAsync_v2 failed: {res}"
-                ),
-            });
+            // Module SAFETY invariant: rows already enqueued still read from
+            // `compact_host`, a borrow released at return — drain the legacy
+            // stream before this error exit. A failed drain leaves no sound
+            // recovery for a borrowed source; it is surfaced in the error.
+            let enqueue_failure =
+                format!("write_matrix_region_compact row {row} cuMemcpyHtoDAsync_v2 failed: {res}");
+            let message = match device.synchronize_default_stream() {
+                Ok(()) => enqueue_failure,
+                Err(drain_err) => {
+                    format!("{enqueue_failure}; stream drain also failed: {drain_err}")
+                }
+            };
+            return Err(HephaestusError::TransferFailed { message });
         }
     }
-    // SAFETY: context is current (`bind` above); waits on the legacy/null
-    // stream every enqueued row above was issued on, making the writes
-    // complete (and `compact_host` safe to drop/reuse) before returning.
-    let sync_res = unsafe { cuda_oxide::sys::cuStreamSynchronize(std::ptr::null_mut()) };
-    if sync_res != 0 {
+    // Module SAFETY invariant: this drain completes every enqueued row before
+    // `compact_host`'s borrow ends.
+    if let Err(sync_err) = device.synchronize_default_stream() {
         return Err(HephaestusError::TransferFailed {
-            message: format!("write_matrix_region_compact cuStreamSynchronize failed: {sync_res}"),
+            message: format!("write_matrix_region_compact stream drain failed: {sync_err}"),
         });
     }
     Ok(())

@@ -899,7 +899,12 @@ impl ComputeDevice for CudaDevice {
 }
 
 impl CudaDevice {
-    fn synchronize_default_stream(&self) -> Result<()> {
+    /// Wait for every operation enqueued on the legacy/null default stream.
+    ///
+    /// Crate-internal barrier for async-copy paths whose enqueued transfers
+    /// must not outlive their enclosing frame (2-D region copies drain it on
+    /// every exit, error exits included).
+    pub(crate) fn synchronize_default_stream(&self) -> Result<()> {
         self.bind()?;
         // SAFETY: this device's context is current after `bind`; a null stream
         // handle denotes the default stream used by synchronous-form copies.
