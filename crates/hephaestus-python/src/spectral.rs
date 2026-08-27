@@ -3,7 +3,7 @@
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendComplexBuffer, BackendDevice, clone_cuda_buffer};
-use eunomia::{Complex, Complex32};
+use eunomia::Complex32;
 use hephaestus_core::ComputeDevice;
 use hephaestus_cuda::CudaDevice;
 use hephaestus_wgpu::WgpuDevice;
@@ -337,7 +337,6 @@ pub(crate) fn eigenvalues<'py>(
 
     let host_data = py
         .detach(move || {
-            let mut host_data = vec![Complex::new(0.0f32, 0.0f32); n];
             let e_buf = match (&dev, &buf) {
                 (BackendDevice::Wgpu(device), BackendBuffer::Wgpu(buffer)) => {
                     hephaestus_wgpu::eigenvalues(
@@ -365,7 +364,16 @@ pub(crate) fn eigenvalues<'py>(
                     });
                 }
             };
-            dev.download_complex(&e_buf, &mut host_data)?;
+            let host_data = dev.download_complex(&e_buf)?;
+            // An n-by-n input yields exactly n eigenvalues; the previous
+            // fixed-length download enforced this, so keep the contract
+            // check rather than shaping the result from the buffer alone.
+            if host_data.len() != n {
+                return Err(hephaestus_core::HephaestusError::LengthMismatch {
+                    host_len: n,
+                    device_len: host_data.len(),
+                });
+            }
             Ok::<_, hephaestus_core::HephaestusError>(host_data)
         })
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;

@@ -61,31 +61,30 @@ impl BackendDevice {
         }
     }
 
-    pub(crate) fn download_f32(
-        &self,
-        buffer: &BackendBuffer,
-        out: &mut [f32],
-    ) -> hephaestus_core::Result<()> {
+    /// Download a buffer into newly allocated host storage via each
+    /// backend's `download_owned` (no zero-fill of memory the transfer
+    /// fully overwrites).
+    pub(crate) fn download_f32(&self, buffer: &BackendBuffer) -> hephaestus_core::Result<Vec<f32>> {
         match (self, buffer) {
-            (Self::Wgpu(device), BackendBuffer::Wgpu(buffer)) => device.download(buffer, out),
-            (Self::Cuda(device), BackendBuffer::Cuda(buffer)) => device.download(buffer, out),
+            (Self::Wgpu(device), BackendBuffer::Wgpu(buffer)) => device.download_owned(buffer),
+            (Self::Cuda(device), BackendBuffer::Cuda(buffer)) => device.download_owned(buffer),
             _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: "array buffer belongs to a different backend".to_string(),
             }),
         }
     }
 
+    /// Complex counterpart of [`download_f32`](Self::download_f32).
     pub(crate) fn download_complex(
         &self,
         buffer: &BackendComplexBuffer,
-        out: &mut [Complex<f32>],
-    ) -> hephaestus_core::Result<()> {
+    ) -> hephaestus_core::Result<Vec<Complex<f32>>> {
         match (self, buffer) {
             (Self::Wgpu(device), BackendComplexBuffer::Wgpu(buffer)) => {
-                device.download(buffer, out)
+                device.download_owned(buffer)
             }
             (Self::Cuda(device), BackendComplexBuffer::Cuda(buffer)) => {
-                device.download(buffer, out)
+                device.download_owned(buffer)
             }
             _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: "array buffer belongs to a different backend".to_string(),

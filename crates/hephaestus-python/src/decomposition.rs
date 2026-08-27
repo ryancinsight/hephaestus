@@ -70,8 +70,7 @@ pub(crate) fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::lu_decompose_blocked(device, op)?;
-                let mut host_factors = vec![0.0f32; n * n];
-                device.download(decomp.factors(), &mut host_factors)?;
+                let host_factors = device.download_owned(decomp.factors())?;
                 let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
                 let l_buf = BackendBuffer::Wgpu(device.upload(&host_l)?);
                 let u_buf = BackendBuffer::Wgpu(device.upload(&host_u)?);
@@ -83,8 +82,7 @@ pub(crate) fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::lu_decompose_blocked(device, op)?;
-                let mut host_factors = vec![0.0f32; n * n];
-                device.download(decomp.factors(), &mut host_factors)?;
+                let host_factors = device.download_owned(decomp.factors())?;
                 let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
                 let l_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?));
                 let u_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_u)?));
@@ -195,8 +193,7 @@ pub(crate) fn full_piv_lu(
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::full_piv_lu(device, op)?;
-                let mut host_factors = vec![0.0f32; n * n];
-                device.download(decomp.lu_buffer(), &mut host_factors)?;
+                let host_factors = device.download_owned(decomp.lu_buffer())?;
                 let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
                 Ok((
                     BackendBuffer::Wgpu(device.upload(&host_l)?),
@@ -211,8 +208,7 @@ pub(crate) fn full_piv_lu(
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::full_piv_lu(device, op)?;
-                let mut host_factors = vec![0.0f32; n * n];
-                device.download(decomp.lu_buffer(), &mut host_factors)?;
+                let host_factors = device.download_owned(decomp.lu_buffer())?;
                 let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
                 Ok((
                     BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?)),

@@ -135,26 +135,16 @@ impl PyArray {
     pub(crate) fn tolist(&self, py: Python<'_>) -> PyResult<Vec<f32>> {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
-        let len = self.buffer.len();
-        let host_data = py
-            .detach(move || {
-                let mut host_data = vec![0.0f32; len];
-                dev.download_f32(&buf, &mut host_data).map(|()| host_data)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(host_data)
+        py.detach(move || dev.download_f32(&buf))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     /// Download array data to a NumPy 1D array.
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
-        let len = self.buffer.len();
         let host_data = py
-            .detach(move || {
-                let mut host_data = vec![0.0f32; len];
-                dev.download_f32(&buf, &mut host_data).map(|()| host_data)
-            })
+            .detach(move || dev.download_f32(&buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))
     }
