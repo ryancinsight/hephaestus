@@ -148,14 +148,15 @@
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   readback correction is on `perf/wgpu-readback-completion-pool` and consumer
   closure is in Apollo/Kwavers.
-- Lease: Codex owns `crates/hephaestus-wgpu/src/infrastructure/{device,pool}.rs`,
-  focused readback tests, and this item's PM/release regions through the next
-  verified commit. Provider PR #230 merged as `48bb731`; device-preflight PR
-  #231 merged as `1636301`. The working candidate replaces the per-readback
+- Lease: none; the readback-completion increment is committed as exact candidate
+  `05a13d6`. Provider PR #230 merged as `48bb731`; device-preflight PR #231
+  merged as `1636301`. The candidate replaces the per-readback
   completion channel with eight device-owned concurrent slots, retains an
   overflow path instead of serializing readbacks, and adds first-use, reuse,
-  and concurrent value tests. Warning-denied all-target Clippy and the focused
-  device contract pass; exact commit, independent review, and merge remain.
+  and concurrent value tests. Warning-denied all-target Clippy, full WGPU
+  nextest (25/25 in 26.57 seconds), doctests (2/2), and rustdoc pass. The local
+  stack overlay prevents a standalone `--locked` resolution; hosted exact-lock
+  validation, independent review, and merge remain.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then

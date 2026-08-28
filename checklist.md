@@ -4,16 +4,15 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
-Readback-completion lease: Codex owns
-`crates/hephaestus-wgpu/src/infrastructure/{device,pool}.rs`, focused readback
-tests, and this item through the next verified commit on
+Readback-completion lease: discharged at exact candidate `05a13d6` on
 `perf/wgpu-readback-completion-pool`. Provider PR #230 merged as `48bb731` and
 device-preflight PR #231 merged as `1636301`. Apollo's warm STFT phase census
-isolated the remaining provider-owned transient host allocation to
-`stage_and_read`'s per-call completion channel. The working candidate replaces
+isolated `stage_and_read`'s per-call completion channel; the candidate replaces
 it with eight device-owned concurrent slots plus an unpooled overflow path.
-Warning-denied all-target Clippy and the focused first-use/reuse/concurrency
-device contract pass; exact commit, independent review, and merge remain.
+Warning-denied all-target Clippy, full WGPU nextest (25/25 in 26.57 seconds),
+doctests (2/2), and rustdoc pass. The local stack overlay prevents standalone
+`--locked` resolution; hosted exact-lock validation, independent review, and
+merge remain.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
