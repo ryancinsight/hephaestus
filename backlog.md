@@ -261,42 +261,11 @@
   binary16 speed claim. Apollo/Leto differential coverage, consumer deletion,
   and exact-head hosted verification remain open.
 
-## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — in progress
+## ✅ HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf]: Reuse WGPU test devices
 
-- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
-  `perf/wgpu-test-device-reuse`.
-- Lease: `crates/hephaestus-wgpu/tests`, WGPU test-target declarations and
-  fixtures, this item block, and the matching checklist through the next
-  verified commit.
-- Outcome: reduce WGPU package-gate latency by consolidating the current 26 test
-  binaries into cohesive process-local suites and reusing fixture-compatible
-  logical devices while preserving isolated buffers and deterministic order.
-- Scope/non-goals: package test topology, test-only fixtures, and acquisition;
-  no production device singleton, test deletion, workload reduction, timeout
-  increase, or assertion weakening.
-- Acceptance: profile attributes the 76.936-second/26-binary baseline, the case
-  census and unchanged case bodies preserve independent per-case storage and
-  all 242 value-semantic oracles, and exact execution completes materially below
-  that baseline and below the committed 30-second Nextest slow bound. Profiling
-  falsified concurrent named tests as a device-reuse mechanism because Nextest
-  executes each named test in a separate process; deterministic aggregate suites
-  are therefore the process-local reuse boundary.
-- Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
-  lifetime.
-- Status: in progress; implementation and local gates are green, independent
-  review pending. Nextest 0.9.143 executes one process per test, so the existing
-  `OnceLock` device caches were recreated 242 times across 26 binaries. The
-  consolidated topology has two binaries and 25 process tests representing all
-  242 original semantic cases: one 168-case integration registry, 14
-  module-local suites covering 64 unit cases, and ten single unit cases.
-  Ordinary integration cases share one logical device; optional-feature and
-  cross-device cases retain dedicated acquisitions and every case retains its
-  original buffers, workload, and assertions. Exact execution falls from
-  76.936 to 27.168 seconds (64.7%) with no skips. Warning-denied host Clippy,
-  warning-denied Windows AArch64 all-target checking, no-default library
-  checking, Rustdoc, and 2/2 doctests pass. The pre-existing no-default
-  all-target configuration remains red in feature-specific decomposition/sparse
-  benches and `contract.rs`; this increment adds no failure to that surface.
+- **Delivered**: PR #228 / implementation `5507479` consolidates 242 semantic cases from 26 binaries and 242 process tests into two binaries and 25 process tests without changing case workloads, assertions, buffer isolation, optional-feature behavior, or intentional cross-device acquisition.
+- **Evidence**: exact package execution falls from 76.936 to 27.168 seconds (64.7%) with no skips; host Clippy, Windows AArch64 all-target checking, no-default library checking, Rustdoc, and 2/2 doctests pass, and two independent static reviews are GREEN. The pre-existing no-default all-target failures remain outside this increment.
+- **Integrator**: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 

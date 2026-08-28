@@ -87,8 +87,8 @@ Sprint target: 0.18.0. Phase: Closure.
       The exact package run passes without skips in 27.168 seconds versus
       76.936 seconds at entry. Host Clippy, Windows AArch64 all-target checking,
       no-default library checking, Rustdoc, and 2/2 doctests pass.
-- [ ] Pass independent review, synchronize the measured result, commit, and
-      merge the performance increment.
+- [x] Pass independent review, synchronize the measured result, commit, and
+      merge the performance increment as PR #228 / implementation `5507479`.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — Owner: current Atlas session
 
