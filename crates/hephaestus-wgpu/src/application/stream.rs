@@ -829,6 +829,28 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         }
     }
 
+    const OVERSIZED_PARAMETER_WORDS: usize = 16_385;
+    static OVERSIZED_PARAMETERS: [u32; OVERSIZED_PARAMETER_WORDS] = [0; OVERSIZED_PARAMETER_WORDS];
+
+    struct OversizedGroupedKernel;
+
+    impl GroupedKernelInterface for OversizedGroupedKernel {
+        type Params = [u32; OVERSIZED_PARAMETER_WORDS];
+        const LABEL: &'static str = "hephaestus-wgpu-oversized-grouped";
+        const BINDINGS: &'static [GroupedBindingDecl] = GroupedAddKernel::BINDINGS;
+        const PARAM_GROUP: u32 = GroupedAddKernel::PARAM_GROUP;
+        const PARAM_BINDING: u32 = GroupedAddKernel::PARAM_BINDING;
+        const WORKGROUP: [u32; 3] = GroupedAddKernel::WORKGROUP;
+    }
+
+    impl GroupedKernelSource<Wgsl> for OversizedGroupedKernel {
+        const ENTRY: &'static str = GroupedAddKernel::ENTRY;
+
+        fn source(&self) -> Cow<'static, str> {
+            GroupedAddKernel.source()
+        }
+    }
+
     impl KernelSource<Wgsl> for ScaleKernel {
         const ENTRY: &'static str = "main";
 
@@ -900,6 +922,18 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             (
                 "bound_grouped_sequence_reuses_fixed_resources",
                 bound_grouped_sequence_reuses_fixed_resources as fn(),
+            ),
+            (
+                "bound_grouped_dispatch_rejects_invalid_parameter_size",
+                bound_grouped_dispatch_rejects_invalid_parameter_size as fn(),
+            ),
+            (
+                "bound_grouped_sequence_rejects_foreign_device",
+                bound_grouped_sequence_rejects_foreign_device as fn(),
+            ),
+            (
+                "bound_grouped_dispatch_rejects_group_mismatch",
+                bound_grouped_dispatch_rejects_group_mismatch as fn(),
             ),
             (
                 "grouped_command_stream_rejects_group_mismatch",
@@ -1189,6 +1223,124 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             )
             .expect_err("bound grouped preparation must preserve device provenance");
         assert!(error.to_string().contains("different device"));
+    }
+
+    fn bound_grouped_dispatch_rejects_invalid_parameter_size() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping bound parameter-size test");
+            return;
+        };
+        let left = device.upload(&[1.0f32]).unwrap();
+        let right = device.upload(&[2.0f32]).unwrap();
+        let output = device.alloc_zeroed::<f32>(1).unwrap();
+        let prepared = device.prepare_grouped(&GroupedAddKernel).unwrap();
+        let oversized = WgpuGroupedPrepared::<OversizedGroupedKernel> {
+            pipeline: prepared.pipeline.clone(),
+            bind_group_layouts: prepared.bind_group_layouts.clone(),
+            parameter_group: prepared.parameter_group,
+            parameter_binding: prepared.parameter_binding,
+            owner: prepared.owner.clone(),
+            label: OversizedGroupedKernel::LABEL,
+            marker: PhantomData,
+        };
+
+        let error = device
+            .bind_grouped_dispatch(
+                &oversized,
+                &[
+                    GroupedBinding::read(0, 0, &left),
+                    GroupedBinding::read(1, 0, &right),
+                    GroupedBinding::read_write(1, 1, &output),
+                ],
+                &OVERSIZED_PARAMETERS,
+                DispatchGrid::new(1, 1, 1),
+            )
+            .expect_err("oversized retained parameters must fail before WGPU allocation");
+
+        match error {
+            HephaestusError::AllocationFailed { message } => {
+                assert!(message.contains("65540 bytes"));
+                assert!(message.contains("max_uniform_buffer_binding_size=65536"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    fn bound_grouped_sequence_rejects_foreign_device() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping foreign bound-sequence test");
+            return;
+        };
+        let Some(other) = try_device() else {
+            eprintln!("No second WGPU device available; skipping foreign bound-sequence test");
+            return;
+        };
+        let left = device.upload(&[1.0f32]).unwrap();
+        let right = device.upload(&[2.0f32]).unwrap();
+        let output = device.alloc_zeroed::<f32>(1).unwrap();
+        let prepared = device.prepare_grouped(&GroupedAddKernel).unwrap();
+        let bound = device
+            .bind_grouped_dispatch(
+                &prepared,
+                &[
+                    GroupedBinding::read(0, 0, &left),
+                    GroupedBinding::read(1, 0, &right),
+                    GroupedBinding::read_write(1, 1, &output),
+                ],
+                &GroupedParams {
+                    len: 1,
+                    addend: 0.0,
+                },
+                DispatchGrid::new(1, 1, 1),
+            )
+            .unwrap();
+        let mut stream = other.grouped_stream().unwrap();
+
+        let error = stream
+            .encode_grouped_sequence("foreign-bound-grouped-sequence", |sequence| {
+                bound.encode_in_sequence(sequence)
+            })
+            .expect_err("bound dispatch must reject a foreign sequence");
+
+        assert_eq!(
+            error.to_string(),
+            "kernel dispatch failed: prepared WGPU bound grouped dispatch belongs to a different device"
+        );
+        let mut host = [f32::NAN; 1];
+        device.download(&output, &mut host).unwrap();
+        assert_eq!(host, [0.0]);
+    }
+
+    fn bound_grouped_dispatch_rejects_group_mismatch() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping bound grouped mismatch test");
+            return;
+        };
+        let left = device.upload(&[1.0f32]).unwrap();
+        let right = device.upload(&[2.0f32]).unwrap();
+        let output = device.alloc_zeroed::<f32>(1).unwrap();
+        let prepared = device.prepare_grouped(&GroupedAddKernel).unwrap();
+
+        let error = device
+            .bind_grouped_dispatch(
+                &prepared,
+                &[
+                    GroupedBinding::read(0, 0, &left),
+                    GroupedBinding::read(0, 0, &right),
+                    GroupedBinding::read_write(1, 1, &output),
+                ],
+                &GroupedParams {
+                    len: 1,
+                    addend: 0.0,
+                },
+                DispatchGrid::new(1, 1, 1),
+            )
+            .expect_err("bound grouped preparation must validate binding slots");
+
+        assert_eq!(
+            error.to_string(),
+            "kernel dispatch failed: hephaestus-wgpu-grouped-add: binding 1 declared group 1 binding 0, bound group 0 binding 0"
+        );
     }
 
     fn grouped_command_stream_rejects_group_mismatch() {

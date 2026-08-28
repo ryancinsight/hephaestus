@@ -80,6 +80,24 @@ impl WgpuDevice {
         validate_device_owner(&prepared.owner, self, "grouped pipeline")?;
         validate_grouped_bindings::<Self>(K::LABEL, K::BINDINGS, bindings)?;
         let parameter_size = Self::byte_size::<K::Params>(1)?.max(wgpu::COPY_BUFFER_ALIGNMENT);
+        let limits = self.limits();
+        if parameter_size > limits.max_buffer_size
+            || parameter_size > limits.max_uniform_buffer_binding_size
+        {
+            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+                message: format!(
+                    "{} parameter buffer requires {parameter_size} bytes; enabled max_buffer_size={} and max_uniform_buffer_binding_size={}",
+                    K::LABEL,
+                    limits.max_buffer_size,
+                    limits.max_uniform_buffer_binding_size
+                ),
+            });
+        }
+        let out_of_memory = self
+            .inner()
+            .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let internal = self.inner().push_error_scope(wgpu::ErrorFilter::Internal);
+        let validation = self.inner().push_error_scope(wgpu::ErrorFilter::Validation);
         let parameters = self.inner().create_buffer(&wgpu::BufferDescriptor {
             label: Some(K::LABEL),
             size: parameter_size,
@@ -88,13 +106,30 @@ impl WgpuDevice {
         });
         self.queue()
             .write_buffer(&parameters, 0, bytemuck::bytes_of(params));
-        let validation = self.inner().push_error_scope(wgpu::ErrorFilter::Validation);
         let bind_groups = build_grouped_bind_groups(self.inner(), prepared, bindings, &parameters);
         let validation_error = moirai::block_on(validation.pop());
+        let internal_error = moirai::block_on(internal.pop());
+        let out_of_memory_error = moirai::block_on(out_of_memory.pop());
         let bind_groups = bind_groups?;
         if let Some(error) = validation_error {
             return Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!("{} bind-group creation failed: {error}", prepared.label),
+            });
+        }
+        if let Some(error) = internal_error {
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!(
+                    "{} retained binding failed internally: {error}",
+                    prepared.label
+                ),
+            });
+        }
+        if let Some(error) = out_of_memory_error {
+            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+                message: format!(
+                    "{} retained binding allocation failed: {error}",
+                    prepared.label
+                ),
             });
         }
         Ok(WgpuBoundGroupedDispatch {
