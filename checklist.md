@@ -4,11 +4,11 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
-Selected-axis correction lease: active 2026-08-28 on
-`feat/wgpu-fft-selected-axes`. Owned regions are the device-neutral FFT
-contract/planner, WGPU FFT plan/seam/tests, ADR 0053, and affected release
-documentation. Apollo STFT requires retained rank-2 plans that transform only
-axis 1; the current all-axis convenience cannot represent that contract.
+Selected-axis correction lease: discharged 2026-08-28 on
+`feat/wgpu-fft-selected-axes` at `90572d3`; provider PR #230 is ready to merge.
+The increment adds retained rank-2 plans that transform only axis 1 plus
+retained grouped consumer-kernel bindings, with typed WGPU allocation,
+internal, validation, size, and device-provenance failures.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
@@ -47,7 +47,12 @@ axis 1; the current all-axis convenience cannot represent that contract.
       The native-scalar increment's complete package run passes 242/242 with no
       skips in 76.936 seconds. This exceeds the ordinary package budget and
       refreshes `HEPH-WGPU-TEST-DEVICE-REUSE-1`'s entry baseline; no timeout or
-      workload was changed.
+      workload was changed. The selected-axis increment adds direct-DFT and
+      inverse row oracles for `[3, 8]` and `[3, 5]`, rejection before mutation
+      for empty, duplicate, and out-of-range selections, and retained grouped
+      binding reuse. Focused real-device Nextest passes 14/14 in 15.486 seconds;
+      warning-denied all-target Clippy, formatting, doctests, rustdoc, core/WGPU
+      SemVer (196/196 each), and two independent static reviews are green.
 - [x] Generalize the existing rank-generic WGPU FFT implementation to native
       `f16` through `FftOps<D, T>` without a second plan family; reject devices
       without shader-f16 support and add shared f32/f16 analytical,
@@ -71,8 +76,8 @@ axis 1; the current all-axis convenience cannot represent that contract.
       implementations.
 - [ ] Pass independent architecture review, focused/full gates, exact-head
       hosted provider and consumer CI, then merge dependency-order commits.
-      The local provider architecture/performance re-review is green; hosted
-      exact-head and consumer closure remain.
+      The local provider architecture/performance and selected-axis/binding
+      re-reviews are green; hosted exact-head and consumer closure remain.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — Owner: Codex
 
