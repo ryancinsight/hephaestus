@@ -1,4 +1,6 @@
 use core::marker::PhantomData;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use std::{borrow::Cow, sync::Arc};
 
 use bytemuck::Pod;
@@ -56,6 +58,118 @@ impl Drop for MappingLifecycle<'_> {
 // and `clear_transient_pools` releases retained buffers on demand.
 const STAGING_POOL_MAX_BUFFERS: usize = 8;
 const STAGING_POOL_MAX_BYTES: u64 = 512 * 1024 * 1024;
+// Idle decay for the retention ceiling above: the pool parks burst
+// allocations until `clear_transient_pools` is called, which in a long-lived
+// session would keep hundreds of MiB of MAP_READ memory for the device's
+// lifetime after a single readback burst. Staging retention is instead
+// released once no staging traffic (acquire or recycle) has happened for
+// `STAGING_POOL_IDLE_DECAY`; the check rides the next acquire (one monotonic
+// clock read, two relaxed loads), so there is no timer thread and no added
+// cost on a busy path.
+//
+// The 10 s deadline separates two boundaries. Within an active run, staging
+// traffic recurs every solver step and routine inter-readback gaps are
+// milliseconds — three-plus orders of magnitude below the deadline — so a
+// warm pool is never decayed mid-run (the sustained-traffic test pins the
+// hit-rate contract). Across a session boundary (paused, finished, one-shot
+// validation), the deadline bounds parked MAP_READ memory to ~10 s past the
+// last transfer, reclaiming the burst within a human-noticeable idle window.
+// Uniforms are exempt: their whole retention is ~8 KiB and every dispatch
+// reuses it, so decaying them would spend a fresh allocation on a
+// non-problem.
+const STAGING_POOL_IDLE_DECAY: Duration = Duration::from_secs(10);
+
+/// Idle-decay accounting for the staging pool.
+///
+/// `ShardedResourcePool`'s retention counters are private, so this shadow
+/// tracks the bytes routed through this device's staging acquire/recycle
+/// paths. The retained total is an UPPER BOUND on true pool residency: the
+/// pool's internal FIFO cap eviction and over-cap recycles drop buffers this
+/// shadow still counts. That is the safe direction for a decay decision — it
+/// can only trigger a `clear` of space that is (partly) already gone, never
+/// retain beyond the policy.
+#[derive(Debug)]
+struct StagingPoolAccounting {
+    /// Monotonic clock base; `last_use_ms` is an offset from this.
+    base: Instant,
+    last_use_ms: AtomicU64,
+    /// Upper bound on bytes parked in the staging pool (see type doc).
+    retained_bytes: AtomicU64,
+    /// Acquires served from the pool versus fresh buffer creations.
+    hits: AtomicU64,
+    misses: AtomicU64,
+    #[cfg(test)]
+    /// Test-only decay deadline override in ms; 0 selects
+    /// [`STAGING_POOL_IDLE_DECAY`]. Lets unit tests exercise decay without
+    /// waiting out the production deadline.
+    test_decay_ms: AtomicU64,
+}
+
+impl StagingPoolAccounting {
+    fn new() -> Self {
+        Self {
+            base: Instant::now(),
+            last_use_ms: AtomicU64::new(0),
+            retained_bytes: AtomicU64::new(0),
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+            #[cfg(test)]
+            test_decay_ms: AtomicU64::new(0),
+        }
+    }
+
+    #[inline]
+    fn now_ms(&self) -> u64 {
+        self.base.elapsed().as_millis() as u64
+    }
+
+    /// Record staging traffic, keeping pool retention warm.
+    #[inline]
+    fn touch(&self) {
+        self.last_use_ms.store(self.now_ms(), Ordering::Relaxed);
+    }
+
+    /// True when no staging traffic happened within `deadline`.
+    #[inline]
+    fn idle_beyond(&self, deadline: Duration) -> bool {
+        self.now_ms()
+            .saturating_sub(self.last_use_ms.load(Ordering::Relaxed))
+            > deadline.as_millis() as u64
+    }
+
+    /// Decay deadline: the test-only override when one is set, otherwise the
+    /// production constant.
+    fn decay_deadline(&self) -> Duration {
+        #[cfg(test)]
+        {
+            let override_ms = self.test_decay_ms.load(Ordering::Relaxed);
+            if override_ms != 0 {
+                return Duration::from_millis(override_ms);
+            }
+        }
+        STAGING_POOL_IDLE_DECAY
+    }
+
+    fn record_recycle(&self, bytes: u64) {
+        self.retained_bytes.fetch_add(bytes, Ordering::Relaxed);
+        self.touch();
+    }
+
+    fn record_hit(&self, bytes: u64) {
+        self.hits.fetch_add(1, Ordering::Relaxed);
+        self.retained_bytes.fetch_sub(bytes, Ordering::Relaxed);
+        self.touch();
+    }
+
+    fn record_miss(&self) {
+        self.misses.fetch_add(1, Ordering::Relaxed);
+        self.touch();
+    }
+
+    fn reset_retained(&self) {
+        self.retained_bytes.store(0, Ordering::Relaxed);
+    }
+}
 // Uniforms: metadata blocks of ≲256 B; ops acquire up to three per call
 // (`matmul_into`, `kron_into`), so 2/shard (the old 8/4) forced an
 // allocate-evict cycle on every 3-uniform call from one thread. 32 (8/shard)
@@ -79,6 +193,7 @@ pub struct WgpuDevice {
     pub(crate) pipeline_cache: PipelineCache,
     pub(crate) staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
     pub(crate) uniform_pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    staging_accounting: Arc<StagingPoolAccounting>,
 }
 
 impl WgpuDevice {
@@ -211,6 +326,7 @@ impl WgpuDevice {
                 STAGING_POOL_MAX_BUFFERS,
                 STAGING_POOL_MAX_BYTES,
             )),
+            staging_accounting: Arc::new(StagingPoolAccounting::new()),
             uniform_pool: Arc::new(ShardedResourcePool::new(
                 UNIFORM_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
@@ -1012,10 +1128,13 @@ impl WgpuDevice {
     /// without overflowing `u64`.
     pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
+        self.maybe_decay_staging();
         Ok(
             if let Some(buffer) = self.staging_pool.take_at_least(staging_size) {
+                self.staging_accounting.record_hit(buffer.0.size());
                 buffer.0
             } else {
+                self.staging_accounting.record_miss();
                 self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("hephaestus-recycled-staging"),
                     size: staging_size,
@@ -1028,7 +1147,22 @@ impl WgpuDevice {
 
     /// Return a staging buffer back to the bounded pool for reuse.
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
+        self.staging_accounting.record_recycle(buffer.size());
         self.staging_pool.recycle(PoolBuffer(buffer));
+    }
+
+    /// Release parked staging retention when no staging transfer has happened
+    /// for [`STAGING_POOL_IDLE_DECAY`]. Runs on the staging acquire path so
+    /// decay needs no timer infrastructure; when warm it costs one clock read
+    /// and two relaxed loads.
+    fn maybe_decay_staging(&self) {
+        let accounting = &self.staging_accounting;
+        if accounting.idle_beyond(accounting.decay_deadline())
+            && accounting.retained_bytes.load(Ordering::Relaxed) > 0
+        {
+            self.staging_pool.clear();
+            accounting.reset_retained();
+        }
     }
 
     /// Retrieve a uniform buffer of size ≥ `size` from the pool, or create
@@ -1072,6 +1206,10 @@ impl WgpuDevice {
     pub fn clear_transient_pools(&self) {
         self.staging_pool.clear();
         self.uniform_pool.clear();
+        // The shadow retained bound must follow the release, or a later decay
+        // check would see stale parking (harmless over-clear of an empty
+        // pool, but avoidable).
+        self.staging_accounting.reset_retained();
     }
 
     fn download_into<T: Pod>(
@@ -1585,6 +1723,14 @@ mod tests {
                 "elevated_storage_limit_raises_the_aggregate_buffer_limit",
                 elevated_storage_limit_raises_the_aggregate_buffer_limit as fn(),
             ),
+            (
+                "staging_pool_serves_sustained_readback_traffic",
+                staging_pool_serves_sustained_readback_traffic as fn(),
+            ),
+            (
+                "staging_pool_decays_after_idle_and_rewarm_serves",
+                staging_pool_decays_after_idle_and_rewarm_serves as fn(),
+            ),
         ]);
     }
 
@@ -1721,6 +1867,96 @@ mod tests {
         assert_eq!(
             limits.max_buffers_and_acceleration_structures_per_shader_stage,
             32
+        );
+    }
+
+    /// Steady-state evidence: repeated same-size readbacks must be served by
+    /// the staging pool (at most the first pays a fresh allocation), pinning
+    /// the warm hit-rate contract the idle-decay deadline is designed around.
+    fn staging_pool_serves_sustained_readback_traffic() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-staging-hit-rate") else {
+            return;
+        };
+        let expected = [7_u8; 4096];
+        let buffer = device.upload(&expected).expect("upload");
+        let accounting = Arc::clone(&device.staging_accounting);
+
+        let rounds: u64 = 16;
+        for round in 0..rounds as usize {
+            let actual = device
+                .download_owned(&buffer)
+                .unwrap_or_else(|error| panic!("readback {round} failed: {error:?}"));
+            assert_eq!(actual, expected);
+        }
+
+        let hits = accounting.hits.load(Ordering::Relaxed);
+        let misses = accounting.misses.load(Ordering::Relaxed);
+        assert!(
+            misses <= 1 && hits + misses >= rounds,
+            "steady-state readbacks must be pool-served (hits={hits}, misses={misses})"
+        );
+    }
+
+    /// Decay evidence: past the idle deadline the parked staging retention is
+    /// released (the next acquire pays one fresh allocation instead of
+    /// serving stale parking), and the pool re-warms on subsequent traffic.
+    fn staging_pool_decays_after_idle_and_rewarm_serves() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-staging-decay") else {
+            return;
+        };
+        let expected = [3_u8; 2048];
+        let buffer = device.upload(&expected).expect("upload");
+        let accounting = Arc::clone(&device.staging_accounting);
+
+        // Warm the pool: first readback pays the allocation, the repeat is
+        // pool-served.
+        assert_eq!(
+            device.download_owned(&buffer).expect("warm-up download"),
+            expected
+        );
+        assert_eq!(
+            device
+                .download_owned(&buffer)
+                .expect("warm repeat download"),
+            expected
+        );
+        let warm_hits = accounting.hits.load(Ordering::Relaxed);
+        let warm_misses = accounting.misses.load(Ordering::Relaxed);
+        assert!(warm_hits >= 1, "warm pool must serve a repeat readback");
+
+        // Simulate a session boundary: shrink the decay deadline and idle
+        // past it, so no production-deadline wait is needed.
+        accounting.test_decay_ms.store(1, Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(25));
+
+        // The acquire inside this readback observes idle-beyond-deadline,
+        // clears the parked retention, and pays a fresh allocation.
+        assert_eq!(
+            device.download_owned(&buffer).expect("post-decay download"),
+            expected
+        );
+        assert_eq!(
+            accounting.misses.load(Ordering::Relaxed),
+            warm_misses + 1,
+            "idle decay must release parked staging retention, forcing one fresh allocation"
+        );
+        assert_eq!(
+            accounting.hits.load(Ordering::Relaxed),
+            warm_hits,
+            "decayed pool must not serve from stale retention"
+        );
+
+        // Restore the production deadline, then confirm the pool re-warms:
+        // the buffer parked by the post-decay readback serves the next one.
+        accounting.test_decay_ms.store(0, Ordering::Relaxed);
+        assert_eq!(
+            device.download_owned(&buffer).expect("rewarm download"),
+            expected
+        );
+        assert_eq!(
+            accounting.hits.load(Ordering::Relaxed),
+            warm_hits + 1,
+            "pool must re-warm and serve after decay"
         );
     }
 }
