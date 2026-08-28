@@ -237,6 +237,14 @@ cutover gate because the provider benchmark excludes Kwavers physics kernels.
   source inspection establishes that no Hephaestus-owned allocation, pipeline
   compilation, bind-group construction, host transfer, or device copy occurs
   on that path. This claim does not cover opaque allocations inside the driver.
+- Synchronous readback completion state is retained at device construction.
+  Tests prove that first and repeated readbacks allocate no new provider slot
+  and that concurrent readbacks receive independent state. A whole-call global
+  allocator census is not the ownership oracle: WGPU's one-shot encoder,
+  submit, and mapping internals still allocate opaque host state. The Apollo
+  phase census measured 99 allocations before removing the provider channel
+  and 97 after it; provider counters and retained host-buffer identities cover
+  the source-controlled lifecycle claim.
 - Matched benchmarks compare Apollo/Leto and Hephaestus end to end at
   cache-/device-relevant shapes, reporting Criterion regression-slope time
   estimates and confidence intervals;

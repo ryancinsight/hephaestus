@@ -6,8 +6,8 @@
 - Lease: crates/hephaestus-cuda/src/application/decomposition/region.rs,
   crates/hephaestus-cuda/src/infrastructure/{pinned.rs,buffer.rs,compiler.rs},
   crates/hephaestus-python/src/{backend.rs,array.rs,decomposition.rs,
-  spectral.rs,sparse.rs}, crates/hephaestus-wgpu/src/infrastructure/device.rs,
-  backlog.md.
+  spectral.rs,sparse.rs}, backlog.md. The WGPU device sub-scope landed as
+  `0fe0889` and carries no live lease.
 - Outcome: implement the accepted audit findings — synchronize the CUDA stream
   on every 2-D region-copy error exit before pinned/borrowed DMA targets are
   released; replace the Python clone_cuda_buffer host round-trip with the
@@ -151,9 +151,11 @@
 - Lease: Codex owns `crates/hephaestus-wgpu/src/infrastructure/{device,pool}.rs`,
   focused readback tests, and this item's PM/release regions through the next
   verified commit. Provider PR #230 merged as `48bb731`; device-preflight PR
-  #231 merged as `1636301`. Apollo's warm STFT census attributes a remaining
-  provider-owned allocation to the per-readback completion channel; replace it
-  with retained concurrent completion state without serializing readbacks.
+  #231 merged as `1636301`. The working candidate replaces the per-readback
+  completion channel with eight device-owned concurrent slots, retains an
+  overflow path instead of serializing readbacks, and adds first-use, reuse,
+  and concurrent value tests. Warning-denied all-target Clippy and the focused
+  device contract pass; exact commit, independent review, and merge remain.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then

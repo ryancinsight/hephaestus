@@ -9,9 +9,11 @@ Readback-completion lease: Codex owns
 tests, and this item through the next verified commit on
 `perf/wgpu-readback-completion-pool`. Provider PR #230 merged as `48bb731` and
 device-preflight PR #231 merged as `1636301`. Apollo's warm STFT phase census
-now isolates the remaining provider-owned transient host allocation to
-`stage_and_read`'s per-call completion channel; replace it with retained
-concurrent completion state and verify reuse before resuming consumer closure.
+isolated the remaining provider-owned transient host allocation to
+`stage_and_read`'s per-call completion channel. The working candidate replaces
+it with eight device-owned concurrent slots plus an unpooled overflow path.
+Warning-denied all-target Clippy and the focused first-use/reuse/concurrency
+device contract pass; exact commit, independent review, and merge remain.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.

@@ -13,7 +13,7 @@ use std::any::TypeId;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::buffer::WgpuBuffer;
-use crate::infrastructure::pool::PoolBuffer;
+use crate::infrastructure::pool::{MapCompletionPool, PoolBuffer};
 use moirai_sync::ShardedResourcePool;
 
 /// Pipeline-cache key: kernel-family discriminator, scalar type, block width.
@@ -193,6 +193,7 @@ pub struct WgpuDevice {
     pub(crate) pipeline_cache: PipelineCache,
     pub(crate) staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
     pub(crate) uniform_pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    map_completion_pool: Arc<MapCompletionPool>,
     staging_accounting: Arc<StagingPoolAccounting>,
 }
 
@@ -331,6 +332,9 @@ impl WgpuDevice {
                 UNIFORM_POOL_MAX_BUFFERS,
                 UNIFORM_POOL_MAX_BYTES,
             )),
+            // One completion slot per retained staging buffer: retaining more
+            // callback state cannot improve the staging pool's warm capacity.
+            map_completion_pool: Arc::new(MapCompletionPool::new(STAGING_POOL_MAX_BUFFERS)),
         }
     }
 
@@ -1196,7 +1200,7 @@ impl WgpuDevice {
         self.uniform_pool.recycle(PoolBuffer(buffer));
     }
 
-    /// Drop transient buffers retained for reuse.
+    /// Drop transient buffers and readback completion slots retained for reuse.
     ///
     /// The bounded pools avoid repeated staging and uniform allocations on hot
     /// paths. Bindings and short-lived host integrations can call this at an
@@ -1206,6 +1210,7 @@ impl WgpuDevice {
     pub fn clear_transient_pools(&self) {
         self.staging_pool.clear();
         self.uniform_pool.clear();
+        self.map_completion_pool.clear();
         // The shadow retained bound must follow the release, or a later decay
         // check would see stale parking (harmless over-clear of an empty
         // pool, but avoidable).
@@ -1626,11 +1631,11 @@ impl WgpuDevice {
         let submission_index = self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..staging_size);
-        let (sender, receiver) = std::sync::mpsc::channel();
+        let completion = self.map_completion_pool.take();
+        completion.reset();
+        let callback_completion = completion.clone();
         slice.map_async(wgpu::MapMode::Read, move |result| {
-            // send() only fails if the receiver was dropped; the receiver is alive
-            // in the same synchronous frame until after poll() returns below.
-            let _ = sender.send(result);
+            callback_completion.complete(result);
         });
         let mapping = MappingLifecycle(&staging);
         self.device
@@ -1641,16 +1646,9 @@ impl WgpuDevice {
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("device poll failed: {e:?}"),
             })?;
-        receiver
-            .try_recv()
-            .map_err(|error| HephaestusError::TransferFailed {
-                message: format!(
-                    "map_async callback was not delivered after device completion: {error}"
-                ),
-            })?
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("buffer mapping failed: {e:?}"),
-            })?;
+        let mapping_result = completion.result();
+        self.map_completion_pool.recycle(completion);
+        mapping_result?;
 
         // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
         let byte_len_usize = usize::try_from(byte_len)
@@ -1679,6 +1677,7 @@ impl WgpuDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::pool::map_completion_allocation_count;
 
     #[test]
     fn module_cases_share_process_state() {
@@ -1726,6 +1725,14 @@ mod tests {
             (
                 "staging_pool_serves_sustained_readback_traffic",
                 staging_pool_serves_sustained_readback_traffic as fn(),
+            ),
+            (
+                "warm_readback_reuses_completion_state",
+                warm_readback_reuses_completion_state as fn(),
+            ),
+            (
+                "concurrent_readbacks_keep_independent_completion_state",
+                concurrent_readbacks_keep_independent_completion_state as fn(),
             ),
             (
                 "staging_pool_decays_after_idle_and_rewarm_serves",
@@ -1894,6 +1901,85 @@ mod tests {
         assert!(
             misses <= 1 && hits + misses >= rounds,
             "steady-state readbacks must be pool-served (hits={hits}, misses={misses})"
+        );
+    }
+
+    /// Lifecycle evidence: device construction owns the bounded completion
+    /// slots, so neither the first nor a repeated readback allocates one.
+    fn warm_readback_reuses_completion_state() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-map-completion-reuse") else {
+            return;
+        };
+        let expected = [11_u32, 13, 17, 19];
+        let buffer = device.upload(&expected).expect("upload");
+        let mut actual = [0_u32; 4];
+        let prepared_allocations = map_completion_allocation_count();
+
+        device
+            .download(&buffer, &mut actual)
+            .expect("warm readback");
+        assert_eq!(actual, expected);
+        let warm_allocations = map_completion_allocation_count();
+        assert_eq!(
+            warm_allocations, prepared_allocations,
+            "first readback must use device-owned callback completion state"
+        );
+
+        actual.fill(0);
+        device
+            .download(&buffer, &mut actual)
+            .expect("reused readback");
+        assert_eq!(actual, expected);
+        assert_eq!(
+            map_completion_allocation_count(),
+            warm_allocations,
+            "warm readback must reuse retained callback completion state"
+        );
+    }
+
+    fn concurrent_readbacks_keep_independent_completion_state() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-map-completion-concurrency") else {
+            return;
+        };
+        let first_expected = [2_u32, 3, 5, 7];
+        let second_expected = [23_u32, 29, 31, 37];
+        let first = device.upload(&first_expected).expect("first upload");
+        let second = device.upload(&second_expected).expect("second upload");
+        let barrier = std::sync::Barrier::new(3);
+        let prepared_allocations = map_completion_allocation_count();
+
+        std::thread::scope(|scope| {
+            let first_download = scope.spawn(|| {
+                barrier.wait();
+                let mut actual = [0_u32; 4];
+                device
+                    .download(&first, &mut actual)
+                    .expect("first concurrent readback");
+                actual
+            });
+            let second_download = scope.spawn(|| {
+                barrier.wait();
+                let mut actual = [0_u32; 4];
+                device
+                    .download(&second, &mut actual)
+                    .expect("second concurrent readback");
+                actual
+            });
+            barrier.wait();
+
+            assert_eq!(
+                first_download.join().expect("first readback thread"),
+                first_expected
+            );
+            assert_eq!(
+                second_download.join().expect("second readback thread"),
+                second_expected
+            );
+        });
+        assert_eq!(
+            map_completion_allocation_count(),
+            prepared_allocations,
+            "two concurrent readbacks must use distinct device-owned slots"
         );
     }
 

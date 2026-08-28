@@ -1,6 +1,115 @@
-//! Transient buffer pooling using Moirai's sharded resource pool.
+//! Transient buffer and readback-completion pooling.
+
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+
+use hephaestus_core::{HephaestusError, Result};
 
 use crate::infrastructure::device::WgpuDevice;
+
+const MAP_PENDING: u8 = 0;
+const MAP_SUCCEEDED: u8 = 1;
+const MAP_FAILED: u8 = 2;
+
+/// Reusable completion state for one asynchronous WGPU buffer mapping.
+#[derive(Clone, Debug)]
+pub(crate) struct MapCompletion {
+    state: Arc<AtomicU8>,
+}
+
+impl MapCompletion {
+    fn new() -> Self {
+        #[cfg(test)]
+        MAP_COMPLETION_ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        Self {
+            state: Arc::new(AtomicU8::new(MAP_PENDING)),
+        }
+    }
+
+    pub(crate) fn reset(&self) {
+        self.state.store(MAP_PENDING, Ordering::Relaxed);
+    }
+
+    pub(crate) fn complete(&self, result: core::result::Result<(), wgpu::BufferAsyncError>) {
+        self.state.store(
+            if result.is_ok() {
+                MAP_SUCCEEDED
+            } else {
+                MAP_FAILED
+            },
+            Ordering::Release,
+        );
+    }
+
+    pub(crate) fn result(&self) -> Result<()> {
+        match self.state.load(Ordering::Acquire) {
+            MAP_SUCCEEDED => Ok(()),
+            MAP_FAILED => Err(HephaestusError::TransferFailed {
+                message: "buffer mapping failed".to_owned(),
+            }),
+            _ => Err(HephaestusError::TransferFailed {
+                message: "map_async callback was not delivered after device completion".to_owned(),
+            }),
+        }
+    }
+}
+
+/// Bounded retained completion slots for synchronous readback callbacks.
+///
+/// Acquiring and returning a slot holds the mutex only for a vector pop or
+/// push. Each in-flight mapping owns an independent atomic state, so readbacks
+/// remain concurrent. Concurrency above the retained capacity allocates an
+/// unpooled overflow slot rather than serializing device work.
+#[derive(Debug)]
+pub(crate) struct MapCompletionPool {
+    available: Mutex<Vec<MapCompletion>>,
+    retained_capacity: usize,
+}
+
+impl MapCompletionPool {
+    pub(crate) fn new(retained_capacity: usize) -> Self {
+        let mut available = Vec::with_capacity(retained_capacity);
+        available.resize_with(retained_capacity, MapCompletion::new);
+        Self {
+            available: Mutex::new(available),
+            retained_capacity,
+        }
+    }
+
+    pub(crate) fn take(&self) -> MapCompletion {
+        self.available
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop()
+            .unwrap_or_else(MapCompletion::new)
+    }
+
+    pub(crate) fn recycle(&self, completion: MapCompletion) {
+        let mut available = self
+            .available
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if available.len() < self.retained_capacity {
+            available.push(completion);
+        }
+    }
+
+    pub(crate) fn clear(&self) {
+        self.available
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+}
+
+#[cfg(test)]
+static MAP_COMPLETION_ALLOCATIONS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(test)]
+pub(crate) fn map_completion_allocation_count() -> u64 {
+    MAP_COMPLETION_ALLOCATIONS.load(Ordering::Relaxed)
+}
 
 /// Zero-cost orphan-rule wrapper around wgpu::Buffer that implements SizeBounded.
 #[repr(transparent)]
