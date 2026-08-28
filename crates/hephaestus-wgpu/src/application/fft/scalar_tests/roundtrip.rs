@@ -139,6 +139,19 @@ fn assert_staged_mode<T: TestScalar>(device: &WgpuDevice) {
 }
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "scalar_widths_round_trip_across_ranks_and_staged_execution",
+            scalar_widths_round_trip_across_ranks_and_staged_execution as fn(),
+        ),
+        (
+            "normwise_oracle_rejects_zero_output",
+            normwise_oracle_rejects_zero_output as fn(),
+        ),
+    ]);
+}
+
 fn scalar_widths_round_trip_across_ranks_and_staged_execution() {
     let Some(device) = required_device_or_skip() else {
         return;
@@ -155,7 +168,6 @@ fn scalar_widths_round_trip_across_ranks_and_staged_execution() {
     assert_staged_mode::<eunomia::F16>(&device);
 }
 
-#[test]
 fn normwise_oracle_rejects_zero_output() {
     let actual_real = [0.0_f32, 0.0];
     let actual_imaginary = [0.0_f32, 0.0];

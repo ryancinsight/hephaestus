@@ -261,27 +261,11 @@
   binary16 speed claim. Apollo/Leto differential coverage, consumer deletion,
   and exact-head hosted verification remain open.
 
-## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
+## ✅ HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf]: Reuse WGPU test devices
 
-- Outcome: reduce WGPU package-gate latency by consolidating the current 26 test
-  binaries into the fewest cohesive harnesses and reusing one acquired logical
-  device per harness while preserving isolated buffers and parallel-test
-  determinism.
-- Scope/non-goals: integration-test topology, fixtures, and acquisition only; no
-  production device singleton, test deletion, workload reduction, timeout
-  increase, or assertion weakening.
-- Acceptance: profile attributes the 76.936-second/26-binary baseline, focused
-  tests prove independent buffer state under concurrent execution, and the
-  unchanged 242-test package suite completes materially below that baseline
-  under the committed Nextest budget.
-- Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
-  lifetime.
-- Status: todo; dependency: `HEPH-FFT-PROVIDER-1` provider commit. Audit evidence:
-  the main `contract.rs` harness already uses `OnceLock`; the remaining cost is
-  dominated by separate integration binaries and their independent devices.
-  The exact native-scalar FFT diff passes 242/242 with no skips in 76.936
-  seconds, exceeding the ordinary 60-second package budget and confirming that
-  topology optimization remains the next provider-side performance increment.
+- **Delivered**: PR #228 / implementation `5507479` consolidates 242 semantic cases from 26 binaries and 242 process tests into two binaries and 25 process tests without changing case workloads, assertions, buffer isolation, optional-feature behavior, or intentional cross-device acquisition.
+- **Evidence**: exact package execution falls from 76.936 to 27.168 seconds (64.7%) with no skips; host Clippy, Windows AArch64 all-target checking, no-default library checking, Rustdoc, and 2/2 doctests pass, and two independent static reviews are GREEN. The pre-existing no-default all-target failures remain outside this increment.
+- **Integrator**: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 

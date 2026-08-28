@@ -2,6 +2,24 @@ use super::*;
 use aequitas::systems::si::{quantities::Length, units::Meter};
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        ("params_valid_grid", params_valid_grid as fn()),
+        (
+            "params_negative_polarity_negates_axis_coefficients",
+            params_negative_polarity_negates_axis_coefficients as fn(),
+        ),
+        (
+            "params_rejects_too_small_axes",
+            params_rejects_too_small_axes as fn(),
+        ),
+        (
+            "params_rejects_bad_spacing",
+            params_rejects_bad_spacing as fn(),
+        ),
+    ]);
+}
+
 fn params_valid_grid() {
     let params = Laplacian2DParams::new(
         4,
@@ -18,7 +36,6 @@ fn params_valid_grid() {
     assert!((params.inv2[1] - 25.0).abs() < f32::EPSILON);
 }
 
-#[test]
 fn params_negative_polarity_negates_axis_coefficients() {
     let params = Laplacian2DParams::new(
         4,
@@ -34,7 +51,6 @@ fn params_negative_polarity_negates_axis_coefficients() {
     assert!((params.inv2[1] + 25.0).abs() < f32::EPSILON);
 }
 
-#[test]
 fn params_rejects_too_small_axes() {
     for dimensions in [(1, 4), (4, 1)] {
         assert!(matches!(
@@ -51,7 +67,6 @@ fn params_rejects_too_small_axes() {
     }
 }
 
-#[test]
 fn params_rejects_bad_spacing() {
     for bad in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, 0.0, -1.0] {
         for spacing in [

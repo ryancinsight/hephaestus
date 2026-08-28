@@ -18,13 +18,7 @@ use leto::{Array1, Laplacian2D};
 use leto_ops::laplacian_2d_into;
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-stencil-laplacian-test") {
-        Ok(device) => Some(device),
-        Err(error) => {
-            eprintln!("skipping Laplacian stencil test: {error}");
-            None
-        }
-    }
+    super::device_or_skip()
 }
 
 /// Leto CPU reference for the same provider-owned stencil used by the WGSL
@@ -81,8 +75,7 @@ fn run_laplacian(
     Some(got)
 }
 
-#[test]
-fn laplacian_minimum_grid_matches_cpu_reference() {
+pub(super) fn laplacian_minimum_grid_matches_cpu_reference() {
     let field: Vec<f32> = (0..4).map(|i| (i as f32) * 0.5 - 0.75).collect();
     let Some(got) = run_laplacian(&field, 2, 2, 1.0, 1.0, BoundaryCondition::Dirichlet) else {
         return;
@@ -91,8 +84,7 @@ fn laplacian_minimum_grid_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_dirichlet_matches_cpu_reference() {
+pub(super) fn laplacian_dirichlet_matches_cpu_reference() {
     let Some(got) = run_laplacian(
         &(0..30).map(|i| i as f32).collect::<Vec<_>>(),
         6,
@@ -114,8 +106,7 @@ fn laplacian_dirichlet_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_neumann_matches_cpu_reference() {
+pub(super) fn laplacian_neumann_matches_cpu_reference() {
     let field: Vec<f32> = (0..30)
         .map(|k| {
             let i = (k % 6) as f32;
@@ -131,8 +122,7 @@ fn laplacian_neumann_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_periodic_matches_cpu_reference() {
+pub(super) fn laplacian_periodic_matches_cpu_reference() {
     let field: Vec<f32> = (0..30)
         .map(|k| {
             let i = (k % 6) as f32;
@@ -148,8 +138,7 @@ fn laplacian_periodic_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_non_square_2x3_matches_cpu_reference() {
+pub(super) fn laplacian_non_square_2x3_matches_cpu_reference() {
     // Covers nx < ny aspect ratio and the nx == 2 minimum in the X direction.
     let field: Vec<f32> = (0..6)
         .map(|k| {
@@ -166,8 +155,7 @@ fn laplacian_non_square_2x3_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_non_square_3x2_matches_cpu_reference() {
+pub(super) fn laplacian_non_square_3x2_matches_cpu_reference() {
     // Covers ny < nx aspect ratio and the ny == 2 minimum in the Y direction.
     let field: Vec<f32> = (0..6)
         .map(|k| {
@@ -184,8 +172,7 @@ fn laplacian_non_square_3x2_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_large_dirichlet_16x16_matches_cpu_reference() {
+pub(super) fn laplacian_large_dirichlet_16x16_matches_cpu_reference() {
     // Exercises multiple 8x8 workgroups with Dirichlet boundaries.
     let n = 16;
     let field: Vec<f32> = (0..n * n)
@@ -203,8 +190,7 @@ fn laplacian_large_dirichlet_16x16_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_large_periodic_16x16_matches_cpu_reference() {
+pub(super) fn laplacian_large_periodic_16x16_matches_cpu_reference() {
     // Exercises multiple 8x8 workgroups with a genuinely periodic field.
     let n = 16;
     let field: Vec<f32> = (0..n * n)
@@ -224,8 +210,7 @@ fn laplacian_large_periodic_16x16_matches_cpu_reference() {
     assert_close_slice(&got, &expected, 1e-5, 1e-5);
 }
 
-#[test]
-fn laplacian_storage_length_mismatch_is_rejected_before_launch() {
+pub(super) fn laplacian_storage_length_mismatch_is_rejected_before_launch() {
     let Some(device) = device_or_skip() else {
         return;
     };

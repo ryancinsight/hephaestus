@@ -7,16 +7,11 @@
 //! shared entry points no backend exercised before `ATLAS-ARCH-001`.
 
 use hephaestus_conformance::assert_typed_elementwise_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuElementwiseOps};
+use hephaestus_wgpu::WgpuElementwiseOps;
 
-#[test]
-fn wgpu_satisfies_the_typed_elementwise_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-typed-elementwise-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU typed-elementwise conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_typed_elementwise_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_typed_elementwise_contract(&device, &WgpuElementwiseOps);
 }

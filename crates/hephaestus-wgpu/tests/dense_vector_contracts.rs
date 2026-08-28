@@ -5,16 +5,11 @@
 //! this file only supplies the device and the backend's seam value.
 
 use hephaestus_conformance::assert_dense_vector_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuVectorOps};
+use hephaestus_wgpu::WgpuVectorOps;
 
-#[test]
-fn wgpu_satisfies_the_dense_vector_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-dense-vector-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU dense-vector conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_dense_vector_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     let ops = WgpuVectorOps::new(&device).expect("vector kernels compile");
     assert_dense_vector_contract(&device, &ops);

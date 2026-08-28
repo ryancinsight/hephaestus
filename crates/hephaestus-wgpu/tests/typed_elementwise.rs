@@ -33,18 +33,7 @@ use hephaestus_wgpu::{
 use leto::Layout;
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
-    DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-typed-elementwise-test") {
-                Ok(device) => Some(device),
-                Err(e) => {
-                    eprintln!("skipping wgpu typed-elementwise test: {e}");
-                    None
-                }
-            },
-        )
-        .clone()
+    super::device_or_skip()
 }
 
 fn op<'a, T, const N: usize>(
@@ -55,8 +44,7 @@ fn op<'a, T, const N: usize>(
 }
 
 /// `u32` comparisons: unsigned ordering with an equal pair at both ends.
-#[test]
-fn typed_comparisons_are_exact_indicators_for_unsigned_operands() {
+pub(super) fn typed_comparisons_are_exact_indicators_for_unsigned_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -91,8 +79,7 @@ fn typed_comparisons_are_exact_indicators_for_unsigned_operands() {
 
 /// `i32` comparisons: the discriminating case is negative operands, which a
 /// kernel that reused the unsigned expression would order incorrectly.
-#[test]
-fn typed_comparisons_order_signed_operands_by_sign() {
+pub(super) fn typed_comparisons_order_signed_operands_by_sign() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -134,8 +121,7 @@ fn typed_comparisons_order_signed_operands_by_sign() {
 /// backends do provide IEEE semantics, so NaN and infinity behaviour is
 /// *capability-gated*, not a universal `ComputeBackend` clause — recorded for the
 /// shared suite as `ATLAS-ARCH-010`.
-#[test]
-fn typed_comparisons_are_exact_indicators_for_finite_floats() {
+pub(super) fn typed_comparisons_are_exact_indicators_for_finite_floats() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -167,8 +153,7 @@ fn typed_comparisons_are_exact_indicators_for_finite_floats() {
 
 /// The `_into` form writes caller-owned storage, matches the allocating form,
 /// and is stable across repeated dispatch.
-#[test]
-fn typed_comparison_into_writes_caller_storage_and_matches_allocating_form() {
+pub(super) fn typed_comparison_into_writes_caller_storage_and_matches_allocating_form() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -195,8 +180,7 @@ fn typed_comparison_into_writes_caller_storage_and_matches_allocating_form() {
 }
 
 /// Operand length disagreement is a typed rejection, not a truncated dispatch.
-#[test]
-fn typed_comparison_rejects_length_mismatch() {
+pub(super) fn typed_comparison_rejects_length_mismatch() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -219,8 +203,7 @@ fn typed_comparison_rejects_length_mismatch() {
 /// The strided `_into` form reads operands through their layouts rather than in
 /// buffer order. A transposed view is the discriminating case: same bytes,
 /// different traversal.
-#[test]
-fn typed_comparison_strided_into_respects_source_strides() {
+pub(super) fn typed_comparison_strided_into_respects_source_strides() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -252,8 +235,7 @@ fn typed_comparison_strided_into_respects_source_strides() {
 
 /// The allocating strided form broadcasts a zero-stride operand across the
 /// output shape and returns dense storage.
-#[test]
-fn typed_comparison_strided_broadcasts_into_dense_output() {
+pub(super) fn typed_comparison_strided_broadcasts_into_dense_output() {
     let Some(device) = device_or_skip() else {
         return;
     };

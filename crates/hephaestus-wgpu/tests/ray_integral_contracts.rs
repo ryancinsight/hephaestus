@@ -5,16 +5,11 @@
 //! this file only supplies the device and the backend's seam value.
 
 use hephaestus_conformance::assert_ray_integral_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuRayIntegralOps};
+use hephaestus_wgpu::WgpuRayIntegralOps;
 
-#[test]
-fn wgpu_satisfies_the_ray_integral_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-ray-integral-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU ray-integral conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_ray_integral_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_ray_integral_contract(&device, &WgpuRayIntegralOps);
 }

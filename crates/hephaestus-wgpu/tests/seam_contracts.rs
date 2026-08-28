@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use hephaestus_core::{
     AddOp, CombineExpr, ComputeDevice, DeviceBuffer, ElementwiseOps, FullReductionOps, IdentityOp,
     IdentityToken, OpIdentity, ProdOp, ScanDirection, ScanOps, StridedView, SumOp, UnaryExpr, Wgsl,
@@ -8,13 +6,7 @@ use hephaestus_wgpu::{WgpuDevice, WgpuElementwiseOps, WgpuFullReductionOps, Wgpu
 use leto::Layout;
 
 fn device() -> WgpuDevice {
-    static DEVICE: OnceLock<WgpuDevice> = OnceLock::new();
-    DEVICE
-        .get_or_init(|| {
-            WgpuDevice::try_default("hephaestus-seam-contracts")
-                .expect("WGPU seam contract tests require a device")
-        })
-        .clone()
+    super::device_or_skip().expect("WGPU seam contract tests require a device")
 }
 
 fn download(device: &WgpuDevice, buffer: &hephaestus_wgpu::WgpuBuffer<f32>) -> Vec<f32> {
@@ -25,8 +17,7 @@ fn download(device: &WgpuDevice, buffer: &hephaestus_wgpu::WgpuBuffer<f32>) -> V
     values
 }
 
-#[test]
-fn full_reduction_honors_output_offset() {
+pub(super) fn full_reduction_honors_output_offset() {
     let device = device();
     let input = device.upload(&[1.0_f32, 2.0, 3.0]).expect("input");
     let output = device.upload(&[17.0_f32, 19.0, 23.0]).expect("output");
@@ -44,8 +35,7 @@ fn full_reduction_honors_output_offset() {
     assert_eq!(download(&device, &output), [17.0, 6.0, 23.0]);
 }
 
-#[test]
-fn empty_full_reductions_write_operator_identities() {
+pub(super) fn empty_full_reductions_write_operator_identities() {
     let device = device();
     let input = device.alloc_uninitialized::<f32>(0).expect("empty input");
     let output = device.upload(&[7.0_f32, 11.0]).expect("output");
@@ -71,8 +61,7 @@ fn empty_full_reductions_write_operator_identities() {
     assert_eq!(download(&device, &output), [0.0, 1.0]);
 }
 
-#[test]
-fn prepared_elementwise_rejects_cross_device_dispatch() {
+pub(super) fn prepared_elementwise_rejects_cross_device_dispatch() {
     let source_device = device();
     let other_device = WgpuDevice::try_default("hephaestus-seam-contracts-other")
         .expect("cross-device contract requires a second logical WGPU device");
@@ -101,8 +90,7 @@ fn prepared_elementwise_rejects_cross_device_dispatch() {
     assert_eq!(download(&source_device, &output), [13.0, 17.0]);
 }
 
-#[test]
-fn prepared_scan_and_full_reduction_reject_cross_device_dispatch() {
+pub(super) fn prepared_scan_and_full_reduction_reject_cross_device_dispatch() {
     let source_device = device();
     let other_device = WgpuDevice::try_default("hephaestus-seam-contracts-other-prepared")
         .expect("cross-device contract requires a second logical WGPU device");
@@ -155,8 +143,7 @@ fn prepared_scan_and_full_reduction_reject_cross_device_dispatch() {
     assert_eq!(download(&source_device, &reduction_output), [29.0]);
 }
 
-#[test]
-fn overlapping_writable_layouts_fail_before_mutation() {
+pub(super) fn overlapping_writable_layouts_fail_before_mutation() {
     let device = device();
     let input = device.upload(&[1.0_f32, 2.0, 3.0, 4.0]).expect("input");
     let output = device.upload(&[29.0_f32, 31.0, 37.0]).expect("output");
@@ -191,8 +178,7 @@ fn overlapping_writable_layouts_fail_before_mutation() {
     assert_eq!(download(&device, &output), [29.0, 31.0, 37.0]);
 }
 
-#[test]
-fn elementwise_and_scan_match_value_oracles() {
+pub(super) fn elementwise_and_scan_match_value_oracles() {
     let device = device();
     let lhs = device
         .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
@@ -253,8 +239,7 @@ impl UnaryExpr<Wgsl> for InvalidWgsl {
     const EXPR: &'static str = "this is not a WGSL expression";
 }
 
-#[test]
-fn invalid_external_expression_is_a_typed_preparation_error() {
+pub(super) fn invalid_external_expression_is_a_typed_preparation_error() {
     let device = device();
     let input = device.upload(&[1.0_f32]).expect("input");
     let output = device.upload(&[43.0_f32]).expect("output");
@@ -292,8 +277,7 @@ impl IdentityToken<InvalidCombine, Wgsl> for f32 {
     const TOKEN: &'static str = "0.0";
 }
 
-#[test]
-fn invalid_external_combine_is_a_typed_preparation_error() {
+pub(super) fn invalid_external_combine_is_a_typed_preparation_error() {
     let device = device();
     let input = device.upload(&[1.0_f32, 2.0]).expect("input");
     let output = device.upload(&[47.0_f32]).expect("output");
@@ -317,8 +301,7 @@ fn invalid_external_combine_is_a_typed_preparation_error() {
     assert_eq!(download(&device, &output), [47.0]);
 }
 
-#[test]
-fn full_reduction_rejects_foreign_buffers_before_mutation() {
+pub(super) fn full_reduction_rejects_foreign_buffers_before_mutation() {
     let source_device = device();
     let other_device = WgpuDevice::try_default("hephaestus-seam-contracts-foreign-buffers")
         .expect("foreign-buffer contract requires a second logical WGPU device");

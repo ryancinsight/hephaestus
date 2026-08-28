@@ -5,8 +5,7 @@
 //! version tied to the Hephaestus provider instead of a separate direct
 //! dependency.
 
-#[test]
-fn provider_exports_wgpu_abi_types() {
+pub(super) fn provider_exports_wgpu_abi_types() {
     let usage = hephaestus_wgpu::wgpu::BufferUsages::STORAGE
         | hephaestus_wgpu::wgpu::BufferUsages::COPY_SRC
         | hephaestus_wgpu::wgpu::BufferUsages::COPY_DST;

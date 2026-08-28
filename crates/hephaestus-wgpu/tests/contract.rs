@@ -44,22 +44,7 @@ impl hephaestus_wgpu::MatrixIdentityScalar for AlternateIdentity {
 }
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
-    DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-contract-test") {
-                Ok(device) => Some(device),
-                Err(error @ HephaestusError::AdapterUnavailable { .. }) => {
-                    if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some() {
-                        panic!("WGPU adapter required, but acquisition failed: {error}");
-                    }
-                    eprintln!("skipping wgpu contract test: adapter unavailable");
-                    None
-                }
-                Err(error) => panic!("WGPU contract tests require a working provider: {error}"),
-            },
-        )
-        .clone()
+    super::device_or_skip()
 }
 fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
     match result {
@@ -261,8 +246,7 @@ fn packed_lu_product(packed: &[f32], n: usize) -> Vec<f32> {
     out
 }
 
-#[test]
-fn upload_download_round_trips_values() {
+pub(super) fn upload_download_round_trips_values() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -275,8 +259,7 @@ fn upload_download_round_trips_values() {
     assert_eq!(out, host);
 }
 
-#[test]
-fn device_local_copy_preserves_values_and_rejects_mismatch() {
+pub(super) fn device_local_copy_preserves_values_and_rejects_mismatch() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -297,8 +280,7 @@ fn device_local_copy_preserves_values_and_rejects_mismatch() {
     );
 }
 
-#[test]
-fn uninitialized_allocation_is_fully_overwritten_before_read() {
+pub(super) fn uninitialized_allocation_is_fully_overwritten_before_read() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -310,8 +292,7 @@ fn uninitialized_allocation_is_fully_overwritten_before_read() {
     assert_eq!(actual, expected);
 }
 
-#[test]
-fn odd_u16_storage_preserves_logical_values_when_device_exists() {
+pub(super) fn odd_u16_storage_preserves_logical_values_when_device_exists() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -338,8 +319,7 @@ fn odd_u16_storage_preserves_logical_values_when_device_exists() {
     assert_eq!(written_readback, written);
 }
 
-#[test]
-fn test_placement_aware_allocation() {
+pub(super) fn test_placement_aware_allocation() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -379,8 +359,7 @@ fn test_placement_aware_allocation() {
     assert_eq!(default_out, host, "Device upload must preserve data");
 }
 
-#[test]
-fn download_rejects_length_mismatch() {
+pub(super) fn download_rejects_length_mismatch() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -389,8 +368,7 @@ fn download_rejects_length_mismatch() {
     assert_length_mismatch(device.download(&buffer, &mut out), 2, 3);
 }
 
-#[test]
-fn elementwise_add_matches_cpu_reference() {
+pub(super) fn elementwise_add_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -408,8 +386,7 @@ fn elementwise_add_matches_cpu_reference() {
     assert_eq!(got, expected);
 }
 
-#[test]
-fn elementwise_mul_matches_cpu_reference_integral() {
+pub(super) fn elementwise_mul_matches_cpu_reference_integral() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -426,8 +403,7 @@ fn elementwise_mul_matches_cpu_reference_integral() {
     assert_eq!(got, expected);
 }
 
-#[test]
-fn elementwise_rejects_input_length_mismatch() {
+pub(super) fn elementwise_rejects_input_length_mismatch() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -436,8 +412,7 @@ fn elementwise_rejects_input_length_mismatch() {
     assert_length_mismatch(binary_elementwise::<AddOp, f32>(&device, &a, &b), 2, 3);
 }
 
-#[test]
-fn elementwise_into_reuses_caller_output_buffers() {
+pub(super) fn elementwise_into_reuses_caller_output_buffers() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -482,8 +457,7 @@ fn elementwise_into_reuses_caller_output_buffers() {
     );
 }
 
-#[test]
-fn elementwise_into_rejects_output_input_aliasing() {
+pub(super) fn elementwise_into_rejects_output_input_aliasing() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -503,8 +477,7 @@ fn elementwise_into_rejects_output_input_aliasing() {
     ));
 }
 
-#[test]
-fn elementwise_unary_matches_cpu_reference() {
+pub(super) fn elementwise_unary_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -581,8 +554,7 @@ fn elementwise_unary_matches_cpu_reference() {
     assert_eq!(got_recip, vec![1.0f32, 0.5, 0.25, 0.125]);
 }
 
-#[test]
-fn elementwise_lgamma_matches_cpu_reference() {
+pub(super) fn elementwise_lgamma_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -615,8 +587,7 @@ fn elementwise_lgamma_matches_cpu_reference() {
     }
 }
 
-#[test]
-fn elementwise_activation_markers_match_cpu_reference() {
+pub(super) fn elementwise_activation_markers_match_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -724,8 +695,7 @@ fn elementwise_activation_markers_match_cpu_reference() {
     );
 }
 
-#[test]
-fn elementwise_scalar_matches_cpu_reference() {
+pub(super) fn elementwise_scalar_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -745,8 +715,7 @@ fn elementwise_scalar_matches_cpu_reference() {
     assert_eq!(got_mul, vec![3.0f32, 6.0, 9.0, 12.0, 15.0]);
 }
 
-#[test]
-fn reduction_sum_matches_cpu_reference() {
+pub(super) fn reduction_sum_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -843,8 +812,7 @@ fn reduction_sum_matches_cpu_reference() {
     }
 }
 
-#[test]
-fn reduction_min_max_matches_cpu_reference() {
+pub(super) fn reduction_min_max_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -924,8 +892,7 @@ fn reduction_min_max_matches_cpu_reference() {
     }
 }
 
-#[test]
-fn reduction_width_is_part_of_dispatch_contract() {
+pub(super) fn reduction_width_is_part_of_dispatch_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -959,8 +926,7 @@ fn reduction_width_is_part_of_dispatch_contract() {
     );
 }
 
-#[test]
-fn axis_reductions_match_leto_reference() {
+pub(super) fn axis_reductions_match_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1379,8 +1345,7 @@ fn axis_reductions_match_leto_reference() {
     assert_eq!(no_output.len(), 0);
 }
 
-#[test]
-fn mixed_prepared_reduction_batch_preserves_scalar_and_axis_results() {
+pub(super) fn mixed_prepared_reduction_batch_preserves_scalar_and_axis_results() {
     use hephaestus_wgpu::StridedOperand;
     use leto::Layout;
 
@@ -1474,8 +1439,7 @@ fn mixed_prepared_reduction_batch_preserves_scalar_and_axis_results() {
 /// equality — the naive-summation error model is O(n*eps*sum(|x_i|)); the
 /// bound below is that model with headroom for the extra tree-reduction
 /// level, not a widened-to-pass tolerance.
-#[test]
-fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
+pub(super) fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
     use hephaestus_wgpu::StridedOperand;
     use leto::Layout;
 
@@ -1519,8 +1483,7 @@ fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
     }
 }
 
-#[test]
-fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
+pub(super) fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
     use hephaestus_wgpu::StridedOperand;
     use leto::Layout;
 
@@ -1582,8 +1545,7 @@ fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
     assert_eq!(narrow_actual, expected_sum);
 }
 
-#[test]
-fn axis_scans_match_leto_reference() {
+pub(super) fn axis_scans_match_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1706,8 +1668,7 @@ fn axis_scans_match_leto_reference() {
     );
 }
 
-#[test]
-fn cumprod_convenience_preserves_strided_and_empty_contract() {
+pub(super) fn cumprod_convenience_preserves_strided_and_empty_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1782,8 +1743,7 @@ fn cumprod_convenience_preserves_strided_and_empty_contract() {
     ));
 }
 
-#[test]
-fn axis_scan_long_line_matches_leto_reference() {
+pub(super) fn axis_scan_long_line_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1819,8 +1779,7 @@ fn axis_scan_long_line_matches_leto_reference() {
     assert_eq!(got, expected);
 }
 
-#[test]
-fn acquisition_reports_themis_topology_from_adapter() {
+pub(super) fn acquisition_reports_themis_topology_from_adapter() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1849,8 +1808,7 @@ fn acquisition_reports_themis_topology_from_adapter() {
     );
 }
 
-#[test]
-fn linalg_matmul_matches_cpu_reference() {
+pub(super) fn linalg_matmul_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1910,8 +1868,7 @@ fn linalg_matmul_matches_cpu_reference() {
     assert_eq!(allocated_got, expected);
 }
 
-#[test]
-fn linalg_batched_matmul_matches_cpu_reference() {
+pub(super) fn linalg_batched_matmul_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1967,8 +1924,7 @@ fn linalg_batched_matmul_matches_cpu_reference() {
     assert_eq!(allocated_got, expected);
 }
 
-#[test]
-fn linalg_kron_matches_leto_reference() {
+pub(super) fn linalg_kron_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2028,8 +1984,7 @@ fn linalg_kron_matches_leto_reference() {
     assert_eq!(allocated_got, expected);
 }
 
-#[test]
-fn linalg_matpow_matches_leto_reference() {
+pub(super) fn linalg_matpow_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2107,8 +2062,7 @@ fn linalg_matpow_matches_leto_reference() {
     assert_eq!(empty_power.len(), 0);
 }
 
-#[test]
-fn linalg_matpow_rejects_non_square() {
+pub(super) fn linalg_matpow_rejects_non_square() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2131,8 +2085,7 @@ fn linalg_matpow_rejects_non_square() {
     );
 }
 
-#[test]
-fn linalg_dot_matches_cpu_reference() {
+pub(super) fn linalg_dot_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2167,8 +2120,7 @@ fn linalg_dot_matches_cpu_reference() {
     assert_eq!(got[0], expected);
 }
 
-#[test]
-fn prepared_dot_reuses_output_and_observes_input_updates() {
+pub(super) fn prepared_dot_reuses_output_and_observes_input_updates() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2209,8 +2161,7 @@ fn prepared_dot_reuses_output_and_observes_input_updates() {
     assert_eq!(&output_handle, prepared.output().raw());
 }
 
-#[test]
-fn linalg_trace_matches_cpu_reference() {
+pub(super) fn linalg_trace_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2237,8 +2188,7 @@ fn linalg_trace_matches_cpu_reference() {
     assert_eq!(got[0], expected);
 }
 
-#[test]
-fn linalg_matrix_rank_matches_leto_reference() {
+pub(super) fn linalg_matrix_rank_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2313,8 +2263,7 @@ fn linalg_matrix_rank_matches_leto_reference() {
     ));
 }
 
-#[test]
-fn linalg_det_matches_leto_reference() {
+pub(super) fn linalg_det_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2380,8 +2329,7 @@ fn linalg_det_matches_leto_reference() {
 /// is `1` and the singular values equal the diagonal magnitudes, so the
 /// threshold alone decides the rank and the GPU row-reduction result must agree
 /// with Leto's SVD-spectrum result for both tolerances.
-#[test]
-fn matrix_rank_relative_tolerance_is_the_discriminator() {
+pub(super) fn matrix_rank_relative_tolerance_is_the_discriminator() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2427,8 +2375,7 @@ fn matrix_rank_relative_tolerance_is_the_discriminator() {
 /// a near-singular matrix yields its small, nonzero determinant. The input is
 /// upper-triangular, so elimination performs no row operations and the result is
 /// the analytical pivot product `2 * 3 * δ`.
-#[test]
-fn det_of_near_singular_triangular_is_exact_pivot_product() {
+pub(super) fn det_of_near_singular_triangular_is_exact_pivot_product() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2472,8 +2419,7 @@ fn det_of_near_singular_triangular_is_exact_pivot_product() {
     assert!((got[0] - leto_det).abs() <= tol);
 }
 
-#[test]
-fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
+pub(super) fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2527,8 +2473,7 @@ fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
 }
 
-#[test]
-fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
+pub(super) fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2552,8 +2497,7 @@ fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     ));
 }
 
-#[test]
-fn eigenvalues_match_closed_form_diagonal() {
+pub(super) fn eigenvalues_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2588,8 +2532,7 @@ fn eigenvalues_match_closed_form_diagonal() {
     }
 }
 
-#[test]
-fn eigenvalues_match_exact_complex_pair_blocks() {
+pub(super) fn eigenvalues_match_exact_complex_pair_blocks() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2632,8 +2575,7 @@ fn eigenvalues_match_exact_complex_pair_blocks() {
     }
 }
 
-#[test]
-fn eigenvalues_match_structured_and_dense_leto_oracles() {
+pub(super) fn eigenvalues_match_structured_and_dense_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2684,8 +2626,7 @@ fn eigenvalues_match_structured_and_dense_leto_oracles() {
     }
 }
 
-#[test]
-fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
+pub(super) fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2723,8 +2664,7 @@ fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
 }
 
-#[test]
-fn eigenvalues_rejects_non_square_input() {
+pub(super) fn eigenvalues_rejects_non_square_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2748,8 +2688,7 @@ fn eigenvalues_rejects_non_square_input() {
     ));
 }
 
-#[test]
-fn singular_values_match_closed_form_diagonal() {
+pub(super) fn singular_values_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2775,8 +2714,7 @@ fn singular_values_match_closed_form_diagonal() {
     assert_close(got[1], 2.0, 1.0e-5);
 }
 
-#[test]
-fn svd_decompose_reconstructs_leto_reference() {
+pub(super) fn svd_decompose_reconstructs_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2821,8 +2759,7 @@ fn svd_decompose_reconstructs_leto_reference() {
     }
 }
 
-#[test]
-fn svd_rank_revealing_accepts_rank_deficient_matrix() {
+pub(super) fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2859,8 +2796,7 @@ fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     }
 }
 
-#[test]
-fn bidiagonalize_reconstructs_and_preserves_singular_values() {
+pub(super) fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2935,8 +2871,7 @@ fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     }
 }
 
-#[test]
-fn bidiagonalize_rejects_wide_matrix() {
+pub(super) fn bidiagonalize_rejects_wide_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -2961,8 +2896,7 @@ fn bidiagonalize_rejects_wide_matrix() {
     ));
 }
 
-#[test]
-fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
+pub(super) fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3049,8 +2983,7 @@ fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         .unwrap();
 }
 
-#[test]
-fn schur_rejects_rectangular_matrix() {
+pub(super) fn schur_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3079,8 +3012,7 @@ fn schur_rejects_rectangular_matrix() {
         .unwrap();
 }
 
-#[test]
-fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
+pub(super) fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3173,8 +3105,7 @@ fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     assert_close(got_h_norm[0], got_a_norm[0], 1.0e-3);
 }
 
-#[test]
-fn hessenberg_rejects_rectangular_matrix() {
+pub(super) fn hessenberg_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3199,8 +3130,7 @@ fn hessenberg_rejects_rectangular_matrix() {
     ));
 }
 
-#[test]
-fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
+pub(super) fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3268,8 +3198,7 @@ fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
     }
 }
 
-#[test]
-fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
+pub(super) fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3297,8 +3226,7 @@ fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
     ));
 }
 
-#[test]
-fn full_piv_lu_rejects_rectangular_matrix() {
+pub(super) fn full_piv_lu_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3323,8 +3251,7 @@ fn full_piv_lu_rejects_rectangular_matrix() {
     ));
 }
 
-#[test]
-fn blocked_pivoted_decompositions_match_ordinary_contracts() {
+pub(super) fn blocked_pivoted_decompositions_match_ordinary_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3381,8 +3308,7 @@ fn blocked_pivoted_decompositions_match_ordinary_contracts() {
 
 // ── write_buffer tests ────────────────────────────────────────────────
 
-#[test]
-fn write_buffer_overwrites_existing_data() {
+pub(super) fn write_buffer_overwrites_existing_data() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3401,8 +3327,7 @@ fn write_buffer_overwrites_existing_data() {
     assert_eq!(got, updated);
 }
 
-#[test]
-fn write_buffer_rejects_length_mismatch() {
+pub(super) fn write_buffer_rejects_length_mismatch() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3413,8 +3338,7 @@ fn write_buffer_rejects_length_mismatch() {
     assert_length_mismatch(result, 2, 3);
 }
 
-#[test]
-fn write_buffer_empty_is_noop() {
+pub(super) fn write_buffer_empty_is_noop() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3424,8 +3348,7 @@ fn write_buffer_empty_is_noop() {
     assert_eq!(buf.len(), 0);
 }
 
-#[test]
-fn write_buffer_integer_types() {
+pub(super) fn write_buffer_integer_types() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3439,8 +3362,7 @@ fn write_buffer_integer_types() {
     assert_eq!(got, data);
 }
 
-#[test]
-fn write_sub_buffer_overwrites_only_requested_range() {
+pub(super) fn write_sub_buffer_overwrites_only_requested_range() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3453,8 +3375,7 @@ fn write_sub_buffer_overwrites_only_requested_range() {
     assert_eq!(got, [1.0, 20.0, 30.0, 4.0]);
 }
 
-#[test]
-fn write_sub_buffer_rejects_out_of_range_write() {
+pub(super) fn write_sub_buffer_rejects_out_of_range_write() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3463,8 +3384,7 @@ fn write_sub_buffer_rejects_out_of_range_write() {
     assert_length_mismatch(device.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
 }
 
-#[test]
-fn write_sub_buffer_empty_tail_write_is_noop() {
+pub(super) fn write_sub_buffer_empty_tail_write_is_noop() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3479,8 +3399,7 @@ fn write_sub_buffer_empty_tail_write_is_noop() {
 
 // ── Extended differential decomposition tests ─────────────────────────────
 
-#[test]
-fn cholesky_rejects_singular_matrix() {
+pub(super) fn cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3503,8 +3422,7 @@ fn cholesky_rejects_singular_matrix() {
     );
 }
 
-#[test]
-fn lu_rejects_singular_matrix() {
+pub(super) fn lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3524,8 +3442,7 @@ fn lu_rejects_singular_matrix() {
     assert!(result.is_err(), "singular matrix must be rejected by LU");
 }
 
-#[test]
-fn linalg_norms_match_cpu_reference() {
+pub(super) fn linalg_norms_match_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3567,8 +3484,7 @@ fn linalg_norms_match_cpu_reference() {
     assert_eq!(got_max[0], 4.0);
 }
 
-#[test]
-fn prepared_l2_norm_reuses_output_and_observes_input_updates() {
+pub(super) fn prepared_l2_norm_reuses_output_and_observes_input_updates() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3603,8 +3519,7 @@ fn prepared_l2_norm_reuses_output_and_observes_input_updates() {
     assert_eq!(&output_handle, prepared.output().raw());
 }
 
-#[test]
-fn linalg_reductions_accept_strided_views() {
+pub(super) fn linalg_reductions_accept_strided_views() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3660,8 +3575,7 @@ fn linalg_reductions_accept_strided_views() {
 
 // ── Blocked decomposition differential tests ────────────────────────────
 
-#[test]
-fn blocked_lu_matches_leto_reference() {
+pub(super) fn blocked_lu_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3731,8 +3645,7 @@ fn blocked_lu_matches_leto_reference() {
     );
 }
 
-#[test]
-fn blocked_lu_identity_yields_identity_factors() {
+pub(super) fn blocked_lu_identity_yields_identity_factors() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3759,8 +3672,7 @@ fn blocked_lu_identity_yields_identity_factors() {
     assert_eq!(gpu_lu.det(), 1.0);
 }
 
-#[test]
-fn blocked_lu_solve_known_system_accurate() {
+pub(super) fn blocked_lu_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3805,8 +3717,7 @@ fn blocked_lu_solve_known_system_accurate() {
     }
 }
 
-#[test]
-fn blocked_lu_rejects_singular_matrix() {
+pub(super) fn blocked_lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3829,8 +3740,7 @@ fn blocked_lu_rejects_singular_matrix() {
     );
 }
 
-#[test]
-fn blocked_qr_matches_leto_reference() {
+pub(super) fn blocked_qr_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3923,8 +3833,7 @@ fn blocked_qr_matches_leto_reference() {
     }
 }
 
-#[test]
-fn blocked_qr_preserves_panel_boundary_contracts() {
+pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4020,8 +3929,7 @@ fn blocked_qr_preserves_panel_boundary_contracts() {
     }
 }
 
-#[test]
-fn blocked_qr_identity_yields_identity_r() {
+pub(super) fn blocked_qr_identity_yields_identity_r() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4062,8 +3970,7 @@ fn blocked_qr_identity_yields_identity_r() {
     }
 }
 
-#[test]
-fn blocked_qr_solve_known_system_accurate() {
+pub(super) fn blocked_qr_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4111,8 +4018,7 @@ fn blocked_qr_solve_known_system_accurate() {
     );
 }
 
-#[test]
-fn blocked_qr_rejects_underdetermined() {
+pub(super) fn blocked_qr_rejects_underdetermined() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4135,8 +4041,7 @@ fn blocked_qr_rejects_underdetermined() {
     ));
 }
 
-#[test]
-fn blocked_cholesky_identity_yields_identity_lower() {
+pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4167,8 +4072,7 @@ fn blocked_cholesky_identity_yields_identity_lower() {
     assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
 }
 
-#[test]
-fn blocked_cholesky_spd_reconstruction_matches_original() {
+pub(super) fn blocked_cholesky_spd_reconstruction_matches_original() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4229,8 +4133,7 @@ fn blocked_cholesky_spd_reconstruction_matches_original() {
     }
 }
 
-#[test]
-fn blocked_cholesky_solve_known_system_accurate() {
+pub(super) fn blocked_cholesky_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4274,8 +4177,7 @@ fn blocked_cholesky_solve_known_system_accurate() {
     assert!((ax1 - 7.0).abs() <= 1e-4, "residual[1] = {ax1}");
 }
 
-#[test]
-fn blocked_cholesky_rejects_singular_matrix() {
+pub(super) fn blocked_cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4298,8 +4200,7 @@ fn blocked_cholesky_rejects_singular_matrix() {
     );
 }
 
-#[test]
-fn udu_decompose_rejects_invalid_contracts() {
+pub(super) fn udu_decompose_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4355,8 +4256,7 @@ fn udu_decompose_rejects_invalid_contracts() {
     ));
 }
 
-#[test]
-fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
+pub(super) fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4396,8 +4296,7 @@ fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     ));
 }
 
-#[test]
-fn linalg_pinv_matches_closed_form_diagonal() {
+pub(super) fn linalg_pinv_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4422,8 +4321,7 @@ fn linalg_pinv_matches_closed_form_diagonal() {
     assert_eq!(got, vec![0.5, 0.0, 0.0, 0.25]);
 }
 
-#[test]
-fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
+pub(super) fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4461,8 +4359,7 @@ fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     assert_close_slice(&ap_a_ap, &got, 1.0e-4, 1.0e-4);
 }
 
-#[test]
-fn linalg_pinv_handles_rectangular_full_rank_matrix() {
+pub(super) fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4497,8 +4394,7 @@ fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
 }
 
-#[test]
-fn linalg_pinv_rejects_non_finite_input() {
+pub(super) fn linalg_pinv_rejects_non_finite_input() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4522,8 +4418,7 @@ fn linalg_pinv_rejects_non_finite_input() {
     ));
 }
 
-#[test]
-fn linalg_matexp_matches_closed_form_diagonal() {
+pub(super) fn linalg_matexp_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4555,8 +4450,7 @@ fn linalg_matexp_matches_closed_form_diagonal() {
     }
 }
 
-#[test]
-fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
+pub(super) fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4600,8 +4494,7 @@ fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
     );
 }
 
-#[test]
-fn linalg_matexp_matches_leto_general_matrix() {
+pub(super) fn linalg_matexp_matches_leto_general_matrix() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4631,8 +4524,7 @@ fn linalg_matexp_matches_leto_general_matrix() {
     assert_close_slice(&got, &expected_host, 1.0e-3, 1.0e-4);
 }
 
-#[test]
-fn linalg_matexp_rejects_invalid_contracts() {
+pub(super) fn linalg_matexp_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4672,8 +4564,7 @@ fn linalg_matexp_rejects_invalid_contracts() {
     ));
 }
 
-#[test]
-fn test_wgpu_uniform_and_normal_with_seed() {
+pub(super) fn test_wgpu_uniform_and_normal_with_seed() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4702,8 +4593,7 @@ fn test_wgpu_uniform_and_normal_with_seed() {
     assert!(got_n.iter().any(|&val| val != 0.0));
 }
 
-#[test]
-fn test_wgpu_sparse_matrix_spmv_spmm() {
+pub(super) fn test_wgpu_sparse_matrix_spmv_spmm() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4884,8 +4774,7 @@ where
     }
 }
 
-#[test]
-fn blocked_cholesky_rejects_non_dense_operands() {
+pub(super) fn blocked_cholesky_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4896,24 +4785,21 @@ fn blocked_cholesky_rejects_non_dense_operands() {
     );
 }
 
-#[test]
-fn blocked_lu_rejects_non_dense_operands() {
+pub(super) fn blocked_lu_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
     assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::lu_decompose_blocked, "LU");
 }
 
-#[test]
-fn blocked_qr_rejects_non_dense_operands() {
+pub(super) fn blocked_qr_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
     assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::qr_decompose_blocked, "QR");
 }
 
-#[test]
-fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+pub(super) fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4929,8 +4815,7 @@ fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     );
 }
 
-#[test]
-fn empty_qr_preserves_shape_and_identity() {
+pub(super) fn empty_qr_preserves_shape_and_identity() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -4954,8 +4839,7 @@ fn empty_qr_preserves_shape_and_identity() {
     }
 }
 
-#[test]
-fn fdtd_3d_provider_matches_sequential_cpu_reference() {
+pub(super) fn fdtd_3d_provider_matches_sequential_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };

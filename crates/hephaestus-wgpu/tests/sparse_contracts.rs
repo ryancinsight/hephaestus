@@ -7,16 +7,11 @@
 //! native CSR SpMV implementations (ATLAS-ARCH-001c).
 
 use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
-use hephaestus_wgpu::{WgpuDevice, WgpuSparseOps};
+use hephaestus_wgpu::WgpuSparseOps;
 
-#[test]
-fn wgpu_satisfies_the_sparse_operator_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-sparse-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU sparse conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_sparse_operator_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_sparse_operator_contract(&device, &WgpuSparseOps);
     assert_batch_submit_contract(&device, &WgpuSparseOps);

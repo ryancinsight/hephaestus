@@ -6,16 +6,11 @@
 //! and the backend's seam value.
 
 use hephaestus_conformance::assert_full_reduction_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuFullReductionOps};
+use hephaestus_wgpu::WgpuFullReductionOps;
 
-#[test]
-fn wgpu_satisfies_the_full_reduction_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-full-reduction-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU full-reduction conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_full_reduction_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_full_reduction_contract(&device, &WgpuFullReductionOps);
 }

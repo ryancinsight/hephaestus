@@ -1543,6 +1543,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn module_cases_share_process_state() {
+        crate::test_support::run_cases(&[
+            (
+                "padded_size_aligns_to_copy_boundary",
+                padded_size_aligns_to_copy_boundary as fn(),
+            ),
+            (
+                "padded_host_bytes_preserve_an_odd_u16_payload",
+                padded_host_bytes_preserve_an_odd_u16_payload as fn(),
+            ),
+            (
+                "staging_mapping_is_reusable_after_consumer_unwind",
+                staging_mapping_is_reusable_after_consumer_unwind as fn(),
+            ),
+            (
+                "aligned_size_overflow_is_allocation_failure",
+                aligned_size_overflow_is_allocation_failure as fn(),
+            ),
+            (
+                "byte_size_overflow_is_allocation_failure",
+                byte_size_overflow_is_allocation_failure as fn(),
+            ),
+            (
+                "device_feature_mapping_preserves_required_shader_f16",
+                device_feature_mapping_preserves_required_shader_f16 as fn(),
+            ),
+            (
+                "adapter_ranking_maps_both_device_preferences",
+                adapter_ranking_maps_both_device_preferences as fn(),
+            ),
+            (
+                "downlevel_device_limits_preserve_wgpu_downlevel_contract",
+                downlevel_device_limits_preserve_wgpu_downlevel_contract as fn(),
+            ),
+            (
+                "typed_downlevel_limits_preserve_full_wgpu_acquisition_contract",
+                typed_downlevel_limits_preserve_full_wgpu_acquisition_contract as fn(),
+            ),
+            (
+                "elevated_storage_limit_raises_the_aggregate_buffer_limit",
+                elevated_storage_limit_raises_the_aggregate_buffer_limit as fn(),
+            ),
+        ]);
+    }
+
     fn padded_size_aligns_to_copy_boundary() {
         match WgpuDevice::byte_size::<u32>(3) {
             Ok(bytes) => assert_eq!(bytes, 12),
@@ -1558,7 +1603,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn padded_host_bytes_preserve_an_odd_u16_payload() {
         let host = [0x0001_u16, 0x0203, 0x0405];
         let payload = WgpuDevice::padded_host_bytes(&host).expect("padded host bytes");
@@ -1567,7 +1611,6 @@ mod tests {
         assert_eq!(&payload[6..], [0, 0]);
     }
 
-    #[test]
     fn staging_mapping_is_reusable_after_consumer_unwind() {
         let Ok(device) = WgpuDevice::try_default("hephaestus-staging-unwind") else {
             return;
@@ -1598,7 +1641,6 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test]
     fn aligned_size_overflow_is_allocation_failure() {
         match WgpuDevice::aligned_size(u64::MAX, wgpu::COPY_BUFFER_ALIGNMENT) {
             Err(HephaestusError::AllocationFailed { message }) => assert_eq!(
@@ -1613,7 +1655,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn byte_size_overflow_is_allocation_failure() {
         let overflowing_len = usize::MAX / core::mem::size_of::<u64>() + 1;
         match WgpuDevice::byte_size::<u64>(overflowing_len) {
@@ -1625,7 +1666,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn device_feature_mapping_preserves_required_shader_f16() {
         assert_eq!(
             WgpuDevice::wgpu_features(&[DeviceFeature::ShaderF16, DeviceFeature::TimestampQuery,]),
@@ -1633,7 +1673,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn adapter_ranking_maps_both_device_preferences() {
         assert!(
             WgpuDevice::adapter_preference_rank(
@@ -1655,7 +1694,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn downlevel_device_limits_preserve_wgpu_downlevel_contract() {
         let downlevel = WgpuDevice::downlevel_device_limits();
 
@@ -1666,7 +1704,6 @@ mod tests {
         assert_eq!(downlevel.max_storage_buffers_per_shader_stage, Some(4));
     }
 
-    #[test]
     fn typed_downlevel_limits_preserve_full_wgpu_acquisition_contract() {
         assert_eq!(
             WgpuDevice::wgpu_limits_from_device_limits(WgpuDevice::downlevel_device_limits()),
@@ -1674,7 +1711,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn elevated_storage_limit_raises_the_aggregate_buffer_limit() {
         let mut required = WgpuDevice::downlevel_device_limits();
         required.max_storage_buffers_per_shader_stage = Some(32);
