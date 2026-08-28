@@ -148,9 +148,11 @@
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   fix-forward is on `feat/wgpu-fft-device-validation` and consumer closure is
   in Apollo/Kwavers.
-- Lease: none. Provider PR #230 merged as `48bb731`; the prepared FFT
-  consumer-preflight fix-forward is warning-clean and passes the focused
-  real-device FFT suite (6 process tests, all cases green in 15.570 seconds).
+- Lease: none. PR #231 corrected candidate `d82c5e7` adds the structural typed
+  error assertion, outside-crate visibility coverage, and API/ADR
+  synchronization requested by independent review. Warning-denied all-target
+  Clippy passes, and the external 169-case integration contract passes in 4.988
+  seconds. Provider PR #230 merged as `48bb731`; re-review/merge remain open.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then

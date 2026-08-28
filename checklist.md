@@ -5,12 +5,12 @@ Sprint target: 0.18.0. Phase: Closure.
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
 Consumer-preflight lease: discharged 2026-08-28 on
-`feat/wgpu-fft-device-validation`. Provider PR #230 merged as `48bb731`; Apollo
-STFT then exposed the need to validate a prepared plan's device before its first
-queue write. The narrow fix-forward makes the existing ownership check public
-and retains the same typed error. Warning-denied all-target Clippy and the
-focused real-device FFT suite (6 process tests, all cases green in 15.570
-seconds) pass.
+`feat/wgpu-fft-device-validation`, PR #231 at corrected candidate `d82c5e7`.
+Provider PR #230 merged as `48bb731`; Apollo STFT then exposed the need to
+validate a prepared plan's device before its first queue write. The fix-forward
+makes the existing ownership check public and retains the same typed error.
+Warning-denied all-target Clippy passes, and the external 169-case integration
+contract passes in 4.988 seconds. Independent re-review and merge remain open.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
