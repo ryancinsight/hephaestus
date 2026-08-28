@@ -40,7 +40,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   [161.25, 164.67]/[168.20, 174.41] and
   [219.22, 225.42]/[212.69, 218.68]. WGPU command streams and readback also
   expose explicit deadline-aware forms for bounded host and benchmark
-  integration.
+  integration. Retained grouped dispatches additionally bind fixed buffers,
+  parameters, and launch geometry once, then encode beside prepared FFT
+  commands without warm-path Hephaestus allocation or bind-group construction.
 
 - [patch] WGPU device acquisition now reports why it failed. Every
   `request_adapter` and `request_device` error was discarded behind

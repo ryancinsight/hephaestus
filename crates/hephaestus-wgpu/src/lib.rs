@@ -92,7 +92,8 @@ pub use application::storage_kernel::{
     WgslUnaryStorageKernel,
 };
 pub use application::stream::{
-    WgpuCommandStream, WgpuGroupedPrepared, WgpuGroupedSequence, WgpuPrepared,
+    WgpuBoundGroupedDispatch, WgpuCommandStream, WgpuGroupedPrepared, WgpuGroupedSequence,
+    WgpuPrepared,
 };
 pub use application::strided::{
     MAX_STRIDED_RANK, StridedOperand, binary_elementwise_strided, binary_elementwise_strided_into,
