@@ -70,14 +70,23 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — Owner: Codex
 
-- [ ] Attribute the 76.936-second, 242-test, 26-binary baseline by test binary,
+- [x] Attribute the 76.936-second, 242-test, 26-binary baseline by test binary,
       device-acquisition count, and execution time without changing workloads.
-- [ ] Consolidate integration tests into the fewest cohesive harnesses and reuse
-      one logical device per harness while preserving independent buffers,
-      parallel-test determinism, skip policy, and every value assertion.
-- [ ] Verify concurrent buffer isolation, warning-denied all-target compilation,
-      and the unchanged 242-test package suite under the committed Nextest
-      budget; compare exact before/after wall time.
+      Nextest's process-per-test model recreated every process-local device
+      cache; the 101-case provider contract alone incurred about 27 seconds of
+      repeated acquisition.
+- [x] Consolidate integration tests into cohesive process-local suites and reuse
+      fixture-compatible devices while preserving independent buffers,
+      deterministic case order, skip policy, and every value assertion.
+      Two binaries now expose 25 process tests representing all 242 semantic
+      cases; ordinary integration cases share one device while optional-feature
+      and cross-device cases retain distinct acquisitions.
+- [x] Verify buffer isolation, warning-denied all-target compilation, and all
+      242 semantic cases under the committed Nextest budget; compare exact
+      before/after execution time.
+      The exact package run passes without skips in 27.168 seconds versus
+      76.936 seconds at entry. Host Clippy, Windows AArch64 all-target checking,
+      no-default library checking, Rustdoc, and 2/2 doctests pass.
 - [ ] Pass independent review, synchronize the measured result, commit, and
       merge the performance increment.
 

@@ -1,5 +1,6 @@
 [package]
 name = "hephaestus-wgpu"
+autotests = false
 version.workspace = true
 rust-version.workspace = true
 edition.workspace = true
@@ -81,6 +82,10 @@ harness = false
 [[bench]]
 name = "fft_prepared"
 harness = false
+
+[[test]]
+name = "contracts"
+path = "tests/contracts.rs"
 
 [lints]
 workspace = true

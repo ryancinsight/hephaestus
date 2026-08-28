@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "strategy_selects_radix_and_bluestein_without_rank_clones",
+            strategy_selects_radix_and_bluestein_without_rank_clones as fn(),
+        ),
+        (
+            "host_chirp_preparation_fft_matches_impulse_spectrum",
+            host_chirp_preparation_fft_matches_impulse_spectrum as fn(),
+        ),
+        (
+            "workspace_accounts_for_axis_batch_geometry",
+            workspace_accounts_for_axis_batch_geometry as fn(),
+        ),
+        (
+            "fused_radix_eliminates_workspace_when_device_limits_allow_it",
+            fused_radix_eliminates_workspace_when_device_limits_allow_it as fn(),
+        ),
+        (
+            "storage_validation_covers_bluestein_workspace_and_dispatch_limits",
+            storage_validation_covers_bluestein_workspace_and_dispatch_limits as fn(),
+        ),
+        (
+            "host_preparation_allocation_failure_is_typed",
+            host_preparation_allocation_failure_is_typed as fn(),
+        ),
+        (
+            "chirp_phase_is_range_reduced_before_precision_narrowing",
+            chirp_phase_is_range_reduced_before_precision_narrowing as fn(),
+        ),
+    ]);
+}
+
 fn strategy_selects_radix_and_bluestein_without_rank_clones() {
     assert_eq!(
         axis_strategy_for(64).expect("valid radix strategy"),
@@ -12,7 +45,6 @@ fn strategy_selects_radix_and_bluestein_without_rank_clones() {
     );
 }
 
-#[test]
 fn host_chirp_preparation_fft_matches_impulse_spectrum() {
     let mut values = vec![[0.0, 0.0]; 8];
     values[0] = [1.0, 0.0];
@@ -23,7 +55,6 @@ fn host_chirp_preparation_fft_matches_impulse_spectrum() {
     }
 }
 
-#[test]
 fn workspace_accounts_for_axis_batch_geometry() {
     let dimensions = [2, 3, 4];
     assert_eq!(
@@ -33,7 +64,6 @@ fn workspace_accounts_for_axis_batch_geometry() {
     );
 }
 
-#[test]
 fn fused_radix_eliminates_workspace_when_device_limits_allow_it() {
     let limits = DeviceLimits {
         max_buffer_size: u64::MAX,
@@ -61,7 +91,6 @@ fn fused_radix_eliminates_workspace_when_device_limits_allow_it() {
     );
 }
 
-#[test]
 fn storage_validation_covers_bluestein_workspace_and_dispatch_limits() {
     let dimensions = [3, 1, 1];
     let strategies = [
@@ -88,7 +117,6 @@ fn storage_validation_covers_bluestein_workspace_and_dispatch_limits() {
     );
 }
 
-#[test]
 fn host_preparation_allocation_failure_is_typed() {
     match try_host_vector::<u8>(usize::MAX, "test staging") {
         Err(HephaestusError::AllocationFailed { message }) => {
@@ -99,7 +127,6 @@ fn host_preparation_allocation_failure_is_typed() {
     }
 }
 
-#[test]
 fn chirp_phase_is_range_reduced_before_precision_narrowing() {
     let n = 1_000_003_u32;
     let index = 980_700_u32;

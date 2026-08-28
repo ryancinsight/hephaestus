@@ -5,16 +5,11 @@
 //! this file only supplies the device and the backend's seam value.
 
 use hephaestus_conformance::assert_scan_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuScanOps};
+use hephaestus_wgpu::WgpuScanOps;
 
-#[test]
-fn wgpu_satisfies_the_scan_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-scan-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU scan conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_scan_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_scan_contract(&device, &WgpuScanOps);
 }

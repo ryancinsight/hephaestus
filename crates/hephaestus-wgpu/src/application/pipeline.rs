@@ -139,6 +139,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn module_cases_share_process_state() {
+        crate::test_support::run_cases(&[
+            (
+                "workgroups_accepts_exact_u32_group_limit",
+                workgroups_accepts_exact_u32_group_limit as fn(),
+            ),
+            (
+                "workgroups_rejects_beyond_u32_group_limit",
+                workgroups_rejects_beyond_u32_group_limit as fn(),
+            ),
+        ]);
+    }
+
     fn workgroups_accepts_exact_u32_group_limit() {
         let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
         let len: usize = (u64::from(width.get()) * u64::from(u32::MAX))
@@ -150,7 +163,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn workgroups_rejects_beyond_u32_group_limit() {
         let width = BlockWidth::new(256).expect("invariant: test width is non-zero");
         let len_u64 = u64::from(width.get()) * u64::from(u32::MAX) + 1;

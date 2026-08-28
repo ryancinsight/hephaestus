@@ -860,6 +860,47 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
 
     #[test]
+    fn module_cases_share_process_state() {
+        crate::test_support::run_cases(&[
+            (
+                "command_stream_dispatches_prepared_wgsl_kernel",
+                command_stream_dispatches_prepared_wgsl_kernel as fn(),
+            ),
+            (
+                "command_stream_preserves_order_for_fill_copy_and_dispatch",
+                command_stream_preserves_order_for_fill_copy_and_dispatch as fn(),
+            ),
+            (
+                "command_stream_rejects_binding_contract_mismatch",
+                command_stream_rejects_binding_contract_mismatch as fn(),
+            ),
+            (
+                "command_stream_copy_rejects_length_mismatch",
+                command_stream_copy_rejects_length_mismatch as fn(),
+            ),
+            (
+                "command_stream_copy_prefix_preserves_the_destination_suffix",
+                command_stream_copy_prefix_preserves_the_destination_suffix as fn(),
+            ),
+            (
+                "grouped_command_stream_dispatches_multi_group_wgsl_kernel",
+                grouped_command_stream_dispatches_multi_group_wgsl_kernel as fn(),
+            ),
+            (
+                "grouped_sequence_preserves_order_in_one_wgpu_pass",
+                grouped_sequence_preserves_order_in_one_wgpu_pass as fn(),
+            ),
+            (
+                "grouped_command_stream_rejects_group_mismatch",
+                grouped_command_stream_rejects_group_mismatch as fn(),
+            ),
+            (
+                "kernel_interface_declares_wgpu_parameter_binding_after_storage",
+                kernel_interface_declares_wgpu_parameter_binding_after_storage as fn(),
+            ),
+        ]);
+    }
+
     fn command_stream_dispatches_prepared_wgsl_kernel() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping command stream test");
@@ -886,7 +927,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         assert_eq!(host, [2.5, 5.0, 7.5, 10.0]);
     }
 
-    #[test]
     fn command_stream_preserves_order_for_fill_copy_and_dispatch() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping command stream order test");
@@ -918,7 +958,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         assert_eq!(host, [9.0, 12.0, 15.0, 18.0]);
     }
 
-    #[test]
     fn command_stream_rejects_binding_contract_mismatch() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping binding contract test");
@@ -947,7 +986,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         }
     }
 
-    #[test]
     fn command_stream_copy_rejects_length_mismatch() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping copy contract test");
@@ -968,7 +1006,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         ));
     }
 
-    #[test]
     fn command_stream_copy_prefix_preserves_the_destination_suffix() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping command stream prefix-copy test");
@@ -985,7 +1022,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         assert_eq!(host, [3, 5, 0, 0]);
     }
 
-    #[test]
     fn grouped_command_stream_dispatches_multi_group_wgsl_kernel() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping grouped command stream test");
@@ -1017,7 +1053,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         assert_eq!(host, [11.5, 22.5, 33.5, 44.5]);
     }
 
-    #[test]
     fn grouped_sequence_preserves_order_in_one_wgpu_pass() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping grouped sequence test");
@@ -1067,7 +1102,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         assert_eq!(host, [22.5, 43.5, 64.5, 85.5]);
     }
 
-    #[test]
     fn grouped_command_stream_rejects_group_mismatch() {
         let Some(device) = try_device() else {
             eprintln!("No WGPU adapter available; skipping grouped mismatch test");
@@ -1102,7 +1136,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         }
     }
 
-    #[test]
     fn kernel_interface_declares_wgpu_parameter_binding_after_storage() {
         assert_eq!(ScaleKernel::BINDINGS.len(), 2);
         assert_eq!(ScaleKernel::BINDINGS[0].access, Access::ReadOnly);

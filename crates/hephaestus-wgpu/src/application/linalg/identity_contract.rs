@@ -27,6 +27,23 @@ impl MatrixIdentityScalar for VectorIdentity {
 }
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "identity_shader_preserves_separate_typed_bindings",
+            identity_shader_preserves_separate_typed_bindings as fn(),
+        ),
+        (
+            "identity_buffer_aligns_three_lane_values_without_host_padding",
+            identity_buffer_aligns_three_lane_values_without_host_padding as fn(),
+        ),
+        (
+            "identity_shader_preserves_admitted_vector_tokens",
+            identity_shader_preserves_admitted_vector_tokens as fn(),
+        ),
+    ]);
+}
+
 fn identity_shader_preserves_separate_typed_bindings() {
     let source = identity_shader_source::<f32>();
 
@@ -36,7 +53,6 @@ fn identity_shader_preserves_separate_typed_bindings() {
     assert!(source.contains("select(zero_value, one_value, id.x == id.y)"));
 }
 
-#[test]
 fn identity_buffer_aligns_three_lane_values_without_host_padding() {
     let (one_offset, buffer_size) = identity_buffer_layout::<[i32; 3]>(256).unwrap();
 
@@ -44,7 +60,6 @@ fn identity_buffer_aligns_three_lane_values_without_host_padding() {
     assert_eq!(buffer_size, 268);
 }
 
-#[test]
 fn identity_shader_preserves_admitted_vector_tokens() {
     let source = identity_shader_source::<VectorIdentity>();
 

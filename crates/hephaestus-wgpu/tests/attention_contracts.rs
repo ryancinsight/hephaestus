@@ -7,16 +7,14 @@ use hephaestus_core::{
 use hephaestus_wgpu::{WgpuAttentionOps, WgpuDevice};
 use leto::Layout;
 
-#[test]
-fn wgpu_satisfies_the_attention_contract() {
+pub(super) fn wgpu_satisfies_the_attention_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };
     assert_attention_contract(&device, &WgpuAttentionOps);
 }
 
-#[test]
-fn prepared_dispatch_resets_semantic_status_after_failure() {
+pub(super) fn prepared_dispatch_resets_semantic_status_after_failure() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -57,8 +55,7 @@ fn prepared_dispatch_resets_semantic_status_after_failure() {
     assert_download_eq(&device, &weights, &[1.0]);
 }
 
-#[test]
-fn zero_probability_prefix_preserves_stable_convex_output() {
+pub(super) fn zero_probability_prefix_preserves_stable_convex_output() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -90,13 +87,7 @@ fn zero_probability_prefix_preserves_stable_convex_output() {
 }
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-attention-conformance") {
-        Ok(device) => Some(device),
-        Err(error) => {
-            eprintln!("skip WGPU attention conformance: device unavailable ({error})");
-            None
-        }
-    }
+    super::device_or_skip()
 }
 
 fn assert_download_eq(

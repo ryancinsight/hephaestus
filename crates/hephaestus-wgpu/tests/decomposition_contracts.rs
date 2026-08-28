@@ -6,7 +6,7 @@
 //! and the backend seam value.
 
 use hephaestus_conformance::assert_decomposition_contract;
-use hephaestus_wgpu::{WgpuDecompositionOps, WgpuDevice};
+use hephaestus_wgpu::WgpuDecompositionOps;
 use syn::visit::{self, Visit};
 
 const OWNED_READBACK_SOURCES: &[(&str, usize, &str)] = &[
@@ -89,8 +89,7 @@ impl<'syntax> Visit<'syntax> for DownloadCallVisitor {
     }
 }
 
-#[test]
-fn non_blocked_decomposition_heap_readbacks_are_provider_owned() {
+pub(super) fn non_blocked_decomposition_heap_readbacks_are_provider_owned() {
     let mut total_owned = 0;
     for (name, expected_owned, source) in OWNED_READBACK_SOURCES {
         let syntax = syn::parse_file(source).expect("decomposition source must parse as Rust");
@@ -109,14 +108,9 @@ fn non_blocked_decomposition_heap_readbacks_are_provider_owned() {
     assert_eq!(total_owned, 16, "WGPU owned readback total changed");
 }
 
-#[test]
-fn wgpu_satisfies_the_decomposition_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-decomposition-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU decomposition conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_decomposition_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_decomposition_contract(&device, &WgpuDecompositionOps);
 }

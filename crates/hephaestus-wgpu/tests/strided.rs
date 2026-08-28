@@ -22,18 +22,7 @@ fn op<'a, T, const N: usize>(
 use leto::Layout;
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
-    DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-strided-test") {
-                Ok(device) => Some(device),
-                Err(e) => {
-                    eprintln!("skipping wgpu strided test: {e}");
-                    None
-                }
-            },
-        )
-        .clone()
+    super::device_or_skip()
 }
 
 fn assert_dispatch_message<T>(result: hephaestus_wgpu::Result<T>, expected: &'static str) {
@@ -73,8 +62,7 @@ fn cpu_reference<const N: usize>(
     }
 }
 
-#[test]
-fn strided_add_transposed_input_matches_cpu() {
+pub(super) fn strided_add_transposed_input_matches_cpu() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -125,8 +113,7 @@ fn strided_add_transposed_input_matches_cpu() {
     assert_eq!(got_allocated, expected);
 }
 
-#[test]
-fn strided_broadcast_inputs_match_cpu() {
+pub(super) fn strided_broadcast_inputs_match_cpu() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -167,8 +154,7 @@ fn strided_broadcast_inputs_match_cpu() {
     assert_eq!(got, vec![11.0, 21.0, 31.0, 12.0, 22.0, 32.0]);
 }
 
-#[test]
-fn strided_offset_output_writes_only_selected_region() {
+pub(super) fn strided_offset_output_writes_only_selected_region() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -199,8 +185,7 @@ fn strided_offset_output_writes_only_selected_region() {
     assert_eq!(got, vec![0.0, 0.0, 0.0, 0.0, 5.0, 12.0, 0.0, 21.0, 32.0]);
 }
 
-#[test]
-fn strided_rejects_aliasing_output_and_short_buffers() {
+pub(super) fn strided_rejects_aliasing_output_and_short_buffers() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -238,8 +223,7 @@ fn strided_rejects_aliasing_output_and_short_buffers() {
     );
 }
 
-#[test]
-fn strided_rank3_batched_matches_cpu() {
+pub(super) fn strided_rank3_batched_matches_cpu() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -279,8 +263,7 @@ fn strided_rank3_batched_matches_cpu() {
     assert_eq!(got, expected);
 }
 
-#[test]
-fn strided_unary_transposed_matches_cpu() {
+pub(super) fn strided_unary_transposed_matches_cpu() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -317,8 +300,7 @@ fn strided_unary_transposed_matches_cpu() {
     assert_eq!(got_allocated, got);
 }
 
-#[test]
-fn strided_unary_broadcasts_input_to_output_shape() {
+pub(super) fn strided_unary_broadcasts_input_to_output_shape() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -342,8 +324,7 @@ fn strided_unary_broadcasts_input_to_output_shape() {
     assert_eq!(got, vec![-1.0, 2.0, -3.0, -1.0, 2.0, -3.0]);
 }
 
-#[test]
-fn strided_scalar_matches_binary_broadcast_semantics() {
+pub(super) fn strided_scalar_matches_binary_broadcast_semantics() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -382,8 +363,7 @@ fn strided_scalar_matches_binary_broadcast_semantics() {
     assert_eq!(got_allocated, got);
 }
 
-#[test]
-fn non_default_block_width_produces_identical_results() {
+pub(super) fn non_default_block_width_produces_identical_results() {
     let Some(device) = device_or_skip() else {
         return;
     };

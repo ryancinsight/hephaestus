@@ -1,16 +1,11 @@
 //! WGPU instantiation of the shared dense-product conformance clauses.
 
 use hephaestus_conformance::assert_dense_product_contract;
-use hephaestus_wgpu::{WgpuDenseProductOps, WgpuDevice};
+use hephaestus_wgpu::WgpuDenseProductOps;
 
-#[test]
-fn wgpu_satisfies_the_dense_product_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-dense-product-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU dense-product conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_dense_product_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_dense_product_contract(&device, &WgpuDenseProductOps);
 }

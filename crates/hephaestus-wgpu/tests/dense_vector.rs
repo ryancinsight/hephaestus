@@ -5,18 +5,7 @@ use hephaestus_core::{ComputeDevice, DenseVectorOps, DeviceBuffer, HephaestusErr
 use hephaestus_wgpu::{WgpuDevice, WgpuVectorOps};
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
-    DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-dense-vector-test") {
-                Ok(device) => Some(device),
-                Err(error) => {
-                    eprintln!("skipping wgpu dense-vector test: {error}");
-                    None
-                }
-            },
-        )
-        .clone()
+    super::device_or_skip()
 }
 
 /// Lengths spanning under, exactly, and over one workgroup, plus the empty
@@ -49,8 +38,7 @@ fn assert_close(actual: &[f32], expected: &[f32], tolerance: f32) {
     }
 }
 
-#[test]
-fn axpy_matches_the_cpu_reference() {
+pub(super) fn axpy_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -75,8 +63,7 @@ fn axpy_matches_the_cpu_reference() {
     }
 }
 
-#[test]
-fn xpay_matches_the_cpu_reference() {
+pub(super) fn xpay_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -101,8 +88,7 @@ fn xpay_matches_the_cpu_reference() {
     }
 }
 
-#[test]
-fn scale_and_copy_match_the_cpu_reference() {
+pub(super) fn scale_and_copy_match_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -125,8 +111,7 @@ fn scale_and_copy_match_the_cpu_reference() {
     }
 }
 
-#[test]
-fn subtract_matches_the_cpu_reference() {
+pub(super) fn subtract_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -185,8 +170,7 @@ fn subtract_matches_the_cpu_reference() {
     }
 }
 
-#[test]
-fn reductions_match_the_cpu_reference() {
+pub(super) fn reductions_match_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -227,8 +211,7 @@ fn reductions_match_the_cpu_reference() {
     }
 }
 
-#[test]
-fn prepared_reductions_reuse_their_bound_allocation() {
+pub(super) fn prepared_reductions_reuse_their_bound_allocation() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -257,8 +240,7 @@ fn prepared_reductions_reuse_their_bound_allocation() {
     ));
 }
 
-#[test]
-fn mismatched_lengths_are_rejected() {
+pub(super) fn mismatched_lengths_are_rejected() {
     let Some(device) = device_or_skip() else {
         return;
     };

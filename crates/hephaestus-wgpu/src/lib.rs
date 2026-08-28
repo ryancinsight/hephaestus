@@ -17,6 +17,9 @@ pub mod application;
 /// wgpu device, queue, and buffer infrastructure.
 pub mod infrastructure;
 
+#[cfg(test)]
+mod test_support;
+
 pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::convolution::WgpuConvolutionOps;

@@ -14,13 +14,7 @@ use hephaestus_core::{BlockWidth, ComputeDevice};
 use hephaestus_wgpu::{FieldGeometry, RAY_STRIDE, WgpuDevice, ray_line_integrals};
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-volume-test") {
-        Ok(device) => Some(device),
-        Err(e) => {
-            eprintln!("skipping volume ray-integral test: {e}");
-            None
-        }
-    }
+    super::device_or_skip()
 }
 
 /// 9×5×5 field with 2.0 world spacing → node box [0,16]×[0,8]×[0,8].
@@ -64,8 +58,7 @@ fn run(device: &WgpuDevice, host_field: &[f32], rays: &[f32], step: f32) -> Vec<
     got
 }
 
-#[test]
-fn uniform_field_integrates_to_value_times_chord() {
+pub(super) fn uniform_field_integrates_to_value_times_chord() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -84,8 +77,7 @@ fn uniform_field_integrates_to_value_times_chord() {
     assert_eq!(got[1], 0.0, "missing ray must integrate to 0");
 }
 
-#[test]
-fn affine_field_is_integrated_exactly_by_midpoint() {
+pub(super) fn affine_field_is_integrated_exactly_by_midpoint() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -101,8 +93,7 @@ fn affine_field_is_integrated_exactly_by_midpoint() {
     );
 }
 
-#[test]
-fn step_size_does_not_change_a_uniform_integral() {
+pub(super) fn step_size_does_not_change_a_uniform_integral() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -116,8 +107,7 @@ fn step_size_does_not_change_a_uniform_integral() {
     );
 }
 
-#[test]
-fn oblique_ray_matches_cpu_reference() {
+pub(super) fn oblique_ray_matches_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };

@@ -26,6 +26,27 @@ fn device_or_skip() -> Option<WgpuDevice> {
 }
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "matches_leto_regular_and_transposed_forward_backward",
+            matches_leto_regular_and_transposed_forward_backward as fn(),
+        ),
+        (
+            "matches_leto_spatial_ranks_two_and_three",
+            matches_leto_spatial_ranks_two_and_three as fn(),
+        ),
+        (
+            "rejects_forward_buffer_alias_before_mutation",
+            rejects_forward_buffer_alias_before_mutation as fn(),
+        ),
+        (
+            "rejects_prepared_kernel_on_a_different_device",
+            rejects_prepared_kernel_on_a_different_device as fn(),
+        ),
+    ]);
+}
+
 fn matches_leto_regular_and_transposed_forward_backward() {
     let Some(device) = device_or_skip() else {
         return;
@@ -59,7 +80,6 @@ fn matches_leto_regular_and_transposed_forward_backward() {
     );
 }
 
-#[test]
 fn matches_leto_spatial_ranks_two_and_three() {
     let Some(device) = device_or_skip() else {
         return;
@@ -128,7 +148,6 @@ fn matches_leto_spatial_ranks_two_and_three() {
     );
 }
 
-#[test]
 fn rejects_forward_buffer_alias_before_mutation() {
     let Some(device) = device_or_skip() else {
         return;
@@ -171,7 +190,6 @@ fn rejects_forward_buffer_alias_before_mutation() {
     assert_download_eq(&device, &shared, &initial);
 }
 
-#[test]
 fn rejects_prepared_kernel_on_a_different_device() {
     let Some(source_device) = device_or_skip() else {
         return;

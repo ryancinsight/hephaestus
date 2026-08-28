@@ -59,6 +59,31 @@ fn default_device_or_skip() -> Option<WgpuDevice> {
 }
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "half_precision_sources_contain_no_wider_arithmetic",
+            half_precision_sources_contain_no_wider_arithmetic as fn(),
+        ),
+        (
+            "half_precision_bluestein_roundtrip_obeys_derived_bound",
+            half_precision_bluestein_roundtrip_obeys_derived_bound as fn(),
+        ),
+        (
+            "half_precision_warm_grouped_dispatch_reuses_prepared_resources",
+            half_precision_warm_grouped_dispatch_reuses_prepared_resources as fn(),
+        ),
+        (
+            "half_precision_rejects_missing_capability_without_mutation",
+            half_precision_rejects_missing_capability_without_mutation as fn(),
+        ),
+        (
+            "half_precision_rejects_cross_device_dispatch_without_mutation",
+            half_precision_rejects_cross_device_dispatch_without_mutation as fn(),
+        ),
+    ]);
+}
+
 fn half_precision_sources_contain_no_wider_arithmetic() {
     let sources = [
         FftKernel::<F16, Butterfly>::new().source(),
@@ -73,7 +98,6 @@ fn half_precision_sources_contain_no_wider_arithmetic() {
     }
 }
 
-#[test]
 fn half_precision_bluestein_roundtrip_obeys_derived_bound() {
     let Some(device) = required_device_or_skip() else {
         return;
@@ -137,7 +161,6 @@ fn half_precision_bluestein_roundtrip_obeys_derived_bound() {
     );
 }
 
-#[test]
 fn half_precision_warm_grouped_dispatch_reuses_prepared_resources() {
     let Some(device) = required_device_or_skip() else {
         return;
@@ -274,7 +297,6 @@ fn half_precision_warm_grouped_dispatch_reuses_prepared_resources() {
     );
 }
 
-#[test]
 fn half_precision_rejects_missing_capability_without_mutation() {
     let Some(device) = default_device_or_skip() else {
         return;
@@ -314,7 +336,6 @@ fn half_precision_rejects_missing_capability_without_mutation() {
     );
 }
 
-#[test]
 fn half_precision_rejects_cross_device_dispatch_without_mutation() {
     let Some(device) = required_device_or_skip() else {
         return;

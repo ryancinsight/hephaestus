@@ -9,6 +9,31 @@ use super::WgpuCrossEntropyOps;
 use crate::WgpuDevice;
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "wgpu_satisfies_shared_cross_entropy_contract",
+            wgpu_satisfies_shared_cross_entropy_contract as fn(),
+        ),
+        (
+            "strided_forward_and_additive_backward_match_analytical_values",
+            strided_forward_and_additive_backward_match_analytical_values as fn(),
+        ),
+        (
+            "forward_mean_does_not_overflow_representable_row_losses",
+            forward_mean_does_not_overflow_representable_row_losses as fn(),
+        ),
+        (
+            "invalid_device_target_preserves_forward_outputs",
+            invalid_device_target_preserves_forward_outputs as fn(),
+        ),
+        (
+            "invalid_probabilities_preserve_additive_destination",
+            invalid_probabilities_preserve_additive_destination as fn(),
+        ),
+    ]);
+}
+
 fn wgpu_satisfies_shared_cross_entropy_contract() {
     let Some(device) = device_or_skip() else {
         return;
@@ -16,7 +41,6 @@ fn wgpu_satisfies_shared_cross_entropy_contract() {
     assert_cross_entropy_contract(&device, &WgpuCrossEntropyOps);
 }
 
-#[test]
 fn strided_forward_and_additive_backward_match_analytical_values() {
     let Some(device) = device_or_skip() else {
         return;
@@ -123,7 +147,6 @@ fn strided_forward_and_additive_backward_match_analytical_values() {
     assert_eq!(actual_gradient[8], gradient_initial[8]);
 }
 
-#[test]
 fn forward_mean_does_not_overflow_representable_row_losses() {
     let Some(device) = device_or_skip() else {
         return;
@@ -156,7 +179,6 @@ fn forward_mean_does_not_overflow_representable_row_losses() {
     assert_close(actual[0], 2.0e38, 8);
 }
 
-#[test]
 fn invalid_device_target_preserves_forward_outputs() {
     let Some(device) = device_or_skip() else {
         return;
@@ -193,7 +215,6 @@ fn invalid_device_target_preserves_forward_outputs() {
     assert_eq!(actual_probabilities, [19.0, 23.0]);
 }
 
-#[test]
 fn invalid_probabilities_preserve_additive_destination() {
     let Some(device) = device_or_skip() else {
         return;

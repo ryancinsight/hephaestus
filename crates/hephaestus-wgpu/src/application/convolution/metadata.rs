@@ -325,6 +325,23 @@ mod tests {
 
     #[cfg(target_pointer_width = "64")]
     #[test]
+    fn module_cases_share_process_state() {
+        crate::test_support::run_cases(&[
+            (
+                "rejects_stride_spans_outside_signed_wgsl_addressing",
+                rejects_stride_spans_outside_signed_wgsl_addressing as fn(),
+            ),
+            (
+                "metadata_layout_matches_wgsl_alignment",
+                metadata_layout_matches_wgsl_alignment as fn(),
+            ),
+            (
+                "rejects_overlapping_reads_with_unaddressable_logical_products",
+                rejects_overlapping_reads_with_unaddressable_logical_products as fn(),
+            ),
+        ]);
+    }
+
     fn rejects_stride_spans_outside_signed_wgsl_addressing() {
         let maximum_stride =
             isize::try_from(i32::MAX).expect("invariant: 64-bit isize represents i32");
@@ -339,13 +356,11 @@ mod tests {
         );
     }
 
-    #[test]
     fn metadata_layout_matches_wgsl_alignment() {
         assert_eq!(core::mem::size_of::<LayoutMeta>(), 80);
         assert_eq!(core::mem::size_of::<ConvolutionMeta>(), 464);
     }
 
-    #[test]
     fn rejects_overlapping_reads_with_unaddressable_logical_products() {
         let layout = Layout::try_new([46_341, 46_341, 1], [0, 0, 0], 0).expect("valid test layout");
         let error = LayoutMeta::new(&layout).expect_err("logical product exceeds i32");

@@ -2,6 +2,19 @@ use super::with_row_major_matrix;
 use leto::Layout;
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "canonical_contiguous_matrix_reuses_downloaded_storage",
+            canonical_contiguous_matrix_reuses_downloaded_storage as fn(),
+        ),
+        (
+            "strided_matrix_compacts_into_independent_row_major_storage",
+            strided_matrix_compacts_into_independent_row_major_storage as fn(),
+        ),
+    ]);
+}
+
 fn canonical_contiguous_matrix_reuses_downloaded_storage() {
     let layout = Layout::c_contiguous([2, 3]).expect("test layout must be valid");
     let mut downloaded = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -16,7 +29,6 @@ fn canonical_contiguous_matrix_reuses_downloaded_storage() {
     assert_eq!(observed, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 }
 
-#[test]
 fn strided_matrix_compacts_into_independent_row_major_storage() {
     let layout = Layout::try_new([2, 2], [3, 1], 1)
         .expect("invariant: submatrix layout derives from a validated parent");

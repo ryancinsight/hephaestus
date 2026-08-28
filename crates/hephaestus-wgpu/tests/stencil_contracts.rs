@@ -1,16 +1,11 @@
 //! WGPU instantiation of the shared stencil conformance clauses.
 
 use hephaestus_conformance::assert_stencil_contract;
-use hephaestus_wgpu::{WgpuDevice, WgpuStencilOps};
+use hephaestus_wgpu::WgpuStencilOps;
 
-#[test]
-fn wgpu_satisfies_the_stencil_contract() {
-    let device = match WgpuDevice::try_default("hephaestus-stencil-conformance") {
-        Ok(device) => device,
-        Err(error) => {
-            eprintln!("skip WGPU stencil conformance: adapter unavailable ({error})");
-            return;
-        }
+pub(super) fn wgpu_satisfies_the_stencil_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
     };
     assert_stencil_contract(&device, &WgpuStencilOps);
 }

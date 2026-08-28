@@ -13,22 +13,10 @@ use hephaestus_conformance::assert_axis_reduction_contract;
 use hephaestus_wgpu::{WgpuAxisReductionOps, WgpuDevice};
 
 fn device_or_skip() -> Option<WgpuDevice> {
-    static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
-    DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-axis-reduction-test") {
-                Ok(device) => Some(device),
-                Err(e) => {
-                    eprintln!("skipping wgpu axis-reduction test: {e}");
-                    None
-                }
-            },
-        )
-        .clone()
+    super::device_or_skip()
 }
 
-#[test]
-fn wgpu_satisfies_the_axis_reduction_contract() {
+pub(super) fn wgpu_satisfies_the_axis_reduction_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };

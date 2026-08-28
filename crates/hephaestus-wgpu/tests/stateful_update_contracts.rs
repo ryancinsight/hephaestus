@@ -19,16 +19,14 @@ fn device(label: &str) -> Option<WgpuDevice> {
     }
 }
 
-#[test]
-fn wgpu_satisfies_the_stateful_update_contract() {
+pub(super) fn wgpu_satisfies_the_stateful_update_contract() {
     let Some(device) = device("hephaestus-stateful-update-test") else {
         return;
     };
     assert_stateful_update_contract(&device, &WgpuStatefulUpdateOps);
 }
 
-#[test]
-fn foreign_device_buffers_fail_before_mutation() {
+pub(super) fn foreign_device_buffers_fail_before_mutation() {
     let Some(owner) = device("hephaestus-stateful-update-owner") else {
         return;
     };

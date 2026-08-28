@@ -219,6 +219,35 @@ fn verify_shape<const R: usize>(device: &WgpuDevice, shape: [usize; R]) {
 }
 
 #[test]
+fn module_cases_share_process_state() {
+    crate::test_support::run_cases(&[
+        (
+            "prepared_fft_matches_direct_oracles_for_every_supported_rank",
+            prepared_fft_matches_direct_oracles_for_every_supported_rank as fn(),
+        ),
+        (
+            "fused_fft_skips_singleton_axes_and_allocates_no_volume_workspace",
+            fused_fft_skips_singleton_axes_and_allocates_no_volume_workspace as fn(),
+        ),
+        (
+            "prepared_bluestein_fft_matches_direct_oracles",
+            prepared_bluestein_fft_matches_direct_oracles as fn(),
+        ),
+        (
+            "large_bluestein_impulse_preserves_range_reduced_phase",
+            large_bluestein_impulse_preserves_range_reduced_phase as fn(),
+        ),
+        (
+            "prepared_fft_rejects_cross_device_dispatch",
+            prepared_fft_rejects_cross_device_dispatch as fn(),
+        ),
+        (
+            "prepared_fft_owns_operands_and_encodes_in_existing_pass",
+            prepared_fft_owns_operands_and_encodes_in_existing_pass as fn(),
+        ),
+    ]);
+}
+
 fn prepared_fft_matches_direct_oracles_for_every_supported_rank() {
     let Some(device) = device_or_skip() else {
         return;
@@ -254,7 +283,6 @@ fn assert_fused_plan_shape<const R: usize>(
     assert_eq!(prepared.plan.commands.len(), active_axes);
 }
 
-#[test]
 fn fused_fft_skips_singleton_axes_and_allocates_no_volume_workspace() {
     let Some(device) = device_or_skip() else {
         return;
@@ -268,7 +296,6 @@ fn fused_fft_skips_singleton_axes_and_allocates_no_volume_workspace() {
     assert_fused_plan_shape(&device, [8, 4, 2], 3);
 }
 
-#[test]
 fn prepared_bluestein_fft_matches_direct_oracles() {
     let Some(device) = device_or_skip() else {
         return;
@@ -279,7 +306,6 @@ fn prepared_bluestein_fft_matches_direct_oracles() {
     verify_shape(&device, [2, 2, 3]);
 }
 
-#[test]
 fn large_bluestein_impulse_preserves_range_reduced_phase() {
     let Some(device) = device_or_skip() else {
         return;
@@ -331,7 +357,6 @@ fn large_bluestein_impulse_preserves_range_reduced_phase() {
     }
 }
 
-#[test]
 fn prepared_fft_rejects_cross_device_dispatch() {
     let Some(device) = device_or_skip() else {
         return;
@@ -371,7 +396,6 @@ fn prepared_fft_rejects_cross_device_dispatch() {
     );
 }
 
-#[test]
 fn prepared_fft_owns_operands_and_encodes_in_existing_pass() {
     let Some(device) = device_or_skip() else {
         return;
