@@ -141,11 +141,14 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
-- Owner: Codex on `codex/hephaestus-fft-pstd-throughput`; last update:
-  2026-08-26.
-- Lease: no uncommitted provider-region lease remains after the fused-radix
-  increment. The merged provider increment remains the basis for the consumer
-  throughput gate; the next active region is the dependent Kwavers cutover.
+- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
+  `feat/fft-native-f16`; takeover 2026-08-28 after the recorded owner branch
+  disappeared and no provider-region lease remained.
+- Lease: native-f16 FFT support in `crates/hephaestus-core/src/domain/fft`,
+  `crates/hephaestus-wgpu/src/application/fft`, FFT tests/benchmarks, ADR 0053,
+  CHANGELOG, this item block, and the matching checklist through the next
+  verified commit. The generated ADR index in the primary checkout remains
+  peer-owned and outside this lane.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -174,9 +177,10 @@
   conformance, allocation instrumentation after plan preparation, codegen/source
   residue scans, matched rank/shape benchmarks, independent architecture review,
   and exact-head hosted provider plus Kwavers consumer CI.
-- Dependencies: Apollo PR #130 may merge independently; it does not change the
-  GPU provider contract. Consumer deletion waits for provider parity, not for a
-  compatibility adapter.
+- Dependencies: Kwavers PR #663 already delivers closed `Leto | Hephaestus`
+  selection and direct Hephaestus WGPU execution. Apollo WGPU deletion waits
+  for native-f16 provider parity; CUDA remains a later provider slice because
+  Apollo's CUDA execution is not yet redundant.
 - Local evidence: the core FFT planner and operation seam are warning-clean;
   configured Nextest passes 106/106 `hephaestus-core` tests in 0.683 seconds,
   including ranks one through three plus rank/layout/alias/address rejection;

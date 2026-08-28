@@ -35,6 +35,10 @@ Sprint target: 0.18.0. Phase: Closure.
       seconds; the separately tracked test-topology item owns reducing that
       runtime without weakening coverage or budgets. The full Kwavers step
       remains the deletion gate.
+- [ ] Generalize the existing rank-generic WGPU FFT implementation to native
+      `f16` through `FftOps<D, T>` without a second plan family; reject devices
+      without shader-f16 support and add shared f32/f16 analytical,
+      round-trip, allocation, and dispatch-residency coverage.
 - [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
       the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
       implementations.
