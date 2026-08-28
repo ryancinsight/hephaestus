@@ -145,10 +145,14 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
-- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider work is
-  on `feat/wgpu-fft-selected-axes` and consumer closure is in Apollo/Kwavers.
-- Lease: none. The selected-axis and retained grouped-binding increment is
-  verified at `90572d3` and provider PR #230 is ready to merge.
+- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
+  fix-forward is on `feat/wgpu-fft-device-validation` and consumer closure is
+  in Apollo/Kwavers.
+- Lease: none. PR #231 corrected candidate `d82c5e7` adds the structural typed
+  error assertion, outside-crate visibility coverage, and API/ADR
+  synchronization requested by independent review. Warning-denied all-target
+  Clippy passes, and the external 169-case integration contract passes in 4.988
+  seconds. Provider PR #230 merged as `48bb731`; re-review/merge remain open.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then

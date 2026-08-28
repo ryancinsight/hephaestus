@@ -4,11 +4,13 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
-Selected-axis correction lease: discharged 2026-08-28 on
-`feat/wgpu-fft-selected-axes` at `90572d3`; provider PR #230 is ready to merge.
-The increment adds retained rank-2 plans that transform only axis 1 plus
-retained grouped consumer-kernel bindings, with typed WGPU allocation,
-internal, validation, size, and device-provenance failures.
+Consumer-preflight lease: discharged 2026-08-28 on
+`feat/wgpu-fft-device-validation`, PR #231 at corrected candidate `d82c5e7`.
+Provider PR #230 merged as `48bb731`; Apollo STFT then exposed the need to
+validate a prepared plan's device before its first queue write. The fix-forward
+makes the existing ownership check public and retains the same typed error.
+Warning-denied all-target Clippy passes, and the external 169-case integration
+contract passes in 4.988 seconds. Independent re-review and merge remain open.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.

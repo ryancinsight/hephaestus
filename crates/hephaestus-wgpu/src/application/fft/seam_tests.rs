@@ -438,6 +438,14 @@ fn prepared_fft_rejects_cross_device_dispatch() {
         FftDirection::Forward,
     );
 
+    let preflight_error = prepared
+        .validate_device(&other)
+        .expect_err("cross-device preflight must fail");
+    let HephaestusError::DispatchFailed { message } = preflight_error else {
+        panic!("cross-device preflight returned the wrong error variant")
+    };
+    assert_eq!(message, "prepared WGPU FFT belongs to a different device");
+
     let expected = "kernel dispatch failed: prepared WGPU FFT belongs to a different device";
     assert_eq!(
         ops.dispatch_fft(&other, &prepared)

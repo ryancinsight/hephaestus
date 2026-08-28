@@ -15,7 +15,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   submission or into a provenance-carrying WGPU compute-pass sequence. Plans
   own cloned fixed operand handles and bind them directly, removing two
   full-volume allocations (`2N * size_of::<T>()`) and four full-volume device
-  copies (`4N * size_of::<T>()` per warm transform).
+  copies (`4N * size_of::<T>()` per warm transform). Consumers that must upload
+  before opening a command stream can call `WgpuPreparedFft::validate_device`;
+  a foreign device returns the same typed ownership failure as dispatch and
+  sequence encoding.
   Callers may prepare a nonempty set of unique transform axes while retaining
   the full dense operand shape. This supports batched row transforms such as
   `[frame_count, frame_len]` on axis 1 without transforming across frames;

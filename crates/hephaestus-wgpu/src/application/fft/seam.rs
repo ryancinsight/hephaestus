@@ -64,7 +64,16 @@ fn invalid(message: impl Into<String>) -> HephaestusError {
 }
 
 impl<const R: usize, T: WgpuFftScalar> WgpuPreparedFft<R, T> {
-    fn validate_device(&self, device: &WgpuDevice) -> Result<()> {
+    /// Validate that `device` owns this prepared plan and its fixed operands.
+    ///
+    /// Consumers that upload input before opening a command stream use this
+    /// preflight to reject a foreign device before any queue mutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed ownership failure when the plan was prepared by a
+    /// different WGPU device.
+    pub fn validate_device(&self, device: &WgpuDevice) -> Result<()> {
         validate_device_owner(&self.owner, device, "FFT")
     }
 

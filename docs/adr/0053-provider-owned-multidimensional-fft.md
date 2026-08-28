@@ -116,7 +116,10 @@ encodes; the sequence carries its owning device so the FFT validates actual pass
 provenance. The operation still owns its validated operand handles and all
 prebound commands. The prepared operation remains bound to the validated
 operand storage and shape, matching the existing Hephaestus prepared-operation
-model.
+model. A consumer that must upload input before creating either stream calls
+`WgpuPreparedFft::validate_device` first. This exposes the same provider-owned
+identity check and typed foreign-device rejection used by dispatch and encoding;
+it does not replace their per-operation provenance validation.
 
 `hephaestus-wgpu` is the first executable provider. It consolidates Apollo's
 general radix/Bluestein implementation and Kwavers's PSTD requirements into one
