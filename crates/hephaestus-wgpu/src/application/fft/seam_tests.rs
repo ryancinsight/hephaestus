@@ -440,6 +440,13 @@ fn prepared_fft_rejects_cross_device_dispatch() {
 
     let expected = "kernel dispatch failed: prepared WGPU FFT belongs to a different device";
     assert_eq!(
+        prepared
+            .validate_device(&other)
+            .expect_err("cross-device preflight must fail")
+            .to_string(),
+        expected
+    );
+    assert_eq!(
         ops.dispatch_fft(&other, &prepared)
             .expect_err("cross-device dispatch must fail")
             .to_string(),
