@@ -77,9 +77,11 @@
   through it; hang-path behavior covered by a test with an injected
   never-completing wait or documented as untestable with the limit stated.
 
-## HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf] — todo
+## HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf] — in progress
 
-- Owner: unclaimed.
+- Owner: Codebuff session on `perf/wgpu-staging-pool-decay`.
+- Lease: `crates/hephaestus-wgpu/src/infrastructure/device.rs` and this item
+  block through the next verified commit.
 - Outcome: age/watermark decay for the wgpu staging pool so burst allocations
   stop parking memory for the device's lifetime.
 - Evidence (audit 2026-08-27):
