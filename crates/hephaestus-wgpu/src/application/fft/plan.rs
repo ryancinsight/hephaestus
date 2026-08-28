@@ -8,47 +8,41 @@ use hephaestus_core::{
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
 
 use super::{
+    chirp::{chirp_angle, forward_radix_two},
     kernel::{
         ChirpParams, FUSED_MAX_LENGTH, FUSED_WORKGROUP_SIZE, FUSED_WORKGROUP_STORAGE_BYTES,
         PackParams, WORKGROUP_SIZE,
     },
     pipelines::FftPipelines,
+    scalar::WgpuFftScalar,
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
+    twiddle::{build_fused_twiddle, build_radix_twiddle, radix_parameters, try_host_vector},
 };
 
-pub(crate) struct WgpuFftPlan {
+pub(crate) struct WgpuFftPlan<T> {
     pub(crate) rank: usize,
-    pub(crate) real: WgpuBuffer<f32>,
-    pub(crate) imaginary: WgpuBuffer<f32>,
-    pub(crate) workspace: Option<FftWorkspace>,
-    pub(crate) fused_twiddle: Option<WgpuBuffer<f32>>,
+    pub(crate) real: WgpuBuffer<T>,
+    pub(crate) imaginary: WgpuBuffer<T>,
+    pub(crate) workspace: Option<FftWorkspace<T>>,
+    pub(crate) fused_twiddle: Option<WgpuBuffer<T>>,
+    pub(crate) radix_twiddle: Option<WgpuBuffer<T>>,
     pub(crate) strategy: [AxisStrategy; 3],
     pub(crate) pack: [PackParams; 3],
-    pub(crate) chirp: [Option<ChirpData>; 3],
+    pub(crate) chirp: [Option<ChirpData<T>>; 3],
     pub(crate) stages: [RadixStages; 3],
     pub(crate) commands: Box<[crate::application::stream::WgpuBoundDispatch]>,
 }
 
-pub(crate) struct FftWorkspace {
-    pub(crate) real: WgpuBuffer<f32>,
-    pub(crate) imaginary: WgpuBuffer<f32>,
+pub(crate) struct FftWorkspace<T> {
+    pub(crate) real: WgpuBuffer<T>,
+    pub(crate) imaginary: WgpuBuffer<T>,
 }
 
 fn invalid(message: impl Into<String>) -> HephaestusError {
     HephaestusError::InvalidConfiguration {
         message: message.into(),
     }
-}
-
-fn try_host_vector<T>(capacity: usize, role: &str) -> Result<Vec<T>> {
-    let mut values = Vec::new();
-    values
-        .try_reserve_exact(capacity)
-        .map_err(|error| HephaestusError::AllocationFailed {
-            message: format!("FFT {role} host allocation for {capacity} values failed: {error}"),
-        })?;
-    Ok(values)
 }
 
 fn next_power_of_two(n: usize) -> Result<usize> {
@@ -135,7 +129,20 @@ fn axis_workspace_elements(
         .map(Some)
 }
 
-fn validate_storage_limit(
+fn radix_root_length(dimensions: [usize; 3], strategies: [AxisStrategy; 3]) -> usize {
+    strategies
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, strategy)| match strategy {
+            AxisStrategy::FusedRadix2 => None,
+            AxisStrategy::StagedRadix2 => Some(dimensions[index]),
+            AxisStrategy::ChirpZ { m, .. } => Some(m),
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn validate_storage_limit<T>(
     max_buffer_size: u64,
     max_workgroups_per_dimension: u32,
     volume_elements: usize,
@@ -157,6 +164,29 @@ fn validate_storage_limit(
     .into_iter()
     .flatten()
     .max();
+    let radix_root_length = radix_root_length(dimensions, strategies);
+    let radix_twiddle_elements = if radix_root_length > 0 {
+        radix_root_length
+            .checked_add(
+                usize::try_from(radix_root_length.trailing_zeros())
+                    .expect("invariant: a usize trailing-zero count fits usize")
+                    + 1,
+            )
+            .ok_or_else(|| invalid("radix twiddle element count overflows"))?
+    } else {
+        0
+    };
+    let fused_twiddle_elements = if strategies.contains(&AxisStrategy::FusedRadix2) {
+        FUSED_MAX_LENGTH
+            .checked_add(
+                usize::try_from(FUSED_MAX_LENGTH.ilog2())
+                    .expect("invariant: a usize logarithm fits usize")
+                    + 1,
+            )
+            .ok_or_else(|| invalid("fused twiddle element count overflows"))?
+    } else {
+        0
+    };
     if let Some(workspace_elements) = workspace_elements
         && workspace_elements > u32::MAX as usize
     {
@@ -166,10 +196,16 @@ fn validate_storage_limit(
     }
     for (name, elements) in core::iter::once(("volume", volume_elements))
         .chain(workspace_elements.map(|workspace| ("workspace", workspace)))
+        .chain((radix_root_length > 0).then_some(("radix twiddle", radix_twiddle_elements)))
+        .chain(
+            strategies
+                .contains(&AxisStrategy::FusedRadix2)
+                .then_some(("fused twiddle", fused_twiddle_elements)),
+        )
     {
         let bytes = u64::try_from(elements)
             .map_err(|_| invalid(format!("FFT {name} element count exceeds u64")))?
-            .checked_mul(4)
+            .checked_mul(core::mem::size_of::<T>() as u64)
             .ok_or_else(|| invalid(format!("FFT {name} byte count overflows")))?;
         if bytes > max_buffer_size {
             return Err(invalid(format!(
@@ -193,94 +229,38 @@ fn radix_stages(
     strategy: AxisStrategy,
     batch_count: u32,
     inverse: bool,
+    root_length: usize,
 ) -> Result<RadixStages> {
     if !matches!(strategy, AxisStrategy::StagedRadix2) {
         return Ok(RadixStages::empty());
     }
     let fft_len = dimension(axis_len, "radix axis length")?;
+    let (root_half, scale_index) = radix_parameters(root_length, fft_len)?;
     if fft_len.trailing_zeros() % 2 == 0 {
-        Ok(RadixStages::radix_four(fft_len, batch_count, inverse))
+        Ok(RadixStages::radix_four(
+            fft_len,
+            batch_count,
+            inverse,
+            root_half,
+            scale_index,
+        ))
     } else {
-        Ok(RadixStages::radix_two(fft_len, batch_count, inverse))
+        Ok(RadixStages::radix_two(
+            fft_len,
+            batch_count,
+            inverse,
+            root_half,
+            scale_index,
+        ))
     }
 }
 
-fn build_fused_twiddle(device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
-    let mut roots = [0.0_f32; FUSED_MAX_LENGTH];
-    for index in 0..(FUSED_MAX_LENGTH / 2) {
-        let angle = -core::f64::consts::TAU * index as f64 / FUSED_MAX_LENGTH as f64;
-        roots[index] = angle.cos() as f32;
-        roots[FUSED_MAX_LENGTH / 2 + index] = angle.sin() as f32;
-    }
-    device.upload(&roots)
-}
-
-fn forward_radix_two(values: &mut [[f64; 2]]) {
-    let n = values.len();
-    if n <= 1 {
-        return;
-    }
-    debug_assert!(n.is_power_of_two());
-
-    let mut reversed = 0usize;
-    for index in 1..n {
-        let mut bit = n >> 1;
-        while reversed & bit != 0 {
-            reversed ^= bit;
-            bit >>= 1;
-        }
-        reversed ^= bit;
-        if index < reversed {
-            values.swap(index, reversed);
-        }
-    }
-
-    let mut span = 2usize;
-    loop {
-        let angle = -core::f64::consts::TAU / span as f64;
-        let step = [angle.cos(), angle.sin()];
-        for start in (0..n).step_by(span) {
-            let mut twiddle = [1.0, 0.0];
-            for offset in 0..span / 2 {
-                let even = values[start + offset];
-                let odd = values[start + offset + span / 2];
-                let rotated = [
-                    odd[0].mul_add(twiddle[0], -(odd[1] * twiddle[1])),
-                    odd[0].mul_add(twiddle[1], odd[1] * twiddle[0]),
-                ];
-                values[start + offset] = [even[0] + rotated[0], even[1] + rotated[1]];
-                values[start + offset + span / 2] = [even[0] - rotated[0], even[1] - rotated[1]];
-                twiddle = [
-                    twiddle[0].mul_add(step[0], -(twiddle[1] * step[1])),
-                    twiddle[0].mul_add(step[1], twiddle[1] * step[0]),
-                ];
-            }
-        }
-        if span == n {
-            break;
-        }
-        span *= 2;
-    }
-}
-
-fn chirp_angle(index: u32, n: u32) -> f64 {
-    debug_assert!(n != 0);
-    let index = u64::from(index);
-    let n_wide = u64::from(n);
-    let phase_index = (index * index) % (2 * n_wide);
-    let whole_pi = u32::try_from(phase_index / n_wide)
-        .expect("invariant: a phase reduced modulo 2N contains at most one whole pi");
-    let remainder = u32::try_from(phase_index % n_wide)
-        .expect("invariant: the phase remainder is less than the u32 transform length");
-    f64::from(whole_pi) * core::f64::consts::PI
-        + core::f64::consts::PI * f64::from(remainder) / f64::from(n)
-}
-
-fn build_chirp_data(
+fn build_chirp_data<T: WgpuFftScalar>(
     device: &WgpuDevice,
     strategy: AxisStrategy,
     batch_count: u32,
-) -> Result<Option<ChirpData>> {
+    root_length: usize,
+) -> Result<Option<ChirpData<T>>> {
     let AxisStrategy::ChirpZ { n, m } = strategy else {
         return Ok(None);
     };
@@ -298,25 +278,30 @@ fn build_chirp_data(
         if position > 0 {
             chirp[m - position] = value;
         }
-        direct.push([value[0] as f32, -value[1] as f32]);
+        direct.push([
+            T::from_fft_coefficient(value[0]),
+            T::from_fft_coefficient(-value[1]),
+        ]);
     }
     forward_radix_two(&mut chirp);
 
     let mut component = try_host_vector(m, "Bluestein upload component")?;
-    component.extend(chirp.iter().map(|value| value[0] as f32));
+    component.extend(chirp.iter().map(|value| T::from_fft_coefficient(value[0])));
     let real_kernel = device.upload(&component)?;
     component.clear();
-    component.extend(chirp.iter().map(|value| value[1] as f32));
+    component.extend(chirp.iter().map(|value| T::from_fft_coefficient(value[1])));
     let imaginary_kernel = device.upload(&component)?;
     drop(chirp);
 
     component.clear();
     component.extend(direct.iter().map(|value| value[0]));
+    component.push(T::from_fft_coefficient(1.0 / f64::from(n_param)));
     let direct_real = device.upload(&component)?;
     component.clear();
     component.extend(direct.iter().map(|value| value[1]));
     let direct_imaginary = device.upload(&component)?;
 
+    let (root_half, scale_index) = radix_parameters(root_length, m_param)?;
     Ok(Some(ChirpData {
         real_kernel,
         imaginary_kernel,
@@ -328,17 +313,17 @@ fn build_chirp_data(
             batch_count,
             padding: 0,
         },
-        forward_radix: RadixStages::radix_two(m_param, batch_count, false),
-        inverse_radix: RadixStages::radix_two(m_param, batch_count, true),
+        forward_radix: RadixStages::radix_two(m_param, batch_count, false, root_half, scale_index),
+        inverse_radix: RadixStages::radix_two(m_param, batch_count, true, root_half, scale_index),
     }))
 }
 
-impl WgpuFftPlan {
+impl<T: WgpuFftScalar> WgpuFftPlan<T> {
     pub(crate) fn new<const R: usize>(
         device: &WgpuDevice,
         plan: FftPlan<R>,
-        real: WgpuBuffer<f32>,
-        imaginary: WgpuBuffer<f32>,
+        real: WgpuBuffer<T>,
+        imaginary: WgpuBuffer<T>,
     ) -> Result<Self> {
         let mut dimensions = [1usize; 3];
         dimensions[..R].copy_from_slice(&plan.shape);
@@ -385,7 +370,8 @@ impl WgpuFftPlan {
                 max_workgroups_per_dimension,
             ),
         ];
-        let workspace_elements = validate_storage_limit(
+        let radix_root_length = radix_root_length(dimensions, strategy);
+        let workspace_elements = validate_storage_limit::<T>(
             limits.max_buffer_size,
             max_workgroups_per_dimension,
             plan.elements,
@@ -430,21 +416,41 @@ impl WgpuFftPlan {
         } else {
             None
         };
+        let radix_twiddle = build_radix_twiddle(device, radix_root_length)?;
         let mut prepared = Self {
             rank: R,
             real,
             imaginary,
             workspace,
             fused_twiddle,
+            radix_twiddle,
             chirp: [
-                build_chirp_data(device, strategy[0], batch[0])?,
-                build_chirp_data(device, strategy[1], batch[1])?,
-                build_chirp_data(device, strategy[2], batch[2])?,
+                build_chirp_data(device, strategy[0], batch[0], radix_root_length)?,
+                build_chirp_data(device, strategy[1], batch[1], radix_root_length)?,
+                build_chirp_data(device, strategy[2], batch[2], radix_root_length)?,
             ],
             stages: [
-                radix_stages(dimensions[0], strategy[0], batch[0], inverse)?,
-                radix_stages(dimensions[1], strategy[1], batch[1], inverse)?,
-                radix_stages(dimensions[2], strategy[2], batch[2], inverse)?,
+                radix_stages(
+                    dimensions[0],
+                    strategy[0],
+                    batch[0],
+                    inverse,
+                    radix_root_length,
+                )?,
+                radix_stages(
+                    dimensions[1],
+                    strategy[1],
+                    batch[1],
+                    inverse,
+                    radix_root_length,
+                )?,
+                radix_stages(
+                    dimensions[2],
+                    strategy[2],
+                    batch[2],
+                    inverse,
+                    radix_root_length,
+                )?,
             ],
             strategy,
             pack,

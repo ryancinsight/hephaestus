@@ -15,6 +15,9 @@ use hephaestus_wgpu::{
 };
 use leto::Layout;
 
+#[path = "fft_prepared/scalar.rs"]
+mod scalar;
+
 const GPU_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 const PSTD_LOSSLESS_TRANSFORM_PAIRS: u64 = 6;
 // A radix stage performs at most one complex multiply and a butterfly per
@@ -367,6 +370,7 @@ fn prepared_fft(c: &mut Criterion) {
         Validation::RoundTrip,
     );
     group.finish();
+    scalar::bench_scalar_comparison(c);
 }
 
 criterion_group! {

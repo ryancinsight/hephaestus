@@ -144,11 +144,9 @@
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
   `feat/fft-native-f16`; takeover 2026-08-28 after the recorded owner branch
   disappeared and no provider-region lease remained.
-- Lease: native-f16 FFT support in `crates/hephaestus-core/src/domain/fft`,
-  `crates/hephaestus-wgpu/src/application/fft`, FFT tests/benchmarks, ADR 0053,
-  CHANGELOG, this item block, and the matching checklist through the next
-  verified commit. The generated ADR index in the primary checkout remains
-  peer-owned and outside this lane.
+- Lease: none. The native-binary16 provider increment is verified and ready for
+  delivery; the generated ADR index in the primary checkout remains peer-owned
+  and outside this lane.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -204,12 +202,9 @@
   1D 65,536, 2D 256x256, 3D 64x64x64, and 3D 32x32x33 Bluestein. The benchmark
   calls the provider-neutral composition seam, checks independent forward DFT
   bins under a depth-derived `gamma(k)` bound, and bounds submission, readback,
-  and CI process time. Optimized timing is not claimed because Cargo requests a
-  lockfile rewrite for the release profile despite locked standalone resolution;
-  Apollo/Leto differential and dispatch-allocation coverage, consumer deletion,
-  and hosted exact-head verification remain open. Independent blocker-only
-  re-review is clean after correction of benchmark-oracle, bounded-wait,
-  provider-neutral composition, and fallible host-allocation findings.
+  and CI process time. Independent blocker-only re-review is clean after
+  correction of benchmark-oracle, bounded-wait, provider-neutral composition,
+  and fallible host-allocation findings.
   A consumer integration audit then exposed two warm-path costs hidden by the
   first prepared shape: cloned operand handles now make plans independently
   storable, pack/unpack binds those fixed buffers directly, and the two duplicate
@@ -229,7 +224,42 @@
   required-device WGPU package passes 233/233 with no skips in 62.109 seconds;
   this preserves coverage but confirms the separately tracked 26-binary device
   acquisition/topology defect. Complete step timing remains the consumer cutover
-  gate before the old shader is deleted.
+  gate before the old shader is deleted. The current increment instantiates this
+  same rank-generic plan, strategy, and WGSL family for `f32` and native
+  `eunomia::F16`; binary16 rejects a device without `ShaderF16` before plan
+  allocation or operand mutation and has no host or wider-scalar fallback. One
+  generic real-device conformance body covers both scalars across ranks one
+  through three, fused/staged radix, Bluestein, singleton axes, analytical bins,
+  and inverse round trips. The first independent review found wider shader-side
+  trigonometry, weak scale-relative assertions, and incomplete rank/special-value
+  coverage. The correction precomputes roots and reciprocal scales directly in
+  the selected scalar, uses normwise relative oracles that reject all-zero
+  output, and adds both scalar widths across ranks one through three, nontrivial
+  staged Fourier modes, and NaN/infinity/zero cases. Those tests exposed and
+  fixed staged twiddle angle halving, `u32` index-product overflow, and a
+  radix-four second-half-circle lookup. Focused FFT Nextest now passes 22/22 in
+  17.081 seconds, and the complete bounded benchmark smoke passes every 1-D,
+  2-D, 3-D, Bluestein, PSTD, and scalar-width case in 9.198 seconds. The scalar
+  benchmark validates sampled forward bins against an independent direct DFT
+  before inverse dispatch and proves that identity output fails the oracle.
+  Warning-denied core/WGPU all-target Clippy and Windows AArch64 compilation,
+  doctests, rustdoc, and core/WGPU SemVer checks (196/196 each) pass.
+  Independent architecture/performance review is green. The canonical
+  standalone lock resolves under `--locked` with 33 first-party Git sources.
+  Linux AArch64 execution is not claimed: the local
+  cross build stops in the `alloca` build script because
+  `aarch64-linux-gnu-gcc` is absent, before project code is compiled. Grouped
+  warm-dispatch tests preserve prepared command-slice and workspace-buffer
+  identities; source inspection establishes no Hephaestus-owned allocation,
+  pipeline or bind-group construction, transfer, or copy on that path, but does
+  not observe opaque driver allocations. On an RTX 5080 through Vulkan, paired
+  forward/inverse Criterion regression-slope time estimates (95% confidence
+  intervals) are 162.71 microseconds [161.25, 164.67] for binary32 and 171.31
+  [168.20, 174.41] for binary16 at 65,536 elements; at 64 cubed they are
+  221.64 [219.22, 225.42] and 215.52 [212.69, 218.68] microseconds. The result
+  does not support a universal
+  binary16 speed claim. Apollo/Leto differential coverage, consumer deletion,
+  and exact-head hosted verification remain open.
 
 ## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
 
@@ -240,15 +270,18 @@
 - Scope/non-goals: integration-test topology, fixtures, and acquisition only; no
   production device singleton, test deletion, workload reduction, timeout
   increase, or assertion weakening.
-- Acceptance: profile attributes the 62.109-second/26-binary baseline, focused
+- Acceptance: profile attributes the 76.936-second/26-binary baseline, focused
   tests prove independent buffer state under concurrent execution, and the
-  unchanged 233-test package suite completes materially below that baseline
+  unchanged 242-test package suite completes materially below that baseline
   under the committed Nextest budget.
 - Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
   lifetime.
 - Status: todo; dependency: `HEPH-FFT-PROVIDER-1` provider commit. Audit evidence:
   the main `contract.rs` harness already uses `OnceLock`; the remaining cost is
   dominated by separate integration binaries and their independent devices.
+  The exact native-scalar FFT diff passes 242/242 with no skips in 76.936
+  seconds, exceeding the ordinary 60-second package budget and confirming that
+  topology optimization remains the next provider-side performance increment.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 

@@ -49,7 +49,7 @@ fn fused_radix_eliminates_workspace_when_device_limits_allow_it() {
     let strategy = select_fused_strategy(AxisStrategy::StagedRadix2, 256, 16_384, limits, 65_535);
     assert_eq!(strategy, AxisStrategy::FusedRadix2);
     assert_eq!(
-        validate_storage_limit(
+        validate_storage_limit::<f32>(
             u64::MAX,
             65_535,
             256 * 128 * 128,
@@ -69,15 +69,15 @@ fn storage_validation_covers_bluestein_workspace_and_dispatch_limits() {
         AxisStrategy::StagedRadix2,
         AxisStrategy::StagedRadix2,
     ];
-    assert!(validate_storage_limit(31, u32::MAX, 3, dimensions, strategies).is_err());
-    assert!(validate_storage_limit(u64::MAX, 0, 3, dimensions, strategies).is_err());
+    assert!(validate_storage_limit::<f32>(31, u32::MAX, 3, dimensions, strategies).is_err());
+    assert!(validate_storage_limit::<f32>(u64::MAX, 0, 3, dimensions, strategies).is_err());
     assert_eq!(
-        validate_storage_limit(u64::MAX, 1, 3, dimensions, strategies)
+        validate_storage_limit::<f32>(u64::MAX, 1, 3, dimensions, strategies)
             .expect("one workgroup covers the prepared workspace"),
         Some(8)
     );
     assert!(
-        validate_storage_limit(
+        validate_storage_limit::<f32>(
             u64::MAX,
             65_535,
             1 << 24,

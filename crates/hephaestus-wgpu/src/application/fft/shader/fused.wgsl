@@ -14,11 +14,11 @@ struct FusedParams {
 }
 
 @group(0) @binding(0)
-var<storage, read_write> volume_re: array<f32>;
+var<storage, read_write> volume_re: array<{{scalar}}>;
 @group(0) @binding(1)
-var<storage, read_write> volume_im: array<f32>;
+var<storage, read_write> volume_im: array<{{scalar}}>;
 @group(0) @binding(2)
-var<storage, read> roots: array<f32>;
+var<storage, read> roots: array<{{scalar}}>;
 @group(0) @binding(3)
 var<uniform> params: FusedParams;
 
@@ -26,10 +26,20 @@ const MAX_LENGTH: u32 = 1024u;
 const MAX_HALF_LENGTH: u32 = MAX_LENGTH >> 1u;
 const WORKGROUP_SIZE: u32 = 64u;
 
-var<workgroup> values_re: array<f32, 1024>;
-var<workgroup> values_im: array<f32, 1024>;
-var<workgroup> roots_re: array<f32, 512>;
-var<workgroup> roots_im: array<f32, 512>;
+var<workgroup> values_re: array<{{scalar}}, 1024>;
+var<workgroup> values_im: array<{{scalar}}, 1024>;
+var<workgroup> roots_re: array<{{scalar}}, 512>;
+var<workgroup> roots_im: array<{{scalar}}, 512>;
+
+fn complex_multiply(
+    left: vec2<{{scalar}}>,
+    right: vec2<{{scalar}}>,
+) -> vec2<{{scalar}}> {
+    return vec2<{{scalar}}>(
+        left.x * right.x - left.y * right.y,
+        left.x * right.y + left.y * right.x,
+    );
+}
 
 @compute @workgroup_size(64, 1, 1)
 fn fft_fused_axis(
@@ -111,16 +121,15 @@ fn fft_fused_axis(
                 w_im = -w_im;
             }
 
-            let e_re = values_re[even];
-            let e_im = values_im[even];
-            let o_re = values_re[odd];
-            let o_im = values_im[odd];
-            let product_re = w_re * o_re - w_im * o_im;
-            let product_im = w_re * o_im + w_im * o_re;
-            values_re[even] = e_re + product_re;
-            values_im[even] = e_im + product_im;
-            values_re[odd] = e_re - product_re;
-            values_im[odd] = e_im - product_im;
+            let even_value = vec2<{{scalar}}>(values_re[even], values_im[even]);
+            let odd_value = vec2<{{scalar}}>(values_re[odd], values_im[odd]);
+            let product = complex_multiply(vec2<{{scalar}}>(w_re, w_im), odd_value);
+            let sum = even_value + product;
+            let difference = even_value - product;
+            values_re[even] = sum.x;
+            values_im[even] = sum.y;
+            values_re[odd] = difference.x;
+            values_im[odd] = difference.y;
             index += WORKGROUP_SIZE;
         }
         stage += 1u;
@@ -128,7 +137,11 @@ fn fft_fused_axis(
     }
 
     index = local_id.x;
-    let scale = select(1.0, 1.0 / f32(n), params.inverse != 0u);
+    let scale = select(
+        {{scalar}}(1.0),
+        roots[MAX_LENGTH + params.log2n],
+        params.inverse != 0u,
+    );
     loop {
         if index >= n {
             break;

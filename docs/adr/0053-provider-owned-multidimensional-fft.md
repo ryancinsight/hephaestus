@@ -2,6 +2,23 @@
 
 - Status: Accepted
 - Date: 2026-08-26
+- Revision 2026-08-28: The WGPU provider now instantiates one sealed,
+  scalar-generic FFT plan for `f32` and native `eunomia::F16`. Binary16 requires
+  `ShaderF16`; preparation rejects the missing capability before plan
+  allocation or operand mutation and never widens or falls back to the host.
+  One WGSL template serves both representations, with scalar-generic complex
+  butterflies expressed as two-lane vectors. Root and reciprocal tables are
+  evaluated once during preparation and narrowed directly to the selected
+  storage scalar; no transform shader performs wider arithmetic. The compact
+  staged table stores one half-circle and reconstructs radix-four's third root
+  by sign reflection. On an RTX 5080 through Vulkan, paired forward/inverse
+  Criterion regression-slope time estimates (95% confidence intervals) are
+  162.71 microseconds [161.25, 164.67] for binary32 and 171.31
+  [168.20, 174.41] for binary16 at 65,536 elements; for 64-cubed they are
+  221.64 [219.22, 225.42] and 215.52 [212.69, 218.68] microseconds
+  respectively. Binary16 is higher in the long staged regime and lower in the
+  fused workgroup-local regime; neither result
+  establishes a universal scalar-width speed claim.
 - Revision 2026-08-26: The executable WGPU increment prebinds pipelines,
   immutable parameter buffers, bind groups, and dispatch grids during plan
   creation. The provider-neutral `FftOps::encode_fft` records into a
@@ -97,8 +114,16 @@ not wrappers around a three-dimensional public API: all ranks instantiate the
 same axis planner, and only their actual axes are dispatched. All axis passes
 are encoded into one command stream submission. Bluestein coefficient
 preparation is Hephaestus-owned; integer modulo reduction bounds the quadratic
-phase before `f64` evaluation and one `f32` narrowing. It cannot call Apollo or
-silently execute the requested transform on the host. Metal continues to use
+phase before `f64` evaluation and one narrowing to the selected storage scalar.
+The WGPU implementation admits `f32` and native `eunomia::F16` through the
+sealed `WgpuFftScalar` contract. Binary16 requires the acquired device to expose
+`ShaderF16`, and capability rejection precedes operand validation, allocation,
+pipeline compilation, or mutation. The binary16 WGSL token remains local to
+this sealed contract rather than becoming a global `DialectScalar<Wgsl>`
+implementation: other generic WGPU operation families do not yet enable or
+validate native half execution, so admitting the type globally would expose
+unsupported shader paths. It cannot call Apollo or silently execute
+the requested transform on the host. Metal continues to use
 the WGPU provider over its selected adapter. CUDA and ROCm implement the same
 seam in later provider increments; unsupported providers return a typed
 capability error.
@@ -148,7 +173,15 @@ unsupported capability until that provider implements this seam.
 
 Ownership movement alone establishes no speed claim. The executable plan's
 static resource delta is exact: direct fixed-buffer binding removes two `N`
-element `f32` allocations and four `N` element device copies per dispatch.
+element allocations (`2N * size_of::<T>()`) and four `N` element device copies
+(`4N * size_of::<T>()`) per dispatch. Binary16 therefore halves plan workspace,
+root-table, and warm-copy byte volume relative to binary32 at the same shape.
+Each staged plan adds `M + log2(M) + 1` scalar values for the largest staged or
+Bluestein radix length `M`; each fused plan adds 1,035 scalar values. A
+Bluestein axis adds one scalar reciprocal to its direct-real factor buffer.
+These immutable prepared tables replace per-butterfly trigonometric and
+division work. The half-circle representation avoids another `M` scalar values
+per staged plan.
 The matched PSTD instrument holds the input/output addresses and prebuilt plans
 fixed, records all six pairs into one device-resident timed command stream, and
 reports Criterion confidence intervals. Complete-step parity remains a consumer
@@ -159,10 +192,15 @@ cutover gate because the provider benchmark excludes Kwavers physics kernels.
 - Core planner tests cover ranks 0 through 4, singleton/nonzero shapes, checked
   products, dense and rejected strided layouts, split-component length and
   alias rules, and failure-atomic preparation.
-- One generic conformance suite covers ranks one through three using impulses,
-  constants, single Fourier modes, inverse round trips, and Apollo/Leto
-  differential outputs. It includes power-of-two and prime/composite
-  non-power-of-two axes.
+- One generic WGPU conformance body instantiates `f32` and `eunomia::F16` across
+  ranks one through three, fused and staged radix, Bluestein, and singleton
+  axes. It checks direct analytical spectra, staged nontrivial Fourier modes,
+  inverse round trips, NaN/infinity/zero behavior, and rejects an all-zero
+  result under the normwise oracle.
+  Binary16-specific tests cover a 3x3x3 Bluestein round trip, missing-feature
+  and cross-device rejection with bitwise-unchanged operands, and stable
+  prepared command/workspace identities through grouped warm dispatch.
+  Apollo/Leto differential outputs remain a consumer-boundary cutover gate.
 - FFT is the dependency-cycle exception recorded by the 2026-08-26 revision of
   ADR 0046: Hephaestus uses the analytical oracle here, while the Apollo/Leto
   differential test runs at the consumer boundary.
@@ -174,11 +212,15 @@ cutover gate because the provider benchmark excludes Kwavers physics kernels.
   beyond the acquired device limit. Source/codegen audits prove one
   operation-boundary provider selection and no host fallback or per-axis
   capability probe.
-- Allocation and preparation instrumentation proves zero host and device
-  allocation plus zero pipeline compilation during repeated dispatch. Buffer
-  identities remain stable across iterations.
+- Prepared commands are immutable boxed slices and grouped warm encoding only
+  validates device provenance before traversing them. Real-device tests keep
+  command storage and workspace-buffer identities stable through dispatch;
+  source inspection establishes that no Hephaestus-owned allocation, pipeline
+  compilation, bind-group construction, host transfer, or device copy occurs
+  on that path. This claim does not cover opaque allocations inside the driver.
 - Matched benchmarks compare Apollo/Leto and Hephaestus end to end at
-  cache-/device-relevant shapes, reporting medians and confidence intervals;
+  cache-/device-relevant shapes, reporting Criterion regression-slope time
+  estimates and confidence intervals;
   no benchmark changes its workload or statistical acceptance to obtain a win.
   Small and medium instruments first check independent forward DFT bins with a
   standard `gamma(k)` bound derived from radix/Bluestein depth. The four-million

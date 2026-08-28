@@ -20,11 +20,16 @@ as `hephaestus::wgpu`.
 - Prepared plans (`prepare_dot`, `prepare_norm_l2`, `PreparedReduction`,
   `PreparedAxisReduction`) that bind fixed buffers once and re-dispatch without
   reallocating or rebuilding bind groups.
-- Prepared dense split-complex 1D, 2D, and 3D FFTs with radix-four/radix-two
-  power-of-two passes and Bluestein non-power-of-two axes. FFT plans own scratch
-  and prebind pipelines, parameter buffers, bind groups, and dispatch grids.
-  Bluestein phases are range-reduced in `f64` before one `f32` narrowing and
-  upload. `FftOps::encode_fft` composes a prepared plan into an existing command
+- Prepared dense split-complex 1D, 2D, and 3D FFTs over `f32` or native
+  `eunomia::F16`, with radix-four/radix-two power-of-two passes and Bluestein
+  non-power-of-two axes. Binary16 requires `ShaderF16` and never falls back to
+  host or wider-precision execution. FFT plans own scratch and prebind
+  pipelines, parameter buffers, bind groups, and dispatch grids. Bluestein
+  phases are range-reduced in `f64` before one scalar narrowing and upload;
+  staged and fused roots plus reciprocal scales are likewise prepared once in
+  the selected storage scalar. Staged radix-four reflects a compact
+  half-circle root table instead of retaining a second half.
+  `FftOps::encode_fft` composes a prepared plan into an existing command
   stream without provider-owned transient resources. Fixed operand handles are
   owned by the plan and bound directly, eliminating duplicate volume storage
   and per-transform device copies; WGPU consumers can also encode the plan into

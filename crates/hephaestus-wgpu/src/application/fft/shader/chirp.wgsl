@@ -6,13 +6,13 @@ struct ChirpParams {
 }
 
 @group(0) @binding(0)
-var<storage, read_write> data_re: array<f32>;
+var<storage, read_write> data_re: array<{{scalar}}>;
 @group(0) @binding(1)
-var<storage, read_write> data_im: array<f32>;
+var<storage, read_write> data_im: array<{{scalar}}>;
 @group(0) @binding(2)
-var<storage, read> chirp_re: array<f32>;
+var<storage, read> chirp_re: array<{{scalar}}>;
 @group(0) @binding(3)
-var<storage, read> chirp_im: array<f32>;
+var<storage, read> chirp_im: array<{{scalar}}>;
 
 @group(0) @binding(4)
 var<uniform> params: ChirpParams;
@@ -68,7 +68,7 @@ fn chirp_scale(@builtin(global_invocation_id) gid: vec3<u32>) {
     let row = linear_idx / params.n;
     let local_idx = linear_idx % params.n;
     let idx = row * params.m + local_idx;
-    let inv_n = 1.0 / f32(params.n);
+    let inv_n = chirp_re[params.n];
     data_re[idx] = data_re[idx] * inv_n;
     data_im[idx] = data_im[idx] * inv_n;
 }

@@ -5,10 +5,21 @@ use std::{borrow::Cow, marker::PhantomData};
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, KernelInterface, KernelSource, Wgsl};
 
+use super::scalar::WgpuFftScalar;
+
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
 pub(crate) const FUSED_WORKGROUP_SIZE: u32 = 64;
 pub(crate) const FUSED_MAX_LENGTH: usize = 1024;
 pub(crate) const FUSED_WORKGROUP_STORAGE_BYTES: u32 = 12 * 1024;
+
+fn scalar_source<T: WgpuFftScalar>(template: &'static str) -> Cow<'static, str> {
+    let body = template.replace("{{scalar}}", T::TYPE_TOKEN);
+    if T::FFT_SOURCE_PREAMBLE.is_empty() {
+        Cow::Owned(body)
+    } else {
+        Cow::Owned(format!("{}{body}", T::FFT_SOURCE_PREAMBLE))
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -17,38 +28,42 @@ pub(crate) struct FftParams {
     pub(crate) stage: u32,
     pub(crate) inverse: u32,
     pub(crate) batch_count: u32,
+    pub(crate) root_half: u32,
+    pub(crate) scale_index: u32,
+    pub(crate) padding: [u32; 2],
 }
 
-const _: () = assert!(core::mem::size_of::<FftParams>() == 16);
+const _: () = assert!(core::mem::size_of::<FftParams>() == 32);
 
 pub(crate) trait FftEntry {
     const LABEL: &'static str;
     const ENTRY: &'static str;
 }
 
-pub(crate) struct FftKernel<E>(PhantomData<E>);
+pub(crate) struct FftKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> FftKernel<E> {
+impl<T, E> FftKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: FftEntry> KernelInterface for FftKernel<E> {
+impl<T: WgpuFftScalar, E: FftEntry> KernelInterface for FftKernel<T, E> {
     type Params = FftParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_only::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: FftEntry> KernelSource<Wgsl> for FftKernel<E> {
+impl<T: WgpuFftScalar, E: FftEntry> KernelSource<Wgsl> for FftKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("shader/fft.wgsl"))
+        scalar_source::<T>(include_str!("shader/fft.wgsl"))
     }
 }
 
@@ -113,24 +128,30 @@ pub(crate) struct FusedParams {
 
 const _: () = assert!(core::mem::size_of::<FusedParams>() == 48);
 
-pub(crate) struct FusedKernel;
+pub(crate) struct FusedKernel<T>(PhantomData<T>);
 
-impl KernelInterface for FusedKernel {
+impl<T> FusedKernel<T> {
+    pub(crate) const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: WgpuFftScalar> KernelInterface for FusedKernel<T> {
     type Params = FusedParams;
     const LABEL: &'static str = "hephaestus-fft-fused-radix";
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_only::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [FUSED_WORKGROUP_SIZE, 1, 1];
 }
 
-impl KernelSource<Wgsl> for FusedKernel {
+impl<T: WgpuFftScalar> KernelSource<Wgsl> for FusedKernel<T> {
     const ENTRY: &'static str = "fft_fused_axis";
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("shader/fused.wgsl"))
+        scalar_source::<T>(include_str!("shader/fused.wgsl"))
     }
 }
 
@@ -150,31 +171,31 @@ pub(crate) trait PackEntry {
     const ENTRY: &'static str;
 }
 
-pub(crate) struct PackKernel<E>(PhantomData<E>);
+pub(crate) struct PackKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> PackKernel<E> {
+impl<T, E> PackKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: PackEntry> KernelInterface for PackKernel<E> {
+impl<T: WgpuFftScalar, E: PackEntry> KernelInterface for PackKernel<T, E> {
     type Params = PackParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: PackEntry> KernelSource<Wgsl> for PackKernel<E> {
+impl<T: WgpuFftScalar, E: PackEntry> KernelSource<Wgsl> for PackKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("shader/pack.wgsl"))
+        scalar_source::<T>(include_str!("shader/pack.wgsl"))
     }
 }
 
@@ -195,31 +216,31 @@ pub(crate) trait ChirpEntry {
     const ENTRY: &'static str;
 }
 
-pub(crate) struct ChirpKernel<E>(PhantomData<E>);
+pub(crate) struct ChirpKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> ChirpKernel<E> {
+impl<T, E> ChirpKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: ChirpEntry> KernelInterface for ChirpKernel<E> {
+impl<T: WgpuFftScalar, E: ChirpEntry> KernelInterface for ChirpKernel<T, E> {
     type Params = ChirpParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_only::<f32>(),
-        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_only::<T>(),
+        BindingDecl::read_only::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: ChirpEntry> KernelSource<Wgsl> for ChirpKernel<E> {
+impl<T: WgpuFftScalar, E: ChirpEntry> KernelSource<Wgsl> for ChirpKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("shader/chirp.wgsl"))
+        scalar_source::<T>(include_str!("shader/chirp.wgsl"))
     }
 }
 

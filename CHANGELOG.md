@@ -5,22 +5,37 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 ## Unreleased
 
 - [minor] Add the provider-owned dense split-complex FFT seam and prepared WGPU
-  implementation for ranks one through three. Power-of-two and Bluestein axes
-  share one rank-generic plan; repeated encoding reuses caller-owned operands,
+  implementation for ranks one through three. The sealed `WgpuFftScalar`
+  contract instantiates the same rank-generic power-of-two/Bluestein plan for
+  `f32` and native `eunomia::F16`; binary16 preparation requires `ShaderF16`
+  and fails before allocation or mutation when unavailable, with no host or
+  wider-precision fallback. Repeated encoding reuses caller-owned operands,
   provider scratch, pipelines, immutable parameters, bind groups, and dispatch
   grids, and can compose into an existing command stream without an intermediate
   submission or into a provenance-carrying WGPU compute-pass sequence. Plans
-  own cloned fixed operand handles and bind them directly, removing two full-volume allocations
-  (`8N` bytes) and four full-volume device copies (`16N` bytes per warm
-  transform). Device-limit-qualified power-of-two axes up to 1,024 elements now
+  own cloned fixed operand handles and bind them directly, removing two
+  full-volume allocations (`2N * size_of::<T>()`) and four full-volume device
+  copies (`4N * size_of::<T>()` per warm transform).
+  Device-limit-qualified power-of-two axes up to 1,024 elements now
   execute as one fused workgroup-local dispatch per non-singleton axis, with no
   full-volume workspace, pack, or unpack pass. On the 256x128x128 lossless PSTD
   workload, six forward/inverse pairs decrease from 13.810 ms to 7.9974 ms
   median and remove 64 MiB of paired-plan workspace; singleton axes allocate no
-  workspace and emit no command. Bluestein phases are range-reduced before narrowing and upload so
-  large non-power-of-two transforms do not accumulate shader-side `f32` phase
-  construction error. WGPU command streams and readback also expose explicit
-  deadline-aware forms for bounded host and benchmark integration.
+  workspace and emit no command. Bluestein phases are range-reduced before one
+  scalar narrowing and upload so large non-power-of-two transforms do not
+  accumulate shader-side phase-construction error. The fused kernel expresses
+  complex butterflies as scalar-generic two-lane vectors. Fused and staged
+  roots plus inverse scales are prepared once in the selected storage scalar;
+  staged radix-four reconstructs the second half-circle by sign reflection so
+  plans do not retain a duplicate root table. On an RTX 5080 via Vulkan,
+  paired forward/inverse Criterion regression-slope time estimates are
+  162.71/171.31 microseconds for binary32/binary16 at 65,536 elements and
+  221.64/215.52 microseconds for a
+  64-cubed transform; the respective 95% confidence intervals are
+  [161.25, 164.67]/[168.20, 174.41] and
+  [219.22, 225.42]/[212.69, 218.68]. WGPU command streams and readback also
+  expose explicit deadline-aware forms for bounded host and benchmark
+  integration.
 
 - [patch] WGPU device acquisition now reports why it failed. Every
   `request_adapter` and `request_device` error was discarded behind

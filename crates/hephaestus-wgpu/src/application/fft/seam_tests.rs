@@ -318,11 +318,15 @@ fn large_bluestein_impulse_preserves_range_reduced_phase() {
         let angle = -core::f64::consts::TAU * phase_index as f64 / f64::from(exact_u32(N));
         assert!(
             (f64::from(actual_real[output]) - angle.cos()).abs() <= tolerance,
-            "real spectrum bin {output} exceeds the depth-derived bound"
+            "real spectrum bin {output}: actual={} expected={} exceeds the depth-derived bound {tolerance}",
+            actual_real[output],
+            angle.cos(),
         );
         assert!(
             (f64::from(actual_imaginary[output]) - angle.sin()).abs() <= tolerance,
-            "imaginary spectrum bin {output} exceeds the depth-derived bound"
+            "imaginary spectrum bin {output}: actual={} expected={} exceeds the depth-derived bound {tolerance}",
+            actual_imaginary[output],
+            angle.sin(),
         );
     }
 }

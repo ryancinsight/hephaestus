@@ -16,14 +16,28 @@ pub(crate) struct RadixStages {
 }
 
 impl RadixStages {
+    fn params(
+        fft_len: u32,
+        stage: u32,
+        inverse: u32,
+        batch_count: u32,
+        root_half: u32,
+        scale_index: u32,
+    ) -> FftParams {
+        FftParams {
+            n: fft_len,
+            stage,
+            inverse,
+            batch_count,
+            root_half,
+            scale_index,
+            padding: [0; 2],
+        }
+    }
+
     pub(crate) fn empty() -> Self {
         Self {
-            bit_reverse: FftParams {
-                n: 0,
-                stage: 0,
-                inverse: 0,
-                batch_count: 0,
-            },
+            bit_reverse: Self::params(0, 0, 0, 0, 0, 0),
             butterflies: Box::default(),
             inverse_scale: None,
             fft_len: 0,
@@ -32,60 +46,88 @@ impl RadixStages {
         }
     }
 
-    pub(crate) fn radix_two(fft_len: u32, batch_count: u32, inverse: bool) -> Self {
+    pub(crate) fn radix_two(
+        fft_len: u32,
+        batch_count: u32,
+        inverse: bool,
+        root_half: u32,
+        scale_index: u32,
+    ) -> Self {
         let inverse_flag = u32::from(inverse);
         let butterflies = (0..fft_len.trailing_zeros())
-            .map(|stage| FftParams {
-                n: fft_len,
-                stage,
-                inverse: inverse_flag,
-                batch_count,
+            .map(|stage| {
+                Self::params(
+                    fft_len,
+                    stage,
+                    inverse_flag,
+                    batch_count,
+                    root_half,
+                    scale_index,
+                )
             })
             .collect();
         Self {
-            bit_reverse: FftParams {
-                n: fft_len,
-                stage: 0,
-                inverse: inverse_flag,
+            bit_reverse: Self::params(
+                fft_len,
+                0,
+                inverse_flag,
                 batch_count,
-            },
+                root_half,
+                scale_index,
+            ),
             butterflies,
-            inverse_scale: inverse.then_some(FftParams {
-                n: fft_len,
-                stage: 0,
-                inverse: 1,
+            inverse_scale: inverse.then_some(Self::params(
+                fft_len,
+                0,
+                1,
                 batch_count,
-            }),
+                root_half,
+                scale_index,
+            )),
             fft_len,
             batch_count,
             radix_four: false,
         }
     }
 
-    pub(crate) fn radix_four(fft_len: u32, batch_count: u32, inverse: bool) -> Self {
+    pub(crate) fn radix_four(
+        fft_len: u32,
+        batch_count: u32,
+        inverse: bool,
+        root_half: u32,
+        scale_index: u32,
+    ) -> Self {
         let inverse_flag = u32::from(inverse);
         let butterflies = (0..(fft_len.trailing_zeros() / 2))
-            .map(|stage| FftParams {
-                n: fft_len,
-                stage,
-                inverse: inverse_flag,
-                batch_count,
+            .map(|stage| {
+                Self::params(
+                    fft_len,
+                    stage,
+                    inverse_flag,
+                    batch_count,
+                    root_half,
+                    scale_index,
+                )
             })
             .collect();
         Self {
-            bit_reverse: FftParams {
-                n: fft_len,
-                stage: 0,
-                inverse: inverse_flag,
+            bit_reverse: Self::params(
+                fft_len,
+                0,
+                inverse_flag,
                 batch_count,
-            },
+                root_half,
+                scale_index,
+            ),
             butterflies,
-            inverse_scale: inverse.then_some(FftParams {
-                n: fft_len,
-                stage: 0,
-                inverse: 1,
+            inverse_scale: inverse.then_some(Self::params(
+                fft_len,
+                0,
+                1,
                 batch_count,
-            }),
+                root_half,
+                scale_index,
+            )),
             fft_len,
             batch_count,
             radix_four: true,
