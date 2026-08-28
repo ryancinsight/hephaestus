@@ -238,13 +238,20 @@ cutover gate because the provider benchmark excludes Kwavers physics kernels.
   compilation, bind-group construction, host transfer, or device copy occurs
   on that path. This claim does not cover opaque allocations inside the driver.
 - Synchronous readback completion state is retained at device construction.
-  Tests prove that first and repeated readbacks allocate no new provider slot
-  and that concurrent readbacks receive independent state. A whole-call global
-  allocator census is not the ownership oracle: WGPU's one-shot encoder,
-  submit, and mapping internals still allocate opaque host state. The Apollo
-  phase census measured 99 allocations before removing the provider channel
-  and 97 after it; provider counters and retained host-buffer identities cover
-  the source-controlled lifecycle claim.
+  `stage_and_read` claims a slot before queue submission, and each claim has
+  exactly two owners: the synchronous reader and the WGPU callback. The slot
+  remains quarantined until both owners terminate, so pending browser callbacks,
+  poll errors, and unwinds cannot recycle state into a later readback. Excess
+  concurrency allocates an unpooled slot before submission. Deterministic tests
+  hold the full retained capacity, force capacity-plus-one overflow, distinguish
+  successful and failed terminal states, and prove delayed-callback quarantine
+  and reuse after both owners drop. Real-device tests cover first/repeated and
+  concurrent readbacks plus completion-capacity preservation across transient
+  buffer clearing. A whole-call global allocator census is not the ownership
+  oracle: WGPU's one-shot encoder, submit, and mapping internals still allocate
+  opaque host state. The Apollo phase census measured 99 allocations before
+  removing the provider channel and 97 after it; provider counters and retained
+  host-buffer identities cover the source-controlled lifecycle claim.
 - Matched benchmarks compare Apollo/Leto and Hephaestus end to end at
   cache-/device-relevant shapes, reporting Criterion regression-slope time
   estimates and confidence intervals;

@@ -1200,17 +1200,17 @@ impl WgpuDevice {
         self.uniform_pool.recycle(PoolBuffer(buffer));
     }
 
-    /// Drop transient buffers and readback completion slots retained for reuse.
+    /// Drop transient staging and uniform buffers retained for reuse.
     ///
     /// The bounded pools avoid repeated staging and uniform allocations on hot
     /// paths. Bindings and short-lived host integrations can call this at an
     /// ownership boundary to release cached allocations before the host runtime
-    /// tears down GPU state.
+    /// tears down GPU state. The small fixed readback-completion slots remain
+    /// device-owned because pending WGPU callbacks can still reference them.
     #[inline]
     pub fn clear_transient_pools(&self) {
         self.staging_pool.clear();
         self.uniform_pool.clear();
-        self.map_completion_pool.clear();
         // The shadow retained bound must follow the release, or a later decay
         // check would see stale parking (harmless over-clear of an empty
         // pool, but avoidable).
@@ -1623,6 +1623,10 @@ impl WgpuDevice {
         let raw_staging = self.get_staging_buffer(padded)?;
         let staging_size = raw_staging.size();
         let staging = crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
+        // Capacity overflow is resolved before queue submission. The two
+        // owners keep retained state quarantined until both this reader and
+        // the WGPU callback have terminated, including error and unwind paths.
+        let (completion, callback_completion) = self.map_completion_pool.acquire();
 
         let mut encoder = self
             .device
@@ -1631,9 +1635,6 @@ impl WgpuDevice {
         let submission_index = self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..staging_size);
-        let completion = self.map_completion_pool.take();
-        completion.reset();
-        let callback_completion = completion.clone();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             callback_completion.complete(result);
         });
@@ -1646,9 +1647,7 @@ impl WgpuDevice {
             .map_err(|e| HephaestusError::TransferFailed {
                 message: format!("device poll failed: {e:?}"),
             })?;
-        let mapping_result = completion.result();
-        self.map_completion_pool.recycle(completion);
-        mapping_result?;
+        completion.result()?;
 
         // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
         let byte_len_usize = usize::try_from(byte_len)
@@ -1677,7 +1676,6 @@ impl WgpuDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::pool::map_completion_allocation_count;
 
     #[test]
     fn module_cases_share_process_state() {
@@ -1733,6 +1731,10 @@ mod tests {
             (
                 "concurrent_readbacks_keep_independent_completion_state",
                 concurrent_readbacks_keep_independent_completion_state as fn(),
+            ),
+            (
+                "clearing_transient_buffers_preserves_completion_capacity",
+                clearing_transient_buffers_preserves_completion_capacity as fn(),
             ),
             (
                 "staging_pool_decays_after_idle_and_rewarm_serves",
@@ -1913,13 +1915,13 @@ mod tests {
         let expected = [11_u32, 13, 17, 19];
         let buffer = device.upload(&expected).expect("upload");
         let mut actual = [0_u32; 4];
-        let prepared_allocations = map_completion_allocation_count();
+        let prepared_allocations = device.map_completion_pool.overflow_allocation_count();
 
         device
             .download(&buffer, &mut actual)
             .expect("warm readback");
         assert_eq!(actual, expected);
-        let warm_allocations = map_completion_allocation_count();
+        let warm_allocations = device.map_completion_pool.overflow_allocation_count();
         assert_eq!(
             warm_allocations, prepared_allocations,
             "first readback must use device-owned callback completion state"
@@ -1931,7 +1933,7 @@ mod tests {
             .expect("reused readback");
         assert_eq!(actual, expected);
         assert_eq!(
-            map_completion_allocation_count(),
+            device.map_completion_pool.overflow_allocation_count(),
             warm_allocations,
             "warm readback must reuse retained callback completion state"
         );
@@ -1946,7 +1948,7 @@ mod tests {
         let first = device.upload(&first_expected).expect("first upload");
         let second = device.upload(&second_expected).expect("second upload");
         let barrier = std::sync::Barrier::new(3);
-        let prepared_allocations = map_completion_allocation_count();
+        let prepared_allocations = device.map_completion_pool.overflow_allocation_count();
 
         std::thread::scope(|scope| {
             let first_download = scope.spawn(|| {
@@ -1977,9 +1979,31 @@ mod tests {
             );
         });
         assert_eq!(
-            map_completion_allocation_count(),
+            device.map_completion_pool.overflow_allocation_count(),
             prepared_allocations,
             "two concurrent readbacks must use distinct device-owned slots"
+        );
+    }
+
+    fn clearing_transient_buffers_preserves_completion_capacity() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-map-completion-clear") else {
+            return;
+        };
+        let expected = [41_u32, 43, 47, 53];
+        let buffer = device.upload(&expected).expect("upload");
+        let prepared_allocations = device.map_completion_pool.overflow_allocation_count();
+
+        device.clear_transient_pools();
+        let mut actual = [0_u32; 4];
+        device
+            .download(&buffer, &mut actual)
+            .expect("readback after transient-buffer clear");
+
+        assert_eq!(actual, expected);
+        assert_eq!(
+            device.map_completion_pool.overflow_allocation_count(),
+            prepared_allocations,
+            "clearing transient buffers must preserve fixed completion capacity"
         );
     }
 
