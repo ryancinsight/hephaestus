@@ -2,6 +2,22 @@
 
 - Status: Accepted
 - Date: 2026-08-26
+- Revision 2026-08-28: Consumer-domain grouped kernels with fixed buffers,
+  parameters, and geometry can retain `WgpuBoundGroupedDispatch` values beside
+  a prepared FFT. Binding validates the grouped interface and fixed-resource
+  device provenance; every encode validates the target sequence's device
+  provenance before reusing the pipeline, parameter uniform, bind groups, and
+  dispatch grid. This
+  lets Apollo retain STFT framing/window/overlap kernels around provider-owned
+  FFT commands without rebuilding Hephaestus binding state on the warm path.
+- Revision 2026-08-28: Apollo STFT established a batched selected-axis
+  requirement: dense C-order `[frame_count, frame_len]` storage must transform
+  axis 1 without transforming across frames. Prepared FFT plans therefore
+  validate and retain an explicit nonempty set of unique in-range axes.
+  Existing preparation remains the all-axis convenience over this canonical
+  seam. Inverse normalization uses the product of active extents, not the full
+  operand element count. Empty, duplicate, and out-of-range selections fail
+  before provider allocation or operand mutation.
 - Revision 2026-08-28: The WGPU provider now instantiates one sealed,
   scalar-generic FFT plan for `f32` and native `eunomia::F16`. Binary16 requires
   `ShaderF16`; preparation rejects the missing capability before plan

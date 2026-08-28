@@ -1,6 +1,6 @@
 use bytemuck::Pod;
 
-use crate::domain::error::Result;
+use crate::domain::error::{HephaestusError, Result};
 use crate::domain::stream::{CommandStream, KernelDevice};
 
 use super::{FftDirection, FftOperands};
@@ -32,6 +32,23 @@ pub trait FftOps<D: KernelDevice, T: Pod> {
         self.dispatch_fft(device, &prepared)
     }
 
+    /// Transform selected axes of caller-owned split-complex storage in place.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed axis, validation, preparation, or device-dispatch
+    /// failure.
+    fn fft_axes_in_place<const R: usize>(
+        &self,
+        device: &D,
+        operands: FftOperands<'_, D::Buffer<T>, R>,
+        direction: FftDirection,
+        axes: &[usize],
+    ) -> Result<()> {
+        let prepared = self.prepare_fft_axes(device, operands, direction, axes)?;
+        self.dispatch_fft(device, &prepared)
+    }
+
     /// Validate and prepare one transform over fixed device operands.
     ///
     /// # Errors
@@ -44,6 +61,33 @@ pub trait FftOps<D: KernelDevice, T: Pod> {
         operands: FftOperands<'a, D::Buffer<T>, R>,
         direction: FftDirection,
     ) -> Result<Self::Prepared<'a, R>>;
+
+    /// Validate and prepare a transform over selected axes of fixed operands.
+    ///
+    /// Existing providers inherit all-axis behavior. Providers supporting
+    /// selected axes override this method and reject invalid selections before
+    /// allocating provider state or mutating operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed axis, validation, preparation, allocation, compilation,
+    /// or unsupported-capability failure.
+    fn prepare_fft_axes<'a, const R: usize>(
+        &self,
+        device: &'a D,
+        operands: FftOperands<'a, D::Buffer<T>, R>,
+        direction: FftDirection,
+        axes: &[usize],
+    ) -> Result<Self::Prepared<'a, R>> {
+        let selects_every_axis = axes.len() == R && (0..R).all(|axis| axes.contains(&axis));
+        if selects_every_axis {
+            self.prepare_fft(device, operands, direction)
+        } else {
+            Err(HephaestusError::InvalidConfiguration {
+                message: "selected-axis FFT is unsupported by this provider".to_owned(),
+            })
+        }
+    }
 
     /// Encode a prepared transform into an existing provider command stream.
     ///

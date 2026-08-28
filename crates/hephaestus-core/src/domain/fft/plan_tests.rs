@@ -54,7 +54,54 @@ fn plans_one_two_and_three_dimensional_transforms() {
     let plan = plan_shape([2, 3, 5]);
     assert_eq!(plan.shape, [2, 3, 5]);
     assert_eq!(plan.elements, 30);
+    assert_eq!(plan.active_axes, [true, true, true]);
+    assert_eq!(plan.transform_elements, 30);
     assert_eq!(plan.max_physical_offset, 29);
+}
+
+#[test]
+fn plans_selected_axes_and_normalization_extent() {
+    let real_buffer = Buffer { len: 24 };
+    let imaginary_buffer = Buffer { len: 24 };
+    let layout = Layout::c_contiguous([3, 8]).expect("rank-two layout");
+    let plan = plan_fft_axes::<f32, _, 2>(
+        &operands(&real_buffer, &imaginary_buffer, &layout, &layout),
+        FftDirection::Inverse,
+        &[1],
+        false,
+    )
+    .expect("axis-one plan");
+    assert_eq!(plan.shape, [3, 8]);
+    assert_eq!(plan.elements, 24);
+    assert_eq!(plan.active_axes, [false, true]);
+    assert_eq!(plan.transform_elements, 8);
+
+    let reversed = plan_fft_axes::<f32, _, 2>(
+        &operands(&real_buffer, &imaginary_buffer, &layout, &layout),
+        FftDirection::Forward,
+        &[1, 0],
+        false,
+    )
+    .expect("axis order is not semantically significant");
+    assert_eq!(reversed.active_axes, [true, true]);
+    assert_eq!(reversed.transform_elements, 24);
+}
+
+#[test]
+fn rejects_invalid_selected_axis_sets() {
+    let real_buffer = Buffer { len: 24 };
+    let imaginary_buffer = Buffer { len: 24 };
+    let layout = Layout::c_contiguous([3, 8]).expect("rank-two layout");
+    let operands = || operands(&real_buffer, &imaginary_buffer, &layout, &layout);
+    for (axes, expected) in [
+        (&[][..], "nonempty"),
+        (&[1, 1][..], "duplicated"),
+        (&[2][..], "out of range"),
+    ] {
+        let error = plan_fft_axes::<f32, _, 2>(&operands(), FftDirection::Forward, axes, false)
+            .expect_err("invalid axes must fail");
+        assert!(error.to_string().contains(expected));
+    }
 }
 
 #[test]

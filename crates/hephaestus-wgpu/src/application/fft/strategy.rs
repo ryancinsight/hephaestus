@@ -6,6 +6,7 @@ use super::{kernel::ChirpParams, stages::RadixStages};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AxisStrategy {
+    Identity,
     FusedRadix2,
     StagedRadix2,
     ChirpZ { n: usize, m: usize },

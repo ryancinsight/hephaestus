@@ -1,4 +1,6 @@
-use hephaestus_core::{FftDirection, FftOperands, FftOps, HephaestusError, Result, plan_fft};
+use hephaestus_core::{
+    FftDirection, FftOperands, FftOps, HephaestusError, Result, plan_fft, plan_fft_axes,
+};
 
 use crate::application::prepared::{device_owner, validate_device_owner};
 use crate::infrastructure::device::PipelineCache;
@@ -10,6 +12,40 @@ use super::{plan::WgpuFftPlan, scalar::WgpuFftScalar};
 /// WGPU implementation of the device-neutral dense complex FFT seam.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuFftOps;
+
+impl WgpuFftOps {
+    fn prepare<T: WgpuFftScalar, const R: usize>(
+        device: &WgpuDevice,
+        operands: FftOperands<'_, WgpuBuffer<T>, R>,
+        direction: FftDirection,
+        axes: Option<&[usize]>,
+    ) -> Result<WgpuPreparedFft<R, T>> {
+        T::validate_fft_capability(device)?;
+        if !operands.real.buffer.belongs_to(&device.pipeline_cache)
+            || !operands.imaginary.buffer.belongs_to(&device.pipeline_cache)
+        {
+            return Err(invalid(
+                "FFT component buffers must belong to the preparation device",
+            ));
+        }
+        let aliases = operands.real.buffer.aliases(operands.imaginary.buffer);
+        let logical = if let Some(axes) = axes {
+            plan_fft_axes::<T, _, R>(&operands, direction, axes, aliases)?
+        } else {
+            plan_fft::<T, _, R>(&operands, direction, aliases)?
+        };
+        logical.validate_address_limit(u32::MAX as usize)?;
+        Ok(WgpuPreparedFft {
+            plan: WgpuFftPlan::new(
+                device,
+                logical,
+                operands.real.buffer.clone(),
+                operands.imaginary.buffer.clone(),
+            )?,
+            owner: device_owner(device),
+        })
+    }
+}
 
 /// Prepared WGPU FFT resources bound to fixed split-complex device buffers.
 ///
@@ -76,29 +112,17 @@ impl<T: WgpuFftScalar> FftOps<WgpuDevice, T> for WgpuFftOps {
         operands: FftOperands<'a, WgpuBuffer<T>, R>,
         direction: FftDirection,
     ) -> Result<Self::Prepared<'a, R>> {
-        T::validate_fft_capability(device)?;
-        if !operands.real.buffer.belongs_to(&device.pipeline_cache)
-            || !operands.imaginary.buffer.belongs_to(&device.pipeline_cache)
-        {
-            return Err(invalid(
-                "FFT component buffers must belong to the preparation device",
-            ));
-        }
-        let logical = plan_fft::<T, _, R>(
-            &operands,
-            direction,
-            operands.real.buffer.aliases(operands.imaginary.buffer),
-        )?;
-        logical.validate_address_limit(u32::MAX as usize)?;
-        Ok(WgpuPreparedFft {
-            plan: WgpuFftPlan::new(
-                device,
-                logical,
-                operands.real.buffer.clone(),
-                operands.imaginary.buffer.clone(),
-            )?,
-            owner: device_owner(device),
-        })
+        Self::prepare(device, operands, direction, None)
+    }
+
+    fn prepare_fft_axes<'a, const R: usize>(
+        &self,
+        device: &'a WgpuDevice,
+        operands: FftOperands<'a, WgpuBuffer<T>, R>,
+        direction: FftDirection,
+        axes: &[usize],
+    ) -> Result<Self::Prepared<'a, R>> {
+        Self::prepare(device, operands, direction, Some(axes))
     }
 
     fn encode_fft<const R: usize>(

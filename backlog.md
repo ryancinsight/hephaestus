@@ -145,12 +145,10 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
-- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
-  `feat/fft-native-f16`; takeover 2026-08-28 after the recorded owner branch
-  disappeared and no provider-region lease remained.
-- Lease: none. The native-binary16 provider increment is verified and ready for
-  delivery; the generated ADR index in the primary checkout remains peer-owned
-  and outside this lane.
+- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider work is
+  on `feat/wgpu-fft-selected-axes` and consumer closure is in Apollo/Kwavers.
+- Lease: none. The selected-axis and retained grouped-binding increment is
+  verified at `90572d3` and provider PR #230 is ready to merge.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
@@ -262,8 +260,20 @@
   [168.20, 174.41] for binary16 at 65,536 elements; at 64 cubed they are
   221.64 [219.22, 225.42] and 215.52 [212.69, 218.68] microseconds. The result
   does not support a universal
-  binary16 speed claim. Apollo/Leto differential coverage, consumer deletion,
-  and exact-head hosted verification remain open.
+  binary16 speed claim. The selected-axis correction validates and executes
+  only a nonempty unique in-range axis set, normalizes inverse transforms by
+  active extents, and preserves the all-axis convenience. Direct-DFT and inverse
+  row oracles cover `[3, 8]` and `[3, 5]`; invalid selections reject before
+  mutation. Retained grouped binding moves consumer pipeline, uniform, bind
+  group, and dispatch-grid preparation out of warm encoding while preserving
+  fixed-resource and per-encode sequence-device provenance. Parameter size is
+  checked against enabled limits, and scoped WGPU failures preserve causal
+  precedence: allocation, internal, validation, then host binding. Focused
+  real-device Nextest passes 14/14 in 15.486 seconds; warning-denied all-target
+  Clippy, formatting, doctests, rustdoc, core/WGPU SemVer (196/196 each), and
+  two independent static reviews are green at `90572d3`. Apollo/Leto
+  differential coverage, consumer deletion, and exact-head hosted verification
+  remain open.
 
 ## ✅ HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf]: Reuse WGPU test devices
 
