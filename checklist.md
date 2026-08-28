@@ -4,6 +4,12 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
+Selected-axis correction lease: active 2026-08-28 on
+`feat/wgpu-fft-selected-axes`. Owned regions are the device-neutral FFT
+contract/planner, WGPU FFT plan/seam/tests, ADR 0053, and affected release
+documentation. Apollo STFT requires retained rank-2 plans that transform only
+axis 1; the current all-axis convenience cannot represent that contract.
+
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
 - [x] Record the provider ownership, rank-generic contract, staged cutover, and
