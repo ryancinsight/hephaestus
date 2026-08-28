@@ -55,6 +55,9 @@ mod elementwise_contracts;
 #[path = "full_reduction_contracts.rs"]
 mod full_reduction_contracts;
 
+#[path = "fft_contracts.rs"]
+mod fft_contracts;
+
 #[path = "parameterized_unary_contracts.rs"]
 mod parameterized_unary_contracts;
 
@@ -232,6 +235,7 @@ contract_cases!(
     dense_vector::prepared_reductions_reuse_their_bound_allocation,
     dense_vector::mismatched_lengths_are_rejected,
     elementwise_contracts::wgpu_satisfies_the_elementwise_contract,
+    fft_contracts::prepared_fft_device_preflight_is_public_and_typed,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     parameterized_unary_contracts::wgpu_satisfies_the_parameterized_unary_contract,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
@@ -292,7 +296,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        168,
+        169,
         "the consolidated integration contract must retain every migrated case"
     );
 
