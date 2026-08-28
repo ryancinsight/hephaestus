@@ -277,6 +277,7 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
     ) -> Result<()> {
         let index = axis.shader_index() as usize;
         match self.strategy[index] {
+            AxisStrategy::Identity => return Ok(()),
             AxisStrategy::FusedRadix2 => {
                 commands.push(self.bind_fused(device, pipelines, axis, inverse, components)?);
                 return Ok(());

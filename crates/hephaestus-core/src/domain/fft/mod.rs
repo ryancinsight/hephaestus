@@ -10,4 +10,4 @@ mod plan;
 
 pub use operands::FftOperands;
 pub use ops::FftOps;
-pub use plan::{FftDirection, FftPlan, plan_fft};
+pub use plan::{FftDirection, FftPlan, plan_fft, plan_fft_axes};

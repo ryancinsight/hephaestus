@@ -82,6 +82,47 @@ fn direct_forward<const R: usize>(
         .collect()
 }
 
+fn direct_axis_one(
+    rows: usize,
+    columns: usize,
+    real: &[f32],
+    imaginary: &[f32],
+    direction: FftDirection,
+) -> Vec<[f64; 2]> {
+    let sign = match direction {
+        FftDirection::Forward => -1.0,
+        FftDirection::Inverse => 1.0,
+    };
+    let scale = match direction {
+        FftDirection::Forward => 1.0,
+        FftDirection::Inverse => 1.0 / f64::from(exact_u32(columns)),
+    };
+    (0..rows)
+        .flat_map(|row| {
+            (0..columns).map(move |output_column| {
+                (0..columns)
+                    .fold([0.0, 0.0], |sum, input_column| {
+                        let input_index = row * columns + input_column;
+                        let phase = f64::from(exact_u32(input_column))
+                            * f64::from(exact_u32(output_column))
+                            / f64::from(exact_u32(columns));
+                        let angle = sign * core::f64::consts::TAU * phase;
+                        let twiddle = [angle.cos(), angle.sin()];
+                        let input = [
+                            f64::from(real[input_index]),
+                            f64::from(imaginary[input_index]),
+                        ];
+                        [
+                            sum[0] + input[0].mul_add(twiddle[0], -(input[1] * twiddle[1])),
+                            sum[1] + input[0].mul_add(twiddle[1], input[1] * twiddle[0]),
+                        ]
+                    })
+                    .map(|value| value * scale)
+            })
+        })
+        .collect()
+}
+
 fn download(device: &WgpuDevice, buffer: &WgpuBuffer<f32>) -> Vec<f32> {
     let mut host = vec![0.0; buffer.len()];
     device
@@ -134,6 +175,19 @@ fn prepare<'a, const R: usize>(
 ) -> WgpuPreparedFft<R> {
     ops.prepare_fft(device, operands(real, imaginary, layout), direction)
         .expect("invariant: FFT preparation succeeds")
+}
+
+fn prepare_axes<'a, const R: usize>(
+    ops: &WgpuFftOps,
+    device: &'a WgpuDevice,
+    real: &'a WgpuBuffer<f32>,
+    imaginary: &'a WgpuBuffer<f32>,
+    layout: &'a Layout<R>,
+    direction: FftDirection,
+    axes: &[usize],
+) -> WgpuPreparedFft<R> {
+    ops.prepare_fft_axes(device, operands(real, imaginary, layout), direction, axes)
+        .expect("invariant: selected-axis FFT preparation succeeds")
 }
 
 fn verify_shape<const R: usize>(device: &WgpuDevice, shape: [usize; R]) {
@@ -244,6 +298,14 @@ fn module_cases_share_process_state() {
         (
             "prepared_fft_owns_operands_and_encodes_in_existing_pass",
             prepared_fft_owns_operands_and_encodes_in_existing_pass as fn(),
+        ),
+        (
+            "prepared_axis_one_fft_matches_independent_row_oracles",
+            prepared_axis_one_fft_matches_independent_row_oracles as fn(),
+        ),
+        (
+            "selected_axis_validation_precedes_operand_mutation",
+            selected_axis_validation_precedes_operand_mutation as fn(),
         ),
     ]);
 }
@@ -447,4 +509,123 @@ fn prepared_fft_owns_operands_and_encodes_in_existing_pass() {
         &expected,
         shape.into_iter().product(),
     );
+}
+
+fn prepared_axis_one_fft_matches_independent_row_oracles() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    for columns in [8, 5] {
+        let rows = 3;
+        let elements = rows * columns;
+        let real_input = (0..elements)
+            .map(|index| {
+                let row = index / columns;
+                let column = index % columns;
+                0.25 + row as f32 * 1.75 + column as f32 * 0.125
+            })
+            .collect::<Vec<_>>();
+        let imaginary_input = (0..elements)
+            .map(|index| {
+                let row = index / columns;
+                let column = index % columns;
+                -0.5 + row as f32 * 0.375 - column as f32 * 0.0625
+            })
+            .collect::<Vec<_>>();
+        let real = device.upload(&real_input).expect("real upload");
+        let imaginary = device.upload(&imaginary_input).expect("imaginary upload");
+        let layout = Layout::c_contiguous([rows, columns]).expect("dense row layout");
+        let ops = WgpuFftOps;
+        let forward = prepare_axes(
+            &ops,
+            &device,
+            &real,
+            &imaginary,
+            &layout,
+            FftDirection::Forward,
+            &[1],
+        );
+        let inverse = prepare_axes(
+            &ops,
+            &device,
+            &real,
+            &imaginary,
+            &layout,
+            FftDirection::Inverse,
+            &[1],
+        );
+        let expected_forward = direct_axis_one(
+            rows,
+            columns,
+            &real_input,
+            &imaginary_input,
+            FftDirection::Forward,
+        );
+        ops.dispatch_fft(&device, &forward)
+            .expect("selected-axis forward dispatch");
+        assert_complex_close(
+            &download(&device, &real),
+            &download(&device, &imaginary),
+            &expected_forward,
+            columns,
+        );
+
+        let real_spectrum = (0..elements)
+            .map(|index| 0.75 - index as f32 * 0.03125)
+            .collect::<Vec<_>>();
+        let imaginary_spectrum = (0..elements)
+            .map(|index| -0.25 + index as f32 * 0.046875)
+            .collect::<Vec<_>>();
+        device
+            .write_sub_buffer(&real, 0, &real_spectrum)
+            .expect("real spectrum upload");
+        device
+            .write_sub_buffer(&imaginary, 0, &imaginary_spectrum)
+            .expect("imaginary spectrum upload");
+        let expected_inverse = direct_axis_one(
+            rows,
+            columns,
+            &real_spectrum,
+            &imaginary_spectrum,
+            FftDirection::Inverse,
+        );
+        ops.dispatch_fft(&device, &inverse)
+            .expect("selected-axis inverse dispatch");
+        assert_complex_close(
+            &download(&device, &real),
+            &download(&device, &imaginary),
+            &expected_inverse,
+            columns,
+        );
+    }
+}
+
+fn selected_axis_validation_precedes_operand_mutation() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let real_input = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let imaginary_input = [-1.0_f32, -2.0, -3.0, -4.0, -5.0, -6.0];
+    let real = device.upload(&real_input).expect("real upload");
+    let imaginary = device.upload(&imaginary_input).expect("imaginary upload");
+    let layout = Layout::c_contiguous([2, 3]).expect("dense row layout");
+    let ops = WgpuFftOps;
+    for (axes, expected) in [
+        (&[][..], "nonempty"),
+        (&[1, 1][..], "duplicated"),
+        (&[2][..], "out of range"),
+    ] {
+        let error = match ops.prepare_fft_axes(
+            &device,
+            operands(&real, &imaginary, &layout),
+            FftDirection::Forward,
+            axes,
+        ) {
+            Ok(_) => panic!("invalid selected axes must fail"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains(expected));
+        assert_eq!(download(&device, &real), real_input);
+        assert_eq!(download(&device, &imaginary), imaginary_input);
+    }
 }

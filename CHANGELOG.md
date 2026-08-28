@@ -16,6 +16,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   own cloned fixed operand handles and bind them directly, removing two
   full-volume allocations (`2N * size_of::<T>()`) and four full-volume device
   copies (`4N * size_of::<T>()` per warm transform).
+  Callers may prepare a nonempty set of unique transform axes while retaining
+  the full dense operand shape. This supports batched row transforms such as
+  `[frame_count, frame_len]` on axis 1 without transforming across frames;
+  inactive axes allocate no FFT state or commands, and inverse normalization
+  uses only the selected extents.
   Device-limit-qualified power-of-two axes up to 1,024 elements now
   execute as one fused workgroup-local dispatch per non-singleton axis, with no
   full-volume workspace, pack, or unpack pass. On the 256x128x128 lossless PSTD

@@ -9,7 +9,7 @@ use super::FftOperands;
 pub enum FftDirection {
     /// Negative exponential with no scaling.
     Forward,
-    /// Positive exponential scaled by the reciprocal of the full element count.
+    /// Positive exponential scaled by the reciprocal of the transformed extents.
     Inverse,
 }
 
@@ -21,6 +21,10 @@ pub struct FftPlan<const R: usize> {
     pub shape: [usize; R],
     /// Product of every transform extent.
     pub elements: usize,
+    /// Axes selected for transformation.
+    pub active_axes: [bool; R],
+    /// Product of the selected transform extents.
+    pub transform_elements: usize,
     /// Requested transform direction and normalization.
     pub direction: FftDirection,
     /// Largest physical element offset touched in either component.
@@ -64,10 +68,53 @@ pub fn plan_fft<T, B, const R: usize>(
 where
     B: DeviceBuffer<T>,
 {
+    let axes: &[usize] = match R {
+        1 => &[0],
+        2 => &[0, 1],
+        3 => &[0, 1, 2],
+        _ => &[],
+    };
+    plan_fft_axes(operands, direction, axes, illegal_aliasing)
+}
+
+/// Validate split-complex FFT operands and a selected transform-axis set.
+///
+/// The axes must be nonempty, unique, and in range for rank R. Axis order does
+/// not affect the mathematical result; providers retain their canonical
+/// direction-dependent execution order while filtering to this set.
+///
+/// # Errors
+///
+/// Returns a typed rank, axis, shape, storage, layout, overflow, or alias
+/// error.
+pub fn plan_fft_axes<T, B, const R: usize>(
+    operands: &FftOperands<'_, B, R>,
+    direction: FftDirection,
+    axes: &[usize],
+    illegal_aliasing: bool,
+) -> Result<FftPlan<R>>
+where
+    B: DeviceBuffer<T>,
+{
     if !(1..=3).contains(&R) {
         return Err(invalid(format!(
             "FFT rank {R} is unsupported; expected a rank from 1 through 3"
         )));
+    }
+    if axes.is_empty() {
+        return Err(invalid("FFT transform axes must be nonempty"));
+    }
+    let mut active_axes = [false; R];
+    for &axis in axes {
+        let Some(active) = active_axes.get_mut(axis) else {
+            return Err(invalid(format!(
+                "FFT axis {axis} is out of range for rank {R}"
+            )));
+        };
+        if *active {
+            return Err(invalid(format!("FFT axis {axis} is duplicated")));
+        }
+        *active = true;
     }
     if illegal_aliasing {
         return Err(invalid(
@@ -113,10 +160,21 @@ where
             operands.imaginary.buffer.len()
         )));
     }
+    let transform_elements = active_axes
+        .iter()
+        .zip(real.shape())
+        .filter_map(|(&active, extent)| active.then_some(extent))
+        .try_fold(1usize, |product, extent| {
+            product
+                .checked_mul(extent)
+                .ok_or_else(|| invalid("FFT selected-axis element count overflows"))
+        })?;
 
     Ok(FftPlan {
         shape: real.shape(),
         elements,
+        active_axes,
+        transform_elements,
         direction,
         max_physical_offset: elements - 1,
     })

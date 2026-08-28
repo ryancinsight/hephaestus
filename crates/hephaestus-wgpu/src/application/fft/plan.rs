@@ -21,7 +21,6 @@ use super::{
 };
 
 pub(crate) struct WgpuFftPlan<T> {
-    pub(crate) rank: usize,
     pub(crate) real: WgpuBuffer<T>,
     pub(crate) imaginary: WgpuBuffer<T>,
     pub(crate) workspace: Option<FftWorkspace<T>>,
@@ -98,6 +97,25 @@ fn select_fused_strategy(
     }
 }
 
+fn select_axis_strategy(
+    active: bool,
+    axis_len: usize,
+    batch_count: u32,
+    limits: DeviceLimits,
+    max_workgroups_per_dimension: u32,
+) -> Result<AxisStrategy> {
+    if !active || axis_len == 1 {
+        return Ok(AxisStrategy::Identity);
+    }
+    Ok(select_fused_strategy(
+        axis_strategy_for(axis_len)?,
+        axis_len,
+        batch_count,
+        limits,
+        max_workgroups_per_dimension,
+    ))
+}
+
 fn dimension(value: usize, name: &str) -> Result<u32> {
     u32::try_from(value)
         .map_err(|_| invalid(format!("FFT {name}={value} exceeds the shader u32 domain")))
@@ -112,7 +130,7 @@ fn axis_workspace_elements(
         return Ok(None);
     }
     let transform_len = match strategy {
-        AxisStrategy::FusedRadix2 => return Ok(None),
+        AxisStrategy::Identity | AxisStrategy::FusedRadix2 => return Ok(None),
         AxisStrategy::StagedRadix2 => axis.len(dimensions),
         AxisStrategy::ChirpZ { m, .. } => m,
     };
@@ -134,7 +152,7 @@ fn radix_root_length(dimensions: [usize; 3], strategies: [AxisStrategy; 3]) -> u
         .into_iter()
         .enumerate()
         .filter_map(|(index, strategy)| match strategy {
-            AxisStrategy::FusedRadix2 => None,
+            AxisStrategy::Identity | AxisStrategy::FusedRadix2 => None,
             AxisStrategy::StagedRadix2 => Some(dimensions[index]),
             AxisStrategy::ChirpZ { m, .. } => Some(m),
         })
@@ -347,28 +365,30 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
                 "axis batch count",
             )?;
         }
+        let mut active_axes = [false; 3];
+        active_axes[..R].copy_from_slice(&plan.active_axes);
         let strategy = [
-            select_fused_strategy(
-                axis_strategy_for(dimensions[0])?,
+            select_axis_strategy(
+                active_axes[0],
                 dimensions[0],
                 batch[0],
                 limits,
                 max_workgroups_per_dimension,
-            ),
-            select_fused_strategy(
-                axis_strategy_for(dimensions[1])?,
+            )?,
+            select_axis_strategy(
+                active_axes[1],
                 dimensions[1],
                 batch[1],
                 limits,
                 max_workgroups_per_dimension,
-            ),
-            select_fused_strategy(
-                axis_strategy_for(dimensions[2])?,
+            )?,
+            select_axis_strategy(
+                active_axes[2],
                 dimensions[2],
                 batch[2],
                 limits,
                 max_workgroups_per_dimension,
-            ),
+            )?,
         ];
         let radix_root_length = radix_root_length(dimensions, strategy);
         let workspace_elements = validate_storage_limit::<T>(
@@ -383,6 +403,7 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
         let mut pack = [PackParams::zeroed(); 3];
         for (index, axis) in axes.into_iter().enumerate() {
             let fft_len = match strategy[index] {
+                AxisStrategy::Identity => 1,
                 AxisStrategy::FusedRadix2 | AxisStrategy::StagedRadix2 => {
                     dimension(axis.len(dimensions), "axis length")?
                 }
@@ -418,7 +439,6 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
         };
         let radix_twiddle = build_radix_twiddle(device, radix_root_length)?;
         let mut prepared = Self {
-            rank: R,
             real,
             imaginary,
             workspace,
@@ -470,7 +490,7 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
 
     pub(crate) fn axis_is_active(&self, axis: Axis) -> bool {
         let index = axis.shader_index() as usize;
-        index < self.rank && self.pack[index].n > 1
+        !matches!(self.strategy[index], AxisStrategy::Identity)
     }
 }
 
