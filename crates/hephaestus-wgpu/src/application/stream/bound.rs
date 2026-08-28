@@ -68,7 +68,8 @@ impl WgpuDevice {
     ///
     /// # Errors
     ///
-    /// Returns a typed binding-contract, size, allocation, or WGPU validation
+    /// Returns a typed prepared-device ownership, binding-contract,
+    /// configuration/size, allocation, internal-provider, or WGPU validation
     /// failure.
     pub fn bind_grouped_dispatch<K: GroupedKernelSource<Wgsl>>(
         &self,
@@ -110,10 +111,12 @@ impl WgpuDevice {
         let validation_error = moirai::block_on(validation.pop());
         let internal_error = moirai::block_on(internal.pop());
         let out_of_memory_error = moirai::block_on(out_of_memory.pop());
-        let bind_groups = bind_groups?;
-        if let Some(error) = validation_error {
-            return Err(hephaestus_core::HephaestusError::DispatchFailed {
-                message: format!("{} bind-group creation failed: {error}", prepared.label),
+        if let Some(error) = out_of_memory_error {
+            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+                message: format!(
+                    "{} retained binding allocation failed: {error}",
+                    prepared.label
+                ),
             });
         }
         if let Some(error) = internal_error {
@@ -124,14 +127,15 @@ impl WgpuDevice {
                 ),
             });
         }
-        if let Some(error) = out_of_memory_error {
-            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+        if let Some(error) = validation_error {
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!(
-                    "{} retained binding allocation failed: {error}",
+                    "{} retained binding validation failed: {error}",
                     prepared.label
                 ),
             });
         }
+        let bind_groups = bind_groups?;
         Ok(WgpuBoundGroupedDispatch {
             pipeline: prepared.pipeline.clone(),
             bind_groups,
