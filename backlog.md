@@ -77,20 +77,24 @@
   through it; hang-path behavior covered by a test with an injected
   never-completing wait or documented as untestable with the limit stated.
 
-## HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf] — todo
+## ✅ HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf]: Decay idle staging pool retention
 
-- Owner: unclaimed.
-- Outcome: age/watermark decay for the wgpu staging pool so burst allocations
-  stop parking memory for the device's lifetime.
-- Evidence (audit 2026-08-27):
-  `crates/hephaestus-wgpu/src/infrastructure/device.rs` —
-  `STAGING_POOL_MAX_BYTES = 512 MiB` (:58) retained for device lifetime with
-  no age/decay/watermark trim; only the manual `clear_transient_pools`
-  (:1072) releases it. One readback burst parks hundreds of MiB of MAP_READ
-  memory in long-lived sessions.
-- Acceptance: a decay/watermark policy with derivation for its constants,
-  steady-state memory evidence (burst then idle returns to the watermark),
-  and pool-hit-rate evidence showing no regression on sustained readback.
+- **Delivered**: PR #229 / implementation `9f39acd` adds age-based idle decay
+  to the wgpu staging pool: a shadow retained-byte bound and hit/miss
+  counters ride the staging acquire/recycle paths (one clock read plus two
+  relaxed loads when warm), and when no staging traffic occurs for
+  `STAGING_POOL_IDLE_DECAY` (10 s, derived in-source), the next acquire
+  clears parked retention, so a readback burst no longer parks up to 512 MiB
+  of MAP_READ memory for the device's lifetime. Uniform pool exempt (~8 KiB,
+  reused every dispatch); `clear_transient_pools` resets the bound.
+- **Evidence**: a sustained-readback hit-rate test (at most the first of 16
+  rounds pays a fresh allocation) and an idle-decay test pinning one fresh
+  allocation after the idle window plus pool re-warm on subsequent traffic;
+  cargo fmt, warning-denied Clippy, and nextest -p hephaestus-wgpu (25/25)
+  pass, and CI Lockfile integrity, Host-side verification, and WGPU feature
+  and software-adapter contracts are green.
+- **Integrator**: Codebuff session on `perf/wgpu-staging-pool-decay`; lease:
+  none.
 
 ## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — todo
 
