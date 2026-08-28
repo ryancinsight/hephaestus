@@ -261,8 +261,13 @@
   binary16 speed claim. Apollo/Leto differential coverage, consumer deletion,
   and exact-head hosted verification remain open.
 
-## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — todo
+## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — in progress
 
+- Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
+  `perf/wgpu-test-device-reuse`.
+- Lease: `crates/hephaestus-wgpu/tests`, WGPU test-target declarations and
+  fixtures, this item block, and the matching checklist through the next
+  verified commit.
 - Outcome: reduce WGPU package-gate latency by consolidating the current 26 test
   binaries into the fewest cohesive harnesses and reusing one acquired logical
   device per harness while preserving isolated buffers and parallel-test
@@ -276,9 +281,10 @@
   under the committed Nextest budget.
 - Risk/change class: `[patch] [perf]`; test-infrastructure concurrency and device
   lifetime.
-- Status: todo; dependency: `HEPH-FFT-PROVIDER-1` provider commit. Audit evidence:
-  the main `contract.rs` harness already uses `OnceLock`; the remaining cost is
-  dominated by separate integration binaries and their independent devices.
+- Status: in progress; dependency `HEPH-FFT-PROVIDER-1` merged in PR #227 as
+  `2a785d8`. Audit evidence: the main `contract.rs` harness already uses
+  `OnceLock`; the remaining cost is dominated by separate integration binaries
+  and their independent devices.
   The exact native-scalar FFT diff passes 242/242 with no skips in 76.936
   seconds, exceeding the ordinary 60-second package budget and confirming that
   topology optimization remains the next provider-side performance increment.

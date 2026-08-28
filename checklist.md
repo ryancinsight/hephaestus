@@ -68,6 +68,19 @@ Sprint target: 0.18.0. Phase: Closure.
       The local provider architecture/performance re-review is green; hosted
       exact-head and consumer closure remain.
 
+## HEPH-WGPU-TEST-DEVICE-REUSE-1 [patch] [perf] — Owner: Codex
+
+- [ ] Attribute the 76.936-second, 242-test, 26-binary baseline by test binary,
+      device-acquisition count, and execution time without changing workloads.
+- [ ] Consolidate integration tests into the fewest cohesive harnesses and reuse
+      one logical device per harness while preserving independent buffers,
+      parallel-test determinism, skip policy, and every value assertion.
+- [ ] Verify concurrent buffer isolation, warning-denied all-target compilation,
+      and the unchanged 242-test package suite under the committed Nextest
+      budget; compare exact before/after wall time.
+- [ ] Pass independent review, synchronize the measured result, commit, and
+      merge the performance increment.
+
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — Owner: current Atlas session
 
 - [x] Compare the affected chapters with the current core device, buffer,
