@@ -20,11 +20,14 @@ Sprint target: 0.18.0. Phase: Closure.
       provider-neutral encode seam and checks independent forward DFT bins with
       a depth-derived error bound. Prepared plans own fixed operand handles;
       static inspection and an in-pass real-device regression prove the removal
-      of duplicate volumes and warm copies. Apollo/Leto differential, explicit
-      device-allocation instrumentation, and matched timing remain. Post-change
-      evidence passes 11/11 focused FFT and 231/231 full real-device WGPU tests,
-      warning-denied all-target Clippy and rustdoc, and 196/196 minor-policy
-      SemVer checks against `origin/master`.
+      of duplicate volumes and warm copies. Apollo/Leto differential and
+      consumer-boundary allocation instrumentation remain; provider scalar
+      timing is complete. The generic f32/f16 suite passes 22/22 focused FFT
+      tests in 17.081 seconds. Grouped dispatch preserves command, workspace,
+      and root-table identities, while source inspection excludes
+      Hephaestus-owned warm
+      allocation, compilation, bind construction, transfer, and copy but not
+      opaque driver allocations.
       Provider PR #222 merged as `cfadc373`; the next provider increment adds a
       matched 256x128x128 repeated-pair workload against Kwavers's measured
       10.09 ms/step pre-cutover baseline. The staged plan measured 13.810 ms and
@@ -35,13 +38,35 @@ Sprint target: 0.18.0. Phase: Closure.
       seconds; the separately tracked test-topology item owns reducing that
       runtime without weakening coverage or budgets. The full Kwavers step
       remains the deletion gate.
+      The native-scalar increment's complete package run passes 242/242 with no
+      skips in 76.936 seconds. This exceeds the ordinary package budget and
+      refreshes `HEPH-WGPU-TEST-DEVICE-REUSE-1`'s entry baseline; no timeout or
+      workload was changed.
+- [x] Generalize the existing rank-generic WGPU FFT implementation to native
+      `f16` through `FftOps<D, T>` without a second plan family; reject devices
+      without shader-f16 support and add shared f32/f16 analytical,
+      round-trip, allocation, and dispatch-residency coverage.
+      One sealed scalar contract now instantiates the existing plan, strategy,
+      and WGSL family for f32 and native binary16. Missing `ShaderF16` fails
+      before allocation or mutation with no fallback. Roots and reciprocal
+      scales are precomputed in the selected scalar; the compact staged table
+      reconstructs radix-four's second half-circle without another allocation.
+      RTX 5080/Vulkan paired forward/inverse Criterion regression-slope time
+      estimates (95% confidence intervals) are 162.71 microseconds
+      [161.25, 164.67] versus 171.31 [168.20, 174.41] at 65,536 elements and
+      221.64 [219.22, 225.42] versus 215.52 [212.69, 218.68] at 64 cubed. This
+      does not support a universal binary16 speed claim. The benchmark validates
+      sampled forward bins against an independent direct DFT and rejects
+      identity output. Warning-denied all-target Clippy, Windows AArch64,
+      doctests, rustdoc, core/WGPU SemVer (196/196 each), benchmark smoke, and
+      independent review are green.
 - [ ] Migrate Apollo and Kwavers, add closed `Leto`/`Hephaestus` selection at
       the Kwavers operation boundary, and delete both consumer-owned WGPU FFT
       implementations.
 - [ ] Pass independent architecture review, focused/full gates, exact-head
       hosted provider and consumer CI, then merge dependency-order commits.
-      The local provider blocker-only re-review is clean; hosted exact-head and
-      consumer closure remain.
+      The local provider architecture/performance re-review is green; hosted
+      exact-head and consumer closure remain.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — Owner: current Atlas session
 

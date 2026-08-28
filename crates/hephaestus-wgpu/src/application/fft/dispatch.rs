@@ -11,14 +11,15 @@ use super::{
     kernel::FusedParams,
     pipelines::FftPipelines,
     plan::{FftWorkspace, WgpuFftPlan},
+    scalar::WgpuFftScalar,
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
 };
 
 #[derive(Clone, Copy)]
-pub(super) struct FftComponents<'a> {
-    pub(super) real: &'a WgpuBuffer<f32>,
-    pub(super) imaginary: &'a WgpuBuffer<f32>,
+pub(super) struct FftComponents<'a, T> {
+    pub(super) real: &'a WgpuBuffer<T>,
+    pub(super) imaginary: &'a WgpuBuffer<T>,
 }
 
 fn grid(elements: usize) -> Result<DispatchGrid> {
@@ -34,8 +35,8 @@ fn product_grid(left: u32, right: u32) -> Result<DispatchGrid> {
     grid(elements)
 }
 
-impl WgpuFftPlan {
-    fn workspace(&self) -> Result<&FftWorkspace> {
+impl<T: WgpuFftScalar> WgpuFftPlan<T> {
+    fn workspace(&self) -> Result<&FftWorkspace<T>> {
         self.workspace
             .as_ref()
             .ok_or_else(|| hephaestus_core::HephaestusError::DispatchFailed {
@@ -46,9 +47,9 @@ impl WgpuFftPlan {
     fn bind_pack(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         axis: Axis,
-        components: FftComponents<'_>,
+        components: FftComponents<'_, T>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
         let workspace = self.workspace()?;
@@ -69,9 +70,9 @@ impl WgpuFftPlan {
     fn bind_unpack(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         axis: Axis,
-        components: FftComponents<'_>,
+        components: FftComponents<'_, T>,
     ) -> Result<WgpuBoundDispatch> {
         let params = self.pack[axis.shader_index() as usize];
         let workspace = self.workspace()?;
@@ -92,7 +93,7 @@ impl WgpuFftPlan {
     fn bind_radix(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         stages: &RadixStages,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
@@ -100,9 +101,15 @@ impl WgpuFftPlan {
             return Ok(());
         }
         let workspace = self.workspace()?;
+        let roots = self.radix_twiddle.as_ref().ok_or_else(|| {
+            hephaestus_core::HephaestusError::DispatchFailed {
+                message: "prepared radix FFT is missing its twiddle table".to_owned(),
+            }
+        })?;
         let bindings = [
             Binding::read_write(&workspace.real),
             Binding::read_write(&workspace.imaginary),
+            Binding::read(roots),
         ];
         let element_grid = product_grid(stages.batch_count, stages.fft_len)?;
         if stages.radix_four {
@@ -147,8 +154,8 @@ impl WgpuFftPlan {
     fn bind_chirp(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
-        chirp: &ChirpData,
+        pipelines: &FftPipelines<T>,
+        chirp: &ChirpData<T>,
         inverse: bool,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
@@ -215,10 +222,10 @@ impl WgpuFftPlan {
     fn bind_fused(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         axis: Axis,
         inverse: bool,
-        components: FftComponents<'_>,
+        components: FftComponents<'_, T>,
     ) -> Result<WgpuBoundDispatch> {
         let pipeline = pipelines.fused.as_ref().ok_or_else(|| {
             hephaestus_core::HephaestusError::DispatchFailed {
@@ -262,10 +269,10 @@ impl WgpuFftPlan {
     fn bind_axis(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         axis: Axis,
         inverse: bool,
-        components: FftComponents<'_>,
+        components: FftComponents<'_, T>,
         commands: &mut Vec<WgpuBoundDispatch>,
     ) -> Result<()> {
         let index = axis.shader_index() as usize;
@@ -297,9 +304,9 @@ impl WgpuFftPlan {
     pub(crate) fn prepare_commands(
         &self,
         device: &WgpuDevice,
-        pipelines: &FftPipelines,
+        pipelines: &FftPipelines<T>,
         direction: FftDirection,
-        components: FftComponents<'_>,
+        components: FftComponents<'_, T>,
     ) -> Result<Box<[WgpuBoundDispatch]>> {
         let mut commands = Vec::new();
         let axes = match direction {

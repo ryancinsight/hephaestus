@@ -3,23 +3,38 @@ struct FftParams {
     stage: u32,
     inverse: u32,
     batch_count: u32,
+    root_half: u32,
+    scale_index: u32,
+    padding_0: u32,
+    padding_1: u32,
 }
 @group(0) @binding(0)
-var<storage, read_write> data_re: array<f32>;
+var<storage, read_write> data_re: array<{{scalar}}>;
 
 @group(0) @binding(1)
-var<storage, read_write> data_im: array<f32>;
+var<storage, read_write> data_im: array<{{scalar}}>;
 
 @group(0) @binding(2)
+var<storage, read> roots: array<{{scalar}}>;
+
+@group(0) @binding(3)
 var<uniform> params: FftParams;
 
-const TWO_PI: f32 = 6.28318530717958647692;
-
-fn cmul_re(a_re: f32, a_im: f32, b_re: f32, b_im: f32) -> f32 {
+fn cmul_re(
+    a_re: {{scalar}},
+    a_im: {{scalar}},
+    b_re: {{scalar}},
+    b_im: {{scalar}},
+) -> {{scalar}} {
     return a_re * b_re - a_im * b_im;
 }
 
-fn cmul_im(a_re: f32, a_im: f32, b_re: f32, b_im: f32) -> f32 {
+fn cmul_im(
+    a_re: {{scalar}},
+    a_im: {{scalar}},
+    b_re: {{scalar}},
+    b_im: {{scalar}},
+) -> {{scalar}} {
     return a_re * b_im + a_im * b_re;
 }
 
@@ -140,13 +155,13 @@ fn fft_forward(@builtin(global_invocation_id) gid: vec3<u32>) {
     let even = base + group_idx * group_size + local_idx;
     let odd = even + h;
 
-    var angle = -TWO_PI * f32(local_idx) / f32(group_size);
+    let root_stride = params.root_half / (group_size >> 1u);
+    let root_index = local_idx * root_stride;
+    let w_re = roots[root_index];
+    var w_im = roots[params.root_half + root_index];
     if params.inverse != 0u {
-        angle = -angle;
+        w_im = -w_im;
     }
-
-    let w_re = cos(angle);
-    let w_im = sin(angle);
 
     let e_re = data_re[even];
     let e_im = data_im[even];
@@ -183,17 +198,24 @@ fn fft_forward_radix4(@builtin(global_invocation_id) gid: vec3<u32>) {
     let i2 = base + (m << 1u);
     let i3 = base + (m * 3u);
 
-    var angle = -TWO_PI * f32(local_idx) / f32(group_size);
+    let root_stride = params.root_half / (group_size >> 1u);
+    let root_index = local_idx * root_stride;
+    let w1_re = roots[root_index];
+    var w1_im = roots[params.root_half + root_index];
+    let w2_re = roots[root_index * 2u];
+    var w2_im = roots[params.root_half + root_index * 2u];
+    let w3_index = root_index * 3u;
+    let w3_reflected = w3_index >= params.root_half;
+    let w3_root_index = select(w3_index, w3_index - params.root_half, w3_reflected);
+    let w3_re_base = roots[w3_root_index];
+    let w3_im_base = roots[params.root_half + w3_root_index];
+    let w3_re = select(w3_re_base, -w3_re_base, w3_reflected);
+    var w3_im = select(w3_im_base, -w3_im_base, w3_reflected);
     if params.inverse != 0u {
-        angle = -angle;
+        w1_im = -w1_im;
+        w2_im = -w2_im;
+        w3_im = -w3_im;
     }
-
-    let w1_re = cos(angle);
-    let w1_im = sin(angle);
-    let w2_re = cos(2.0 * angle);
-    let w2_im = sin(2.0 * angle);
-    let w3_re = cos(3.0 * angle);
-    let w3_im = sin(3.0 * angle);
 
     let a0_re = data_re[i0];
     let a0_im = data_im[i0];
@@ -225,10 +247,10 @@ fn fft_forward_radix4(@builtin(global_invocation_id) gid: vec3<u32>) {
     let y2_re = t0_re - t2_re;
     let y2_im = t0_im - t2_im;
 
-    var y1_re: f32;
-    var y1_im: f32;
-    var y3_re: f32;
-    var y3_im: f32;
+    var y1_re: {{scalar}};
+    var y1_im: {{scalar}};
+    var y3_re: {{scalar}};
+    var y3_im: {{scalar}};
 
     if params.inverse != 0u {
         y1_re = t1_re - t3_im;
@@ -259,7 +281,7 @@ fn fft_scale(@builtin(global_invocation_id) gid: vec3<u32>) {
     if i >= total {
         return;
     }
-    let inv_n = 1.0 / f32(params.n);
+    let inv_n = roots[params.scale_index];
     data_re[i] *= inv_n;
     data_im[i] *= inv_n;
 }

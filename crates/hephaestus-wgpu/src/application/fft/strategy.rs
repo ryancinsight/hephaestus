@@ -44,11 +44,11 @@ impl Axis {
     }
 }
 
-pub(crate) struct ChirpData {
-    pub(crate) real_kernel: WgpuBuffer<f32>,
-    pub(crate) imaginary_kernel: WgpuBuffer<f32>,
-    pub(crate) direct_real: WgpuBuffer<f32>,
-    pub(crate) direct_imaginary: WgpuBuffer<f32>,
+pub(crate) struct ChirpData<T> {
+    pub(crate) real_kernel: WgpuBuffer<T>,
+    pub(crate) imaginary_kernel: WgpuBuffer<T>,
+    pub(crate) direct_real: WgpuBuffer<T>,
+    pub(crate) direct_imaginary: WgpuBuffer<T>,
     pub(crate) params: ChirpParams,
     pub(crate) forward_radix: RadixStages,
     pub(crate) inverse_radix: RadixStages,

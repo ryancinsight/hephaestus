@@ -27,9 +27,10 @@ crate flat.
   compile error.
 - Shared backend-neutral parameter vocabulary: volume ray geometry and
   validation, 2D Laplacian parameters and boundary conditions.
-- `FftOps` with validated dense split-complex operands, fixed forward/inverse
-  normalization, one const-rank prepared contract for 1D, 2D, and 3D, and a
-  provider-neutral command-stream encoding boundary for composed kernels.
+- Scalar-generic `FftOps` with validated dense split-complex operands, fixed
+  forward/inverse normalization, one const-rank prepared contract for 1D, 2D,
+  and 3D, and a provider-neutral command-stream encoding boundary for composed
+  kernels.
 - The error vocabulary, including distinct allocation rejection.
 
 `#![forbid(unsafe_code)]`.

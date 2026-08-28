@@ -5,15 +5,19 @@ use crate::infrastructure::device::PipelineCache;
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
 use crate::{WgpuCommandStream, WgpuGroupedSequence};
 
-use super::plan::WgpuFftPlan;
+use super::{plan::WgpuFftPlan, scalar::WgpuFftScalar};
 
 /// WGPU implementation of the device-neutral dense complex FFT seam.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuFftOps;
 
 /// Prepared WGPU FFT resources bound to fixed split-complex device buffers.
-pub struct WgpuPreparedFft<const R: usize> {
-    plan: WgpuFftPlan,
+///
+/// Inputs are not filtered for IEEE special values. NaNs propagate through
+/// butterfly arithmetic, infinities remain non-finite, and a transform of
+/// signed zeros is numerically zero but does not preserve zero signs.
+pub struct WgpuPreparedFft<const R: usize, T = f32> {
+    plan: WgpuFftPlan<T>,
     owner: PipelineCache,
 }
 
@@ -23,7 +27,7 @@ fn invalid(message: impl Into<String>) -> HephaestusError {
     }
 }
 
-impl<const R: usize> WgpuPreparedFft<R> {
+impl<const R: usize, T: WgpuFftScalar> WgpuPreparedFft<R, T> {
     fn validate_device(&self, device: &WgpuDevice) -> Result<()> {
         validate_device_owner(&self.owner, device, "FFT")
     }
@@ -60,15 +64,19 @@ impl<const R: usize> WgpuPreparedFft<R> {
     }
 }
 
-impl FftOps<WgpuDevice, f32> for WgpuFftOps {
-    type Prepared<'a, const R: usize> = WgpuPreparedFft<R>;
+impl<T: WgpuFftScalar> FftOps<WgpuDevice, T> for WgpuFftOps {
+    type Prepared<'a, const R: usize>
+        = WgpuPreparedFft<R, T>
+    where
+        T: 'a;
 
     fn prepare_fft<'a, const R: usize>(
         &self,
         device: &'a WgpuDevice,
-        operands: FftOperands<'a, WgpuBuffer<f32>, R>,
+        operands: FftOperands<'a, WgpuBuffer<T>, R>,
         direction: FftDirection,
     ) -> Result<Self::Prepared<'a, R>> {
+        T::validate_fft_capability(device)?;
         if !operands.real.buffer.belongs_to(&device.pipeline_cache)
             || !operands.imaginary.buffer.belongs_to(&device.pipeline_cache)
         {
@@ -76,7 +84,7 @@ impl FftOps<WgpuDevice, f32> for WgpuFftOps {
                 "FFT component buffers must belong to the preparation device",
             ));
         }
-        let logical = plan_fft::<f32, _, R>(
+        let logical = plan_fft::<T, _, R>(
             &operands,
             direction,
             operands.real.buffer.aliases(operands.imaginary.buffer),
@@ -107,3 +115,7 @@ impl FftOps<WgpuDevice, f32> for WgpuFftOps {
 #[cfg(test)]
 #[path = "seam_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "scalar_tests.rs"]
+mod scalar_tests;
