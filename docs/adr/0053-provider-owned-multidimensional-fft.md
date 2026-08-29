@@ -2,12 +2,13 @@
 
 - Status: Accepted
 - Date: 2026-08-26
-- Revision 2026-08-28: Consumer-domain grouped kernels with fixed buffers,
-  parameters, and geometry can retain `WgpuBoundGroupedDispatch` values beside
-  a prepared FFT. Binding validates the grouped interface and fixed-resource
-  device provenance; every encode validates the target sequence's device
-  provenance before reusing the pipeline, parameter uniform, bind groups, and
-  dispatch grid. This
+- Revision 2026-08-28: Consumer-domain grouped kernels with fixed buffers and
+  geometry can retain `WgpuBoundGroupedDispatch` values beside a prepared FFT.
+  Binding validates the grouped interface and fixed-resource device provenance;
+  a mutable `update_params` call rewrites the retained uniform on that device's
+  ordered queue, and every encode validates the target sequence's provenance
+  before reusing the pipeline, parameter uniform, bind groups, and dispatch
+  grid. This
   lets Apollo retain STFT framing/window/overlap kernels around provider-owned
   FFT commands without rebuilding Hephaestus binding state on the warm path.
 - Revision 2026-08-28: Apollo STFT established a batched selected-axis
@@ -237,6 +238,10 @@ cutover gate because the provider benchmark excludes Kwavers physics kernels.
   source inspection establishes that no Hephaestus-owned allocation, pipeline
   compilation, bind-group construction, host transfer, or device copy occurs
   on that path. This claim does not cover opaque allocations inside the driver.
+- A retained grouped-dispatch test updates both logical length and arithmetic
+  parameters between submissions and checks exact output through the original
+  bind groups and fixed grid. A separate test structurally rejects a
+  foreign-device parameter update before queue submission.
 - Synchronous readback completion state is retained at device construction.
   `stage_and_read` claims a slot before queue submission, and each claim has
   exactly two owners: the synchronous reader and the WGPU callback. The slot

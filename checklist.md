@@ -20,12 +20,15 @@ hosted lockfile and host verification pass. CUDA, ROCm, Metal, and WGPU hosted
 checks were still running when the PR merged and remain a collection watchpoint.
 Apollo and Kwavers consumer closure remains.
 
-Current increment: add a mutable, device-provenance-checked parameter update
-to `WgpuBoundGroupedDispatch` so capacity-bounded consumers can reuse fixed
-buffers, bind groups, and launch geometry across changing logical lengths.
-Lease: Codex owns `application/stream/{bound.rs,tests}`, ADR 0053, the
-Unreleased changelog, and this checklist entry through the next verified
-commit.
+Retained-parameter increment: `WgpuBoundGroupedDispatch::update_params`
+mutably rewrites the uniform through the owning queue while preserving fixed
+buffers, bind groups, and launch geometry. Exact output changes with logical
+length and arithmetic parameters through the same retained dispatch;
+foreign-device mutation fails before writing. Warning-denied all-target
+Clippy, WGPU Nextest (28/28 in 31.381 seconds), Rustdoc, rustfmt, and diff
+checks pass. `cargo-semver-checks` did not reach API comparison because its
+local baseline clone failed on an oversized packed-object entry. Lease: none;
+independent review and exact-lock hosted gates remain.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
