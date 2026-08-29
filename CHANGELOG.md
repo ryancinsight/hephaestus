@@ -49,7 +49,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   queue submission; reader and callback ownership quarantine a pending slot
   until both terminate, including poll-error and unwind exits. Excess
   concurrency allocates an unpooled slot before submission instead of
-  serializing device work. Retained grouped dispatches additionally
+  serializing device work. A bounded one-slot Loom model exhaustively checks
+  concurrent reader/callback release, callback completion publication,
+  cancellation, overflow, and reuse only after both owners terminate. Retained
+  grouped dispatches additionally
   bind fixed buffers, parameters, and launch geometry once, then encode beside
   prepared FFT commands without warm-path Hephaestus allocation or bind-group
   construction.

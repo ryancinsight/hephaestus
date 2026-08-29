@@ -706,6 +706,7 @@ dependencies = [
  "hephaestus-core",
  "leto",
  "leto-ops",
+ "loom",
  "mnemosyne-memory-core",
  "moirai-gpu",
  "moirai-runtime",

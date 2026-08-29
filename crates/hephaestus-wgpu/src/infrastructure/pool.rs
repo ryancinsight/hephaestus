@@ -272,6 +272,97 @@ pub(crate) fn uniform_guard(device: WgpuDevice, buffer: wgpu::Buffer) -> Uniform
 mod completion_tests {
     use super::*;
 
+    struct ModelSlot {
+        state: loom::sync::atomic::AtomicU8,
+        claimed: loom::sync::atomic::AtomicBool,
+        users: loom::sync::atomic::AtomicU8,
+    }
+
+    impl ModelSlot {
+        fn acquired() -> Self {
+            Self {
+                state: loom::sync::atomic::AtomicU8::new(MAP_PENDING),
+                claimed: loom::sync::atomic::AtomicBool::new(true),
+                users: loom::sync::atomic::AtomicU8::new(2),
+            }
+        }
+
+        fn release(&self) {
+            if self.users.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.claimed.store(false, Ordering::Release);
+            }
+        }
+
+        fn try_reacquire(&self, callback_finishes: bool) -> bool {
+            match self
+                .claimed
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                Ok(false) => {
+                    assert_eq!(
+                        self.users.load(Ordering::Acquire),
+                        0,
+                        "a retained slot cannot be reacquired while either prior owner remains"
+                    );
+                    if callback_finishes {
+                        assert_eq!(
+                            self.state.load(Ordering::Acquire),
+                            MAP_SUCCEEDED,
+                            "callback completion must be published before the slot is released"
+                        );
+                    }
+                    true
+                }
+                Err(true) => false,
+                result => panic!("invalid one-slot claim transition: {result:?}"),
+            }
+        }
+    }
+
+    fn model_two_owner_reclamation(callback_finishes: bool) {
+        loom::model(move || {
+            let slot = loom::sync::Arc::new(ModelSlot::acquired());
+
+            assert_eq!(
+                slot.claimed
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed,),
+                Err(true),
+                "capacity-plus-one must overflow while both retained owners remain"
+            );
+
+            let reader_slot = loom::sync::Arc::clone(&slot);
+            let reader = loom::thread::spawn(move || reader_slot.release());
+
+            let callback_slot = loom::sync::Arc::clone(&slot);
+            let callback = loom::thread::spawn(move || {
+                if callback_finishes {
+                    callback_slot.state.store(MAP_SUCCEEDED, Ordering::Release);
+                }
+                callback_slot.release();
+            });
+
+            let acquirer_slot = loom::sync::Arc::clone(&slot);
+            let acquirer =
+                loom::thread::spawn(move || acquirer_slot.try_reacquire(callback_finishes));
+
+            reader.join().expect("reader owner");
+            callback.join().expect("callback owner");
+            let raced_reacquisition = acquirer.join().expect("racing acquirer");
+            if !raced_reacquisition {
+                assert!(
+                    slot.try_reacquire(callback_finishes),
+                    "slot must be reusable after both prior owners terminate"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn two_owner_reclamation_is_generation_safe_under_all_interleavings() {
+        model_two_owner_reclamation(true);
+        model_two_owner_reclamation(false);
+    }
+
     #[test]
     fn held_capacity_uses_preallocated_slots_then_overflows() {
         let pool = Arc::new(MapCompletionPool::new(2));
