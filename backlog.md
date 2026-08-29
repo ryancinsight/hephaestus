@@ -114,6 +114,59 @@
 - Acceptance: no host staging in the factor-split path on either backend,
   value-semantic parity with `split_packed_lu` in differential tests, and
   transfer-count evidence (before/after) attached.
+- Status: WGPU `lu`/`full_piv_lu` land on `hephaestus_wgpu::split_packed_lu`
+  (PR pending). Instrumented byte counts for the split step go
+  3·n²·4 → 0 in both directions, exactly as predicted; wall clock at n=512 is
+  ~13× and at n=256 ~2.4–5.4×, while n≤128 stays inside this host's noise band.
+  Differential parity against the host oracle is bitwise (copies and structural
+  0/1 only, no arithmetic), and the assertion was confirmed to fail under a
+  deliberately mutated triangular predicate.
+- Residual (acceptance partially met): the CUDA arms still round-trip, so
+  "either backend" is unmet by design — see the scope note above.
+- Findings that correct the 2026-08-27 audit note:
+  - `cholesky` in the Python layer never round-tripped; it already returns
+    `into_lower()`. The host staging is inside
+    `cholesky_decompose_blocked`, whose closing `write_buffer(&lower_buf,
+    &host)` exists only to zero the strictly-upper triangle — one n² upload a
+    triangular-zero mask would remove. The `host` array itself is not
+    removable: `GpuCholesky::inner` needs it for det/solve/inv.
+  - `qr` cannot be fixed by the same move. `GpuQrDecomposition` exposes no
+    device-resident Q at all, and `r_buffer()` is not substitutable for
+    `inner().r()`: `qr_decompose` stores leto's clean R there, but
+    `qr_decompose_blocked` stores `work_buf`, the *packed* reflector buffer.
+    Removing qr's uploads needs device-side Q accumulation from the stored
+    reflectors — a new kernel family, not a contained change. The
+    `r_buffer()` contract divergence between the two entry points is a
+    latent defect worth its own item.
+
+## HEPH-WGPU-QR-DEVICE-FACTORS [minor] [perf] — todo
+
+- Outcome: `qr` returns device-resident Q and R without host uploads, and
+  `GpuQrDecomposition::r_buffer()` means the same thing on both entry points.
+- Evidence (2026-08-29): `crates/hephaestus-python/src/decomposition.rs` `qr`
+  uploads `inner().q()` and `inner().r()`, both host tensors, because no
+  device Q exists. `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`
+  returns `r: work_buf` (packed reflectors) from `qr_decompose_blocked` but
+  `r: r_buf` (clean upper-triangular R) from `qr_decompose`, so callers of
+  `r_buffer()` get different mathematical objects depending on which path ran.
+- Acceptance: one documented meaning for `r_buffer()` asserted by a test that
+  exercises both entry points; device-side Q accumulation from the stored
+  Householder reflectors, differentially verified against `inner().q()` within
+  a derived tolerance; transfer-count evidence attached.
+
+## HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf] — todo
+
+- Outcome: `cholesky_decompose_blocked` zeroes its strictly-upper triangle on
+  the device instead of uploading the assembled host matrix.
+- Evidence (2026-08-29):
+  `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs` closes with
+  `device.write_buffer(&lower_buf, &host)` — an n² host→device upload whose only
+  effect beyond the per-panel scatters already performed is zeroing the strict
+  upper triangle, which still holds the input's values from the entry copy.
+- Acceptance: the upload is replaced by a device-side triangular-zero pass, the
+  existing Cholesky contracts still pass against a real adapter, and byte-count
+  evidence shows the n² host→device transfer removed. `GpuCholesky::inner`
+  keeps its host array; only the redundant upload goes.
 
 ## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — todo (external blocker)
 
