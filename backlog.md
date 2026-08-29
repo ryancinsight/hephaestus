@@ -96,9 +96,14 @@
 - **Integrator**: Codebuff session on `perf/wgpu-staging-pool-decay`; lease:
   none.
 
-## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — todo
+## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — in-progress
 
-- Owner: unclaimed.
+- Integrator: claude-fable session 03d80d33 subagent; last-update: 2026-08-29.
+- Lease: crates/hephaestus-wgpu/src/application/decomposition/{split.rs,mod.rs},
+  crates/hephaestus-wgpu/src/lib.rs,
+  crates/hephaestus-python/src/decomposition.rs, backlog.md.
+- Scope: WGPU only. The CUDA path stays on the host round-trip — this host has
+  no CUDA device, so a CUDA change would ship unverifiable.
 - Outcome: split packed factorization outputs on-device in the Python
   bindings instead of the host round-trip.
 - Evidence (audit 2026-08-27): `crates/hephaestus-python/src/decomposition.rs`
