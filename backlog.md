@@ -148,17 +148,20 @@
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   readback correction is on `perf/wgpu-readback-completion-pool` and consumer
   closure is in Apollo/Kwavers.
-- Lease: none; PR #232's corrected readback candidate is `1d03d15`. Provider
+- Lease: none; PR #232's corrected readback candidate is `8d382f1`. Provider
   PR #230 merged as `48bb731`; device-preflight PR #231 merged as `1636301`.
   The candidate replaces the per-readback completion channel with eight fixed
   slots acquired before submission. Reader/callback ownership quarantines
   pending state through poll errors, callback delay/cancellation, and unwind;
   capacity overflow allocates before submission. Deterministic tests hold all
   retained slots, force capacity plus one, distinguish terminal outcomes, and
-  prove bounded release/reuse. Warning-denied all-target Clippy, exact-candidate
-  WGPU nextest (27/27 in 25.797 seconds), doctests (2/2), and rustdoc pass. The
-  local stack overlay prevents standalone `--locked` resolution; hosted
-  exact-lock validation, independent re-review, and merge remain.
+  prove bounded release/reuse. A one-slot Loom model checks every interleaving
+  of concurrent reader/callback release, callback completion or cancellation,
+  and racing reacquisition (1/1 in 0.671 seconds). Warning-denied all-target
+  Clippy, exact-candidate WGPU nextest (28/28 in 25.096 seconds), doctests (2/2),
+  and rustdoc pass. The local stack overlay prevents standalone `--locked`
+  resolution; hosted exact-lock validation, independent re-review, and merge
+  remain.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then
