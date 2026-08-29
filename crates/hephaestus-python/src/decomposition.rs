@@ -1,7 +1,10 @@
 //! Matrix factorisations: Cholesky, LU (partial and full pivoting), QR
 //! (plain and column-pivoted), Hessenberg, bidiagonalisation, and
-//! Bunch-Kaufman. Factor-splitting math lives in `hephaestus-core`
-//! (`split_packed_lu`); this module only marshals buffers.
+//! Bunch-Kaufman. Factor-splitting math lives in the backends; this module
+//! only marshals buffers. The WGPU LU paths split the packed factor on the
+//! device via `hephaestus_wgpu::split_packed_lu`, so **L** and **U** stay
+//! resident; the CUDA paths still round-trip through
+//! `hephaestus_core::split_packed_lu` on the host.
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendDevice, clone_cuda_buffer};
@@ -70,11 +73,12 @@ pub(crate) fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::lu_decompose_blocked(device, op)?;
-                let host_factors = device.download_owned(decomp.factors())?;
-                let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
-                let l_buf = BackendBuffer::Wgpu(device.upload(&host_l)?);
-                let u_buf = BackendBuffer::Wgpu(device.upload(&host_u)?);
-                Ok((decomp.pivots().to_vec(), l_buf, u_buf))
+                let (l, u) = hephaestus_wgpu::split_packed_lu(device, decomp.factors(), n)?;
+                Ok((
+                    decomp.pivots().to_vec(),
+                    BackendBuffer::Wgpu(l),
+                    BackendBuffer::Wgpu(u),
+                ))
             }
             (BackendDevice::Cuda(device), BackendBuffer::Cuda(buffer)) => {
                 let op = hephaestus_cuda::StridedOperand {
@@ -193,11 +197,10 @@ pub(crate) fn full_piv_lu(
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::full_piv_lu(device, op)?;
-                let host_factors = device.download_owned(decomp.lu_buffer())?;
-                let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
+                let (l, u) = hephaestus_wgpu::split_packed_lu(device, decomp.lu_buffer(), n)?;
                 Ok((
-                    BackendBuffer::Wgpu(device.upload(&host_l)?),
-                    BackendBuffer::Wgpu(device.upload(&host_u)?),
+                    BackendBuffer::Wgpu(l),
+                    BackendBuffer::Wgpu(u),
                     decomp.row_permutation().to_vec(),
                     decomp.col_permutation().to_vec(),
                 ))
