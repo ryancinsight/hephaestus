@@ -27,8 +27,9 @@ length and arithmetic parameters through the same retained dispatch;
 foreign-device mutation fails before writing. Warning-denied all-target
 Clippy, WGPU Nextest (28/28 in 31.381 seconds), Rustdoc, rustfmt, and diff
 checks pass. `cargo-semver-checks` did not reach API comparison because its
-local baseline clone failed on an oversized packed-object entry. Lease: none;
-independent review and exact-lock hosted gates remain.
+local baseline clone failed on an oversized packed-object entry. Independent
+exact-candidate review of `e6218da` is GREEN. Lease: none; exact-lock hosted
+gates and merge remain.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.

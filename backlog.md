@@ -154,7 +154,8 @@
   Warning-denied all-target Clippy, WGPU Nextest (28/28 in 31.381 seconds),
   Rustdoc, rustfmt, and diff checks pass. `cargo-semver-checks` did not reach
   API comparison because its local baseline clone failed on an oversized
-  packed-object entry; independent review and exact-lock hosted gates remain.
+  packed-object entry. Independent exact-candidate review of `e6218da` is
+  GREEN; exact-lock hosted gates and merge remain.
   Readback PR #232 merged as `b4e170e` from exact reviewed head
   `cf0907e`. Provider PR #230 merged as `48bb731`; device-preflight PR #231
   merged as `1636301`.
