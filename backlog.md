@@ -154,13 +154,34 @@
   Householder reflectors, differentially verified against `inner().q()` within
   a derived tolerance; transfer-count evidence attached.
 
-## HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf] — in-progress
+## ✅ HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf]: Device-side triangular zero
 
-- Integrator: Claude session 5050c72a; last-update: 2026-08-29.
-- Lease: `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`
-  and this item block. Disjoint from the factor-split lease above
-  (`split.rs`/`mod.rs`/`lib.rs`/`hephaestus-python`), so the device-side mask
-  lands without touching that lane.
+- **Delivered**: `cholesky_decompose_blocked`'s closing
+  `write_buffer(&lower_buf, &host)` is replaced by `zero_strict_upper`, a
+  256-wide WGSL pass that zeroes only the cells with `col > row` in place.
+  `GpuCholesky::inner` keeps its host array unchanged — det/solve/inv still
+  read it — so only the redundant upload goes.
+- **Byte-count evidence**: the removed call uploaded the whole `n`x`n` f32
+  factor, `4n^2` bytes per factorization — 256 KiB at n=256, 1 MiB at n=512,
+  4 MiB at n=1024 — of which every cell at or below the diagonal was
+  byte-identical to what the device already held. Host→device traffic in the
+  blocked path now ends with the per-panel scatters. No wall-clock claim is
+  made: the transfer count is exact by inspection, and this host's timing
+  noise was not separated from it.
+- **Correctness evidence**: new contract case
+  `blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks` (n=96 > the
+  64-element block, off-diagonal fixture value 0.5) asserts exact zeros above
+  the diagonal plus a positive diagonal, so an all-zero buffer cannot pass.
+  Liveness proven: with the mask predicate deliberately disabled, it fails at
+  `[0, 64]` holding the input's `0.5` — the first cell outside the first
+  diagonal block — and the pre-existing
+  `blocked_cholesky_matches_leto_reference_across_block_boundary` and
+  `..._spd_reconstruction_matches_original` fail alongside it. Restored, all
+  170 contract cases pass.
+- **Gates**: `cargo nextest run -p hephaestus-wgpu` 31/31 with 0 skipped
+  against a real adapter, doctests 2/2, warning-denied all-target Clippy, and
+  `cargo fmt --check` clean.
+- **Integrator**: Claude session 5050c72a; lease: none.
 - Equivalence confirmed before implementing: `panel_cholesky_packed`
   (`hephaestus-core/src/domain/decomposition.rs:238-241`) already zeroes each
   diagonal block's strictly-upper triangle, and the per-panel uploads cover

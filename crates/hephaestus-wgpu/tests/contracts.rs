@@ -156,6 +156,7 @@ contract_cases!(
     contract::matrix_rank_relative_tolerance_is_the_discriminator,
     contract::det_of_near_singular_triangular_is_exact_pivot_product,
     contract::blocked_cholesky_matches_leto_reference_across_block_boundary,
+    contract::blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks,
     contract::symmetric_eigen_jacobi_rejects_non_symmetric_input,
     contract::eigenvalues_match_closed_form_diagonal,
     contract::eigenvalues_match_exact_complex_pair_blocks,
@@ -296,7 +297,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        169,
+        170,
         "the consolidated integration contract must retain every migrated case"
     );
 
