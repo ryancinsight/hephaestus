@@ -6,8 +6,8 @@
 - Lease: crates/hephaestus-cuda/src/application/decomposition/region.rs,
   crates/hephaestus-cuda/src/infrastructure/{pinned.rs,buffer.rs,compiler.rs},
   crates/hephaestus-python/src/{backend.rs,array.rs,decomposition.rs,
-  spectral.rs,sparse.rs}, crates/hephaestus-wgpu/src/infrastructure/device.rs,
-  backlog.md.
+  spectral.rs,sparse.rs}, backlog.md. The WGPU device sub-scope landed as
+  `0fe0889` and carries no live lease.
 - Outcome: implement the accepted audit findings — synchronize the CUDA stream
   on every 2-D region-copy error exit before pinned/borrowed DMA targets are
   released; replace the Python clone_cuda_buffer host round-trip with the
@@ -146,13 +146,22 @@
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
-  fix-forward is on `feat/wgpu-fft-device-validation` and consumer closure is
-  in Apollo/Kwavers.
-- Lease: none. PR #231 corrected candidate `d82c5e7` adds the structural typed
-  error assertion, outside-crate visibility coverage, and API/ADR
-  synchronization requested by independent review. Warning-denied all-target
-  Clippy passes, and the external 169-case integration contract passes in 4.988
-  seconds. Provider PR #230 merged as `48bb731`; re-review/merge remain open.
+  readback correction is on `perf/wgpu-readback-completion-pool` and consumer
+  closure is in Apollo/Kwavers.
+- Lease: none; PR #232's corrected readback candidate is `8d382f1`. Provider
+  PR #230 merged as `48bb731`; device-preflight PR #231 merged as `1636301`.
+  The candidate replaces the per-readback completion channel with eight fixed
+  slots acquired before submission. Reader/callback ownership quarantines
+  pending state through poll errors, callback delay/cancellation, and unwind;
+  capacity overflow allocates before submission. Deterministic tests hold all
+  retained slots, force capacity plus one, distinguish terminal outcomes, and
+  prove bounded release/reuse. A one-slot Loom model checks every interleaving
+  of concurrent reader/callback release, callback completion or cancellation,
+  and racing reacquisition (1/1 in 0.671 seconds). Warning-denied all-target
+  Clippy, exact-candidate WGPU nextest (28/28 in 25.096 seconds), doctests (2/2),
+  and rustdoc pass. The local stack overlay prevents standalone `--locked`
+  resolution; hosted exact-lock validation, independent re-review, and merge
+  remain.
 - Outcome: Hephaestus becomes the single accelerator owner of dense complex FFT
   execution, exposes one prepared device-neutral contract for ranks one through
   three, and provides the WGPU implementation needed by Kwavers. Kwavers then

@@ -43,9 +43,19 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   [161.25, 164.67]/[168.20, 174.41] and
   [219.22, 225.42]/[212.69, 218.68]. WGPU command streams and readback also
   expose explicit deadline-aware forms for bounded host and benchmark
-  integration. Retained grouped dispatches additionally bind fixed buffers,
-  parameters, and launch geometry once, then encode beside prepared FFT
-  commands without warm-path Hephaestus allocation or bind-group construction.
+  integration. Device construction now retains eight independent map-callback
+  completion slots, replacing the per-readback host channel allocation while
+  preserving concurrent readbacks. Readback acquires completion state before
+  queue submission; reader and callback ownership quarantine a pending slot
+  until both terminate, including poll-error and unwind exits. Excess
+  concurrency allocates an unpooled slot before submission instead of
+  serializing device work. A bounded one-slot Loom model exhaustively checks
+  concurrent reader/callback release, callback completion publication,
+  cancellation, overflow, and reuse only after both owners terminate. Retained
+  grouped dispatches additionally
+  bind fixed buffers, parameters, and launch geometry once, then encode beside
+  prepared FFT commands without warm-path Hephaestus allocation or bind-group
+  construction.
 
 - [patch] WGPU device acquisition now reports why it failed. Every
   `request_adapter` and `request_device` error was discarded behind

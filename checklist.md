@@ -4,13 +4,20 @@ Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
-Consumer-preflight lease: discharged 2026-08-28 on
-`feat/wgpu-fft-device-validation`, PR #231 at corrected candidate `d82c5e7`.
-Provider PR #230 merged as `48bb731`; Apollo STFT then exposed the need to
-validate a prepared plan's device before its first queue write. The fix-forward
-makes the existing ownership check public and retains the same typed error.
-Warning-denied all-target Clippy passes, and the external 169-case integration
-contract passes in 4.988 seconds. Independent re-review and merge remain open.
+Readback-completion lease: discharged at corrected PR #232 candidate `8d382f1`
+on `perf/wgpu-readback-completion-pool`. Provider PR #230 merged as `48bb731`
+and device-preflight PR #231 merged as `1636301`. Apollo's warm STFT phase
+census isolated `stage_and_read`'s per-call completion channel. The candidate
+uses eight fixed slots acquired before submission; reader/callback ownership
+quarantines pending state through error, cancellation, and unwind, while
+capacity overflow allocates before submission. Deterministic capacity-plus-one,
+terminal-state, cancellation, and reuse tests pass. The bounded one-slot Loom
+model covers concurrent final-owner release, callback completion publication,
+cancellation, overflow, and racing reuse (1/1 in 0.671 seconds). Warning-denied
+all-target Clippy, exact-candidate WGPU nextest (28/28 in 25.096 seconds),
+doctests (2/2), and rustdoc pass. The local stack overlay prevents standalone
+`--locked` resolution; hosted exact-lock validation, independent re-review, and
+merge remain.
 
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
