@@ -20,6 +20,13 @@ hosted lockfile and host verification pass. CUDA, ROCm, Metal, and WGPU hosted
 checks were still running when the PR merged and remain a collection watchpoint.
 Apollo and Kwavers consumer closure remains.
 
+Current increment: add a mutable, device-provenance-checked parameter update
+to `WgpuBoundGroupedDispatch` so capacity-bounded consumers can reuse fixed
+buffers, bind groups, and launch geometry across changing logical lengths.
+Lease: Codex owns `application/stream/{bound.rs,tests}`, ADR 0053, the
+Unreleased changelog, and this checklist entry through the next verified
+commit.
+
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
 - [x] Record the provider ownership, rank-generic contract, staged cutover, and
