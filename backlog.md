@@ -154,7 +154,21 @@
   Householder reflectors, differentially verified against `inner().q()` within
   a derived tolerance; transfer-count evidence attached.
 
-## HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf] — todo
+## HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf] — in-progress
+
+- Integrator: Claude session 5050c72a; last-update: 2026-08-29.
+- Lease: `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`
+  and this item block. Disjoint from the factor-split lease above
+  (`split.rs`/`mod.rs`/`lib.rs`/`hephaestus-python`), so the device-side mask
+  lands without touching that lane.
+- Equivalence confirmed before implementing: `panel_cholesky_packed`
+  (`hephaestus-core/src/domain/decomposition.rs:238-241`) already zeroes each
+  diagonal block's strictly-upper triangle, and the per-panel uploads cover
+  every cell with `row >= blockstart(col)`. The closing `write_buffer` is
+  therefore bitwise identical to the device state except on the strict upper
+  triangle outside the diagonal blocks, which still holds the entry copy's
+  input values. A strict-upper zero pass is an exact replacement, not an
+  approximation.
 
 - Outcome: `cholesky_decompose_blocked` zeroes its strictly-upper triangle on
   the device instead of uploading the assembled host matrix.
