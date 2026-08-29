@@ -924,6 +924,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
                 bound_grouped_sequence_reuses_fixed_resources as fn(),
             ),
             (
+                "bound_grouped_dispatch_updates_retained_parameters",
+                bound_grouped_dispatch_updates_retained_parameters as fn(),
+            ),
+            (
+                "bound_grouped_parameter_update_rejects_foreign_device",
+                bound_grouped_parameter_update_rejects_foreign_device as fn(),
+            ),
+            (
                 "bound_grouped_dispatch_rejects_invalid_parameter_size",
                 bound_grouped_dispatch_rejects_invalid_parameter_size as fn(),
             ),
@@ -1223,6 +1231,106 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             )
             .expect_err("bound grouped preparation must preserve device provenance");
         assert!(error.to_string().contains("different device"));
+    }
+
+    fn bound_grouped_dispatch_updates_retained_parameters() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping bound parameter-update test");
+            return;
+        };
+        let left = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+        let right = device.upload(&[10.0f32, 20.0, 30.0, 40.0]).unwrap();
+        let output = device.alloc_zeroed::<f32>(4).unwrap();
+        let prepared = device.prepare_grouped(&GroupedAddKernel).unwrap();
+        let mut bound = device
+            .bind_grouped_dispatch(
+                &prepared,
+                &[
+                    GroupedBinding::read(0, 0, &left),
+                    GroupedBinding::read(1, 0, &right),
+                    GroupedBinding::read_write(1, 1, &output),
+                ],
+                &GroupedParams {
+                    len: 4,
+                    addend: 0.5,
+                },
+                DispatchGrid::new(1, 1, 1),
+            )
+            .unwrap();
+
+        let execute = |bound: &WgpuBoundGroupedDispatch<GroupedAddKernel>| {
+            let mut stream = device.grouped_stream().unwrap();
+            stream
+                .encode_grouped_sequence("hephaestus-wgpu-bound-parameter-update", |sequence| {
+                    bound.encode_in_sequence(sequence)
+                })
+                .unwrap();
+            stream.submit_grouped().unwrap();
+        };
+        execute(&bound);
+        let mut host = [0.0f32; 4];
+        device.download(&output, &mut host).unwrap();
+        assert_eq!(host, [11.5, 22.5, 33.5, 44.5]);
+
+        bound
+            .update_params(
+                &device,
+                &GroupedParams {
+                    len: 2,
+                    addend: -1.0,
+                },
+            )
+            .unwrap();
+        execute(&bound);
+        device.download(&output, &mut host).unwrap();
+        assert_eq!(host, [10.0, 21.0, 33.5, 44.5]);
+    }
+
+    fn bound_grouped_parameter_update_rejects_foreign_device() {
+        let Some(device) = try_device() else {
+            eprintln!("No WGPU adapter available; skipping foreign parameter-update test");
+            return;
+        };
+        let Some(other) = try_device() else {
+            eprintln!("No second WGPU device available; skipping foreign parameter-update test");
+            return;
+        };
+        let left = device.upload(&[1.0f32]).unwrap();
+        let right = device.upload(&[2.0f32]).unwrap();
+        let output = device.alloc_zeroed::<f32>(1).unwrap();
+        let prepared = device.prepare_grouped(&GroupedAddKernel).unwrap();
+        let mut bound = device
+            .bind_grouped_dispatch(
+                &prepared,
+                &[
+                    GroupedBinding::read(0, 0, &left),
+                    GroupedBinding::read(1, 0, &right),
+                    GroupedBinding::read_write(1, 1, &output),
+                ],
+                &GroupedParams {
+                    len: 1,
+                    addend: 0.0,
+                },
+                DispatchGrid::new(1, 1, 1),
+            )
+            .unwrap();
+
+        let error = bound
+            .update_params(
+                &other,
+                &GroupedParams {
+                    len: 1,
+                    addend: 9.0,
+                },
+            )
+            .expect_err("parameter update must reject a foreign device");
+        match error {
+            HephaestusError::DispatchFailed { message } => assert_eq!(
+                message,
+                "prepared WGPU bound grouped dispatch belongs to a different device"
+            ),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     fn bound_grouped_dispatch_rejects_invalid_parameter_size() {

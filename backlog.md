@@ -148,7 +148,15 @@
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   readback correction is on `perf/wgpu-readback-completion-pool` and consumer
   closure is in Apollo/Kwavers.
-- Lease: none; readback PR #232 merged as `b4e170e` from exact reviewed head
+- Lease: none. The retained-parameter candidate on
+  `feat/wgpu-bound-parameters` adds a device-provenance-checked mutable
+  uniform update while preserving fixed bindings and launch geometry.
+  Warning-denied all-target Clippy, WGPU Nextest (28/28 in 31.381 seconds),
+  Rustdoc, rustfmt, and diff checks pass. `cargo-semver-checks` did not reach
+  API comparison because its local baseline clone failed on an oversized
+  packed-object entry. Independent exact-candidate review of `e6218da` is
+  GREEN; exact-lock hosted gates and merge remain.
+  Readback PR #232 merged as `b4e170e` from exact reviewed head
   `cf0907e`. Provider PR #230 merged as `48bb731`; device-preflight PR #231
   merged as `1636301`.
   The candidate replaces the per-readback completion channel with eight fixed

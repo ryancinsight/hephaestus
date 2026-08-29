@@ -20,6 +20,17 @@ hosted lockfile and host verification pass. CUDA, ROCm, Metal, and WGPU hosted
 checks were still running when the PR merged and remain a collection watchpoint.
 Apollo and Kwavers consumer closure remains.
 
+Retained-parameter increment: `WgpuBoundGroupedDispatch::update_params`
+mutably rewrites the uniform through the owning queue while preserving fixed
+buffers, bind groups, and launch geometry. Exact output changes with logical
+length and arithmetic parameters through the same retained dispatch;
+foreign-device mutation fails before writing. Warning-denied all-target
+Clippy, WGPU Nextest (28/28 in 31.381 seconds), Rustdoc, rustfmt, and diff
+checks pass. `cargo-semver-checks` did not reach API comparison because its
+local baseline clone failed on an oversized packed-object entry. Independent
+exact-candidate review of `e6218da` is GREEN. Lease: none; exact-lock hosted
+gates and merge remain.
+
 - [x] Audit Leto, Apollo, Hephaestus, and Kwavers ownership, dimensionality,
       duplicated WGPU kernels, dependency direction, and existing conformance.
 - [x] Record the provider ownership, rank-generic contract, staged cutover, and

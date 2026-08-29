@@ -3,7 +3,8 @@
 use core::marker::PhantomData;
 
 use hephaestus_core::{
-    DispatchGrid, GroupedBinding, GroupedKernelSource, Result, Wgsl, validate_grouped_bindings,
+    DispatchGrid, GroupedBinding, GroupedKernelSource, HephaestusError, Result, Wgsl,
+    validate_grouped_bindings,
 };
 
 use crate::application::bindings::BindGroups;
@@ -12,17 +13,18 @@ use crate::infrastructure::device::{PipelineCache, WgpuDevice};
 
 use super::{WgpuGroupedPrepared, WgpuGroupedSequence, build_grouped_bind_groups};
 
-/// A grouped WGPU dispatch with fixed buffers, parameters, and launch geometry.
+/// A grouped WGPU dispatch with fixed buffers and launch geometry.
 ///
 /// Construction owns the bind groups and parameter uniform needed by the
-/// dispatch. Repeated [`Self::encode_in_sequence`] calls therefore record only
-/// the retained command state and perform no Hephaestus-managed allocation or
-/// bind-group construction.
+/// dispatch. [`Self::update_params`] changes the uniform contents without
+/// rebuilding that state. Repeated [`Self::encode_in_sequence`] calls therefore
+/// record only the retained command state and perform no Hephaestus-managed
+/// allocation or bind-group construction.
 #[must_use]
 pub struct WgpuBoundGroupedDispatch<K> {
     pipeline: wgpu::ComputePipeline,
     bind_groups: BindGroups,
-    _parameters: wgpu::Buffer,
+    parameters: wgpu::Buffer,
     owner: PipelineCache,
     label: &'static str,
     grid: DispatchGrid,
@@ -63,8 +65,63 @@ impl<K> WgpuBoundGroupedDispatch<K> {
     }
 }
 
+impl<K: GroupedKernelSource<Wgsl>> WgpuBoundGroupedDispatch<K> {
+    /// Replace the retained uniform parameters without rebuilding fixed bindings.
+    ///
+    /// The mutable borrow serializes updates to this retained dispatch. WGPU
+    /// orders the uniform write on the device queue before subsequently
+    /// submitted command streams, so the next encoded dispatch observes
+    /// `params` while preserving the existing pipeline, bind groups, buffers,
+    /// and launch geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed ownership failure when `device` differs from the
+    /// preparation device, an allocation failure when WGPU cannot stage the
+    /// write, or a typed internal-provider or validation failure reported by
+    /// WGPU.
+    pub fn update_params(&mut self, device: &WgpuDevice, params: &K::Params) -> Result<()> {
+        validate_device_owner(&self.owner, device, "bound grouped dispatch")?;
+        let out_of_memory = device
+            .inner()
+            .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let internal = device.inner().push_error_scope(wgpu::ErrorFilter::Internal);
+        let validation = device
+            .inner()
+            .push_error_scope(wgpu::ErrorFilter::Validation);
+        device
+            .queue()
+            .write_buffer(&self.parameters, 0, bytemuck::bytes_of(params));
+        let validation_error = moirai::block_on(validation.pop());
+        let internal_error = moirai::block_on(internal.pop());
+        let out_of_memory_error = moirai::block_on(out_of_memory.pop());
+        if let Some(error) = out_of_memory_error {
+            return Err(HephaestusError::AllocationFailed {
+                message: format!("{} retained parameter update failed: {error}", self.label),
+            });
+        }
+        if let Some(error) = internal_error {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!(
+                    "{} retained parameter update failed internally: {error}",
+                    self.label
+                ),
+            });
+        }
+        if let Some(error) = validation_error {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!(
+                    "{} retained parameter update failed validation: {error}",
+                    self.label
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl WgpuDevice {
-    /// Bind fixed grouped-kernel resources for allocation-free repeated encode.
+    /// Bind grouped-kernel resources for allocation-free repeated encode.
     ///
     /// # Errors
     ///
@@ -85,7 +142,7 @@ impl WgpuDevice {
         if parameter_size > limits.max_buffer_size
             || parameter_size > limits.max_uniform_buffer_binding_size
         {
-            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+            return Err(HephaestusError::AllocationFailed {
                 message: format!(
                     "{} parameter buffer requires {parameter_size} bytes; enabled max_buffer_size={} and max_uniform_buffer_binding_size={}",
                     K::LABEL,
@@ -112,7 +169,7 @@ impl WgpuDevice {
         let internal_error = moirai::block_on(internal.pop());
         let out_of_memory_error = moirai::block_on(out_of_memory.pop());
         if let Some(error) = out_of_memory_error {
-            return Err(hephaestus_core::HephaestusError::AllocationFailed {
+            return Err(HephaestusError::AllocationFailed {
                 message: format!(
                     "{} retained binding allocation failed: {error}",
                     prepared.label
@@ -120,7 +177,7 @@ impl WgpuDevice {
             });
         }
         if let Some(error) = internal_error {
-            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+            return Err(HephaestusError::DispatchFailed {
                 message: format!(
                     "{} retained binding failed internally: {error}",
                     prepared.label
@@ -128,7 +185,7 @@ impl WgpuDevice {
             });
         }
         if let Some(error) = validation_error {
-            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+            return Err(HephaestusError::DispatchFailed {
                 message: format!(
                     "{} retained binding validation failed: {error}",
                     prepared.label
@@ -139,7 +196,7 @@ impl WgpuDevice {
         Ok(WgpuBoundGroupedDispatch {
             pipeline: prepared.pipeline.clone(),
             bind_groups,
-            _parameters: parameters,
+            parameters,
             owner: device_owner(self),
             label: prepared.label,
             grid,

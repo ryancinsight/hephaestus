@@ -19,6 +19,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   before opening a command stream can call `WgpuPreparedFft::validate_device`;
   a foreign device returns the same typed ownership failure as dispatch and
   sequence encoding.
+  `WgpuBoundGroupedDispatch::update_params` rewrites a retained parameter
+  uniform through the owning device queue without rebuilding its pipeline,
+  bind groups, fixed buffers, or launch geometry. A mutable dispatch borrow
+  serializes updates, and foreign-device updates fail before writing.
   Callers may prepare a nonempty set of unique transform axes while retaining
   the full dense operand shape. This supports batched row transforms such as
   `[frame_count, frame_len]` on axis 1 without transforming across frames;
