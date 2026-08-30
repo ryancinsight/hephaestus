@@ -4072,6 +4072,68 @@ pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
     assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
 }
 
+/// The device factor's strictly-upper triangle is exactly zero, including the
+/// region outside the diagonal blocks.
+///
+/// The blocked path's per-panel scatters cover only `row >= blockstart(col)`,
+/// and the panel factorisation zeroes just the diagonal blocks' own upper
+/// triangle, so cells strictly above the diagonal *outside* those blocks hold
+/// the input's values until the closing triangular-zero pass clears them.
+/// This fixture therefore carries a large, distinctive off-diagonal value: a
+/// regression in that pass leaves `0.5` in the factor rather than something
+/// that could be mistaken for rounding noise. `n` exceeds the 64-element
+/// block size so at least one such region exists.
+pub(super) fn blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    let n = 96usize;
+    // A = (n - 0.5)·I + 0.5·J is symmetric positive-definite (eigenvalues
+    // n - 0.5 and 1.5·n - 0.5) and strongly diagonally dominant.
+    let mut matrix_host = vec![0.5f32; n * n];
+    for index in 0..n {
+        matrix_host[index * n + index] = n as f32;
+    }
+
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_cholesky = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got_lower = vec![0.0f32; n * n];
+    device
+        .download(gpu_cholesky.lower(), &mut got_lower)
+        .unwrap();
+
+    for row in 0..n {
+        for col in (row + 1)..n {
+            let value = got_lower[row * n + col];
+            assert_eq!(
+                value, 0.0,
+                "strict upper entry [{row}, {col}] must be zero, got {value}"
+            );
+        }
+    }
+    // A wholly zeroed buffer would satisfy the loop above; the diagonal pins
+    // that the factor itself survived the pass.
+    for index in 0..n {
+        let diagonal = got_lower[index * n + index];
+        assert!(
+            diagonal > 0.0,
+            "diagonal entry [{index}, {index}] must stay positive, got {diagonal}"
+        );
+    }
+}
+
 pub(super) fn blocked_cholesky_spd_reconstruction_matches_original() {
     let Some(device) = device_or_skip() else {
         return;
