@@ -155,9 +155,10 @@
   device buffer holds clean upper-triangular **R**, not packed reflectors.
   The name is stale, the contents are not: the host-side `packed` array fed
   to `QrDecomposition::from_raw_parts` is the separate object that carries
-  the reflectors. `blocked_qr_matches_leto_reference` already asserts the
-  strict lower triangle is within `f32::EPSILON` of zero and passes today.
-  Both entry points therefore already agree on `r_buffer()`'s meaning.
+  the reflectors. Both entry points therefore already agree on
+  `r_buffer()`'s meaning — asserted directly below rather than inferred from
+  `blocked_qr_matches_leto_reference`, whose fixture never reaches the device
+  schedule (see the routing trap).
 - **Real defect found while checking it:** the Python `qr` binding uploads
   `inner().r()` even though the identical R is already device-resident in
   `r_buffer()` — an `m`x`n` host->device transfer per call that the WGPU
@@ -170,14 +171,26 @@
   `r_buffer()` is upper-triangular and that the two paths agree within a
   derived tolerance; the Python `qr` R transfer count drops by `4mn` bytes
   with the returned R value-identical to the uploaded one.
+- **Routing trap found in review (2026-08-30):** `qr_decompose_blocked`
+  delegates to `qr_decompose` at or below `QR_DIRECT_PANEL_LIMIT` (4) panels
+  of `QR_BLOCK_SIZE` (32) columns, so every QR fixture at `n = 35` — including
+  `blocked_qr_matches_leto_reference`, whose comment claims it "exercises two
+  QR blocks" — runs the *host* path. The first version of the case below
+  inherited that shape and so compared the delegating path against itself:
+  its assertions held vacuously. The case now covers both regimes, `n = 35`
+  (2 panels, delegating) and `n = 129` (5 panels, device schedule), with a
+  guard asserting each fixture lands where intended.
 - **Delivered 2026-08-30:** `qr_r_buffer_is_upper_triangular_on_both_entry_points`
-  (m=70, n=35, two QR blocks) asserts both paths' `r_buffer()` is zero below
-  the diagonal and that they agree within `2·c(m,n)·ε·5.1` from Householder
+  asserts, at both shapes, that both paths' `r_buffer()` is zero below the
+  diagonal and that they agree within `2·c(m,n)·ε·5.1` from Householder
   columnwise backward stability. It also pins the identity the Python change
-  rests on — the device buffer equals `inner().r()` **exactly**, since the
-  blocked path's panel factorisation writes each R row to the host `packed`
-  array and the device buffer from one computation — measured bitwise, not
-  merely within tolerance. `GpuQrDecomposition::into_r_buffer` hands that
+  rests on — the device buffer equals `inner().r()` **exactly**, since each R
+  row is produced once and stored to both the host `packed` array and the
+  buffer — measured bitwise on the device route, not merely within tolerance.
+  Liveness confirmed: with the panel write-back's `col < row` zeroing
+  disabled, the case fails at `R[129, 128] = 4.99e-3` (a reflector surviving
+  in the tail region) and `blocked_qr_preserves_panel_boundary_contracts`
+  fails with it; the `n = 35` arm alone catches neither. `GpuQrDecomposition::into_r_buffer` hands that
   buffer over, and the Python `qr` arm returns it instead of re-uploading
   `inner().r()`: **`4mn` bytes removed per WGPU `qr` call** (9.8 KiB at the
   test shape, 4 MiB at m=n=1024), with the Q upload left in place and its
