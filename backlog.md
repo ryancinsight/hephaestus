@@ -139,20 +139,88 @@
     `r_buffer()` contract divergence between the two entry points is a
     latent defect worth its own item.
 
-## HEPH-WGPU-QR-DEVICE-FACTORS [minor] [perf] — todo
+## ✅ HEPH-WGPU-QR-DEVICE-FACTORS [minor] [perf]: Device-resident R returned; premise corrected
 
-- Outcome: `qr` returns device-resident Q and R without host uploads, and
-  `GpuQrDecomposition::r_buffer()` means the same thing on both entry points.
-- Evidence (2026-08-29): `crates/hephaestus-python/src/decomposition.rs` `qr`
-  uploads `inner().q()` and `inner().r()`, both host tensors, because no
-  device Q exists. `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`
-  returns `r: work_buf` (packed reflectors) from `qr_decompose_blocked` but
-  `r: r_buf` (clean upper-triangular R) from `qr_decompose`, so callers of
-  `r_buffer()` get different mathematical objects depending on which path ran.
-- Acceptance: one documented meaning for `r_buffer()` asserted by a test that
-  exercises both entry points; device-side Q accumulation from the stored
-  Householder reflectors, differentially verified against `inner().q()` within
-  a derived tolerance; transfer-count evidence attached.
+- Integrator: Claude session 5050c72a; lease: none.
+- Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`,
+  the `qr` arm of `crates/hephaestus-python/src/decomposition.rs`, the QR
+  contract cases, and this item block. The factor-split lease above names
+  that Python file, but its last commit is ~6 h old and its WGPU delivery
+  merged in #235, so the region is reclaimed per the stale-claim rule; the
+  `lu`/`full_piv_lu` arms are untouched.
+- **Premise correction (2026-08-30): the `r_buffer()` divergence does not
+  exist.** `qr_decompose_blocked` does return the buffer named `work_buf`,
+  but the panel write-back zeroes every `col < row` entry before it reaches
+  the device (`qr.rs` `factored_panel` and `final_panel` loops), so the
+  device buffer holds clean upper-triangular **R**, not packed reflectors.
+  The name is stale, the contents are not: the host-side `packed` array fed
+  to `QrDecomposition::from_raw_parts` is the separate object that carries
+  the reflectors. Both entry points therefore already agree on
+  `r_buffer()`'s meaning — asserted directly below rather than inferred from
+  `blocked_qr_matches_leto_reference`, whose fixture never reaches the device
+  schedule (see the routing trap).
+- **Real defect found while checking it:** the Python `qr` binding uploads
+  `inner().r()` even though the identical R is already device-resident in
+  `r_buffer()` — an `m`x`n` host->device transfer per call that the WGPU
+  path had already paid for.
+- Outcome (this increment): the redundant R upload is removed, and the
+  cross-entry-point `r_buffer()` contract is asserted rather than left
+  implicit. Device-side **Q** accumulation is split out below — the half of
+  the original premise that survives.
+- Acceptance: a contract case exercising both entry points asserts
+  `r_buffer()` is upper-triangular and that the two paths agree within a
+  derived tolerance; the Python `qr` R transfer count drops by `4mn` bytes
+  with the returned R value-identical to the uploaded one.
+- **Routing trap found in review (2026-08-30):** `qr_decompose_blocked`
+  delegates to `qr_decompose` at or below `QR_DIRECT_PANEL_LIMIT` (4) panels
+  of `QR_BLOCK_SIZE` (32) columns, so every QR fixture at `n = 35` — including
+  `blocked_qr_matches_leto_reference`, whose comment claims it "exercises two
+  QR blocks" — runs the *host* path. The first version of the case below
+  inherited that shape and so compared the delegating path against itself:
+  its assertions held vacuously. The case now covers both regimes, `n = 35`
+  (2 panels, delegating) and `n = 129` (5 panels, device schedule), with a
+  guard asserting each fixture lands where intended.
+- **Delivered 2026-08-30:** `qr_r_buffer_is_upper_triangular_on_both_entry_points`
+  asserts, at both shapes, that both paths' `r_buffer()` is zero below the
+  diagonal and that they agree within `2·c(m,n)·ε·5.1` from Householder
+  columnwise backward stability. It also pins the identity the Python change
+  rests on — the device buffer equals `inner().r()` **exactly**, since each R
+  row is produced once and stored to both the host `packed` array and the
+  buffer — measured bitwise on the device route, not merely within tolerance.
+  Liveness confirmed: with the panel write-back's `col < row` zeroing
+  disabled, the case fails at `R[129, 128] = 4.99e-3` (a reflector surviving
+  in the tail region) and `blocked_qr_preserves_panel_boundary_contracts`
+  fails with it; the `n = 35` arm alone catches neither. `GpuQrDecomposition::into_r_buffer` hands that
+  buffer over, and the Python `qr` arm returns it instead of re-uploading
+  `inner().r()`: **`4mn` bytes removed per WGPU `qr` call** (9.8 KiB at the
+  test shape, 4 MiB at m=n=1024), with the Q upload left in place and its
+  removal split into `HEPH-WGPU-QR-DEVICE-Q`. No wall-clock claim.
+- **Gates:** `cargo nextest run -p hephaestus-wgpu -p hephaestus-core`
+  139/139, 0 skipped, against a real adapter (171 contract cases);
+  warning-denied all-target Clippy over `hephaestus-wgpu` and
+  `hephaestus-python`; doctests and `cargo fmt --check` clean.
+
+## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — todo
+
+- Outcome: the Python `qr` binding stops uploading `inner().q()`, because a
+  device-resident **Q** exists to return.
+- Evidence (2026-08-30): `crates/hephaestus-python/src/decomposition.rs`
+  uploads `inner().q()` (`m`x`m` f32) on every WGPU `qr` call;
+  `GpuQrDecomposition` exposes no device Q at all. This is the surviving
+  half of `HEPH-WGPU-QR-DEVICE-FACTORS`, whose R half was retired by the
+  premise correction recorded there.
+- Scope: accumulate **Q** from the stored Householder reflectors on the
+  device. The blocked path already owns a reflector-application kernel
+  (`hephaestus-qr-hh-update`, applying panels to the trailing matrix), so
+  the design question is whether Q can be built by applying those panels to
+  an identity rather than a new kernel family. **Non-goals:** changing the
+  factorization itself or the CUDA arm (no device on this host).
+- Acceptance: Q accumulated on-device, differentially verified against
+  `inner().q()` within a tolerance derived from Householder backward
+  stability, with transfer-count evidence for the removed `4m^2` upload.
+- Risk / change class: [minor] [perf]; a new device-side accumulation is
+  numerically load-bearing and needs the differential oracle above before
+  it can replace the upload.
 
 ## ✅ HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf]: Device-side triangular zero
 

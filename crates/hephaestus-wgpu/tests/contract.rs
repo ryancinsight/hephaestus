@@ -3833,6 +3833,116 @@ pub(super) fn blocked_qr_matches_leto_reference() {
     }
 }
 
+/// `r_buffer()` denotes the same mathematical object on both QR entry points,
+/// in both of the blocked entry's routing regimes.
+///
+/// `qr_decompose` uploads the host factor's **R**. `qr_decompose_blocked`
+/// delegates to it at or below `QR_DIRECT_PANEL_LIMIT` (4) panels of
+/// `QR_BLOCK_SIZE` (32) columns, and only past that runs the device schedule
+/// whose panel write-back zeroes every `col < row` entry before the buffer
+/// reaches the caller. Both regimes are exercised here: a shape at `n = 35`
+/// (2 panels, delegating) and one at `n = 129` (5 panels, device path). A
+/// shape inside the delegating regime alone would assert nothing about the
+/// device write-back — the two handles would be the same uploaded buffer.
+pub(super) fn qr_r_buffer_is_upper_triangular_on_both_entry_points() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // (m, n, exercises the device schedule)
+    for (m, n, blocked_route) in [(70usize, 35usize, false), (138usize, 129usize, true)] {
+        qr_r_buffer_contract_at_shape(&device, m, n, blocked_route);
+    }
+}
+
+fn qr_r_buffer_contract_at_shape(
+    device: &hephaestus_wgpu::WgpuDevice,
+    m: usize,
+    n: usize,
+    blocked_route: bool,
+) {
+    use hephaestus_wgpu::{StridedOperand, qr_decompose, qr_decompose_blocked};
+    use leto::Layout;
+
+    assert_eq!(
+        n.div_ceil(32) > 4,
+        blocked_route,
+        "fixture [{m}, {n}] must land in the intended routing regime"
+    );
+
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let operand = || StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+
+    let direct = qr_decompose(device, operand()).unwrap();
+    let blocked = qr_decompose_blocked(device, operand()).unwrap();
+    assert_eq!(direct.shape(), (m, n));
+    assert_eq!(blocked.shape(), (m, n));
+
+    let mut direct_r = vec![0.0f32; m * n];
+    let mut blocked_r = vec![0.0f32; m * n];
+    device.download(direct.r_buffer(), &mut direct_r).unwrap();
+    device.download(blocked.r_buffer(), &mut blocked_r).unwrap();
+
+    for row in 1..m {
+        for col in 0..n.min(row) {
+            for (label, values) in [("direct", &direct_r), ("blocked", &blocked_r)] {
+                let value = values[row * n + col];
+                assert!(
+                    value.abs() <= f32::EPSILON,
+                    "{label} R[{row}, {col}] = {value} must be zero at [{m}, {n}]: r_buffer()                      is the upper-triangular factor on both entry points"
+                );
+            }
+        }
+    }
+
+    // The device buffer and the host factor's R are the same object written to
+    // two places: each R row is produced once — by leto on the delegating
+    // route, by the panel factorisation on the device route — and stored to
+    // both `packed` and the buffer. Callers that return `r_buffer()` instead
+    // of uploading `inner().r()`, as the Python binding does, depend on that
+    // identity, so it is asserted exactly rather than within a tolerance.
+    let blocked_inner_r = blocked.inner().r();
+    let blocked_inner_values = leto::Storage::as_slice(blocked_inner_r.storage());
+    assert_eq!(blocked_inner_r.shape(), [m, n]);
+    assert_eq!(
+        blocked_r, blocked_inner_values,
+        "the device R buffer must equal the host factor's R exactly at [{m}, {n}]"
+    );
+
+    // Both factor the same matrix by the same Householder scheme, so their R
+    // entries differ only by the order of the arithmetic. Householder QR is
+    // columnwise backward stable — ‖ΔR·eⱼ‖₂ ≤ c(m, n)·ε·‖aⱼ‖₂ (Higham,
+    // *Accuracy and Stability*, ch. 19) — and this fixture's column norms are
+    // bounded by 5.1, so 2·c(m, n)·ε·5.1 with c(m, n) ≤ m·n covers both
+    // factorisations' error against the exact R and hence their difference.
+    let tolerance = 2.0 * (m * n) as f32 * f32::EPSILON * 5.1;
+    for row in 0..n {
+        for col in 0..n {
+            let index = row * n + col;
+            let delta = (direct_r[index] - blocked_r[index]).abs();
+            assert!(
+                delta <= tolerance,
+                "entry points disagree at R[{row}, {col}] for [{m}, {n}]: direct {},                  blocked {}, delta {delta} exceeds {tolerance}",
+                direct_r[index],
+                blocked_r[index]
+            );
+        }
+    }
+}
+
 pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
     let Some(device) = device_or_skip() else {
         return;
