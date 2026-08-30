@@ -139,9 +139,9 @@
     `r_buffer()` contract divergence between the two entry points is a
     latent defect worth its own item.
 
-## HEPH-WGPU-QR-DEVICE-FACTORS [minor] [perf] — in-progress
+## ✅ HEPH-WGPU-QR-DEVICE-FACTORS [minor] [perf]: Device-resident R returned; premise corrected
 
-- Integrator: Claude session 5050c72a; last-update: 2026-08-30.
+- Integrator: Claude session 5050c72a; lease: none.
 - Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`,
   the `qr` arm of `crates/hephaestus-python/src/decomposition.rs`, the QR
   contract cases, and this item block. The factor-split lease above names
@@ -170,6 +170,22 @@
   `r_buffer()` is upper-triangular and that the two paths agree within a
   derived tolerance; the Python `qr` R transfer count drops by `4mn` bytes
   with the returned R value-identical to the uploaded one.
+- **Delivered 2026-08-30:** `qr_r_buffer_is_upper_triangular_on_both_entry_points`
+  (m=70, n=35, two QR blocks) asserts both paths' `r_buffer()` is zero below
+  the diagonal and that they agree within `2·c(m,n)·ε·5.1` from Householder
+  columnwise backward stability. It also pins the identity the Python change
+  rests on — the device buffer equals `inner().r()` **exactly**, since the
+  blocked path's panel factorisation writes each R row to the host `packed`
+  array and the device buffer from one computation — measured bitwise, not
+  merely within tolerance. `GpuQrDecomposition::into_r_buffer` hands that
+  buffer over, and the Python `qr` arm returns it instead of re-uploading
+  `inner().r()`: **`4mn` bytes removed per WGPU `qr` call** (9.8 KiB at the
+  test shape, 4 MiB at m=n=1024), with the Q upload left in place and its
+  removal split into `HEPH-WGPU-QR-DEVICE-Q`. No wall-clock claim.
+- **Gates:** `cargo nextest run -p hephaestus-wgpu -p hephaestus-core`
+  139/139, 0 skipped, against a real adapter (171 contract cases);
+  warning-denied all-target Clippy over `hephaestus-wgpu` and
+  `hephaestus-python`; doctests and `cargo fmt --check` clean.
 
 ## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — todo
 

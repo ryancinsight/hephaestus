@@ -82,10 +82,28 @@ impl GpuQrDecomposition {
     }
 
     /// Borrow the upper-triangular factor **R** buffer on the device.
+    ///
+    /// Both entry points leave the same object here: [`qr_decompose`] uploads
+    /// the host factor's **R**, and [`qr_decompose_blocked`] computes it in
+    /// place — its panel write-back zeroes every `col < row` entry, so the
+    /// buffer it returns carries no reflectors despite its working name. The
+    /// contract is asserted across both paths by the
+    /// `qr_r_buffer_is_upper_triangular_on_both_entry_points` contract case.
     #[must_use]
     #[inline]
     pub fn r_buffer(&self) -> &WgpuBuffer<f32> {
         &self.r
+    }
+
+    /// Take ownership of the device-resident **R** buffer.
+    ///
+    /// Callers that need to keep **R** past this decomposition — the Python
+    /// binding returns it as a standalone device tensor — would otherwise
+    /// re-upload `inner().r()`, sending `4mn` bytes the device already holds.
+    #[must_use]
+    #[inline]
+    pub fn into_r_buffer(self) -> WgpuBuffer<f32> {
+        self.r
     }
 
     /// Borrow the host-side Leto decomposition.
