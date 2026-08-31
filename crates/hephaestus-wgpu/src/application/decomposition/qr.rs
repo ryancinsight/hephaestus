@@ -113,6 +113,119 @@ impl GpuQrDecomposition {
         &self.inner
     }
 
+    /// Accumulate the orthogonal factor **Q** (*m* × *m*, row-major) on the
+    /// device.
+    ///
+    /// **Q** is built here rather than during factorisation because it is not
+    /// free: accumulating it costs O(*m*² *n*), and a least-squares caller
+    /// discards it entirely. Factorisation stores only the compact Householder
+    /// form, and this method materialises **Q** for the callers that ask.
+    ///
+    /// Starting from a device identity, the stored reflectors apply in reverse
+    /// — **Q** = **H₁**(**H₂**(⋯(**H_k I**))) — with one workgroup per column
+    /// of **Q**, mirroring the panel kernel's reduce-then-update shape.
+    ///
+    /// The transfer trade is `4mn + 8·min(m, n)` bytes uploaded (the packed
+    /// factor and the per-reflector head/β pairs) in place of the `4m²` bytes
+    /// a host-accumulated **Q** costs to download and upload back, and the
+    /// O(*m*² *n*) accumulation itself moves off the host.
+    ///
+    /// # Errors
+    ///
+    /// - Buffer allocation or dispatch failure.
+    /// - Dimensions exceeding `u32`.
+    pub fn accumulate_q(&self, device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
+        let (m, n) = (self.rows, self.cols);
+        let layout = leto::Layout::c_contiguous([m, m]).map_err(map_layout_err)?;
+        let q = crate::application::linalg::device_identity::<f32>(device, &layout)?;
+
+        let reflector_count = m.min(n);
+        // With no reflectors — an empty matrix, or no columns to factor — the
+        // identity is already Q, matching `inner().q()`.
+        if m == 0 || reflector_count == 0 {
+            return Ok(q);
+        }
+
+        let packed_dev = device.upload(self.inner.packed())?;
+
+        let heads = self.inner.heads();
+        let betas = self.inner.betas();
+        let reflector_host = (0..reflector_count)
+            .map(|k| QReflector {
+                head: heads[k],
+                beta: betas[k],
+            })
+            .collect::<Vec<_>>();
+        let reflector_dev = device.alloc_uninitialized::<QReflector>(reflector_count)?;
+        device.write_sub_buffer(&reflector_dev, 0, &reflector_host)?;
+
+        let to_u32 = |value: usize, what: &str| {
+            u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("Q accumulation {what} {value} exceeds u32"),
+            })
+        };
+        let meta = QMeta {
+            m: to_u32(m, "m")?,
+            n: to_u32(n, "n")?,
+            reflector_count: to_u32(reflector_count, "reflector_count")?,
+        };
+
+        let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<QMeta>(1)?)?;
+        let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
+        device
+            .queue()
+            .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+
+        let pipeline = cached_pipeline(
+            device,
+            (TypeId::of::<QAccumulateKernel>(), TypeId::of::<f32>(), 256),
+            "hephaestus-qr-q-accumulate",
+            q_accumulate_shader_source,
+        );
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("hephaestus-qr-q-accumulate"),
+                layout: &pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: packed_dev.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: q.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: reflector_dev.buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: meta_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-qr-q-accumulate"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hephaestus-qr-q-accumulate"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(meta.m, 1, 1);
+        }
+        device.queue().submit(Some(encoder.finish()));
+
+        Ok(q)
+    }
+
     /// Solve min ‖**A** · **x** − **rhs**‖₂ (least squares).
     ///
     /// Downloads the RHS from the device, solves on the host using the
@@ -268,6 +381,132 @@ fn main(
 }
 
 struct HhKernel;
+
+// ---------------------------------------------------------------------------
+// Q accumulation uniform
+// ---------------------------------------------------------------------------
+
+/// Packed metadata for the **Q** accumulation kernel.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable)]
+struct QMeta {
+    /// Row count *m* of the factored matrix, and the order of **Q**.
+    m: u32,
+    /// Column count *n*, the row stride of the packed factor.
+    n: u32,
+    /// Number of stored reflectors, `min(m, n)`.
+    reflector_count: u32,
+}
+
+// SAFETY: QMeta is `#[repr(C)]` and every field is Pod.
+unsafe impl bytemuck::Pod for QMeta {}
+
+/// Per-reflector scalars the packed factor does not carry.
+///
+/// The head `v_k[k]` is displaced from the packed diagonal (which holds
+/// `R[k][k]`), so it travels alongside β rather than being read from `packed`.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable)]
+struct QReflector {
+    /// Householder vector head component `v_k[k]`.
+    head: f32,
+    /// Householder scale factor `β_k = 2 / (v_kᵀ v_k)`.
+    beta: f32,
+}
+
+// SAFETY: QReflector is `#[repr(C)]` and every field is Pod.
+unsafe impl bytemuck::Pod for QReflector {}
+
+// ---------------------------------------------------------------------------
+// Q accumulation kernel:  Q ← H₁ (H₂ (⋯ (H_k · I)))
+// ---------------------------------------------------------------------------
+
+/// WGSL source accumulating **Q** by applying the stored reflectors to an
+/// identity, one workgroup per column of **Q**.
+fn q_accumulate_shader_source() -> String {
+    r#"struct QMeta {
+    m: u32,
+    n: u32,
+    reflector_count: u32,
+}
+struct QReflector {
+    head: f32,
+    beta: f32,
+}
+
+@group(0) @binding(0) var<storage, read>       packed: array<f32>;
+@group(0) @binding(1) var<storage, read_write> q: array<f32>;
+@group(0) @binding(2) var<storage, read>       reflectors: array<QReflector>;
+@group(0) @binding(3) var<uniform>             params: QMeta;
+
+var<workgroup> sdata: array<f32, 256>;
+
+@compute @workgroup_size(256)
+fn main(
+    @builtin(local_invocation_id) lid: vec3<u32>,
+    @builtin(workgroup_id)        wid: vec3<u32>,
+) {
+    let col = wid.x;
+    if (col >= params.m) {
+        return;
+    }
+    let tid = lid.x;
+    let m = params.m;
+    let n = params.n;
+
+    // Reverse order: Q = H_1 (H_2 (... (H_k I))), so the last reflector
+    // reaches the identity first.
+    for (var idx = 0u; idx < params.reflector_count; idx = idx + 1u) {
+        let k = params.reflector_count - 1u - idx;
+        let head = reflectors[k].head;
+        let beta = reflectors[k].beta;
+        let span = m - k;
+
+        // Phase 1: dot = v_kᵀ · Q[k:m, col], reduced as a 256-way tree.
+        var partial = f32(0.0);
+        var row = tid;
+        while (row < span) {
+            let r = k + row;
+            // The packed diagonal slot holds R[k][k]; the reflector head
+            // arrives separately.
+            var v = packed[r * n + k];
+            if (row == 0u) { v = head; }
+            partial = partial + v * q[r * m + col];
+            row = row + 256u;
+        }
+        sdata[tid] = partial;
+        workgroupBarrier();
+        for (var s = 128u; s > 0u; s = s >> 1u) {
+            if (tid < s) { sdata[tid] = sdata[tid] + sdata[tid + s]; }
+            workgroupBarrier();
+        }
+        let scaled = beta * sdata[0];
+        workgroupBarrier();
+
+        // Phase 2: Q[k:m, col] -= β_k · v_k · dot.
+        //
+        // A zero β is deliberately *not* skipped with `continue`: β is a
+        // storage read, so branching on it around the `workgroupBarrier()`
+        // calls above would be non-uniform control flow, which WGSL forbids.
+        // With β = 0 the update below is already the identity, so the
+        // reflector costs a pass and changes nothing.
+        row = tid;
+        while (row < span) {
+            let r = k + row;
+            var v = packed[r * n + k];
+            if (row == 0u) { v = head; }
+            q[r * m + col] = q[r * m + col] - scaled * v;
+            row = row + 256u;
+        }
+        storageBarrier();
+        workgroupBarrier();
+    }
+}
+"#
+    .to_string()
+}
+
+struct QAccumulateKernel;
 
 // ---------------------------------------------------------------------------
 // Inline panel Householder QR
