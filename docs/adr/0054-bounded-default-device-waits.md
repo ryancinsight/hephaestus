@@ -67,10 +67,13 @@ watchdog, a wedged driver, or work legitimately queued ahead of the waited
 submission for longer than the bound.
 
 Upper bound: 30 s is half of Windows' `TdrLimitTime` (60 s) bug-check window
-and remains a host stall a human notices. Headroom against real work: this
-backend's whole 172-case integration contract suite, every case
-device-resident, completes in ~1.9 s of wall clock, so no wait this backend
-produces is within an order of magnitude of the bound.
+and remains a host stall a human notices. Headroom against real work is
+recorded only as the aggregate it is: this backend's whole 172-case
+integration contract suite, every case device-resident, completes in ~1.9 s of
+wall clock. That is a suite total, not a per-wait maximum — it bounds no
+individual wait, and says nothing about larger workloads or slower adapters
+than this host's. Establishing a per-wait maximum would need per-wait
+instrumentation this change does not add.
 
 ## Alternatives rejected
 
