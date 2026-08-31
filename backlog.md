@@ -1,25 +1,19 @@
 # Backlog — hephaestus
 
-## HEPH-QUALITY-WAVE-2026-08-27 — Audit-adjudicated safety/perf fixes [patch] — in-progress
+## ✅ HEPH-QUALITY-WAVE-2026-08-27 [patch]: Audit-adjudicated safety/perf fixes
 
-- Integrator: claude-fable session 03d80d33 subagent; last-update: 2026-08-27.
-- Lease: crates/hephaestus-cuda/src/application/decomposition/region.rs,
-  crates/hephaestus-cuda/src/infrastructure/{pinned.rs,buffer.rs,compiler.rs},
-  crates/hephaestus-python/src/{backend.rs,array.rs,decomposition.rs,
-  spectral.rs,sparse.rs}, backlog.md. The WGPU device sub-scope landed as
-  `0fe0889` and carries no live lease.
-- Outcome: implement the accepted audit findings — synchronize the CUDA stream
-  on every 2-D region-copy error exit before pinned/borrowed DMA targets are
-  released; replace the Python clone_cuda_buffer host round-trip with the
-  device-to-device copy; correct the pinned-buffer Deref SAFETY contract to the
-  real caller-initialization obligation; route Python readbacks through
-  `download_owned` instead of zero-filled pre-allocation; scope the WGPU
-  copy_buffer wait to the copy's own submission index; preserve the caller's
-  current CUDA context across RAII drop-time binds. Deferred findings filed as
-  DoR board items.
-- Acceptance: warning-denied clippy, configured nextest, and doctests green on
-  the branch; each fix an atomic commit with the Item trailer; PR opened
-  against master for integrator review (no self-merge).
+- **Delivered**: every accepted finding carries its fix commit on master —
+  region-copy error-exit stream drain `31a72a7`, device-to-device
+  `clone_cuda_buffer` `7ea5498`, pinned-buffer Deref SAFETY contract `a132613`,
+  Python readbacks through `download_owned` `583cfa2`, submission-scoped WGPU
+  `copy_buffer` wait `0fe0889`, CUDA context preservation across drop-time
+  binds `2476f3c`.
+- **Verified 2026-08-31**: each hash confirmed an ancestor of master
+  (`git merge-base --is-ancestor`), and the leased regions
+  (`decomposition/region.rs`, `infrastructure/pinned.rs`,
+  `hephaestus-python/src/backend.rs`) hold those commits as their most recent
+  substantive changes. Lease released.
+- **Integrator**: closed by Claude session 5050c72a; lease: none.
 
 ## HEPH-CUDA-LAUNCH-DRAIN-REEVAL [patch] [perf] — todo
 
@@ -128,7 +122,22 @@
   deliberately mutated triangular predicate.
 - Residual (acceptance partially met): the CUDA arms still round-trip, so
   "either backend" is unmet by design — see the scope note above.
-- Findings that correct the 2026-08-27 audit note:
+- **SUPERSEDED — do not file work off the findings below.** They recorded the
+  cholesky and qr state as of 2026-08-29; PRs #236, #237, and #238 have since
+  retired all three. Verified 2026-08-31 against master:
+  - The cholesky `n²` upload is gone — `cholesky.rs` now zeroes the strict
+    upper triangle with a device kernel (`hephaestus-cholesky-triangular-zero`,
+    PR #236), not `write_buffer(&lower_buf, &host)`.
+  - The qr Q claim is retired: `GpuQrDecomposition::accumulate_q` builds Q on
+    the device from the stored reflectors (PR #238), and the Python `qr` arm
+    returns it instead of uploading `inner().q()`.
+  - **The `r_buffer()` contract divergence was proven false** (PR #237). The
+    blocked path's panel write-back zeroes every `col < row` entry before the
+    buffer reaches the device, so both entry points leave clean upper-triangular
+    **R** in `r_buffer()`; only the local name `work_buf` is stale. This is
+    asserted, not inferred, by
+    `qr_r_buffer_is_upper_triangular_on_both_entry_points`.
+- Superseded findings, retained for the audit trail only:
   - `cholesky` in the Python layer never round-tripped; it already returns
     `into_lower()`. The host staging is inside
     `cholesky_decompose_blocked`, whose closing `write_buffer(&lower_buf,
@@ -205,9 +214,20 @@
   warning-denied all-target Clippy over `hephaestus-wgpu` and
   `hephaestus-python`; doctests and `cargo fmt --check` clean.
 
-## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — in review
+## ✅ HEPH-WGPU-QR-DEVICE-Q [minor] [perf]: Device-side Q accumulation
 
-- Integrator: Claude session 5050c72a; last-update: 2026-08-31.
+- **Delivered**: PR #238 (`1fca9d6`, merged as `6a15a8b`).
+  `GpuQrDecomposition::accumulate_q` builds Q on the device from the stored
+  Householder reflectors against a `linalg::device_identity`, and the Python
+  `qr` arm returns that buffer — `inner().q()` is no longer uploaded on the
+  WGPU route. Transfer is `4mn + 8·min(m, n)` in place of `4m²`.
+- **Verified 2026-08-31**: `accumulate_q` present at `qr.rs:137`; the Python
+  WGPU arm calls it (`decomposition.rs:334`) with no `inner().q()` upload left
+  on that route (the CUDA arm still uploads, as scoped); the contract case at
+  `tests/contract.rs:3998` runs at both routing regimes. Lease released.
+- **Integrator**: Claude session 5050c72a; lease: none.
+
+- Superseded planning detail, retained for the audit trail:
 - Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`, the
   `qr` arm of `crates/hephaestus-python/src/decomposition.rs`, the QR
   contract cases, one visibility change in
