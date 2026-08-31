@@ -1,5 +1,22 @@
 # Backlog — hephaestus
 
+## HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — in progress
+
+- **Outcome**: restore the Atlas conformance ratchet without raising its
+  baseline after provider advances exposed one oversized test sidecar, two
+  misclassified test diagnostics, one type-suffixed test helper, one
+  wall-clock-synchronized test, and one unbounded release workflow.
+- **Scope/non-goals**: WGPU FFT test topology, the WGPU wait-deadline
+  regression, and the Python release job bound only; no production numerical
+  behavior, wait policy, test workload/assertion, or release trigger changes.
+- **Acceptance**: the live provider scan is at or below the committed
+  Hephaestus baseline for all five classes; tests use event/poll state rather
+  than sleep; moved FFT cases retain their value oracles; the publish job has a
+  finite derived bound; warning-denied focused gates pass.
+- **Integrator**: Codex `/root/hephaestus_conformance`; lease: backlog/checklist,
+  `application/fft/{seam,scalar}_tests*`, `infrastructure/device.rs`, and
+  `.github/workflows/python-release.yml`; last update 2026-08-31.
+
 ## ✅ HEPH-QUALITY-WAVE-2026-08-27 [patch]: Audit-adjudicated safety/perf fixes
 
 - **Delivered**: every accepted finding carries its fix commit on master —

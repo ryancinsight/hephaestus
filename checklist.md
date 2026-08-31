@@ -2,6 +2,18 @@
 
 Sprint target: 0.18.0. Phase: Closure.
 
+## HEPH-CONFORMANCE-RATCHET-2026-08-31 — Codex
+
+- [x] Reproduce and attribute every Hephaestus ratchet increase against the
+      exact scanner and committed baseline.
+- [ ] Reclassify and split the FFT test sidecars without weakening value
+      coverage.
+- [ ] Replace the wall-clock sleep with deterministic completion state and
+      bound the Python publish job.
+- [ ] Run the exact provider scan, focused tests, warning-denied Clippy,
+      formatting, and diff checks.
+- [ ] Commit, push, independently review, merge, and discharge the lease.
+
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
 Readback-completion PR #232 merged as `b4e170e` from exact reviewed head
