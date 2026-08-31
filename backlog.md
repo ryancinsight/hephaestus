@@ -96,7 +96,7 @@
 - **Integrator**: Codebuff session on `perf/wgpu-staging-pool-decay`; lease:
   none.
 
-## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — in-progress
+## HEPH-PY-DEVICE-SIDE-FACTOR-SPLIT [minor] [perf] — done 2026-08-29 (PR #235)
 
 - Integrator: claude-fable session 03d80d33 subagent; last-update: 2026-08-29.
 - Lease: crates/hephaestus-wgpu/src/application/decomposition/{split.rs,mod.rs},
@@ -114,8 +114,13 @@
 - Acceptance: no host staging in the factor-split path on either backend,
   value-semantic parity with `split_packed_lu` in differential tests, and
   transfer-count evidence (before/after) attached.
-- Status: WGPU `lu`/`full_piv_lu` land on `hephaestus_wgpu::split_packed_lu`
-  (PR pending). Instrumented byte counts for the split step go
+- **Delivered:** PR #235, merged 2026-08-29T21:20Z; member CI green (host
+  verification, lockfile integrity, WGPU software-adapter contracts). Closed
+  2026-08-31 — the claim had gone stale with the work already landed. The CUDA
+  path remains on the host round-trip, as scoped, and is recorded as residual
+  rather than assumed equivalent.
+- Status: WGPU `lu`/`full_piv_lu` land on `hephaestus_wgpu::split_packed_lu`.
+  Instrumented byte counts for the split step go
   3·n²·4 → 0 in both directions, exactly as predicted; wall clock at n=512 is
   ~13× and at n=256 ~2.4–5.4×, while n≤128 stays inside this host's noise band.
   Differential parity against the host oracle is bitwise (copies and structural
