@@ -55,21 +55,61 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## HEPH-WGPU-DEFAULT-DEADLINES [minor] — todo
+## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — in review: Bounded default device waits
+
+- **Premise confirmed 2026-08-31** (this fleet's items have carried premises
+  that no longer held, so it was re-checked before any edit): `synchronize`
+  polled `wgpu::PollType::wait_indefinitely()`, and `download`,
+  `download_owned`, `download_sub_buffer`, and `copy_buffer` all reached
+  `poll` with `timeout: None`. The audit note understated it by two paths;
+  the decomposition region readback (`decomposition/region.rs`
+  `wait_for_mappings`) waited indefinitely as well.
+- **Delivered**: ADR 0054. `DEFAULT_DEVICE_WAIT` (30 s, derived in-source from
+  the Windows TDR envelope — `TdrDelay` 2 s + `TdrDdiDelay` 5 s — so the host
+  deadline is the backstop and not the first reporter) now carries all six
+  paths; `stage_and_read` and `download_into` take `Duration` rather than
+  `Option<Duration>`, so an unbounded wait is no longer expressible there. An
+  elapsed deadline surfaces as `HephaestusError::DeviceWaitTimeout { deadline,
+  message }`, distinct from `TransferFailed`; no retry, degradation, or
+  fallback. No new opt-out surface — `download_with_timeout` and
+  `submit_with_timeout` already serve a differing bound, and nothing needed a
+  third.
+- **Evidence**: the bound is proved to bite by driving the deadline to 1 ns
+  behind 512 MiB of queued copy traffic and asserting the *default*
+  `download_owned` returns the typed timeout, then recovers. Liveness proved
+  twice: ignoring the deadline on the default path fails the case with
+  `got Ok([7, 8, 9, 10])`, and mapping `PollError::Timeout` back to
+  `TransferFailed` fails it with the wrong variant; it is the only failing case
+  either way. The success half is a public-surface contract case (173 cases).
+  Gates: fmt, warning-denied all-target Clippy over `hephaestus-wgpu` and
+  `hephaestus-core`, workspace `cargo check --all-targets`, nextest 31/31 with
+  0 skipped against a real adapter, doctests 2/2.
+- **Reclassified [minor] → [major]**: adding a variant to the public
+  `HephaestusError` is `enum_variant_added` under `cargo-semver-checks`. Every
+  match on that enum in this workspace and in apollo names specific variants
+  under a catch-all, so it is source-compatible with all of them; the workspace
+  `check --all-targets` is green. See ADR 0054 for why `#[non_exhaustive]` was
+  not taken here.
+- **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
+  released on merge.
+
+## HEPH-WGPU-SUBMIT-ERROR-SCOPE-WAIT [patch] — todo
 
 - Owner: unclaimed.
-- Outcome: a decided, enforced deadline policy for the wgpu default wait
-  paths.
-- Evidence (audit 2026-08-27): `synchronize`, `download`, and
-  `download_owned` default paths in
-  `crates/hephaestus-wgpu/src/infrastructure/device.rs` wait indefinitely
-  (`timeout: None`); bounded forms exist but nothing routes defaults through
-  a deadline, so a TDR/driver hang blocks the host forever — the unbounded
-  wait the bounded-resource rule prohibits.
-- Acceptance: an ADR fixing the default bound (value derivation, timeout
-  error semantics, opt-out surface if any) and the default paths routed
-  through it; hang-path behavior covered by a test with an injected
-  never-completing wait or documented as untestable with the limit stated.
+- Outcome: decide whether `checked_submit`'s error-scope waits can stall
+  unboundedly, and bound them if so.
+- Evidence (2026-08-31, found while bounding the poll paths): with
+  `timeout: None`, `application/prepared.rs` `checked_submit_with_timeout`
+  performs no poll at all, so it is not an unbounded *poll* — but it then
+  drives three wgpu error-scope futures through `moirai::block_on`
+  (`prepared.rs:108-112`), which resolve only once the device processes them.
+  Whether that can block indefinitely on a wedged device was not established;
+  it is a separate question from the poll deadlines and was deliberately not
+  guessed at in ADR 0054.
+- Acceptance: the resolution path for error-scope futures traced to its
+  wgpu source, and either a bound applied through the same
+  `device_wait_deadline()` policy or a recorded argument that the wait is
+  already bounded by construction.
 
 ## ✅ HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf]: Decay idle staging pool retention
 

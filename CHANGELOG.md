@@ -4,6 +4,21 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [major] Bound every default WGPU device wait. `synchronize`, `download`,
+  `download_owned`, `download_sub_buffer`, `copy_buffer`, and the
+  decomposition region readback previously polled with `timeout: None` and
+  could block the calling thread indefinitely on a lost device or a wedged
+  driver. They now carry `DEFAULT_DEVICE_WAIT` (30 s, derived from the Windows
+  TDR envelope so the host deadline is the backstop rather than the first
+  reporter — see ADR 0054), and an elapsed deadline surfaces as the new
+  `HephaestusError::DeviceWaitTimeout { deadline, message }` rather than being
+  collapsed into `TransferFailed`. Success-path behaviour is unchanged.
+  Callers needing a different bound continue to use `download_with_timeout` or
+  `WgpuCommandStream::submit_with_timeout`. Breaking only as
+  `enum_variant_added` on `HephaestusError`: every match in this workspace and
+  in stack consumers names specific variants under a catch-all, so no
+  consumer source change is required.
+
 - [minor] Add the provider-owned dense split-complex FFT seam and prepared WGPU
   implementation for ranks one through three. The sealed `WgpuFftScalar`
   contract instantiates the same rank-generic power-of-two/Bluestein plan for

@@ -5228,3 +5228,49 @@ pub(super) fn fdtd_3d_provider_matches_sequential_cpu_reference() {
         }
     }
 }
+
+/// Every default wait path now carries a deadline; none of them may become
+/// observable on the success path.
+///
+/// The bound itself is exercised where the deadline can be driven below a real
+/// submission's duration (`infrastructure::device::tests`). What this case
+/// holds is the other half of that contract, over the public surface: with the
+/// production bound in force, `download`, `download_owned`,
+/// `download_sub_buffer`, `copy_buffer`, and `synchronize` return exactly what
+/// they returned unbounded. It fails if a deadline is ever mis-plumbed into a
+/// path — a zero or near-zero bound turns each of these into a timeout rather
+/// than a value.
+pub(crate) fn bounded_default_waits_leave_the_success_path_unchanged() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let expected: Vec<u32> = (0..1024).collect();
+    let source = device.upload(&expected).unwrap();
+
+    let owned = device.download_owned(&source).unwrap();
+    assert_eq!(owned, expected);
+
+    let mut into = vec![0_u32; expected.len()];
+    device.download(&source, &mut into).unwrap();
+    assert_eq!(into, expected);
+
+    let mut tail = vec![0_u32; 16];
+    device
+        .download_sub_buffer(&source, 1000, &mut tail)
+        .unwrap();
+    assert_eq!(tail, expected[1000..1016]);
+
+    let destination = device.alloc_uninitialized::<u32>(expected.len()).unwrap();
+    device.copy_buffer(&source, &destination).unwrap();
+    device.synchronize().unwrap();
+    assert_eq!(device.download_owned(&destination).unwrap(), expected);
+
+    // The explicit opt-out still routes to the same values when its own bound
+    // is generous, so callers that need a different deadline are not on a
+    // second code path.
+    let mut explicit = vec![0_u32; expected.len()];
+    device
+        .download_with_timeout(&source, &mut explicit, std::time::Duration::from_secs(30))
+        .unwrap();
+    assert_eq!(explicit, expected);
+}

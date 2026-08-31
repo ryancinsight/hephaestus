@@ -331,11 +331,19 @@ fn wait_for_mappings(
         Item = std::sync::mpsc::Receiver<core::result::Result<(), wgpu::BufferAsyncError>>,
     >,
 ) -> Result<()> {
+    let deadline = crate::infrastructure::device::device_wait_deadline();
     device
         .inner()
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|error| HephaestusError::TransferFailed {
-            message: format!("device poll failed: {error:?}"),
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(deadline),
+        })
+        .map_err(|error| {
+            crate::infrastructure::device::poll_failure(
+                "decomposition region mapping wait",
+                deadline,
+                &error,
+            )
         })?;
     for receiver in receivers {
         receiver

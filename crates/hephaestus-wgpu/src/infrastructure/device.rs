@@ -177,6 +177,82 @@ impl StagingPoolAccounting {
 const UNIFORM_POOL_MAX_BUFFERS: usize = 32;
 const UNIFORM_POOL_MAX_BYTES: u64 = 1024 * 1024;
 
+// Deadline carried by every device wait this backend performs on a default
+// path: readback polls (`download`, `download_owned`, `download_sub_buffer`,
+// the decomposition region readbacks), `copy_buffer`, and `synchronize`. An
+// unbounded wait is the temporal form of an unbounded queue — a wedged driver
+// or a lost device parks the calling thread, which here is a Python binding or
+// a solver step, with nothing to act on.
+//
+// DERIVATION. The bound sits ABOVE the platform's own hang detection, so this
+// deadline is the backstop rather than the first reporter:
+//   * Windows resets a GPU that misses `TdrDelay` (default 2 s) and allows the
+//     driver `TdrDdiDelay` (default 5 s) to unwind before bug-checking, so a
+//     genuine hang surfaces through wgpu as a lost device within ~7 s.
+//     Source: Microsoft, "Testing and Debugging TDR During Driver Development"
+//     (TDR registry keys) — TdrDelay 2 s, TdrDdiDelay 5 s, TdrLimitTime 60 s.
+//   * Linux amdgpu's GPU-scheduler `lockup_timeout` defaults to 2000 ms across
+//     all queues, inside the same envelope.
+// A shorter deadline would fire first and replace an accurate device-lost
+// diagnosis with an ambiguous host-side timeout. 30 s is ~4x the 7 s envelope,
+// so it fires only where the platform watchdog does not: a compute stack with
+// no watchdog, a wedged driver, or work legitimately queued ahead of the
+// waited submission for longer than the bound.
+//
+// UPPER BOUND. 30 s is half of Windows' `TdrLimitTime` (60 s) bug-check window
+// and remains a host stall a human notices. Headroom against real work: this
+// backend's whole 172-case integration contract suite, every case
+// device-resident, completes in ~1.9 s of wall clock, so no wait this backend
+// produces is within an order of magnitude of the bound. Callers whose work
+// genuinely exceeds it wait explicitly through `download_with_timeout` or
+// `WgpuCommandStream::submit_with_timeout` instead of being silently unbounded.
+const DEFAULT_DEVICE_WAIT: Duration = Duration::from_secs(30);
+
+#[cfg(test)]
+thread_local! {
+    /// Test-only deadline override in nanoseconds; 0 selects
+    /// [`DEFAULT_DEVICE_WAIT`]. The production bound cannot be reached inside
+    /// the configured test budget — doing so needs 30 s of stalled device — so
+    /// the override lets a test drive a real submission that is genuinely too
+    /// slow for its deadline into the timeout path, rather than asserting the
+    /// plumbing against itself. Thread-local, so a case running concurrently
+    /// on another thread keeps the production bound.
+    static TEST_WAIT_DEADLINE_NS: core::cell::Cell<u64> = const { core::cell::Cell::new(0) };
+}
+
+/// The deadline every default device wait in this backend carries.
+pub(crate) fn device_wait_deadline() -> Duration {
+    #[cfg(test)]
+    {
+        let override_ns = TEST_WAIT_DEADLINE_NS.with(core::cell::Cell::get);
+        if override_ns != 0 {
+            return Duration::from_nanos(override_ns);
+        }
+    }
+    DEFAULT_DEVICE_WAIT
+}
+
+/// Map a wgpu poll failure onto the typed error a caller can act on.
+///
+/// An elapsed deadline is not a transfer fault, so it carries its own variant
+/// and the bound that expired; every other poll failure stays a transfer
+/// failure. Nothing here retries, degrades, or falls back — the caller decides.
+pub(crate) fn poll_failure(
+    context: &str,
+    deadline: Duration,
+    error: &wgpu::PollError,
+) -> HephaestusError {
+    match error {
+        wgpu::PollError::Timeout => HephaestusError::DeviceWaitTimeout {
+            deadline,
+            message: context.to_string(),
+        },
+        other @ wgpu::PollError::WrongSubmissionIndex(..) => HephaestusError::TransferFailed {
+            message: format!("{context}: device poll failed: {other:?}"),
+        },
+    }
+}
+
 /// An acquired wgpu device + queue pair.
 ///
 /// `Clone` is cheap (three `Arc` clones). This is the single authoritative
@@ -1221,7 +1297,7 @@ impl WgpuDevice {
         &self,
         buffer: &WgpuBuffer<T>,
         out: &mut [T],
-        timeout: Option<std::time::Duration>,
+        timeout: Duration,
     ) -> Result<()> {
         validate_slice_alignment(out)?;
         if out.len() != buffer.len {
@@ -1251,18 +1327,22 @@ impl WgpuDevice {
 
     /// Copy a device buffer into a host slice with an explicit completion deadline.
     ///
+    /// [`ComputeDevice::download`] already carries a deadline; use this form
+    /// only when the caller's own bound differs from the backend default.
+    ///
     /// # Errors
     ///
     /// Returns the same validation and transfer errors as
-    /// [`ComputeDevice::download`], including [`HephaestusError::TransferFailed`]
-    /// when the device does not complete before `timeout`.
+    /// [`ComputeDevice::download`], plus
+    /// [`HephaestusError::DeviceWaitTimeout`] when the device does not
+    /// complete before `timeout`.
     pub fn download_with_timeout<T: Pod>(
         &self,
         buffer: &WgpuBuffer<T>,
         out: &mut [T],
         timeout: std::time::Duration,
     ) -> Result<()> {
-        self.download_into(buffer, out, Some(timeout))
+        self.download_into(buffer, out, timeout)
     }
 
     /// Copy a subset of a device buffer's contents into a host slice (device→host).
@@ -1310,7 +1390,7 @@ impl WgpuDevice {
                 padded,
                 byte_len,
             },
-            None,
+            device_wait_deadline(),
             "hephaestus-download-sub",
             |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
         )
@@ -1455,7 +1535,7 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn download<T: Pod>(&self, buffer: &WgpuBuffer<T>, out: &mut [T]) -> Result<()> {
-        self.download_into(buffer, out, None)
+        self.download_into(buffer, out, device_wait_deadline())
     }
 
     fn download_owned<T: Pod>(&self, buffer: &WgpuBuffer<T>) -> Result<Vec<T>> {
@@ -1484,7 +1564,7 @@ impl ComputeDevice for WgpuDevice {
                 padded,
                 byte_len,
             },
-            None,
+            device_wait_deadline(),
             "hephaestus-download-owned",
             |bytes| {
                 // SAFETY: `try_reserve_exact` established writable capacity for
@@ -1529,14 +1609,13 @@ impl ComputeDevice for WgpuDevice {
         // Wait on this copy's own submission index; a whole-queue
         // `synchronize` would also drain every unrelated prior submission.
         let submission_index = stream.submit_indexed()?;
+        let deadline = device_wait_deadline();
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: Some(submission_index),
-                timeout: None,
+                timeout: Some(deadline),
             })
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("copy_buffer submission wait failed: {e:?}"),
-            })?;
+            .map_err(|error| poll_failure("copy_buffer submission wait", deadline, &error))?;
         Ok(())
     }
 
@@ -1545,11 +1624,13 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn synchronize(&self) -> Result<()> {
+        let deadline = device_wait_deadline();
         self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("device poll failed: {e:?}"),
-            })?;
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(deadline),
+            })
+            .map_err(|error| poll_failure("device synchronize", deadline, &error))?;
         Ok(())
     }
 }
@@ -1611,7 +1692,7 @@ impl WgpuDevice {
         &self,
         src_buf: &wgpu::Buffer,
         region: ReadbackRegion,
-        timeout: Option<std::time::Duration>,
+        timeout: Duration,
         label: &str,
         consume: impl FnOnce(&[u8]) -> R,
     ) -> Result<R> {
@@ -1638,15 +1719,16 @@ impl WgpuDevice {
         slice.map_async(wgpu::MapMode::Read, move |result| {
             callback_completion.complete(result);
         });
+        // Constructed before the poll so an elapsed deadline unmaps the
+        // staging allocation on the way out, aborting the pending `map_async`
+        // rather than recycling a buffer with a live mapping request.
         let mapping = MappingLifecycle(&staging);
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: Some(submission_index),
-                timeout,
+                timeout: Some(timeout),
             })
-            .map_err(|e| HephaestusError::TransferFailed {
-                message: format!("device poll failed: {e:?}"),
-            })?;
+            .map_err(|error| poll_failure(label, timeout, &error))?;
         completion.result()?;
 
         // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
@@ -1691,6 +1773,14 @@ mod tests {
             (
                 "staging_mapping_is_reusable_after_consumer_unwind",
                 staging_mapping_is_reusable_after_consumer_unwind as fn(),
+            ),
+            (
+                "default_wait_deadline_is_the_production_constant",
+                default_wait_deadline_is_the_production_constant as fn(),
+            ),
+            (
+                "an_overrun_default_wait_reports_a_typed_timeout_and_recovers",
+                an_overrun_default_wait_reports_a_typed_timeout_and_recovers as fn(),
             ),
             (
                 "aligned_size_overflow_is_allocation_failure",
@@ -1766,6 +1856,83 @@ mod tests {
         assert_eq!(&payload[6..], [0, 0]);
     }
 
+    /// The default paths must resolve to the derived production bound, not to
+    /// a leftover override or an unbounded wait.
+    fn default_wait_deadline_is_the_production_constant() {
+        assert_eq!(device_wait_deadline(), DEFAULT_DEVICE_WAIT);
+        assert_eq!(DEFAULT_DEVICE_WAIT, Duration::from_secs(30));
+    }
+
+    /// A default-path wait that cannot complete within its deadline must
+    /// return the typed timeout instead of blocking, and must leave the device
+    /// usable afterwards.
+    ///
+    /// The deadline is driven to 1 ns rather than the device being made to
+    /// hang: a hang reachable from a test is either a 30 s stall (outside the
+    /// configured budget) or an infinite kernel (a TDR the host would have to
+    /// recover from). What is exercised instead is a real, genuinely slower
+    /// submission — half a gibibyte of queued device-to-device copy traffic,
+    /// which no shipping device completes in under a microsecond, so the
+    /// margin over the deadline is five orders of magnitude and the outcome
+    /// does not depend on scheduling.
+    fn an_overrun_default_wait_reports_a_typed_timeout_and_recovers() {
+        let Ok(device) = WgpuDevice::try_default("hephaestus-wait-deadline") else {
+            return;
+        };
+        let expected = [7_u32, 8, 9, 10];
+        let probe = device.upload(&expected).expect("probe upload");
+
+        // 32 MiB of device memory copied 16 times: enough queued work that the
+        // probe readback, submitted behind it, cannot be complete when the
+        // poll begins.
+        const BULK_BYTES: u64 = 32 * 1024 * 1024;
+        const COPIES: usize = 16;
+        let descriptor = wgpu::BufferDescriptor {
+            label: Some("hephaestus-wait-deadline-bulk"),
+            size: BULK_BYTES,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        };
+        let source = device.device.create_buffer(&descriptor);
+        let sink = device.device.create_buffer(&descriptor);
+        let mut encoder = device
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-wait-deadline-bulk"),
+            });
+        for _ in 0..COPIES {
+            encoder.copy_buffer_to_buffer(&source, 0, &sink, 0, BULK_BYTES);
+        }
+        device.queue.submit(Some(encoder.finish()));
+
+        TEST_WAIT_DEADLINE_NS.with(|deadline| deadline.set(1));
+        let overrun = device.download_owned::<u32>(&probe);
+        TEST_WAIT_DEADLINE_NS.with(|deadline| deadline.set(0));
+
+        match overrun {
+            Err(HephaestusError::DeviceWaitTimeout { deadline, .. }) => {
+                assert_eq!(
+                    deadline,
+                    Duration::from_nanos(1),
+                    "the error must carry the deadline that elapsed"
+                );
+            }
+            other => panic!(
+                "a 1 ns default wait behind {COPIES} bulk copies must report a typed timeout, got {other:?}"
+            ),
+        }
+
+        // The timed-out readback unmapped its staging allocation on the way
+        // out, so the device stays usable: the same default path, back on the
+        // production deadline, returns the exact values.
+        assert_eq!(
+            device
+                .download_owned::<u32>(&probe)
+                .expect("post-timeout download"),
+            expected
+        );
+    }
+
     fn staging_mapping_is_reusable_after_consumer_unwind() {
         let Ok(device) = WgpuDevice::try_default("hephaestus-staging-unwind") else {
             return;
@@ -1783,7 +1950,7 @@ mod tests {
                     padded,
                     byte_len,
                 },
-                None,
+                device_wait_deadline(),
                 "hephaestus-staging-unwind",
                 |_| panic!("intentional mapped-consumer unwind"),
             );

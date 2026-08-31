@@ -118,6 +118,7 @@ macro_rules! contract_cases {
 
 contract_cases!(
     contract::upload_download_round_trips_values,
+    contract::bounded_default_waits_leave_the_success_path_unchanged,
     contract::device_local_copy_preserves_values_and_rejects_mismatch,
     contract::uninitialized_allocation_is_fully_overwritten_before_read,
     contract::odd_u16_storage_preserves_logical_values_when_device_exists,
@@ -299,7 +300,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        172,
+        173,
         "the consolidated integration contract must retain every migrated case"
     );
 
