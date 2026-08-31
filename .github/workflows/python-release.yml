@@ -35,6 +35,10 @@ jobs:
     name: Publish wheels to PyPI
     needs: wheels
     runs-on: ubuntu-latest
+    # One artifact download plus one trusted-publishing upload: twice the
+    # repository's five-minute verification target leaves network headroom
+    # without permitting an unbounded release wait.
+    timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/p/hephaestus-python

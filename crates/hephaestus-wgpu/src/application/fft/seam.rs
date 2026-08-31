@@ -146,9 +146,9 @@ impl<T: WgpuFftScalar> FftOps<WgpuDevice, T> for WgpuFftOps {
 }
 
 #[cfg(test)]
-#[path = "seam_tests.rs"]
+#[path = "tests_seam.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "scalar_tests.rs"]
+#[path = "tests_scalar.rs"]
 mod scalar_tests;

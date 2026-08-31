@@ -103,6 +103,9 @@ struct StagingPoolAccounting {
     /// [`STAGING_POOL_IDLE_DECAY`]. Lets unit tests exercise decay without
     /// waiting out the production deadline.
     test_decay_ms: AtomicU64,
+    /// Test-only monotonic clock value in ms; 0 reads the real clock.
+    #[cfg(test)]
+    test_now_ms: AtomicU64,
 }
 
 impl StagingPoolAccounting {
@@ -115,11 +118,20 @@ impl StagingPoolAccounting {
             misses: AtomicU64::new(0),
             #[cfg(test)]
             test_decay_ms: AtomicU64::new(0),
+            #[cfg(test)]
+            test_now_ms: AtomicU64::new(0),
         }
     }
 
     #[inline]
     fn now_ms(&self) -> u64 {
+        #[cfg(test)]
+        {
+            let test_now_ms = self.test_now_ms.load(Ordering::Relaxed);
+            if test_now_ms != 0 {
+                return test_now_ms;
+            }
+        }
         self.base.elapsed().as_millis() as u64
     }
 
@@ -2203,6 +2215,7 @@ mod tests {
         let expected = [3_u8; 2048];
         let buffer = device.upload(&expected).expect("upload");
         let accounting = Arc::clone(&device.staging_accounting);
+        accounting.test_now_ms.store(1_000, Ordering::Relaxed);
 
         // Warm the pool: first readback pays the allocation, the repeat is
         // pool-served.
@@ -2220,10 +2233,11 @@ mod tests {
         let warm_misses = accounting.misses.load(Ordering::Relaxed);
         assert!(warm_hits >= 1, "warm pool must serve a repeat readback");
 
-        // Simulate a session boundary: shrink the decay deadline and idle
-        // past it, so no production-deadline wait is needed.
+        // Simulate a session boundary by advancing the injected monotonic
+        // clock past the shortened deadline. No wall-clock scheduling enters
+        // the state transition or its assertion.
         accounting.test_decay_ms.store(1, Ordering::Relaxed);
-        std::thread::sleep(Duration::from_millis(25));
+        accounting.test_now_ms.store(1_002, Ordering::Relaxed);
 
         // The acquire inside this readback observes idle-beyond-deadline,
         // clears the parked retention, and pays a fresh allocation.
@@ -2245,6 +2259,7 @@ mod tests {
         // Restore the production deadline, then confirm the pool re-warms:
         // the buffer parked by the post-decay readback serves the next one.
         accounting.test_decay_ms.store(0, Ordering::Relaxed);
+        accounting.test_now_ms.store(0, Ordering::Relaxed);
         assert_eq!(
             device.download_owned(&buffer).expect("rewarm download"),
             expected
