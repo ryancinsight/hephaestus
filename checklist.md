@@ -13,7 +13,9 @@ Sprint target: 0.18.0. Phase: Closure.
 - [x] Run the exact provider scan, focused tests, warning-denied Clippy,
       formatting, and diff checks.
 - [x] Commit source as `828de2b` and discharge the implementation lease.
-- [ ] Push, independently review, merge, and record exact closure evidence.
+- [x] Push and merge PR #240 as `94e4695` after hosted host, lockfile, WGPU,
+      independent exact-Git, and CodeRabbit checks passed; record the external
+      analysis integration's pre-analysis error as a non-gating evidence limit.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
