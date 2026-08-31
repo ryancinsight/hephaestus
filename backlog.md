@@ -23,9 +23,10 @@
   all-target Clippy passes; WGPU Nextest passes 31/31 with no skips in 29.648
   seconds; all workflows parse; rustfmt and diff checks pass.
 - **Closure**: hosted host verification, lockfile integrity, and WGPU
-  software-adapter contracts pass; CodeRabbit reports no finding. The external
-  analysis integration errored before producing analysis and was not a
-  repository merge gate.
+  software-adapter contracts pass; independent exact-Git review of source
+  `828de2b` / PM head `6d7a0ee` is GREEN, with static-only evidence limits.
+  CodeRabbit reports no finding. The external analysis integration errored
+  before producing analysis and was not a repository merge gate.
 - **Integrator**: Codex `/root/hephaestus_conformance`; lease: none.
 
 ## ✅ HEPH-QUALITY-WAVE-2026-08-27 [patch]: Audit-adjudicated safety/perf fixes
