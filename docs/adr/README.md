@@ -59,3 +59,4 @@
 | [0051](0051-provider-owned-fdtd.md) | Own accelerator 3D FDTD in Hephaestus | Accepted |
 | [0052](0052-device-neutral-sliding-window-seam.md) | Device-neutral sliding-window seam | Proposed |
 | [0053](0053-provider-owned-multidimensional-fft.md) | Own multidimensional accelerator FFTs in Hephaestus | Accepted |
+| [0054](0054-bounded-default-device-waits.md) | Bounded default device waits | Accepted |

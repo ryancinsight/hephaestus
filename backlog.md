@@ -1,25 +1,19 @@
 # Backlog — hephaestus
 
-## HEPH-QUALITY-WAVE-2026-08-27 — Audit-adjudicated safety/perf fixes [patch] — in-progress
+## ✅ HEPH-QUALITY-WAVE-2026-08-27 [patch]: Audit-adjudicated safety/perf fixes
 
-- Integrator: claude-fable session 03d80d33 subagent; last-update: 2026-08-27.
-- Lease: crates/hephaestus-cuda/src/application/decomposition/region.rs,
-  crates/hephaestus-cuda/src/infrastructure/{pinned.rs,buffer.rs,compiler.rs},
-  crates/hephaestus-python/src/{backend.rs,array.rs,decomposition.rs,
-  spectral.rs,sparse.rs}, backlog.md. The WGPU device sub-scope landed as
-  `0fe0889` and carries no live lease.
-- Outcome: implement the accepted audit findings — synchronize the CUDA stream
-  on every 2-D region-copy error exit before pinned/borrowed DMA targets are
-  released; replace the Python clone_cuda_buffer host round-trip with the
-  device-to-device copy; correct the pinned-buffer Deref SAFETY contract to the
-  real caller-initialization obligation; route Python readbacks through
-  `download_owned` instead of zero-filled pre-allocation; scope the WGPU
-  copy_buffer wait to the copy's own submission index; preserve the caller's
-  current CUDA context across RAII drop-time binds. Deferred findings filed as
-  DoR board items.
-- Acceptance: warning-denied clippy, configured nextest, and doctests green on
-  the branch; each fix an atomic commit with the Item trailer; PR opened
-  against master for integrator review (no self-merge).
+- **Delivered**: every accepted finding carries its fix commit on master —
+  region-copy error-exit stream drain `31a72a7`, device-to-device
+  `clone_cuda_buffer` `7ea5498`, pinned-buffer Deref SAFETY contract `a132613`,
+  Python readbacks through `download_owned` `583cfa2`, submission-scoped WGPU
+  `copy_buffer` wait `0fe0889`, CUDA context preservation across drop-time
+  binds `2476f3c`.
+- **Verified 2026-08-31**: each hash confirmed an ancestor of master
+  (`git merge-base --is-ancestor`), and the leased regions
+  (`decomposition/region.rs`, `infrastructure/pinned.rs`,
+  `hephaestus-python/src/backend.rs`) hold those commits as their most recent
+  substantive changes. Lease released.
+- **Integrator**: closed by Claude session 5050c72a; lease: none.
 
 ## HEPH-CUDA-LAUNCH-DRAIN-REEVAL [patch] [perf] — todo
 
@@ -61,21 +55,61 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## HEPH-WGPU-DEFAULT-DEADLINES [minor] — todo
+## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — in review: Bounded default device waits
+
+- **Premise confirmed 2026-08-31** (this fleet's items have carried premises
+  that no longer held, so it was re-checked before any edit): `synchronize`
+  polled `wgpu::PollType::wait_indefinitely()`, and `download`,
+  `download_owned`, `download_sub_buffer`, and `copy_buffer` all reached
+  `poll` with `timeout: None`. The audit note understated it by two paths;
+  the decomposition region readback (`decomposition/region.rs`
+  `wait_for_mappings`) waited indefinitely as well.
+- **Delivered**: ADR 0054. `DEFAULT_DEVICE_WAIT` (30 s, derived in-source from
+  the Windows TDR envelope — `TdrDelay` 2 s + `TdrDdiDelay` 5 s — so the host
+  deadline is the backstop and not the first reporter) now carries all six
+  paths; `stage_and_read` and `download_into` take `Duration` rather than
+  `Option<Duration>`, so an unbounded wait is no longer expressible there. An
+  elapsed deadline surfaces as `HephaestusError::DeviceWaitTimeout { deadline,
+  message }`, distinct from `TransferFailed`; no retry, degradation, or
+  fallback. No new opt-out surface — `download_with_timeout` and
+  `submit_with_timeout` already serve a differing bound, and nothing needed a
+  third.
+- **Evidence**: the bound is proved to bite by driving the deadline to 1 ns
+  behind 512 MiB of queued copy traffic and asserting the *default*
+  `download_owned` returns the typed timeout, then recovers. Liveness proved
+  twice: ignoring the deadline on the default path fails the case with
+  `got Ok([7, 8, 9, 10])`, and mapping `PollError::Timeout` back to
+  `TransferFailed` fails it with the wrong variant; it is the only failing case
+  either way. The success half is a public-surface contract case (173 cases).
+  Gates: fmt, warning-denied all-target Clippy over `hephaestus-wgpu` and
+  `hephaestus-core`, workspace `cargo check --all-targets`, nextest 31/31 with
+  0 skipped against a real adapter, doctests 2/2.
+- **Reclassified [minor] → [major]**: adding a variant to the public
+  `HephaestusError` is `enum_variant_added` under `cargo-semver-checks`. Every
+  match on that enum in this workspace and in apollo names specific variants
+  under a catch-all, so it is source-compatible with all of them; the workspace
+  `check --all-targets` is green. See ADR 0054 for why `#[non_exhaustive]` was
+  not taken here.
+- **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
+  released on merge.
+
+## HEPH-WGPU-SUBMIT-ERROR-SCOPE-WAIT [patch] — todo
 
 - Owner: unclaimed.
-- Outcome: a decided, enforced deadline policy for the wgpu default wait
-  paths.
-- Evidence (audit 2026-08-27): `synchronize`, `download`, and
-  `download_owned` default paths in
-  `crates/hephaestus-wgpu/src/infrastructure/device.rs` wait indefinitely
-  (`timeout: None`); bounded forms exist but nothing routes defaults through
-  a deadline, so a TDR/driver hang blocks the host forever — the unbounded
-  wait the bounded-resource rule prohibits.
-- Acceptance: an ADR fixing the default bound (value derivation, timeout
-  error semantics, opt-out surface if any) and the default paths routed
-  through it; hang-path behavior covered by a test with an injected
-  never-completing wait or documented as untestable with the limit stated.
+- Outcome: decide whether `checked_submit`'s error-scope waits can stall
+  unboundedly, and bound them if so.
+- Evidence (2026-08-31, found while bounding the poll paths): with
+  `timeout: None`, `application/prepared.rs` `checked_submit_with_timeout`
+  performs no poll at all, so it is not an unbounded *poll* — but it then
+  drives three wgpu error-scope futures through `moirai::block_on`
+  (`prepared.rs:108-112`), which resolve only once the device processes them.
+  Whether that can block indefinitely on a wedged device was not established;
+  it is a separate question from the poll deadlines and was deliberately not
+  guessed at in ADR 0054.
+- Acceptance: the resolution path for error-scope futures traced to its
+  wgpu source, and either a bound applied through the same
+  `device_wait_deadline()` policy or a recorded argument that the wait is
+  already bounded by construction.
 
 ## ✅ HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf]: Decay idle staging pool retention
 
@@ -128,7 +162,22 @@
   deliberately mutated triangular predicate.
 - Residual (acceptance partially met): the CUDA arms still round-trip, so
   "either backend" is unmet by design — see the scope note above.
-- Findings that correct the 2026-08-27 audit note:
+- **SUPERSEDED — do not file work off the findings below.** They recorded the
+  cholesky and qr state as of 2026-08-29; PRs #236, #237, and #238 have since
+  retired all three. Verified 2026-08-31 against master:
+  - The cholesky `n²` upload is gone — `cholesky.rs` now zeroes the strict
+    upper triangle with a device kernel (`hephaestus-cholesky-triangular-zero`,
+    PR #236), not `write_buffer(&lower_buf, &host)`.
+  - The qr Q claim is retired: `GpuQrDecomposition::accumulate_q` builds Q on
+    the device from the stored reflectors (PR #238), and the Python `qr` arm
+    returns it instead of uploading `inner().q()`.
+  - **The `r_buffer()` contract divergence was proven false** (PR #237). The
+    blocked path's panel write-back zeroes every `col < row` entry before the
+    buffer reaches the device, so both entry points leave clean upper-triangular
+    **R** in `r_buffer()`; only the local name `work_buf` is stale. This is
+    asserted, not inferred, by
+    `qr_r_buffer_is_upper_triangular_on_both_entry_points`.
+- Superseded findings, retained for the audit trail only:
   - `cholesky` in the Python layer never round-tripped; it already returns
     `into_lower()`. The host staging is inside
     `cholesky_decompose_blocked`, whose closing `write_buffer(&lower_buf,
@@ -205,9 +254,20 @@
   warning-denied all-target Clippy over `hephaestus-wgpu` and
   `hephaestus-python`; doctests and `cargo fmt --check` clean.
 
-## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — in review
+## ✅ HEPH-WGPU-QR-DEVICE-Q [minor] [perf]: Device-side Q accumulation
 
-- Integrator: Claude session 5050c72a; last-update: 2026-08-31.
+- **Delivered**: PR #238 (`1fca9d6`, merged as `6a15a8b`).
+  `GpuQrDecomposition::accumulate_q` builds Q on the device from the stored
+  Householder reflectors against a `linalg::device_identity`, and the Python
+  `qr` arm returns that buffer — `inner().q()` is no longer uploaded on the
+  WGPU route. Transfer is `4mn + 8·min(m, n)` in place of `4m²`.
+- **Verified 2026-08-31**: `accumulate_q` present at `qr.rs:137`; the Python
+  WGPU arm calls it (`decomposition.rs:334`) with no `inner().q()` upload left
+  on that route (the CUDA arm still uploads, as scoped); the contract case at
+  `tests/contract.rs:3998` runs at both routing regimes. Lease released.
+- **Integrator**: Claude session 5050c72a; lease: none.
+
+- Superseded planning detail, retained for the audit trail:
 - Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`, the
   `qr` arm of `crates/hephaestus-python/src/decomposition.rs`, the QR
   contract cases, one visibility change in

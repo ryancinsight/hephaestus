@@ -52,6 +52,23 @@ pub enum HephaestusError {
         /// Backend-reported detail.
         message: String,
     },
+    /// A wait for device completion reached its deadline with the submission
+    /// still outstanding.
+    ///
+    /// Distinct from [`HephaestusError::TransferFailed`]: nothing reported a
+    /// fault, the device simply did not answer within the bound. A caller acts
+    /// on the two differently — a transfer failure is terminal for that
+    /// operation, while an elapsed deadline names an unresponsive or
+    /// over-subscribed device the caller can reacquire, re-submit against, or
+    /// escalate as a hang. Collapsing it into a transfer message would leave
+    /// that decision to string matching.
+    #[error("device wait exceeded its {deadline:?} deadline: {message}")]
+    DeviceWaitTimeout {
+        /// The deadline that elapsed.
+        deadline: core::time::Duration,
+        /// Which wait timed out.
+        message: String,
+    },
 }
 
 /// Result alias for accelerator operations.
