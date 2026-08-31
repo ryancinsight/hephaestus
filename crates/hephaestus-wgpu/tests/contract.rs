@@ -3943,6 +3943,115 @@ fn qr_r_buffer_contract_at_shape(
     }
 }
 
+/// The device-accumulated **Q** must match leto's host accumulation at both
+/// QR routing regimes, and must be orthogonal.
+pub(super) fn qr_accumulated_q_matches_host_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // (m, n, exercises the device schedule, checks orthogonality)
+    for (m, n, blocked_route, check_orthogonality) in [
+        (70usize, 35usize, false, false),
+        (138usize, 129usize, true, true),
+    ] {
+        qr_accumulated_q_contract_at_shape(&device, m, n, blocked_route, check_orthogonality);
+    }
+}
+
+fn qr_accumulated_q_contract_at_shape(
+    device: &hephaestus_wgpu::WgpuDevice,
+    m: usize,
+    n: usize,
+    blocked_route: bool,
+    check_orthogonality: bool,
+) {
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    assert_eq!(
+        n.div_ceil(32) > 4,
+        blocked_route,
+        "fixture [{m}, {n}] must land in the intended routing regime"
+    );
+
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let decomp = qr_decompose_blocked(
+        device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let q_buffer = decomp.accumulate_q(device).unwrap();
+    let mut q_gpu = vec![0.0f32; m * m];
+    device.download(&q_buffer, &mut q_gpu).unwrap();
+
+    let q_host_array = decomp.inner().q();
+    assert_eq!(q_host_array.shape(), [m, m]);
+    let q_host = leto::Storage::as_slice(q_host_array.storage());
+
+    // Both apply the same min(m, n) reflectors to the same identity and differ
+    // only in how each dot product vᵀ·q is summed — the host sequentially, the
+    // device as a 256-way tree. Accumulating a product of computed Householder
+    // reflectors is backward stable with ‖Q̂ − Q‖ ≤ c(m, n)·ε, c(m, n) ≤
+    // m·min(m, n) (Higham, *Accuracy and Stability*, ch. 19): each reflector is
+    // orthogonal, so earlier rounding is transported rather than amplified, and
+    // Q's columns are unit-norm, so the ‖v‖₂‖q‖₂ factors are O(1). The tree
+    // reduction's own bound is the smaller of the two (depth log₂256 + m/256
+    // against the host's m), so the sum of both bounds covers their difference.
+    let tolerance = 2.0 * (m * n.min(m)) as f32 * f32::EPSILON;
+    for row in 0..m {
+        for col in 0..m {
+            let index = row * m + col;
+            let delta = (q_gpu[index] - q_host[index]).abs();
+            assert!(
+                delta <= tolerance,
+                "device Q disagrees with the host reference at Q[{row}, {col}] for [{m}, {n}]: device {}, host {}, delta {delta} exceeds {tolerance}",
+                q_gpu[index],
+                q_host[index]
+            );
+        }
+    }
+
+    if !check_orthogonality {
+        return;
+    }
+
+    // Elementwise agreement with a same-order reference cannot detect a wrong
+    // reflector order if both orders were wrong alike, so QᵀQ is checked
+    // against I independently. The same backward-stability constant bounds the
+    // departure from orthogonality; the f64 accumulation below contributes at
+    // most m·ε_f64, negligible against it.
+    let mut max_residual = 0.0f64;
+    for i in 0..m {
+        for j in 0..m {
+            let mut dot = 0.0f64;
+            for r in 0..m {
+                dot += f64::from(q_gpu[r * m + i]) * f64::from(q_gpu[r * m + j]);
+            }
+            let expected = if i == j { 1.0 } else { 0.0 };
+            max_residual = max_residual.max((dot - expected).abs());
+        }
+    }
+    assert!(
+        max_residual <= f64::from(tolerance),
+        "device Q is not orthogonal at [{m}, {n}]: max |QᵀQ − I| = {max_residual} exceeds {tolerance}"
+    );
+}
+
 pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
     let Some(device) = device_or_skip() else {
         return;

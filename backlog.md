@@ -244,6 +244,46 @@
 - Risk / change class: [minor] [perf]; a new device-side accumulation is
   numerically load-bearing and needs the differential oracle above before
   it can replace the upload.
+- **Delivered 2026-08-31 (draft PR, merge-blocked):**
+  `GpuQrDecomposition::accumulate_q` builds **Q** from a `linalg::device_identity`
+  by applying the stored reflectors in reverse, one workgroup per column,
+  with a 256-way tree reduction per dot product. A zero β is deliberately not
+  skipped: β is a storage read, so branching on it around the workgroup
+  barriers would be non-uniform control flow, and with β = 0 the update is
+  already the identity. The Python `qr` arm calls it instead of uploading
+  `inner().q()`, and reports shapes from `decomp.shape()` (`Q` is `m`x`m`,
+  `R` is `m`x`n` by construction) so neither host factor is materialised.
+- **Transfer:** `4m^2` uploaded becomes `4mn + 8·min(m, n)` uploaded — at the
+  `[138, 129]` fixture 74.4 KiB becomes 70.5 KiB. QR requires `m ≥ n`, so
+  `4mn ≤ 4m^2` always, with the win scaling as `m/n` and the two converging
+  at `m = n` (square costs `8m` bytes more). The unconditional gain is the
+  `O(m^2 n)` host accumulation itself, which no longer runs per call.
+- **Differential evidence:** `qr_accumulated_q_matches_host_reference` runs at
+  both routing regimes — `[70, 35]` (2 panels, delegating) and `[138, 129]`
+  (5 panels, device schedule), each guarded against its intended route — and
+  compares elementwise against `inner().q()` within `2·m·min(m, n)·ε`. The
+  bound sums both accumulations' backward-stability error: `‖Q̂ − Q‖ ≤
+  c(m,n)·ε` with `c(m,n) ≤ m·min(m,n)` (Higham ch. 19), reflectors being
+  orthogonal so rounding is transported rather than amplified, and the
+  device's tree reduction bounded below the host's sequential sum. Measured
+  `max|Q_gpu − Q_host| = 5.96e-8` at both shapes (one ulp at unit magnitude)
+  against tolerances `5.84e-4` and `4.24e-3`. Orthogonality is asserted
+  independently at `[138, 129]` — `max|QᵀQ − I| = 9.51e-7` against the same
+  bound — because an elementwise check against a same-order reference cannot
+  see a reflector order that is wrong in both.
+- **Liveness proved:** with the shader's reflector iteration reversed to
+  forward order, the case fails at `Q[0, 1]` for `[70, 35]` — device
+  `-9.99e-4` against host `1.002e-3`, delta `2.00e-3` exceeding the
+  `5.84e-4` tolerance — and it is the only case that fails. Restored and
+  re-run green; the mutation is not committed.
+- **Gates:** `cargo nextest run -p hephaestus-wgpu` 31/31, 0 skipped, against
+  a real adapter (172 contract cases); warning-denied all-target Clippy over
+  `hephaestus-wgpu` and `hephaestus-python`; `cargo test --doc` 2/2 and
+  `cargo fmt --check` clean. No wall-clock claim.
+- **Merge blocker:** the committed `Cargo.lock` pins a leto revision without
+  `packed()`/`heads()`/`betas()`, so this builds locally only through the
+  Atlas overlay and CI cannot pass until leto PR #134 merges and hephaestus
+  repins leto. PR stays draft until then; re-open trigger: the leto repin.
 
 ## ✅ HEPH-WGPU-CHOLESKY-TRIANGLE-MASK [patch] [perf]: Device-side triangular zero
 

@@ -1039,7 +1039,7 @@ fn identity_buffer_layout<T: Pod>(alignment: u64) -> Result<(u64, u64)> {
     Ok((one_offset, buffer_size))
 }
 
-fn device_identity<T>(device: &WgpuDevice, layout: &Layout<2>) -> Result<WgpuBuffer<T>>
+pub(crate) fn device_identity<T>(device: &WgpuDevice, layout: &Layout<2>) -> Result<WgpuBuffer<T>>
 where
     T: MatrixIdentityScalar,
 {

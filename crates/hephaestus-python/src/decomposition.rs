@@ -326,21 +326,18 @@ pub(crate) fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::qr_decompose_blocked(device, op)?;
-                let (q_buffer, q_shape, r_shape) = {
-                    let q_host = decomp.inner().q();
-                    let r_host = decomp.inner().r();
-                    (
-                        device.upload(leto::Storage::as_slice(q_host.storage()))?,
-                        vec![q_host.shape()[0], q_host.shape()[1]],
-                        vec![r_host.shape()[0], r_host.shape()[1]],
-                    )
-                };
-                // R is already device-resident and value-identical to
-                // `inner().r()` — both entry points leave clean
-                // upper-triangular R in the decomposition's buffer — so taking
-                // it avoids re-sending `4mn` bytes the device already holds.
-                // Q still uploads: no device-resident Q exists yet
-                // (HEPH-WGPU-QR-DEVICE-Q).
+                // `inner().q()` is `m`x`m` and `inner().r()` is `m`x`n` by
+                // construction, so the reported shapes come from the factored
+                // shape rather than from materialising either host factor.
+                let (m, n) = decomp.shape();
+                let (q_shape, r_shape) = (vec![m, m], vec![m, n]);
+                let q_buffer = decomp.accumulate_q(device)?;
+                // Neither factor is re-uploaded. R is device-resident and
+                // value-identical to `inner().r()` — both entry points leave
+                // clean upper-triangular R in the decomposition's buffer — so
+                // taking it avoids re-sending `4mn` bytes the device already
+                // holds. Q is accumulated on the device from the stored
+                // reflectors instead of uploading a host-accumulated `4m^2`.
                 Ok((
                     BackendBuffer::Wgpu(q_buffer),
                     BackendBuffer::Wgpu(decomp.into_r_buffer()),
