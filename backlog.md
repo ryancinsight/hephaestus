@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — in progress
+## HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — review
 
 - **Outcome**: restore the Atlas conformance ratchet without raising its
   baseline after provider advances exposed one oversized test sidecar, two
@@ -13,9 +13,17 @@
   Hephaestus baseline for all five classes; tests use event/poll state rather
   than sleep; moved FFT cases retain their value oracles; the publish job has a
   finite derived bound; warning-denied focused gates pass.
-- **Integrator**: Codex `/root/hephaestus_conformance`; lease: backlog/checklist,
-  `application/fft/{seam,scalar}_tests*`, `infrastructure/device.rs`, and
-  `.github/workflows/python-release.yml`; last update 2026-08-31.
+- **Delivered**: source `828de2b` renames the two FFT sidecars into the
+  scanner's test namespace, splits the retained/selected-axis cases below the
+  500-line target, injects test-only monotonic time for idle decay, and gives
+  the two-step PyPI publish job a derived 10-minute bound.
+- **Evidence**: exact live scan restores `oversized_files=38`, `print_dbg=0`,
+  `type_suffixed_fns=22`, `sleep_synced_tests=0`, and
+  `workflow_missing_timeout=0`; standalone exact-lock warning-denied WGPU
+  all-target Clippy passes; WGPU Nextest passes 31/31 with no skips in 29.648
+  seconds; all workflows parse; rustfmt and diff checks pass.
+- **Integrator**: Codex `/root/hephaestus_conformance`; lease: none; independent
+  review, hosted checks, PR, and merge remain.
 
 ## ✅ HEPH-QUALITY-WAVE-2026-08-27 [patch]: Audit-adjudicated safety/perf fixes
 

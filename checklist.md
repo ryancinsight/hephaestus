@@ -6,13 +6,14 @@ Sprint target: 0.18.0. Phase: Closure.
 
 - [x] Reproduce and attribute every Hephaestus ratchet increase against the
       exact scanner and committed baseline.
-- [ ] Reclassify and split the FFT test sidecars without weakening value
+- [x] Reclassify and split the FFT test sidecars without weakening value
       coverage.
-- [ ] Replace the wall-clock sleep with deterministic completion state and
+- [x] Replace the wall-clock sleep with deterministic completion state and
       bound the Python publish job.
-- [ ] Run the exact provider scan, focused tests, warning-denied Clippy,
+- [x] Run the exact provider scan, focused tests, warning-denied Clippy,
       formatting, and diff checks.
-- [ ] Commit, push, independently review, merge, and discharge the lease.
+- [x] Commit source as `828de2b` and discharge the implementation lease.
+- [ ] Push, independently review, merge, and record exact closure evidence.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — Owner: Codex
 
