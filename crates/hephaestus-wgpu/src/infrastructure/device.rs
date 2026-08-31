@@ -1779,8 +1779,12 @@ mod tests {
                 default_wait_deadline_is_the_production_constant as fn(),
             ),
             (
-                "an_overrun_default_wait_reports_a_typed_timeout_and_recovers",
-                an_overrun_default_wait_reports_a_typed_timeout_and_recovers as fn(),
+                "poll_failure_maps_a_timeout_to_its_own_variant",
+                poll_failure_maps_a_timeout_to_its_own_variant as fn(),
+            ),
+            (
+                "an_overrun_default_wait_is_typed_and_leaves_the_device_usable",
+                an_overrun_default_wait_is_typed_and_leaves_the_device_usable as fn(),
             ),
             (
                 "aligned_size_overflow_is_allocation_failure",
@@ -1875,36 +1879,44 @@ mod tests {
     /// which no shipping device completes in under a microsecond, so the
     /// margin over the deadline is five orders of magnitude and the outcome
     /// does not depend on scheduling.
-    fn an_overrun_default_wait_reports_a_typed_timeout_and_recovers() {
+    fn poll_failure_maps_a_timeout_to_its_own_variant() {
+        // The mapping is the part that can regress silently: a caller
+        // branching on `DeviceWaitTimeout` stops seeing elapsed deadlines the
+        // moment this collapses back into `TransferFailed`. It is a pure
+        // function of the poll error, so it is pinned here without a device —
+        // deterministically, on every adapter and in every CI job.
+        let deadline = Duration::from_millis(250);
+        match poll_failure("probe context", deadline, &wgpu::PollError::Timeout) {
+            HephaestusError::DeviceWaitTimeout {
+                deadline: carried,
+                message,
+            } => {
+                assert_eq!(carried, deadline, "the elapsed bound must be carried");
+                assert!(
+                    message.contains("probe context"),
+                    "the caller's context must survive, got {message:?}"
+                );
+            }
+            other => panic!("a poll timeout must be its own variant, got {other:?}"),
+        }
+    }
+
+    fn an_overrun_default_wait_is_typed_and_leaves_the_device_usable() {
         let Ok(device) = WgpuDevice::try_default("hephaestus-wait-deadline") else {
             return;
         };
         let expected = [7_u32, 8, 9, 10];
         let probe = device.upload(&expected).expect("probe upload");
 
-        // 32 MiB of device memory copied 16 times: enough queued work that the
-        // probe readback, submitted behind it, cannot be complete when the
-        // poll begins.
-        const BULK_BYTES: u64 = 32 * 1024 * 1024;
-        const COPIES: usize = 16;
-        let descriptor = wgpu::BufferDescriptor {
-            label: Some("hephaestus-wait-deadline-bulk"),
-            size: BULK_BYTES,
-            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        };
-        let source = device.device.create_buffer(&descriptor);
-        let sink = device.device.create_buffer(&descriptor);
-        let mut encoder = device
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("hephaestus-wait-deadline-bulk"),
-            });
-        for _ in 0..COPIES {
-            encoder.copy_buffer_to_buffer(&source, 0, &sink, 0, BULK_BYTES);
-        }
-        device.queue.submit(Some(encoder.finish()));
-
+        // A 1 ns deadline against a real submission. Whether it elapses is a
+        // property of the adapter, not of this code: a software adapter can
+        // complete the readback before the poll begins, and an earlier version
+        // of this case tried to force the issue with 512 MiB of queued copies
+        // — which neither made a software adapter slow enough nor drained
+        // before the next case ran. So both outcomes are legal here and each
+        // is held to its own contract; the timeout *mapping* is pinned
+        // deterministically by `poll_failure_maps_a_timeout_to_its_own_variant`
+        // above.
         TEST_WAIT_DEADLINE_NS.with(|deadline| deadline.set(1));
         let overrun = device.download_owned::<u32>(&probe);
         TEST_WAIT_DEADLINE_NS.with(|deadline| deadline.set(0));
@@ -1917,19 +1929,26 @@ mod tests {
                     "the error must carry the deadline that elapsed"
                 );
             }
-            other => panic!(
-                "a 1 ns default wait behind {COPIES} bulk copies must report a typed timeout, got {other:?}"
+            Ok(values) => {
+                assert_eq!(
+                    values, expected,
+                    "a wait that completed inside its deadline must return the exact payload"
+                );
+            }
+            Err(other) => panic!(
+                "an elapsed default wait must be `DeviceWaitTimeout`, never another error: {other:?}"
             ),
         }
 
-        // The timed-out readback unmapped its staging allocation on the way
-        // out, so the device stays usable: the same default path, back on the
-        // production deadline, returns the exact values.
+        // The point that holds either way: whatever the deadline did, the
+        // readback released its staging allocation on the way out, so the same
+        // default path back on the production bound returns the exact values.
         assert_eq!(
             device
                 .download_owned::<u32>(&probe)
-                .expect("post-timeout download"),
-            expected
+                .expect("the device stays usable after a bounded wait"),
+            expected,
+            "a bounded wait must leave no staging state behind"
         );
     }
 
