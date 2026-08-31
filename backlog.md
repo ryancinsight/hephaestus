@@ -200,7 +200,7 @@
   warning-denied all-target Clippy over `hephaestus-wgpu` and
   `hephaestus-python`; doctests and `cargo fmt --check` clean.
 
-## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — in-progress
+## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — in review
 
 - Integrator: Claude session 5050c72a; last-update: 2026-08-31.
 - Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`, the
