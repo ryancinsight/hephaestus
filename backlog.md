@@ -200,7 +200,30 @@
   warning-denied all-target Clippy over `hephaestus-wgpu` and
   `hephaestus-python`; doctests and `cargo fmt --check` clean.
 
-## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — todo
+## HEPH-WGPU-QR-DEVICE-Q [minor] [perf] — in-progress
+
+- Integrator: Claude session 5050c72a; last-update: 2026-08-31.
+- Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`, the
+  `qr` arm of `crates/hephaestus-python/src/decomposition.rs`, the QR
+  contract cases, one visibility change in
+  `crates/hephaestus-wgpu/src/application/linalg.rs`, and this item block.
+- **Upstream enabler:** the reflectors live in `leto_ops::QrDecomposition`'s
+  `pub(super)` `packed`/`heads`/`betas`, unreachable from this repo, and the
+  delegating route returns leto's own decomposition — so read accessors
+  belong in leto (upstream ownership), not a hephaestus-local copy of the
+  factor. Filed and delivered as a leto [minor] API addition; this item
+  consumes it after the repin.
+- **Design:** `Q` is accumulated lazily, never during factorisation — an
+  R-only caller (least squares) must not pay `O(m^2 n)` for a Q it discards.
+  Start from a device identity (reusing `linalg::device_identity` rather
+  than a second identity kernel), upload the packed factor plus per-reflector
+  `(head, beta)`, and apply the reflectors in reverse (`Q = H_1(H_2(...H_k I))`)
+  with one workgroup per Q column, mirroring the existing panel kernel's
+  reduce-then-update shape. Transfer becomes `4mn + 8·min(m,n)` in place of
+  the `4m^2` Q upload, and the `O(m^2 n)` accumulation moves off the host.
+- Acceptance unchanged from the filing: differential against `inner().q()`
+  within a tolerance derived from Householder backward stability, at both
+  routing regimes, with transfer-count evidence.
 
 - Outcome: the Python `qr` binding stops uploading `inner().q()`, because a
   device-resident **Q** exists to return.
