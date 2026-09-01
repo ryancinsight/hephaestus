@@ -185,11 +185,11 @@ impl LaunchConfig {
 ///
 /// Binds the device's context to the calling thread first: CUDA contexts are
 /// thread-affine and `CudaDevice` is `Clone + Send`, so the caller's thread
-/// may not be the acquiring thread. Launches on the legacy null stream. On
-/// non-Windows targets, the launch remains asynchronous and errors from kernel
-/// *execution* surface at the next synchronizing operation. On Windows, the
-/// WDDM managed-memory drain below makes kernel completion and execution
-/// errors observable before returning.
+/// may not be the acquiring thread. Launches on the legacy null stream.
+///
+/// The launch is asynchronous on every target: errors from kernel *execution*
+/// surface at the next synchronizing operation, not from this call. Launch
+/// rejection is synchronous and is reported here.
 ///
 /// # Errors
 /// Returns [`HephaestusError::DispatchFailed`] when the driver rejects the
@@ -235,29 +235,33 @@ pub(crate) fn launch_kernel(
         });
     }
 
-    // WDDM managed-memory safety: on Windows the default driver model (WDDM)
-    // does not support concurrent host/device access to `cuMemAllocManaged`
-    // ranges. A subsequent host touchpoint — allocating the next intermediate
-    // buffer, or the driver's own managed-heap bookkeeping — issued while this
-    // kernel is still in flight on the null stream faults with
-    // STATUS_IN_PAGE_ERROR (0xc0000006). Draining the context after the launch
-    // makes the completion explicit before any such host access. The backend
-    // is already null-stream-serial, so on Windows this only surfaces the
-    // existing serialization; Linux/UVM handles async managed access natively
-    // and keeps the launch asynchronous. This also converts an
-    // asynchronously-reported kernel-execution fault into an error attributed
-    // to the launching operation rather than the next unrelated transfer.
-    #[cfg(target_os = "windows")]
-    {
-        // SAFETY: this device's context is current on this thread (`bind`
-        // above); draining reports this kernel's execution status.
-        let sync = unsafe { cuda_oxide::sys::cuCtxSynchronize() };
-        if sync != 0 {
-            return Err(HephaestusError::DispatchFailed {
-                message: format!("cuCtxSynchronize after launch -> {sync}"),
-            });
-        }
-    }
+    // A Windows-only `cuCtxSynchronize` drain stood here. It guarded WDDM's
+    // lack of concurrent host/device access to `cuMemAllocManaged` ranges: a
+    // host touchpoint issued while a kernel was in flight faulted with
+    // STATUS_IN_PAGE_ERROR (0xc0000006).
+    //
+    // That premise no longer holds. The backend allocates only `cuMemAlloc_v2`
+    // (`infrastructure/device.rs`, which documents the choice as deliberately
+    // non-managed), so no managed range exists for WDDM to fault on. The drain
+    // outlived the allocation strategy it was written for.
+    //
+    // Removed on run evidence, on a WDDM RTX 5080 (driver 610.47, CUDA 13.3,
+    // compute 12.0 — a GeForce part, so WDDM is the only available driver
+    // model and this is the exact configuration the drain targeted):
+    //
+    // - Launch throughput, 2000 back-to-back launches over 1024 f32, best of 7
+    //   interleaved blocks in one process: 29.750 us/launch with the drain,
+    //   6.070 us/launch without — 4.9x. The drain serialized every launch.
+    // - `cuda_launch_survives_host_allocation_in_flight` reproduces the exact
+    //   cited scenario — host alloc/upload/free with a launch outstanding and
+    //   no intervening sync — and does not fault.
+    // - The package suite is green without the drain (152/152).
+    //
+    // Error attribution, the drain's second effect, is deliberately given up:
+    // kernel *execution* faults now surface at the next synchronizing
+    // operation, as they already did on every non-Windows target. Launch
+    // rejection is unaffected — `cuLaunchKernel` reports that synchronously
+    // and is checked above.
     Ok(())
 }
 

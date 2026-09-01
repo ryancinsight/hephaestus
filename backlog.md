@@ -154,7 +154,43 @@
   substantive changes. Lease released.
 - **Integrator**: closed by Claude session 5050c72a; lease: none.
 
-## HEPH-CUDA-LAUNCH-DRAIN-REEVAL [patch] [perf] — todo
+## HEPH-CUDA-LAUNCH-DRAIN-REEVAL [patch] [perf] — done 2026-09-01
+
+- Owner / integrator: Claude session 03d80d33. Lease: none (discharged).
+- **The recorded blocker had expired.** This item was parked on "a Windows host
+  with a runtime CUDA device — the current development machine compile-gates
+  CUDA only". That is no longer true: the machine now has an RTX 5080 (driver
+  610.47, CUDA 13.3, compute 12.0) and `cargo nextest run -p hephaestus-cuda`
+  executes 152/152 against it. A blocker is a claim like any other and expires
+  by routes other than the one being watched; re-checking it is what unblocked
+  this. The device is a GeForce part, so WDDM is the only available driver
+  model — the exact configuration the drain targeted.
+- **Premise confirmed stale.** The drain cited WDDM's lack of concurrent
+  host/device access to `cuMemAllocManaged` ranges. The backend allocates only
+  `cuMemAlloc_v2`, and `infrastructure/device.rs` documents that choice as
+  deliberately non-managed, so no managed range exists to fault on.
+- **Cost, matched pair in one process** (2000 back-to-back launches over 1024
+  f32, best of 7 interleaved blocks, single trailing sync so both configs
+  measure completed work): **29.750 us/launch with the drain, 6.070 us/launch
+  without — 4.9x.** It serialized every launch.
+- **Correctness.** A new committed test,
+  `cuda_launch_survives_host_allocation_in_flight`, reproduces the exact cited
+  scenario — 1500 rounds of host allocate/upload/free with a launch outstanding
+  and no intervening synchronization — and does not fault. It asserts output
+  values at five indices, so a fault-free run cannot be a run that silently did
+  nothing. Package suite 153/153 with `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1` (no
+  skips); suite wall time fell from 24.6 s to 21.6 s.
+- **Given up deliberately.** The drain's second effect was attributing
+  asynchronous kernel-execution faults to the launching operation. Those now
+  surface at the next synchronizing operation, exactly as they already did on
+  every non-Windows target. Launch *rejection* is unaffected: `cuLaunchKernel`
+  reports it synchronously and the return is checked. This trade is recorded at
+  the call site, not only here.
+- **Unblocks:** KS-7 stream overlap and `HEPH-CUDA-STREAM-ORDERED-ALLOC`, whose
+  own dependency line carries the same stale "compile-gates CUDA only" premise
+  and should be re-checked before it is treated as blocked.
+
+## HEPH-CUDA-LAUNCH-DRAIN-REEVAL — original item (superseded 2026-09-01)
 
 - Owner: unclaimed.
 - Outcome: remove — or re-justify against current evidence — the Windows
