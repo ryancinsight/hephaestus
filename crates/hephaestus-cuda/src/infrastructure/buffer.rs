@@ -91,11 +91,41 @@ impl<T> Drop for CudaBuffer<T> {
             // silently retarget the dropping thread.
             let previous = CurrentContext::capture();
             if context.bind().is_ok() {
-                // SAFETY: `self.ptr` is non-null (guarded above), was
-                // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
-                // and this buffer owns that allocation exactly once.
-                let res = unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) };
-                debug_assert_eq!(res, 0, "cuMemFree_v2 failed with code {res}");
+                // Drop soundness. A buffer may still be referenced by a kernel
+                // in flight when it is dropped, so the free must not take
+                // effect before that kernel completes.
+                //
+                // `cuMemFree_v2` gave that by synchronizing the entire device —
+                // correct, and the reason it was safe, but it drained all
+                // in-flight work on every drop. `cuMemFreeAsync` on the null
+                // stream gives the same guarantee by ordering instead of
+                // blocking: the free is enqueued behind the work already
+                // submitted to that stream, and this backend launches every
+                // kernel and issues every copy on that same null stream. The
+                // ordering is contractual rather than incidental, which is what
+                // `HEPH-CUDA-STREAM-ORDERED-ALLOC` required before async frees
+                // could replace the synchronizing pair.
+                //
+                // Allocation and free read the same per-device flag, so they
+                // cannot diverge. That pairing is a performance contract, not a
+                // validity one: the driver does accept `cuMemFree_v2` on a
+                // stream-ordered allocation (measured — the suite passes with
+                // the branch forced), but it reintroduces the device-wide
+                // synchronization this change exists to remove.
+                let res = if context.stream_ordered {
+                    // SAFETY: `self.ptr` is non-null (guarded above), was
+                    // returned by `cuMemAllocAsync` on the null stream in this
+                    // context, and this buffer owns that allocation exactly
+                    // once. Freeing on the same stream orders the release
+                    // after every prior use of the pointer on it.
+                    unsafe { cuda_oxide::sys::cuMemFreeAsync(self.ptr, std::ptr::null_mut()) }
+                } else {
+                    // SAFETY: `self.ptr` is non-null (guarded above), was
+                    // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
+                    // and this buffer owns that allocation exactly once.
+                    unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) }
+                };
+                debug_assert_eq!(res, 0, "device free failed with code {res}");
             } else {
                 debug_assert!(false, "CudaBuffer drop: context bind failed");
             }

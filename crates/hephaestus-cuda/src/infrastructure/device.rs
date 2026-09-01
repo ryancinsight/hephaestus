@@ -20,6 +20,11 @@ use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 #[derive(Debug)]
 pub(crate) struct CudaContext {
     raw: cuda_oxide::sys::CUcontext,
+    /// Whether this device supports the stream-ordered allocator
+    /// (`cuMemAllocAsync`/`cuMemFreeAsync`). Detected once at context creation
+    /// and read by both the allocation and the free path, so a buffer is always
+    /// released by the allocator that produced it.
+    pub(crate) stream_ordered: bool,
 }
 
 impl CudaContext {
@@ -39,7 +44,28 @@ impl CudaContext {
                 message: format!("cuCtxCreate_v2 for CUDA device {device} -> {status}"),
             });
         }
-        Ok(Self { raw })
+
+        // Probe the stream-ordered allocator rather than assuming it: it is a
+        // per-device capability, and a device without it must keep the
+        // synchronous pair. A failed query reads as unsupported, so the
+        // fallback is the conservative path.
+        let mut pools_supported: i32 = 0;
+        // SAFETY: `pools_supported` is a valid out-pointer for one `i32`, and
+        // `device` was returned by `cuDeviceGet`. The call only reads a device
+        // attribute.
+        let attribute_status = unsafe {
+            cuda_oxide::sys::cuDeviceGetAttribute(
+                &mut pools_supported,
+                cuda_oxide::sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED,
+                device,
+            )
+        };
+        let stream_ordered = attribute_status == 0 && pools_supported != 0;
+
+        Ok(Self {
+            raw,
+            stream_ordered,
+        })
     }
 
     pub(crate) fn bind(&self) -> Result<()> {
@@ -324,11 +350,12 @@ impl CudaDevice {
 
     /// Resolve caller placement hints to CUDA's implemented allocation tier.
     ///
-    /// This backend deliberately allocates primary buffers with `cuMemAlloc_v2`.
-    /// That is non-managed device memory: host access happens only through
-    /// explicit copies. Host-visible hints are therefore normalized to
-    /// [`themis::MemoryTier::Device`] instead of being recorded as mappable or
-    /// managed storage.
+    /// This backend deliberately allocates primary buffers with
+    /// `cuMemAllocAsync`, or `cuMemAlloc_v2` where the device lacks the
+    /// stream-ordered allocator. Both are non-managed device memory: host
+    /// access happens only through explicit copies. Host-visible hints are
+    /// therefore normalized to [`themis::MemoryTier::Device`] instead of being
+    /// recorded as mappable or managed storage.
     fn allocation_tier(hint: themis::PlacementHint) -> Result<themis::MemoryTier> {
         match hint {
             themis::PlacementHint::Tier(tier) if !tier.is_host_allocatable() => {
@@ -378,10 +405,35 @@ impl CudaDevice {
         // SAFETY: this device's context is current after `bind`; `ptr` is a
         // valid out-pointer for one `CUdeviceptr`, and `bytes > 0` at call
         // sites.
-        let status = unsafe { cuda_oxide::sys::cuMemAlloc_v2(&mut ptr, byte_count) };
+        // Stream-ordered allocation where the device supports it. The
+        // synchronous pair costs 5.5x-36.8x on this path (see
+        // HEPH-CUDA-STREAM-ORDERED-ALLOC): `cuMemFree_v2` synchronizes the
+        // whole device, so every buffer drop drained in-flight work.
+        //
+        // The pool's release threshold is deliberately left at its default of
+        // zero, so memory still returns to the driver at synchronization
+        // points exactly as before and this introduces no retained pool to
+        // grow unbounded. The win is the ordering, not the retention: measured
+        // with the threshold raised to `u64::MAX` the numbers are the same
+        // within noise (4M-element reduction 44.3 us vs 45.0 us).
+        let status = if self.context.stream_ordered {
+            // SAFETY: this device's context is current after `bind`; `ptr` is a
+            // valid out-pointer for one `CUdeviceptr`, and `bytes > 0` at call
+            // sites. The null stream is the same stream every kernel and copy
+            // in this backend uses, so the allocation is ordered against them.
+            unsafe { cuda_oxide::sys::cuMemAllocAsync(&mut ptr, byte_count, std::ptr::null_mut()) }
+        } else {
+            // SAFETY: as above; the synchronous allocator carries no stream.
+            unsafe { cuda_oxide::sys::cuMemAlloc_v2(&mut ptr, byte_count) }
+        };
         if status != 0 {
+            let function = if self.context.stream_ordered {
+                "cuMemAllocAsync"
+            } else {
+                "cuMemAlloc_v2"
+            };
             return Err(HephaestusError::AllocationFailed {
-                message: format!("cuda-oxide cuMemAlloc_v2({bytes} bytes) -> {status}"),
+                message: format!("cuda-oxide {function}({bytes} bytes) -> {status}"),
             });
         }
         Ok(ptr)

@@ -210,7 +210,66 @@
   development machine compile-gates CUDA only, so removal cannot be validated
   here.
 
-## HEPH-CUDA-STREAM-ORDERED-ALLOC [minor] [perf] — todo
+## HEPH-CUDA-STREAM-ORDERED-ALLOC [minor] [perf] — done 2026-09-01
+
+- Owner / integrator: Claude session 03d80d33. Lease: none (discharged).
+- **Delivered:** `cuMemAllocAsync`/`cuMemFreeAsync` on the null stream, selected
+  per device by a `CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED` probe recorded on
+  `CudaContext`. Allocation and free read the same flag, so they cannot diverge.
+  A device without the capability keeps the synchronous pair — a complete
+  fallback, not a stub.
+- **The blocker had expired here too.** Like the drain item, this carried
+  "compile-gates CUDA only". The machine has an RTX 5080; the suite runs against
+  it.
+- **Cost of the old pair** (`unary_elementwise`, which allocates its output,
+  against `unary_elementwise_into`, which reuses a caller buffer — identical
+  kernel, so the delta is allocation traffic alone; both blocks end with one
+  explicit sync so each measures completed work):
+
+  | elements | allocating | reuse | ratio before | ratio after |
+  |---|---|---|---|---|
+  | 1024 | 32.1 us | 5.8 us | 5.5x | **1.19x** |
+  | 16384 | 34.2 us | 6.0 us | 5.7x | **1.14x** |
+  | 262144 | 250.6 us | 7.0 us | 35.8x | **1.01x** |
+  | 4194304 | 529.7 us | 14.4 us | 36.8x | **1.07x** |
+
+  Allocation is now approximately free. Reductions, which allocate a fresh
+  buffer per pass and retain every one until the reduction ends:
+
+  | elements | passes | before | after | speedup |
+  |---|---|---|---|---|
+  | 16384 | 2 | 38.8 us | 14.3 us | 2.7x |
+  | 262144 | 3 | 42.7 us | 22.1 us | 1.9x |
+  | 4194304 | 3 | 304.4 us | 45.3 us | **6.7x** |
+
+- **The win is ordering, not retention.** The pool's release threshold is left
+  at its default of zero, so memory still returns to the driver at
+  synchronization points and no retained pool grows unbounded. Measured with the
+  threshold raised to `u64::MAX` the numbers are the same within noise (4M
+  reduction 44.3 us vs 45.0 us), so the retention policy that a hand-rolled pool
+  would have required is not needed at all.
+- **Drop soundness, the item's stated precondition.** `cuMemFree_v2` was safe
+  because it synchronized the whole device. `cuMemFreeAsync` on the null stream
+  gives the same guarantee by ordering: the free is enqueued behind work already
+  submitted to that stream, and this backend launches every kernel and issues
+  every copy on that stream. The ordering is contractual, not incidental, which
+  is what this item required before async frees could land. Recorded at the free
+  site, and pinned by `cuda_input_buffer_may_drop_while_its_kernel_is_in_flight`
+  — 200 rounds dropping a kernel's *input* with the launch outstanding, then
+  asserting output values, so an early free shows as corruption rather than
+  passing quietly.
+- **A claim I had to correct.** The free-site comment first asserted that the
+  driver rejects a mismatched alloc/free pair. Forcing the branch showed it does
+  not: `cuMemFree_v2` accepts a stream-ordered allocation and the suite passes.
+  The pairing is a performance contract, not a validity one, and the comment now
+  says so. `cuda_allocation_and_free_select_the_same_allocator` pins the
+  structure regardless.
+- **Gates:** `hephaestus-cuda` 155/155 with `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1`
+  (no skips); `-p hephaestus-core -p hephaestus-host -p hephaestus` 110/110;
+  fmt, `clippy --locked --workspace --all-targets -D warnings`, workspace
+  doctests, and `cargo doc --locked --workspace --no-deps` all clean.
+
+## HEPH-CUDA-STREAM-ORDERED-ALLOC — original item (superseded 2026-09-01)
 
 - Owner: unclaimed.
 - Outcome: device-buffer pooling or stream-ordered allocation for the CUDA
