@@ -84,6 +84,13 @@ rounding contributions. A five-panel blocked case independently checks
 `QᵀQ ≈ I`, empty `m × 0` decompositions return identity Q, and a second-context
 case proves ownership rejection before dispatch while preserving R.
 
+CUDA device-Q source `b6c002a` passes 165 CUDA/Python tests on an RTX 5080 in
+35.870 seconds (`cfb70b91-4911-4d54-92ee-e90126a53f5c`). Focused contracts
+cover ordinary and blocked factorization, orthogonality, empty shapes, foreign
+device provenance, and the Python CUDA binding. The transfer reduction and
+absence of host-Q materialization are source-level allocation and residency
+evidence; no throughput claim is made without a controlled timing benchmark.
+
 The implementation head `5314522` passed the CUDA feature and adapterless
 contracts (run `30182486511`, job `89741393411`, 7m35s), ROCm feature and
 adapterless contracts (run `30182486506`, job `89741368781`, 5m53s), and
