@@ -11,6 +11,7 @@
 
 use bytemuck::Pod;
 use std::any::TypeId;
+use std::sync::OnceLock;
 
 use hephaestus_core::{ComputeDevice, HephaestusError, Result, factor_cholesky_panel};
 use leto::Layout;
@@ -262,17 +263,65 @@ fn syrk_trailing_update(
 // Result type
 // ---------------------------------------------------------------------------
 
-/// Lower-triangular Cholesky factor on the device, with host-side
-/// decomposition for solve/inv/det without re-factorization.
+/// Lower-triangular Cholesky factor on the device, with a host-side
+/// decomposition for solve/inv without re-factorization.
+///
+/// # Host residency
+///
+/// The `n × n` host factor is what [`solve`](Self::solve) and
+/// [`inv`](Self::inv) substitute against; it is *not* what
+/// [`det`](Self::det) needs, which reads only the factor's diagonal.
+/// [`cholesky_decompose_blocked`] therefore keeps just that diagonal (`n`
+/// elements, extracted from panels it already downloads) and leaves `inner`
+/// empty, materializing it from the device factor on the first `solve`/`inv`
+/// and caching it thereafter. [`cholesky_decompose`] factors on the host to
+/// begin with, so it populates `inner` eagerly and never downloads.
 pub struct GpuCholesky {
-    /// Host-side leto-ops decomposition (owns the factor data).
-    inner: leto_ops::CholeskyDecomposition<f32>,
+    /// Host-side leto-ops decomposition, materialized on first host-side
+    /// substitution. Pre-populated by the host-delegating entry point.
+    inner: OnceLock<leto_ops::CholeskyDecomposition<f32>>,
+    /// Diagonal of **L** in factor order, `n` elements.
+    ///
+    /// Bitwise equal to the device factor's diagonal: both are written from
+    /// the same host panel values.
+    diagonal: Vec<f32>,
     /// Device-resident lower-triangular factor **L** (*n* × *n*, row-major).
     lower: WgpuBuffer<f32>,
     n: usize,
 }
 
 impl GpuCholesky {
+    /// The host factor, downloading and caching it on first use.
+    ///
+    /// The device factor is authoritative and complete once
+    /// [`zero_strict_upper`] has run: the per-panel scatters write every cell
+    /// with `row >= blockstart(col)` from the same host panel values the old
+    /// eager array held, and that pass clears the rest. Downloading it
+    /// therefore reconstructs exactly the decomposition the eager path built.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the device readback failure.
+    fn host_factor(&self, device: &WgpuDevice) -> Result<&leto_ops::CholeskyDecomposition<f32>> {
+        if let Some(factor) = self.inner.get() {
+            return Ok(factor);
+        }
+
+        let mut data = vec![0.0f32; self.n * self.n];
+        device.download(&self.lower, &mut data)?;
+        let factor = leto_ops::CholeskyDecomposition::from_raw_parts(
+            leto::Array2::from_shape_vec([self.n, self.n], data)
+                .expect("invariant: n*n elements form an n x n factor"),
+        );
+        // A racing initializer computed the same value from the same
+        // immutable buffer, so either winner is correct.
+        let _ = self.inner.set(factor);
+        Ok(self
+            .inner
+            .get()
+            .expect("invariant: set unconditionally above"))
+    }
+
     /// Matrix dimension *n*.
     #[must_use]
     #[inline]
@@ -294,17 +343,32 @@ impl GpuCholesky {
         self.lower
     }
 
-    /// Determinant det(**A**) = Πᵢ Lᵢᵢ² via the host-side decomposition.
+    /// Determinant det(**A**) = Πᵢ Lᵢᵢ² from the retained factor diagonal.
+    ///
+    /// Multiplies in ascending `i` from `1.0`, the same order and the same
+    /// operations as [`leto_ops::CholeskyDecomposition::det`], so the result
+    /// is bitwise equal to the host reference's on an identical factor. No
+    /// device dispatch and no readback: the diagonal is captured while the
+    /// factorization already has each panel on the host.
     #[must_use]
     #[inline]
     pub fn det(&self) -> f32 {
-        self.inner.det()
+        self.diagonal
+            .iter()
+            .fold(1.0f32, |product, &diagonal| product * (diagonal * diagonal))
     }
 
     /// Solve **A** · **x** = **rhs** via host-side forward/back substitution.
     ///
     /// Downloads the RHS from the device, solves on the host using the
-    /// stored decomposition, and uploads the solution vector.
+    /// stored decomposition, and uploads the solution vector. On the blocked
+    /// entry point's first call this also materializes the host factor (see
+    /// [`GpuCholesky`]); later calls reuse it.
+    ///
+    /// # Errors
+    ///
+    /// - `LengthMismatch` when `rhs.len != n`.
+    /// - The device readback failure, or the host substitution failure.
     pub fn solve(&self, device: &WgpuDevice, rhs: &WgpuBuffer<f32>) -> Result<WgpuBuffer<f32>> {
         if rhs.len != self.n {
             return Err(HephaestusError::LengthMismatch {
@@ -323,23 +387,29 @@ impl GpuCholesky {
             leto::Layout::c_contiguous([self.n]).expect("infallible: valid contiguous layout"),
             &rhs_host,
         );
-        let x = self
-            .inner
-            .solve(&rhs_view)
-            .map_err(|e| HephaestusError::DispatchFailed {
+        let x = self.host_factor(device)?.solve(&rhs_view).map_err(|e| {
+            HephaestusError::DispatchFailed {
                 message: format!("Cholesky solve failed: {e}"),
-            })?;
+            }
+        })?;
 
         device.upload(leto::Storage::as_slice(x.storage()))
     }
 
     /// Compute the inverse **A**⁻¹ via the host-side decomposition.
+    ///
+    /// On the blocked entry point's first call this also materializes the
+    /// host factor (see [`GpuCholesky`]); later calls reuse it.
+    ///
+    /// # Errors
+    ///
+    /// The device readback failure, or the host inversion failure.
     pub fn inv(&self, device: &WgpuDevice) -> Result<WgpuBuffer<f32>> {
         if self.n == 0 {
             return device.alloc_zeroed::<f32>(0);
         }
         let inv = self
-            .inner
+            .host_factor(device)?
             .inv()
             .map_err(|e| HephaestusError::DispatchFailed {
                 message: format!("Cholesky inverse failed: {e}"),
@@ -370,15 +440,15 @@ pub fn cholesky_decompose(
 ) -> Result<GpuCholesky> {
     let n = validate_square(&matrix)?;
     if n == 0 {
-        let lower = device.alloc_zeroed::<f32>(0)?;
-        let inner = leto_ops::cholesky_decompose(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
-            &[],
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Cholesky decomposition failed: {e}"),
-        })?;
-        return Ok(GpuCholesky { inner, lower, n: 0 });
+        // An empty factor has an empty diagonal, so `det` yields the empty
+        // product `1.0` and `solve`/`inv` short-circuit before reaching
+        // `inner` — no host decomposition needs to exist.
+        return Ok(GpuCholesky {
+            inner: OnceLock::new(),
+            diagonal: Vec::new(),
+            lower: device.alloc_zeroed::<f32>(0)?,
+            n: 0,
+        });
     }
 
     // Download input to host.
@@ -395,10 +465,18 @@ pub fn cholesky_decompose(
         })?;
 
     // Upload the lower-triangular factor to the device.
-    let lower = device.upload(leto::Storage::as_slice(chol.lower().storage()))?;
+    let factor = leto::Storage::as_slice(chol.lower().storage());
+    let diagonal = (0..n).map(|k| factor[k * n + k]).collect();
+    let lower = device.upload(factor)?;
+
+    // This path factored on the host, so the decomposition already exists:
+    // publish it rather than making `solve`/`inv` download it back.
+    let inner = OnceLock::new();
+    let _ = inner.set(chol);
 
     Ok(GpuCholesky {
-        inner: chol,
+        inner,
+        diagonal,
         lower,
         n,
     })
@@ -606,15 +684,12 @@ pub fn cholesky_decompose_blocked(
     let n = validate_square(&matrix)?;
     validate_dense_operand("cholesky", &matrix)?;
     if n == 0 {
-        let lower = device.alloc_zeroed::<f32>(0)?;
-        let inner = leto_ops::cholesky_decompose(&leto::ArrayView::<f32, 2>::new(
-            leto::Layout::c_contiguous([0, 0]).expect("infallible: empty matrix layout"),
-            &[],
-        ))
-        .map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("Cholesky decomposition failed: {e}"),
-        })?;
-        return Ok(GpuCholesky { inner, lower, n: 0 });
+        return Ok(GpuCholesky {
+            inner: OnceLock::new(),
+            diagonal: Vec::new(),
+            lower: device.alloc_zeroed::<f32>(0)?,
+            n: 0,
+        });
     }
 
     // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
@@ -643,7 +718,11 @@ pub fn cholesky_decompose_blocked(
     // panel_rows = n - k <= n, cols = b <= block_size  =>  max n * block_size elements.
     let panel_compact_buf = device.alloc_uninitialized::<f32>(n * block_size)?;
 
-    let mut host = vec![0.0f32; n * n];
+    // Only the factor's diagonal is retained. `det` reads nothing else, and
+    // `solve`/`inv` reconstruct the full factor from `lower_buf` on demand —
+    // so the superseded `n * n` host array, which this loop scattered every
+    // panel column into, is never allocated.
+    let mut diagonal = vec![0.0f32; n];
 
     // Per-panel host scratch, allocated once and resized by the panel download
     // each iteration instead of allocating a fresh `Vec` per panel.
@@ -674,32 +753,11 @@ pub fn cholesky_decompose_blocked(
         // triangular solve) — the backend-neutral shared computation.
         factor_cholesky_panel(&mut panel, b, trail_rows)?;
 
-        if trail_rows == 0 {
-            // Copy the finalized columns to the host-side packed matrix
-            for j in 0..b {
-                let col = k + j;
-                for r in k..n {
-                    host[r * n + col] = panel[(r - k) * b + j];
-                }
-            }
-
-            // Upload the final diagonal block back to device buffer
-            write_matrix_region_compact_reusable(
-                device,
-                &lower_buf,
-                &panel_compact_buf,
-                &panel,
-                panel_region,
-            )?;
-            continue;
-        }
-
-        // Copy the finalized columns to the host-side packed matrix
+        // Retain this panel's contribution to the factor diagonal. The panel
+        // is `panel_rows × b` compact, so global cell `(k + j, k + j)` sits at
+        // panel row `j`, column `j`.
         for j in 0..b {
-            let col = k + j;
-            for r in k..n {
-                host[r * n + col] = panel[(r - k) * b + j];
-            }
+            diagonal[k + j] = panel[j * b + j];
         }
 
         // Upload the entire updated active panel (diagonal + off-diagonal) back to device buffer
@@ -710,6 +768,10 @@ pub fn cholesky_decompose_blocked(
             &panel,
             panel_region,
         )?;
+
+        if trail_rows == 0 {
+            continue;
+        }
 
         // ── Step 3: trailing SYRK update on GPU ──
         let trail_layout = leto::Layout::try_new(
@@ -748,12 +810,12 @@ pub fn cholesky_decompose_blocked(
     // already computed.
     zero_strict_upper(device, &lower_buf, n)?;
 
-    let inner = leto_ops::CholeskyDecomposition::from_raw_parts(
-        leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
-    );
-
+    // `inner` stays empty: with the factor complete on the device and its
+    // diagonal retained, only a host-side substitution needs the `n * n`
+    // array, and `host_factor` downloads it then.
     Ok(GpuCholesky {
-        inner,
+        inner: OnceLock::new(),
+        diagonal,
         lower: lower_buf,
         n,
     })

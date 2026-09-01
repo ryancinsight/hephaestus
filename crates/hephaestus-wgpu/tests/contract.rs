@@ -4291,6 +4291,127 @@ pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
     assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
 }
 
+/// The blocked path retains the factor diagonal instead of the whole `n × n`
+/// factor, and `det`/`solve` still agree with the host reference.
+///
+/// `det` reads only that retained diagonal, so this pins it bitwise against
+/// the device factor's own diagonal — the two are written from the same host
+/// panel values, and any divergence means the capture indexes the panel
+/// wrongly. `solve` then forces the deferred host factor to materialize from
+/// the device buffer.
+pub(super) fn blocked_cholesky_retains_factor_diagonal_across_panels() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    // `cholesky_decompose_blocked` has no host-delegation threshold, but it
+    // does degenerate: `block_size = BLOCK_SIZE.min(n)`, so at `n <= 64` the
+    // loop runs one panel with `trail_rows == 0`, dispatches no SYRK, and
+    // captures the whole diagonal from a single panel. `n = 160` against
+    // `BLOCK_SIZE = 64` runs three panels (64, 64, 32) with a ragged tail, so
+    // the capture spans panel boundaries and two SYRK updates run.
+    const BLOCK_SIZE: usize = 64;
+    let n = 160usize;
+    assert!(
+        n > BLOCK_SIZE && !n.is_multiple_of(BLOCK_SIZE),
+        "fixture must land in the multi-panel regime with a ragged tail"
+    );
+    assert_eq!(n.div_ceil(BLOCK_SIZE), 3, "fixture must run three panels");
+
+    // Strictly diagonally dominant SPD: off-diagonal row mass is
+    // `0.2·(n−1)/n < 0.2` against a diagonal of `1.4`, so ‖A‖∞ ≤ 1.6 and
+    // (Varah) ‖A⁻¹‖∞ ≤ 1/(1.4 − 0.2), giving κ∞ ≤ 1.34. The small diagonal
+    // keeps det ≈ 1.4¹⁶⁰ ≈ 2.3e23 inside f32's range, which a
+    // dominance-by-magnitude fixture would overflow.
+    let mut matrix_host = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col { 1.4 } else { 0.2 / n as f32 };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_chol = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    assert_eq!(gpu_chol.n(), n);
+
+    // ── Retained diagonal is bitwise the device factor's diagonal ──
+    // `det` folds `Π Lₖₖ²` from 1.0 in ascending k, the same order and
+    // operations as the host reference, so recomputing it from the downloaded
+    // factor must reproduce the same f32 exactly.
+    let mut device_factor = vec![0.0f32; n * n];
+    device
+        .download(gpu_chol.lower(), &mut device_factor)
+        .unwrap();
+    let det_from_device = (0..n).fold(1.0f32, |product, k| {
+        let diagonal = device_factor[k * n + k];
+        product * (diagonal * diagonal)
+    });
+    assert_eq!(
+        gpu_chol.det(),
+        det_from_device,
+        "retained diagonal diverged from the device factor's diagonal"
+    );
+
+    // ── Differential against the host reference ──
+    // Unit roundoff u = ε/2 = 2⁻²⁴. Each computed Lₖₖ carries forward relative
+    // error ≲ κ∞·γ_{n+1} ≈ κ∞(n+1)u (Higham, Accuracy and Stability of
+    // Numerical Algorithms, 2nd ed., Thm 10.3, transferred through κ∞). det is
+    // a product of 2n such factors, so one factorization's det carries
+    // ≲ 2n(n+1)κ∞·u; comparing two independent backward-stable factorizations
+    // doubles it to 4n(n+1)κ∞·u. With κ∞ ≤ 2 for this fixture that is
+    // 8n(n+1)u = 4n(n+1)ε ≈ 1.23e-2 relative at n = 160.
+    let det_rel_tolerance = 4.0 * n as f32 * (n + 1) as f32 * f32::EPSILON;
+    let leto_det = leto_chol.det();
+    assert!(
+        (gpu_chol.det() - leto_det).abs() <= det_rel_tolerance * leto_det.abs(),
+        "blocked det {} diverged from host det {leto_det} beyond {}",
+        gpu_chol.det(),
+        det_rel_tolerance * leto_det.abs()
+    );
+
+    // ── Deferred host factor materializes and solves ──
+    // `solve` is the first call needing the full factor, so it downloads and
+    // caches it. Same error model: factorization plus two triangular solves
+    // gives ‖x̂ − x‖∞/‖x‖∞ ≲ 2n(n+1)κ∞·u, bounded here by 4n(n+1)ε.
+    let rhs_host: Vec<f32> = (0..n).map(|i| 1.0 + (i % 7) as f32).collect();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let solution = gpu_chol.solve(&device, &rhs).unwrap();
+    let mut got_x = vec![0.0f32; n];
+    device.download(&solution, &mut got_x).unwrap();
+
+    let rhs_view = leto::Array::from_shape_vec([n], rhs_host).unwrap();
+    let expected_x = leto_chol.solve(&rhs_view.view()).unwrap();
+    let expected_slice = leto::Storage::as_slice(expected_x.storage());
+    let scale = expected_slice
+        .iter()
+        .fold(0.0f32, |peak, value| peak.max(value.abs()));
+    let solve_tolerance = 4.0 * n as f32 * (n + 1) as f32 * f32::EPSILON * scale;
+    for (index, (&got, &expected)) in got_x.iter().zip(expected_slice.iter()).enumerate() {
+        assert!(
+            (got - expected).abs() <= solve_tolerance,
+            "deferred-factor solve mismatch at {index}: got {got}, expected {expected}, tolerance {solve_tolerance}"
+        );
+    }
+
+    // A second solve reuses the cached factor and must be unchanged.
+    let repeat = gpu_chol.solve(&device, &rhs).unwrap();
+    let mut repeat_x = vec![0.0f32; n];
+    device.download(&repeat, &mut repeat_x).unwrap();
+    assert_eq!(got_x, repeat_x, "cached host factor changed the solution");
+}
+
 /// The device factor's strictly-upper triangle is exactly zero, including the
 /// region outside the diagonal blocks.
 ///
