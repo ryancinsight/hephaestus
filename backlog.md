@@ -1,5 +1,35 @@
 # Backlog — hephaestus
 
+## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — in-progress
+
+- **Outcome:** materialize the ordinary QR orthogonal factor **Q** on CUDA
+  from the provider's compact Householder representation, then route the
+  Python CUDA `qr` result through that device buffer.
+- **Scope / non-goals:** CUDA ordinary QR Q accumulation, the shared CUDA
+  identity kernel, the Python CUDA `qr` arm, focused contracts, ADR 0024, and
+  Unreleased documentation. Factorization, least-squares, pivoted QR, and the
+  already-device-resident **R** path remain unchanged; **Q** stays lazy so
+  callers that do not request it allocate no `m²` output.
+- **Acceptance oracle:** both CUDA QR entry routes produce a device **Q** that
+  agrees with Leto's host accumulation within the Householder reduction bound;
+  the real blocked route is independently orthogonal; empty shapes preserve
+  identity semantics; a foreign dispatch device rejects before allocation or
+  upload; the Python CUDA arm contains no `inner().q()` or host Q upload.
+  The kernel launches one 256-thread block per Q column and reuses the existing
+  device-identity implementation without a second identity kernel.
+- **Performance model / stop condition:** the binding replaces a `4m²`-byte
+  host Q upload plus host O(`m²n`) accumulation with `4mn + 8·min(m,n)` bytes
+  of compact-factor uploads and device O(`m²n`) accumulation. No timing claim
+  is made without a controlled benchmark; reject if value semantics regress or
+  a least-squares-only call begins allocating Q.
+- **Risk / delivery:** additive public CUDA parity is SemVer minor. Required
+  evidence is focused debug/release CUDA values on a physical adapter,
+  warning-denied CUDA/Python Clippy and Rustdoc, doctests, formatting, source
+  routing audit, and SemVer analysis where the tool can complete.
+- **Ownership:** integrator=Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`;
+  branch=`perf/cuda-qr-device-q`; lease=`backlog.md` for the claim increment;
+  last-update=2026-09-01.
+
 ## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — review-ready
 
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
