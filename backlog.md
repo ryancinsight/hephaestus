@@ -45,6 +45,8 @@
 
 ## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — review-ready
 
+- **Independent hardware evidence (2026-09-01):** `4bfbed8` is an ancestor of `1ffe9859`, the revision on which the RTX 5080 run of `cargo nextest run --package hephaestus-cuda --features cuda,decomposition --locked` passed 161/161 (see PR #246 review comment). The device-side split's contracts were therefore exercised on hardware by a reviewer who did not author them.
+
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
   asymmetric. wgpu splits packed factors **on device** via
   `hephaestus_wgpu::split_packed_lu` (a shader,
