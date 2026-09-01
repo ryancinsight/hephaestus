@@ -6,11 +6,13 @@
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendDevice, clone_cuda_buffer};
-use hephaestus_core::ComputeDevice;
 use leto::Layout;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::sync::Arc;
+
+#[cfg(test)]
+mod tests;
 
 #[pyfunction]
 pub(crate) fn cholesky(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
@@ -349,19 +351,14 @@ pub(crate) fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
                 };
                 let decomp = hephaestus_cuda::qr_decompose_blocked(device, op)?;
                 let (m, n) = decomp.shape();
-                let q_host = decomp.inner().q();
-                // Blocked CUDA QR still factors each panel on the CPU and
-                // retains those reflectors in `inner`, while the provider has
-                // no device-side Q-accumulation seam yet. Q therefore remains
-                // an intentional host construction and upload. R already
-                // resides in the cleaned upper triangle of `r_buffer`, so it
-                // is cloned device-to-device instead of materialized and
-                // uploaded through the host.
+                let q_buffer = decomp.accumulate_q(device)?;
+                // Q is accumulated on the device from the compact
+                // Householder representation. R already resides in the
+                // cleaned upper triangle of the decomposition buffer, so
+                // consuming it avoids both host staging and a device copy.
                 Ok((
-                    BackendBuffer::Cuda(Arc::new(
-                        device.upload(leto::Storage::as_slice(q_host.storage()))?,
-                    )),
-                    clone_cuda_buffer(device, decomp.r_buffer())?,
+                    BackendBuffer::Cuda(Arc::new(q_buffer)),
+                    BackendBuffer::Cuda(Arc::new(decomp.into_r_buffer())),
                     vec![m, m],
                     vec![m, n],
                 ))

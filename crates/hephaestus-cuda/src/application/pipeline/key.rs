@@ -106,6 +106,8 @@ pub(crate) enum PipelineKey {
     #[cfg(all(feature = "cuda", feature = "decomposition"))]
     QrHouseholder,
     #[cfg(all(feature = "cuda", feature = "decomposition"))]
+    QrAccumulateQ,
+    #[cfg(all(feature = "cuda", feature = "decomposition"))]
     SplitPackedLu,
     Stream(u64),
     GroupedStream(u64),

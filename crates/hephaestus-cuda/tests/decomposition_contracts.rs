@@ -8,7 +8,11 @@
 #![cfg(all(feature = "cuda", feature = "decomposition"))]
 use hephaestus_conformance::assert_decomposition_contract;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError};
-use hephaestus_cuda::{CudaDecompositionOps, CudaDevice, split_packed_lu};
+use hephaestus_cuda::{
+    CudaDecompositionOps, CudaDevice, GpuQrDecomposition, StridedOperand, qr_decompose,
+    qr_decompose_blocked, split_packed_lu,
+};
+use leto::Layout;
 use std::sync::OnceLock;
 
 const DECOMPOSITION_SOURCES: &[(&str, &str)] = &[
@@ -181,5 +185,177 @@ fn cuda_split_packed_lu_rejects_foreign_device_before_mutation() {
             .download_owned(&packed)
             .expect("unchanged packed readback"),
         original
+    );
+}
+
+fn qr_fixture(rows: usize, cols: usize) -> Vec<f32> {
+    let mut matrix = vec![0.0; rows * cols];
+    for row in 0..rows {
+        for column in 0..cols {
+            matrix[row * cols + column] = if row == column {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(column) as f32)
+            };
+        }
+    }
+    matrix
+}
+
+fn assert_q_matches_host(
+    device: &CudaDevice,
+    decomposition: &GpuQrDecomposition,
+    check_orthogonality: bool,
+) {
+    let (rows, cols) = decomposition.shape();
+    let q = decomposition
+        .accumulate_q(device)
+        .expect("device Q accumulation");
+    let actual = device.download_owned(&q).expect("device Q download");
+    let expected_array = decomposition.inner().q();
+    let expected = leto::Storage::as_slice(expected_array.storage());
+    assert_eq!(expected_array.shape(), [rows, rows]);
+
+    // Both routes apply the same computed reflectors to the same identity.
+    // They differ only in dot-product reduction order. Householder
+    // accumulation is backward stable with c(m,n) <= m*min(m,n); doubling
+    // c*epsilon covers the host and device rounding contributions.
+    let tolerance = 2.0 * (rows * cols.min(rows)) as f32 * f32::EPSILON;
+    for (index, (&got, &want)) in actual.iter().zip(expected).enumerate() {
+        let delta = (got - want).abs();
+        assert!(
+            delta <= tolerance,
+            "Q[{index}] at [{rows}, {cols}] differs: {got} versus {want}; delta {delta} exceeds {tolerance}"
+        );
+    }
+
+    if check_orthogonality {
+        assert_q_orthogonal(&actual, rows, cols, tolerance);
+    }
+}
+
+fn assert_q_orthogonal(q: &[f32], rows: usize, cols: usize, tolerance: f32) {
+    let mut max_residual = 0.0f64;
+    for left in 0..rows {
+        for right in 0..rows {
+            let mut dot = 0.0f64;
+            for row in 0..rows {
+                dot += f64::from(q[row * rows + left]) * f64::from(q[row * rows + right]);
+            }
+            let expected = if left == right { 1.0 } else { 0.0 };
+            max_residual = max_residual.max((dot - expected).abs());
+        }
+    }
+    assert!(
+        max_residual <= f64::from(tolerance),
+        "Q from [{rows}, {cols}] is not orthogonal: max residual {max_residual} exceeds {tolerance}"
+    );
+}
+
+#[test]
+fn cuda_q_accumulation_matches_host_on_both_qr_entry_points() {
+    let Some(device) = cuda_device_or_skip() else {
+        return;
+    };
+
+    let direct_shape = [70, 35];
+    let direct_host = qr_fixture(direct_shape[0], direct_shape[1]);
+    let direct_buffer = device.upload(&direct_host).expect("direct input upload");
+    let direct_layout = Layout::c_contiguous(direct_shape).expect("direct layout");
+    let direct = qr_decompose(
+        &device,
+        StridedOperand {
+            buffer: &direct_buffer,
+            layout: &direct_layout,
+        },
+    )
+    .expect("direct QR");
+    assert_q_matches_host(&device, &direct, false);
+
+    // 129 columns crosses four complete 32-column panels and a ragged panel,
+    // exercising the GPU-trailing route rather than only the host delegate.
+    let blocked_shape = [138, 129];
+    let blocked_host = qr_fixture(blocked_shape[0], blocked_shape[1]);
+    let blocked_buffer = device.upload(&blocked_host).expect("blocked input upload");
+    let blocked_layout = Layout::c_contiguous(blocked_shape).expect("blocked layout");
+    let blocked = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &blocked_buffer,
+            layout: &blocked_layout,
+        },
+    )
+    .expect("blocked QR");
+    assert_q_matches_host(&device, &blocked, true);
+}
+
+#[test]
+fn cuda_q_accumulation_preserves_empty_identity_semantics() {
+    let Some(device) = cuda_device_or_skip() else {
+        return;
+    };
+
+    for rows in [0, 3] {
+        let input = device.alloc_zeroed::<f32>(0).expect("empty input");
+        let layout = Layout::c_contiguous([rows, 0]).expect("empty layout");
+        let decomposition = qr_decompose_blocked(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &layout,
+            },
+        )
+        .expect("empty QR");
+        let q = decomposition
+            .accumulate_q(&device)
+            .expect("empty Q accumulation");
+        let actual = device.download_owned(&q).expect("empty Q download");
+        let expected = (0..rows * rows)
+            .map(|index| {
+                if index / rows == index % rows {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "identity at shape [{rows}, 0]");
+    }
+}
+
+#[test]
+fn cuda_q_accumulation_rejects_foreign_device_before_mutation() {
+    let Some(owner) = cuda_device_or_skip() else {
+        return;
+    };
+    let dispatch = CudaDevice::try_default().expect("second CUDA context");
+    let matrix_host = qr_fixture(4, 2);
+    let matrix = owner.upload(&matrix_host).expect("owner upload");
+    let layout = Layout::c_contiguous([4, 2]).expect("layout");
+    let decomposition = qr_decompose(
+        &owner,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("owner QR");
+    let before = owner
+        .download_owned(decomposition.r_buffer())
+        .expect("R before rejection");
+
+    let error = decomposition
+        .accumulate_q(&dispatch)
+        .expect_err("foreign decomposition rejection");
+    assert!(matches!(
+        error,
+        HephaestusError::InvalidConfiguration { message }
+            if message == "QR decomposition must belong to the dispatch device"
+    ));
+    assert_eq!(
+        owner
+            .download_owned(decomposition.r_buffer())
+            .expect("R after rejection"),
+        before
     );
 }

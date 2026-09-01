@@ -32,11 +32,24 @@ not currently own one.
 CUDA now exposes the same device-resident packed-LU split as WGPU. Both
 providers turn their packed factor into explicit dense **L** and **U** buffers
 without host staging; the copy-and-mask result is bitwise equal to the shared
-host oracle. CUDA blocked QR also returns its existing device-resident **R**
-buffer to bindings. Its **Q** remains host-accumulated because the blocked
-algorithm performs panel factorization on the CPU and CUDA does not yet own a
-device reflector-accumulation seam; adding that seam is a separate capability
-increment rather than an implicit fallback in the packed-LU operation.
+host oracle.
+
+CUDA ordinary QR now retains the same lazy materialization boundary as WGPU.
+Factorization keeps the compact Householder representation and the cleaned
+upper-triangular **R** device buffer. `GpuQrDecomposition::accumulate_q`
+creates a device identity and applies those reflectors in reverse order, one
+256-thread block per Q column. CPU panel factorization does not require host Q
+accumulation: the packed tails plus the retained vector heads and scales are
+the complete input to the device operation. Bindings request Q through that
+method and consume R through `into_r_buffer`, so neither factor is staged
+through the host and R is not cloned. Least-squares callers that never request
+Q keep the compact representation and allocate no `m × m` factor.
+
+The CUDA operation deliberately uploads the existing packed factor, heads,
+and scales when Q is requested instead of retaining duplicate device copies
+during factorization. This changes the materialization transfer from `4m²`
+bytes of host-built Q to `4mn + 8·min(m,n)` bytes while preserving the lazy
+factorization footprint.
 
 ## Alternatives rejected
 
@@ -48,6 +61,13 @@ increment rather than an implicit fallback in the packed-LU operation.
   semantically incorrect for offsets, broadcasts, and transposes.
 - Re-export WGPU functions from Metal: this would expose the wrong buffer and
   device ownership boundary instead of a Metal-owned API.
+- Materialize CUDA Q during every factorization: least-squares and R-only
+  consumers do not use Q, so eager O(`m²n`) work and an `m²` buffer would
+  regress their execution and memory contracts.
+- Retain a second packed factor and reflector set on the device: this would
+  save a later upload only for callers that request Q, while charging every
+  factorization duplicate retained storage. Lazy direct uploads preserve the
+  existing compact handle and remove the transient host Q array.
 
 ## Verification
 
@@ -57,6 +77,12 @@ assert typed dense-layout rejection for transposed, offset, and broadcast
 views. CUDA, ROCm, and macOS Metal CI run the feature, warning-denied Clippy,
 Nextest, doctest, and rustdoc gates; hosted NVIDIA and AMD jobs remain
 hardware evidence only when their labels are available.
+
+CUDA Q contracts compare device accumulation with Leto's host accumulation on
+both public QR entry points using `2·m·min(m,n)·ε` from the two Householder
+rounding contributions. A five-panel blocked case independently checks
+`QᵀQ ≈ I`, empty `m × 0` decompositions return identity Q, and a second-context
+case proves ownership rejection before dispatch while preserving R.
 
 The implementation head `5314522` passed the CUDA feature and adapterless
 contracts (run `30182486511`, job `89741393411`, 7m35s), ROCm feature and
