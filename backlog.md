@@ -79,6 +79,7 @@
   `4bfbed8`, CUDA QR's retained **R** stays on-device while host **Q**
   accumulation remains explicit. Follow-up item
   `HEPH-CUDA-QR-DEVICE-Q-2026-09-01` retires that recorded remainder.
+- **Narrowed 2026-09-01:** PR #246 (`feat(cuda): Accumulate QR Q on device`) closes the QR site (`:358-361`) on device with no host staging; independently verified here, 161/161 hardware contracts on the RTX 5080 at `1ffe9859`. Remaining scope is exactly the two LU packed-factor split sites (`:89-92`, `:214-218`), which need the CUDA `split_packed_lu` kernel. Nothing else changes.
 - **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
   — verify before deferring (recorded blockers expire). If the CUDA feature
   does not build here, that is the first finding, not grounds to close.
