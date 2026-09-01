@@ -1,5 +1,41 @@
 # Backlog — hephaestus
 
+## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [patch] — todo
+
+- **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
+  asymmetric. wgpu splits packed factors **on device** via
+  `hephaestus_wgpu::split_packed_lu` (a shader,
+  `crates/hephaestus-wgpu/src/application/decomposition/split.rs:98`). CUDA has
+  no counterpart — `crates/hephaestus-cuda/src/application/decomposition/`
+  holds lu/qr/cholesky/svd/schur/… but no `split.rs` — so the binding falls
+  back to the host `split_packed_lu(&[f32], n)`
+  (`hephaestus-core/src/domain/decomposition.rs:532`), downloading and
+  re-uploading around it.
+- **Evidence (three sites, `crates/hephaestus-python/src/decomposition.rs`):**
+  - `:89-92` — `lu()`: downloads n² floats, splits on host, uploads 2n².
+  - `:214-218` — same shape on the `lu_buffer()` path.
+  - `:358-361` — QR uploads `q_host`/`r_host` from a **leto host**
+    computation, so that arm may not be a device factorization at all.
+- **Cost:** 3n² floats of PCIe traffic per `lu()` call that the wgpu arm does
+  not pay — 12 MB at n=1024 — for a triangular mask that is pure indexing.
+  Same defect class the Cholesky triangle-mask work closed (4n² → 4n), left
+  open on the other backend.
+- **Not a missing abstraction.** The `decomposition_seam` handles are already
+  residency-correct: `factors()`/`r_buffer()`/`lower()` return
+  `&D::Buffer<f32>`, and `solve(&self, device, rhs: &D::Buffer<f32>) ->
+  Result<D::Buffer<f32>>` is device-in/device-out, so residency already
+  survives chained operations. Only this backend's missing kernel forces the
+  roundtrip. Do **not** scope this as a placement or residency layer.
+- **Acceptance oracle:** a CUDA `split_packed_lu` matching the wgpu shader's
+  contract, differential-tested against the host `split_packed_lu` on
+  identical packed input — **exact equality**, since this is copy-and-mask
+  with no arithmetic, so no tolerance applies; the three binding sites carry
+  no `download_owned`/`upload` pair; `:358` either becomes a device path or
+  its host computation is documented as deliberate with the reason.
+- **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
+  — verify before deferring (recorded blockers expire). If the CUDA feature
+  does not build here, that is the first finding, not grounds to close.
+
 ## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
 
 - **Owner / integrator**: Claude session 5050c72a. Lease:
