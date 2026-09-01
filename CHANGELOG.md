@@ -4,6 +4,21 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Defer the WGPU blocked Cholesky's host factor. PR #236 moved the
+  factorization's closing strict-upper zeroing onto the device but left
+  `cholesky_decompose_blocked` building an eager `n × n` host copy of the
+  factor, because `det`, `solve`, and `inv` read it. `det` needs only the
+  factor's diagonal, so the blocked path now retains those `n` elements —
+  extracted from panels it already downloads, costing no transfer and no
+  dispatch — and defers the full array to the first `solve`/`inv`, which
+  downloads it from the device factor and caches it. A factorization that is
+  consumed on the device or through `det` no longer materializes
+  `4·n·(n−1)` host bytes (255 KiB at n = 256), and no longer scatters
+  `≈ n²/2` host writes across the panel loop. `det` remains bitwise equal to
+  `leto_ops::CholeskyDecomposition::det`: it folds the same product in the
+  same order. `cholesky_decompose`'s host-delegating path is unchanged and
+  still publishes its factor eagerly. No signature or error-variant change.
+
 - [major] Bound every default WGPU device wait. `synchronize`, `download`,
   `download_owned`, `download_sub_buffer`, `copy_buffer`, and the
   decomposition region readback previously polled with `timeout: None` and

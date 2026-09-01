@@ -201,6 +201,7 @@ contract_cases!(
     contract::blocked_qr_solve_known_system_accurate,
     contract::blocked_qr_rejects_underdetermined,
     contract::blocked_cholesky_identity_yields_identity_lower,
+    contract::blocked_cholesky_retains_factor_diagonal_across_panels,
     contract::blocked_cholesky_spd_reconstruction_matches_original,
     contract::blocked_cholesky_solve_known_system_accurate,
     contract::blocked_cholesky_rejects_singular_matrix,
@@ -300,7 +301,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        173,
+        174,
         "the consolidated integration contract must retain every migrated case"
     );
 
