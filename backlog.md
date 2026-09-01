@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [patch] — todo
+## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — review-ready
 
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
   asymmetric. wgpu splits packed factors **on device** via
@@ -32,9 +32,24 @@
   with no arithmetic, so no tolerance applies; the three binding sites carry
   no `download_owned`/`upload` pair; `:358` either becomes a device path or
   its host computation is documented as deliberate with the reason.
+- **Classification:** additive public CUDA parity is SemVer minor. CUDA QR's
+  retained **R** now stays on-device; host **Q** accumulation remains explicit
+  because blocked QR has no CUDA reflector-accumulation seam.
 - **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
   — verify before deferring (recorded blockers expire). If the CUDA feature
   does not build here, that is the first finding, not grounds to close.
+- **Outcome / evidence:** source `4bfbed8` adds the public CUDA split, routes
+  both Python LU variants through it, and keeps CUDA QR **R** on-device. RTX
+  5080 focused debug/release contracts pass 5/5 with exact host-oracle values;
+  CUDA/Python Nextest passes 161/161 in 37.067 s; warning-denied all-target
+  Clippy and Rustdoc, doctest, formatting, diff, locked source, and routing
+  audits pass. The routing audit finds two CUDA LU splits, one device-local QR
+  **R** clone, and zero forbidden host roundtrip pairs. `cargo-semver-checks`
+  did not reach comparison because its baseline clone failed with `Entry too
+  large to fit in memory`; the public diff is additive and remains classified
+  minor. Integrator=Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`;
+  branch=`perf/cuda-packed-lu-split`; lease=none; remaining=independent review,
+  PR, merge, and closure; last-update=2026-09-01.
 
 ## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
 

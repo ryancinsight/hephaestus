@@ -27,6 +27,17 @@ This closes the public capability and validation contract without duplicating
 the pivoting algorithms or claiming a blocked kernel where the provider does
 not currently own one.
 
+### 2026-09-01 revision: packed-factor residency
+
+CUDA now exposes the same device-resident packed-LU split as WGPU. Both
+providers turn their packed factor into explicit dense **L** and **U** buffers
+without host staging; the copy-and-mask result is bitwise equal to the shared
+host oracle. CUDA blocked QR also returns its existing device-resident **R**
+buffer to bindings. Its **Q** remains host-accumulated because the blocked
+algorithm performs panel factorization on the CPU and CUDA does not yet own a
+device reflector-accumulation seam; adding that seam is a separate capability
+increment rather than an implicit fallback in the packed-LU operation.
+
 ## Alternatives rejected
 
 - Clone the ROCm HIP pivot kernels into WGPU/CUDA: this creates a second
