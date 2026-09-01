@@ -1,5 +1,48 @@
 # Backlog — hephaestus
 
+## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — review-ready
+
+- **Outcome:** materialize the ordinary QR orthogonal factor **Q** on CUDA
+  from the provider's compact Householder representation, then route the
+  Python CUDA `qr` result through that device buffer.
+- **Scope / non-goals:** CUDA ordinary QR Q accumulation, the shared CUDA
+  identity kernel, the Python CUDA `qr` arm, focused contracts, ADR 0024, and
+  Unreleased documentation. Factorization, least-squares, pivoted QR, and the
+  already-device-resident **R** path remain unchanged; **Q** stays lazy so
+  callers that do not request it allocate no `m²` output.
+- **Acceptance oracle:** both CUDA QR entry routes produce a device **Q** that
+  agrees with Leto's host accumulation within the Householder reduction bound;
+  the real blocked route is independently orthogonal; empty shapes preserve
+  identity semantics; a foreign dispatch device rejects before allocation or
+  upload; the Python CUDA arm contains no `inner().q()` or host Q upload.
+  The kernel launches one 256-thread block per Q column and reuses the existing
+  device-identity implementation without a second identity kernel.
+- **Performance model / stop condition:** the binding replaces a `4m²`-byte
+  host Q upload plus host O(`m²n`) accumulation with `4mn + 8·min(m,n)` bytes
+  of compact-factor uploads and device O(`m²n`) accumulation. No timing claim
+  is made without a controlled benchmark; reject if value semantics regress or
+  a least-squares-only call begins allocating Q.
+- **Risk / delivery:** additive public CUDA parity is SemVer minor. Required
+  evidence is focused debug/release CUDA values on a physical adapter,
+  warning-denied CUDA/Python Clippy and Rustdoc, doctests, formatting, source
+  routing audit, and SemVer analysis where the tool can complete.
+- **Outcome / evidence:** source `b6c002a` adds lazy device-Q accumulation,
+  transfers the retained R buffer without a device clone, and removes the
+  Python CUDA host-Q path. RTX 5080 focused debug/release contracts pass 8/8
+  (`e7ba55ed-934f-430a-851c-b7b961b32d99` and
+  `404bf93f-459a-4a4d-826a-3c1a0b2fb0d5`); the CUDA Python binding contract
+  passes 1/1 (`af00f59e-312d-400a-9634-b4cfd0b0d151`); exact-source
+  CUDA/Python Nextest passes 165/165 in 35.870 s
+  (`cfb70b91-4911-4d54-92ee-e90126a53f5c`). Warning-denied all-target,
+  all-feature Clippy and Rustdoc, doctests, no-default CUDA checking,
+  formatting, diff, locked-source, and routing audits pass. The public surface
+  is additive; `cargo-semver-checks` remains uncollected because the baseline
+  clone exceeds the local tool's entry-size limit. No throughput claim is made
+  without a controlled timing instrument.
+- **Ownership:** integrator=Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`;
+  branch=`perf/cuda-qr-device-q`; lease=none; last-update=2026-09-01;
+  remaining=independent review, PR, and merge collection.
+
 ## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — review-ready
 
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
@@ -32,9 +75,10 @@
   with no arithmetic, so no tolerance applies; the three binding sites carry
   no `download_owned`/`upload` pair; `:358` either becomes a device path or
   its host computation is documented as deliberate with the reason.
-- **Classification:** additive public CUDA parity is SemVer minor. CUDA QR's
-  retained **R** now stays on-device; host **Q** accumulation remains explicit
-  because blocked QR has no CUDA reflector-accumulation seam.
+- **Classification:** additive public CUDA parity is SemVer minor. At source
+  `4bfbed8`, CUDA QR's retained **R** stays on-device while host **Q**
+  accumulation remains explicit. Follow-up item
+  `HEPH-CUDA-QR-DEVICE-Q-2026-09-01` retires that recorded remainder.
 - **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
   — verify before deferring (recorded blockers expire). If the CUDA feature
   does not build here, that is the first finding, not grounds to close.

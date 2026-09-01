@@ -17,6 +17,9 @@ consumers reach it through the `hephaestus` facade as `hephaestus::cuda`.
 - Dynamic-rank strided elementwise entry points, so runtime-shaped consumers can
   delegate their GPU tensor layout kernels rather than carrying their own CUDA
   generators.
+- Device-resident decomposition results, including an exact packed-LU split
+  and lazy QR Q accumulation from compact Householder factors. R-only and
+  least-squares QR consumers do not allocate the `m × m` orthogonal factor.
 
 ## Requirements and features
 

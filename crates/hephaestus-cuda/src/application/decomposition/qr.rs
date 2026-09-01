@@ -37,6 +37,11 @@ use crate::infrastructure::device::CudaDevice;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::device::cuda_byte_count;
 
+#[cfg(feature = "cuda")]
+mod householder;
+#[cfg(feature = "cuda")]
+mod q;
+
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.
 pub struct GpuQrDecomposition {
@@ -61,6 +66,16 @@ impl GpuQrDecomposition {
     #[inline]
     pub fn r_buffer(&self) -> &CudaBuffer<f32> {
         &self.r
+    }
+
+    /// Take ownership of the device-resident **R** buffer.
+    ///
+    /// This avoids a device-to-device copy when a caller needs **R** as an
+    /// independent result after consuming the decomposition.
+    #[must_use]
+    #[inline]
+    pub fn into_r_buffer(self) -> CudaBuffer<f32> {
+        self.r
     }
 
     /// Borrow the host-side Leto decomposition.
@@ -228,7 +243,8 @@ pub fn qr_decompose_blocked(
         let vectors_dev = device.alloc_uninitialized::<f32>(m * block_size)?;
 
         // Pre-allocate reflector buffer.
-        let reflector_dev = device.alloc_uninitialized::<hh_impl::HhReflectorMeta>(block_size)?;
+        let reflector_dev =
+            device.alloc_uninitialized::<householder::HhReflectorMeta>(block_size)?;
 
         for k in (0..n).step_by(block_size) {
             let b = block_size.min(n - k);
@@ -289,18 +305,19 @@ pub fn qr_decompose_blocked(
             // ── Step 6: Apply b Householder reflectors on GPU in-place ──
             device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
 
-            hh_impl::hh_trailing_update(
+            householder::hh_trailing_update(
                 device,
-                &vectors_dev,
-                &work_buf,
-                &reflector_dev,
-                panel_rows,
-                trail_cols,
-                n,
-                k,
-                b,
-                &vector_offsets,
-                &betas,
+                householder::HhTrailingUpdate {
+                    vectors: &vectors_dev,
+                    matrix: &work_buf,
+                    reflectors: &reflector_dev,
+                    panel_rows,
+                    trail_cols,
+                    matrix_cols: n,
+                    panel_start: k,
+                    vector_offsets: &vector_offsets,
+                    betas: &betas,
+                },
             )?;
         }
 
@@ -340,189 +357,3 @@ pub fn qr_decompose_blocked(
 }
 
 // Custom gather/scatter compute kernels removed in favor of generic MatrixRegion transfers.
-
-#[cfg(feature = "cuda")]
-mod hh_impl {
-    use super::*;
-    use crate::application::linalg::to_u32;
-    use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
-
-    #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Zeroable)]
-    pub(super) struct HhReflectorMeta {
-        pub(super) vector_offset: u32,
-        pub(super) beta: f32,
-    }
-
-    // SAFETY: `HhReflectorMeta` is `#[repr(C)]` and contains one `u32` and
-    // one `f32` field of identical size and alignment, so it has no padding
-    // bytes, and every bit pattern is valid for both types.
-    unsafe impl bytemuck::Pod for HhReflectorMeta {}
-
-    #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Zeroable)]
-    pub struct HhMeta {
-        panel_rows: u32,
-        reflector_count: u32,
-        trail_cols: u32,
-        matrix_cols: u32,
-        k: u32,
-        _pad: [u32; 3],
-    }
-
-    // SAFETY: `HhMeta` is `#[repr(C)]` and contains only `u32` fields of
-    // identical size and alignment (the trailing `[u32; 3]` pads the struct
-    // to 32 bytes explicitly), so it has no implicit padding bytes, and
-    // every bit pattern is a valid value.
-    unsafe impl bytemuck::Pod for HhMeta {}
-
-    fn hh_shader_source() -> String {
-        r#"
-    struct ReflectorMeta {
-        unsigned int vector_offset;
-        float beta;
-    };
-
-    struct HhMeta {
-        unsigned int panel_rows;
-        unsigned int reflector_count;
-        unsigned int trail_cols;
-        unsigned int matrix_cols;
-        unsigned int k;
-        unsigned int _pad0;
-        unsigned int _pad1;
-        unsigned int _pad2;
-    };
-
-    extern "C" __global__ void householder_kernel(
-        const float* v_buf,
-        float* a_buf,
-        const ReflectorMeta* reflector_buf,
-        HhMeta meta
-    ) {
-        __shared__ float sdata[256];
-
-        unsigned int wid_x = blockIdx.x;
-        unsigned int col = meta.k + meta.reflector_count + wid_x;
-        unsigned int tid = threadIdx.x;
-
-        if (col >= meta.matrix_cols) {
-            return;
-        }
-
-        unsigned int n_cols = meta.matrix_cols;
-        unsigned int k_offset = meta.k;
-
-        for (unsigned int reflector = 0u; reflector < meta.reflector_count; reflector++) {
-            unsigned int n_rows = meta.panel_rows - reflector;
-            unsigned int start_row = k_offset + reflector;
-            unsigned int v_off = reflector_buf[reflector].vector_offset;
-            float beta = reflector_buf[reflector].beta;
-
-            // Phase 1: partial dot = v^T · A[start_row:m, col]
-            float partial = 0.0f;
-            unsigned int row = tid;
-            while (row < n_rows) {
-                unsigned int a_idx = (start_row + row) * n_cols + col;
-                partial += v_buf[v_off + row] * a_buf[a_idx];
-                row += 256u;
-            }
-            sdata[tid] = partial;
-            __syncthreads();
-
-            // Parallel tree reduction
-            for (unsigned int s = 128u; s > 0u; s >>= 1u) {
-                if (tid < s) {
-                    sdata[tid] += sdata[tid + s];
-                }
-                __syncthreads();
-            }
-
-            float dot = sdata[0];
-            __syncthreads();
-
-            // Phase 2: A[start_row:m, col] -= beta * v * dot
-            row = tid;
-            while (row < n_rows) {
-                unsigned int a_idx = (start_row + row) * n_cols + col;
-                a_buf[a_idx] -= beta * v_buf[v_off + row] * dot;
-                row += 256u;
-            }
-            __syncthreads();
-        }
-    }
-        "#
-        .to_string()
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn hh_trailing_update(
-        device: &CudaDevice,
-        v_buf: &CudaBuffer<f32>,
-        a_buf: &CudaBuffer<f32>,
-        reflector_buf: &CudaBuffer<HhReflectorMeta>,
-        panel_rows: usize,
-        trail_cols: usize,
-        matrix_cols: usize,
-        k: usize,
-        reflector_count: usize,
-        vector_offsets: &[usize],
-        betas: &[f32],
-    ) -> Result<()> {
-        if panel_rows == 0 || trail_cols == 0 || reflector_count == 0 {
-            return Ok(());
-        }
-
-        let meta = HhMeta {
-            panel_rows: to_u32(panel_rows, "HH panel_rows")?,
-            reflector_count: to_u32(reflector_count, "HH reflector_count")?,
-            trail_cols: to_u32(trail_cols, "HH trail_cols")?,
-            matrix_cols: to_u32(matrix_cols, "HH matrix_cols")?,
-            k: to_u32(k, "HH k")?,
-            _pad: [0; 3],
-        };
-
-        let reflector_host: Vec<HhReflectorMeta> = vector_offsets
-            .iter()
-            .copied()
-            .zip(betas.iter().copied())
-            .map(|(offset, beta)| {
-                let vector_offset = to_u32(offset, "HH vector_offset")?;
-                Ok(HhReflectorMeta {
-                    vector_offset,
-                    beta,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        device.write_sub_buffer(reflector_buf, 0, &reflector_host)?;
-
-        let kernel = cached_kernel(
-            device,
-            PipelineKey::QrHouseholder,
-            "householder_kernel",
-            hh_shader_source,
-        )?;
-
-        let mut v_ptr = v_buf.raw();
-        let mut a_ptr = a_buf.raw();
-        let mut ref_ptr = reflector_buf.raw();
-        let mut meta_val = meta;
-
-        // Argument list mirrors `householder_kernel(const float*, float*,
-        // const ReflectorMeta*, HhMeta)`.
-        let mut args: [*mut std::ffi::c_void; 4] = [
-            &mut v_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut ref_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut meta_val as *mut HhMeta as *mut std::ffi::c_void,
-        ];
-
-        // 256-thread blocks match the kernel's fixed `sdata[256]` reduction tile.
-        launch_kernel(
-            device,
-            &kernel,
-            LaunchConfig::planar(trail_cols as u32, 1, 256, 1),
-            &mut args,
-        )
-    }
-}

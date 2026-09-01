@@ -22,6 +22,8 @@ mod pinv_matexp;
 
 pub use kron::{kron, kron_into};
 pub use matmul::{batched_matmul, batched_matmul_into, matmul, matmul_into};
+#[cfg(all(feature = "cuda", feature = "decomposition"))]
+pub(crate) use matpow::device_identity;
 pub use matpow::{MatrixIdentityScalar, matpow};
 #[cfg(feature = "decomposition")]
 pub use matrix::MatrixDecompose;

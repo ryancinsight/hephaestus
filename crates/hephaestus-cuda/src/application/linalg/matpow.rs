@@ -54,7 +54,11 @@ extern "C" __global__ void matrix_identity_kernel(
     )
 }
 
-fn device_identity<T>(device: &CudaDevice, rows: usize, len: usize) -> Result<CudaBuffer<T>>
+pub(crate) fn device_identity<T>(
+    device: &CudaDevice,
+    rows: usize,
+    len: usize,
+) -> Result<CudaBuffer<T>>
 where
     T: MatrixIdentityScalar,
 {

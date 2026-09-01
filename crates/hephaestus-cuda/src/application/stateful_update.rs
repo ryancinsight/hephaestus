@@ -180,6 +180,8 @@ fn validate_device<const N: usize>(
     device: &CudaDevice,
     operands: &StatefulUpdateOperands<'_, CudaBuffer<f32>, N>,
 ) -> Result<()> {
+    #[cfg(not(feature = "cuda"))]
+    let _ = device;
     #[cfg(feature = "cuda")]
     let matches = |buffer: &CudaBuffer<f32>| {
         buffer
