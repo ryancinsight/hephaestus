@@ -1,14 +1,12 @@
 //! Matrix factorisations: Cholesky, LU (partial and full pivoting), QR
 //! (plain and column-pivoted), Hessenberg, bidiagonalisation, and
 //! Bunch-Kaufman. Factor-splitting math lives in the backends; this module
-//! only marshals buffers. The WGPU LU paths split the packed factor on the
-//! device via `hephaestus_wgpu::split_packed_lu`, so **L** and **U** stay
-//! resident; the CUDA paths still round-trip through
-//! `hephaestus_core::split_packed_lu` on the host.
+//! only marshals buffers. Both GPU backends split packed LU factors on-device,
+//! so **L** and **U** remain resident without host staging.
 
 use crate::array::PyArray;
 use crate::backend::{BackendBuffer, BackendDevice, clone_cuda_buffer};
-use hephaestus_core::{ComputeDevice, split_packed_lu};
+use hephaestus_core::ComputeDevice;
 use leto::Layout;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -86,10 +84,9 @@ pub(crate) fn lu(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::lu_decompose_blocked(device, op)?;
-                let host_factors = device.download_owned(decomp.factors())?;
-                let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
-                let l_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?));
-                let u_buf = BackendBuffer::Cuda(Arc::new(device.upload(&host_u)?));
+                let (lower, upper) = hephaestus_cuda::split_packed_lu(device, decomp.factors(), n)?;
+                let l_buf = BackendBuffer::Cuda(Arc::new(lower));
+                let u_buf = BackendBuffer::Cuda(Arc::new(upper));
                 Ok((decomp.pivots().to_vec(), l_buf, u_buf))
             }
             _ => Err(hephaestus_core::HephaestusError::DispatchFailed {
@@ -211,11 +208,11 @@ pub(crate) fn full_piv_lu(
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::full_piv_lu(device, op)?;
-                let host_factors = device.download_owned(decomp.lu_buffer())?;
-                let (host_l, host_u) = split_packed_lu(&host_factors, n)?;
+                let (lower, upper) =
+                    hephaestus_cuda::split_packed_lu(device, decomp.lu_buffer(), n)?;
                 Ok((
-                    BackendBuffer::Cuda(Arc::new(device.upload(&host_l)?)),
-                    BackendBuffer::Cuda(Arc::new(device.upload(&host_u)?)),
+                    BackendBuffer::Cuda(Arc::new(lower)),
+                    BackendBuffer::Cuda(Arc::new(upper)),
                     decomp.row_permutation().to_vec(),
                     decomp.col_permutation().to_vec(),
                 ))
@@ -351,17 +348,22 @@ pub(crate) fn qr(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray)> {
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::qr_decompose_blocked(device, op)?;
+                let (m, n) = decomp.shape();
                 let q_host = decomp.inner().q();
-                let r_host = decomp.inner().r();
+                // Blocked CUDA QR still factors each panel on the CPU and
+                // retains those reflectors in `inner`, while the provider has
+                // no device-side Q-accumulation seam yet. Q therefore remains
+                // an intentional host construction and upload. R already
+                // resides in the cleaned upper triangle of `r_buffer`, so it
+                // is cloned device-to-device instead of materialized and
+                // uploaded through the host.
                 Ok((
                     BackendBuffer::Cuda(Arc::new(
                         device.upload(leto::Storage::as_slice(q_host.storage()))?,
                     )),
-                    BackendBuffer::Cuda(Arc::new(
-                        device.upload(leto::Storage::as_slice(r_host.storage()))?,
-                    )),
-                    vec![q_host.shape()[0], q_host.shape()[1]],
-                    vec![r_host.shape()[0], r_host.shape()[1]],
+                    clone_cuda_buffer(device, decomp.r_buffer())?,
+                    vec![m, m],
+                    vec![m, n],
                 ))
             }
             _ => Err(hephaestus_core::HephaestusError::DispatchFailed {

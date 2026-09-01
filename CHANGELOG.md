@@ -4,6 +4,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] Add CUDA's device-resident packed-LU split. The Python `lu` and
+  `full_piv_lu` paths no longer download `n²` packed values and upload `2n²`
+  explicit-factor values (12 MiB of avoidable PCIe traffic at `n = 1024`).
+  CUDA QR now clones its already-device-resident **R** buffer rather than
+  materializing and re-uploading it; **Q** remains host-accumulated because
+  the blocked CUDA algorithm performs CPU panel factorization and has no
+  device reflector-accumulation seam. Exact boundary tests compare CUDA's
+  copy-and-mask output bitwise with the host oracle and reject foreign-device
+  buffers before dispatch.
+
 - [patch] Defer the WGPU blocked Cholesky's host factor. PR #236 moved the
   factorization's closing strict-upper zeroing onto the device but left
   `cholesky_decompose_blocked` building an eager `n × n` host copy of the

@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [patch] — in progress
+## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — in progress
 
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
   asymmetric. wgpu splits packed factors **on device** via
@@ -32,6 +32,9 @@
   with no arithmetic, so no tolerance applies; the three binding sites carry
   no `download_owned`/`upload` pair; `:358` either becomes a device path or
   its host computation is documented as deliberate with the reason.
+- **Classification:** additive public CUDA parity is SemVer minor. CUDA QR's
+  retained **R** now stays on-device; host **Q** accumulation remains explicit
+  because blocked QR has no CUDA reflector-accumulation seam.
 - **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
   — verify before deferring (recorded blockers expire). If the CUDA feature
   does not build here, that is the first finding, not grounds to close.

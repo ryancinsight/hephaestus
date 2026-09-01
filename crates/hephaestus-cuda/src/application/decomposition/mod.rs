@@ -137,6 +137,7 @@ pub mod hessenberg;
 pub mod lu;
 pub mod qr;
 pub mod schur;
+pub mod split;
 pub mod svd;
 pub mod udu;
 
@@ -153,5 +154,6 @@ pub use hessenberg::{GpuHessenbergDecomposition, hessenberg};
 pub use lu::{GpuLuDecomposition, lu_decompose, lu_decompose_blocked};
 pub use qr::{GpuQrDecomposition, qr_decompose, qr_decompose_blocked};
 pub use schur::{GpuRealSchur, schur};
+pub use split::split_packed_lu;
 pub use svd::{GpuSvdDecomposition, singular_values, svd_decompose, svd_rank_revealing};
 pub use udu::{GpuUduDecomposition, udu_decompose};
