@@ -27,6 +27,88 @@
   a real adapter (0 skipped), doctests; a new contract case registered in
   `contracts.rs` with the `CONTRACT_CASES.len()` guard bumped; deliberate
   perturbation of the new device path to prove the case can fail.
+- **What forced the host array** (audit, `decomposition/cholesky.rs` at
+  `63f5661`): exactly three reads of `GpuCholesky::inner` — `det` :301,
+  `solve` :328, `inv` :341-346. The field is private and has no other reader.
+  `det` needs only the factor diagonal; `solve` and `inv` need the whole
+  `n × n` array for host substitution.
+- **Delivered** (`7643ed4`): the blocked path retains the `n`-element factor
+  diagonal, captured inside the existing panel loop at zero transfer and zero
+  dispatch cost, and `inner` becomes a `OnceLock` the first `solve`/`inv`
+  fills by downloading the device factor. The host-delegating entry point
+  populates it eagerly as before. Both `n == 0` arms stop building a throwaway
+  leto decomposition, and the panel loop's two duplicate scatter/write blocks
+  collapse to one.
+- **Scoped out, with reason**: device-side triangular `solve` and device-side
+  `inv` — each is its own vertical item. A *device reduction* for `det` was
+  rejected as the wrong shape: the diagonal is already host-resident inside
+  the panel loop, so capturing it costs nothing, whereas a reduction adds a
+  dispatch plus a readback per call and reorders the product, breaking the
+  bitwise `det` equality two existing contract cases assert.
+- **Evidence — transfers/allocations, by inspection**: factorization-time
+  device transfers unchanged (the diagonal comes from the per-panel
+  `download_matrix_region_compact_into` that already ran). `det`: still 0
+  dispatches and 0 readbacks. Host memory no longer materialized per blocked
+  factorization: `4n² − 4n = 4n(n−1)` bytes — 143 KiB at n = 192, 255 KiB at
+  n = 256 — plus the eliminated scatter of `n²(p+1)/(2p)` host writes over
+  `p = ⌈n/64⌉` panels (→ `≈ n²/2`). Accepted cost: the blocked path's first
+  `solve`/`inv` adds one `4n²`-byte readback, cached for every later call;
+  the host-delegating path adds none.
+- **Evidence — differential**: new case
+  `blocked_cholesky_retains_factor_diagonal_across_panels` at n = 160 (three
+  panels, 64/64/32, ragged tail — regime asserted explicitly, since
+  `block_size = BLOCK_SIZE.min(n)` makes any `n ≤ 64` a single SYRK-free
+  panel). It asserts `det()` *bitwise* against the product recomputed from the
+  downloaded device diagonal, then differentially against leto within
+  `4n(n+1)ε ≈ 1.23e-2` relative — derived from Higham (ASNA 2nd ed., Thm 10.3)
+  as `4n(n+1)κ∞·u` with `u = ε/2` and `κ∞ ≤ 2` for the strictly diagonally
+  dominant fixture — and exercises the deferred materialization through
+  `solve` plus a cached repeat solve.
+- **Evidence — liveness**: scaling the diagonal capture by `1.000_01` made the
+  new case FAIL at `contract.rs:4361` with `left: 2.3870195e23` vs
+  `right: 2.3794136e23`, and also tripped the pre-existing
+  `blocked_cholesky_identity_yields_identity_lower` (`1.00004` vs `1.0`).
+  Note the derived *tolerance* alone did not catch it (3.2e-3 relative sits
+  inside the 1.23e-2 bound) — the bitwise assertion is the sharp oracle and
+  the tolerance is the backstop. Restored; all cases pass.
+- **Evidence — gates**: `cargo fmt -p hephaestus-wgpu -- --check` clean;
+  `cargo clippy -p hephaestus-wgpu --all-targets -- -D warnings` clean;
+  `cargo nextest run -p hephaestus-wgpu` 31 passed, **0 skipped**, 14.553 s
+  on a real adapter (`HEPHAESTUS_WGPU_REQUIRE_DEVICE=1`);
+  `cargo test -p hephaestus-wgpu --doc` 2 passed;
+  `cargo check --workspace --all-targets` clean (metal re-exports this type).
+  `CONTRACT_CASES.len()` 173 → 174. Lockfile untouched.
+- **Residual**: `solve` and `inv` remain host substitution, so the `n × n`
+  download still happens for any caller that uses them. Retiring it needs
+  device-side triangular solve — filed below.
+
+## HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — todo
+
+- **Owner**: unclaimed.
+- **Outcome**: run `GpuCholesky::solve` as two device-side triangular solves
+  against the resident lower factor, retiring the `4n²`-byte host-factor
+  download that HEPH-CHOLESKY-LAZY-HOST-FACTOR deferred but did not remove,
+  plus the per-solve `4n`-byte RHS download and solution upload
+  (`decomposition/cholesky.rs` `solve`).
+- **Scope**: the WGPU handle's `solve` only. **Non-goals**: `inv` (n solves;
+  its own item once `solve` lands), the CUDA/ROCm siblings, and any
+  `CholeskyHandle` signature change — `solve` already takes `&device`.
+- **Acceptance oracle**: forward and backward substitution kernels agree with
+  `leto_ops::CholeskyDecomposition::solve` within a derived bound
+  (`≲ 2n(n+1)κ∞·u`, Higham ASNA 2nd ed. ch. 8); a multi-panel fixture
+  (`n > 64`, ragged tail) asserts the regime explicitly; `inner` stays
+  unmaterialized across a factor-then-solve sequence.
+- **Risk / change class**: [patch] — no public signature change. Note
+  `HephaestusError` is not `#[non_exhaustive]`, so any new error variant
+  reclassifies this to [major].
+- **Dependencies**: none; HEPH-CHOLESKY-LAZY-HOST-FACTOR already isolated the
+  host factor behind `host_factor`, so this item deletes one call site.
+- **Verification plan**: warning-denied focused gates, WGPU Nextest with a
+  real adapter, a new contract case registered with the `CONTRACT_CASES.len()`
+  guard bumped, and a deliberate kernel perturbation proving it fails.
+- **DoR gap**: the substitution kernels are sequential in the solved index, so
+  the parallelization strategy (blocked/level-scheduled forward substitution
+  vs. a per-row dispatch chain) needs a spike before the item is Ready.
 
 ## ✅ HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — done 2026-08-31
 
