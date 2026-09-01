@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [patch] — todo
+## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [patch] — in progress
 
 - **Context:** the wgpu and CUDA arms of the Python decomposition bindings are
   asymmetric. wgpu splits packed factors **on device** via
@@ -35,6 +35,10 @@
 - **Blocker check:** needs CUDA hardware. An RTX 5080 is present on this host
   — verify before deferring (recorded blockers expire). If the CUDA feature
   does not build here, that is the first finding, not grounds to close.
+- **Integrator / lease:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`;
+  branch=`perf/cuda-packed-lu-split`; lease=`crates/hephaestus-cuda/src/
+  application/decomposition`, `crates/hephaestus-python/src/decomposition.rs`,
+  focused CUDA/Python tests, CHANGELOG, and this item; last-update=2026-09-01.
 
 ## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
 
