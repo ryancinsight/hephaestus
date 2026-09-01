@@ -1,5 +1,33 @@
 # Backlog — hephaestus
 
+## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
+
+- **Owner / integrator**: Claude session 5050c72a. Lease:
+  `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`,
+  `crates/hephaestus-wgpu/tests/{contract.rs,contracts.rs}`.
+- **Outcome**: retire the eager `n²` host factor materialization that
+  `cholesky_decompose_blocked` builds alongside the device factor, so a
+  caller that factors and reads `det`/`lower` never pays for it.
+- **Driver**: PR #236 moved the closing strict-upper zeroing onto the device
+  but left `GpuCholesky::inner`'s host array in place because `det`, `solve`,
+  and `inv` read it. Nothing tracked retiring it.
+- **Scope**: the WGPU `GpuCholesky` handle and its two entry points.
+  **Non-goals**: device-side triangular `solve`, device-side `inv`, the CUDA
+  and ROCm sibling handles, and any `CholeskyHandle` signature change.
+- **Acceptance oracle**: `det()` stays bitwise equal to
+  `leto_ops::CholeskyDecomposition::det` on both entry points (two existing
+  contract cases assert this exactly); the captured diagonal is bitwise equal
+  to the device factor's diagonal in the multi-panel regime; `solve` after the
+  lazy materialization matches the host reference within a derived bound.
+- **Risk / change class**: [patch]. No public signature changes, no new
+  `HephaestusError` variant (the enum is not `#[non_exhaustive]`, so a variant
+  would be [major]); `GpuCholesky`'s fields are private.
+- **Dependencies**: none.
+- **Verification plan**: warning-denied focused fmt/clippy, WGPU Nextest with
+  a real adapter (0 skipped), doctests; a new contract case registered in
+  `contracts.rs` with the `CONTRACT_CASES.len()` guard bumped; deliberate
+  perturbation of the new device path to prove the case can fail.
+
 ## ✅ HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — done 2026-08-31
 
 - **Outcome**: restore the Atlas conformance ratchet without raising its
