@@ -41,12 +41,16 @@ pub mod ops;
 pub mod parameterized;
 /// Shared narrowing/error helpers for dispatch planning.
 pub(crate) mod planning;
+/// Device-neutral spatial pooling operands, planning, and dispatch seam.
+pub mod pooling;
 /// Device-neutral seeded random initialization seam.
 pub mod random;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
+/// Device-neutral spatial unfold/fold operands, planning, and dispatch seam.
+pub mod sliding_window;
 /// Device-neutral sparse operator contracts.
 pub mod sparse;
 /// Provider-owned stateful parameter-update rules and dispatch seam.
@@ -61,3 +65,5 @@ pub mod vector;
 pub mod view;
 /// Volume contracts.
 pub mod volume;
+/// Shared spatial-window geometry and validation.
+pub mod window;

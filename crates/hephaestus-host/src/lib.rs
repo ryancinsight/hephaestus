@@ -10,8 +10,14 @@
 
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
+/// Leto-backed pooling seam implementor.
+pub mod pooling;
+/// Leto-backed unfold/fold seam implementor.
+pub mod sliding_window;
 
 pub use decomposition::HostDecompositionOps;
+pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
+pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -58,10 +64,14 @@ impl<T> HostBuffer<T> {
             .expect("invariant: host buffer lock is never poisoned")
     }
 
-    fn write(&self) -> RwLockWriteGuard<'_, Vec<T>> {
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, Vec<T>> {
         self.cells
             .write()
             .expect("invariant: host buffer lock is never poisoned")
+    }
+
+    pub(crate) fn aliases(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.cells, &other.cells)
     }
 }
 
@@ -95,6 +105,12 @@ impl HostDevice {
                 device_len: expected,
             })
         }
+    }
+}
+
+pub(crate) fn map_leto_error<E: core::fmt::Display>(error: E) -> HephaestusError {
+    HephaestusError::DispatchFailed {
+        message: format!("host window operation failed: {error}"),
     }
 }
 
