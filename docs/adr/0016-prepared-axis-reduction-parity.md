@@ -1,4 +1,4 @@
-# ADR 0016 (hephaestus): prepared axis reduction parity
+# ADR 0016: prepared axis reduction parity
 
 - Status: Accepted
 - Class: [minor]

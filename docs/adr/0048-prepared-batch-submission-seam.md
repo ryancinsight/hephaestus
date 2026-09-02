@@ -1,4 +1,4 @@
-# ADR 0048 — Prepared batch submission seam
+# ADR 0048: Prepared batch submission seam
 
 - Status: Accepted
 - Date: 2026-08-01 (revised same day: implemented as-designed for the

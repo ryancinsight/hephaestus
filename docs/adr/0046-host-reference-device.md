@@ -1,4 +1,4 @@
-# ADR 0046 — Host reference device and the Leto implementor
+# ADR 0046: Host reference device and the Leto implementor
 
 - Status: Accepted
 - Revision 2026-08-26: ADR 0053 exempts FFT from a `HostDevice` implementor.

@@ -1,4 +1,4 @@
-# ADR 0012 (hephaestus): native ROCm backend through HIP
+# ADR 0012: native ROCm backend through HIP
 
 - Status: Accepted
 - Date: 2026-07-24

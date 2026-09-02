@@ -1,4 +1,4 @@
-# ADR 0003 — Blocked-decomposition host-loop consolidation
+# ADR 0003: Blocked-decomposition host-loop consolidation
 
 - Status: Accepted
 - Revision (2026-08-14): LU and Cholesky per-panel extraction plus the blocked-LU host-loop hoist are implemented. QR compute and the loop-structure trait hoist remain pending; this status records the accepted architecture, not completion of every sequenced increment.

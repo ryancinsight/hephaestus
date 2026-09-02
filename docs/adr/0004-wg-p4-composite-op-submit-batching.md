@@ -1,4 +1,4 @@
-# ADR 0004 — WG-P4 composite-op submit batching (norm_l2 / matpow)
+# ADR 0004: WG-P4 composite-op submit batching (norm_l2 / matpow)
 
 - Status: Accepted
 - Revision (2026-08-14): The 2026-07-21 amendment is the current implementation: prepared reduction, map-reduction, dot, and L2-norm operations own the canonical encoder/submission seam. The amendment remains recorded below; no parallel ad-hoc encoder family is introduced.

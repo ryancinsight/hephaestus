@@ -1,4 +1,4 @@
-# ADR 0045 — Provider-owned stateful elementwise updates
+# ADR 0045: Provider-owned stateful elementwise updates
 
 - Status: Accepted
 - Date: 2026-08-01

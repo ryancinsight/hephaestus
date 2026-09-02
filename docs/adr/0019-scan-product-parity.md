@@ -1,4 +1,4 @@
-# ADR 0019 (hephaestus): cumulative-product scan parity
+# ADR 0019: cumulative-product scan parity
 
 - Status: Accepted
 - Class: [minor]

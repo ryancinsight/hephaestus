@@ -6,8 +6,8 @@
 
 | ADR | Title | Status |
 | --- | ----- | ------ |
-| [0001](0001-cuda-backend.md) | ADR 0001 (hephaestus): CUDA backend composing cuda-oxide + cutile | Accepted |
-| [0002](0002-atlas-compute-boundaries.md) | ADR 0002 (hephaestus): Atlas compute-boundary integration | Accepted |
+| [0001](0001-cuda-backend.md) | CUDA backend composing cuda-oxide + cutile | Accepted |
+| [0002](0002-atlas-compute-boundaries.md) | Atlas compute-boundary integration | Accepted |
 | [0003](0003-blocked-decomposition-consolidation.md) | Blocked-decomposition host-loop consolidation | Accepted |
 | [0004](0004-wg-p4-composite-op-submit-batching.md) | WG-P4 composite-op submit batching (norm_l2 / matpow) | Accepted |
 | [0005](0005-immutable-wgpu-staging-callbacks.md) | Immutable WGPU staging callbacks | Rejected |
@@ -17,20 +17,20 @@
 | [0009](0009-order-preserving-tiled-scan.md) | Order-preserving tiled axis scans | Accepted |
 | [0010](0010-eunomia-complex-provider.md) | Eunomia complex provider | Accepted |
 | [0011](0011-aequitas-stencil-spacing.md) | Aequitas stencil spacing | Accepted |
-| [0012](0012-rocm-backend.md) | ADR 0012 (hephaestus): native ROCm backend through HIP | Accepted |
-| [0013](0013-backend-volume-parity.md) | ADR 0013 (hephaestus): backend-neutral volume ray-integral parity | Accepted |
-| [0014](0014-backend-stencil-parity.md) | ADR 0014 (hephaestus): backend-neutral 2D Laplacian stencil parity | Accepted |
-| [0015](0015-prepared-reduction-parity.md) | ADR 0015 (hephaestus): prepared scalar reduction parity | Accepted |
-| [0016](0016-prepared-axis-reduction-parity.md) | ADR 0016 (hephaestus): prepared axis reduction parity | Accepted |
-| [0017](0017-prepared-sparse-parity.md) | ADR 0017 (hephaestus): prepared sparse parity | Accepted |
-| [0018](0018-prepared-map-reduction-parity.md) | ADR 0018 (hephaestus): prepared map-reduction parity | Accepted |
-| [0019](0019-scan-product-parity.md) | ADR 0019 (hephaestus): cumulative-product scan parity | Accepted |
-| [0020](0020-metal-random-parity.md) | ADR 0020 (hephaestus): Metal seeded-random parity | Accepted |
-| [0021](0021-metal-fluent-linalg-parity.md) | ADR 0021 (hephaestus): Metal fluent linear-algebra parity | Accepted |
-| [0022](0022-metal-authored-kernel-parity.md) | ADR 0022 (hephaestus): Metal authored-kernel parity | Accepted |
-| [0023](0023-metal-exp-neg-parity.md) | ADR 0023 (hephaestus): Metal fused negated exponential parity | Accepted |
-| [0024](0024-blocked-pivoted-parity.md) | ADR 0024 (hephaestus): blocked pivoted-decomposition parity | Accepted |
-| [0025](0025-metal-reduce-into-parity.md) | ADR 0025 (hephaestus): Metal axis-reduction output parity | Accepted |
+| [0012](0012-rocm-backend.md) | native ROCm backend through HIP | Accepted |
+| [0013](0013-backend-volume-parity.md) | backend-neutral volume ray-integral parity | Accepted |
+| [0014](0014-backend-stencil-parity.md) | backend-neutral 2D Laplacian stencil parity | Accepted |
+| [0015](0015-prepared-reduction-parity.md) | prepared scalar reduction parity | Accepted |
+| [0016](0016-prepared-axis-reduction-parity.md) | prepared axis reduction parity | Accepted |
+| [0017](0017-prepared-sparse-parity.md) | prepared sparse parity | Accepted |
+| [0018](0018-prepared-map-reduction-parity.md) | prepared map-reduction parity | Accepted |
+| [0019](0019-scan-product-parity.md) | cumulative-product scan parity | Accepted |
+| [0020](0020-metal-random-parity.md) | Metal seeded-random parity | Accepted |
+| [0021](0021-metal-fluent-linalg-parity.md) | Metal fluent linear-algebra parity | Accepted |
+| [0022](0022-metal-authored-kernel-parity.md) | Metal authored-kernel parity | Accepted |
+| [0023](0023-metal-exp-neg-parity.md) | Metal fused negated exponential parity | Accepted |
+| [0024](0024-blocked-pivoted-parity.md) | blocked pivoted-decomposition parity | Accepted |
+| [0025](0025-metal-reduce-into-parity.md) | Metal axis-reduction output parity | Accepted |
 | [0026](0026-suffix-scan-parity.md) | Reverse cumulative-sum convenience parity | Accepted |
 | [0027](0027-typed-comparison-expression-parity.md) | Typed comparison expression parity | Accepted |
 | [0028](0028-unary-math-expression-parity.md) | Unary math expression parity | Accepted |

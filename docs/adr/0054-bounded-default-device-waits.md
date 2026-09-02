@@ -1,4 +1,4 @@
-# ADR 0054 — Bounded default device waits
+# ADR 0054: Bounded default device waits
 
 - Status: Accepted
 - Date: 2026-08-31

@@ -1,4 +1,4 @@
-# ADR 0001 (hephaestus): CUDA backend composing cuda-oxide + cutile
+# ADR 0001: CUDA backend composing cuda-oxide + cutile
 
 - Status: Accepted
 - Date: 2026-06-10

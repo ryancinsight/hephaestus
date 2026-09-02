@@ -1,4 +1,4 @@
-# ADR 0017 (hephaestus): prepared sparse parity
+# ADR 0017: prepared sparse parity
 
 - Status: Accepted
 - Class: [minor]

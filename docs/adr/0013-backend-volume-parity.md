@@ -1,4 +1,4 @@
-# ADR 0013 (hephaestus): backend-neutral volume ray-integral parity
+# ADR 0013: backend-neutral volume ray-integral parity
 
 - Status: Accepted
 - Class: [minor]

@@ -1,4 +1,4 @@
-# ADR 0047 — Metal is a WGPU adapter preference, not a backend crate
+# ADR 0047: Metal is a WGPU adapter preference, not a backend crate
 
 - Status: Accepted
 - Date: 2026-08-03

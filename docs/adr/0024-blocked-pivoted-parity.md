@@ -1,4 +1,4 @@
-# ADR 0024 (hephaestus): blocked pivoted-decomposition parity
+# ADR 0024: blocked pivoted-decomposition parity
 
 - Status: Accepted
 - Class: [minor]
