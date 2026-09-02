@@ -400,7 +400,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "eunomia"
 version = "0.8.0"
-source = "git+https://github.com/ryancinsight/eunomia#ce928c8b38c8e5d0d37d0662b1d4f7195c3caafa"
+source = "git+https://github.com/ryancinsight/eunomia#01b75e04f189c5d2504b013885915284180a0063"
 dependencies = [
  "bytemuck",
  "libm",
@@ -934,7 +934,7 @@ dependencies = [
 [[package]]
 name = "melinoe"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/melinoe.git#f7fa27ac45a47837d33c61f2583ee37b2e648344"
+source = "git+https://github.com/ryancinsight/melinoe.git#e3ca88ec5e9af6c875efc5ec1e7a79171146d6bd"
 
 [[package]]
 name = "memchr"
@@ -954,7 +954,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-arena"
 version = "0.4.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "eunomia",
  "loom",
@@ -966,7 +966,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-backend"
 version = "0.5.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "mnemosyne-memory-core",
 ]
@@ -974,12 +974,12 @@ dependencies = [
 [[package]]
 name = "mnemosyne-build-util"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 
 [[package]]
 name = "mnemosyne-decay"
 version = "0.3.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
@@ -989,7 +989,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-heap"
 version = "0.4.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "libc",
  "melinoe",
@@ -1004,7 +1004,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-local"
 version = "0.4.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "melinoe",
  "mnemosyne-arena",
@@ -1019,7 +1019,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-memory"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "eunomia",
  "mnemosyne-arena",
@@ -1034,7 +1034,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-memory-core"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "loom",
 ]
@@ -1042,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-prof"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#5a433fb9b033db5795e1d452c98f1075ee777946"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#b760bd7a36066ab30409712a8350730ddc3a350b"
 dependencies = [
  "backtrace",
  "mnemosyne-build-util",
@@ -2011,7 +2011,7 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 [[package]]
 name = "themis-topology"
 version = "0.10.1"
-source = "git+https://github.com/ryancinsight/themis#9fd113fd03bb8006f6a8e4c3e6ac683f7910628a"
+source = "git+https://github.com/ryancinsight/themis#1510dbb9683dfffdc0c32eef36e4d9896331f430"
 dependencies = [
  "melinoe",
 ]
@@ -2435,7 +2435,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
