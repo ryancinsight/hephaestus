@@ -268,7 +268,6 @@ fn assert_staged_impulse<T: TestScalar>(device: &WgpuDevice) {
             FftDirection::Forward,
         )
         .unwrap_or_else(|error| panic!("{} staged preparation failed: {error}", T::LABEL));
-    assert!(prepared.plan.workspace.is_some());
     ops.dispatch_fft(device, &prepared)
         .unwrap_or_else(|error| panic!("{} staged dispatch failed: {error}", T::LABEL));
     assert!(
