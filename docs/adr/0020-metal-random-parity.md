@@ -1,4 +1,4 @@
-# ADR 0020 (hephaestus): Metal seeded-random parity
+# ADR 0020: Metal seeded-random parity
 
 - Status: Accepted
 - Class: [minor]

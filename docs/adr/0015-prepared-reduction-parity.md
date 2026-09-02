@@ -1,4 +1,4 @@
-# ADR 0015 (hephaestus): prepared scalar reduction parity
+# ADR 0015: prepared scalar reduction parity
 
 - Status: Accepted
 - Class: [minor]

@@ -1,4 +1,4 @@
-# ADR 0002 (hephaestus): Atlas compute-boundary integration
+# ADR 0002: Atlas compute-boundary integration
 
 ## Status
 

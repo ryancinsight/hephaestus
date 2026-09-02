@@ -1,4 +1,4 @@
-# ADR 0018 (hephaestus): prepared map-reduction parity
+# ADR 0018: prepared map-reduction parity
 
 - Status: Accepted
 - Class: [minor]

@@ -1,4 +1,4 @@
-# ADR 0052 — Device-neutral sliding-window seam
+# ADR 0052: Device-neutral sliding-window seam
 
 - Status: Proposed
 - Date: 2026-08-18

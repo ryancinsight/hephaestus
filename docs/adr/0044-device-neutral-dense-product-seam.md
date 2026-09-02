@@ -1,4 +1,4 @@
-# ADR 0044 — Device-neutral dense product seam
+# ADR 0044: Device-neutral dense product seam
 
 - Status: Accepted
 - Date: 2026-08-01

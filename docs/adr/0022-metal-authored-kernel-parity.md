@@ -1,4 +1,4 @@
-# ADR 0022 (hephaestus): Metal authored-kernel parity
+# ADR 0022: Metal authored-kernel parity
 
 - Status: Accepted
 - Class: [minor]

@@ -1,4 +1,4 @@
-# ADR 0041 — One generic ComputeBackend conformance crate
+# ADR 0041: One generic ComputeBackend conformance crate
 
 - Status: Accepted (retroactive — records the crate as built)
 - Date: 2026-07-31

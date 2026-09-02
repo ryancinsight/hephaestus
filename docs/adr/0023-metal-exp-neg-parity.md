@@ -1,4 +1,4 @@
-# ADR 0023 (hephaestus): Metal fused negated exponential parity
+# ADR 0023: Metal fused negated exponential parity
 
 - Status: Accepted
 - Class: [minor]

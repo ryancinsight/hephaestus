@@ -1,4 +1,4 @@
-# ADR 0014 (hephaestus): backend-neutral 2D Laplacian stencil parity
+# ADR 0014: backend-neutral 2D Laplacian stencil parity
 
 - Status: Accepted
 - Class: [minor]

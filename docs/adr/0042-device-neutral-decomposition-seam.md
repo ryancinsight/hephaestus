@@ -1,4 +1,4 @@
-# ADR 0042 — Device-neutral decomposition seam
+# ADR 0042: Device-neutral decomposition seam
 
 - Status: Accepted
 - Date: 2026-08-01 (revised same day: scope narrowed to the LU/QR/Cholesky

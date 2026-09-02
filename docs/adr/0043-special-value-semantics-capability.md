@@ -1,4 +1,4 @@
-# ADR 0043 — Special-value semantics as a dialect capability
+# ADR 0043: Special-value semantics as a dialect capability
 
 - Status: Accepted
 - Date: 2026-08-01
