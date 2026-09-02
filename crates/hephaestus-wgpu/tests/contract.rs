@@ -4579,6 +4579,112 @@ pub(super) fn blocked_cholesky_solve_known_system_accurate() {
     assert!((ax1 - 7.0).abs() <= 1e-4, "residual[1] = {ax1}");
 }
 
+/// Device forward/backward substitution across two solve blocks (`n = 300`:
+/// one full 256-row block plus a ragged 44-row tail) matches leto's host
+/// substitution against the same downloaded factor, and never materializes
+/// the host factor.
+///
+/// Fixture: `A = L·Lᵀ` with `L = I − P`, `P ≥ 0` strictly lower and every row
+/// and column sum of `P` at most `1/2` (`|P[i,j]| ≤ 1/(2n)`). Then
+/// `‖L‖∞, ‖L‖₁ ≤ 3/2` and, by the Neumann series, `‖L⁻¹‖∞, ‖L⁻¹‖₁ ≤ 2`, so
+/// the recurrence is well conditioned: `L⁻¹ ≥ 0`, hence for `b > 0` every
+/// `y = L⁻¹b > 0` and no cancellation hides a dropped coupling.
+///
+/// Bound: each computed triangular solve satisfies `(L + ΔL)ŷ = b` with
+/// `|ΔL| ≤ γₙ|L|` (Higham, *Accuracy and Stability of Numerical Algorithms*,
+/// 2nd ed., Thm 8.5), so its relative forward error is at most
+/// `γₙ · ‖|L⁻¹||L||y|‖∞ / ‖y‖∞ ≤ γₙ · ‖L⁻¹‖∞ · ‖L‖∞ = 3γₙ`. Backward
+/// substitution inherits the forward pass's error through `‖L⁻ᵀ‖∞ ‖Lᵀ‖∞ ≤ 3`
+/// and adds its own `3γₙ`, giving `12γₙ` per implementation; the device and
+/// host results, each within `12γₙ` of the exact solution of the shared
+/// factor, differ by at most `24γₙ` with `γₙ = n·u / (1 − n·u)`, `u = 2⁻²⁴`.
+/// Dropping one trailing update moves rows past the first block by
+/// `Σ_c P[r,c]·y[c] ≳ 0.2·min y` — three orders above the bound.
+pub(super) fn blocked_cholesky_solve_multi_panel_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    let n = 300usize;
+    // Deterministic LCG (Numerical Recipes constants) mapped to [0, 1).
+    let mut state = 0x2545_F491_4F6C_DD1Du64;
+    let mut unit = move || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (state >> 40) as f64 / (1u64 << 24) as f64
+    };
+    let mut lower = vec![0.0f64; n * n];
+    for row in 0..n {
+        lower[row * n + row] = 1.0;
+        for col in 0..row {
+            lower[row * n + col] = -unit() / (2.0 * n as f64);
+        }
+    }
+    let matrix_host = (0..n * n)
+        .map(|index| {
+            let (row, col) = (index / n, index % n);
+            (0..=row.min(col))
+                .map(|k| lower[row * n + k] * lower[col * n + k])
+                .sum::<f64>() as f32
+        })
+        .collect::<Vec<_>>();
+    let rhs_host = (0..n).map(|_| 1.0 + unit() as f32).collect::<Vec<_>>();
+
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_cholesky = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    assert!(
+        !gpu_cholesky.host_factor_materialized(),
+        "the blocked factorization must not download its factor"
+    );
+
+    let solution = gpu_cholesky.solve(&device, &rhs).unwrap();
+    assert!(
+        !gpu_cholesky.host_factor_materialized(),
+        "a device solve must not materialize the host factor"
+    );
+    let mut got = vec![0.0f32; n];
+    device.download(&solution, &mut got).unwrap();
+    let mut rhs_after = vec![0.0f32; n];
+    device.download(&rhs, &mut rhs_after).unwrap();
+    assert_eq!(
+        rhs_after, rhs_host,
+        "the caller's right-hand side is read-only"
+    );
+
+    let mut factor = vec![0.0f32; n * n];
+    device.download(gpu_cholesky.lower(), &mut factor).unwrap();
+    let host_factor = leto_ops::CholeskyDecomposition::from_raw_parts(
+        leto::Array2::from_shape_vec([n, n], factor).unwrap(),
+    );
+    let rhs_view = leto::ArrayView::<f32, 1>::new(Layout::c_contiguous([n]).unwrap(), &rhs_host);
+    let expected = host_factor.solve(&rhs_view).unwrap();
+    let expected = leto::Storage::as_slice(expected.storage());
+
+    let n_u = n as f32 * f32::EPSILON / 2.0;
+    let gamma_n = n_u / (1.0 - n_u);
+    let bound = 24.0 * gamma_n;
+    let scale = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    for (row, (&device_x, &host_x)) in got.iter().zip(expected).enumerate() {
+        assert!(
+            (device_x - host_x).abs() <= bound * scale,
+            "x[{row}]: device {device_x} vs leto {host_x}, bound {} (relative {bound})",
+            bound * scale
+        );
+    }
+}
+
 pub(super) fn blocked_cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;

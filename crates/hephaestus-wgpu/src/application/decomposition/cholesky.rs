@@ -24,6 +24,7 @@ use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::pool::uniform_guard;
 
 // ---------------------------------------------------------------------------
 // SYRK uniform
@@ -263,22 +264,22 @@ fn syrk_trailing_update(
 // Result type
 // ---------------------------------------------------------------------------
 
-/// Lower-triangular Cholesky factor on the device, with a host-side
-/// decomposition for solve/inv without re-factorization.
+/// Lower-triangular Cholesky factor on the device, solving on the device and
+/// inverting through a host-side decomposition without re-factorization.
 ///
 /// # Host residency
 ///
-/// The `n × n` host factor is what [`solve`](Self::solve) and
-/// [`inv`](Self::inv) substitute against; it is *not* what
-/// [`det`](Self::det) needs, which reads only the factor's diagonal.
+/// [`solve`](Self::solve) substitutes on the device against the resident
+/// factor and [`det`](Self::det) reads only the factor's diagonal; the
+/// `n × n` host factor serves [`inv`](Self::inv) alone.
 /// [`cholesky_decompose_blocked`] therefore keeps just that diagonal (`n`
 /// elements, extracted from panels it already downloads) and leaves `inner`
-/// empty, materializing it from the device factor on the first `solve`/`inv`
-/// and caching it thereafter. [`cholesky_decompose`] factors on the host to
+/// empty, materializing it from the device factor on the first `inv` and
+/// caching it thereafter. [`cholesky_decompose`] factors on the host to
 /// begin with, so it populates `inner` eagerly and never downloads.
 pub struct GpuCholesky {
     /// Host-side leto-ops decomposition, materialized on first host-side
-    /// substitution. Pre-populated by the host-delegating entry point.
+    /// inversion. Pre-populated by the host-delegating entry point.
     inner: OnceLock<leto_ops::CholeskyDecomposition<f32>>,
     /// Diagonal of **L** in factor order, `n` elements.
     ///
@@ -291,7 +292,7 @@ pub struct GpuCholesky {
 }
 
 impl GpuCholesky {
-    /// The host factor, downloading and caching it on first use.
+    /// The host factor for [`inv`](Self::inv), downloading and caching it on first use.
     ///
     /// The device factor is authoritative and complete once
     /// [`zero_strict_upper`] has run: the per-panel scatters write every cell
@@ -358,48 +359,36 @@ impl GpuCholesky {
             .fold(1.0f32, |product, &diagonal| product * (diagonal * diagonal))
     }
 
-    /// Solve **A** · **x** = **rhs** via host-side forward/back substitution.
+    /// Solve **A** · **x** = **rhs** on the device against the resident factor.
     ///
-    /// Downloads the RHS from the device, solves on the host using the
-    /// stored decomposition, and uploads the solution vector. On the blocked
-    /// entry point's first call this also materializes the host factor (see
-    /// [`GpuCholesky`]); later calls reuse it.
+    /// Blocked forward substitution on **L** then backward substitution on
+    /// **L**ᵀ, blocked by 256 rows; neither the factor nor the right-hand
+    /// side crosses the host, and the host factor stays unmaterialized.
     ///
     /// # Errors
     ///
     /// - `LengthMismatch` when `rhs.len != n`.
-    /// - The device readback failure, or the host substitution failure.
+    /// - `DispatchFailed` when a dimension or workgroup count exceeds `u32`.
     pub fn solve(&self, device: &WgpuDevice, rhs: &WgpuBuffer<f32>) -> Result<WgpuBuffer<f32>> {
-        if rhs.len != self.n {
-            return Err(HephaestusError::LengthMismatch {
-                host_len: self.n,
-                device_len: rhs.len,
-            });
-        }
-        if self.n == 0 {
-            return device.upload(&[] as &[f32]);
-        }
+        device_solve(device, &self.lower, self.n, rhs)
+    }
 
-        let mut rhs_host = vec![0.0f32; self.n];
-        device.download(rhs, &mut rhs_host)?;
-
-        let rhs_view = leto::ArrayView::<f32, 1>::new(
-            leto::Layout::c_contiguous([self.n]).expect("infallible: valid contiguous layout"),
-            &rhs_host,
-        );
-        let x = self.host_factor(device)?.solve(&rhs_view).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("Cholesky solve failed: {e}"),
-            }
-        })?;
-
-        device.upload(leto::Storage::as_slice(x.storage()))
+    /// Whether the host-side factor copy is resident.
+    ///
+    /// `false` after [`cholesky_decompose_blocked`] until the first
+    /// [`inv`](Self::inv); `true` from construction for
+    /// [`cholesky_decompose`]. [`solve`](Self::solve) never materializes it.
+    #[must_use]
+    #[inline]
+    pub fn host_factor_materialized(&self) -> bool {
+        self.inner.get().is_some()
     }
 
     /// Compute the inverse **A**⁻¹ via the host-side decomposition.
     ///
-    /// On the blocked entry point's first call this also materializes the
-    /// host factor (see [`GpuCholesky`]); later calls reuse it.
+    /// On the blocked entry point's first call this materializes the host
+    /// factor (see [`GpuCholesky`]); later calls reuse it. The `n` device
+    /// solves that would retire this download are their own item.
     ///
     /// # Errors
     ///
@@ -644,6 +633,388 @@ fn zero_strict_upper(device: &WgpuDevice, matrix: &WgpuBuffer<f32>, n: usize) ->
     device.queue().submit(Some(encoder.finish()));
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Device-side triangular solves against the resident factor
+// ---------------------------------------------------------------------------
+
+/// Rows per triangular-solve block: the workgroup width of the block kernel,
+/// so one workgroup owns one diagonal block of **L** with a lane per row.
+const SOLVE_BLOCK_WIDTH: u32 = 256;
+/// [`SOLVE_BLOCK_WIDTH`] as an index count for host-side blocking arithmetic.
+const SOLVE_BLOCK: usize = SOLVE_BLOCK_WIDTH as usize;
+
+/// Packed metadata for one triangular-solve dispatch, matching the WGSL
+/// `SolveMeta` struct.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable)]
+struct SolveMeta {
+    /// Matrix dimension *n* of the *n* × *n* factor.
+    n: u32,
+    /// First row of the diagonal block this dispatch works on.
+    block_start: u32,
+    /// Rows in the block: `SOLVE_BLOCK`, or the ragged tail for the last one.
+    block_len: u32,
+    /// Rows the trailing update touches: everything after the block going
+    /// forward, everything before it going backward. Unused by the block
+    /// solve, which pads the struct to its 16-byte uniform stride.
+    update_rows: u32,
+}
+
+unsafe impl Pod for SolveMeta {}
+
+/// Which triangular system a solve pass works on.
+///
+/// Forward substitution solves **L** · **y** = **b** from the first block
+/// down; backward substitution solves **L**ᵀ · **x** = **y** from the last
+/// block up, reading **L** transposed so no second factor is materialized.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Substitution {
+    Forward,
+    Backward,
+}
+
+impl Substitution {
+    /// WGSL expression for the factor element coupling `row` to column
+    /// `col` of the current system: `L[row, col]` forward, `L[col, row]`
+    /// backward.
+    fn coefficient(self) -> &'static str {
+        match self {
+            Self::Forward => "lower[row * params.n + col]",
+            Self::Backward => "lower[col * params.n + row]",
+        }
+    }
+}
+
+struct ForwardBlockSolveKernel;
+struct ForwardTrailingUpdateKernel;
+struct BackwardBlockSolveKernel;
+struct BackwardTrailingUpdateKernel;
+
+/// WGSL source for the diagonal-block solve.
+///
+/// One workgroup solves the block's `block_len × block_len` triangle against
+/// its slice of `rhs` in place: lane `i` owns local row `i`, and each step
+/// `c` finalizes row `c` (one division by the diagonal), publishes it through
+/// workgroup memory, then every later row subtracts its coupling to it.
+/// Forward substitution walks `c` upward and couples rows below the pivot;
+/// backward substitution walks it downward and couples rows above. The
+/// barrier sits in uniform control flow (`block_len` is a uniform), and each
+/// workgroup slot is written exactly once per solve, so one barrier per step
+/// orders the publish before its readers.
+fn block_solve_shader_source(substitution: Substitution) -> String {
+    let (pivot, coupled) = match substitution {
+        Substitution::Forward => ("step", "i > c"),
+        Substitution::Backward => ("params.block_len - 1u - step", "i < c"),
+    };
+    let coefficient = substitution.coefficient();
+    format!(
+        r#"struct SolveMeta {{
+    n: u32,
+    block_start: u32,
+    block_len: u32,
+    update_rows: u32,
+}}
+@group(0) @binding(0) var<storage, read>       lower: array<f32>;
+@group(0) @binding(1) var<storage, read_write> rhs:   array<f32>;
+@group(0) @binding(2) var<uniform>             params: SolveMeta;
+
+var<workgroup> solved: array<f32, {SOLVE_BLOCK}u>;
+
+@compute @workgroup_size({SOLVE_BLOCK})
+fn main(
+    @builtin(local_invocation_id) lid: vec3<u32>,
+) {{
+    let i = lid.x;
+    let row = params.block_start + i;
+    let owns_row = i < params.block_len;
+    var acc = 0.0;
+    if (owns_row) {{
+        acc = rhs[row];
+    }}
+    for (var step = 0u; step < params.block_len; step = step + 1u) {{
+        let c = {pivot};
+        let col = params.block_start + c;
+        if (i == c) {{
+            let value = acc / {coefficient};
+            solved[c] = value;
+            rhs[row] = value;
+        }}
+        workgroupBarrier();
+        if (owns_row && {coupled}) {{
+            acc = acc - {coefficient} * solved[c];
+        }}
+    }}
+}}
+"#
+    )
+}
+
+/// WGSL source for the trailing update after a block solve.
+///
+/// One invocation per row outside the solved block subtracts that row's
+/// coupling to every just-solved entry: `rhs[row] -= Σ_c coefficient(row, c)
+/// · rhs[c]` over the block's columns. Forward substitution updates the rows
+/// after the block; backward substitution updates the rows before it. The
+/// block's own entries are only read, and every written row lies outside it,
+/// so the dispatch is race-free without atomics.
+fn trailing_update_shader_source(substitution: Substitution) -> String {
+    let first_row = match substitution {
+        Substitution::Forward => "params.block_start + params.block_len",
+        Substitution::Backward => "0u",
+    };
+    let coefficient = substitution.coefficient();
+    format!(
+        r#"struct SolveMeta {{
+    n: u32,
+    block_start: u32,
+    block_len: u32,
+    update_rows: u32,
+}}
+@group(0) @binding(0) var<storage, read>       lower: array<f32>;
+@group(0) @binding(1) var<storage, read_write> rhs:   array<f32>;
+@group(0) @binding(2) var<uniform>             params: SolveMeta;
+
+@compute @workgroup_size({SOLVE_BLOCK})
+fn main(
+    @builtin(global_invocation_id) gid: vec3<u32>,
+) {{
+    if (gid.x >= params.update_rows) {{
+        return;
+    }}
+    let row = {first_row} + gid.x;
+    var acc = rhs[row];
+    for (var c = 0u; c < params.block_len; c = c + 1u) {{
+        let col = params.block_start + c;
+        acc = acc - {coefficient} * rhs[col];
+    }}
+    rhs[row] = acc;
+}}
+"#
+    )
+}
+
+fn forward_block_solve_shader_source() -> String {
+    block_solve_shader_source(Substitution::Forward)
+}
+
+fn forward_trailing_update_shader_source() -> String {
+    trailing_update_shader_source(Substitution::Forward)
+}
+
+fn backward_block_solve_shader_source() -> String {
+    block_solve_shader_source(Substitution::Backward)
+}
+
+fn backward_trailing_update_shader_source() -> String {
+    trailing_update_shader_source(Substitution::Backward)
+}
+
+/// The four kernels of the blocked solve, in the order a solve issues them.
+#[derive(Clone, Copy)]
+enum SolveKernel {
+    ForwardBlock,
+    ForwardUpdate,
+    BackwardBlock,
+    BackwardUpdate,
+}
+
+/// One dispatch of the blocked solve: its kernel, metadata, and width.
+struct SolveDispatch {
+    kernel: SolveKernel,
+    meta: SolveMeta,
+    workgroups: u32,
+}
+
+/// Solve **A** · **x** = **rhs** on the device against the resident factor.
+///
+/// Forward substitution on **L** then backward substitution on **L**ᵀ, each
+/// blocked by `SOLVE_BLOCK` rows: per block one workgroup solves the diagonal
+/// triangle in place, then a row-parallel dispatch applies the rank-`block`
+/// update to the rows still unsolved. That is `2 · ⌈n / SOLVE_BLOCK⌉` block
+/// solves plus their trailing updates per solve, all recorded in one compute
+/// pass so WebGPU's per-dispatch ordering serializes the chain. The right-hand
+/// side is copied device-to-device into the solution buffer first, so the
+/// caller's buffer is untouched and nothing crosses the host.
+///
+/// # Errors
+///
+/// - `LengthMismatch` when `rhs.len != n`.
+/// - `DispatchFailed` when a dimension or workgroup count exceeds `u32`.
+fn device_solve(
+    device: &WgpuDevice,
+    lower: &WgpuBuffer<f32>,
+    n: usize,
+    rhs: &WgpuBuffer<f32>,
+) -> Result<WgpuBuffer<f32>> {
+    if rhs.len != n {
+        return Err(HephaestusError::LengthMismatch {
+            host_len: n,
+            device_len: rhs.len,
+        });
+    }
+    let solution = device.alloc_zeroed::<f32>(n)?;
+    if n == 0 {
+        return Ok(solution);
+    }
+    let to_u32 = |value: usize, what: &str| {
+        u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("cholesky solve {what} {value} exceeds u32"),
+        })
+    };
+    let n_u32 = to_u32(n, "dimension")?;
+
+    let pipeline_key = |kernel: TypeId| (kernel, TypeId::of::<f32>(), SOLVE_BLOCK_WIDTH);
+    let forward_block = cached_pipeline(
+        device,
+        pipeline_key(TypeId::of::<ForwardBlockSolveKernel>()),
+        "hephaestus-cholesky-forward-block-solve",
+        forward_block_solve_shader_source,
+    );
+    let forward_update = cached_pipeline(
+        device,
+        pipeline_key(TypeId::of::<ForwardTrailingUpdateKernel>()),
+        "hephaestus-cholesky-forward-trailing-update",
+        forward_trailing_update_shader_source,
+    );
+    let backward_block = cached_pipeline(
+        device,
+        pipeline_key(TypeId::of::<BackwardBlockSolveKernel>()),
+        "hephaestus-cholesky-backward-block-solve",
+        backward_block_solve_shader_source,
+    );
+    let backward_update = cached_pipeline(
+        device,
+        pipeline_key(TypeId::of::<BackwardTrailingUpdateKernel>()),
+        "hephaestus-cholesky-backward-trailing-update",
+        backward_trailing_update_shader_source,
+    );
+
+    let block_count = n.div_ceil(SOLVE_BLOCK);
+    let mut dispatches = Vec::with_capacity(4 * block_count);
+    let dispatch =
+        |kernel: SolveKernel, block_start: usize, block_len: usize, update_rows: usize| {
+            Ok::<_, HephaestusError>(SolveDispatch {
+                kernel,
+                meta: SolveMeta {
+                    n: n_u32,
+                    block_start: to_u32(block_start, "block start")?,
+                    block_len: to_u32(block_len, "block length")?,
+                    update_rows: to_u32(update_rows, "update rows")?,
+                },
+                // A block solve is exactly one workgroup; `update_rows` is zero
+                // there and the block kernel never reads it.
+                workgroups: to_u32(update_rows.div_ceil(SOLVE_BLOCK).max(1), "workgroup count")?,
+            })
+        };
+    for k in 0..block_count {
+        let block_start = k * SOLVE_BLOCK;
+        let block_len = SOLVE_BLOCK.min(n - block_start);
+        let remaining = n - block_start - block_len;
+        dispatches.push(dispatch(
+            SolveKernel::ForwardBlock,
+            block_start,
+            block_len,
+            0,
+        )?);
+        if remaining > 0 {
+            dispatches.push(dispatch(
+                SolveKernel::ForwardUpdate,
+                block_start,
+                block_len,
+                remaining,
+            )?);
+        }
+    }
+    for k in (0..block_count).rev() {
+        let block_start = k * SOLVE_BLOCK;
+        let block_len = SOLVE_BLOCK.min(n - block_start);
+        dispatches.push(dispatch(
+            SolveKernel::BackwardBlock,
+            block_start,
+            block_len,
+            0,
+        )?);
+        if block_start > 0 {
+            dispatches.push(dispatch(
+                SolveKernel::BackwardUpdate,
+                block_start,
+                block_len,
+                block_start,
+            )?);
+        }
+    }
+
+    let pipeline_for = |kernel: SolveKernel| match kernel {
+        SolveKernel::ForwardBlock => &forward_block,
+        SolveKernel::ForwardUpdate => &forward_update,
+        SolveKernel::BackwardBlock => &backward_block,
+        SolveKernel::BackwardUpdate => &backward_update,
+    };
+    let meta_size = WgpuDevice::byte_size::<SolveMeta>(1)?;
+    let mut metas = Vec::with_capacity(dispatches.len());
+    let mut bind_groups = Vec::with_capacity(dispatches.len());
+    for dispatch in &dispatches {
+        let raw_meta = device.get_uniform_buffer(meta_size)?;
+        let meta_buf = uniform_guard(device.clone(), raw_meta);
+        device
+            .queue()
+            .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&dispatch.meta));
+        bind_groups.push(
+            device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("hephaestus-cholesky-solve-bind-group"),
+                    layout: &pipeline_for(dispatch.kernel).get_bind_group_layout(0),
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: lower.raw().as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: solution.raw().as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: meta_buf.as_entire_binding(),
+                        },
+                    ],
+                }),
+        );
+        metas.push(meta_buf);
+    }
+
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-cholesky-solve"),
+        });
+    encoder.copy_buffer_to_buffer(
+        rhs.raw(),
+        0,
+        solution.raw(),
+        0,
+        WgpuDevice::byte_size::<f32>(n)?,
+    );
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-cholesky-solve-pass"),
+            timestamp_writes: None,
+        });
+        for (dispatch, bind_group) in dispatches.iter().zip(&bind_groups) {
+            pass.set_pipeline(pipeline_for(dispatch.kernel));
+            pass.set_bind_group(0, bind_group, &[]);
+            pass.dispatch_workgroups(dispatch.workgroups, 1, 1);
+        }
+    }
+    device.queue().submit(Some(encoder.finish()));
+    // The uniform guards return their buffers to the pool on drop; the
+    // submitted command buffer already holds its own references.
+    drop(metas);
+
+    Ok(solution)
 }
 
 /// Blocked Cholesky factorization **A** = **L** **L**ᵀ with GPU-accelerated
