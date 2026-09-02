@@ -3975,6 +3975,40 @@ fn dense_vector_ops_match_cpu_reference() {
     );
 }
 
+/// The regression guard for the defect itself.
+///
+/// Neither value clause below discriminates it: the old field was a free
+/// reading *stored at acquisition*, so it was stale rather than moving, and
+/// `buffer_limit_is_stable_across_allocations_and_free_memory_tracks_them`
+/// passes on the defective code. `free <= max_buffer_size` also holds when
+/// the limit *is* a free reading. What distinguishes the two is which half of
+/// `cuMemGetInfo_v2` reaches `DeviceLimits`, so the source is the oracle —
+/// and this clause needs no device, so it guards on every runner.
+#[test]
+fn the_buffer_limit_is_built_from_total_device_memory_not_the_free_reading() {
+    let source = include_str!("../src/infrastructure/device.rs");
+    let body = source
+        .split_once("fn query_device_limits(")
+        .map(|(_, tail)| tail)
+        .and_then(|tail| {
+            tail.split_once(
+                "
+fn ",
+            )
+        })
+        .map(|(body, _)| body)
+        .expect("query_device_limits must be present");
+
+    assert!(
+        body.contains("let (_, total_bytes) = current_memory_info()?;"),
+        "query_device_limits must take the total half of current_memory_info"
+    );
+    assert!(
+        !body.contains("free_bytes"),
+        "no free-memory reading may reach DeviceLimits; it is a runtime query"
+    );
+}
+
 /// `max_buffer_size` is the device capacity — it does not move when memory is
 /// allocated — while the free-memory query does.
 #[test]

@@ -769,6 +769,17 @@
 - **Delivered:** `query_device_limits` reports total device memory as `max_buffer_size` (the stable per-device capacity, matching the WGPU hard limit's semantics) and `CudaDevice::free_memory_bytes` is the point-in-time runtime query. `require_limits` therefore compares against a value that no longer decays with allocations.
 - **Consumer sweep:** `max_buffer_size` readers are hephaestus-internal (`require_limits`, ROCm/Metal/host contract tests) plus coeus-wgpu's output-size validation, which reads the WGPU limit, not CUDA's — no caller read the CUDA value as "free now", so no migration.
 - **Evidence:** RTX 5080 — `device_capabilities_are_driver_backed` asserts free ≤ capacity; the new `buffer_limit_is_stable_across_allocations_and_free_memory_tracks_them` allocates 64 MiB and sees the limit unchanged and free memory fall; hephaestus-cuda contract 87/87, clippy and rustdoc clean.
+- **Follow-up 2026-09-02 (concurrent duplicate reconciled).** A second agent
+  implemented the same correction independently; its delivery is superseded
+  by the one above except for one clause, ported here. Neither value clause
+  discriminates the defect: the old field was a free reading *stored at
+  acquisition*, so it was stale rather than moving, and
+  `buffer_limit_is_stable_across_allocations_and_free_memory_tracks_them`
+  **passes on the defective code** (verified by reintroducing it).
+  `the_buffer_limit_is_built_from_total_device_memory_not_the_free_reading`
+  asserts on the source which half of `cuMemGetInfo_v2` reaches
+  `DeviceLimits`, fails on that reintroduction, and needs no device, so it
+  guards on every runner rather than only where a GPU is present.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
