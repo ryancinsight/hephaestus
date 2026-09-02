@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — review-ready
+## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — done
 
 - **Outcome:** materialize the ordinary QR orthogonal factor **Q** on CUDA
   from the provider's compact Householder representation, then route the
@@ -43,7 +43,16 @@
   branch=`perf/cuda-qr-device-q`; lease=none; last-update=2026-09-01;
   remaining=independent review, PR, and merge collection.
 
-## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — review-ready
+- **Independent review (2026-09-01, Claude, RTX 5080 / CUDA 13.3 / driver 610.47):**
+  merged as PR #246. `cargo nextest run --package hephaestus-cuda --features
+  cuda,decomposition --locked` passes 161/161 in debug and 161/161 under
+  `--cargo-profile release` on the physical adapter — the release-profile
+  evidence the acceptance asked for and the earlier hardware run had not
+  supplied. Source audit: the Python CUDA `qr` arm calls
+  `decomp.accumulate_q(device)` and `into_r_buffer()`; the only `inner().q()`
+  text remaining is a comment explaining what is *not* materialised. Reviewer
+  did not author the change.
+## HEPH-CUDA-HOST-ROUNDTRIP-SPLIT-2026-09-01 [minor] — done
 
 - **Independent hardware evidence (2026-09-01):** `4bfbed8` is an ancestor of `1ffe9859`, the revision on which the RTX 5080 run of `cargo nextest run --package hephaestus-cuda --features cuda,decomposition --locked` passed 161/161 (see PR #246 review comment). The device-side split's contracts were therefore exercised on hardware by a reviewer who did not author them.
 
@@ -98,6 +107,11 @@
   branch=`perf/cuda-packed-lu-split`; lease=none; remaining=independent review,
   PR, merge, and closure; last-update=2026-09-01.
 
+- **Independent review (2026-09-01, Claude):** merged as PR #245;
+  `hephaestus_cuda::split_packed_lu` exists (`decomposition/split.rs`) and both
+  Python CUDA LU arms (`lu()`, `lu_buffer()`) call it — no host
+  `split_packed_lu` round trip remains at the three cited sites. Same 161/161
+  debug and release runs as above cover its contracts on hardware.
 ## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
 
 - **Owner / integrator**: Claude session 5050c72a. Lease:
