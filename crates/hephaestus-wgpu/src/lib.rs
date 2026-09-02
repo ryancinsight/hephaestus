@@ -107,7 +107,7 @@ pub use application::volume::{
 };
 pub use application::window::{
     PreparedPoolingBackward, PreparedPoolingForward, PreparedSlidingWindowFold,
-    PreparedSlidingWindowUnfold, WgpuPoolingOps, WgpuSlidingWindowOps,
+    PreparedSlidingWindowUnfold, WgpuPoolingOps, WgpuSlidingWindowOps, WgpuWindowScalar,
 };
 pub use wgpu;
 

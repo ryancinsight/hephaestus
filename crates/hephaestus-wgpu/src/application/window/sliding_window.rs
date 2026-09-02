@@ -1,14 +1,13 @@
 use core::any::TypeId;
 use core::marker::PhantomData;
 
-use bytemuck::Pod;
 use hephaestus_core::{
-    DeviceFeature, DialectScalar, HephaestusError, Result, SlidingWindowFoldOperands,
-    SlidingWindowOps, SlidingWindowUnfoldOperands, Wgsl, plan_sliding_window_fold,
-    plan_sliding_window_unfold,
+    HephaestusError, Result, SlidingWindowFoldOperands, SlidingWindowOps,
+    SlidingWindowUnfoldOperands, plan_sliding_window_fold, plan_sliding_window_unfold,
 };
 use leto::WindowParameters;
 
+use super::WgpuWindowScalar;
 use super::metadata::{WindowLayoutMeta, WindowMeta};
 use super::prepared::PreparedWindowKernel;
 use super::shader;
@@ -38,7 +37,7 @@ pub struct WgpuSlidingWindowOps;
 
 impl<T> SlidingWindowOps<WgpuDevice, T> for WgpuSlidingWindowOps
 where
-    T: WgpuSlidingWindowScalar,
+    T: WgpuWindowScalar,
 {
     type PreparedUnfold<'a, const R: usize, const S: usize>
         = PreparedSlidingWindowUnfold<T, R, S>
@@ -151,40 +150,6 @@ where
     }
 }
 
-trait WgpuSlidingWindowScalar: DialectScalar<Wgsl> + Pod + Send + Sync + 'static {
-    fn validate_capability(device: &WgpuDevice) -> Result<()>;
-}
-
-impl WgpuSlidingWindowScalar for f32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuSlidingWindowScalar for i32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuSlidingWindowScalar for u32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuSlidingWindowScalar for f64 {
-    fn validate_capability(device: &WgpuDevice) -> Result<()> {
-        if device.supports_device_feature(DeviceFeature::ShaderF64) {
-            Ok(())
-        } else {
-            Err(HephaestusError::InvalidConfiguration {
-                message: "WGPU window operations require ShaderF64 for f64".to_owned(),
-            })
-        }
-    }
-}
-
 fn validate_spatial_rank<const S: usize>() -> Result<()> {
     if !(1..=3).contains(&S) {
         return Err(HephaestusError::InvalidConfiguration {
@@ -218,7 +183,7 @@ fn prepare_kernel<T, const N: usize, const UNFOLD: bool>(
     label: &'static str,
 ) -> Result<PreparedWindowKernel>
 where
-    T: WgpuSlidingWindowScalar,
+    T: WgpuWindowScalar,
 {
     if elements == 0 {
         return Ok(PreparedWindowKernel::empty(device, label));

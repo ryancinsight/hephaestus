@@ -1,13 +1,13 @@
 use core::any::TypeId;
 use core::marker::PhantomData;
 
-use bytemuck::Pod;
 use hephaestus_core::{
-    DeviceFeature, DialectScalar, HephaestusError, PoolingBackwardOperands, PoolingForwardOperands,
-    PoolingMode, PoolingOps, Result, Wgsl, plan_pooling_backward, plan_pooling_forward,
+    HephaestusError, PoolingBackwardOperands, PoolingForwardOperands, PoolingMode, PoolingOps,
+    Result, plan_pooling_backward, plan_pooling_forward,
 };
 use leto::WindowParameters;
 
+use super::WgpuWindowScalar;
 use super::metadata::{WindowLayoutMeta, WindowMeta};
 use super::prepared::PreparedWindowKernel;
 use super::shader;
@@ -183,40 +183,6 @@ where
         prepared: &Self::PreparedBackward<'_, R, S>,
     ) -> Result<()> {
         prepared.kernel.dispatch(device)
-    }
-}
-
-trait WgpuWindowScalar: DialectScalar<Wgsl> + Pod + Send + Sync + 'static {
-    fn validate_capability(device: &WgpuDevice) -> Result<()>;
-}
-
-impl WgpuWindowScalar for f32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuWindowScalar for i32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuWindowScalar for u32 {
-    fn validate_capability(_device: &WgpuDevice) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl WgpuWindowScalar for f64 {
-    fn validate_capability(device: &WgpuDevice) -> Result<()> {
-        if device.supports_device_feature(DeviceFeature::ShaderF64) {
-            Ok(())
-        } else {
-            Err(HephaestusError::InvalidConfiguration {
-                message: "WGPU window operations require ShaderF64 for f64".to_owned(),
-            })
-        }
     }
 }
 
