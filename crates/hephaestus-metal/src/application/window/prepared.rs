@@ -9,8 +9,7 @@ where
     T: bytemuck::Pod,
     WgpuPoolingOps: PoolingOps<WgpuDevice, T>,
 {
-    pub(super) inner:
-        <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedForward<'a, R, S>,
+    pub(super) inner: <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedForward<'a, R, S>,
     pub(super) _lifetime: PhantomData<&'a T>,
 }
 
@@ -20,8 +19,7 @@ where
     T: bytemuck::Pod,
     WgpuPoolingOps: PoolingOps<WgpuDevice, T>,
 {
-    pub(super) inner:
-        <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedBackward<'a, R, S>,
+    pub(super) inner: <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedBackward<'a, R, S>,
     pub(super) _lifetime: PhantomData<&'a T>,
 }
 
