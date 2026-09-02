@@ -397,6 +397,25 @@ impl CudaDevice {
         self.context.bind()
     }
 
+    /// Device memory not currently allocated, in bytes, as the driver reports
+    /// it at this call.
+    ///
+    /// A point-in-time reading that other contexts and later allocations
+    /// move; the stable per-device capacity is `ComputeDevice::device_limits`
+    /// (`max_buffer_size`), and this value never exceeds it.
+    ///
+    /// # Errors
+    ///
+    /// [`HephaestusError::DeviceUnavailable`] when the context cannot be bound
+    /// or the driver query fails.
+    pub fn free_memory_bytes(&self) -> Result<u64> {
+        self.bind()?;
+        let (free_bytes, _) = current_memory_info()?;
+        u64::try_from(free_bytes).map_err(|_| HephaestusError::DeviceUnavailable {
+            message: "CUDA free memory byte count exceeds u64".to_string(),
+        })
+    }
+
     /// Allocate `bytes` of device memory according to the tier.
     fn alloc_bytes(&self, bytes: usize) -> Result<DevicePtr> {
         self.bind()?;
@@ -603,9 +622,17 @@ fn nonnegative_u32(value: i32) -> u32 {
 fn query_device_limits(device: &cuda_oxide::sys::CUdevice) -> Result<DeviceLimits> {
     use cuda_oxide::sys;
 
-    let (free_bytes, _) = current_memory_info()?;
+    // The limit is the device's capacity, a stable per-device fact like the
+    // workgroup bounds below; the free-memory snapshot it used to carry went
+    // stale after the first allocation and made `require_limits` reject busy
+    // devices. Free memory is a runtime query (`CudaDevice::free_memory_bytes`).
+    let (_, total_bytes) = current_memory_info()?;
+    let max_buffer_size =
+        u64::try_from(total_bytes).map_err(|_| HephaestusError::DeviceUnavailable {
+            message: "CUDA total memory byte count exceeds u64".to_string(),
+        })?;
     Ok(DeviceLimits {
-        max_buffer_size: free_bytes as u64,
+        max_buffer_size,
         max_compute_workgroup_size_x: nonnegative_u32(device_attribute(
             *device,
             sys::CUdevice_attribute_enum_CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,

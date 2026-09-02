@@ -50,6 +50,10 @@ impl CudaDevice {
     pub fn bind(&self) -> Result<()> {
         Self::unavailable()
     }
+    /// Stub implementation of the free-memory query: no device, no memory.
+    pub fn free_memory_bytes(&self) -> Result<u64> {
+        Self::unavailable()
+    }
 
     fn unavailable<R>() -> Result<R> {
         Err(HephaestusError::AdapterUnavailable {
