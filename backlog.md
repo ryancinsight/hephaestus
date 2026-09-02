@@ -196,9 +196,9 @@
 
 - **Closed (stale-claim sweep 2026-09-01, Claude):** delivered as `7643ed4`, merged through PR #242 (2026-09-01); the item still read in-progress. Its remaining `4n²` host download on `solve` is `HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE`.
 
-## HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — todo
+## HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — in-progress
 
-- **Owner**: unclaimed.
+- **Owner**: Claude (claimed 2026-09-01; branch `perf/hephaestus-cholesky-device-solve`; regions `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`, `crates/hephaestus-wgpu/tests/contracts.rs`, `crates/hephaestus-conformance/src/decomposition.rs`).
 - **Outcome**: run `GpuCholesky::solve` as two device-side triangular solves
   against the resident lower factor, retiring the `4n²`-byte host-factor
   download that HEPH-CHOLESKY-LAZY-HOST-FACTOR deferred but did not remove,
