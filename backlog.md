@@ -112,7 +112,7 @@
   Python CUDA LU arms (`lu()`, `lu_buffer()`) call it — no host
   `split_packed_lu` round trip remains at the three cited sites. Same 161/161
   debug and release runs as above cover its contracts on hardware.
-## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — in-progress
+## HEPH-CHOLESKY-LAZY-HOST-FACTOR [patch] [perf] — done
 
 - **Owner / integrator**: Claude session 5050c72a. Lease:
   `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`,
@@ -193,6 +193,8 @@
 - **Residual**: `solve` and `inv` remain host substitution, so the `n × n`
   download still happens for any caller that uses them. Retiring it needs
   device-side triangular solve — filed below.
+
+- **Closed (stale-claim sweep 2026-09-01, Claude):** delivered as `7643ed4`, merged through PR #242 (2026-09-01); the item still read in-progress. Its remaining `4n²` host download on `solve` is `HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE`.
 
 ## HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — todo
 
@@ -439,7 +441,7 @@
 - **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
   released on merge.
 
-## HEPH-WGPU-SUBMIT-ERROR-SCOPE-WAIT [patch] — todo
+## HEPH-WGPU-SUBMIT-ERROR-SCOPE-WAIT [patch] — done
 
 - Owner: unclaimed.
 - Outcome: decide whether `checked_submit`'s error-scope waits can stall
@@ -456,6 +458,21 @@
   wgpu source, and either a bound applied through the same
   `device_wait_deadline()` policy or a recorded argument that the wait is
   already bounded by construction.
+
+- **Resolved (2026-09-01, Claude) — bounded by construction; no code change.**
+  Traced to the wgpu 30.0.1 source in the registry,
+  `src/backend/wgpu_core.rs` `ContextWgpuCore::pop_error_scope` (~1860-1897):
+  on the native `wgpu-core` backend an error scope is a thread-local CPU-side
+  stack; `pop_error_scope` pops it synchronously and returns
+  `Box::pin(ready(scope.error))` on every path (`ready(None)` on the
+  mismatched-thread and unwinding paths). The future is complete before
+  `block_on` sees it, so the three `moirai::block_on` calls in
+  `prepared.rs:108-112` cannot wait on device progress and cannot stall on a
+  wedged device. The only device wait on that path is the explicit
+  `PollType::Wait` with the caller's timeout. The web (`webgpu`) backend does
+  resolve error scopes asynchronously, but hephaestus does not enable it.
+  Re-open trigger: enabling the `webgpu` backend, or a wgpu bump whose
+  `wgpu-core` `pop_error_scope` no longer returns a ready future.
 
 ## ✅ HEPH-WGPU-STAGING-POOL-DECAY [patch] [perf]: Decay idle staging pool retention
 
