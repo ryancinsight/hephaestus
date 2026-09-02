@@ -21,3 +21,5 @@
 pub mod device_api;
 /// Generic rank-2 axis prefix/suffix scan over the device-API seam.
 pub mod scan;
+/// Generic pooling and sliding-window operations over C-family devices.
+pub mod window;

@@ -21,6 +21,10 @@ pub use domain::accelerator::scan::{
     AXIS_SCAN_ENTRY, AxisScanDialect, AxisScanKey, AxisScanLaunch, AxisScanOps, PreparedAxisScan,
     c_family_axis_scan_source, launch_planned_axis_scan, plan_axis_scan_launch,
 };
+pub use domain::accelerator::window::{
+    CFamilyPoolingOps, CFamilySlidingWindowOps, WindowDialect, WindowKey, WindowOperation,
+    c_family_window_source,
+};
 pub use domain::attention::{
     AttentionBackwardOperands, AttentionCausality, AttentionForwardOperands,
     AttentionGradientViews, AttentionMask, AttentionOps, AttentionPlan, AttentionScalar,
