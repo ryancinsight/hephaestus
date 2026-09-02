@@ -204,6 +204,7 @@ contract_cases!(
     contract::blocked_cholesky_retains_factor_diagonal_across_panels,
     contract::blocked_cholesky_spd_reconstruction_matches_original,
     contract::blocked_cholesky_solve_known_system_accurate,
+    contract::blocked_cholesky_solve_multi_panel_matches_leto_reference,
     contract::blocked_cholesky_rejects_singular_matrix,
     contract::udu_decompose_rejects_invalid_contracts,
     contract::bunch_kaufman_rejects_rectangular_and_nonsymmetric,
@@ -301,7 +302,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        174,
+        175,
         "the consolidated integration contract must retain every migrated case"
     );
 

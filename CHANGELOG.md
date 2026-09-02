@@ -4,6 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] WGPU `GpuCholesky::solve` substitutes on the device: blocked
+  forward and backward triangular solves against the resident factor
+  (`2·⌈n/256⌉` block solves plus trailing updates in one pass) replace the
+  `4n²`-byte host-factor download and the per-solve right-hand-side
+  round trip. `GpuCholesky::host_factor_materialized` reports host
+  residency, which now only `inv` triggers.
 - [minor] Add CUDA's device-resident packed-LU split. The Python `lu` and
   `full_piv_lu` paths no longer download `n²` packed values and upload `2n²`
   explicit-factor values (12 MiB of avoidable PCIe traffic at `n = 1024`).

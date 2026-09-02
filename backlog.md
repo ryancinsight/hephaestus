@@ -196,49 +196,20 @@
 
 - **Closed (stale-claim sweep 2026-09-01, Claude):** delivered as `7643ed4`, merged through PR #242 (2026-09-01); the item still read in-progress. Its remaining `4n²` host download on `solve` is `HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE`.
 
-## HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — in-progress
+## ✅ HEPH-CHOLESKY-DEVICE-TRIANGULAR-SOLVE [patch] [perf] — done 2026-09-02
 
-- **Owner**: Claude (claimed 2026-09-01; branch `perf/hephaestus-cholesky-device-solve`; regions `crates/hephaestus-wgpu/src/application/decomposition/cholesky.rs`, `crates/hephaestus-wgpu/tests/contracts.rs`, `crates/hephaestus-conformance/src/decomposition.rs`).
-- **Outcome**: run `GpuCholesky::solve` as two device-side triangular solves
-  against the resident lower factor, retiring the `4n²`-byte host-factor
-  download that HEPH-CHOLESKY-LAZY-HOST-FACTOR deferred but did not remove,
-  plus the per-solve `4n`-byte RHS download and solution upload
-  (`decomposition/cholesky.rs` `solve`).
-- **Scope**: the WGPU handle's `solve` only. **Non-goals**: `inv` (n solves;
-  its own item once `solve` lands), the CUDA/ROCm siblings, and any
-  `CholeskyHandle` signature change — `solve` already takes `&device`.
-- **Acceptance oracle**: forward and backward substitution kernels agree with
-  `leto_ops::CholeskyDecomposition::solve` within a derived bound
-  (`≲ 2n(n+1)κ∞·u`, Higham ASNA 2nd ed. ch. 8); a multi-panel fixture
-  (`n > 64`, ragged tail) asserts the regime explicitly; `inner` stays
-  unmaterialized across a factor-then-solve sequence.
-- **Risk / change class**: [patch] — no public signature change. Note
-  `HephaestusError` is not `#[non_exhaustive]`, so any new error variant
-  reclassifies this to [major].
-- **Dependencies**: none; HEPH-CHOLESKY-LAZY-HOST-FACTOR already isolated the
-  host factor behind `host_factor`, so this item deletes one call site.
-- **Verification plan**: warning-denied focused gates, WGPU Nextest with a
-  real adapter, a new contract case registered with the `CONTRACT_CASES.len()`
-  guard bumped, and a deliberate kernel perturbation proving it fails.
-- **DoR gap, resolved by spike (2026-09-01, Claude):** blocked triangular
-  solve, not a per-row dispatch chain. Forward substitution is sequential in
-  the solved index but only *within* a diagonal block: partition `L` into
-  `B x B` diagonal blocks (`B = 256`, the workgroup width `split.rs` already
-  uses), and for each block `k`: (1) one workgroup solves the `B x B`
-  diagonal block against its `B`-row slice of the right-hand side entirely
-  in shared memory, sequentially over its rows with the dot products
-  parallel across lanes; (2) one parallel dispatch applies the rank-`B`
-  update `rhs[k+1..] -= L[k+1.., k] * y[k]` across every remaining row, the
-  same shape as the blocked Cholesky's trailing update. Backward substitution
-  mirrors it on `Lᵀ` from the last block. Cost: `2 * ceil(n / B)` dispatches
-  per solve (8 for `n = 1024`) against `n` for a per-row chain (1024), with
-  the trailing updates carrying all the bandwidth. Level scheduling (a DAG
-  over rows) buys nothing here: dense `L` has no sparsity to schedule around.
-  Error model for the acceptance bound: each block solve is a `B`-term
-  recurrence, so the Higham `2n(n+1)κ∞u` bound the item cites holds
-  unchanged. Verification adds one perturbation: zeroing the trailing update
-  must fail the multi-panel (`n > B`) fixture and pass the single-block one,
-  proving the fixture reaches the second dispatch. Item is Ready.
+- **Delivered:** `GpuCholesky::solve` runs blocked forward/backward
+  substitution on the device (`2·⌈n/256⌉` block solves plus trailing updates
+  in one compute pass, RHS copied device-to-device); the `4n²` host-factor
+  download and the per-solve RHS round trip are gone from `solve`; `inv` is
+  the only remaining host-factor consumer (its `n` device solves are a
+  follow-up item). `GpuCholesky::host_factor_materialized` exposes residency.
+- **Evidence:** WGPU contract suite 175/175 on RTX 5080 incl. the new
+  `n = 300` (256 + ragged 44) case against leto on the shared factor within
+  `24γₙ` (Higham Thm 8.5, derivation at the test); mutation proof: zeroing the
+  trailing update fails only that case (`x[0]` off by 9e-2 vs bound 4.3e-4)
+  while the single-block `2×2` case passes; clippy/doc/doctest/lib green.
+- **Residual:** `inv` still downloads the factor — its own item.
 
 ## ✅ HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — done 2026-08-31
 
