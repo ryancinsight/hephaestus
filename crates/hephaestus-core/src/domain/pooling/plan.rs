@@ -7,7 +7,7 @@ use crate::domain::window::{
     WindowPlan, invalid, max_offset, plan_window, validate_shape, validate_writable,
 };
 
-use super::{PoolingBackwardOperands, PoolingForwardOperands};
+use super::{PoolingBackwardOperands, PoolingForwardOperands, PoolingMode};
 
 /// Validated pooling geometry and backend address bounds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,14 +59,26 @@ where
 pub fn plan_pooling_backward<T, B, const R: usize, const S: usize>(
     operands: &PoolingBackwardOperands<'_, B, R>,
     parameters: WindowParameters<S>,
+    mode: PoolingMode,
     illegal_aliasing: bool,
 ) -> Result<PoolingPlan<S>>
 where
     T: Pod,
     B: DeviceBuffer<T>,
 {
-    let mut geometry =
-        plan_window::<T, B, R, S>(operands.input.layout, operands.input.buffer, parameters)?;
+    if matches!(mode, PoolingMode::Maximum) && operands.input.is_none() {
+        return Err(invalid(
+            "maximum pooling backward requires the forward input",
+        ));
+    }
+    let mut geometry = match operands.input {
+        Some(input) => plan_window::<T, B, R, S>(input.layout, input.buffer, parameters)?,
+        None => plan_window::<T, B, R, S>(
+            operands.grad_input.layout,
+            operands.grad_input.buffer,
+            parameters,
+        )?,
+    };
     validate_shape(
         operands.grad_output.layout.shape(),
         geometry.batch,

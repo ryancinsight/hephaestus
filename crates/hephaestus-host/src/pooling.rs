@@ -88,12 +88,15 @@ where
         parameters: WindowParameters<S>,
         mode: PoolingMode,
     ) -> hephaestus_core::Result<Self::PreparedBackward<'a, R, S>> {
-        let illegal_aliasing = operands.grad_input.buffer.aliases(operands.input.buffer)
+        let input_aliases = operands
+            .input
+            .is_some_and(|input| operands.grad_input.buffer.aliases(input.buffer));
+        let illegal_aliasing = input_aliases
             || operands
                 .grad_input
                 .buffer
                 .aliases(operands.grad_output.buffer);
-        plan_pooling_backward::<T, _, R, S>(&operands, parameters, illegal_aliasing)?;
+        plan_pooling_backward::<T, _, R, S>(&operands, parameters, mode, illegal_aliasing)?;
         Ok(HostPoolingBackward {
             operands,
             parameters,
@@ -106,23 +109,34 @@ where
         _device: &HostDevice,
         prepared: &Self::PreparedBackward<'_, R, S>,
     ) -> hephaestus_core::Result<()> {
-        let input = prepared.operands.input;
         let grad_output = prepared.operands.grad_output;
         let grad_input = prepared.operands.grad_input;
-        let input_cells = input.buffer.read();
         let grad_output_cells = grad_output.buffer.read();
         let mut grad_input_cells = grad_input.buffer.write();
-        let input_view = ArrayView::new(*input.layout, &input_cells);
         let grad_output_view = ArrayView::new(*grad_output.layout, &grad_output_cells);
         let mut grad_input_view = ArrayViewMut::new(*grad_input.layout, &mut grad_input_cells);
-        leto_ops::pooling_backward_accumulate(
-            &grad_output_view,
-            &input_view,
-            prepared.parameters,
-            leto_mode(prepared.mode),
-            &mut grad_input_view,
-        )
-        .map_err(map_leto_error)
+        match prepared.operands.input {
+            Some(input) => {
+                let input_cells = input.buffer.read();
+                let input_view = ArrayView::new(*input.layout, &input_cells);
+                leto_ops::pooling_backward_accumulate(
+                    &grad_output_view,
+                    Some(&input_view),
+                    prepared.parameters,
+                    leto_mode(prepared.mode),
+                    &mut grad_input_view,
+                )
+                .map_err(map_leto_error)
+            }
+            None => leto_ops::pooling_backward_accumulate(
+                &grad_output_view,
+                None,
+                prepared.parameters,
+                leto_mode(prepared.mode),
+                &mut grad_input_view,
+            )
+            .map_err(map_leto_error),
+        }
     }
 }
 
@@ -180,9 +194,6 @@ mod tests {
     #[test]
     fn host_backward_accumulates_average_gradient() {
         let device = super::HostDevice::new();
-        let input = device
-            .upload(&[1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
-            .expect("input upload succeeds");
         let grad_output = device
             .upload(&[1.0_f64; 4])
             .expect("gradient upload succeeds");
@@ -196,7 +207,7 @@ mod tests {
             .pooling_backward_accumulate(
                 &device,
                 PoolingBackwardOperands {
-                    input: StridedView::new(&input, &input_layout),
+                    input: None,
                     grad_output: StridedView::new(&grad_output, &output_layout),
                     grad_input: StridedView::new(&grad_input, &input_layout),
                 },

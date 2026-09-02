@@ -10,8 +10,12 @@ pub struct PoolingForwardOperands<'a, B, const R: usize> {
 
 /// Borrowed operands for an additive pooling backward pass.
 pub struct PoolingBackwardOperands<'a, B, const R: usize> {
-    /// Forward input tensor.
-    pub input: StridedView<'a, B, R>,
+    /// Optional forward input tensor.
+    ///
+    /// Maximum pooling needs the input values to identify the selected
+    /// element. Average pooling only needs the input shape, which the plan
+    /// derives from [`grad_input`](Self::grad_input) when this is `None`.
+    pub input: Option<StridedView<'a, B, R>>,
     /// Gradient of the pooling output.
     pub grad_output: StridedView<'a, B, R>,
     /// Caller-owned input-gradient target. The operation adds into it.
