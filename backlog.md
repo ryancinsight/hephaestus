@@ -220,9 +220,25 @@
 - **Verification plan**: warning-denied focused gates, WGPU Nextest with a
   real adapter, a new contract case registered with the `CONTRACT_CASES.len()`
   guard bumped, and a deliberate kernel perturbation proving it fails.
-- **DoR gap**: the substitution kernels are sequential in the solved index, so
-  the parallelization strategy (blocked/level-scheduled forward substitution
-  vs. a per-row dispatch chain) needs a spike before the item is Ready.
+- **DoR gap, resolved by spike (2026-09-01, Claude):** blocked triangular
+  solve, not a per-row dispatch chain. Forward substitution is sequential in
+  the solved index but only *within* a diagonal block: partition `L` into
+  `B x B` diagonal blocks (`B = 256`, the workgroup width `split.rs` already
+  uses), and for each block `k`: (1) one workgroup solves the `B x B`
+  diagonal block against its `B`-row slice of the right-hand side entirely
+  in shared memory, sequentially over its rows with the dot products
+  parallel across lanes; (2) one parallel dispatch applies the rank-`B`
+  update `rhs[k+1..] -= L[k+1.., k] * y[k]` across every remaining row, the
+  same shape as the blocked Cholesky's trailing update. Backward substitution
+  mirrors it on `Lᵀ` from the last block. Cost: `2 * ceil(n / B)` dispatches
+  per solve (8 for `n = 1024`) against `n` for a per-row chain (1024), with
+  the trailing updates carrying all the bandwidth. Level scheduling (a DAG
+  over rows) buys nothing here: dense `L` has no sparsity to schedule around.
+  Error model for the acceptance bound: each block solve is a `B`-term
+  recurrence, so the Higham `2n(n+1)κ∞u` bound the item cites holds
+  unchanged. Verification adds one perturbation: zeroing the trailing update
+  must fail the multi-panel (`n > B`) fixture and pass the single-block one,
+  proving the fixture reaches the second dispatch. Item is Ready.
 
 ## ✅ HEPH-CONFORMANCE-RATCHET-2026-08-31 [patch] — done 2026-08-31
 
