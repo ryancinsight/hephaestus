@@ -764,23 +764,11 @@
   layout on Windows/MSVC; verify the struct layout against the driver header
   before adopting.
 
-## HEPH-CUDA-LIMITS-SEMANTICS [minor] — todo
+## ✅ HEPH-CUDA-LIMITS-SEMANTICS [minor] — done 2026-09-02
 
-- Owner: unclaimed.
-- Outcome: `max_buffer_size` reports a stable per-device capacity, with free
-  memory exposed as a separate runtime query.
-- Evidence (audit 2026-08-27):
-  `crates/hephaestus-cuda/src/infrastructure/device.rs:556` sets
-  `max_buffer_size: free_bytes as u64` — the free-VRAM snapshot at
-  acquisition, stale after any allocation and semantically different from
-  wgpu's hard per-buffer limit, so `require_limits` (:267-269) can
-  spuriously reject on a busy device.
-- Direction: report total device memory (already queried via
-  `current_memory_info`, device.rs:653) as the limit; expose free memory as
-  a runtime query.
-- Dependencies: a consumer sweep (athena, coeus) before the semantic change —
-  callers currently reading `max_buffer_size` as "free now" must migrate to
-  the runtime query in the same co-evolution unit.
+- **Delivered:** `query_device_limits` reports total device memory as `max_buffer_size` (the stable per-device capacity, matching the WGPU hard limit's semantics) and `CudaDevice::free_memory_bytes` is the point-in-time runtime query. `require_limits` therefore compares against a value that no longer decays with allocations.
+- **Consumer sweep:** `max_buffer_size` readers are hephaestus-internal (`require_limits`, ROCm/Metal/host contract tests) plus coeus-wgpu's output-size validation, which reads the WGPU limit, not CUDA's — no caller read the CUDA value as "free now", so no migration.
+- **Evidence:** RTX 5080 — `device_capabilities_are_driver_backed` asserts free ≤ capacity; the new `buffer_limit_is_stable_across_allocations_and_free_memory_tracks_them` allocates 64 MiB and sees the limit unchanged and free memory fall; hephaestus-cuda contract 87/87, clippy and rustdoc clean.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 

@@ -99,6 +99,12 @@ fn device_capabilities_are_driver_backed() {
 
     let limits = dev.device_limits();
     assert!(limits.max_buffer_size > 0);
+    let free = dev.free_memory_bytes().expect("free-memory query");
+    assert!(
+        free <= limits.max_buffer_size,
+        "free memory {free} exceeds the device capacity {}",
+        limits.max_buffer_size
+    );
     assert!(limits.max_compute_workgroup_size_x > 0);
     assert!(limits.max_compute_workgroup_size_y > 0);
     assert!(limits.max_compute_workgroup_size_z > 0);
@@ -3966,5 +3972,31 @@ fn dense_vector_ops_match_cpu_reference() {
         ops.divide_into(&dev, &left, &short, &difference),
         len,
         len - 1,
+    );
+}
+
+/// `max_buffer_size` is the device capacity — it does not move when memory is
+/// allocated — while the free-memory query does.
+#[test]
+fn buffer_limit_is_stable_across_allocations_and_free_memory_tracks_them() {
+    let Some(dev) = device("buffer_limit_is_stable_across_allocations") else {
+        return;
+    };
+    let limits_before = dev.device_limits();
+    let free_before = dev.free_memory_bytes().expect("free-memory query");
+    // 64 MiB: large enough that the driver must back it with new device pages
+    // rather than serve it from a pool the previous tests already touched.
+    let _held = dev
+        .alloc_zeroed::<f32>(16 << 20)
+        .expect("64 MiB device buffer");
+    let free_after = dev.free_memory_bytes().expect("free-memory query");
+    assert_eq!(
+        dev.device_limits(),
+        limits_before,
+        "the limit moved with an allocation"
+    );
+    assert!(
+        free_after < free_before,
+        "free memory did not fall across a 64 MiB allocation: {free_before} -> {free_after}"
     );
 }

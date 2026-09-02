@@ -4,6 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] CUDA `DeviceLimits::max_buffer_size` now reports the device's total
+  memory — a stable per-device capacity, as the WGPU backend's hard limit is —
+  instead of the free-memory snapshot taken at acquisition, which went stale
+  after the first allocation and let `require_limits` reject busy devices.
+  `CudaDevice::free_memory_bytes` exposes the point-in-time free memory as a
+  runtime query.
 - [patch] WGPU `GpuCholesky::solve` substitutes on the device: blocked
   forward and backward triangular solves against the resident factor
   (`2·⌈n/256⌉` block solves plus trailing updates in one pass) replace the
