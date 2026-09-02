@@ -105,6 +105,10 @@ pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, WgpuRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::window::{
+    PreparedPoolingBackward, PreparedPoolingForward, PreparedSlidingWindowFold,
+    PreparedSlidingWindowUnfold, WgpuPoolingOps, WgpuSlidingWindowOps, WgpuWindowScalar,
+};
 pub use wgpu;
 
 pub use infrastructure::buffer::WgpuBuffer;

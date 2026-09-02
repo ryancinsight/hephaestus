@@ -63,3 +63,5 @@ pub mod strided;
 /// Dense vector-operation seam implementation.
 pub mod vector;
 pub mod volume;
+/// Native WGSL pooling and sliding-window operations.
+pub mod window;

@@ -21,6 +21,10 @@ pub use domain::accelerator::scan::{
     AXIS_SCAN_ENTRY, AxisScanDialect, AxisScanKey, AxisScanLaunch, AxisScanOps, PreparedAxisScan,
     c_family_axis_scan_source, launch_planned_axis_scan, plan_axis_scan_launch,
 };
+pub use domain::accelerator::window::{
+    CFamilyPoolingOps, CFamilySlidingWindowOps, WindowDialect, WindowKey, WindowOperation,
+    c_family_window_source,
+};
 pub use domain::attention::{
     AttentionBackwardOperands, AttentionCausality, AttentionForwardOperands,
     AttentionGradientViews, AttentionMask, AttentionOps, AttentionPlan, AttentionScalar,
@@ -81,12 +85,20 @@ pub use domain::parameterized::{
     HardtanhGradOp, HardtanhOp, ParameterizedUnaryExpr, ParameterizedUnaryOps, ThresholdGradOp,
     ThresholdOp, validate_parameterized_output,
 };
+pub use domain::pooling::{
+    PoolingBackwardOperands, PoolingForwardOperands, PoolingMode, PoolingOps, PoolingPlan,
+    plan_pooling_backward, plan_pooling_forward,
+};
 pub use domain::random::RandomInitOps;
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
     StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
+pub use domain::sliding_window::{
+    SlidingWindowFoldOperands, SlidingWindowOps, SlidingWindowPlan, SlidingWindowUnfoldOperands,
+    plan_sliding_window_fold, plan_sliding_window_unfold,
+};
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
 pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
@@ -103,3 +115,4 @@ pub use domain::stream::{
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
 pub use domain::view::StridedView;
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
+pub use domain::window::WindowPlan;

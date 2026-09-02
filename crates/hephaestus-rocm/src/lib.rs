@@ -138,6 +138,7 @@ pub use application::vector::{
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, RocmRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::window::{RocmPoolingOps, RocmSlidingWindowOps};
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 
 pub use hephaestus_core::{
