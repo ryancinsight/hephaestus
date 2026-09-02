@@ -58,3 +58,5 @@ pub mod strided;
 pub mod vector;
 /// Volume ray-integral delegation.
 pub mod volume;
+/// Zero-copy pooling and sliding-window delegation.
+pub mod window;

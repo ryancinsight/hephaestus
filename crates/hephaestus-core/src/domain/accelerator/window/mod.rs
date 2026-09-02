@@ -91,7 +91,7 @@ pub struct PreparedFold<'a, D: DeviceApi, T: Pod> {
 }
 
 /// Generic C-family implementation of pooling operations.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct CFamilyPoolingOps<D>(PhantomData<fn() -> D>);
 
 impl<D> CFamilyPoolingOps<D> {
@@ -102,8 +102,14 @@ impl<D> CFamilyPoolingOps<D> {
     }
 }
 
+impl<D> Default for CFamilyPoolingOps<D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Generic C-family implementation of sliding-window operations.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct CFamilySlidingWindowOps<D>(PhantomData<fn() -> D>);
 
 impl<D> CFamilySlidingWindowOps<D> {
@@ -111,6 +117,12 @@ impl<D> CFamilySlidingWindowOps<D> {
     #[must_use]
     pub const fn new() -> Self {
         Self(PhantomData)
+    }
+}
+
+impl<D> Default for CFamilySlidingWindowOps<D> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

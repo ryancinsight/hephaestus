@@ -64,3 +64,5 @@ pub mod strided_elementwise;
 pub mod vector;
 /// Volume ray-integral kernels.
 pub mod volume;
+/// Generic pooling and sliding-window operations.
+pub mod window;

@@ -53,6 +53,8 @@ pub mod strided;
 pub mod vector;
 /// Volume ray-integral kernels.
 pub mod volume;
+/// Generic pooling and sliding-window operations.
+pub mod window;
 
 #[cfg(feature = "decomposition")]
 /// Dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.

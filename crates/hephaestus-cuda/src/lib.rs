@@ -124,6 +124,7 @@ pub use application::vector::{
 pub use application::volume::{
     CudaRayIntegralOps, FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::window::{CudaPoolingOps, CudaSlidingWindowOps};
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 
 pub use application::random::{normal_with_seed, uniform_with_seed};

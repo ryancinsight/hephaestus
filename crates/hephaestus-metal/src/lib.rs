@@ -88,6 +88,7 @@ pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOp
 pub use application::volume::{
     FieldGeometry, MetalRayIntegralOps, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::window::{MetalPoolingOps, MetalSlidingWindowOps};
 pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
 pub use infrastructure::buffer::MetalBuffer;
 pub use infrastructure::device::MetalDevice;
