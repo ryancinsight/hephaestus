@@ -401,3 +401,42 @@ impl WindowDialect for HipC {
         c_family_window_source::<Self, T>(operation, width)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{WindowOperation, c_family_window_source};
+    use crate::domain::dialect::{CudaC, HipC};
+
+    #[test]
+    fn cuda_and_hip_window_sources_are_identical() {
+        let width = crate::BlockWidth::new(64).expect("non-zero test width");
+        for operation in [
+            WindowOperation::PoolingForwardMaximum,
+            WindowOperation::PoolingForwardAverage,
+            WindowOperation::PoolingBackwardMaximum,
+            WindowOperation::PoolingBackwardAverage,
+            WindowOperation::Unfold,
+            WindowOperation::Fold,
+        ] {
+            assert_eq!(
+                c_family_window_source::<CudaC, f32>(operation, width),
+                c_family_window_source::<HipC, f32>(operation, width)
+            );
+        }
+    }
+
+    #[test]
+    fn source_varies_by_operation_and_scalar() {
+        let width = crate::BlockWidth::new(32).expect("non-zero test width");
+        let maximum =
+            c_family_window_source::<CudaC, f32>(WindowOperation::PoolingForwardMaximum, width);
+        let average =
+            c_family_window_source::<CudaC, f32>(WindowOperation::PoolingForwardAverage, width);
+        let integer =
+            c_family_window_source::<CudaC, i32>(WindowOperation::PoolingForwardMaximum, width);
+        assert_ne!(maximum, average);
+        assert_ne!(maximum, integer);
+        assert!(maximum.contains("float"));
+        assert!(integer.contains("int"));
+    }
+}
