@@ -21,7 +21,7 @@
   change; vendor transitive graphs remain outside this item.
 - **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
   default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
-  doctests, and warning-denied rustdoc pass. **Commit:** pending. **Last-update:** 2026-09-03.
+  doctests, and warning-denied rustdoc pass. **Commit:** `c24de79`. **Last-update:** 2026-09-03.
 
 ## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done
 
