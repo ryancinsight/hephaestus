@@ -4,7 +4,7 @@
 
 - **Outcome:** Move runtime-rank expression fusion into the device-neutral seam and WGPU provider; [ADR 0055](docs/adr/0055-fusion-seam.md).
 - **Scope / acceptance:** Core fusion contracts, borrowed dynamic views, provider-owned WGSL generation/cache/dispatch, layout and resource validation, and differential WGPU contracts; Coeus cleanup remains a follow-on migration.
-- **Evidence:** WGPU nextest `34/34`, Leto nextest `344/344`, clippy, doctests, rustdoc, and ADR index pass; consumes Leto `ef78173`.
+- **Evidence:** After merging `origin/master` (including the mbind link fix), exact-source CUDA checks pass with and without `cuda,decomposition`; ROCm adapterless checks pass with and without `decomposition`; WGPU nextest `34/34`, workspace clippy, format, and locked WGPU all-target checks pass locally. The lockfile consumes merged Leto `070d52c`.
 - **Delivery:** Draft [PR #265](https://github.com/ryancinsight/hephaestus/pull/265); independent architecture review is required before merge.
 
 ## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — done
