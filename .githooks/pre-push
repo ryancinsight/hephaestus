@@ -31,8 +31,15 @@ if [ "${SKIP_LOCKFILE_CHECK:-0}" = "1" ]; then
   exit 0
 fi
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(git -c safe.directory="$PWD" rev-parse --show-toplevel)"
 checker="$repo_root/scripts/lockfile.py"
+
+# Git does not propagate command-line configuration into hooks. Re-inject the
+# exact checkout path so child Git calls remain valid in managed worktrees
+# whose filesystem owner differs from the process owner.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0="$repo_root"
 
 if [ ! -f "$checker" ]; then
   # Nothing to enforce on a checkout that predates the tool; say so rather than
