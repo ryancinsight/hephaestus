@@ -1,10 +1,10 @@
 # Backlog — hephaestus
 
-## ✅ HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done 2026-09-02
+## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — in review
 
 - **Delivered:** Device-neutral runtime fusion contracts and provider-owned WGPU validation, source generation, cache, and dispatch; [ADR 0055](docs/adr/0055-fusion-seam.md).
 - **Evidence:** commit `219d701`; WGPU nextest `34/34`, clippy, doctests, and rustdoc pass.
-- **Dependency:** consumes Leto commit `ef78173`.
+- **Delivery:** Draft [PR #264](https://github.com/ryancinsight/hephaestus/pull/264); independent architecture review is required before merge. Consumes Leto commit `ef78173`.
 
 ## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — done
 
