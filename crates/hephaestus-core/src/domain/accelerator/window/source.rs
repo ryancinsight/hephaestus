@@ -177,8 +177,8 @@ __device__ bool project_inverse(
 }}
 
 extern "C" __global__ void {entry}(
-    {arguments},
-    WindowMeta parameters
+    WindowMeta parameters,
+    {arguments}
 ) {{
     // The host launch uses this same width for occupancy planning: {width}.
     int linear = (int)(blockIdx.x * blockDim.x + threadIdx.x);
@@ -438,5 +438,33 @@ mod tests {
         assert_ne!(maximum, integer);
         assert!(maximum.contains("float"));
         assert!(integer.contains("int"));
+    }
+
+    #[test]
+    fn source_matches_device_api_argument_order() {
+        let width = crate::BlockWidth::new(32).expect("non-zero test width");
+        for operation in [
+            WindowOperation::PoolingForwardMaximum,
+            WindowOperation::PoolingForwardAverage,
+            WindowOperation::PoolingBackwardMaximum,
+            WindowOperation::PoolingBackwardAverage,
+            WindowOperation::Unfold,
+            WindowOperation::Fold,
+        ] {
+            let source = c_family_window_source::<CudaC, f32>(operation, width);
+            let (_, signature) = source
+                .split_once("extern \"C\" __global__ void window_kernel(")
+                .expect("generated source contains the window entry point");
+            let parameter_offset = signature
+                .find("WindowMeta parameters")
+                .expect("window signature contains its parameter block");
+            let operand_offset = signature
+                .find("const float* first")
+                .expect("window signature contains its first operand");
+            assert!(
+                parameter_offset < operand_offset,
+                "{operation:?} must pass the parameter block before operands"
+            );
+        }
     }
 }
