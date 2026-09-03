@@ -70,7 +70,7 @@ leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", d
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-memory-core = { version = "0.2.0", git = "https://github.com/ryancinsight/Mnemosyne.git" }
+mnemosyne-memory-core = { version = "0.2.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "cdf3363db2ff31337c531b24d0025d945ac59a23" }
 moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",
