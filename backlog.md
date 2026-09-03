@@ -1,5 +1,28 @@
 # Backlog — hephaestus
 
+## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — in-progress <a id="heph-eunomia-layout-seam-2026-09-03"></a>
+
+- **Outcome:** Make Eunomia's native `Pod`/`Zeroable` markers and byte-cast
+  functions the single first-party device-layout contract across Hephaestus.
+- **Scope / non-goals:** Migrate `hephaestus-core`, the host reference device,
+  all shipped backend implementations, conformance tests, and owned ABI
+  metadata; remove direct first-party `bytemuck` imports and manifest edges.
+  WGPU/CUDA/ROCm vendor internals and unavoidable transitive dependencies are
+  not replaced by a local adapter or compatibility shim.
+- **Acceptance:** `ComputeDevice`, `DeviceApi`, and every public operation seam
+  bind `eunomia::Pod`; owned `repr(C)`/transparent metadata derives Eunomia
+  markers; host↔device byte views use `eunomia::layout` with no copy added;
+  all first-party crates compile and their value-semantic suites pass; direct
+  source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
+- **Dependencies / risk:** Eunomia PR #86 is merged as
+  `e49ba8afcf02c1d9bcf369cfdb3237212e46a44e`. This breaks the public generic
+  bound and is therefore a major co-evolution change; Apollo's direct `half`
+  cleanup is already landed, while WGPU's transitive `naga` graph remains
+  outside this item.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
+  `chore/close-bounded-waits`; claim covers the Hephaestus source, manifests,
+  tests, ADR, and this item. Last update: 2026-09-03.
+
 ## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done
 
 - **Outcome:** Move runtime-rank expression fusion into the device-neutral seam and WGPU provider; [ADR 0055](docs/adr/0055-fusion-seam.md).
