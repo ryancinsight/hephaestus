@@ -9,7 +9,7 @@ use core::ffi::c_void;
 use std::sync::Arc;
 
 use bytemuck::Pod;
-use hephaestus_core::{AxisScanKey, DeviceApi, HipC, LaunchGeometry, Result};
+use hephaestus_core::{AxisScanKey, DeviceApi, HipC, LaunchGeometry, Result, WindowKey};
 use smallvec::SmallVec;
 
 use crate::RocmDevice;
@@ -42,6 +42,22 @@ impl From<AxisScanKey> for RocmKernelCacheKey {
             direction: key.direction,
             axis: key.axis,
             width: key.width,
+        })
+    }
+}
+
+/// The accelerator layer's spatial-window families — pooling forward and
+/// backward, unfold and fold — identify a kernel by operation, host scalar
+/// and spatial rank. Without this conversion those families are
+/// uninstantiable here, since every one of them is bounded on
+/// `D::CacheKey: From<WindowKey>`.
+impl From<WindowKey> for RocmKernelCacheKey {
+    #[inline]
+    fn from(key: WindowKey) -> Self {
+        Self(PipelineKey::Window {
+            operation: key.operation,
+            scalar: key.scalar,
+            spatial_rank: key.spatial_rank,
         })
     }
 }
@@ -99,5 +115,56 @@ impl DeviceApi for RocmDevice {
             LaunchConfig::linear_shared(geometry.groups, geometry.width, geometry.shared_bytes),
             &mut args,
         )
+    }
+}
+
+#[cfg(test)]
+mod window_cache_key_tests {
+    use super::*;
+    use core::any::TypeId;
+    use hephaestus_core::WindowOperation;
+
+    // The cache key is deliberately opaque and derives no `Debug`, so these
+    // compare with `assert!` and carry the meaning in the message rather than
+    // widening a public derive for a test.
+
+    fn key(operation: WindowOperation, spatial_rank: usize) -> WindowKey {
+        WindowKey {
+            operation,
+            scalar: TypeId::of::<f32>(),
+            spatial_rank,
+        }
+    }
+
+    /// The cache is keyed by identity, so two window kernels differing in any
+    /// of the three fields must not collide — a collision would hand one
+    /// operation's compiled kernel to another.
+    #[test]
+    fn distinct_windows_convert_to_distinct_cache_keys() {
+        let forward = RocmKernelCacheKey::from(key(WindowOperation::PoolingForwardMaximum, 2));
+        let average = RocmKernelCacheKey::from(key(WindowOperation::PoolingForwardAverage, 2));
+        let rank_three = RocmKernelCacheKey::from(key(WindowOperation::PoolingForwardMaximum, 3));
+        let unfold = RocmKernelCacheKey::from(key(WindowOperation::Unfold, 2));
+        let double = RocmKernelCacheKey::from(WindowKey {
+            operation: WindowOperation::PoolingForwardMaximum,
+            scalar: TypeId::of::<f64>(),
+            spatial_rank: 2,
+        });
+        assert!(forward != average, "pooling mode must reach the key");
+        assert!(forward != rank_three, "spatial rank must reach the key");
+        assert!(forward != unfold, "operation must reach the key");
+        assert!(forward != double, "host scalar must reach the key");
+    }
+
+    /// The same window converts to the same key, so a second launch of one
+    /// kernel hits the cache instead of recompiling.
+    #[test]
+    fn the_same_window_converts_to_the_same_cache_key() {
+        let first = RocmKernelCacheKey::from(key(WindowOperation::Fold, 1));
+        let second = RocmKernelCacheKey::from(key(WindowOperation::Fold, 1));
+        assert!(
+            first == second,
+            "the same window must reuse its compiled kernel"
+        );
     }
 }

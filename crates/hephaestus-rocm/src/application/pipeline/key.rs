@@ -1,3 +1,4 @@
+use hephaestus_core::WindowOperation;
 use std::any::TypeId;
 
 /// Pipeline-cache key for a runtime-compiled ROCm kernel.
@@ -70,6 +71,14 @@ pub(crate) enum PipelineKey {
         direction: hephaestus_core::ScanDirection,
         axis: usize,
         width: u32,
+    },
+    /// A generated spatial-window kernel: pooling forward and backward,
+    /// unfold and fold. The accelerator layer plans one kernel per
+    /// (operation, host scalar, spatial rank), so those three identify it.
+    Window {
+        operation: WindowOperation,
+        scalar: TypeId,
+        spatial_rank: usize,
     },
     Matmul {
         marker: TypeId,
