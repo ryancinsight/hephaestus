@@ -5,19 +5,14 @@ use crate::application::linalg::to_u32;
 use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 pub(super) struct HhReflectorMeta {
     pub(super) vector_offset: u32,
     pub(super) beta: f32,
 }
 
-// SAFETY: `HhReflectorMeta` is `#[repr(C)]` and contains one `u32` and
-// one `f32` field of identical size and alignment, so it has no padding
-// bytes, and every bit pattern is valid for both types.
-unsafe impl bytemuck::Pod for HhReflectorMeta {}
-
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct HhMeta {
     panel_rows: u32,
     reflector_count: u32,
@@ -26,12 +21,6 @@ struct HhMeta {
     k: u32,
     _pad: [u32; 3],
 }
-
-// SAFETY: `HhMeta` is `#[repr(C)]` and contains only `u32` fields of
-// identical size and alignment (the trailing `[u32; 3]` pads the struct
-// to 32 bytes explicitly), so it has no implicit padding bytes, and
-// every bit pattern is a valid value.
-unsafe impl bytemuck::Pod for HhMeta {}
 
 fn householder_source() -> String {
     r#"

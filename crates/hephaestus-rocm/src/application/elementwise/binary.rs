@@ -4,7 +4,7 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
     Result, TypedBinaryExpr,

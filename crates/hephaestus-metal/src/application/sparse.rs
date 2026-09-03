@@ -1,6 +1,6 @@
 //! CSR sparse matrix operations delegated through native Metal-selected WGPU.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DialectScalar, Result, Wgsl};
 use hephaestus_wgpu as wgpu_backend;
 

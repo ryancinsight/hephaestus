@@ -174,7 +174,7 @@ fn dispatch_preflight_then_kernels<'a>(
     }
     device
         .queue()
-        .write_buffer(status.raw(), 0, bytemuck::bytes_of(&u32::MAX));
+        .write_buffer(status.raw(), 0, eunomia::layout::bytes_of(&u32::MAX));
     dispatch_kernels(device, preflight)?;
     let mut code = [0_u32];
     device.download(status, &mut code)?;

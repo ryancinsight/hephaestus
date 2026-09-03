@@ -171,7 +171,7 @@ fn metadata_buffer(device: &WgpuDevice, metadata: &WindowMeta) -> Result<Uniform
     let buffer = uniform_guard(device.clone(), raw);
     device
         .queue()
-        .write_buffer(&buffer, 0, bytemuck::bytes_of(metadata));
+        .write_buffer(&buffer, 0, eunomia::layout::bytes_of(metadata));
     Ok(buffer)
 }
 

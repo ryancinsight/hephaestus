@@ -2,7 +2,7 @@
 
 use std::any::TypeId;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DialectScalar, IdentityToken, OpIdentity, Result, Wgsl,
     reduction_pass_count, validate_reduction_width,

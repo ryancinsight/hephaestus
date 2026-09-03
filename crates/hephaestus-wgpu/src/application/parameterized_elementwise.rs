@@ -114,10 +114,10 @@ where
         crate::infrastructure::pool::uniform_guard(device.clone(), raw_parameters);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
     device
         .queue()
-        .write_buffer(&parameter_buffer, 0, bytemuck::bytes_of(&parameters));
+        .write_buffer(&parameter_buffer, 0, eunomia::layout::bytes_of(&parameters));
 
     encode_elementwise(
         device,

@@ -22,7 +22,7 @@
 //! their impls are reachable from a backend crate under the orphan rule
 //! because the dialect marker is that crate's local type.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// A kernel-source dialect a backend can compile.
 pub trait KernelDialect: Copy + Clone + core::fmt::Debug + Default + Send + Sync + 'static {

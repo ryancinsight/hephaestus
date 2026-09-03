@@ -33,10 +33,10 @@ together so no local trait, forwarding bound, or conversion layer mirrors the
 old API.
 
 The direct `bytemuck` dependency and source imports are removed from
-Hephaestus packages once the migration no longer needs them. A vendor crate
-may still receive `bytemuck` transitively from an external API such as WGPU;
-that graph residue is not a first-party contract and is recorded rather than
-hidden behind a second marker or a feature-gated stub.
+Hephaestus packages by this migration. A vendor crate may still receive
+`bytemuck` transitively from an external API such as WGPU; that graph residue
+is not a first-party contract and is recorded rather than hidden behind a
+second marker or a feature-gated stub.
 
 ## Alternatives rejected
 

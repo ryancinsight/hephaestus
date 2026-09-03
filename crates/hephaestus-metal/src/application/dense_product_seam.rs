@@ -5,7 +5,7 @@
 //! method forwards to [`hephaestus_wgpu::WgpuDenseProductOps`] on the device's
 //! WGPU handle.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DenseProductOps, DialectScalar, Result, StridedView, Wgsl};
 use hephaestus_wgpu::{MatmulZero, WgpuDenseProductOps};
 

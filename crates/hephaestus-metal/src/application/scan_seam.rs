@@ -17,7 +17,7 @@ pub struct MetalScanOps {
 
 impl<T> ScanOps<MetalDevice, T> for MetalScanOps
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
+    T: DialectScalar<Wgsl> + eunomia::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
     type PreparedScan<'op, const N: usize>

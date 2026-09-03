@@ -1,6 +1,6 @@
 //! Native WGSL pooling and sliding-window operations.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DeviceFeature, DialectScalar, HephaestusError, Result, Wgsl};
 
 mod metadata;

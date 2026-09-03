@@ -11,7 +11,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     Binding, CommandStream, CudaC, DispatchGrid, GroupedBinding, GroupedCommandStream,
     GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
@@ -443,7 +443,7 @@ mod tests {
     use std::borrow::Cow;
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     struct ScaleParams {
         len: u32,
         factor: f32,
@@ -464,7 +464,7 @@ mod tests {
     }
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     struct GroupedParams {
         len: u32,
         addend: f32,

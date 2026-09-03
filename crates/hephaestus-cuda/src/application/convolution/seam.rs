@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     ConvolutionBackwardOperands, ConvolutionForwardOperands, ConvolutionOps, CudaC, DialectScalar,
     HephaestusError, Result, StridedView, plan_convolution_backward, plan_convolution_forward,

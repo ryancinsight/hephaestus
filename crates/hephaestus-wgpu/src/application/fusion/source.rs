@@ -1,6 +1,6 @@
 //! WGSL source and metadata for runtime-rank fusion.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     DialectScalar, FusedReduction, IdentityToken, MaxOp, MinOp, ProdOp, SumOp, Wgsl,
 };

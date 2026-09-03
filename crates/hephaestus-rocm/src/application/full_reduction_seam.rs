@@ -6,7 +6,7 @@
 //! and writes the scalar into the bound output — so re-dispatch observes
 //! writes to the bound input (the seam's rebind contract).
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, ElementwiseOps,
     FullReductionOps, HephaestusError, HipC, IdentityOp, IdentityToken, OpIdentity, Result,

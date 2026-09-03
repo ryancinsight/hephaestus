@@ -1,8 +1,8 @@
 use core::ffi::c_void;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use bytemuck::Pod;
 use cuda_oxide::Cuda;
+use eunomia::Pod;
 use hephaestus_core::{
     CommandStream, ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities,
     DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, KernelDevice, Result,
@@ -920,7 +920,7 @@ impl ComputeDevice for CudaDevice {
                 ),
             })?;
         if core::mem::size_of::<T>() == 0 {
-            out.resize(len, bytemuck::Zeroable::zeroed());
+            out.resize(len, eunomia::Zeroable::zeroed());
             return Ok(out);
         }
         let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or_else(|| {

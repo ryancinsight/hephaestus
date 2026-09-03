@@ -7,7 +7,7 @@
 //! established scalar determinant, solve, and inverse contracts shared by the
 //! CUDA and wgpu backends.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
     KernelDevice, Result,

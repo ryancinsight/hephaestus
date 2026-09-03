@@ -6,7 +6,7 @@
 //! Each recurrence step is ordered on HIP's default stream, so a later column
 //! observes the diagonal and column writes from the preceding steps.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
     KernelDevice, Result,

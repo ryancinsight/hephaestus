@@ -39,7 +39,7 @@ pub fn binary_elementwise_strided<'a, Op, T, const N: usize>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::binary_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -62,7 +62,7 @@ pub fn binary_elementwise_strided_into<'a, Op, T, const N: usize>(
 ) -> Result<()>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::binary_elementwise_strided_into::<Op, T, N>(
         &device.inner,
@@ -85,7 +85,7 @@ pub fn binary_elementwise_strided_typed<'a, Op, T, const N: usize>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: TypedBinaryExpr<Wgsl, T>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::binary_elementwise_strided_typed::<Op, T, N>(
         &device.inner,
@@ -109,7 +109,7 @@ pub fn binary_elementwise_strided_typed_into<'a, Op, T, const N: usize>(
 ) -> Result<()>
 where
     Op: TypedBinaryExpr<Wgsl, T>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::binary_elementwise_strided_typed_into::<Op, T, N>(
         &device.inner,
@@ -131,7 +131,7 @@ pub fn scalar_elementwise_strided<'a, Op, T, const N: usize>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::scalar_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -154,7 +154,7 @@ pub fn scalar_elementwise_strided_into<'a, Op, T, const N: usize>(
 ) -> Result<()>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::scalar_elementwise_strided_into::<Op, T, N>(
         &device.inner,
@@ -175,7 +175,7 @@ pub fn unary_elementwise_strided<'a, Op, T, const N: usize>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: UnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::unary_elementwise_strided::<Op, T, N>(
         &device.inner,
@@ -196,7 +196,7 @@ pub fn unary_elementwise_strided_into<'a, Op, T, const N: usize>(
 ) -> Result<()>
 where
     Op: UnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::unary_elementwise_strided_into::<Op, T, N>(
         &device.inner,

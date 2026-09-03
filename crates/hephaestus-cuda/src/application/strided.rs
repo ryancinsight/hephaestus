@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
     Result, TypedBinaryExpr, UnaryExpr,
@@ -957,7 +957,7 @@ pub(crate) fn scalar_strided_meta<T, const N: usize>(
     out: &StridedOperand<'_, T, N>,
 ) -> Result<Option<(StridedMeta, usize)>>
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
 {
     let out_layout = out.layout;
     let a_layout = a

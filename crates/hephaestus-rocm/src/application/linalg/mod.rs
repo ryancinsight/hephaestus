@@ -9,7 +9,7 @@
 //! Kronecker products use the same strided rank-2 metadata and one output
 //! thread per logical element.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
 use leto::Layout;
 

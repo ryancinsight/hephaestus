@@ -1,6 +1,6 @@
 //! Leto-backed host implementation of the pooling seam.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     PoolingBackwardOperands, PoolingForwardOperands, PoolingMode, PoolingOps,
     plan_pooling_backward, plan_pooling_forward,

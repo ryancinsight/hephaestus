@@ -29,7 +29,6 @@ hephaestus-core = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
 leto-ops = { workspace = true }
-bytemuck = { workspace = true }
 smallvec = { workspace = true }
 themis = { workspace = true }
 mnemosyne-memory-core = { workspace = true }

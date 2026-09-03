@@ -1,5 +1,5 @@
-use bytemuck::Pod;
 use eunomia::F16;
+use eunomia::Pod;
 use hephaestus_core::{FftDirection, FftOperands, FftOps, StridedView};
 use leto::Layout;
 

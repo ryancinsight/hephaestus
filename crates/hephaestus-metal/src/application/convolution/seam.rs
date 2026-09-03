@@ -23,7 +23,7 @@ pub struct MetalConvolutionOps;
 
 impl<T> ConvolutionOps<MetalDevice, T> for MetalConvolutionOps
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuConvolutionOps: ConvolutionOps<WgpuDevice, T>,
 {
     type PreparedForward<'a, const R: usize, const S: usize>

@@ -26,7 +26,7 @@ use super::dialect::KernelDialect;
 use super::error::{HephaestusError, Result};
 use super::interface::{BindingDecl, GroupedBindingDecl, GroupedKernelSource, KernelSource};
 use super::kernel::DispatchGrid;
-use bytemuck::Pod;
+use eunomia::Pod;
 
 pub use super::interface::Access;
 

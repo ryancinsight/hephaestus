@@ -4,7 +4,7 @@ pub use crate::application::prepared_map_reduction::{PreparedDot, PreparedL2Norm
 use crate::application::prepared_map_reduction::{prepare_dense_dot, prepare_dense_norm_l2};
 use crate::application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
 use crate::{AddOp, CudaBuffer, CudaDevice, DivOp, MulOp, binary_elementwise_into};
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
     HephaestusError, KernelDevice, MultiStorageKernel, Result, SubOp,

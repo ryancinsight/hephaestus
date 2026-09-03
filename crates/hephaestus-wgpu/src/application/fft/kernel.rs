@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, marker::PhantomData};
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, KernelInterface, KernelSource, Wgsl};
 
 use super::scalar::WgpuFftScalar;

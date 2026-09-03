@@ -6,7 +6,7 @@
 //! exists so consumers and the conformance suite can request seeded
 //! buffers without naming a device type.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::device::ComputeDevice;
 use super::error::Result;

@@ -1,6 +1,6 @@
 use core::any::TypeId;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     ConvolutionBackwardOperands, ConvolutionForwardOperands, ConvolutionOps, DeviceFeature,
     DialectScalar, HephaestusError, Result, Wgsl, plan_convolution_backward,

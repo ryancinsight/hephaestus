@@ -1,6 +1,6 @@
 //! WGPU implementation of the device-neutral sparse operator seam.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{BatchSubmitOps, Result, SparseOperatorOps, StridedView, validate_csr};
 
 use super::batch::{PreparedSparseDispatch, submit_prepared_sparse_batch};

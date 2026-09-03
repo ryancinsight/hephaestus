@@ -5,7 +5,7 @@ use crate::infrastructure::buffer::WgpuBuffer;
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 use crate::infrastructure::device::WgpuDevice;
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
-use bytemuck::Pod;
+use eunomia::Pod;
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 use hephaestus_core::{ComputeDevice, DialectScalar, Result, Wgsl};
 #[cfg(any(feature = "decomposition", feature = "sparse"))]

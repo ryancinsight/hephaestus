@@ -10,7 +10,7 @@ operation seam. Its contract is deliberately small:
 The concrete buffer type is selected by `ComputeDevice::Buffer<T>`. The
 associated type carries the backend and scalar type through the compiler, so
 the core traits do not need `dyn DeviceBuffer` or a vendor-specific pointer.
-`T` must implement `bytemuck::Pod` at the device boundary.
+`T` must implement `eunomia::Pod` at the device boundary.
 
 ## Host-to-device lifecycle
 

@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use leto::WindowParameters;
 
 use crate::domain::buffer::DeviceBuffer;

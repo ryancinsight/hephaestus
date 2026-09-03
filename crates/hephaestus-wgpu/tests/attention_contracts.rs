@@ -47,7 +47,7 @@ pub(super) fn prepared_dispatch_resets_semantic_status_after_failure() {
 
     device
         .queue()
-        .write_buffer(query.raw(), 0, bytemuck::bytes_of(&1.0_f32));
+        .write_buffer(query.raw(), 0, eunomia::layout::bytes_of(&1.0_f32));
     WgpuAttentionOps
         .dispatch_attention_forward(&device, &prepared)
         .expect("status reset permits corrected repeated dispatch");

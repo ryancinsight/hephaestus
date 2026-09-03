@@ -2,7 +2,7 @@
 
 use core::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use crate::domain::accelerator::device_api::DeviceApi;
 use crate::domain::dialect::DialectScalar;

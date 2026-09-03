@@ -1,7 +1,7 @@
 //! Backend-neutral two-dimensional Laplacian stencil parameters.
 
 use aequitas::systems::si::quantities::Length;
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 
 use crate::{HephaestusError, Result};
 

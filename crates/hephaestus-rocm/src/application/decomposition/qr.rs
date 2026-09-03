@@ -5,7 +5,7 @@
 //! triangle stores reflector tails, and heads/betas are separate device
 //! metadata buffers until the host-side solve contract is constructed.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
     KernelDevice, Result,

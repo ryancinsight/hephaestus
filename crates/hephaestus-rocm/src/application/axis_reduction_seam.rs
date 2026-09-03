@@ -8,7 +8,7 @@
 //! re-dispatch observes writes made to the bound input between dispatches
 //! (the seam's rebind contract).
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionOps, BlockWidth, CombineExpr, DialectScalar, HipC, IdentityToken, OpIdentity,
     ProdOp, Result, StridedView, SumOp,

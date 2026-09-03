@@ -3,7 +3,7 @@
 use std::any::TypeId;
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar, IdentityToken, OpIdentity,
     Result, Wgsl, plan_axis_scan,
@@ -162,7 +162,7 @@ where
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&dispatch.meta));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {

@@ -1,6 +1,6 @@
 //! WGPU planning and provider-owned storage for dense complex FFTs.
 
-use bytemuck::Zeroable;
+use eunomia::Zeroable;
 use hephaestus_core::{
     ComputeDevice, DeviceLimits, FftDirection, FftPlan, HephaestusError, Result,
 };

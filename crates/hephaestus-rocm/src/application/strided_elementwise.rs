@@ -5,7 +5,7 @@
 //! transposed, sliced, and broadcast inputs execute directly from their device
 //! storage without a host materialization copy.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
     Result, TypedBinaryExpr, UnaryExpr,

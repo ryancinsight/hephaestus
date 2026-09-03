@@ -5,7 +5,7 @@
 //! the conformance suite — can run dense products without naming
 //! `WgpuDevice`, matching the crate's other seam adapters.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DenseProductOps, DialectScalar, Result, StridedView, Wgsl};
 
 use crate::MatmulZero;

@@ -18,7 +18,7 @@ pub struct MetalPoolingOps;
 
 impl<T> PoolingOps<MetalDevice, T> for MetalPoolingOps
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuPoolingOps: PoolingOps<WgpuDevice, T>,
 {
     type PreparedForward<'a, const R: usize, const S: usize>
@@ -91,7 +91,7 @@ pub struct MetalSlidingWindowOps;
 
 impl<T> SlidingWindowOps<MetalDevice, T> for MetalSlidingWindowOps
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuSlidingWindowOps: SlidingWindowOps<WgpuDevice, T>,
 {
     type PreparedUnfold<'a, const R: usize, const S: usize>

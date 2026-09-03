@@ -1,6 +1,6 @@
 //! The device-API seam separating vendor mechanics from generic orchestration.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use crate::domain::device::ComputeDevice;
 use crate::domain::dialect::KernelDialect;

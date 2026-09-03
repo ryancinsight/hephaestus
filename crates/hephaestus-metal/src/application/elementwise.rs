@@ -25,7 +25,7 @@ pub fn binary_elementwise<Op, T>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::binary_elementwise::<Op, T>(&device.inner, &lhs.inner, &rhs.inner)?;
     Ok(MetalBuffer { inner })
@@ -42,7 +42,7 @@ pub fn binary_elementwise_into<Op, T>(
 ) -> Result<()>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::binary_elementwise_into::<Op, T>(
         &device.inner,
@@ -62,7 +62,7 @@ pub fn binary_elementwise_typed<Op, T>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: TypedBinaryExpr<Wgsl, T>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner =
         wgpu_backend::binary_elementwise_typed::<Op, T>(&device.inner, &lhs.inner, &rhs.inner)?;
@@ -80,7 +80,7 @@ pub fn binary_elementwise_typed_into<Op, T>(
 ) -> Result<()>
 where
     Op: TypedBinaryExpr<Wgsl, T>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::binary_elementwise_typed_into::<Op, T>(
         &device.inner,
@@ -100,7 +100,7 @@ pub fn scalar_elementwise<Op, T>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::scalar_elementwise::<Op, T>(&device.inner, &lhs.inner, scalar)?;
     Ok(MetalBuffer { inner })
@@ -117,7 +117,7 @@ pub fn scalar_elementwise_into<Op, T>(
 ) -> Result<()>
 where
     Op: BinaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::scalar_elementwise_into::<Op, T>(
         &device.inner,
@@ -136,7 +136,7 @@ pub fn unary_elementwise<Op, T>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: UnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     let inner = wgpu_backend::unary_elementwise::<Op, T>(&device.inner, &lhs.inner)?;
     Ok(MetalBuffer { inner })
@@ -152,7 +152,7 @@ pub fn unary_elementwise_into<Op, T>(
 ) -> Result<()>
 where
     Op: UnaryExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     wgpu_backend::unary_elementwise_into::<Op, T>(&device.inner, &lhs.inner, &out.inner, width)
 }

@@ -1,7 +1,7 @@
 //! Decomposition operand validation — thin adapters over the backend-neutral
 //! `hephaestus_core` validators.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 #[cfg(feature = "cuda")]
 use hephaestus_core::require_dense_operand;
 use hephaestus_core::{DeviceBuffer, Result, validate_square_operand};

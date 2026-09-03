@@ -1,6 +1,6 @@
 //! Leto-backed host implementation of the unfold/fold seam.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     SlidingWindowFoldOperands, SlidingWindowOps, SlidingWindowUnfoldOperands,
     plan_sliding_window_fold, plan_sliding_window_unfold,

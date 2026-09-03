@@ -1,7 +1,7 @@
 //! Batched dispatch for prepared sparse WGPU operations.
 
 use super::{PreparedSpmm, PreparedSpmv};
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DialectScalar, HephaestusError, Result, Wgsl};
 
 /// A prepared sparse operation that can be recorded into a shared command

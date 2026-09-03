@@ -5,7 +5,7 @@
 //! or the conformance suite — can run CSR products without naming
 //! `RocmDevice`, matching the WGPU and CUDA seam shapes.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{BatchSubmitOps, Result, SparseOperatorOps, StridedView, validate_csr};
 
 use super::prepared::{

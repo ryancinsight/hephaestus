@@ -8,7 +8,7 @@
 
 use crate::domain::device::ComputeDevice;
 use crate::domain::error::{HephaestusError, Result};
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// Three-dimensional compute dispatch grid in backend workgroups.
 ///

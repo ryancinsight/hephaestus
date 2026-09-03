@@ -1,8 +1,8 @@
 use std::{hint::black_box, time::Duration};
 
-use bytemuck::Pod;
 use criterion::{BenchmarkId, Criterion, Throughput};
 use eunomia::F16;
+use eunomia::Pod;
 use hephaestus_core::{
     DeviceFeature, DevicePreference, FftDirection, FftOperands, FftOps, KernelDevice, StridedView,
 };

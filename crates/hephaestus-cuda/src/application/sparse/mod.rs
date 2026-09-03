@@ -15,7 +15,7 @@ pub use spmv::{spmv, spmv_into};
 
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, Result};
 
 /// Compressed Sparse Row matrix on the GPU (CUDA): stores only the non-zero elements

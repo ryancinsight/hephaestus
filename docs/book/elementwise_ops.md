@@ -2,7 +2,7 @@
 
 `ElementwiseOps<D, T>` is the device-neutral seam for unary, binary, and
 scalar-aware operations over `StridedView` operands. `D` is a
-`ComputeDevice`; `T` is a `bytemuck::Pod` element type.
+`ComputeDevice`; `T` is an `eunomia::Pod` element type.
 
 The operation expression is a type parameter constrained by the backend's
 `KernelDialect`. `UnaryExpr`, `BinaryExpr`, and `TypedBinaryExpr`

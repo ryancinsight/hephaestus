@@ -15,7 +15,7 @@
 use core::marker::PhantomData;
 use std::any::TypeId;
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, TypedBinaryExpr,
     UnaryExpr, Wgsl,
@@ -165,7 +165,7 @@ fn encode_strided(
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(meta));
 
     let mut entries = BindGroupEntries::with_capacity(buffers.len() + 1);
     entries.push(wgpu::BindGroupEntry {
@@ -626,7 +626,7 @@ where
     let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar_buf);
     device
         .queue()
-        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
+        .write_buffer(&scalar_buffer, 0, eunomia::layout::bytes_of(&scalar));
 
     let pipeline = cached_pipeline(
         device,

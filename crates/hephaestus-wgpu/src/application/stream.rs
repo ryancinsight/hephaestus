@@ -10,7 +10,7 @@
 
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
     GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
@@ -202,7 +202,7 @@ impl WgpuDevice {
             mapped_at_creation: false,
         });
         self.queue()
-            .write_buffer(&parameters, 0, bytemuck::bytes_of(params));
+            .write_buffer(&parameters, 0, eunomia::layout::bytes_of(params));
 
         let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
         for (binding, bound) in bindings.iter().enumerate() {
@@ -428,7 +428,7 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
             .get_uniform_buffer(WgpuDevice::byte_size::<K::Params>(1)?)?;
         self.device
             .queue()
-            .write_buffer(&raw_params, 0, bytemuck::bytes_of(params));
+            .write_buffer(&raw_params, 0, eunomia::layout::bytes_of(params));
 
         let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
         for (binding, bound) in bindings.iter().enumerate() {
@@ -616,7 +616,7 @@ fn encode_grouped_on_pass<K: GroupedKernelSource<Wgsl>>(
     let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<K::Params>(1)?)?;
     device
         .queue()
-        .write_buffer(&raw_params, 0, bytemuck::bytes_of(params));
+        .write_buffer(&raw_params, 0, eunomia::layout::bytes_of(params));
 
     let bind_groups = build_grouped_bind_groups(device.inner(), prepared, bindings, &raw_params)?;
     uniform_buffers.push(raw_params);
@@ -761,7 +761,7 @@ mod tests {
     };
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     struct ScaleParams {
         len: u32,
         factor: f32,
@@ -780,7 +780,7 @@ mod tests {
     }
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     struct GroupedParams {
         len: u32,
         addend: f32,

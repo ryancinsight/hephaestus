@@ -1,7 +1,7 @@
 //! Kronecker products over strided ROCm matrix operands.
 
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 use leto::Layout;
 

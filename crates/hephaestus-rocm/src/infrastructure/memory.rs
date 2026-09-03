@@ -1,6 +1,6 @@
 use core::{ffi::c_void, ptr};
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     CommandStream, ComputeDevice, HephaestusError, KernelDevice, Result, validate_buffer_size,
     validate_slice_alignment,
@@ -140,7 +140,7 @@ impl ComputeDevice for RocmDevice {
                 ),
             })?;
         if core::mem::size_of::<T>() == 0 {
-            out.resize(len, bytemuck::Zeroable::zeroed());
+            out.resize(len, eunomia::Zeroable::zeroed());
             return Ok(out);
         }
         let bytes = checked_bytes::<T>(len)?;

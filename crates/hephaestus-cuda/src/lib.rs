@@ -3,7 +3,7 @@
 // FFI: it occurs in `infrastructure::{device, buffer, compiler}` and at the
 // application-layer kernel-launch and device-copy sites (`pipeline`,
 // `reduction`, and the `decomposition` modules, including their
-// `bytemuck::Pod` metadata impls). Every unsafe block and impl carries a
+// `eunomia::Pod` metadata impls). Every unsafe block and impl carries a
 // `// SAFETY:` note stating the invariants relied on.
 #![cfg_attr(not(feature = "cuda"), forbid(unsafe_code))]
 #![deny(missing_docs)]

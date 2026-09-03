@@ -42,7 +42,7 @@ use hephaestus_wgpu::wgpu;
 use leto::Layout;
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct StreamParams {
     len: u32,
     factor: f32,
@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct GroupedParams {
     len: u32,
     addend: f32,

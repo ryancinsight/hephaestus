@@ -1,7 +1,7 @@
 use super::{PoolingBackwardOperands, PoolingForwardOperands};
 use crate::domain::device::ComputeDevice;
 use crate::domain::error::Result;
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// Pooling reduction selected at the operation boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -6,7 +6,7 @@
 //! the device's WGPU handle. The device-resident matrix type is WGPU's, since
 //! both live on the same underlying device.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{BatchSubmitOps, DialectScalar, Result, SparseOperatorOps, StridedView};
 use hephaestus_wgpu::{GpuCsrMatrix, MatmulZero, WgpuDevice, WgpuSparseOps, Wgsl};
 

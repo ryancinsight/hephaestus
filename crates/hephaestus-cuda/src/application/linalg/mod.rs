@@ -8,7 +8,7 @@
 //!   submodule): fused strided map-reductions whose first pass reads the
 //!   logical view directly and retains only workgroup partials.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result};
 use leto::Layout;
 

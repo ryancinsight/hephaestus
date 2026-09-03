@@ -10,7 +10,7 @@ use super::{MatmulZero, MatrixIdentityScalar, identity_buffer_layout, identity_s
 use hephaestus_core::{DialectScalar, Wgsl};
 
 #[repr(transparent)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct VectorIdentity([i32; 2]);
 
 impl DialectScalar<Wgsl> for VectorIdentity {

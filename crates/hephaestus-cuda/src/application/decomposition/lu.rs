@@ -261,7 +261,7 @@ pub(crate) mod gemm_impl {
     use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     pub struct GemmMeta {
         /// Shape: [m, n, k].
         shape: [u32; 3],
@@ -270,11 +270,6 @@ pub(crate) mod gemm_impl {
         /// Element offsets: [C offset, A offset, B offset].
         offsets: [u32; 3],
     }
-
-    // SAFETY: `GemmMeta` is `#[repr(C)]` and contains only `u32` fields of
-    // identical size and alignment, so it has no padding bytes, and every
-    // bit pattern is a valid value.
-    unsafe impl bytemuck::Pod for GemmMeta {}
 
     fn gemm_shader_source() -> String {
         r#"

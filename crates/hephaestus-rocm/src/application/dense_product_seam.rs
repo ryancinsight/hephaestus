@@ -5,7 +5,7 @@
 //! the conformance suite — can run dense products without naming
 //! `RocmDevice`, matching the crate's other seam adapters.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DenseProductOps, DialectScalar, HipC, Result, StridedView};
 
 use crate::RocmBuffer;

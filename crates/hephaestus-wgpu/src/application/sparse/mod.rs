@@ -13,7 +13,7 @@ pub use spmv::{PreparedSpmv, prepare_spmv, spmv, spmv_into};
 
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, Result, Wgsl};
 
 /// Compressed Sparse Row matrix on the GPU: stores only the non-zero elements

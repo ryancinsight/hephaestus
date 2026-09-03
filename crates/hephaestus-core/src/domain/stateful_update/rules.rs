@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::super::dialect::KernelDialect;
 use super::parameters::{

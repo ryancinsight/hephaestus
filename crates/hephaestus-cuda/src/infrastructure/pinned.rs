@@ -11,8 +11,8 @@
 //! pageable memory.
 
 use crate::infrastructure::device::{CudaContext, CurrentContext, cuda_byte_count};
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{HephaestusError, Result};
 use std::sync::Arc;
 

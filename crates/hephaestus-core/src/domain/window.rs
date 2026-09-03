@@ -1,6 +1,6 @@
 //! Shared validation and geometry for spatial window operations.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use leto::{Layout, WindowParameters};
 
 use crate::domain::buffer::DeviceBuffer;

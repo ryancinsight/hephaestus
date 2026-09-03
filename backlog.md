@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — in-progress <a id="heph-eunomia-layout-seam-2026-09-03"></a>
+## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
 
 - **Outcome:** Make Eunomia's native `Pod`/`Zeroable` markers and byte-cast
   functions the single first-party device-layout contract across Hephaestus.
@@ -14,14 +14,14 @@
   markers; host↔device byte views use `eunomia::layout` with no copy added;
   all first-party crates compile and their value-semantic suites pass; direct
   source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
-- **Dependencies / risk:** Eunomia PR #86 is merged as
-  `e49ba8afcf02c1d9bcf369cfdb3237212e46a44e`. This breaks the public generic
-  bound and is therefore a major co-evolution change; Apollo's direct `half`
-  cleanup is already landed, while WGPU's transitive `naga` graph remains
-  outside this item.
-- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
-  `chore/close-bounded-waits`; claim covers the Hephaestus source, manifests,
-  tests, ADR, and this item. Last update: 2026-09-03.
+- **Dependencies / risk:** Eunomia PR #87 is pending at `fdbf122`; Hephaestus
+  pins that revision, with Aequitas PR #51 and Leto PR #163 pinned for the same
+  source-identity sweep. Remove the temporary revisions after those upstream
+  merges. This breaks the public generic bound and is a major co-evolution
+  change; vendor transitive graphs remain outside this item.
+- **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
+  default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
+  doctests, and warning-denied rustdoc pass. **Commit:** pending. **Last-update:** 2026-09-03.
 
 ## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done
 

@@ -5,7 +5,7 @@
 //! the conformance suite — can run dense products without naming
 //! `CudaDevice`, matching the crate's other seam adapters.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{CudaC, DenseProductOps, DialectScalar, Result, StridedView};
 
 use crate::application::linalg::{batched_matmul_into, kron_into, matmul_into};

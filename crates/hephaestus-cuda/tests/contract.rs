@@ -31,7 +31,7 @@ use hephaestus_cuda::{
 use leto::Layout;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
 struct AlternateIdentity(i32);
 
 impl hephaestus_core::DialectScalar<hephaestus_core::CudaC> for AlternateIdentity {

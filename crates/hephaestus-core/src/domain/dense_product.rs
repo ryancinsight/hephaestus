@@ -6,7 +6,7 @@
 //! host-orchestrated compositions (`matexp`, `matpow`, `det`, `pinv`,
 //! `matrix_rank`) are staged behind this trio per the ADR.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::device::ComputeDevice;
 use super::error::Result;

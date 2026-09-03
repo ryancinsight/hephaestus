@@ -1,6 +1,6 @@
 //! CUDA volume ray-integral dispatch.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DispatchGrid, MultiStorageKernel, Result,
     validate_ray_line_integrals,

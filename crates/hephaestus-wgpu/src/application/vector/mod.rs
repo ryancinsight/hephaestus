@@ -2,7 +2,7 @@
 
 mod kernels;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::RetainedReductions;
 use hephaestus_core::{
     Binding, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,

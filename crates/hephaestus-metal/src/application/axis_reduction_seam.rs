@@ -22,7 +22,7 @@ pub struct MetalAxisReductionOps {
 
 impl<T> AxisReductionOps<MetalDevice, T> for MetalAxisReductionOps
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     type Dialect = Wgsl;
     type Prepared<'op>

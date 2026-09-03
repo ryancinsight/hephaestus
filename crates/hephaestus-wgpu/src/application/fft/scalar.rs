@@ -1,6 +1,6 @@
 //! WGPU FFT scalar capability contract.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DeviceFeature, HephaestusError, Result};
 
 use crate::WgpuDevice;

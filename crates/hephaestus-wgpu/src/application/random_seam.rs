@@ -1,6 +1,6 @@
 //! Provider-owned seeded random initialization seam for Wgpu.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DialectScalar, RandomInitOps, Result, Wgsl};
 use leto_ops::RealScalar;
 

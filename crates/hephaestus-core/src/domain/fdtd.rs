@@ -1,6 +1,6 @@
 //! Provider-neutral three-dimensional acoustic FDTD contracts.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 
 use crate::{ComputeDevice, HephaestusError, Result};
 

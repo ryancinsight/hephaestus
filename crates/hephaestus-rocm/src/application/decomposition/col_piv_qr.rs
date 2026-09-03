@@ -7,7 +7,7 @@
 //! exists only for the established least-squares contract shared by CUDA and
 //! wgpu.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp, Result,
 };

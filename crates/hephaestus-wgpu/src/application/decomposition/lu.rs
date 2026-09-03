@@ -145,7 +145,7 @@ impl GpuLuDecomposition {
 /// Packed metadata for the trailing GEMM compute kernel.
 /// Computes **C -= A · B** where A is (m×k), B is (k×n), C is (m×n).
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct GemmMeta {
     /// Shape: [m, n, k, padding].
     shape: [u32; 4],
@@ -154,9 +154,6 @@ struct GemmMeta {
     /// Element offsets: [C offset, A offset, B offset, padding].
     offsets: [u32; 4],
 }
-
-// SAFETY: GemmMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for GemmMeta {}
 
 // ---------------------------------------------------------------------------
 // GEMM kernel  C -= A · B
@@ -332,7 +329,7 @@ pub(crate) fn gemm_trailing_update(
     let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
     device
         .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = device
         .inner()

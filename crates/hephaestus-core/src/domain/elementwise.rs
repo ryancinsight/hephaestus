@@ -29,7 +29,7 @@
 //! dialect-specific while the elementwise contract is not. That keeps one seam
 //! across backends whose kernels are written in different languages.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::device::ComputeDevice;
 use super::dialect::{DialectScalar, KernelDialect};

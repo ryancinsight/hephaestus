@@ -5,7 +5,7 @@
 //! launched in order on HIP's default stream, so a later step observes the
 //! previous row swap and elimination updates.
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
     KernelDevice, Result,

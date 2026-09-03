@@ -50,7 +50,7 @@ use hephaestus_rocm::{matexp, pinv};
 use leto::Layout;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
 struct AlternateIdentity(i32);
 
 impl hephaestus_core::DialectScalar<HipC> for AlternateIdentity {
