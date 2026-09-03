@@ -421,7 +421,7 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — in review: Bounded default device waits
+## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — done: Bounded default device waits
 
 - **Premise confirmed 2026-08-31** (this fleet's items have carried premises
   that no longer held, so it was re-checked before any edit): `synchronize`
@@ -456,6 +456,7 @@
   under a catch-all, so it is source-compatible with all of them; the workspace
   `check --all-targets` is green. See ADR 0054 for why `#[non_exhaustive]` was
   not taken here.
+- **Delivered**: PR #239 (`d8dfa26462bb4094568304081f527293edc7034d`).
 - **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
   released on merge.
 
