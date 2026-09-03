@@ -36,7 +36,7 @@ pub(crate) type PipelineCache = Arc<
 pub(crate) type FusionPipelineCache = Arc<
     moirai_sync::sync::ConcurrentHashMap<
         FusionPipelineKey,
-        Arc<std::sync::OnceLock<wgpu::ComputePipeline>>,
+        Arc<std::sync::OnceLock<std::result::Result<wgpu::ComputePipeline, Arc<str>>>>,
     >,
 >;
 

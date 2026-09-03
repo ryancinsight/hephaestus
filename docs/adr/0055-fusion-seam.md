@@ -12,6 +12,14 @@ Accepted
 
 `HEPH-FUSION-SEAM-2026-09-02`
 
+## Revision — 2026-09-02
+
+Fusion cache entries now memoize `Result<ComputePipeline, Arc<str>>` inside
+their per-key `OnceLock`. A first-use race waits for the canonical compilation
+result, and validation failures replay as typed dispatch failures. This removes
+duplicate WGPU compilation and avoids retrying a rejected generated source
+without changing the public fusion seam.
+
 ## Cross-repository driver
 
 Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02`; Coeus fused elementwise

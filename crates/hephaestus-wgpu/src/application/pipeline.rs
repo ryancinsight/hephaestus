@@ -95,6 +95,25 @@ where
         return Ok(pipeline.clone());
     }
 
+    let pipeline = compile_pipeline(device, label, source)?;
+
+    // A concurrent preparer may have populated the cell while this pipeline
+    // compiled. In either case return the canonical cached instance.
+    match cell.set(pipeline) {
+        Ok(()) => {}
+        Err(concurrent_pipeline) => drop(concurrent_pipeline),
+    }
+    Ok(cell
+        .get()
+        .expect("invariant: successful or raced OnceLock initialization stores a pipeline")
+        .clone())
+}
+
+fn compile_pipeline(
+    device: &WgpuDevice,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> Result<wgpu::ComputePipeline> {
     let error_scope = device
         .inner()
         .push_error_scope(wgpu::ErrorFilter::Validation);
@@ -119,28 +138,44 @@ where
             message: format!("{label} compilation failed: {error}"),
         });
     }
+    Ok(pipeline)
+}
 
-    // A concurrent preparer may have populated the cell while this pipeline
-    // compiled. In either case return the canonical cached instance.
-    match cell.set(pipeline) {
-        Ok(()) => {}
-        Err(concurrent_pipeline) => drop(concurrent_pipeline),
+fn cached_compilation<T, F>(
+    cell: &std::sync::OnceLock<std::result::Result<T, Arc<str>>>,
+    compile: F,
+) -> Result<T>
+where
+    T: Clone,
+    F: FnOnce() -> Result<T>,
+{
+    match cell.get_or_init(|| compile().map_err(|error| Arc::<str>::from(error.to_string()))) {
+        Ok(value) => Ok(value.clone()),
+        Err(message) => Err(HephaestusError::DispatchFailed {
+            message: message.to_string(),
+        }),
     }
-    Ok(cell
-        .get()
-        .expect("invariant: successful or raced OnceLock initialization stores a pipeline")
-        .clone())
 }
 
 /// Fetch a collision-safe cached pipeline for a runtime-generated fusion
 /// source while surfacing first-compilation validation.
+///
+/// All callers for one key share one initialization attempt. The successful
+/// pipeline and validation failure are both memoized, so a first-use race
+/// cannot duplicate compilation or retry a rejected source.
 pub(crate) fn try_cached_fusion_pipeline(
     device: &WgpuDevice,
     key: FusionPipelineKey,
     label: &'static str,
     source: impl FnOnce() -> String,
 ) -> Result<wgpu::ComputePipeline> {
-    try_cached_pipeline_in(device, &device.fusion_pipeline_cache, key, label, source)
+    let cell = device
+        .fusion_pipeline_cache
+        .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
+        .map_err(|error| HephaestusError::DispatchFailed {
+            message: format!("pipeline cache rejected {label}: {error:?}"),
+        })?;
+    cached_compilation(&cell, || compile_pipeline(device, label, source))
 }
 
 /// Convert a logical work-item count into WGPU workgroup count.
@@ -165,6 +200,10 @@ pub(crate) fn workgroups(len: usize, width: BlockWidth) -> Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        Arc, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    };
 
     #[test]
     fn module_cases_share_process_state() {
@@ -177,7 +216,62 @@ mod tests {
                 "workgroups_rejects_beyond_u32_group_limit",
                 workgroups_rejects_beyond_u32_group_limit as fn(),
             ),
+            (
+                "cached_compilation_initializes_once_under_concurrency",
+                cached_compilation_initializes_once_under_concurrency as fn(),
+            ),
+            (
+                "cached_compilation_replays_failure",
+                cached_compilation_replays_failure as fn(),
+            ),
         ]);
+    }
+
+    fn cached_compilation_initializes_once_under_concurrency() {
+        const CALLERS: usize = 8;
+        let cell = Arc::new(OnceLock::new());
+        let compilations = Arc::new(AtomicUsize::new(0));
+
+        std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(CALLERS);
+            for _ in 0..CALLERS {
+                let cell = Arc::clone(&cell);
+                let compilations = Arc::clone(&compilations);
+                handles.push(scope.spawn(move || {
+                    cached_compilation(&cell, || {
+                        compilations.fetch_add(1, Ordering::Relaxed);
+                        std::thread::yield_now();
+                        Ok(17_u32)
+                    })
+                    .expect("cached compilation succeeds")
+                }));
+            }
+            for handle in handles {
+                assert_eq!(handle.join().expect("compilation thread completes"), 17);
+            }
+        });
+
+        assert_eq!(compilations.load(Ordering::Relaxed), 1);
+    }
+
+    fn cached_compilation_replays_failure() {
+        let cell: OnceLock<std::result::Result<u32, Arc<str>>> = OnceLock::new();
+        let compilations = AtomicUsize::new(0);
+        for _ in 0..2 {
+            match cached_compilation(&cell, || {
+                compilations.fetch_add(1, Ordering::Relaxed);
+                Err(HephaestusError::DispatchFailed {
+                    message: "shader rejected".to_owned(),
+                })
+            }) {
+                Err(HephaestusError::DispatchFailed { message }) => {
+                    assert_eq!(message, "kernel dispatch failed: shader rejected")
+                }
+                other => panic!("expected cached dispatch failure, got {other:?}"),
+            }
+        }
+
+        assert_eq!(compilations.load(Ordering::Relaxed), 1);
     }
 
     fn workgroups_accepts_exact_u32_group_limit() {
