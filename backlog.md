@@ -398,9 +398,7 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## HEPH-WGPU-DEFAULT-DEADLINES [major] — in-progress: Bounded default device waits
-
-- **Takeover:** Codex atlas-session — verify merged PR #239 and close the stale review state; no implementation changes.
+## HEPH-WGPU-DEFAULT-DEADLINES [major] — done
 
 - **Premise confirmed 2026-08-31** (this fleet's items have carried premises
   that no longer held, so it was re-checked before any edit): `synchronize`
@@ -437,6 +435,7 @@
   not taken here.
 - **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
   released on merge.
+- **Delivery:** Merged [PR #239](https://github.com/ryancinsight/hephaestus/pull/239) as `d8dfa26462bb4094568304081f527293edc7034d`.
 
 ## HEPH-WGPU-SUBMIT-ERROR-SCOPE-WAIT [patch] — done
 
