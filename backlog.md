@@ -398,7 +398,9 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — in review: Bounded default device waits
+## HEPH-WGPU-DEFAULT-DEADLINES [major] — in-progress: Bounded default device waits
+
+- **Takeover:** Codex atlas-session — verify merged PR #239 and close the stale review state; no implementation changes.
 
 - **Premise confirmed 2026-08-31** (this fleet's items have carried premises
   that no longer held, so it was re-checked before any edit): `synchronize`
