@@ -378,7 +378,7 @@ fn fold(scalar: &str) -> String {
             output_spatial, parameters.output_spatial, parameters.geometry[0]);
         value += first[physical(parameters.source, output_coordinates)];
     }}
-    second[physical(parameters.destination, destination_coordinates)] = value;
+    output[physical(parameters.destination, destination_coordinates)] = value;
 "#,
         scalar = scalar
     )
@@ -466,5 +466,15 @@ mod tests {
                 "{operation:?} must pass the parameter block before operands"
             );
         }
+    }
+
+    #[test]
+    fn fold_writes_declared_output_operand() {
+        let width = crate::BlockWidth::new(32).expect("non-zero test width");
+        let source = c_family_window_source::<CudaC, f32>(WindowOperation::Fold, width);
+        assert!(source.contains("const float* first, float* output"));
+        assert!(source.contains(
+            "output[physical(parameters.destination, destination_coordinates)] = value;"
+        ));
     }
 }
