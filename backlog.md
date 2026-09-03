@@ -1,29 +1,10 @@
 # Backlog — hephaestus
 
-## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — in progress
+## ✅ HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done 2026-09-02
 
-- **Outcome:** move arbitrary expression fusion's runtime-rank layout,
-  generated WGSL, binding validation, pipeline caching, and dispatch into
-  Hephaestus's device-neutral seam and WGPU provider.
-- **Scope / non-goals:** `hephaestus-core` fusion contracts,
-  `hephaestus-wgpu` dynamic elementwise and axis-reduction dispatch, focused
-  differential contracts, ADR 0055, and documentation. Coeus adapter cleanup
-  and consumer-owned WGPU deletion are follow-on integration work; the existing
-  Coeus WIP remains untouched.
-- **Acceptance oracle:** one generic `FusedExpression` source contract serves
-  dynamic input counts and ranks; WGPU validates device provenance, storage
-  bounds, broadcastability, output injectivity, axis shape, binding limits, and
-  expression-fragment safety before allocation or submission; f32 output agrees
-  with an independent CPU oracle for elementwise and reduction cases; invalid
-  inputs return typed errors; provider-owned cache entries distinguish source
-  values without hash-collision risk.
-- **Risk / delivery:** additive public seam, `[minor] [arch]`; integrator=Codex
-  `01a062a0-a790-7ce1-af31-82059f8a5264`; branch=`feat/hephaestus-fusion-seam`;
-  lease=`crates/hephaestus-core/src/domain/fusion.rs`,
-  `crates/hephaestus-wgpu/src/application/fusion`, pipeline/device cache,
-  `crates/hephaestus-wgpu/tests`, `docs/adr`; last-update=2026-09-02.
-- **Dependency:** Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02` lands the
-  shared runtime-rank layout operations consumed here.
+- **Delivered:** Device-neutral runtime fusion contracts and provider-owned WGPU validation, source generation, cache, and dispatch; [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Evidence:** commit `219d701`; WGPU nextest `34/34`, clippy, doctests, and rustdoc pass.
+- **Dependency:** consumes Leto commit `ef78173`.
 
 ## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — done
 
