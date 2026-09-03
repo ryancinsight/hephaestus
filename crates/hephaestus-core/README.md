@@ -31,6 +31,9 @@ crate flat.
   forward/inverse normalization, one const-rank prepared contract for 1D, 2D,
   and 3D, and a provider-neutral command-stream encoding boundary for composed
   kernels.
+- Runtime-rank `DynamicStridedView`, `FusedExpression`, and separate
+  elementwise/reduction fusion seams. Providers own expression lowering and
+  validate borrowed Leto layouts without copying storage.
 - The error vocabulary, including distinct allocation rejection.
 
 `#![forbid(unsafe_code)]`.

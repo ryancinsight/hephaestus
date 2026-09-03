@@ -15,13 +15,14 @@
 - [4. Elementwise Operations](elementwise_ops.md)
 - [5. Dense Reductions](dense_reductions.md)
 - [6. Decomposition Seam](decomposition_seam.md)
+- [7. Runtime-Rank Fusion](fusion_ops.md)
 
 # Part III — Backends
 
-- [7. HostDevice (Reference)](host_backend.md)
-- [8. wgpu Backend](wgpu_backend.md)
-- [9. CUDA and ROCm Backends](cuda_rocm.md)
+- [8. HostDevice (Reference)](host_backend.md)
+- [9. wgpu Backend](wgpu_backend.md)
+- [10. CUDA and ROCm Backends](cuda_rocm.md)
 
 # Part IV — The Atlas Stack
 
-- [10. Position in the Stack](stack_position.md)
+- [11. Position in the Stack](stack_position.md)

@@ -1,9 +1,11 @@
 //! Shared WGPU pipeline and dispatch utilities.
 
+use std::{hash::Hash, sync::Arc};
+
 use hephaestus_core::{BlockWidth, HephaestusError, Result};
 use mnemosyne_core::KernelResourceBudget;
 
-use crate::infrastructure::device::{PipelineKey, WgpuDevice};
+use crate::infrastructure::device::{FusionPipelineKey, PipelineKey, WgpuDevice};
 
 /// Encode one bind-and-dispatch compute pass into a caller-owned command stream.
 pub(crate) fn encode_compute_pass(
@@ -68,8 +70,23 @@ pub(crate) fn try_cached_pipeline(
     label: &'static str,
     source: impl FnOnce() -> String,
 ) -> Result<wgpu::ComputePipeline> {
-    let cell = device
-        .pipeline_cache
+    try_cached_pipeline_in(device, &device.pipeline_cache, key, label, source)
+}
+
+fn try_cached_pipeline_in<K>(
+    device: &WgpuDevice,
+    cache: &moirai_sync::sync::ConcurrentHashMap<
+        K,
+        Arc<std::sync::OnceLock<wgpu::ComputePipeline>>,
+    >,
+    key: K,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> Result<wgpu::ComputePipeline>
+where
+    K: Hash + Eq,
+{
+    let cell = cache
         .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
         .map_err(|error| HephaestusError::DispatchFailed {
             message: format!("pipeline cache rejected {label}: {error:?}"),
@@ -113,6 +130,17 @@ pub(crate) fn try_cached_pipeline(
         .get()
         .expect("invariant: successful or raced OnceLock initialization stores a pipeline")
         .clone())
+}
+
+/// Fetch a collision-safe cached pipeline for a runtime-generated fusion
+/// source while surfacing first-compilation validation.
+pub(crate) fn try_cached_fusion_pipeline(
+    device: &WgpuDevice,
+    key: FusionPipelineKey,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> Result<wgpu::ComputePipeline> {
+    try_cached_pipeline_in(device, &device.fusion_pipeline_cache, key, label, source)
 }
 
 /// Convert a logical work-item count into WGPU workgroup count.

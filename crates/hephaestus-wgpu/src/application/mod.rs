@@ -14,6 +14,8 @@ pub(crate) mod pipeline;
 pub mod fdtd;
 /// Provider-owned dense complex Fourier transforms.
 pub mod fft;
+/// Runtime-rank expression fusion.
+pub mod fusion;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 

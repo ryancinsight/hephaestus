@@ -11,7 +11,9 @@
 //! Consumers (`apollo` GPU transforms, `coeus` GPU tensor backends) program
 //! against this seam so spectral and tensor packages share one device layer
 //! without an `apollo`→`coeus` dependency edge. Autodiff stays in `coeus`;
-//! kernels dispatched here are autodiff-agnostic functions.
+//! kernels dispatched here are autodiff-agnostic functions. Runtime-rank
+//! expression fusion uses borrowed [`DynamicStridedView`] values and leaves
+//! expression lowering to each provider.
 
 /// Device and buffer contracts.
 pub mod domain;
@@ -58,6 +60,7 @@ pub use domain::elementwise::ElementwiseOps;
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};
+pub use domain::fusion::{FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
     KernelInterface, KernelSource,
@@ -113,6 +116,6 @@ pub use domain::stream::{
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
-pub use domain::view::StridedView;
+pub use domain::view::{DynamicStridedView, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
 pub use domain::window::WindowPlan;
