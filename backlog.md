@@ -1,5 +1,11 @@
 # Backlog — hephaestus
 
+## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — in progress
+
+- **Outcome:** Move runtime-rank expression fusion into the device-neutral seam and WGPU provider; [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Scope / acceptance:** Core fusion contracts, borrowed dynamic views, provider-owned WGSL generation/cache/dispatch, layout and resource validation, and differential WGPU contracts; Coeus cleanup remains a follow-on migration.
+- **Evidence plan:** `cargo nextest`, clippy, doctests, rustdoc, ADR index, and independent architecture review before merge; consumes Leto `ef78173`.
+
 ## HEPH-CUDA-QR-DEVICE-Q-2026-09-01 [minor] [perf] — done
 
 - **Outcome:** materialize the ordinary QR orthogonal factor **Q** on CUDA
