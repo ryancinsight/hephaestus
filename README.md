@@ -243,9 +243,10 @@ dispatch. It does **not** own: autodiff (coeus), transform kernels (apollo),
 CPU arrays (leto — whose host-side `Layout<N>` metadata it reuses), host
 allocation/resource-budget vocabulary (mnemosyne), ownership proofs (melinoe —
 planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
-(hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
-GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
-expose Themis topology snapshots. Hephaestus owns its concrete WGPU 30 runtime
+(hermes). WGPU and CUDA launch sizing use Moirai GPU's
+`KernelResourceBudget` and `plan_launch` through its planner-only feature set;
+acquired devices expose Themis topology snapshots. Hephaestus owns its concrete
+WGPU 30 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
 mechanics, elementwise kernels, reductions, scans, map-reductions, Kronecker
 products, matrix powers, matrix properties, seeded random initializers, tiled

@@ -1,5 +1,21 @@
 # Backlog — hephaestus
 
+## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — in-progress
+
+- **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
+  planner facade, so fresh provider graphs cannot split the budget type across
+  Mnemosyne source revisions.
+- **Scope:** WGPU/CUDA planner call sites, their direct dependency manifests,
+  Cargo.lock, ADR 0002, changelog, and this item. Moirai owns the public export
+  in PR #256; no duplicated wrapper or conversion is permitted.
+- **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
+  no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
+  warning-denied provider gates pass, and the hosted SemVer failure is removed.
+- **Risk / delivery:** [patch] internal dependency ownership; temporarily pin
+  Moirai PR #256 at `6305541` until it merges. Integrator: Codex on
+  `chore/close-bounded-waits`; regions: root and WGPU/CUDA manifests, planner
+  pipelines, ADR/changelog/backlog, and Cargo.lock.
+
 ## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
 
 - **Outcome:** Make Eunomia's native `Pod`/`Zeroable` markers and byte-cast

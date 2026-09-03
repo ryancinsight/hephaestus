@@ -4,6 +4,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] WGPU and CUDA launch sizing now construct
+  `moirai_gpu::KernelResourceBudget` through Moirai's planner facade and no
+  longer carries a direct `mnemosyne-memory-core` dependency. This keeps the
+  budget type identity paired with `moirai_gpu::plan_launch` in fresh provider
+  graphs.
+
 - [minor] CUDA `DeviceLimits::max_buffer_size` now reports the device's total
   memory — a stable per-device capacity, as the WGPU backend's hard limit is —
   instead of the free-memory snapshot taken at acquisition, which went stale

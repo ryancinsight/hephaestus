@@ -637,7 +637,6 @@ dependencies = [
  "leto",
  "leto-ops",
  "libloading",
- "mnemosyne-memory-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
  "moirai-gpu",
  "moirai-sync",
  "smallvec",
@@ -711,7 +710,6 @@ dependencies = [
  "leto",
  "leto-ops",
  "loom",
- "mnemosyne-memory-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
  "moirai-gpu",
  "moirai-runtime",
  "moirai-sync",
@@ -1138,11 +1136,11 @@ dependencies = [
  "futures",
  "libc",
  "moirai-async-macros",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-executor",
  "moirai-pal",
  "moirai-transport",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "socket2",
 ]
 
@@ -1159,12 +1157,24 @@ dependencies = [
 [[package]]
 name = "moirai-core"
 version = "0.5.0"
+source = "git+https://github.com/ryancinsight/Moirai.git?rev=6305541#6305541fe7d04c35c82dcbaf1c4960e61dab5a64"
+dependencies = [
+ "bytemuck",
+ "libc",
+ "mnemosyne-memory 0.7.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git?rev=6305541)",
+ "themis-topology",
+]
+
+[[package]]
+name = "moirai-core"
+version = "0.5.0"
 source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d865d6c213d02b2ca7"
 dependencies = [
  "bytemuck",
  "libc",
  "mnemosyne-memory 0.7.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "themis-topology",
 ]
 
@@ -1175,21 +1185,21 @@ source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d
 dependencies = [
  "melinoe",
  "mnemosyne-memory 0.7.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-pal",
  "moirai-scheduler",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "themis-topology",
 ]
 
 [[package]]
 name = "moirai-gpu"
 version = "0.5.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d865d6c213d02b2ca7"
+source = "git+https://github.com/ryancinsight/Moirai.git?rev=6305541#6305541fe7d04c35c82dcbaf1c4960e61dab5a64"
 dependencies = [
  "mnemosyne-memory-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
- "moirai-core",
- "moirai-utils",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git?rev=6305541)",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git?rev=6305541)",
  "themis-topology",
 ]
 
@@ -1200,10 +1210,10 @@ source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d
 dependencies = [
  "futures",
  "libc",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-executor",
  "moirai-scheduler",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "num_cpus",
  "themis-topology",
  "thiserror 1.0.69",
@@ -1217,7 +1227,7 @@ dependencies = [
  "js-sys",
  "libc",
  "melinoe",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1230,7 +1240,7 @@ version = "0.5.0"
 source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d865d6c213d02b2ca7"
 dependencies = [
  "melinoe",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-executor",
  "themis-topology",
 ]
@@ -1242,14 +1252,14 @@ source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d
 dependencies = [
  "melinoe",
  "moirai-async",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-executor",
  "moirai-iter",
  "moirai-parallel",
  "moirai-scheduler",
  "moirai-sync",
  "moirai-transport",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
 ]
 
 [[package]]
@@ -1259,8 +1269,8 @@ source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d
 dependencies = [
  "loom",
  "mnemosyne-memory 0.7.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=03fe32f4ea669538402bf8fae8d9809610a101a8)",
- "moirai-core",
- "moirai-utils",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "num_cpus",
 ]
 
@@ -1270,8 +1280,8 @@ version = "0.5.0"
 source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d865d6c213d02b2ca7"
 dependencies = [
  "libc",
- "moirai-core",
- "moirai-utils",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
 ]
 
 [[package]]
@@ -1280,10 +1290,15 @@ version = "0.5.0"
 source = "git+https://github.com/ryancinsight/Moirai.git#37387ea8e3f271a38f9660d865d6c213d02b2ca7"
 dependencies = [
  "bytemuck",
- "moirai-core",
+ "moirai-core 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
  "moirai-scheduler",
- "moirai-utils",
+ "moirai-utils 0.5.0 (git+https://github.com/ryancinsight/Moirai.git)",
 ]
+
+[[package]]
+name = "moirai-utils"
+version = "0.5.0"
+source = "git+https://github.com/ryancinsight/Moirai.git?rev=6305541#6305541fe7d04c35c82dcbaf1c4960e61dab5a64"
 
 [[package]]
 name = "moirai-utils"

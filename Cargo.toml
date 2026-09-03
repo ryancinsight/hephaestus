@@ -76,8 +76,10 @@ leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", r
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 # Keep the operation layer on the same Leto source identity as the metadata layer.
 leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "bf0054b", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-mnemosyne-memory-core = { version = "0.2.0", git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "03fe32f4ea669538402bf8fae8d9809610a101a8" }
-moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
+# Temporary co-evolution pin for Moirai PR #256; remove `rev` after its
+# canonical `KernelResourceBudget` facade export merges to main and regenerate
+# Cargo.lock.
+moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "6305541", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",

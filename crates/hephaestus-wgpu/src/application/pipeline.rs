@@ -3,7 +3,7 @@
 use std::{hash::Hash, sync::Arc};
 
 use hephaestus_core::{BlockWidth, HephaestusError, Result};
-use mnemosyne_core::KernelResourceBudget;
+use moirai_gpu::KernelResourceBudget;
 
 use crate::infrastructure::device::{FusionPipelineKey, PipelineKey, WgpuDevice};
 
