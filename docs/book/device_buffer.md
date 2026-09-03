@@ -24,6 +24,11 @@ A transfer failure is returned, not silently converted into a default buffer.
 operations that accept non-contiguous layouts. View validation belongs to the
 operation seam; the buffer itself remains a logical contiguous allocation.
 
+`DynamicStridedView` supplies the corresponding runtime-rank boundary for
+expression fusion. It borrows a `D::Buffer<T>` and Leto's `LayoutDyn`; the
+provider validates broadcast compatibility and writable-layout injectivity
+before generating a kernel. Neither view materializes a contiguous copy.
+
 The host reference example exercises these value contracts, including a
 length-mismatch case for a short host output slice:
 

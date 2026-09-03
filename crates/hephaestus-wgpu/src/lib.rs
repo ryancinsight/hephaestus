@@ -4,7 +4,8 @@
 //! The portable wgpu backend of the Atlas accelerator substrate (atlas ADR
 //! 0001). Implements the `hephaestus-core` [`ComputeDevice`] seam over a
 //! wgpu device/queue pair: adapter acquisition, typed device buffers,
-//! monomorphized compute kernels, and prepared multidimensional FFT dispatch.
+//! monomorphized compute kernels, runtime-rank fusion, and prepared
+//! multidimensional FFT dispatch.
 //!
 //! The crate re-exports the exact [`wgpu`] crate version it builds against so
 //! downstream migration code can author provider-owned WGPU bindings without
@@ -41,6 +42,7 @@ pub use application::elementwise_seam::{PreparedElementwise, WgpuElementwiseOps}
 pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
 pub use application::fft::{WgpuFftOps, WgpuFftScalar, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
+pub use application::fusion::{WgpuFusionOps, WgpuFusionScalar};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{

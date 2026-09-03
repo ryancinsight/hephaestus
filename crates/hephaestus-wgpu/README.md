@@ -17,6 +17,9 @@ as `hephaestus::wgpu`.
 - Monomorphized elementwise, reduction, scan, map-reduction, linalg, and sparse
   dispatch through ZST operation markers, with per-`(Op, T, BlockWidth)` WGSL
   generation. No type names appear in API identifiers.
+- Provider-owned runtime-rank fusion over borrowed `leto::LayoutDyn` views:
+  validated broadcast metadata, expression-specific WGSL pipeline caching,
+  typed binding checks, and separate elementwise/reduction dispatch.
 - Prepared plans (`prepare_dot`, `prepare_norm_l2`, `PreparedReduction`,
   `PreparedAxisReduction`) that bind fixed buffers once and re-dispatch without
   reallocating or rebuilding bind groups.

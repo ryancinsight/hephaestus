@@ -13,7 +13,7 @@
 //! same borrow. Validation stays with the operation that consumes it, because
 //! what counts as a legal layout depends on the operation, not on the pairing.
 
-use leto::Layout;
+use leto::{Layout, LayoutDyn};
 
 /// A device buffer of type `B` interpreted through an `N`-dimensional layout.
 ///
@@ -53,6 +53,37 @@ impl<B, const N: usize> Clone for StridedView<'_, B, N> {
 
 impl<B, const N: usize> Copy for StridedView<'_, B, N> {}
 
+/// A device buffer of type `B` interpreted through a runtime-rank layout.
+///
+/// This is the boundary carrier for expression graphs and other operations
+/// whose rank is data-dependent. It is a pair of borrowed references, so it
+/// never copies storage or allocates while crossing the provider seam.
+#[derive(Debug)]
+pub struct DynamicStridedView<'a, B> {
+    /// The device-resident buffer supplying elements.
+    pub buffer: &'a B,
+    /// Runtime-rank shape, strides, and offset applied to `buffer`.
+    pub layout: &'a LayoutDyn,
+}
+
+impl<'a, B> DynamicStridedView<'a, B> {
+    /// Pair a buffer with its runtime-rank layout.
+    #[must_use]
+    #[inline]
+    pub const fn new(buffer: &'a B, layout: &'a LayoutDyn) -> Self {
+        Self { buffer, layout }
+    }
+}
+
+impl<B> Clone for DynamicStridedView<'_, B> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<B> Copy for DynamicStridedView<'_, B> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +111,20 @@ mod tests {
 
         assert_eq!(view.layout.shape(), [3, 2]);
         assert_eq!(view.layout.strides(), [1, 3]);
+    }
+
+    #[test]
+    fn dynamic_view_is_copy_regardless_of_buffer_type() {
+        struct OpaqueBuffer(Vec<u8>);
+
+        let buffer = OpaqueBuffer(vec![1, 2, 3]);
+        let layout = LayoutDyn::new(Box::from([3usize]), Box::from([1isize]), 0)
+            .expect("rank-one dynamic layout");
+        let view = DynamicStridedView::new(&buffer, &layout);
+        let copied = view;
+
+        assert_eq!(copied.layout.shape.as_ref(), &[3]);
+        assert!(core::ptr::eq(copied.buffer, view.buffer));
+        assert_eq!(buffer.0, [1, 2, 3]);
     }
 }
