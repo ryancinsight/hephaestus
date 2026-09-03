@@ -27,6 +27,8 @@ pub mod error;
 pub mod fdtd;
 /// Device-neutral dense complex Fourier-transform contracts.
 pub mod fft;
+/// Runtime-rank expression-fusion contracts.
+pub mod fusion;
 /// Backend-neutral kernel authoring: interface and source declarations.
 pub mod interface;
 /// Kernel-dispatch contracts shared by accelerator backends.
