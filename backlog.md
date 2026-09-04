@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — in-progress <a id="heph-semver-budget-identity-2026-09-03"></a>
+## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
   planner facade, so fresh provider graphs cannot split the budget type across
@@ -15,10 +15,11 @@
 - **Follow-up source edge:** Leto PR #164 (`1caa846`) is temporarily pinned so
   Hephaestus does not reintroduce Leto's pre-Hermes/Moirai-identity dependency
   graph; remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
-- **Risk / delivery:** [patch] internal dependency ownership; temporarily pin
-  Moirai PR #256 at `773c117` until it merges. Integrator: Codex on
-  `chore/close-bounded-waits`; regions: root and WGPU/CUDA manifests, planner
-  pipelines, ADR/changelog/backlog, and Cargo.lock.
+- **Risk / delivery:** [patch] internal dependency ownership. Merged as PR
+  #270 at `7d0a474`; hosted SemVer, CUDA, ROCm, WGPU, Metal, host, lockfile,
+  and documentation gates pass. Moirai PR #256 remains pinned at `773c117`
+  until it merges; that pin is the recorded follow-up source edge, not a
+  blocker for this item.
 
 ## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
 
