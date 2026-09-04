@@ -58,36 +58,30 @@ loom = "0.7"
 smallvec = "1.15.2"
 thiserror = "2.0"
 syn = { version = "2.0.119", features = ["full", "visit"] }
-# Temporary co-evolution pin for Aequitas PR #51; remove `rev` after the
-# Eunomia source-identity correction merges to main and regenerate Cargo.lock.
-aequitas = { version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", rev = "29fb70b", default-features = false }
-# Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
-# provider derive delivery merges to main and regenerate Cargo.lock.
-eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false }
+# Aequitas PR #51 and Eunomia PR #87 are merged; the lockfile records their
+# reviewed default sources.
+aequitas = { version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
-# types only — no CPU compute dependency (leto-ops is not pulled). The
-# temporary revision follows Leto PR #164 so its Hermes and Moirai edges use
-# the current source identity; remove it after that PR merges and regenerate
-# Cargo.lock.
-leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "1caa846", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+# types only — no CPU compute dependency (leto-ops is not pulled). Leto PR
+# #167 is merged, so the lockfile records its reviewed default source.
+leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
-# Keep the operation layer on the same Leto source identity as the metadata
-# layer and follow Leto PR #164 during provider co-evolution.
-leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "1caa846", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
-# Temporary co-evolution pin for Moirai PR #256; remove `rev` after its
-# canonical `KernelResourceBudget` facade export merges to main and regenerate
-# Cargo.lock.
-moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117", default-features = false, features = [
+# Keep the operation layer on the same default Leto source identity as the
+# metadata layer.
+leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+# Moirai PR #256 is merged; the lockfile records its reviewed default source.
+moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
-moirai-sync = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117" }
-moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117", default-features = false, features = ["async"] }
+moirai-sync = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git" }
+moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"

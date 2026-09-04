@@ -2,6 +2,10 @@
 
 - Status: Accepted
 
+- Revision 2026-09-04: Aequitas #51, Eunomia #87, Leto #167, and Moirai #256
+  are merged. Their temporary co-evolution revisions are removed, restoring the
+  provider-default source graph required by this decision.
+
 ## Context
 
 Hephaestus consumes Atlas providers through Git source dependencies. Fixed

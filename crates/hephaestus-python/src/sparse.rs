@@ -250,23 +250,21 @@ pub(crate) fn spmv_many(py: Python<'_>, a: &PyCsrMatrix, x_batch: &PyArray) -> P
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use crate::device::PyDevice;
-    use crate::test_support::prepare_python;
+    use crate::test_support::{default_wgpu_device, prepare_python};
 
-    #[test]
-    fn test_py_sparse_matrix_roundtrip_spmv_spmm() {
+    pub(crate) fn sparse_roundtrip_and_products_preserve_values() {
         prepare_python();
         Python::attach(|py| {
-            let device = PyDevice::new(None).unwrap();
+            let device = default_wgpu_device();
 
             // Create a 3x3 matrix:
             // [ 2.0  0.0 -1.0 ]
             // [ 0.0  3.0  0.0 ]
             // [ 0.0  0.0  4.0 ]
             let dense_data = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
-            let dense_arr = PyArray::new(py, dense_data.clone(), &device)
+            let dense_arr = PyArray::new(py, dense_data.clone(), device)
                 .unwrap()
                 .reshape(vec![3, 3])
                 .unwrap();
@@ -280,14 +278,14 @@ mod tests {
             assert_eq!(dense_reconstructed.tolist(py).unwrap(), dense_data);
 
             // test spmv: y = A * x, x = [1.0, 2.0, 3.0]
-            let x = PyArray::new(py, vec![1.0f32, 2.0, 3.0], &device).unwrap();
+            let x = PyArray::new(py, vec![1.0f32, 2.0, 3.0], device).unwrap();
             let y = spmv(py, &sparse, &x).unwrap();
             assert_eq!(y.tolist(py).unwrap(), vec![-1.0f32, 6.0, 12.0]);
 
             // test spmm: C = A * B, B = [ 1.0  2.0 ]
             //                            [ 3.0  4.0 ]
             //                            [ 5.0  6.0 ]
-            let b = PyArray::new(py, vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0], &device)
+            let b = PyArray::new(py, vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0], device)
                 .unwrap()
                 .reshape(vec![3, 2])
                 .unwrap();

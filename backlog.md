@@ -1,5 +1,23 @@
 # Backlog — hephaestus
 
+## HEPH-PROVIDER-MERGED-2026-09-04 [patch] [arch] — review <a id="heph-provider-merged-2026-09-04"></a>
+
+- **Integrator:** Codex on `build/hephaestus-source-identity`; **lease:** none.
+- **Outcome:** remove obsolete Aequitas, Eunomia, Leto, and Moirai revision
+  pins after merge so Hephaestus exports one layout and numeric type identity.
+- **Acceptance:** standalone source scans and Apollo NUFFT compile use one
+  Eunomia and Leto identity; WGPU-backed crates share the serialized test
+  resource; configured Hephaestus gates pass; no consumer
+  patch or conversion layer is introduced.
+- **Dependencies:** Aequitas #51, Eunomia #87, Leto #168, and Moirai #256 are
+  merged; **Last-update:** 2026-09-04.
+- **Evidence:** source graph has one Eunomia and one Leto identity at Leto
+  `3c1f9f1`; rejected Mnemosyne PR head `a07f999` is absent; all-target
+  check and Clippy, format, focused WGPU/Python tests, doctests, and rustdoc
+  pass. The full 435-test run reaches 406 passes before a serialized WGPU test
+  exceeds the unchanged 60-second budget; each implicated test passes alone in
+  0.4–3.3 seconds. Independent static judge: approve.
+
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
@@ -12,14 +30,12 @@
 - **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
   no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
   warning-denied provider gates pass, and the hosted SemVer failure is removed.
-- **Follow-up source edge:** Leto PR #164 (`1caa846`) is temporarily pinned so
-  Hephaestus does not reintroduce Leto's pre-Hermes/Moirai-identity dependency
-  graph; remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
+- **Follow-up source edge:** closed by `HEPH-PROVIDER-MERGED-2026-09-04` after
+  the corrected Leto and Moirai provider changes merged.
 - **Risk / delivery:** [patch] internal dependency ownership. Merged as PR
   #270 at `7d0a474`; hosted SemVer, CUDA, ROCm, WGPU, Metal, host, lockfile,
-  and documentation gates pass. Moirai PR #256 remains pinned at `773c117`
-  until it merges; that pin is the recorded follow-up source edge, not a
-  blocker for this item.
+  and documentation gates pass. The temporary Moirai pin was removed after PR
+  #256 merged under `HEPH-PROVIDER-MERGED-2026-09-04`.
 
 ## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
 
@@ -35,11 +51,11 @@
   markers; host↔device byte views use `eunomia::layout` with no copy added;
   all first-party crates compile and their value-semantic suites pass; direct
   source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
-- **Dependencies / risk:** Eunomia PR #87 is pending at `fdbf122`; Hephaestus
-  pins that revision, with Aequitas PR #51 still pinned for the same
-  source-identity sweep. Leto PR #163 merged at `d8229cf`, so its temporary
-  revision is removed here. This breaks the public generic bound and is a major
-  co-evolution change; vendor transitive graphs remain outside this item.
+- **Dependencies / risk:** The co-evolution pins used while Eunomia PR #87 and
+  Aequitas PR #51 were open were removed after merge by
+  `HEPH-PROVIDER-MERGED-2026-09-04`. This breaks the public generic bound and is
+  a major co-evolution change; vendor transitive graphs remain outside this
+  item.
 - **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
   default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
   doctests, and warning-denied rustdoc pass. **Commit:** `c24de79`. **Last-update:** 2026-09-03.
