@@ -1023,20 +1023,11 @@ impl WgpuDevice {
             None
         };
 
-        // An operator-selected backend is honoured exactly; otherwise Windows
-        // tries DX12 before Vulkan and every other host takes wgpu's own
-        // default set.
-        //
-        // The DX12 rung is currently inert: the workspace builds `wgpu` with
-        // `vulkan` and `metal` only, so DX12 reports "dx12 support not compiled
-        // in" and Windows always lands on Vulkan. The rung is kept because it
-        // costs one instance creation and becomes live the moment the feature
-        // is enabled; enabling it today fails to build, because
-        // `gpu-allocator 0.28`'s d3d12 module and the `windows` crate version
-        // unified into this graph disagree on `ID3D12Device`. Until that is
-        // resolved, an operator selecting DX12 gets a typed error naming the
-        // missing backend rather than a silent fallback to a backend they did
-        // not ask for.
+        // An operator-selected backend is honoured exactly; otherwise the
+        // compiled backend set is used. Do not probe a backend that is absent
+        // from this crate's feature set: on Windows, constructing a disabled
+        // DX12 instance leaves a native WGPU teardown path that can outlive
+        // the caller's wait budget before the Vulkan attempt begins.
         //
         // Selection reads `wgpu::Backends::from_env`, which is the single
         // variable wgpu itself consults (`WGPU_BACKEND`). Testing for a
@@ -1045,9 +1036,6 @@ impl WgpuDevice {
         // its defaults.
         let ladder: Vec<wgpu::Backends> = match wgpu::Backends::from_env() {
             Some(requested) => vec![requested],
-            None if cfg!(target_os = "windows") => {
-                vec![wgpu::Backends::DX12, wgpu::Backends::VULKAN]
-            }
             None => vec![wgpu::Backends::all()],
         };
 

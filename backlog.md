@@ -15,7 +15,10 @@
 - **Integrator:** atlas-session; branch `arch/moirai-hephaestus-gpu-route`;
   consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
 - **Delivery:** PR [#272](https://github.com/ryancinsight/hephaestus/pull/272) at
-  `1f6defb`; provider check, Clippy, focused nextest, and lockfile gates pass.
+  `1f6defb` plus the pending default-selection correction; the exact device
+  module nextest and format gate pass. The full WGPU gate still contains the
+  pre-existing `application::stream::tests::module_cases_share_process_state`
+  timeout and remains unclaimed follow-up work.
 
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
