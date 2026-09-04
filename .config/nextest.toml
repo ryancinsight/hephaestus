@@ -14,5 +14,5 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 gpu-serial = { max-threads = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(hephaestus-wgpu) | package(hephaestus-cuda) | package(hephaestus-python)'
+filter = 'package(hephaestus-wgpu) | package(hephaestus-cuda) | package(hephaestus-metal) | package(hephaestus-python)'
 test-group = 'gpu-serial'
