@@ -11,6 +11,9 @@
 - **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
   no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
   warning-denied provider gates pass, and the hosted SemVer failure is removed.
+- **Follow-up source edge:** Leto PR #164 (`a31407e`) is temporarily pinned so
+  Hephaestus does not reintroduce Leto's pre-Hermes-identity dependency graph;
+  remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
 - **Risk / delivery:** [patch] internal dependency ownership; temporarily pin
   Moirai PR #256 at `6305541` until it merges. Integrator: Codex on
   `chore/close-bounded-waits`; regions: root and WGPU/CUDA manifests, planner

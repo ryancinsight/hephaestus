@@ -66,14 +66,17 @@ aequitas = { version = "0.2.0", git = "https://github.com/ryancinsight/aequitas"
 eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
-# types only — no CPU compute dependency (leto-ops is not pulled).
-leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+# types only — no CPU compute dependency (leto-ops is not pulled). The
+# temporary revision follows Leto PR #164 so its Hermes edge uses the current
+# source identity; remove it after that PR merges and regenerate Cargo.lock.
+leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "a31407e", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
-# Keep the operation layer on the same Leto source identity as the metadata layer.
-leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+# Keep the operation layer on the same Leto source identity as the metadata
+# layer and follow Leto PR #164 during provider co-evolution.
+leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "a31407e", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
 # Temporary co-evolution pin for Moirai PR #256; remove `rev` after its
 # canonical `KernelResourceBudget` facade export merges to main and regenerate
 # Cargo.lock.
