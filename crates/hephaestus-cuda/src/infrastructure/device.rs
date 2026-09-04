@@ -9,7 +9,7 @@ use hephaestus_core::{
     validate_buffer_size, validate_slice_alignment,
 };
 
-use crate::application::pipeline::PipelineKey;
+use crate::application::pipeline::{FusionPipelineKey, PipelineKey};
 use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
 
 /// CUDA context handle acquired through cuda-oxide's driver bindings.
@@ -169,6 +169,14 @@ pub struct CudaDevice {
             Arc<std::sync::OnceLock<Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
         >,
     >,
+    /// Runtime-fusion cache keyed by the complete generated expression and
+    /// its provider-visible specialization dimensions.
+    pub(crate) fusion_pipeline_cache: Arc<
+        moirai_sync::sync::ConcurrentHashMap<
+            FusionPipelineKey,
+            Arc<std::sync::OnceLock<Arc<crate::infrastructure::compiler::SafeCachedKernel>>>,
+        >,
+    >,
     topology: Option<Arc<themis::GpuTopology>>,
 }
 
@@ -242,6 +250,7 @@ impl CudaDevice {
             limits,
             features,
             pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
+            fusion_pipeline_cache: Arc::new(moirai_sync::sync::ConcurrentHashMap::new()),
             topology,
         };
         // Sanity check to confirm that device allocation and copying are

@@ -65,6 +65,15 @@ impl<T> CudaBuffer<T> {
     pub(crate) fn aliases<U>(&self, other: &CudaBuffer<U>) -> bool {
         self.ptr != 0 && self.ptr == other.ptr
     }
+
+    /// Return whether this allocation belongs to `device`'s CUDA context.
+    #[must_use]
+    #[inline]
+    pub(crate) fn belongs_to(&self, device: &crate::CudaDevice) -> bool {
+        self.context
+            .as_ref()
+            .is_some_and(|context| std::sync::Arc::ptr_eq(context, device.cuda_context()))
+    }
 }
 
 impl<T> DeviceBuffer<T> for CudaBuffer<T> {

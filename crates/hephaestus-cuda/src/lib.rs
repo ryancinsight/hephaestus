@@ -61,6 +61,7 @@ pub use application::elementwise::{
 };
 pub use application::elementwise_seam::CudaElementwiseOps;
 pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
+pub use application::fusion::{CudaFusionOps, CudaFusionScalar};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{

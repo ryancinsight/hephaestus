@@ -30,6 +30,9 @@ use hephaestus_cuda::{
 };
 use leto::Layout;
 
+#[path = "contracts/fusion_contracts.rs"]
+mod fusion_contracts;
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
 struct AlternateIdentity(i32);

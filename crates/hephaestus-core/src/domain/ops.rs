@@ -1001,6 +1001,12 @@ impl IdentityToken<SumOp, CudaC> for u32 {
 impl IdentityToken<SumOp, CudaC> for i32 {
     const TOKEN: &'static str = "0";
 }
+impl IdentityToken<SumOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(0.0f)";
+}
+impl IdentityToken<SumOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(0.0f)";
+}
 
 impl IdentityToken<ProdOp, Wgsl> for f32 {
     const TOKEN: &'static str = "1.0";
@@ -1019,6 +1025,12 @@ impl IdentityToken<ProdOp, CudaC> for u32 {
 }
 impl IdentityToken<ProdOp, CudaC> for i32 {
     const TOKEN: &'static str = "1";
+}
+impl IdentityToken<ProdOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(1.0f)";
+}
+impl IdentityToken<ProdOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(1.0f)";
 }
 
 impl IdentityToken<MinOp, Wgsl> for f32 {
@@ -1039,6 +1051,12 @@ impl IdentityToken<MinOp, CudaC> for u32 {
 impl IdentityToken<MinOp, CudaC> for i32 {
     const TOKEN: &'static str = "2147483647";
 }
+impl IdentityToken<MinOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(65504.0f)";
+}
+impl IdentityToken<MinOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(3.38953139e+38f)";
+}
 
 impl IdentityToken<MaxOp, Wgsl> for f32 {
     const TOKEN: &'static str = "-3.402823466e+38";
@@ -1057,6 +1075,12 @@ impl IdentityToken<MaxOp, CudaC> for u32 {
 }
 impl IdentityToken<MaxOp, CudaC> for i32 {
     const TOKEN: &'static str = "-2147483648";
+}
+impl IdentityToken<MaxOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(-65504.0f)";
+}
+impl IdentityToken<MaxOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(-3.38953139e+38f)";
 }
 
 impl IdentityToken<CumSumOp, Wgsl> for f32 {
