@@ -72,7 +72,7 @@
   exceeds the unchanged 60-second budget; each implicated test passes alone in
   0.4–3.3 seconds. Independent static judge: approve.
 
-## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — in-progress <a id="heph-cuda-fusion-2026-09-04"></a>
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — review <a id="heph-cuda-fusion-2026-09-04"></a>
 
 - **Outcome:** keep Hephaestus as the single GPU implementation owner for
   Coeus CUDA fusion and WGPU elementwise execution, so Coeus retains only
@@ -94,10 +94,12 @@
   `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
   [ADR 0055](docs/adr/0055-fusion-seam.md).
 - **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) carries
-  the provider extension after locked no-feature nextest 111/111 and CUDA
-  nextest 177/177, with strict Clippy passing in both configurations. Static
-  and dynamic rank-eight elementwise plus rank-eight L1/max reduction are
-  differentially verified on the CUDA device. Independent architectural review
+  provider revision `1d3d5df` after combined locked no-feature Nextest 142/142
+  and CUDA Nextest 177/177, with strict workspace Clippy passing in both
+  configurations. Static and dynamic rank-eight elementwise plus rank-eight
+  L1/max reduction are differentially verified on the CUDA device. The
+  provider-owned HipC activation expressions close the Coeus ROCm bridge gap
+  without adding a downstream implementation. Independent architectural review
   is required.
 - **Last-update:** 2026-09-04.
 
