@@ -1,7 +1,7 @@
 //! Numerical rank and determinant of a matrix on the CUDA device.
 
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 
 use super::{map_layout_err, to_i32, to_u32};

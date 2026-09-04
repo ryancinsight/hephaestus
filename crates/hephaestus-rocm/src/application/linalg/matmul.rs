@@ -1,7 +1,7 @@
 //! Tiled rank-2 matrix multiplication on ROCm.
 
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 use leto::Layout;
 

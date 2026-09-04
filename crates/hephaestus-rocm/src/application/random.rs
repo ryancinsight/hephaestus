@@ -1,6 +1,6 @@
 //! Seeded host-delegated random initializers for ROCm buffers.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, DialectScalar, HipC, Result};
 use leto_ops::RealScalar;
 

@@ -5,7 +5,7 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
     IdentityToken, OpIdentity, Result, reduction_pass_count, validate_reduction_width,

@@ -15,7 +15,7 @@ pub use spmv::{spmv, spmv_into};
 
 use crate::RocmDevice;
 use crate::infrastructure::RocmBuffer;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 
 /// Compressed Sparse Row matrix stored in ROCm device buffers.

@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use leto::{ConvolutionParameters, TransposedConvolutionParameters};
 
 use crate::domain::device::ComputeDevice;

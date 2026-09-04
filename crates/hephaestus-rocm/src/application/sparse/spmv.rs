@@ -6,8 +6,8 @@ use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::infrastructure::{DevicePtr, RocmBuffer};
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
 };

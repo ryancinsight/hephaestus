@@ -1,6 +1,6 @@
 //! Provider-owned seeded random initialization seam for Cuda.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{CudaC, DialectScalar, RandomInitOps, Result};
 use leto_ops::RealScalar;
 

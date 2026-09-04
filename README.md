@@ -92,7 +92,7 @@ register each package's Trusted Publisher with that environment.
 - The `ComputeDevice` trait is the deliberate extension seam — not sealed;
   backends substitute without consumer changes. Consumers bind generically
   (`<D: ComputeDevice>`); dispatch is monomorphized, no `dyn` on hot paths.
-- Element types are bounded by `bytemuck::Pod`; buffer dtype lives in
+- Element types are bounded by `eunomia::Pod`; buffer dtype lives in
   `PhantomData<T>` so dtype confusion is a compile error.
 - Elementwise kernels follow leto-ops' ZST operation-marker pattern on the
   device side: generic allocating APIs delegate to caller-owned `*_into`
@@ -243,9 +243,10 @@ dispatch. It does **not** own: autodiff (coeus), transform kernels (apollo),
 CPU arrays (leto — whose host-side `Layout<N>` metadata it reuses), host
 allocation/resource-budget vocabulary (mnemosyne), ownership proofs (melinoe —
 planned device-buffer tokens), thread-level scheduling (moirai), or CPU SIMD
-(hermes). WGPU launch sizing uses Mnemosyne `KernelResourceBudget` and Moirai
-GPU `plan_launch` through Moirai's planner-only feature set; acquired devices
-expose Themis topology snapshots. Hephaestus owns its concrete WGPU 30 runtime
+(hermes). WGPU and CUDA launch sizing use Moirai GPU's
+`KernelResourceBudget` and `plan_launch` through its planner-only feature set;
+acquired devices expose Themis topology snapshots. Hephaestus owns its concrete
+WGPU 30 runtime
 and does not inherit Moirai's optional WGPU backend. Native HIP device
 mechanics, elementwise kernels, reductions, scans, map-reductions, Kronecker
 products, matrix powers, matrix properties, seeded random initializers, tiled

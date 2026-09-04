@@ -30,7 +30,7 @@ use crate::domain::launch::BlockWidth;
 use crate::domain::ops::{CombineExpr, IdentityToken, OpIdentity};
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use crate::domain::view::StridedView;
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use leto::Layout;
 
 /// Direction of a scan along an axis.

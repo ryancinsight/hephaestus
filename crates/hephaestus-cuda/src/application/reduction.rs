@@ -6,7 +6,7 @@ use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::device::cuda_byte_count;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC,
     DeviceBuffer, DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result,

@@ -11,7 +11,7 @@
 use crate::application::bindings::BindGroupEntries;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageDevice,
     MultiStorageKernel, Result, UnaryStorageKernel,
@@ -225,7 +225,7 @@ impl<'a, P: Pod, const N: usize> MultiStorageKernel<WgpuDevice, P, [WgslStorageB
         let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
         device
             .queue()
-            .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
+            .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));
 
         let mut entries = BindGroupEntries::with_capacity(N + 1);
         for binding in bindings {
@@ -408,7 +408,7 @@ where
         let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
         device
             .queue()
-            .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
+            .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));
 
         let bind_group = device
             .inner()
@@ -535,7 +535,7 @@ where
         let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
         device
             .queue()
-            .write_buffer(&params_buffer, 0, bytemuck::bytes_of(params));
+            .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));
 
         let storage_bind_group = device
             .inner()

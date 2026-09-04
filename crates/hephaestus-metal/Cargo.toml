@@ -25,7 +25,6 @@ hephaestus-wgpu = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
 leto-ops = { workspace = true }
-bytemuck = { workspace = true }
 themis = { workspace = true }
 
 [dev-dependencies]

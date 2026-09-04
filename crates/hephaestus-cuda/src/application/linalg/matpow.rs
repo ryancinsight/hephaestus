@@ -1,6 +1,6 @@
 //! Matrix power operation on the CUDA device.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
 };

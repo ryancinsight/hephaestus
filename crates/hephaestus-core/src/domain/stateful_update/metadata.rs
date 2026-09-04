@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 
 /// Rank-eight packed metadata shared by every stateful-update backend.
 ///

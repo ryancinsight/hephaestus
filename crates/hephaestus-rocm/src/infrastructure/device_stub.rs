@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, HephaestusError, Result,

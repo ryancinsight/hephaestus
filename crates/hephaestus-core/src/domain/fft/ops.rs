@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use crate::domain::error::{HephaestusError, Result};
 use crate::domain::stream::{CommandStream, KernelDevice};

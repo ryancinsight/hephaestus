@@ -6,8 +6,8 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
 };

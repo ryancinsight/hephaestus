@@ -1,6 +1,6 @@
 //! Matrix powers over ROCm device-resident operands.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
 };

@@ -41,7 +41,7 @@ fn operand<'a, T>(view: StridedView<'a, WgpuBuffer<T>, 2>) -> StridedOperand<'a,
 
 impl<T> AxisReductionOps<WgpuDevice, T> for WgpuAxisReductionOps
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod,
+    T: DialectScalar<Wgsl> + eunomia::Pod,
 {
     type Dialect = Wgsl;
     type Prepared<'op>

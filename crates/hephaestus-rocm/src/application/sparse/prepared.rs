@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{BlockWidth, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 
 use super::GpuCsrMatrix;
@@ -61,7 +61,7 @@ impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSpmv<'_, T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct SpmmMeta {
     rows: u32,
     cols: u32,

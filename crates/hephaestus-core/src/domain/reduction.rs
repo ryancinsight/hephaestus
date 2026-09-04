@@ -34,7 +34,7 @@ use crate::domain::ops::{CombineExpr, IdentityToken, MaxOp, MinOp, OpIdentity, P
 use crate::domain::planning::{map_layout_err, to_i32, to_u32};
 use crate::domain::vector::DenseVectorOps;
 use crate::domain::view::StridedView;
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use leto::Layout;
 
 /// Device-neutral rank-2 axis reductions over strided operands.

@@ -17,7 +17,7 @@ pub struct MetalElementwiseOps {
 
 impl<T> ElementwiseOps<MetalDevice, T> for MetalElementwiseOps
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
+    T: DialectScalar<Wgsl> + eunomia::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
     type PreparedUnary<'op, const N: usize>

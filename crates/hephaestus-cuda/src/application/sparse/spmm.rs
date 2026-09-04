@@ -8,8 +8,8 @@ use crate::application::pipeline::{
 use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
 };

@@ -17,7 +17,7 @@ pub struct MetalFullReductionOps {
 
 impl<T> FullReductionOps<MetalDevice, T> for MetalFullReductionOps
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + Send + Sync,
+    T: DialectScalar<Wgsl> + eunomia::Pod + Send + Sync,
 {
     type Dialect = Wgsl;
     type Prepared<'op, const N: usize>

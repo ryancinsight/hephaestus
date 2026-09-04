@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionDispatch, BlockWidth, CombineExpr, DialectScalar, HipC, IdentityToken, MaxOp,
     MinOp, OpIdentity, Result, SumOp,

@@ -10,7 +10,7 @@
 //! Hosted software-adapter CI sets `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1` so an
 //! unavailable adapter fails that lane instead of being reported as evidence.
 
-use bytemuck::Zeroable;
+use eunomia::Zeroable;
 use hephaestus_core::{BlockWidth, Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 use hephaestus_wgpu::{
     AbsOp, AddOp, ComputeDevice, DeviceBuffer, EluGradOp, EluOp, ExpNegOp, ExpOp, GeluTanhGradOp,
@@ -27,7 +27,7 @@ use hephaestus_wgpu::{
 };
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
 struct AlternateIdentity(i32);
 
 impl hephaestus_core::DialectScalar<hephaestus_core::Wgsl> for AlternateIdentity {

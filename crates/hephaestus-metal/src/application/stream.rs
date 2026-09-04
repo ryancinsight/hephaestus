@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
     GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, KernelDevice, KernelSource,

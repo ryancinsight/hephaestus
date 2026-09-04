@@ -1,6 +1,6 @@
 //! Device-neutral sparse operator contracts.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::device::ComputeDevice;
 use super::error::Result;

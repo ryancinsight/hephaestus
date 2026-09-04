@@ -9,7 +9,6 @@
 //!   factorization runs on the CPU but the O(n³) trailing SYRK update
 //!   (`A₂₂ -= L₂₁ L₂₁ᵀ`) runs on the GPU via a dedicated compute kernel.
 
-use bytemuck::Pod;
 use std::any::TypeId;
 use std::sync::OnceLock;
 
@@ -34,7 +33,7 @@ use crate::infrastructure::pool::uniform_guard;
 /// struct.  The matrix layout fields describe the **trailing matrix** C;
 /// `panel_cols` is the rank-k dimension of the panel L₂₁.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct SyrkMeta {
     /// Shape of the trailing matrix: `[rows, cols]`.
     shape: [u32; 2],
@@ -49,9 +48,6 @@ struct SyrkMeta {
     /// Row stride of the panel buffer.
     panel_stride: u32,
 }
-
-// SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl Pod for SyrkMeta {}
 
 // ---------------------------------------------------------------------------
 // SYRK kernel
@@ -219,7 +215,7 @@ fn syrk_trailing_update(
     let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
     device
         .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = device
         .inner()
@@ -489,7 +485,7 @@ const BLOCK_SIZE: usize = 64;
 /// Packed metadata for the triangular-zero kernel, matching the WGSL
 /// `TriangleMeta` struct.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct TriangleMeta {
     /// Order of the square matrix.
     n: u32,
@@ -497,9 +493,6 @@ struct TriangleMeta {
     /// overflow silently at `u32` width.
     total: u32,
 }
-
-// SAFETY: TriangleMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl Pod for TriangleMeta {}
 
 struct StrictUpperZeroKernel;
 
@@ -589,7 +582,7 @@ fn zero_strict_upper(device: &WgpuDevice, matrix: &WgpuBuffer<f32>, n: usize) ->
     let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = device
         .inner()
@@ -648,7 +641,7 @@ const SOLVE_BLOCK: usize = SOLVE_BLOCK_WIDTH as usize;
 /// Packed metadata for one triangular-solve dispatch, matching the WGSL
 /// `SolveMeta` struct.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct SolveMeta {
     /// Matrix dimension *n* of the *n* × *n* factor.
     n: u32,
@@ -661,8 +654,6 @@ struct SolveMeta {
     /// solve, which pads the struct to its 16-byte uniform stride.
     update_rows: u32,
 }
-
-unsafe impl Pod for SolveMeta {}
 
 /// Which triangular system a solve pass works on.
 ///
@@ -960,7 +951,7 @@ fn device_solve(
         let meta_buf = uniform_guard(device.clone(), raw_meta);
         device
             .queue()
-            .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&dispatch.meta));
+            .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&dispatch.meta));
         bind_groups.push(
             device
                 .inner()

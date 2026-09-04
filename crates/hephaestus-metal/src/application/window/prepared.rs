@@ -6,7 +6,7 @@ use hephaestus_wgpu::{WgpuDevice, WgpuPoolingOps, WgpuSlidingWindowOps};
 /// Prepared Metal-selected WGPU pooling-forward resources.
 pub struct MetalPreparedPoolingForward<'a, T, const R: usize, const S: usize>
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuPoolingOps: PoolingOps<WgpuDevice, T>,
 {
     pub(super) inner: <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedForward<'a, R, S>,
@@ -16,7 +16,7 @@ where
 /// Prepared Metal-selected WGPU pooling-backward resources.
 pub struct MetalPreparedPoolingBackward<'a, T, const R: usize, const S: usize>
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuPoolingOps: PoolingOps<WgpuDevice, T>,
 {
     pub(super) inner: <WgpuPoolingOps as PoolingOps<WgpuDevice, T>>::PreparedBackward<'a, R, S>,
@@ -26,7 +26,7 @@ where
 /// Prepared Metal-selected WGPU unfold resources.
 pub struct MetalPreparedUnfold<'a, T, const R: usize, const S: usize>
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuSlidingWindowOps: SlidingWindowOps<WgpuDevice, T>,
 {
     pub(super) inner:
@@ -37,7 +37,7 @@ where
 /// Prepared Metal-selected WGPU fold resources.
 pub struct MetalPreparedFold<'a, T, const R: usize, const S: usize>
 where
-    T: bytemuck::Pod,
+    T: eunomia::Pod,
     WgpuSlidingWindowOps: SlidingWindowOps<WgpuDevice, T>,
 {
     pub(super) inner:

@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::DeviceBuffer;
 
 use super::DevicePtr;

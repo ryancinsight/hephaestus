@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl,
 };
@@ -62,7 +62,7 @@ where
     let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar_buf);
     device
         .queue()
-        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
+        .write_buffer(&scalar_buffer, 0, eunomia::layout::bytes_of(&scalar));
 
     let key = (
         std::any::TypeId::of::<ScalarOpWrapper<Op>>(),

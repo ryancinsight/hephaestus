@@ -1,6 +1,6 @@
 //! Dense rank-one vector operations over device-resident buffers.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::device::ComputeDevice;
 use super::error::Result;

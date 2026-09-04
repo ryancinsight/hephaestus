@@ -174,7 +174,7 @@ impl GpuQrDecomposition {
         let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
         device
             .queue()
-            .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+            .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
 
         let pipeline = cached_pipeline(
             device,
@@ -271,7 +271,7 @@ impl GpuQrDecomposition {
 
 /// Packed metadata for the panel Householder reflector application kernel.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct HhMeta {
     panel_rows: u32,
     reflector_count: u32,
@@ -280,21 +280,15 @@ struct HhMeta {
     k: u32,
 }
 
-// SAFETY: HhMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for HhMeta {}
-
 /// Per-reflector metadata consumed by the panel Householder kernel.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct HhReflectorMeta {
     /// Offset of this reflector in the packed vector buffer.
     vector_offset: u32,
     /// Householder scale factor β.
     beta: f32,
 }
-
-// SAFETY: HhReflectorMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for HhReflectorMeta {}
 
 // ---------------------------------------------------------------------------
 // Householder apply kernel:  A[:, col] -= β · v · (vᵀ · A[:, col])
@@ -388,7 +382,7 @@ struct HhKernel;
 
 /// Packed metadata for the **Q** accumulation kernel.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct QMeta {
     /// Row count *m* of the factored matrix, and the order of **Q**.
     m: u32,
@@ -398,24 +392,18 @@ struct QMeta {
     reflector_count: u32,
 }
 
-// SAFETY: QMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for QMeta {}
-
 /// Per-reflector scalars the packed factor does not carry.
 ///
 /// The head `v_k[k]` is displaced from the packed diagonal (which holds
 /// `R[k][k]`), so it travels alongside β rather than being read from `packed`.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct QReflector {
     /// Householder vector head component `v_k[k]`.
     head: f32,
     /// Householder scale factor `β_k = 2 / (v_kᵀ v_k)`.
     beta: f32,
 }
-
-// SAFETY: QReflector is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for QReflector {}
 
 // ---------------------------------------------------------------------------
 // Q accumulation kernel:  Q ← H₁ (H₂ (⋯ (H_k · I)))
@@ -957,7 +945,7 @@ pub fn qr_decompose_blocked(
 
             device
                 .queue()
-                .write_buffer(&hh_meta_buf, 0, bytemuck::bytes_of(&hh_meta));
+                .write_buffer(&hh_meta_buf, 0, eunomia::layout::bytes_of(&hh_meta));
 
             let mut hh_encoder =
                 device

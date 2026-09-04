@@ -21,7 +21,7 @@ use crate::infrastructure::pool::uniform_guard;
 
 /// Packed metadata for the split kernel, matching the WGSL `SplitMeta` struct.
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct SplitMeta {
     /// Matrix dimension *n* of the *n* × *n* packed factor.
     n: u32,
@@ -29,9 +29,6 @@ struct SplitMeta {
     /// shader free of a multiply that would overflow silently at `u32` width.
     total: u32,
 }
-
-// SAFETY: SplitMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for SplitMeta {}
 
 struct SplitPackedLuKernel;
 
@@ -147,7 +144,7 @@ pub fn split_packed_lu(
     let meta_buf = uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buf, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = device
         .inner()

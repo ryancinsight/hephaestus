@@ -12,7 +12,7 @@
 //! implementations may assume they do not occur, so their behaviour is
 //! capability-gated, not a universal clause.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AddOp, BinaryExpr, ComputeDevice, DialectScalar, ElementwiseOps, EqOp, GeOp, GtOp,
     KernelDialect, LeOp, LtOp, MulOp, NeOp, StridedView, TypedBinaryExpr,

@@ -10,7 +10,6 @@
 //!   (`A₂₂ -= L₂₁ L₂₁ᵀ`) runs on the GPU via a dedicated compute kernel.
 
 #[cfg(feature = "cuda")]
-use bytemuck::Pod;
 #[cfg(feature = "cuda")]
 use hephaestus_core::factor_cholesky_panel;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
@@ -307,7 +306,7 @@ mod syrk_impl {
     use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
     #[repr(C)]
-    #[derive(Clone, Copy, bytemuck::Zeroable)]
+    #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
     pub struct SyrkMeta {
         shape: [u32; 2],
         strides: [i32; 2],
@@ -316,9 +315,6 @@ mod syrk_impl {
         panel_offset: u32,
         panel_stride: u32,
     }
-
-    // SAFETY: SyrkMeta is `#[repr(C)]` and every field is Pod.
-    unsafe impl Pod for SyrkMeta {}
 
     fn syrk_shader_source() -> String {
         r#"

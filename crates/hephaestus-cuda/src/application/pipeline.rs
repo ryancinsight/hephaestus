@@ -1,5 +1,6 @@
 use crate::CudaDevice;
 use hephaestus_core::{BlockWidth, HephaestusError, Result};
+use moirai_gpu::KernelResourceBudget;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -293,7 +294,7 @@ pub fn grid_size(len: usize, width: BlockWidth) -> Result<u32> {
             .ok_or_else(|| HephaestusError::DispatchFailed {
                 message: format!("dispatch size {len} exceeds u32 grid range"),
             })?;
-    let budget = mnemosyne_core::KernelResourceBudget::new(0, 0, width.get())
+    let budget = KernelResourceBudget::new(0, 0, width.get())
         .expect("invariant: BlockWidth is non-zero, so budget threads are non-zero");
     let planned = moirai_gpu::plan_launch(budget, len_u64);
     debug_assert_eq!(planned.threads_per_block, width.get());

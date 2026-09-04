@@ -130,7 +130,7 @@ fn dispatch_preflight(
 fn reset_status(device: &WgpuDevice, status: &WgpuBuffer<u32>) {
     device
         .queue()
-        .write_buffer(status.raw(), 0, bytemuck::bytes_of(&u32::MAX));
+        .write_buffer(status.raw(), 0, eunomia::layout::bytes_of(&u32::MAX));
 }
 
 fn check_status(device: &WgpuDevice, status: &WgpuBuffer<u32>) -> Result<()> {

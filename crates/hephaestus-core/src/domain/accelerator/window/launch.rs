@@ -2,7 +2,7 @@
 
 use core::any::TypeId;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use leto::Layout;
 
 use crate::domain::accelerator::device_api::{DeviceApi, LaunchGeometry};

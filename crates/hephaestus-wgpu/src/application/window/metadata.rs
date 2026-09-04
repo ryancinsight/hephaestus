@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{HephaestusError, Result, WindowPlan};
 use leto::Layout;
 

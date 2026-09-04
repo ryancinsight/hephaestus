@@ -7,8 +7,8 @@ use crate::application::strided::to_u32;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use crate::infrastructure::pool::UniformBufferGuard;
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, Result, Wgsl,
 };
@@ -148,7 +148,7 @@ pub fn prepare_spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {

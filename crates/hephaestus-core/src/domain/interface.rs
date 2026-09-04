@@ -9,7 +9,7 @@
 //! [`stream`](crate::domain::stream).
 
 use super::dialect::KernelDialect;
-use bytemuck::Pod;
+use eunomia::Pod;
 use std::borrow::Cow;
 
 /// Storage-binding access mode declared by a kernel interface.

@@ -20,7 +20,7 @@ pub fn scan_axis<Op, T>(
 ) -> Result<MetalBuffer<T>>
 where
     Op: CombineExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     let inner = wgpu_backend::scan_axis::<Op, T>(
         &device.inner,
@@ -44,7 +44,7 @@ pub fn scan_axis_into<Op, T>(
 ) -> Result<()>
 where
     Op: CombineExpr<Wgsl>,
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
     wgpu_backend::scan_axis_into::<Op, T>(
         &device.inner,
@@ -65,7 +65,7 @@ pub fn cumsum<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     let inner = wgpu_backend::cumsum::<T>(
         &device.inner,
@@ -86,7 +86,7 @@ pub fn cumsum_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     wgpu_backend::cumsum_into::<T>(
         &device.inner,
@@ -106,7 +106,7 @@ pub fn suffix_sum<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     let inner = wgpu_backend::suffix_sum::<T>(
         &device.inner,
@@ -127,7 +127,7 @@ pub fn suffix_sum_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumSumOp> + IdentityToken<CumSumOp, Wgsl>,
 {
     wgpu_backend::suffix_sum_into::<T>(
         &device.inner,
@@ -147,7 +147,7 @@ pub fn cumprod<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
 {
     let inner = wgpu_backend::cumprod::<T>(
         &device.inner,
@@ -168,7 +168,7 @@ pub fn cumprod_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
 {
     wgpu_backend::cumprod_into::<T>(
         &device.inner,
@@ -188,7 +188,7 @@ pub fn suffix_prod<T>(
     width: BlockWidth,
 ) -> Result<MetalBuffer<T>>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
 {
     let inner = wgpu_backend::suffix_prod::<T>(
         &device.inner,
@@ -209,7 +209,7 @@ pub fn suffix_prod_into<T>(
     width: BlockWidth,
 ) -> Result<()>
 where
-    T: DialectScalar<Wgsl> + bytemuck::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
+    T: DialectScalar<Wgsl> + eunomia::Pod + OpIdentity<CumProdOp> + IdentityToken<CumProdOp, Wgsl>,
 {
     wgpu_backend::suffix_prod_into::<T>(
         &device.inner,

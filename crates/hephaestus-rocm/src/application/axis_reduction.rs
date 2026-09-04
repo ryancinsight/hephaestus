@@ -4,7 +4,7 @@ use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, lau
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionDispatch, AxisReductionMeta, CombineExpr, ComputeDevice, DeviceBuffer,
     DialectScalar, HephaestusError, HipC, IdentityToken, OpIdentity, Result, plan_axis_reduction,

@@ -2,7 +2,7 @@
 
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, CudaC, DialectScalar, Result};
 use leto_ops::RealScalar;
 

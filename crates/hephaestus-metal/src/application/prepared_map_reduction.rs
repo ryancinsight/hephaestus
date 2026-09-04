@@ -1,6 +1,6 @@
 //! Prepared dot-product and L2-norm delegation for Metal.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DialectScalar, IdentityToken, OpIdentity, Result, SumOp, Wgsl};
 use hephaestus_wgpu as wgpu_backend;
 

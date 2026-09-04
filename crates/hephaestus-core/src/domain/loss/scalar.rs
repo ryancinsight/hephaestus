@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 
 mod private {
     pub trait Sealed {}

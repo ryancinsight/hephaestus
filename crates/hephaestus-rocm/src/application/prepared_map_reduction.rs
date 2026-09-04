@@ -4,7 +4,7 @@
 //! optional reduction tree. They do not allocate a full logical-length
 //! product or square buffer per dispatch.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HipC, IdentityToken, OpIdentity,
     Result, SumOp,

@@ -9,7 +9,7 @@ pub(super) fn assert_download_eq<D, T>(
     clause: &str,
 ) where
     D: ComputeDevice,
-    T: bytemuck::Pod + Default + Copy + PartialEq + core::fmt::Debug,
+    T: eunomia::Pod + Default + Copy + PartialEq + core::fmt::Debug,
 {
     let mut actual = vec![T::default(); expected.len()];
     device.download(buffer, &mut actual).expect(clause);

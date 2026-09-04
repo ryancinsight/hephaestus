@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 
 use super::super::error::{HephaestusError, Result};
 
@@ -329,7 +329,7 @@ const _: () = assert!(core::mem::size_of::<AdaGradParameters>() == 16);
 
 #[cfg(test)]
 mod tests {
-    use bytemuck::Zeroable;
+    use eunomia::Zeroable;
 
     use super::*;
     use crate::{Adam, StatefulUpdateRule, Wgsl};

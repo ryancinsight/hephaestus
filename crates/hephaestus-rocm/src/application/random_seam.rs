@@ -1,6 +1,6 @@
 //! Provider-owned seeded random initialization seam for Rocm.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{DialectScalar, HipC, RandomInitOps, Result};
 use leto_ops::RealScalar;
 

@@ -8,7 +8,7 @@
 use core::ffi::c_void;
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{AxisScanKey, CudaC, DeviceApi, LaunchGeometry, Result, WindowKey};
 use smallvec::SmallVec;
 

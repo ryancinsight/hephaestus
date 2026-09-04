@@ -19,7 +19,6 @@ mnemosyne-memory = []
 [dependencies]
 aequitas = { workspace = true }
 eunomia = { workspace = true }
-bytemuck = { workspace = true }
 thiserror = { workspace = true }
 themis = { workspace = true }
 # leto host-side layout metadata (shape/strides/offset) is ADR-0001's

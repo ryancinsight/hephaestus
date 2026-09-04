@@ -9,7 +9,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
     IdentityToken, MaxOp, OpIdentity, Result, SumOp,

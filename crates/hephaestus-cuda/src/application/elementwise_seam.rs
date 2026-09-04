@@ -1,4 +1,4 @@
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, CudaC, DialectScalar, ElementwiseOps, Result, StridedView,
     TypedBinaryExpr, UnaryExpr,

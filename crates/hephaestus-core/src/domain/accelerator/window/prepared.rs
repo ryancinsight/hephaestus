@@ -1,6 +1,6 @@
 //! Resources resolved during preparation and consumed at dispatch.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use crate::domain::accelerator::device_api::{DeviceApi, LaunchGeometry};
 

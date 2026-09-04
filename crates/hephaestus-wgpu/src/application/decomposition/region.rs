@@ -33,7 +33,7 @@ pub(crate) struct MatrixRegionUpload<'a> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable)]
+#[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
 struct RegionCopyMeta {
     stride: u32,
     row_start: u32,
@@ -41,9 +41,6 @@ struct RegionCopyMeta {
     rows: u32,
     cols: u32,
 }
-
-// SAFETY: RegionCopyMeta is `#[repr(C)]` and every field is Pod.
-unsafe impl bytemuck::Pod for RegionCopyMeta {}
 
 struct RegionCopyKernel;
 
@@ -238,9 +235,11 @@ impl<'buffer> MatrixRegionDownloadWorkspace<'buffer> {
                 ),
             });
         }
-        self.device
-            .queue()
-            .write_buffer(&self._meta, 0, bytemuck::bytes_of(&region_meta(region)?));
+        self.device.queue().write_buffer(
+            &self._meta,
+            0,
+            eunomia::layout::bytes_of(&region_meta(region)?),
+        );
         Ok(GatherTransfer {
             workspace: self,
             compact_len,
@@ -319,7 +318,7 @@ fn copy_mapped_gather(transfer: &GatherTransfer<'_, '_>, out: &mut Vec<f32>) -> 
         .compact_len
         .checked_mul(core::mem::size_of::<f32>())
         .expect("invariant: compact byte size was validated by WgpuDevice::byte_size");
-    out.copy_from_slice(bytemuck::cast_slice(&mapped[..compact_bytes]));
+    out.copy_from_slice(eunomia::layout::cast_slice(&mapped[..compact_bytes]));
     drop(mapped);
     transfer.workspace.staging.unmap();
     Ok(())
@@ -480,7 +479,7 @@ fn prepare_scatter(
     let meta = uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta, 0, bytemuck::bytes_of(&region_meta(region)?));
+        .write_buffer(&meta, 0, eunomia::layout::bytes_of(&region_meta(region)?));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {

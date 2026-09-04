@@ -4,8 +4,8 @@
 //! products, matrix trace, and vector/matrix norms (L1, L2, Max) mapped to GPU
 //! compute dispatches.
 
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};
 use leto::Layout;
 use std::any::TypeId;
@@ -486,13 +486,13 @@ where
 
     device
         .queue()
-        .write_buffer(&a_layout_buf, 0, bytemuck::bytes_of(&a_meta));
+        .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
     device
         .queue()
-        .write_buffer(&b_layout_buf, 0, bytemuck::bytes_of(&b_meta));
+        .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
     device
         .queue()
-        .write_buffer(&out_layout_buf, 0, bytemuck::bytes_of(&out_meta));
+        .write_buffer(&out_layout_buf, 0, eunomia::layout::bytes_of(&out_meta));
 
     let key = (TypeId::of::<KronKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = cached_pipeline(device, key, "hephaestus-kron", || kron_shader_source::<T>());
@@ -663,13 +663,13 @@ where
 
     device
         .queue()
-        .write_buffer(&a_layout_buf, 0, bytemuck::bytes_of(&a_meta));
+        .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
     device
         .queue()
-        .write_buffer(&b_layout_buf, 0, bytemuck::bytes_of(&b_meta));
+        .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
     device
         .queue()
-        .write_buffer(&c_layout_buf, 0, bytemuck::bytes_of(&c_meta));
+        .write_buffer(&c_layout_buf, 0, eunomia::layout::bytes_of(&c_meta));
 
     let key = (TypeId::of::<MatmulKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = cached_pipeline(device, key, "hephaestus-matmul", || {
@@ -898,13 +898,13 @@ where
 
         device
             .queue()
-            .write_buffer(&a_layout_buf, 0, bytemuck::bytes_of(&a_meta));
+            .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
         device
             .queue()
-            .write_buffer(&b_layout_buf, 0, bytemuck::bytes_of(&b_meta));
+            .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
         device
             .queue()
-            .write_buffer(&c_layout_buf, 0, bytemuck::bytes_of(&c_meta));
+            .write_buffer(&c_layout_buf, 0, eunomia::layout::bytes_of(&c_meta));
 
         let bind_group = device
             .inner()
@@ -1059,13 +1059,15 @@ where
     let identity_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_identity);
     device
         .queue()
-        .write_buffer(&layout_buffer, 0, bytemuck::bytes_of(&metadata));
+        .write_buffer(&layout_buffer, 0, eunomia::layout::bytes_of(&metadata));
     device
         .queue()
-        .write_buffer(&identity_buffer, 0, bytemuck::bytes_of(&T::ZERO));
-    device
-        .queue()
-        .write_buffer(&identity_buffer, one_offset, bytemuck::bytes_of(&T::ONE));
+        .write_buffer(&identity_buffer, 0, eunomia::layout::bytes_of(&T::ZERO));
+    device.queue().write_buffer(
+        &identity_buffer,
+        one_offset,
+        eunomia::layout::bytes_of(&T::ONE),
+    );
     let key = (TypeId::of::<IdentityKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = try_cached_pipeline(device, key, "hephaestus-matrix-identity", || {
         identity_shader_source::<T>()

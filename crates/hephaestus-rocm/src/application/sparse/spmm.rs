@@ -7,8 +7,8 @@ use crate::application::pipeline::{
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
 };

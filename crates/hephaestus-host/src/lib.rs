@@ -21,7 +21,7 @@ pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidin
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     ComputeDevice, ComputeDeviceCapabilities, DeviceBuffer, DeviceFeature, DeviceLimits,
     HephaestusError, Result,

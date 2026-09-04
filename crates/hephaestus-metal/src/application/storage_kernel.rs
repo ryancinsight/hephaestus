@@ -1,6 +1,6 @@
 //! Metal-selected storage-kernel dispatch.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, Result,
     UnaryStorageKernel,

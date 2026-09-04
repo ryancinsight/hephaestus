@@ -9,7 +9,8 @@ Accepted
 Hephaestus must compose with the Atlas foundation crates without duplicating
 their ownership domains:
 
-- `mnemosyne-core` owns resource-budget vocabulary used by launch planning.
+- `mnemosyne-core` owns the resource-budget vocabulary used by launch
+  planning; `moirai-gpu` owns its public construction facade.
 - `moirai-gpu` owns backend-agnostic GPU launch planning.
 - `themis` owns topology snapshots for acquired accelerator devices.
 - `hermes-simd` owns synchronous CPU SIMD over host slices.
@@ -21,9 +22,11 @@ kernels; that boundary belongs to Hephaestus.
 
 Hephaestus integrates each crate at its owned layer:
 
-- WGPU launch sizing constructs `KernelResourceBudget` and calls
-  `moirai_gpu::plan_launch`, while preserving Hephaestus' checked
-  `BlockWidth::checked_covering_blocks` overflow contract.
+- WGPU and CUDA launch sizing construct `moirai_gpu::KernelResourceBudget`
+  and call `moirai_gpu::plan_launch`, while preserving Hephaestus' checked
+  `BlockWidth::checked_covering_blocks` overflow contract. The facade export
+  keeps the budget type identity paired with the planner when a downstream
+  graph resolves Mnemosyne from a different source revision (Moirai ADR 0039).
 - WGPU and CUDA device acquisition expose `themis::GpuTopology` snapshots.
 - Host-delegated dense linear-algebra wrappers call `leto-ops` with its `simd`
   feature enabled; Leto routes CPU hot loops through Hermes SIMD.

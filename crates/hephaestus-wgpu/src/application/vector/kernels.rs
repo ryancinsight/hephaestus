@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, HephaestusError, KernelInterface, KernelSource, Result, Wgsl};
 
 /// Workgroup width shared by the in-place vector kernels.

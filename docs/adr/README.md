@@ -64,3 +64,4 @@
 | [0053](0053-provider-owned-multidimensional-fft.md) | Own multidimensional accelerator FFTs in Hephaestus | Accepted |
 | [0054](0054-bounded-default-device-waits.md) | Bounded default device waits | Accepted |
 | [0055](0055-fusion-seam.md) | Provider-owned runtime-rank fusion seam | Accepted |
+| [0056](0056-eunomia-layout-seam.md) | Eunomia-owned device layout seam | Accepted |

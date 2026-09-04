@@ -3,7 +3,7 @@
 use std::any::TypeId;
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     ComputeDevice, DeviceBuffer, DynamicStridedView, FusedElementwiseOps, FusedExpression,
     FusedReduction, FusedReductionOps, HephaestusError, Result, Wgsl,

@@ -11,7 +11,7 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer};
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, eunomia::Pod, eunomia::Zeroable)]
 struct EmptyTransfer;
 
 /// Run every transfer clause against one backend.

@@ -1,6 +1,6 @@
 use crate::domain::buffer::DeviceBuffer;
 use crate::domain::error::Result;
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// Backend-neutral device selection preference.
 ///
@@ -84,7 +84,7 @@ pub struct DeviceLimits {
 /// Consumers bind generically
 /// (`<D: ComputeDevice>`) so dispatch is monomorphized; no `dyn` on hot paths.
 ///
-/// Element types are bounded by [`bytemuck::Pod`]: device transfer is a
+/// Element types are bounded by [`eunomia::Pod`]: device transfer is a
 /// byte-level copy, so only plain-old-data layouts are admissible, and the
 /// bound makes that a compile-time contract instead of a runtime invariant.
 pub trait ComputeDevice {
@@ -168,7 +168,7 @@ pub trait ComputeDevice {
                 ),
             }
         })?;
-        out.resize(buffer.len(), bytemuck::Zeroable::zeroed());
+        out.resize(buffer.len(), eunomia::Zeroable::zeroed());
         self.download(buffer, &mut out)?;
         Ok(out)
     }

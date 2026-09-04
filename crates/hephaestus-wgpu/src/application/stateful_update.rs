@@ -171,10 +171,10 @@ impl StatefulUpdateOps<WgpuDevice> for WgpuStatefulUpdateOps {
             crate::infrastructure::pool::uniform_guard(device.clone(), raw_parameters);
         device
             .queue()
-            .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&plan.metadata()));
+            .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&plan.metadata()));
         device
             .queue()
-            .write_buffer(&parameter_buffer, 0, bytemuck::bytes_of(&parameters));
+            .write_buffer(&parameter_buffer, 0, eunomia::layout::bytes_of(&parameters));
         let state_zero = operands
             .states
             .first()

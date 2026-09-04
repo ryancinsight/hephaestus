@@ -12,7 +12,7 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
     GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, HipC,

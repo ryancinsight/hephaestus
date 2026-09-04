@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use eunomia::{Pod, Zeroable};
 use leto::Layout;
 
 use crate::domain::error::{HephaestusError, Result};

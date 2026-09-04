@@ -10,8 +10,8 @@
 //! dispatch. `MAX_GRID_Z` chunks batches beyond CUDA's hardware grid.z limit
 //! (65535 on every current compute capability) into multiple launches.
 
-use bytemuck::Pod;
 use core::marker::PhantomData;
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 use leto::Layout;
 

@@ -10,7 +10,7 @@
 
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageDevice,
     MultiStorageKernel, Result, UnaryStorageKernel,

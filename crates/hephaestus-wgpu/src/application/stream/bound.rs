@@ -91,7 +91,7 @@ impl<K: GroupedKernelSource<Wgsl>> WgpuBoundGroupedDispatch<K> {
             .push_error_scope(wgpu::ErrorFilter::Validation);
         device
             .queue()
-            .write_buffer(&self.parameters, 0, bytemuck::bytes_of(params));
+            .write_buffer(&self.parameters, 0, eunomia::layout::bytes_of(params));
         let validation_error = moirai::block_on(validation.pop());
         let internal_error = moirai::block_on(internal.pop());
         let out_of_memory_error = moirai::block_on(out_of_memory.pop());
@@ -163,7 +163,7 @@ impl WgpuDevice {
             mapped_at_creation: false,
         });
         self.queue()
-            .write_buffer(&parameters, 0, bytemuck::bytes_of(params));
+            .write_buffer(&parameters, 0, eunomia::layout::bytes_of(params));
         let bind_groups = build_grouped_bind_groups(self.inner(), prepared, bindings, &parameters);
         let validation_error = moirai::block_on(validation.pop());
         let internal_error = moirai::block_on(internal.pop());

@@ -1,5 +1,48 @@
 # Backlog — hephaestus
 
+## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — in-progress <a id="heph-semver-budget-identity-2026-09-03"></a>
+
+- **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
+  planner facade, so fresh provider graphs cannot split the budget type across
+  Mnemosyne source revisions.
+- **Scope:** WGPU/CUDA planner call sites, their direct dependency manifests,
+  CI/release workflow callers, Cargo.lock, ADR 0002, changelog, and this item.
+  Moirai owns the public export in PR #256; no duplicated wrapper or conversion
+  is permitted.
+- **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
+  no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
+  warning-denied provider gates pass, and the hosted SemVer failure is removed.
+- **Follow-up source edge:** Leto PR #164 (`1caa846`) is temporarily pinned so
+  Hephaestus does not reintroduce Leto's pre-Hermes/Moirai-identity dependency
+  graph; remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
+- **Risk / delivery:** [patch] internal dependency ownership; temporarily pin
+  Moirai PR #256 at `773c117` until it merges. Integrator: Codex on
+  `chore/close-bounded-waits`; regions: root and WGPU/CUDA manifests, planner
+  pipelines, ADR/changelog/backlog, and Cargo.lock.
+
+## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
+
+- **Outcome:** Make Eunomia's native `Pod`/`Zeroable` markers and byte-cast
+  functions the single first-party device-layout contract across Hephaestus.
+- **Scope / non-goals:** Migrate `hephaestus-core`, the host reference device,
+  all shipped backend implementations, conformance tests, and owned ABI
+  metadata; remove direct first-party `bytemuck` imports and manifest edges.
+  WGPU/CUDA/ROCm vendor internals and unavoidable transitive dependencies are
+  not replaced by a local adapter or compatibility shim.
+- **Acceptance:** `ComputeDevice`, `DeviceApi`, and every public operation seam
+  bind `eunomia::Pod`; owned `repr(C)`/transparent metadata derives Eunomia
+  markers; host↔device byte views use `eunomia::layout` with no copy added;
+  all first-party crates compile and their value-semantic suites pass; direct
+  source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
+- **Dependencies / risk:** Eunomia PR #87 is pending at `fdbf122`; Hephaestus
+  pins that revision, with Aequitas PR #51 still pinned for the same
+  source-identity sweep. Leto PR #163 merged at `d8229cf`, so its temporary
+  revision is removed here. This breaks the public generic bound and is a major
+  co-evolution change; vendor transitive graphs remain outside this item.
+- **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
+  default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
+  doctests, and warning-denied rustdoc pass. **Commit:** `c24de79`. **Last-update:** 2026-09-03.
+
 ## HEPH-FUSION-SEAM-2026-09-02 [minor] [arch] — done
 
 - **Outcome:** Move runtime-rank expression fusion into the device-neutral seam and WGPU provider; [ADR 0055](docs/adr/0055-fusion-seam.md).
@@ -398,7 +441,7 @@
   soundness argument recorded at the free site, differential and stress tests
   green on a CUDA host.
 
-## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — in review: Bounded default device waits
+## ✅ HEPH-WGPU-DEFAULT-DEADLINES [major] — done: Bounded default device waits
 
 - **Premise confirmed 2026-08-31** (this fleet's items have carried premises
   that no longer held, so it was re-checked before any edit): `synchronize`
@@ -433,6 +476,7 @@
   under a catch-all, so it is source-compatible with all of them; the workspace
   `check --all-targets` is green. See ADR 0054 for why `#[non_exhaustive]` was
   not taken here.
+- **Delivered**: PR #239 (`d8dfa26462bb4094568304081f527293edc7034d`).
 - **Integrator**: Claude session 5050c72a on `perf/heph-bounded-waits`; lease
   released on merge.
 

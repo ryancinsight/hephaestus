@@ -14,7 +14,7 @@
 //! - binary and combine expressions read `lhs` and `rhs`.
 
 use super::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// Element expression over the canonical unary operand `x` in dialect `L`.
 pub trait UnaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {

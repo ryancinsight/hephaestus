@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 
 use super::{
     device::ComputeDevice, dialect::KernelDialect, error::Result, view::DynamicStridedView,

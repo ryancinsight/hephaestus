@@ -11,7 +11,7 @@ use core::any::TypeId;
 use core::marker::PhantomData;
 use core::mem::size_of;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use leto::Layout;
 
 use super::device_api::{DeviceApi, LaunchGeometry};

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use std::{borrow::Cow, sync::Arc};
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     CommandStream, ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities,
     DeviceFeature, DeviceLimits, DevicePreference, HephaestusError, KernelDevice, Result,
@@ -1185,7 +1185,7 @@ impl WgpuDevice {
     /// Borrow host bytes when they already meet WGPU's copy alignment; otherwise
     /// append zeroed physical padding outside the logical typed range.
     fn padded_host_bytes<T: Pod>(host: &[T]) -> Result<Cow<'_, [u8]>> {
-        let bytes: &[u8] = bytemuck::cast_slice(host);
+        let bytes: &[u8] = eunomia::layout::cast_slice(host);
         let padded_len = usize::try_from(Self::padded_size::<T>(host.len())?).map_err(|_| {
             HephaestusError::AllocationFailed {
                 message: format!(
@@ -1350,7 +1350,7 @@ impl WgpuDevice {
             },
             timeout,
             "hephaestus-download",
-            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
+            |bytes| eunomia::layout::cast_slice_mut(out).copy_from_slice(bytes),
         )
     }
 
@@ -1421,7 +1421,7 @@ impl WgpuDevice {
             },
             device_wait_deadline(),
             "hephaestus-download-sub",
-            |bytes| bytemuck::cast_slice_mut(out).copy_from_slice(bytes),
+            |bytes| eunomia::layout::cast_slice_mut(out).copy_from_slice(bytes),
         )
     }
 
@@ -1463,7 +1463,7 @@ impl WgpuDevice {
         // Byte offset reuses the existing checked multiplication.
         let byte_offset = Self::byte_size::<T>(offset)?;
         Self::validate_copy_offset(byte_offset)?;
-        let bytes = bytemuck::cast_slice(host);
+        let bytes = eunomia::layout::cast_slice(host);
         let payload = if end == buffer.len {
             Self::padded_host_bytes(host)?
         } else if bytes.len() % (wgpu::COPY_BUFFER_ALIGNMENT as usize) == 0 {
@@ -1577,7 +1577,7 @@ impl ComputeDevice for WgpuDevice {
                 ),
             })?;
         if core::mem::size_of::<T>() == 0 {
-            out.resize(len, bytemuck::Zeroable::zeroed());
+            out.resize(len, eunomia::Zeroable::zeroed());
             return Ok(out);
         }
         let byte_len = Self::byte_size::<T>(len)?;
@@ -1885,7 +1885,7 @@ mod tests {
         let host = [0x0001_u16, 0x0203, 0x0405];
         let payload = WgpuDevice::padded_host_bytes(&host).expect("padded host bytes");
         assert_eq!(payload.len(), 8);
-        assert_eq!(&payload[..6], bytemuck::cast_slice::<u16, u8>(&host));
+        assert_eq!(&payload[..6], eunomia::layout::cast_slice::<u16, u8>(&host));
         assert_eq!(&payload[6..], [0, 0]);
     }
 

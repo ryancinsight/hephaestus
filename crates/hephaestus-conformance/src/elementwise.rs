@@ -11,7 +11,7 @@
 //! (`sqrt` of a perfect square). All oracles are therefore exact
 //! equalities; no tolerance is involved.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, MulOp, NegOp,
     SqrtOp, StridedView, SubOp, UnaryExpr,

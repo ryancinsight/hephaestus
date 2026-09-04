@@ -1,7 +1,7 @@
 use super::{SlidingWindowFoldOperands, SlidingWindowUnfoldOperands};
 use crate::domain::device::ComputeDevice;
 use crate::domain::error::Result;
-use bytemuck::Pod;
+use eunomia::Pod;
 
 /// Monomorphized accelerator unfold/fold operations.
 pub trait SlidingWindowOps<D: ComputeDevice, T: Pod> {

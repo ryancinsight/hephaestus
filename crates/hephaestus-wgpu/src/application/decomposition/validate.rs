@@ -1,7 +1,7 @@
 //! Decomposition operand validation — thin adapters over the backend-neutral
 //! `hephaestus_core` validators.
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{Result, require_dense_operand, validate_square_operand};
 
 use crate::application::strided::StridedOperand;

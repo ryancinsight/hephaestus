@@ -1,7 +1,7 @@
 use std::any::TypeId;
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice,
     DialectScalar, HephaestusError, IdentityToken, OpIdentity, Result, Wgsl, plan_axis_reduction,
@@ -591,7 +591,7 @@ where
         .map_or(&input.buffer.buffer, |buffer| &buffer.buffer);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&dispatch.meta));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -654,7 +654,7 @@ where
         .map_or(&input.buffer.buffer, |buffer| &buffer.buffer);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&dispatch.meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&dispatch.meta));
     let bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {

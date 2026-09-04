@@ -23,7 +23,7 @@ crate flat.
   bind generically (`<D: ComputeDevice>`) and dispatch is monomorphized; no
   `dyn` on hot paths.
 - `DeviceBuffer<T>` — typed buffer contract. Element types are bounded by
-  `bytemuck::Pod` and dtype lives in `PhantomData<T>`, so dtype confusion is a
+  `eunomia::Pod` and dtype lives in `PhantomData<T>`, so dtype confusion is a
   compile error.
 - Shared backend-neutral parameter vocabulary: volume ray geometry and
   validation, 2D Laplacian parameters and boundary conditions.

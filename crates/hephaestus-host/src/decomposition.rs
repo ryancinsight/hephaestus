@@ -9,7 +9,7 @@
 //! eigen vectors, dense block-diagonal Bunch–Kaufman `D`, length-`n` UDU
 //! diagonal).
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, ComputeDevice,
     DecompositionOps, FullPivLuHandle, HephaestusError, HessenbergHandle, LuHandle, QrHandle,

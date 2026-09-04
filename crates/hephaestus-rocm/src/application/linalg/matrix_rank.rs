@@ -1,7 +1,7 @@
 //! Numerical rank and determinant over ROCm device-resident matrices.
 
-use bytemuck::{Pod, Zeroable};
 use core::marker::PhantomData;
+use eunomia::{Pod, Zeroable};
 use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
 
 use super::{map_layout_err, to_i32, to_u32};

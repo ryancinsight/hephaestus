@@ -1,7 +1,7 @@
 use std::any::TypeId;
 use std::marker::PhantomData;
 
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, DialectScalar, ElementwiseOps, HephaestusError, Result, StridedView,
     TypedBinaryExpr, UnaryExpr, Wgsl,
@@ -195,7 +195,7 @@ where
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = checked_bind_group(
         device,
@@ -321,13 +321,13 @@ where
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
 
     let raw_scalar = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
     let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar);
     device
         .queue()
-        .write_buffer(&scalar_buffer, 0, bytemuck::bytes_of(&scalar));
+        .write_buffer(&scalar_buffer, 0, eunomia::layout::bytes_of(&scalar));
 
     let bind_group = checked_bind_group(
         device,
@@ -436,7 +436,7 @@ where
     let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
     device
         .queue()
-        .write_buffer(&meta_buffer, 0, bytemuck::bytes_of(&meta));
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
 
     let bind_group = checked_bind_group(
         device,

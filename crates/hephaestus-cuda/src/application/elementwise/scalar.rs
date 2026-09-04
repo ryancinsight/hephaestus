@@ -4,7 +4,7 @@ use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
 use crate::infrastructure::buffer::CudaBuffer;
-use bytemuck::Pod;
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
     Result,
