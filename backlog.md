@@ -15,7 +15,7 @@
   Hephaestus does not reintroduce Leto's pre-Hermes-identity dependency graph;
   remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
 - **Risk / delivery:** [patch] internal dependency ownership; temporarily pin
-  Moirai PR #256 at `6305541` until it merges. Integrator: Codex on
+  Moirai PR #256 at `773c117` until it merges. Integrator: Codex on
   `chore/close-bounded-waits`; regions: root and WGPU/CUDA manifests, planner
   pipelines, ADR/changelog/backlog, and Cargo.lock.
 

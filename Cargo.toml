@@ -80,13 +80,13 @@ leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git
 # Temporary co-evolution pin for Moirai PR #256; remove `rev` after its
 # canonical `KernelResourceBudget` facade export merges to main and regenerate
 # Cargo.lock.
-moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "6305541", default-features = false, features = [
+moirai-gpu = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117", default-features = false, features = [
     "std",
     "parallel",
     "mnemosyne-memory",
 ] }
-moirai-sync = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git" }
-moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async"] }
+moirai-sync = { version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117" }
+moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", rev = "773c117", default-features = false, features = ["async"] }
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
