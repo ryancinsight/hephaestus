@@ -5,6 +5,8 @@
 //! production factorization, so follow-up work targets measured components
 //! rather than stale synthetic transfer models.
 
+#![cfg(feature = "decomposition")]
+
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 

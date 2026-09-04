@@ -1,5 +1,59 @@
 # Backlog — hephaestus
 
+## HEPH-STAGGERED-3D-2026-09-04 — Device 3-D staggered gradient/divergence pair [minor] [arch] — review <a id="heph-staggered-3d-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/hephaestus-staggered-3d`; **lease:**
+  `crates/hephaestus-core/src/domain/staggered.rs`,
+  `crates/hephaestus-wgpu/src/application/stencil/`,
+  `crates/hephaestus-metal/src/application/stencil.rs`,
+  `crates/hephaestus-conformance/src/staggered.rs`, `Cargo.lock` — 2026-09-04.
+- **Outcome:** the device half of `leto_ops::StaggeredLeapfrog3D`.
+  `Staggered3DOps<D>` with `Staggered3DParams` and `StaggeredAxis` in
+  hephaestus-core, WGSL kernels in hephaestus-wgpu, Metal by delegation, and
+  shared conformance clauses. Completes the CPU/GPU seam Coeus PR #369 opened:
+  a consumer binds one trait and reaches either backend.
+- **Separate trait, not new methods on `StencilOps`:** a backend without
+  staggered kernels would otherwise have to supply bodies, and a body returning
+  zeros or an error is a mock wearing a trait impl. CUDA and ROCm advertise the
+  capability when they have it (`HEPH-STAGGERED-3D-CUDA-ROCM`).
+- **The divergence gathers.** Leto scatters `-Gᵀ`, which makes the adjoint true
+  by construction; a GPU cannot scatter without atomics, so the kernel gathers a
+  transpose derived by hand — including the wall closure the CPU comment warns
+  is the easy thing to get wrong. The derivation is written out in the module
+  docs and is checked three ways rather than trusted.
+- **Taps are a parameter, not derived in core.** hephaestus-core carries Leto
+  layout vocabulary and no CPU compute dependency (atlas ADR 0001); a linear
+  solve there would be exactly the dependency that boundary excludes. The caller
+  passes `leto_ops::staggered_first_derivative_coefficients` output, and the
+  conformance clauses close the gap that opens.
+- **Documented capability difference:** the device kernels require
+  `extent >= 2N` on the swept axis so one reflection step is exact.
+  `Staggered3DParams::new` rejects thinner grids with a typed error; Leto's
+  looping reflection still serves them on the CPU. A rejected configuration,
+  not a silent divergence.
+- **Evidence (2026-09-04):** `cargo fmt --check`, `cargo clippy --locked
+  --workspace --all-targets -- -D warnings`, `cargo nextest run --locked -p
+  hephaestus-core -p hephaestus-host -p hephaestus` **121/121**, `cargo test
+  --locked --doc --workspace --exclude hephaestus-python`, `cargo doc --locked
+  --workspace --no-deps` warning-free. The WGPU contract suite ran against a
+  **live adapter** with `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1`: **187/187** cases,
+  up from 179, the eight new ones being the CPU differential on every axis at
+  orders 2/4/6/8, the constant-field wall check, the device-side adjoint
+  identity, the thin-grid rejection, the storage-length rejection, and the
+  shared conformance clause.
+- **The differential tests were proven live, not assumed:** flipping the sign of
+  the low-wall reflected term in the gathered divergence failed exactly
+  `staggered_divergence_matches_cpu_on_every_axis`,
+  `staggered_high_order_matches_cpu`, and `the_device_pair_is_a_negative_adjoint`
+  — the three that should catch it — and the mutation was reverted.
+- **Decision record:** [ADR 0057](docs/adr/0057-device-staggered-pair.md).
+- **Follow-on:** `HEPH-STAGGERED-3D-CUDA-ROCM` — CUDA and ROCm kernels for the
+  same trait. The conformance clauses already exist and judge them on the same
+  three oracles; until then those backends simply do not implement
+  `Staggered3DOps`, which is the honest state and the reason it is a separate
+  trait.
+- **Last-update:** 2026-09-04.
+
 ## HEPH-PROVIDER-MERGED-2026-09-04 [patch] [arch] — review <a id="heph-provider-merged-2026-09-04"></a>
 
 - **Integrator:** Codex on `build/hephaestus-source-identity`; **lease:** none.

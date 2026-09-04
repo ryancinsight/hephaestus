@@ -37,6 +37,7 @@ mod contract;
 #[path = "convolution_contracts.rs"]
 mod convolution_contracts;
 
+#[cfg(feature = "decomposition")]
 #[path = "decomposition_contracts.rs"]
 mod decomposition_contracts;
 
@@ -76,6 +77,7 @@ mod scan_contracts;
 #[path = "seam_contracts.rs"]
 mod seam_contracts;
 
+#[cfg(feature = "sparse")]
 #[path = "sparse_contracts.rs"]
 mod sparse_contracts;
 
@@ -84,6 +86,12 @@ mod stateful_update_contracts;
 
 #[path = "stencil_contracts.rs"]
 mod stencil_contracts;
+
+#[path = "staggered_contracts.rs"]
+mod staggered_contracts;
+
+#[path = "staggered3d.rs"]
+mod staggered3d;
 
 #[path = "stencil_laplacian.rs"]
 mod stencil_laplacian;
@@ -159,26 +167,47 @@ contract_cases!(
     contract::linalg_det_matches_leto_reference,
     contract::matrix_rank_relative_tolerance_is_the_discriminator,
     contract::det_of_near_singular_triangular_is_exact_pivot_product,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_matches_leto_reference_across_block_boundary,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks,
+    #[cfg(feature = "decomposition")]
     contract::symmetric_eigen_jacobi_rejects_non_symmetric_input,
+    #[cfg(feature = "decomposition")]
     contract::eigenvalues_match_closed_form_diagonal,
+    #[cfg(feature = "decomposition")]
     contract::eigenvalues_match_exact_complex_pair_blocks,
+    #[cfg(feature = "decomposition")]
     contract::eigenvalues_match_structured_and_dense_leto_oracles,
+    #[cfg(feature = "decomposition")]
     contract::eigenvalues_symmetric_input_is_real_and_matches_leto,
+    #[cfg(feature = "decomposition")]
     contract::eigenvalues_rejects_non_square_input,
+    #[cfg(feature = "decomposition")]
     contract::singular_values_match_closed_form_diagonal,
+    #[cfg(feature = "decomposition")]
     contract::svd_decompose_reconstructs_leto_reference,
+    #[cfg(feature = "decomposition")]
     contract::svd_rank_revealing_accepts_rank_deficient_matrix,
+    #[cfg(feature = "decomposition")]
     contract::bidiagonalize_reconstructs_and_preserves_singular_values,
+    #[cfg(feature = "decomposition")]
     contract::bidiagonalize_rejects_wide_matrix,
+    #[cfg(feature = "decomposition")]
     contract::schur_reconstructs_quasi_triangular_and_preserves_spectrum,
+    #[cfg(feature = "decomposition")]
     contract::schur_rejects_rectangular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::hessenberg_reconstructs_and_preserves_similarity_invariants,
+    #[cfg(feature = "decomposition")]
     contract::hessenberg_rejects_rectangular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::full_piv_lu_reconstructs_and_matches_leto_oracles,
+    #[cfg(feature = "decomposition")]
     contract::full_piv_lu_reveals_rank_deficiency_and_rejects_inverse,
+    #[cfg(feature = "decomposition")]
     contract::full_piv_lu_rejects_rectangular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::blocked_pivoted_decompositions_match_ordinary_contracts,
     contract::write_buffer_overwrites_existing_data,
     contract::write_buffer_rejects_length_mismatch,
@@ -187,44 +216,80 @@ contract_cases!(
     contract::write_sub_buffer_overwrites_only_requested_range,
     contract::write_sub_buffer_rejects_out_of_range_write,
     contract::write_sub_buffer_empty_tail_write_is_noop,
+    #[cfg(feature = "decomposition")]
     contract::cholesky_rejects_singular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::lu_rejects_singular_matrix,
     contract::linalg_norms_match_cpu_reference,
     contract::prepared_l2_norm_reuses_output_and_observes_input_updates,
     contract::linalg_reductions_accept_strided_views,
+    #[cfg(feature = "decomposition")]
     contract::blocked_lu_matches_leto_reference,
+    #[cfg(feature = "decomposition")]
     contract::blocked_lu_identity_yields_identity_factors,
+    #[cfg(feature = "decomposition")]
     contract::blocked_lu_solve_known_system_accurate,
+    #[cfg(feature = "decomposition")]
     contract::blocked_lu_rejects_singular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_matches_leto_reference,
+    #[cfg(feature = "decomposition")]
     contract::qr_r_buffer_is_upper_triangular_on_both_entry_points,
+    #[cfg(feature = "decomposition")]
     contract::qr_accumulated_q_matches_host_reference,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_preserves_panel_boundary_contracts,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_identity_yields_identity_r,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_solve_known_system_accurate,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_rejects_underdetermined,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_identity_yields_identity_lower,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_retains_factor_diagonal_across_panels,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_spd_reconstruction_matches_original,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_solve_known_system_accurate,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_solve_multi_panel_matches_leto_reference,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_rejects_singular_matrix,
+    #[cfg(feature = "decomposition")]
     contract::udu_decompose_rejects_invalid_contracts,
+    #[cfg(feature = "decomposition")]
     contract::bunch_kaufman_rejects_rectangular_and_nonsymmetric,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_pinv_matches_closed_form_diagonal,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_pinv_rank_deficient_satisfies_moore_penrose,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_pinv_handles_rectangular_full_rank_matrix,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_pinv_rejects_non_finite_input,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_matexp_matches_closed_form_diagonal,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_matexp_matches_nilpotent_and_rotation_closed_forms,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_matexp_matches_leto_general_matrix,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::linalg_matexp_rejects_invalid_contracts,
+    #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::test_wgpu_uniform_and_normal_with_seed,
+    #[cfg(feature = "sparse")]
     contract::test_wgpu_sparse_matrix_spmv_spmm,
+    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_rejects_non_dense_operands,
+    #[cfg(feature = "decomposition")]
     contract::blocked_lu_rejects_non_dense_operands,
+    #[cfg(feature = "decomposition")]
     contract::blocked_qr_rejects_non_dense_operands,
+    #[cfg(feature = "decomposition")]
     contract::blocked_pivoted_decompositions_reject_non_dense_operands,
+    #[cfg(feature = "decomposition")]
     contract::empty_qr_preserves_shape_and_identity,
     contract::fdtd_3d_provider_matches_sequential_cpu_reference,
     attention_contracts::wgpu_satisfies_the_attention_contract,
@@ -232,7 +297,9 @@ contract_cases!(
     attention_contracts::zero_probability_prefix_preserves_stable_convex_output,
     axis_reduction_contracts::wgpu_satisfies_the_axis_reduction_contract,
     convolution_contracts::wgpu_satisfies_the_convolution_contract,
+    #[cfg(feature = "decomposition")]
     decomposition_contracts::non_blocked_decomposition_heap_readbacks_are_provider_owned,
+    #[cfg(feature = "decomposition")]
     decomposition_contracts::wgpu_satisfies_the_decomposition_contract,
     dense_product_contracts::wgpu_satisfies_the_dense_product_contract,
     dense_vector_contracts::wgpu_satisfies_the_dense_vector_contract,
@@ -264,9 +331,18 @@ contract_cases!(
     seam_contracts::invalid_external_expression_is_a_typed_preparation_error,
     seam_contracts::invalid_external_combine_is_a_typed_preparation_error,
     seam_contracts::full_reduction_rejects_foreign_buffers_before_mutation,
+    #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
+    staggered_contracts::wgpu_satisfies_the_staggered_contract,
+    staggered3d::staggered_gradient_matches_cpu_on_every_axis,
+    staggered3d::staggered_divergence_matches_cpu_on_every_axis,
+    staggered3d::staggered_high_order_matches_cpu,
+    staggered3d::a_field_constant_along_the_axis_has_no_device_gradient,
+    staggered3d::the_device_pair_is_a_negative_adjoint,
+    staggered3d::a_grid_thinner_than_the_stencil_is_rejected,
+    staggered3d::storage_length_mismatch_is_rejected_before_launch,
     stencil_contracts::wgpu_satisfies_the_stencil_contract,
     stencil_laplacian::laplacian_minimum_grid_matches_cpu_reference,
     stencil_laplacian::laplacian_dirichlet_matches_cpu_reference,
@@ -303,6 +379,15 @@ contract_cases!(
     wgpu_reexport::provider_exports_wgpu_abi_types,
 );
 
+#[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
+const EXPECTED_CONTRACT_CASES: usize = 127;
+#[cfg(all(feature = "decomposition", not(feature = "sparse")))]
+const EXPECTED_CONTRACT_CASES: usize = 186;
+#[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
+const EXPECTED_CONTRACT_CASES: usize = 139;
+#[cfg(all(feature = "decomposition", feature = "sparse"))]
+const EXPECTED_CONTRACT_CASES: usize = 188;
+
 #[test]
 fn integration_contract_cases_share_process_devices() {
     // Cache setup failure before case-level panic aggregation so a required
@@ -310,7 +395,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        180,
+        EXPECTED_CONTRACT_CASES,
         "the consolidated integration contract must retain every migrated case"
     );
 

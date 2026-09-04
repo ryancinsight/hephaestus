@@ -70,10 +70,12 @@ pub use application::sparse::{
 };
 pub use application::sparse_seam::MetalSparseOps;
 pub use application::stateful_update::MetalStatefulUpdateOps;
+pub use application::stencil::MetalStaggered3DOps;
 pub use application::stencil::MetalStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };
+pub use application::stencil::{Staggered3DKernel, Staggered3DParams, StaggeredAxis};
 pub use application::storage_kernel::{
     MetalBinaryStorageKernel, MetalMultiStorageKernel, MetalStorageAccess, MetalStorageBinding,
     MetalStorageBindingLayout, MetalUnaryStorageKernel,
