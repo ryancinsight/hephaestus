@@ -792,11 +792,12 @@ impl WgpuDevice {
         }
 
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-        desc.backends = wgpu::Backends::all();
+        desc.backends = wgpu::Instance::enabled_backend_features();
         let instance = wgpu::Instance::new(desc);
         let mut devices = Vec::new();
-        let mut adapters =
-            futures::executor::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        let mut adapters = futures::executor::block_on(
+            instance.enumerate_adapters(wgpu::Instance::enabled_backend_features()),
+        );
         adapters.retain(|adapter| accept_adapter(&adapter.get_info()));
         adapters.sort_by_key(|adapter| rank_adapter(&adapter.get_info()));
 
@@ -1024,10 +1025,11 @@ impl WgpuDevice {
         };
 
         // An operator-selected backend is honoured exactly; otherwise the
-        // compiled backend set is used. Do not probe a backend that is absent
-        // from this crate's feature set: on Windows, constructing a disabled
-        // DX12 instance leaves a native WGPU teardown path that can outlive
-        // the caller's wait budget before the Vulkan attempt begins.
+        // compile-time enabled backend set is used. `Backends::all()` is the
+        // complete bitmask, not the set compiled into this crate. Probing an
+        // absent backend can leave a native WGPU teardown path alive after
+        // acquisition returns; on Windows this was observed with disabled
+        // DX12 before the Vulkan attempt began.
         //
         // Selection reads `wgpu::Backends::from_env`, which is the single
         // variable wgpu itself consults (`WGPU_BACKEND`). Testing for a
@@ -1036,7 +1038,7 @@ impl WgpuDevice {
         // its defaults.
         let ladder: Vec<wgpu::Backends> = match wgpu::Backends::from_env() {
             Some(requested) => vec![requested],
-            None => vec![wgpu::Backends::all()],
+            None => vec![wgpu::Instance::enabled_backend_features()],
         };
 
         for backends in ladder {
