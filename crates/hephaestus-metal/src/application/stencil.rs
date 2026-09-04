@@ -61,3 +61,99 @@ impl hephaestus_core::StencilOps<MetalDevice> for MetalStencilOps {
         kernel.dispatch(device, input, output, params)
     }
 }
+
+pub use hephaestus_core::{Staggered3DParams, StaggeredAxis};
+
+/// Compiled 3-D staggered pair using the native Metal-selected WGPU kernels.
+#[derive(Debug)]
+pub struct Staggered3DKernel {
+    inner: wgpu_backend::Staggered3DKernel,
+}
+
+impl Staggered3DKernel {
+    /// Compile the staggered pair for a Metal device.
+    ///
+    /// # Errors
+    ///
+    /// Returns the WGPU backend's kernel compilation failure.
+    pub fn new(device: &MetalDevice) -> Result<Self> {
+        Ok(Self {
+            inner: wgpu_backend::Staggered3DKernel::new(device.wgpu_device())?,
+        })
+    }
+
+    /// Dispatch the gradient over Metal buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns the WGPU backend's dispatch failure.
+    pub fn gradient(
+        &self,
+        device: &MetalDevice,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &Staggered3DParams,
+    ) -> Result<()> {
+        self.inner.gradient(
+            device.wgpu_device(),
+            input.wgpu_buffer(),
+            output.wgpu_buffer(),
+            params,
+        )
+    }
+
+    /// Dispatch the divergence over Metal buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns the WGPU backend's dispatch failure.
+    pub fn divergence(
+        &self,
+        device: &MetalDevice,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &Staggered3DParams,
+    ) -> Result<()> {
+        self.inner.divergence(
+            device.wgpu_device(),
+            input.wgpu_buffer(),
+            output.wgpu_buffer(),
+            params,
+        )
+    }
+}
+
+/// Provider-owned implementation of [`hephaestus_core::Staggered3DOps`] for
+/// Metal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetalStaggered3DOps;
+
+impl hephaestus_core::Staggered3DOps<MetalDevice> for MetalStaggered3DOps {
+    type Staggered3D = Staggered3DKernel;
+
+    fn prepare_staggered_3d(&self, device: &MetalDevice) -> Result<Self::Staggered3D> {
+        Staggered3DKernel::new(device)
+    }
+
+    fn staggered_gradient_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::Staggered3D,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &Staggered3DParams,
+    ) -> Result<()> {
+        kernel.gradient(device, input, output, params)
+    }
+
+    fn staggered_divergence_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::Staggered3D,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &Staggered3DParams,
+    ) -> Result<()> {
+        kernel.divergence(device, input, output, params)
+    }
+}

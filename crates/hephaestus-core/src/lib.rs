@@ -103,6 +103,7 @@ pub use domain::sliding_window::{
     plan_sliding_window_fold, plan_sliding_window_unfold,
 };
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
+pub use domain::staggered::{Staggered3DOps, Staggered3DParams, StaggeredAxis};
 pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
     RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,

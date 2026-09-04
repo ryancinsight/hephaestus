@@ -89,6 +89,9 @@ pub use application::stencil::WgpuStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };
+pub use application::stencil::{
+    Staggered3DKernel, Staggered3DParams, StaggeredAxis, WgpuStaggered3DOps,
+};
 pub use application::storage_kernel::{
     WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,
     WgslUnaryStorageKernel,
