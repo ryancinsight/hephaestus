@@ -18,7 +18,7 @@
   exceeds the unchanged 60-second budget; each implicated test passes alone in
   0.4–3.3 seconds. Independent static judge: approve.
 
-## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — in-progress <a id="heph-cuda-fusion-2026-09-04"></a>
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — review <a id="heph-cuda-fusion-2026-09-04"></a>
 
 - **Outcome:** implement runtime-rank fused elementwise and reduction execution
   in Hephaestus CUDA so Coeus retains only expression and layout adaptation.
@@ -36,6 +36,9 @@
 - **Dependency:** Coeus item
   `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
   [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) at
+  `6d59a4d`; no-feature nextest 110/110 and CUDA nextest 135/135 pass, with
+  strict Clippy and format checks. Independent architectural review is required.
 - **Last-update:** 2026-09-04.
 
 
