@@ -264,6 +264,30 @@ pub struct EluOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EluGradOp;
 
+/// Hard sigmoid activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardsigmoidOp;
+
+/// Hard sigmoid activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardsigmoidGradOp;
+
+/// Hard swish activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardswishOp;
+
+/// Hard swish activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardswishGradOp;
+
+/// Softsign activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftsignOp;
+
+/// Softsign activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftsignGradOp;
+
 impl UnaryExpr<Wgsl> for ExpOp {
     const EXPR: &'static str = "exp(x)";
 }
@@ -544,6 +568,32 @@ impl_activation_unary_exprs!(
         EluGradOp,
         "select(exp(x), 1.0, x >= 0.0)",
         "x >= 0.0f ? 1.0f : expf(x)"
+    ),
+    (
+        HardsigmoidOp,
+        "clamp(x / 6.0 + 0.5, 0.0, 1.0)",
+        "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"
+    ),
+    (
+        HardsigmoidGradOp,
+        "select(0.0, 1.0 / 6.0, (x > -3.0) && (x < 3.0))",
+        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+    ),
+    (
+        HardswishOp,
+        "x * clamp(x + 3.0, 0.0, 6.0) / 6.0",
+        "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"
+    ),
+    (
+        HardswishGradOp,
+        "select(select(0.0, (2.0 * x + 3.0) / 6.0, (x > -3.0) && (x < 3.0)), 1.0, x >= 3.0)",
+        "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+    ),
+    (SoftsignOp, "x / (1.0 + abs(x))", "x / (1.0f + fabsf(x))"),
+    (
+        SoftsignGradOp,
+        "1.0 / ((1.0 + abs(x)) * (1.0 + abs(x)))",
+        "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
     ),
 );
 

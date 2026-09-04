@@ -282,6 +282,7 @@ contract_cases!(
     strided::strided_offset_output_writes_only_selected_region,
     strided::strided_rejects_aliasing_output_and_short_buffers,
     strided::strided_rank3_batched_matches_cpu,
+    strided::strided_rank8_matches_cpu,
     strided::strided_unary_transposed_matches_cpu,
     strided::strided_unary_broadcasts_input_to_output_shape,
     strided::strided_scalar_matches_binary_broadcast_semantics,
@@ -309,7 +310,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        179,
+        180,
         "the consolidated integration contract must retain every migrated case"
     );
 

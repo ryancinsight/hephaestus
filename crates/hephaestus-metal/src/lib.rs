@@ -21,10 +21,11 @@ pub use application::dense_product_seam::MetalDenseProductOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
-    GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, IdentityOp, LeOp, LgammaOp, LnOp,
-    Log1pOp, Log2Op, Log10Op, LtOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp,
-    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
+    GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp,
+    HardswishGradOp, HardswishOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
+    MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
+    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
+    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
     binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
@@ -89,7 +90,10 @@ pub use application::volume::{
     FieldGeometry, MetalRayIntegralOps, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
 pub use application::window::{MetalPoolingOps, MetalSlidingWindowOps};
-pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
+pub use hephaestus_core::{
+    CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
+    LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
+};
 pub use infrastructure::buffer::MetalBuffer;
 pub use infrastructure::device::MetalDevice;
 
