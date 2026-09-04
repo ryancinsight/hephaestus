@@ -31,6 +31,15 @@ launch path. The provider contract suite covers the CUDA implementation under
 both feature-disabled and CUDA-enabled builds; physical-device coverage remains
 the authoritative runtime check.
 
+## Revision — 2026-09-04 (rank-eight CUDA metadata)
+
+The CUDA provider's static strided elementwise and map-reduction contracts now
+use one rank-eight shape/stride metadata representation. Coeus consumes this
+provider capacity through its generic operation bridge; it does not define a
+second metadata ABI, source generator, cache, or launch path. Static and
+dynamic rank-eight elementwise dispatch, plus rank-eight L1 and max reduction,
+remain differentially verified against host layout references.
+
 ## Cross-repository driver
 
 Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02`; Coeus fused elementwise

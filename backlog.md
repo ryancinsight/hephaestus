@@ -40,10 +40,12 @@
 - **Dependency:** Coeus item
   `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
   [ADR 0055](docs/adr/0055-fusion-seam.md).
-- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) will
-  carry the provider extension after the current local gates pass; the earlier
-  no-feature nextest 110/110 and CUDA nextest 135/135 pass. Independent
-  architectural review is required.
+- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) carries
+  the provider extension after locked no-feature nextest 111/111 and CUDA
+  nextest 177/177, with strict Clippy passing in both configurations. Static
+  and dynamic rank-eight elementwise plus rank-eight L1/max reduction are
+  differentially verified on the CUDA device. Independent architectural review
+  is required.
 - **Last-update:** 2026-09-04.
 
 
