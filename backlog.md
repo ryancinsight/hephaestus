@@ -18,6 +18,27 @@
   exceeds the unchanged 60-second budget; each implicated test passes alone in
   0.4–3.3 seconds. Independent static judge: approve.
 
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — in-progress <a id="heph-cuda-fusion-2026-09-04"></a>
+
+- **Outcome:** implement runtime-rank fused elementwise and reduction execution
+  in Hephaestus CUDA so Coeus retains only expression and layout adaptation.
+- **Scope / non-goals:** the core fusion seam, CUDA source generation, signed
+  dynamic-layout metadata, provider cache/launch path, CUDA contract tests,
+  exports, and provider docs. Existing ordinary CUDA operation families and
+  Eunomia scalar/layout contracts remain unchanged.
+- **Acceptance:** `hephaestus-cuda` implements the generic core fusion traits
+  with real CUDA execution, validates ownership, layouts, broadcasts, empty
+  reductions, and output injectivity, and passes exact locked provider gates;
+  Coeus can delete its consumer-owned fused CUDA runtime without a shim.
+- **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`;
+  regions: `crates/hephaestus-cuda/src/application/{fusion,pipeline.rs,key.rs,device_api.rs}`,
+  `crates/hephaestus-cuda/src/{lib.rs,application/mod.rs}`, and CUDA contracts.
+- **Dependency:** Coeus item
+  `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
+  [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Last-update:** 2026-09-04.
+
+
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
