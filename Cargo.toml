@@ -67,15 +67,13 @@ eunomia = { version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", 
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled).
-# Temporary co-evolution pin for Leto PR #163; remove `rev` after the
-# first-party source-identity correction merges to main and regenerate Cargo.lock.
-leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "bf0054b", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 # Keep the operation layer on the same Leto source identity as the metadata layer.
-leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", rev = "bf0054b", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
+leto-ops = { version = "0.43.0", git = "https://github.com/ryancinsight/leto.git", features = ["std", "parallel", "mnemosyne-memory", "topology"] }
 # Temporary co-evolution pin for Moirai PR #256; remove `rev` after its
 # canonical `KernelResourceBudget` facade export merges to main and regenerate
 # Cargo.lock.

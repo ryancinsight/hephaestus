@@ -31,10 +31,10 @@
   all first-party crates compile and their value-semantic suites pass; direct
   source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
 - **Dependencies / risk:** Eunomia PR #87 is pending at `fdbf122`; Hephaestus
-  pins that revision, with Aequitas PR #51 and Leto PR #163 pinned for the same
-  source-identity sweep. Remove the temporary revisions after those upstream
-  merges. This breaks the public generic bound and is a major co-evolution
-  change; vendor transitive graphs remain outside this item.
+  pins that revision, with Aequitas PR #51 still pinned for the same
+  source-identity sweep. Leto PR #163 merged at `d8229cf`, so its temporary
+  revision is removed here. This breaks the public generic bound and is a major
+  co-evolution change; vendor transitive graphs remain outside this item.
 - **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
   default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
   doctests, and warning-denied rustdoc pass. **Commit:** `c24de79`. **Last-update:** 2026-09-03.
