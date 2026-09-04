@@ -1,6 +1,6 @@
 # Backlog — hephaestus
 
-## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — in-progress <a id="heph-wgpu-consumer-2026-09-04"></a>
+## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — review <a id="heph-wgpu-consumer-2026-09-04"></a>
 
 - **Outcome:** remove consumer-runtime ownership from `hephaestus-wgpu` so
   Moirai can use the provider through `hephaestus-core` without a dependency
@@ -14,6 +14,8 @@
   [`0057`](docs/adr/0057-provider-consumer-dependency-direction.md).
 - **Integrator:** atlas-session; branch `arch/moirai-hephaestus-gpu-route`;
   consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
+- **Delivery:** PR [#272](https://github.com/ryancinsight/hephaestus/pull/272) at
+  `1f6defb`; provider check, Clippy, focused nextest, and lockfile gates pass.
 
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
