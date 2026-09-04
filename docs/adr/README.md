@@ -65,3 +65,4 @@
 | [0054](0054-bounded-default-device-waits.md) | Bounded default device waits | Accepted |
 | [0055](0055-fusion-seam.md) | Provider-owned runtime-rank fusion seam | Accepted |
 | [0056](0056-eunomia-layout-seam.md) | Eunomia-owned device layout seam | Accepted |
+| [0057](0057-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Proposed |

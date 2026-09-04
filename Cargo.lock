@@ -637,7 +637,6 @@ dependencies = [
  "leto",
  "leto-ops",
  "libloading",
- "moirai-gpu",
  "moirai-sync",
  "smallvec",
  "themis-topology",
@@ -705,13 +704,12 @@ dependencies = [
  "aequitas",
  "criterion",
  "eunomia",
+ "futures",
  "hephaestus-conformance",
  "hephaestus-core",
  "leto",
  "leto-ops",
  "loom",
- "moirai-gpu",
- "moirai-runtime",
  "moirai-sync",
  "pollster",
  "smallvec",
@@ -1097,17 +1095,6 @@ dependencies = [
  "moirai-core",
  "moirai-pal",
  "moirai-scheduler",
- "moirai-utils",
- "themis-topology",
-]
-
-[[package]]
-name = "moirai-gpu"
-version = "0.5.0"
-source = "git+https://github.com/ryancinsight/Moirai.git?rev=773c117#773c1175fd218f78fd4778357957dc583a7569c9"
-dependencies = [
- "mnemosyne-memory-core",
- "moirai-core",
  "moirai-utils",
  "themis-topology",
 ]
@@ -2078,9 +2065,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.13.0"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba2077be5cd93c7408c849e45a4ab261b59f923f4bcdee2a724b8ed5a175a77"
+checksum = "4cf0ded5c4e56918d8f8a339e1bb67d038d3bc6d144ac407904015ba2e4cde9b"
 dependencies = [
  "tinyvec_macros",
 ]

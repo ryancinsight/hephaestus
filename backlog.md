@@ -1,5 +1,25 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — review <a id="heph-wgpu-consumer-2026-09-04"></a>
+
+- **Outcome:** remove consumer-runtime ownership from `hephaestus-wgpu` so
+  Moirai can use the provider through `hephaestus-core` without a dependency
+  cycle.
+- **Scope / non-goals:** WGPU provider acquisition waits, planner ownership,
+  provider manifests, tests, docs, and lockfile. Kernel semantics and vendor
+  backends are unchanged; Moirai scheduling stays in Moirai.
+- **Acceptance:** `hephaestus-wgpu` has no `moirai-runtime` or `moirai-gpu`
+  dependency, provider-owned functionality remains real and warning-clean, and
+  the generic `ComputeDevice` seam remains usable by downstream adapters. ADR
+  [`0057`](docs/adr/0057-provider-consumer-dependency-direction.md).
+- **Integrator:** atlas-session; branch `arch/moirai-hephaestus-gpu-route`;
+  consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
+- **Delivery:** PR [#272](https://github.com/ryancinsight/hephaestus/pull/272) at
+  `1f6defb` plus the pending default-selection correction; the exact device
+  module nextest and format gate pass. The full WGPU gate still contains the
+  pre-existing `application::stream::tests::module_cases_share_process_state`
+  timeout and remains unclaimed follow-up work.
+
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the

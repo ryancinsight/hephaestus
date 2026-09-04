@@ -92,9 +92,9 @@ impl<K: GroupedKernelSource<Wgsl>> WgpuBoundGroupedDispatch<K> {
         device
             .queue()
             .write_buffer(&self.parameters, 0, eunomia::layout::bytes_of(params));
-        let validation_error = moirai::block_on(validation.pop());
-        let internal_error = moirai::block_on(internal.pop());
-        let out_of_memory_error = moirai::block_on(out_of_memory.pop());
+        let validation_error = futures::executor::block_on(validation.pop());
+        let internal_error = futures::executor::block_on(internal.pop());
+        let out_of_memory_error = futures::executor::block_on(out_of_memory.pop());
         if let Some(error) = out_of_memory_error {
             return Err(HephaestusError::AllocationFailed {
                 message: format!("{} retained parameter update failed: {error}", self.label),
@@ -165,9 +165,9 @@ impl WgpuDevice {
         self.queue()
             .write_buffer(&parameters, 0, eunomia::layout::bytes_of(params));
         let bind_groups = build_grouped_bind_groups(self.inner(), prepared, bindings, &parameters);
-        let validation_error = moirai::block_on(validation.pop());
-        let internal_error = moirai::block_on(internal.pop());
-        let out_of_memory_error = moirai::block_on(out_of_memory.pop());
+        let validation_error = futures::executor::block_on(validation.pop());
+        let internal_error = futures::executor::block_on(internal.pop());
+        let out_of_memory_error = futures::executor::block_on(out_of_memory.pop());
         if let Some(error) = out_of_memory_error {
             return Err(HephaestusError::AllocationFailed {
                 message: format!(
