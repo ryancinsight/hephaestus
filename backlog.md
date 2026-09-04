@@ -9,9 +9,10 @@
   Eunomia and Leto identity; WGPU-backed crates share the serialized test
   resource; configured Hephaestus gates pass; no consumer
   patch or conversion layer is introduced.
-- **Dependencies:** Aequitas #51, Eunomia #87, Leto #167, and Moirai #256 are
+- **Dependencies:** Aequitas #51, Eunomia #87, Leto #168, and Moirai #256 are
   merged; **Last-update:** 2026-09-04.
-- **Evidence:** source graph has one Eunomia and one Leto identity; all-target
+- **Evidence:** source graph has one Eunomia and one Leto identity at Leto
+  `3c1f9f1`; rejected Mnemosyne PR head `a07f999` is absent; all-target
   check and Clippy, format, focused WGPU/Python tests, doctests, and rustdoc
   pass. The full 435-test run reaches 406 passes before a serialized WGPU test
   exceeds the unchanged 60-second budget; each implicated test passes alone in
