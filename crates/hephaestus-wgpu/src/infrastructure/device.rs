@@ -795,7 +795,8 @@ impl WgpuDevice {
         desc.backends = wgpu::Backends::all();
         let instance = wgpu::Instance::new(desc);
         let mut devices = Vec::new();
-        let mut adapters = moirai::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        let mut adapters =
+            futures::executor::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
         adapters.retain(|adapter| accept_adapter(&adapter.get_info()));
         adapters.sort_by_key(|adapter| rank_adapter(&adapter.get_info()));
 
@@ -913,17 +914,18 @@ impl WgpuDevice {
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
-        let (device, queue) = moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some(label),
-            required_features,
-            required_limits,
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|error| HephaestusError::DeviceUnavailable {
-            message: error.to_string(),
-        })?;
+        let (device, queue) =
+            futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some(label),
+                required_features,
+                required_limits,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::Off,
+            }))
+            .map_err(|error| HephaestusError::DeviceUnavailable {
+                message: error.to_string(),
+            })?;
         Ok(Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(adapter))
     }
 
@@ -960,7 +962,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features: select_features(adapter),
                     required_limits: select_limits(adapter),
@@ -995,7 +997,7 @@ impl WgpuDevice {
             ];
 
             for (kind, options) in candidates {
-                match moirai::block_on(instance.request_adapter(&options)) {
+                match futures::executor::block_on(instance.request_adapter(&options)) {
                     Err(error) => {
                         failures.push(format!("{backends:?}/{kind}: no adapter ({error})"));
                     }
@@ -1075,7 +1077,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
@@ -1085,14 +1087,14 @@ impl WgpuDevice {
                 }))
             };
 
-            if let Ok(adapter) =
-                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            if let Ok(adapter) = futures::executor::block_on(instance.request_adapter(
+                &wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: None,
                     force_fallback_adapter: false,
                     apply_limit_buckets: false,
-                }))
-            {
+                },
+            )) {
                 let topology = Self::topology_from_adapter(&adapter);
                 if let Ok((device, queue)) = try_device(&adapter) {
                     let mut acquired = Self::new(Arc::new(device), Arc::new(queue));

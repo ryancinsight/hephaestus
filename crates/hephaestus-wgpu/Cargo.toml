@@ -27,9 +27,8 @@ leto = { workspace = true }
 eunomia = { workspace = true }
 leto-ops = { workspace = true, optional = true }
 themis = { workspace = true }
-moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
-moirai = { workspace = true }
+futures = { workspace = true }
 wgpu = { workspace = true }
 smallvec = { workspace = true }
 

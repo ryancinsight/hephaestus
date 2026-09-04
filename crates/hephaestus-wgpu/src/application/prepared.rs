@@ -54,7 +54,7 @@ pub(crate) fn checked_bind_group(
             layout: &pipeline.get_bind_group_layout(0),
             entries,
         });
-    if let Some(error) = moirai::block_on(validation.pop()) {
+    if let Some(error) = futures::executor::block_on(validation.pop()) {
         return Err(HephaestusError::DispatchFailed {
             message: format!("{label} bind-group creation failed: {error}"),
         });
@@ -106,9 +106,9 @@ pub(crate) fn checked_submit_with_timeout(
     // The bounded path has already completed the indexed submission and its
     // error-scope callbacks, so these executor calls cannot extend its deadline.
     if let Some(error) = [
-        moirai::block_on(validation),
-        moirai::block_on(internal),
-        moirai::block_on(out_of_memory),
+        futures::executor::block_on(validation),
+        futures::executor::block_on(internal),
+        futures::executor::block_on(out_of_memory),
     ]
     .into_iter()
     .flatten()
