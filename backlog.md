@@ -1,13 +1,14 @@
 # Backlog — hephaestus
 
-## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — in-progress
+## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — in-progress <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
   planner facade, so fresh provider graphs cannot split the budget type across
   Mnemosyne source revisions.
 - **Scope:** WGPU/CUDA planner call sites, their direct dependency manifests,
-  Cargo.lock, ADR 0002, changelog, and this item. Moirai owns the public export
-  in PR #256; no duplicated wrapper or conversion is permitted.
+  CI/release workflow callers, Cargo.lock, ADR 0002, changelog, and this item.
+  Moirai owns the public export in PR #256; no duplicated wrapper or conversion
+  is permitted.
 - **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
   no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
   warning-denied provider gates pass, and the hosted SemVer failure is removed.

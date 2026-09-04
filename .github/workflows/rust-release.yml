@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.release.tag_name, 'crate-')
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@da9d549bc50dbb9c4e1d18dca8f37d17059098cb
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@d6686df7628c26d464f1982d55164f1b627d3f2a
     with:
       release-gate: true
       package: hephaestus-core,hephaestus-cuda,hephaestus-host,hephaestus-metal,hephaestus-rocm,hephaestus-wgpu
