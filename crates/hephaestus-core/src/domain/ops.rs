@@ -929,6 +929,21 @@ impl_hip_unary_exprs!(
     ),
     (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
     (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
+    (HardsigmoidOp, "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"),
+    (
+        HardsigmoidGradOp,
+        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+    ),
+    (HardswishOp, "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"),
+    (
+        HardswishGradOp,
+        "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+    ),
+    (SoftsignOp, "x / (1.0f + fabsf(x))"),
+    (
+        SoftsignGradOp,
+        "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
+    ),
 );
 
 macro_rules! impl_hip_binary_exprs {
@@ -1225,6 +1240,30 @@ mod tests {
         assert_eq!(
             <EluGradOp as UnaryExpr<Wgsl>>::EXPR,
             "select(exp(x), 1.0, x >= 0.0)"
+        );
+        assert_eq!(
+            <HardsigmoidOp as UnaryExpr<HipC>>::EXPR,
+            "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"
+        );
+        assert_eq!(
+            <HardsigmoidGradOp as UnaryExpr<HipC>>::EXPR,
+            "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+        );
+        assert_eq!(
+            <HardswishOp as UnaryExpr<HipC>>::EXPR,
+            "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"
+        );
+        assert_eq!(
+            <HardswishGradOp as UnaryExpr<HipC>>::EXPR,
+            "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+        );
+        assert_eq!(
+            <SoftsignOp as UnaryExpr<HipC>>::EXPR,
+            "x / (1.0f + fabsf(x))"
+        );
+        assert_eq!(
+            <SoftsignGradOp as UnaryExpr<HipC>>::EXPR,
+            "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
         );
         assert_eq!(
             <Log10Op as UnaryExpr<Wgsl>>::EXPR,

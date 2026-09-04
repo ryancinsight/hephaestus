@@ -81,16 +81,15 @@
   dynamic-layout metadata, provider cache/launch path, WGPU elementwise
   expressions, rank-eight strided metadata, cross-backend exports, provider
   conformance, and provider docs. Existing ordinary operation families and
-  Eunomia scalar/layout contracts remain unchanged.
+  Eunomia scalar/layout contracts remain unchanged, except for closing the
+  existing HipC activation-expression gap required by the generic Coeus ROCm
+  bridge; no ROCm implementation is duplicated in Coeus.
 - **Acceptance:** Hephaestus implements the generic core CUDA fusion and WGPU
   elementwise seams with real backend execution, validates ownership, layouts,
   broadcasts, empty reductions, output injectivity, and rank-eight metadata,
   and passes exact provider gates; Coeus can delete its consumer-owned CUDA
   and WGPU elementwise runtimes without a shim.
-- **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`;
-  lease: atlas-session `crates/hephaestus-core/src/domain/{ops,parameterized}.rs`,
-  `crates/hephaestus-wgpu/src/application/{elementwise,elementwise_seam.rs,parameterized_elementwise.rs,strided.rs}`,
-  cross-backend exports, conformance, and WGPU contracts.
+- **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`.
 - **Dependency:** Coeus item
   `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
   [ADR 0055](docs/adr/0055-fusion-seam.md).
