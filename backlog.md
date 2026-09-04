@@ -1,5 +1,18 @@
 # Backlog — hephaestus
 
+## HEPH-PROVIDER-MERGED-2026-09-04 [patch] [arch] — in-progress <a id="heph-provider-merged-2026-09-04"></a>
+
+- **Integrator:** Codex on `build/hephaestus-source-identity`; **lease:**
+  `Cargo.toml`, `Cargo.lock`, `backlog.md`,
+  `docs/adr/0007-provider-default-msrv.md`.
+- **Outcome:** remove obsolete Aequitas, Eunomia, Leto, and Moirai revision
+  pins after merge so Hephaestus exports one layout and numeric type identity.
+- **Acceptance:** standalone source scans and Apollo NUFFT compile use one
+  Eunomia and Leto identity; configured Hephaestus gates pass; no consumer
+  patch or conversion layer is introduced.
+- **Dependencies:** Aequitas #51, Eunomia #87, Leto #167, and Moirai #256 are
+  merged; **Last-update:** 2026-09-04.
+
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the
