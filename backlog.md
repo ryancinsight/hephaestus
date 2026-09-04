@@ -18,27 +18,32 @@
   exceeds the unchanged 60-second budget; each implicated test passes alone in
   0.4–3.3 seconds. Independent static judge: approve.
 
-## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — review <a id="heph-cuda-fusion-2026-09-04"></a>
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — in-progress <a id="heph-cuda-fusion-2026-09-04"></a>
 
-- **Outcome:** implement runtime-rank fused elementwise and reduction execution
-  in Hephaestus CUDA so Coeus retains only expression and layout adaptation.
+- **Outcome:** keep Hephaestus as the single GPU implementation owner for
+  Coeus CUDA fusion and WGPU elementwise execution, so Coeus retains only
+  expression and layout adaptation.
 - **Scope / non-goals:** the core fusion seam, CUDA source generation, signed
-  dynamic-layout metadata, provider cache/launch path, CUDA contract tests,
-  exports, and provider docs. Existing ordinary CUDA operation families and
+  dynamic-layout metadata, provider cache/launch path, WGPU elementwise
+  expressions, rank-eight strided metadata, cross-backend exports, provider
+  conformance, and provider docs. Existing ordinary operation families and
   Eunomia scalar/layout contracts remain unchanged.
-- **Acceptance:** `hephaestus-cuda` implements the generic core fusion traits
-  with real CUDA execution, validates ownership, layouts, broadcasts, empty
-  reductions, and output injectivity, and passes exact locked provider gates;
-  Coeus can delete its consumer-owned fused CUDA runtime without a shim.
+- **Acceptance:** Hephaestus implements the generic core CUDA fusion and WGPU
+  elementwise seams with real backend execution, validates ownership, layouts,
+  broadcasts, empty reductions, output injectivity, and rank-eight metadata,
+  and passes exact provider gates; Coeus can delete its consumer-owned CUDA
+  and WGPU elementwise runtimes without a shim.
 - **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`;
-  regions: `crates/hephaestus-cuda/src/application/{fusion,pipeline.rs,key.rs,device_api.rs}`,
-  `crates/hephaestus-cuda/src/{lib.rs,application/mod.rs}`, and CUDA contracts.
+  lease: atlas-session `crates/hephaestus-core/src/domain/{ops,parameterized}.rs`,
+  `crates/hephaestus-wgpu/src/application/{elementwise,elementwise_seam.rs,parameterized_elementwise.rs,strided.rs}`,
+  cross-backend exports, conformance, and WGPU contracts.
 - **Dependency:** Coeus item
   `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
   [ADR 0055](docs/adr/0055-fusion-seam.md).
-- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) at
-  `6d59a4d`; no-feature nextest 110/110 and CUDA nextest 135/135 pass, with
-  strict Clippy and format checks. Independent architectural review is required.
+- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) will
+  carry the provider extension after the current local gates pass; the earlier
+  no-feature nextest 110/110 and CUDA nextest 135/135 pass. Independent
+  architectural review is required.
 - **Last-update:** 2026-09-04.
 
 
