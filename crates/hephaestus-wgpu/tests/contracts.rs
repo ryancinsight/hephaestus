@@ -85,6 +85,12 @@ mod stateful_update_contracts;
 #[path = "stencil_contracts.rs"]
 mod stencil_contracts;
 
+#[path = "staggered_contracts.rs"]
+mod staggered_contracts;
+
+#[path = "staggered3d.rs"]
+mod staggered3d;
+
 #[path = "stencil_laplacian.rs"]
 mod stencil_laplacian;
 
@@ -267,6 +273,14 @@ contract_cases!(
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
+    staggered_contracts::wgpu_satisfies_the_staggered_contract,
+    staggered3d::staggered_gradient_matches_cpu_on_every_axis,
+    staggered3d::staggered_divergence_matches_cpu_on_every_axis,
+    staggered3d::staggered_high_order_matches_cpu,
+    staggered3d::a_field_constant_along_the_axis_has_no_device_gradient,
+    staggered3d::the_device_pair_is_a_negative_adjoint,
+    staggered3d::a_grid_thinner_than_the_stencil_is_rejected,
+    staggered3d::storage_length_mismatch_is_rejected_before_launch,
     stencil_contracts::wgpu_satisfies_the_stencil_contract,
     stencil_laplacian::laplacian_minimum_grid_matches_cpu_reference,
     stencil_laplacian::laplacian_dirichlet_matches_cpu_reference,
@@ -309,7 +323,7 @@ fn integration_contract_cases_share_process_devices() {
     let _cached_device = device_or_skip();
     assert_eq!(
         CONTRACT_CASES.len(),
-        179,
+        187,
         "the consolidated integration contract must retain every migrated case"
     );
 
