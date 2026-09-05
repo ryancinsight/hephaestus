@@ -61,14 +61,17 @@ harness = false
 [[bench]]
 name = "sparse_comparative"
 harness = false
+required-features = ["sparse"]
 
 [[bench]]
 name = "decomposition_sync"
 harness = false
+required-features = ["decomposition"]
 
 [[bench]]
 name = "blocked_qr_tail"
 harness = false
+required-features = ["decomposition"]
 
 [[bench]]
 name = "scan_throughput"

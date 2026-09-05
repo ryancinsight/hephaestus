@@ -30,6 +30,9 @@ use hephaestus_cuda::{
 };
 use leto::Layout;
 
+#[path = "contracts/fusion_contracts.rs"]
+mod fusion_contracts;
+
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
 struct AlternateIdentity(i32);
@@ -1128,6 +1131,34 @@ fn linalg_norms_match_cpu_reference() {
     let mut got_max = [0.0f32; 1];
     dev.download(&max_buf, &mut got_max).unwrap();
     assert_eq!(got_max[0], 4.0);
+}
+
+#[test]
+fn linalg_rank8_norms_match_cpu_reference() {
+    let Some(dev) = device("linalg_rank8_norms_match_cpu_reference") else {
+        return;
+    };
+
+    let shape = [2usize; 8];
+    let a_host: Vec<f32> = (1..=256).map(|value| value as f32).collect();
+    let a_layout = Layout::try_new(shape, [1isize, 2, 4, 8, 16, 32, 64, 128], 0)
+        .expect("valid rank-eight layout");
+    let a = dev.upload(&a_host).unwrap();
+    let operand = StridedOperand {
+        buffer: &a,
+        layout: &a_layout,
+    };
+
+    let l1 = norm_l1(&dev, operand).unwrap();
+    let max = norm_max(&dev, operand).unwrap();
+    let mut got_l1 = [0.0f32; 1];
+    let mut got_max = [0.0f32; 1];
+    dev.download(&l1, &mut got_l1).unwrap();
+    dev.download(&max, &mut got_max).unwrap();
+
+    let expected_l1: f32 = a_host.iter().copied().sum();
+    assert_eq!(got_l1, [expected_l1]);
+    assert_eq!(got_max, [256.0]);
 }
 
 #[test]

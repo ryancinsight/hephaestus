@@ -19,6 +19,8 @@ pub mod elementwise;
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Runtime-rank expression fusion implemented by the CUDA provider.
+pub mod fusion;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
 /// Native mean cross-entropy operations.

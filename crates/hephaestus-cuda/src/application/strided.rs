@@ -11,8 +11,8 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::buffer::CudaBuffer;
 
-/// Maximum rank the packed rank-4 metadata covers.
-pub const MAX_STRIDED_RANK: usize = 4;
+/// Maximum rank the packed rank-eight metadata covers.
+pub const MAX_STRIDED_RANK: usize = 8;
 
 /// A device buffer paired with the leto layout describing its logical view.
 ///
@@ -29,7 +29,7 @@ pub type StridedOperand<'a, T, const N: usize> = hephaestus_core::StridedView<'a
 /// most [`MAX_STRIDED_RANK`].
 #[derive(Clone, Copy)]
 pub struct StridedLayout<'a> {
-    /// Logical shape, right-aligned into the rank-4 CUDA metadata.
+    /// Logical shape, right-aligned into the rank-eight CUDA metadata.
     pub shape: &'a [usize],
     /// Physical element strides, one per logical dimension.
     pub strides: &'a [usize],
@@ -50,19 +50,19 @@ pub struct StridedOperandDyn<'a, T> {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct StridedMeta {
-    pub(crate) shape: [u32; 4],
-    pub(crate) a_strides: [i32; 4],
-    pub(crate) b_strides: [i32; 4],
-    pub(crate) out_strides: [i32; 4],
+    pub(crate) shape: [u32; 8],
+    pub(crate) a_strides: [i32; 8],
+    pub(crate) b_strides: [i32; 8],
+    pub(crate) out_strides: [i32; 8],
     pub(crate) offsets: [u32; 4],
 }
 
 pub(crate) const CUDA_META: &str = r#"
 struct Meta {
-    unsigned int shape[4];
-    int a_strides[4];
-    int b_strides[4];
-    int out_strides[4];
+    unsigned int shape[8];
+    int a_strides[8];
+    int b_strides[8];
+    int out_strides[8];
     unsigned int offsets[4];
 };
 "#;
@@ -72,7 +72,7 @@ pub(crate) const CUDA_DECODE: &str = r#"
     int a_off = lmeta.offsets[0];
     int b_off = lmeta.offsets[1];
     int o_off = lmeta.offsets[2];
-    for (int d = 3; d >= 0; d--) {
+    for (int d = 7; d >= 0; d--) {
         unsigned int dim = lmeta.shape[d];
         int idx = (int)(rem % dim);
         rem = rem / dim;
@@ -97,28 +97,28 @@ pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
 }
 
 #[inline]
-pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
-    let mut out = [1u32; 4];
+pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 8]> {
+    let mut out = [1u32; 8];
     for (d, &dim) in shape.iter().enumerate() {
-        out[4 - N + d] = to_u32(dim, "dimension")?;
+        out[8 - N + d] = to_u32(dim, "dimension")?;
     }
     Ok(out)
 }
 
 #[inline]
-fn pad_shape_dyn(shape: &[usize]) -> Result<[u32; 4]> {
-    let mut out = [1u32; 4];
+fn pad_shape_dyn(shape: &[usize]) -> Result<[u32; 8]> {
+    let mut out = [1u32; 8];
     for (d, &dim) in shape.iter().enumerate() {
-        out[4 - shape.len() + d] = to_u32(dim, "dimension")?;
+        out[8 - shape.len() + d] = to_u32(dim, "dimension")?;
     }
     Ok(out)
 }
 
 #[inline]
-pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
-    let mut out = [0i32; 4];
+pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 8]> {
+    let mut out = [0i32; 8];
     for (d, &stride) in strides.iter().enumerate() {
-        out[4 - N + d] = i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
+        out[8 - N + d] = i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
             message: format!("stride {stride} exceeds i32 range"),
         })?;
     }
@@ -126,10 +126,10 @@ pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4
 }
 
 #[inline]
-fn pad_usize_strides_dyn(strides: &[usize]) -> Result<[i32; 4]> {
-    let mut out = [0i32; 4];
+fn pad_usize_strides_dyn(strides: &[usize]) -> Result<[i32; 8]> {
+    let mut out = [0i32; 8];
     for (d, &stride) in strides.iter().enumerate() {
-        out[4 - strides.len() + d] =
+        out[8 - strides.len() + d] =
             i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
                 message: format!("stride {stride} exceeds i32 range"),
             })?;
@@ -224,7 +224,7 @@ fn validate_dyn_out<T>(out: &CudaBuffer<T>, layout: StridedLayout<'_>) -> Result
 
 #[derive(Clone, Copy)]
 struct BroadcastDyn {
-    strides: [i32; 4],
+    strides: [i32; 8],
     offset: u32,
 }
 
@@ -248,10 +248,10 @@ fn broadcast_dyn_layout(layout: StridedLayout<'_>, out_shape: &[usize]) -> Resul
         });
     }
 
-    let mut strides = [0i32; 4];
+    let mut strides = [0i32; 8];
     let rank_delta = out_shape.len() - layout.shape.len();
     for (out_axis, &out_dim) in out_shape.iter().enumerate() {
-        let dst = 4 - out_shape.len() + out_axis;
+        let dst = 8 - out_shape.len() + out_axis;
         if out_axis < rank_delta {
             strides[dst] = 0;
             continue;
@@ -427,7 +427,7 @@ pub(crate) fn unary_strided_meta<T, const N: usize>(
         StridedMeta {
             shape: pad_shape(out_layout.shape())?,
             a_strides: pad_strides(a_layout.strides())?,
-            b_strides: [0; 4],
+            b_strides: [0; 8],
             out_strides: pad_strides(out_layout.strides())?,
             offsets: [
                 to_u32(a_layout.offset(), "input offset")?,
@@ -707,7 +707,7 @@ where
     let meta = StridedMeta {
         shape: pad_shape_dyn(out.layout.shape)?,
         a_strides: a_layout.strides,
-        b_strides: [0; 4],
+        b_strides: [0; 8],
         out_strides: pad_usize_strides_dyn(out.layout.strides)?,
         offsets: [
             a_layout.offset,
@@ -733,7 +733,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let Some((meta, len)) = binary_strided_meta(&a, &b, &out)? else {
@@ -817,7 +820,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
@@ -850,7 +856,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
@@ -881,7 +890,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let Some((meta, len)) = unary_strided_meta(&a, &out)? else {
@@ -906,7 +918,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
@@ -937,7 +952,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let Some((meta, len)) = scalar_strided_meta(&a, &out)? else {
@@ -975,7 +993,7 @@ where
         StridedMeta {
             shape: pad_shape(out_layout.shape())?,
             a_strides: pad_strides(a_layout.strides())?,
-            b_strides: [0; 4],
+            b_strides: [0; 8],
             out_strides: pad_strides(out_layout.strides())?,
             offsets: [
                 to_u32(a_layout.offset(), "input offset")?,
@@ -1005,7 +1023,10 @@ where
     T: DialectScalar<CudaC> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;

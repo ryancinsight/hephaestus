@@ -72,6 +72,38 @@
   exceeds the unchanged 60-second budget; each implicated test passes alone in
   0.4–3.3 seconds. Independent static judge: approve.
 
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — review <a id="heph-cuda-fusion-2026-09-04"></a>
+
+- **Outcome:** keep Hephaestus as the single GPU implementation owner for
+  Coeus CUDA fusion and WGPU elementwise execution, so Coeus retains only
+  expression and layout adaptation.
+- **Scope / non-goals:** the core fusion seam, CUDA source generation, signed
+  dynamic-layout metadata, provider cache/launch path, WGPU elementwise
+  expressions, rank-eight strided metadata, cross-backend exports, provider
+  conformance, and provider docs. Existing ordinary operation families and
+  Eunomia scalar/layout contracts remain unchanged, except for closing the
+  existing HipC activation-expression gap required by the generic Coeus ROCm
+  bridge; no ROCm implementation is duplicated in Coeus.
+- **Acceptance:** Hephaestus implements the generic core CUDA fusion and WGPU
+  elementwise seams with real backend execution, validates ownership, layouts,
+  broadcasts, empty reductions, output injectivity, and rank-eight metadata,
+  and passes exact provider gates; Coeus can delete its consumer-owned CUDA
+  and WGPU elementwise runtimes without a shim.
+- **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`.
+- **Dependency:** Coeus item
+  `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
+  [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) carries
+  provider revision `1d3d5df` after combined locked no-feature Nextest 142/142
+  and CUDA Nextest 177/177, with strict workspace Clippy passing in both
+  configurations. Static and dynamic rank-eight elementwise plus rank-eight
+  L1/max reduction are differentially verified on the CUDA device. The
+  provider-owned HipC activation expressions close the Coeus ROCm bridge gap
+  without adding a downstream implementation. Independent architectural review
+  is required.
+- **Last-update:** 2026-09-04.
+
+
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
 - **Outcome:** Consume `KernelResourceBudget` through `moirai-gpu`, the

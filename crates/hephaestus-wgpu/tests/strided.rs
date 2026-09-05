@@ -263,6 +263,45 @@ pub(super) fn strided_rank3_batched_matches_cpu() {
     assert_eq!(got, expected);
 }
 
+pub(super) fn strided_rank8_matches_cpu() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let shape = [1, 1, 1, 1, 1, 1, 2, 2];
+    let transposed = Layout::try_new(shape, [4, 4, 4, 4, 4, 4, 1, 2], 0)
+        .expect("valid rank-eight transposed layout");
+    let dense = Layout::c_contiguous(shape).expect("valid rank-eight dense layout");
+    let a_host = [1.0_f32, 2.0, 3.0, 4.0];
+    let b_host = [10.0_f32, 20.0, 30.0, 40.0];
+    let mut expected = [0.0_f32; 4];
+    cpu_reference(
+        &a_host,
+        &transposed,
+        &b_host,
+        &dense,
+        &mut expected,
+        &dense,
+        |x, y| x * y,
+    );
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(4).unwrap();
+    binary_elementwise_strided_into::<MulOp, f32, 8>(
+        &device,
+        op(&a, &transposed),
+        op(&b, &dense),
+        op(&out, &dense),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = [0.0_f32; 4];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+    assert_eq!(got, [10.0, 60.0, 60.0, 160.0]);
+}
+
 pub(super) fn strided_unary_transposed_matches_cpu() {
     let Some(device) = device_or_skip() else {
         return;

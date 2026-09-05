@@ -1,5 +1,6 @@
-use hephaestus_core::{ScanDirection, WindowOperation};
+use hephaestus_core::{FusedReduction, ScanDirection, WindowOperation};
 use std::any::TypeId;
+use std::sync::Arc;
 
 /// Pipeline-cache identity for one compiled CUDA kernel specialization.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -134,4 +135,41 @@ pub(crate) enum PipelineKey {
         entry: &'static str,
         scalar: TypeId,
     },
+}
+
+/// Collision-safe identity for a runtime-generated fusion kernel.
+///
+/// The complete expression is retained in the key. A truncated digest would
+/// let two distinct expressions reuse the wrong compiled kernel.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct FusionPipelineKey {
+    pub(crate) family: TypeId,
+    pub(crate) scalar: TypeId,
+    pub(crate) rank: u32,
+    pub(crate) input_count: u32,
+    pub(crate) reduction: Option<FusedReduction>,
+    pub(crate) expression: Arc<str>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fusion_key_compares_complete_expression_source() {
+        let base = FusionPipelineKey {
+            family: TypeId::of::<()>(),
+            scalar: TypeId::of::<f32>(),
+            rank: 2,
+            input_count: 2,
+            reduction: None,
+            expression: Arc::from("input_0 + input_1"),
+        };
+        let changed = FusionPipelineKey {
+            expression: Arc::from("input_0 - input_1"),
+            ..base.clone()
+        };
+        assert_ne!(base, changed);
+        assert_eq!(base, base.clone());
+    }
 }

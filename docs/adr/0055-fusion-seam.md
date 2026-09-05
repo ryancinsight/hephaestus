@@ -20,6 +20,26 @@ result, and validation failures replay as typed dispatch failures. This removes
 duplicate WGPU compilation and avoids retrying a rejected generated source
 without changing the public fusion seam.
 
+## Revision — 2026-09-04
+
+Hephaestus CUDA now implements the same fusion seam. The provider owns CUDA C
+source generation, Eunomia reduced-precision CUDA preludes and identities,
+runtime-rank signed layout metadata, per-device compilation caching, and kernel
+launch. Coeus is therefore limited to adapting its expression names and
+layouts; it must not retain a second CUDA compiler, metadata ABI, cache, or raw
+launch path. The provider contract suite covers the CUDA implementation under
+both feature-disabled and CUDA-enabled builds; physical-device coverage remains
+the authoritative runtime check.
+
+## Revision — 2026-09-04 (rank-eight CUDA metadata)
+
+The CUDA provider's static strided elementwise and map-reduction contracts now
+use one rank-eight shape/stride metadata representation. Coeus consumes this
+provider capacity through its generic operation bridge; it does not define a
+second metadata ABI, source generator, cache, or launch path. Static and
+dynamic rank-eight elementwise dispatch, plus rank-eight L1 and max reduction,
+remain differentially verified against host layout references.
+
 ## Cross-repository driver
 
 Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02`; Coeus fused elementwise

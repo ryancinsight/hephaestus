@@ -215,6 +215,38 @@ pub struct ThresholdOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ThresholdGradOp;
 
+/// Leaky ReLU activation marker; `first` is the negative slope.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LeakyReluOp;
+
+/// Leaky ReLU gradient marker; `first` is the negative slope.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LeakyReluGradOp;
+
+/// Hardshrink activation marker; `first` is the threshold.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardshrinkOp;
+
+/// Hardshrink gradient marker; `first` is the threshold.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardshrinkGradOp;
+
+/// Softshrink activation marker; `first` is the threshold.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftshrinkOp;
+
+/// Softshrink gradient marker; `first` is the threshold.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftshrinkGradOp;
+
+/// Continuously differentiable exponential linear unit marker; `first` is α.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CeluOp;
+
+/// Continuously differentiable exponential linear unit gradient marker; `first` is α.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CeluGradOp;
+
 impl ParameterizedUnaryExpr<Wgsl> for HardtanhOp {
     const EXPR: &'static str = "select(select(x, second, x > second), first, x < first)";
 }
@@ -229,6 +261,38 @@ impl ParameterizedUnaryExpr<Wgsl> for ThresholdOp {
 
 impl ParameterizedUnaryExpr<Wgsl> for ThresholdGradOp {
     const EXPR: &'static str = "select(0.0, 1.0, x > first)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for LeakyReluOp {
+    const EXPR: &'static str = "select(first * x, x, x >= 0.0)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for LeakyReluGradOp {
+    const EXPR: &'static str = "select(first, 1.0, x >= 0.0)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for HardshrinkOp {
+    const EXPR: &'static str = "select(0.0, x, abs(x) > first)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for HardshrinkGradOp {
+    const EXPR: &'static str = "select(0.0, 1.0, abs(x) > first)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for SoftshrinkOp {
+    const EXPR: &'static str = "select(select(0.0, x - first, x > first), x + first, x < -first)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for SoftshrinkGradOp {
+    const EXPR: &'static str = "select(0.0, 1.0, (x > first) || (x < -first))";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for CeluOp {
+    const EXPR: &'static str = "select(first * (exp(x / first) - 1.0), x, x >= 0.0)";
+}
+
+impl ParameterizedUnaryExpr<Wgsl> for CeluGradOp {
+    const EXPR: &'static str = "select(exp(x / first), 1.0, x >= 0.0)";
 }
 
 macro_rules! impl_c_family {
@@ -247,6 +311,38 @@ macro_rules! impl_c_family {
 
         impl ParameterizedUnaryExpr<$dialect> for ThresholdGradOp {
             const EXPR: &'static str = "x > first ? 1.0 : 0.0";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for LeakyReluOp {
+            const EXPR: &'static str = "x >= 0.0f ? x : first * x";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for LeakyReluGradOp {
+            const EXPR: &'static str = "x >= 0.0f ? 1.0f : first";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for HardshrinkOp {
+            const EXPR: &'static str = "fabsf(x) > first ? x : 0.0f";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for HardshrinkGradOp {
+            const EXPR: &'static str = "fabsf(x) > first ? 1.0f : 0.0f";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for SoftshrinkOp {
+            const EXPR: &'static str = "x > first ? x - first : (x < -first ? x + first : 0.0f)";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for SoftshrinkGradOp {
+            const EXPR: &'static str = "(x > first || x < -first) ? 1.0f : 0.0f";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for CeluOp {
+            const EXPR: &'static str = "x >= 0.0f ? x : first * (expf(x / first) - 1.0f)";
+        }
+
+        impl ParameterizedUnaryExpr<$dialect> for CeluGradOp {
+            const EXPR: &'static str = "x >= 0.0f ? 1.0f : expf(x / first)";
         }
     };
 }
@@ -275,6 +371,18 @@ mod tests {
         assert_eq!(
             <ThresholdGradOp as ParameterizedUnaryExpr<HipC>>::EXPR,
             "x > first ? 1.0 : 0.0"
+        );
+        assert_eq!(
+            <LeakyReluOp as ParameterizedUnaryExpr<Wgsl>>::EXPR,
+            "select(first * x, x, x >= 0.0)"
+        );
+        assert_eq!(
+            <SoftshrinkOp as ParameterizedUnaryExpr<CudaC>>::EXPR,
+            "x > first ? x - first : (x < -first ? x + first : 0.0f)"
+        );
+        assert_eq!(
+            <CeluGradOp as ParameterizedUnaryExpr<HipC>>::EXPR,
+            "x >= 0.0f ? 1.0f : expf(x / first)"
         );
     }
 
