@@ -2,3 +2,8 @@
 
 __pycache__/
 *.pyc
+
+# Built Python extension modules are artefacts, never sources.
+*.pyd
+*.so
+*.whl
