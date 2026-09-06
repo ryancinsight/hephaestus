@@ -41,6 +41,8 @@ pub mod prepared_strided_elementwise;
 pub mod random_seam;
 /// Multi-pass tree reductions.
 pub mod reduction;
+/// Three-dimensional staggered gradient/divergence kernels.
+pub mod staggered;
 /// Device-neutral stateful-update seam implementation.
 pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.

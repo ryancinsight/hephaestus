@@ -90,7 +90,19 @@ than one that admits an edge it does not serve.
 
 ## What remains
 
-CUDA and ROCm implementations of the same trait. Each needs its own kernel; the
-conformance clauses already exist and will judge them on the same three oracles.
-Until then the two backends simply do not implement `Staggered3DOps`, which is
-the honest state and the reason it is a separate trait.
+**Revision 2026-09-06 — CUDA implemented.** `CudaStaggered3DOps` lands the same
+three decisions in CUDA C, verified on a live device (RTX 5080, CUDA 13.3) by
+the differential against the CPU pair at orders 2/4/6/8 on every axis, the
+device-side adjoint identity, and the shared conformance clauses — with the
+sign-flip mutation check repeated to show the differential bites. The decisions
+above are unchanged; only the set of backends implementing them grew.
+
+ROCm remains. Its kernel source would be byte-identical to CUDA's — plain
+CUDA/HIP C, no vendor intrinsics — so it is the second consumer and the source
+consolidates to one shared home rather than being pasted into a second crate;
+the existing per-backend Laplacian sources are the precedent to avoid. It is
+parked because the development host has no AMD device, and the differential
+against the CPU pair is the only oracle that makes a hand-derived gathered
+transpose trustworthy: landing an unverifiable copy is precisely what the
+mutation check exists to prevent. Until it lands, ROCm does not implement
+`Staggered3DOps` — the honest state, and the reason this is a separate trait.
