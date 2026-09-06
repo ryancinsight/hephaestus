@@ -10,7 +10,7 @@
 //! asynchronous instead of silently degrading to synchronous behavior on
 //! pageable memory.
 
-use crate::infrastructure::device::{CudaContext, CurrentContext, cuda_byte_count};
+use crate::infrastructure::device::{CudaContext, CurrentContext};
 use core::marker::PhantomData;
 use eunomia::Pod;
 use hephaestus_core::{HephaestusError, Result};
@@ -67,13 +67,12 @@ impl<T: Pod> PinnedHostBuffer<T> {
                 message: format!("pinned host buffer of {len} elements overflows byte size"),
             }
         })?;
-        let byte_count = cuda_byte_count(byte_len, "pinned host buffer byte size")?;
 
         let mut raw: *mut std::ffi::c_void = std::ptr::null_mut();
         // SAFETY: the context is current (`bind` above); `raw` is a valid
-        // out-pointer for one pointer-sized value; `byte_count` is the exact
+        // out-pointer for one pointer-sized value; `byte_len` is the exact
         // byte size requested, matching `cuMemAllocHost_v2`'s contract.
-        let res = unsafe { cuda_oxide::sys::cuMemAllocHost_v2(&mut raw, byte_count) };
+        let res = unsafe { (context.driver.memory.allocate_host)(&mut raw, byte_len) };
         if res != 0 || raw.is_null() {
             return Err(HephaestusError::AllocationFailed {
                 message: format!("cuMemAllocHost_v2({byte_len} bytes) failed with code {res}"),
@@ -138,19 +137,30 @@ impl<T> Drop for PinnedHostBuffer<T> {
         // between a consumer's `device.bind()` and a raw-handle driver call;
         // restore the previously current context so the drop-time bind cannot
         // silently retarget the dropping thread.
-        let previous = CurrentContext::capture();
+        let Ok(previous) = CurrentContext::capture(self.context.driver) else {
+            // Without the previous context, retain this one resource in
+            // the driver rather than retarget the dropping thread.
+            return;
+        };
         if self.context.bind().is_ok() {
             // SAFETY: `self.ptr` is non-null and was returned by
             // `cuMemAllocHost_v2` in this context; this buffer owns that
             // allocation exactly once and never frees it elsewhere.
-            let res =
-                unsafe { cuda_oxide::sys::cuMemFreeHost(self.ptr.cast::<std::ffi::c_void>()) };
-            debug_assert_eq!(res, 0, "cuMemFreeHost failed with code {res}");
-        } else {
-            debug_assert!(false, "PinnedHostBuffer drop: context bind failed");
+            let res = unsafe {
+                (self.context.driver.memory.free_host)(self.ptr.cast::<std::ffi::c_void>())
+            };
+            if res != 0 {
+                tracing::error!(
+                    operation = "cuMemFreeHost",
+                    status = res,
+                    "CUDA resource release failed; resource retained"
+                );
+                // Preserve thread routing and leave this unreleased
+                // allocation/module with CUDA after a release failure.
+                previous.restore();
+                return;
+            }
         }
-        if let Some(previous) = previous {
-            previous.restore();
-        }
+        previous.restore();
     }
 }

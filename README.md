@@ -27,13 +27,14 @@ hephaestus = "0.19"
 # portable compute
 hephaestus = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
 
-# NVIDIA; needs a CUDA toolkit at build time for headers
+# NVIDIA; execution needs a driver and runtime kernel compilation needs NVRTC
 hephaestus = { version = "0.19", features = ["cuda", "decomposition"] }
 ```
 
 No backend is enabled by default: a default backend would make every consumer of
-the traits pull a device stack, and `cuda`/`rocm` additionally require vendor
-toolkits present at build time.
+the traits pull a device stack. CUDA driver acquisition compiles without a
+toolkit; its kernels compile through NVRTC at runtime. ROCm compilation follows
+its vendor-toolchain requirements.
 
 Feature gating determines what is compiled in; the facade performs no backend
 selection. Select a backend explicitly by naming its device type
@@ -58,7 +59,7 @@ this file.
 | `hephaestus-host` | CPU **reference** device (ADR 0046). Implements the seams over plain host memory via leto so conformance can instantiate a CPU pair for every clause. Correctness first, never a performance path — consumers wanting fast CPU execution use leto directly. |
 | `hephaestus-conformance` | The shared clause suite. One set of contract clauses, generic over `ComputeDevice` and the operation seam, that every backend runs by instantiating rather than re-authoring (ADR 0041). |
 | `hephaestus-wgpu` | Portable wgpu backend (wgpu 30) and the reference implementation of the seam: adapter/device acquisition, typed `WgpuBuffer<T>`, pooled staging transfer, and monomorphized dispatch through ZST op markers with per-`(Op, T, BlockWidth)` WGSL generation. Also owns Metal adapter selection (`WgpuDevice::try_metal`). |
-| `hephaestus-cuda` | Native NVIDIA backend: cuda-oxide device acquisition and context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, transfer, cutile kernel authoring, and monomorphized dispatch across the operation families. `decomposition` implies `cuda`, since its kernels need that substrate. |
+| `hephaestus-cuda` | Native NVIDIA backend: provider-owned driver loading and context binding, `CUdeviceptr` allocation, typed `CudaBuffer<T>`, transfer, NVRTC kernel compilation, and monomorphized dispatch across the operation families. `decomposition` implies `cuda`, since its kernels need that substrate. |
 | `hephaestus-rocm` | Native AMD ROCm/HIP backend: Linux HIP device acquisition, driver-backed limits/topology, typed `RocmBuffer<T>`, and hipRTC/module-launched kernels across the operation families. Needs the `rocm` feature on a ROCm host; `decomposition` adds the factorization surface. |
 | `hephaestus-metal` | **Retired by Accepted [ADR 0047](docs/adr/0047-metal-as-a-wgpu-adapter-preference.md); use `hephaestus-wgpu` directly.** Contains no Metal device API — no `metal::`, no `objc`, no MSL. `MetalDevice` is a newtype over `WgpuDevice` acquired through `WgpuDevice::try_metal`, and every operation forwards to `hephaestus-wgpu`. Metal is an adapter preference of the wgpu backend, not a backend. |
 | `hephaestus-python` | Thin PyO3/NumPy boundary over the Rust WGPU and CUDA device APIs. Wheel-only; not published to crates.io. |

@@ -4,8 +4,6 @@ use crate::application::pipeline::{
 };
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
-#[cfg(feature = "cuda")]
-use crate::infrastructure::device::cuda_byte_count;
 use eunomia::Pod;
 use hephaestus_core::{
     AxisReductionDispatch, AxisReductionMeta, BlockWidth, CombineExpr, ComputeDevice, CudaC,
@@ -100,8 +98,8 @@ where
         // through synchronizing `cuMemFree`-family calls.
         unsafe {
             let bytes = core::mem::size_of::<T>();
-            let byte_count = cuda_byte_count(bytes, "singleton reduction copy byte count")?;
-            let res = cuda_oxide::sys::cuMemcpyDtoD_v2(out.raw(), input.raw(), byte_count);
+
+            let res = (device.driver().memory.copy)(out.raw(), input.raw(), bytes);
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!("cuMemcpyDtoD_v2 failed with code: {res}"),

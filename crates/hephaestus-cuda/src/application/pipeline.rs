@@ -122,13 +122,13 @@ where
             message: format!("kernel name is not a valid CString: {e}"),
         })?;
 
-    let mut module: cuda_oxide::sys::CUmodule = std::ptr::null_mut();
+    let mut module: *mut core::ffi::c_void = std::ptr::null_mut();
     // SAFETY: this device's context is current on this thread (`bind` above);
     // `ptx_c` is a NUL-terminated PTX image kept alive across the call;
     // `module` is a valid out-pointer for one `CUmodule`.
     let compiled = unsafe {
-        let res = cuda_oxide::sys::cuModuleLoadData(
-            &mut module as *mut cuda_oxide::sys::CUmodule,
+        let res = (device.driver().kernel.load)(
+            &mut module as *mut *mut core::ffi::c_void,
             ptx_c.as_ptr() as *const std::ffi::c_void,
         );
         if res != 0 {
@@ -137,17 +137,21 @@ where
             });
         }
 
-        let mut func: cuda_oxide::sys::CUfunction = std::ptr::null_mut();
-        let res = cuda_oxide::sys::cuModuleGetFunction(
-            &mut func as *mut cuda_oxide::sys::CUfunction,
+        let mut func: *mut core::ffi::c_void = std::ptr::null_mut();
+        let res = (device.driver().kernel.function)(
+            &mut func as *mut *mut core::ffi::c_void,
             module as *mut _,
             func_name_c.as_ptr(),
         );
         if res != 0 {
-            let unload = cuda_oxide::sys::cuModuleUnload(module as *mut _);
-            debug_assert_eq!(unload, 0, "cuModuleUnload during error cleanup");
+            let unload = (device.driver().kernel.unload)(module as *mut _);
+            let lookup_failure = format!("cuModuleGetFunction('{func_name}') -> {res}");
             return Err(HephaestusError::DispatchFailed {
-                message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
+                message: if unload == 0 {
+                    lookup_failure
+                } else {
+                    format!("{lookup_failure}; cuModuleUnload during cleanup -> {unload}")
+                },
             });
         }
 
@@ -257,7 +261,7 @@ pub(crate) fn launch_kernel(
     // routes through `cuMemFree`-family calls, which the driver orders after
     // in-flight work on the default stream (implicit synchronization on free).
     let res = unsafe {
-        cuda_oxide::sys::cuLaunchKernel(
+        (device.driver().kernel.launch)(
             kernel.func,
             config.grid.0,
             config.grid.1,

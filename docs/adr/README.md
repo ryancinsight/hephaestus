@@ -9,7 +9,7 @@
 
 | ADR | Title | Status |
 | --- | ----- | ------ |
-| [0001](0001-cuda-backend.md) | CUDA backend composing cuda-oxide + cutile | Accepted |
+| [0001](0001-cuda-backend.md) | Provider-owned CUDA driver boundary | Accepted |
 | [0002](0002-atlas-compute-boundaries.md) | Atlas compute-boundary integration | Accepted |
 | [0003](0003-blocked-decomposition-consolidation.md) | Blocked-decomposition host-loop consolidation | Accepted |
 | [0004](0004-wg-p4-composite-op-submit-batching.md) | WG-P4 composite-op submit batching (norm_l2 / matpow) | Accepted |

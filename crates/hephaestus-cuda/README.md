@@ -9,8 +9,8 @@ consumers reach it through the `hephaestus` facade as `hephaestus::cuda`.
 ## What it provides
 
 - Device acquisition, context binding, `CUdeviceptr` allocation, typed
-  `CudaBuffer<T>`, and host/device transfer through cuda-oxide.
-- Kernel authoring above that substrate through cutile.
+  `CudaBuffer<T>`, and host/device transfer through its owned CUDA driver ABI.
+- Runtime CUDA kernel compilation through NVRTC above that substrate.
 - Monomorphized elementwise, reduction, scan, map-reduction, linalg, sparse,
   volume, and Laplacian dispatch through the shared ZST operation markers, with
   native compiled kernels retained for prepared plans and repeated dispatch.
@@ -23,8 +23,9 @@ consumers reach it through the `hephaestus` facade as `hephaestus::cuda`.
 
 ## Requirements and features
 
-The `cuda` feature enables the native backend and needs a CUDA toolkit at build
-time for headers. Without it the crate still compiles, and
+The `cuda` feature enables the native backend without build-time CUDA headers
+or import libraries. Execution needs an NVIDIA driver; runtime kernel
+compilation additionally needs NVRTC. Without the feature the crate compiles, and
 `CudaDevice::try_default` reports the backend unavailable rather than
 fabricating a device.
 

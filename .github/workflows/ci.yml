@@ -12,8 +12,8 @@ name: CI
 # This job is host-side only and deliberately does not touch the device
 # packages' tests: those need their architectures and already have them. What
 # it does cover the whole workspace with is the checks that need no device --
-# every backend loads its driver dynamically (`cuda` is `cuda-oxide` plus
-# `libloading`, `rocm`'s HIP dependency is behind an off-by-default feature),
+# every backend loads its driver dynamically (CUDA owns its ABI and library
+# lifetime; ROCm's HIP dependency is behind an off-by-default feature),
 # so all of it compiles and lints on a bare runner.
 
 on:

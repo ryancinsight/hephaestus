@@ -24,7 +24,7 @@ use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 #[cfg(feature = "cuda")]
-type DevicePtr = cuda_oxide::sys::CUdeviceptr;
+use crate::infrastructure::buffer::DevicePtr;
 #[cfg(not(feature = "cuda"))]
 type DevicePtr = u64;
 

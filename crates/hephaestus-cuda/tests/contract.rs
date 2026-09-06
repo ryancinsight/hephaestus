@@ -1134,6 +1134,38 @@ fn linalg_norms_match_cpu_reference() {
 }
 
 #[test]
+fn linalg_norm_preserves_large_periodic_sum() {
+    let Some(dev) = device("linalg_norm_preserves_large_periodic_sum") else {
+        return;
+    };
+    let host: Vec<f32> = (0..1 << 20)
+        .map(|index| (index % 17) as f32 - 8.0)
+        .collect();
+    let input = dev.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([host.len()]).unwrap();
+    let operand = StridedOperand {
+        buffer: &input,
+        layout: &layout,
+    };
+
+    // 61_680 complete periods of [-8, ..., 8] contribute 408 each;
+    // the remaining [-8, ..., 7] contributes 344. Every partial through
+    // the penultimate binary reduction level is an integer below 2^24,
+    // and the final sum 25_165_784 is even and exactly representable.
+    // Both paths therefore reach the same correctly rounded square root.
+    let expected = 25_165_784.0_f32.sqrt();
+    let immediate = norm_l2(&dev, operand).unwrap();
+    let prepared = prepare_norm_l2(&dev, operand).unwrap();
+    prepared.dispatch().unwrap();
+
+    for output in [&immediate, prepared.output()] {
+        let mut actual = [0.0_f32; 1];
+        dev.download(output, &mut actual).unwrap();
+        assert_eq!(actual[0], expected);
+    }
+}
+
+#[test]
 fn linalg_rank8_norms_match_cpu_reference() {
     let Some(dev) = device("linalg_rank8_norms_match_cpu_reference") else {
         return;
@@ -4017,21 +4049,16 @@ fn dense_vector_ops_match_cpu_reference() {
 /// and this clause needs no device, so it guards on every runner.
 #[test]
 fn the_buffer_limit_is_built_from_total_device_memory_not_the_free_reading() {
-    let source = include_str!("../src/infrastructure/device.rs");
+    let source = include_str!("../src/infrastructure/device/properties.rs");
     let body = source
         .split_once("fn query_device_limits(")
         .map(|(_, tail)| tail)
-        .and_then(|tail| {
-            tail.split_once(
-                "
-fn ",
-            )
-        })
+        .and_then(|tail| tail.split_once("\npub(super) fn query_device_features("))
         .map(|(body, _)| body)
         .expect("query_device_limits must be present");
 
     assert!(
-        body.contains("let (_, total_bytes) = current_memory_info()?;"),
+        body.contains("let (_, total_bytes) = current_memory_info(driver)?;"),
         "query_device_limits must take the total half of current_memory_info"
     );
     assert!(

@@ -27,11 +27,9 @@ use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
 use crate::infrastructure::compiler::SafeCachedKernel;
 use crate::infrastructure::device::CudaDevice;
-#[cfg(feature = "cuda")]
-use crate::infrastructure::device::cuda_byte_count;
 
 #[cfg(feature = "cuda")]
-type DevicePtr = cuda_oxide::sys::CUdeviceptr;
+use crate::infrastructure::buffer::DevicePtr;
 #[cfg(not(feature = "cuda"))]
 type DevicePtr = u64;
 
@@ -239,11 +237,10 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         self.device.bind()?;
         #[cfg(feature = "cuda")]
         {
-            let byte_count = cuda_byte_count(byte_len, "command stream copy byte count")?;
             // SAFETY: `src` and `dst` are device pointers allocated by this
             // device, lengths are equal, and `byte_len` was derived from that
             // checked element count.
-            let res = unsafe { cuda_oxide::sys::cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_count) };
+            let res = unsafe { (self.device.driver().memory.copy)(dst.raw(), src.raw(), byte_len) };
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!(
@@ -281,10 +278,9 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         self.device.bind()?;
         #[cfg(feature = "cuda")]
         {
-            let byte_count = cuda_byte_count(byte_len, "command stream prefix copy byte count")?;
             // SAFETY: `src` and `dst` are device pointers allocated by this
             // device, and `elements` is bounded by both typed buffer lengths.
-            let res = unsafe { cuda_oxide::sys::cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_count) };
+            let res = unsafe { (self.device.driver().memory.copy)(dst.raw(), src.raw(), byte_len) };
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!(
@@ -311,10 +307,9 @@ impl<'d> CommandStream<'d, CudaDevice> for CudaCommandStream<'d> {
         self.device.bind()?;
         #[cfg(feature = "cuda")]
         {
-            let byte_count = cuda_byte_count(byte_len, "command stream fill byte count")?;
             // SAFETY: `dst` is a device pointer allocated by this device and
             // `byte_len` is the valid allocation byte length for the buffer.
-            let res = unsafe { cuda_oxide::sys::cuMemsetD8_v2(dst.raw(), 0, byte_count) };
+            let res = unsafe { (self.device.driver().memory.fill)(dst.raw(), 0, byte_len) };
             if res != 0 {
                 return Err(HephaestusError::TransferFailed {
                     message: format!(
