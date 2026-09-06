@@ -78,7 +78,7 @@ pub struct DeviceLimits {
 /// The compute-device seam every accelerator backend implements.
 ///
 /// This trait is a **deliberate extension seam** (atlas ADR 0001): the wgpu
-/// backend, the CUDA backend (cuda-oxide + cutile composed), and the ROCm
+/// backend, the CUDA backend, and the ROCm
 /// backend substitute here without consumers changing. It is intentionally
 /// *not* sealed — new backend crates in the hephaestus workspace implement it.
 /// Consumers bind generically

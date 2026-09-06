@@ -1,16 +1,8 @@
 # Backlog — hephaestus
 
 <a id="heph-cuda-driver-boundary"></a>
-## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — in-progress
-
-- **Integrator:** codex/root; **last-update:** 2026-09-05; consumer [APOLLO-CUDA-CRT-LINKAGE](../apollo/backlog.md#apollo-cuda-crt-linkage).
-- **Outcome:** replace `cuda-oxide` with the provider's native dynamically loaded driver boundary, preserving the public compute seam and numeric driver errors.
-- **Scope:** eleven CUDA binding callers, private ABI/loader, manifest/lock, transfer contracts, crate docs and governing ADR 0001; Atlas ADR 0001 is the parent decision. No FFT kernel or license-policy changes.
-- **Evidence:** `infrastructure/device.rs::current_memory_info` supplies dependency `size_t = c_ulong` outputs to `cuMemGetInfo_v2`; Windows x64 supplies 32-bit storage where CUDA 13.3 requires 64-bit outputs. The same dependency also links `cuda.lib` with LIBCMT and violates Apollo's all-feature license policy.
-- **Acceptance:** header-grounded pointer-sized byte counts and opaque-handle ABI; owned library lifetime; distinct absence, symbol, initialization and operation errors; dependency absent from the activated graph; no static CUDA import library.
-- **Verification:** existing physical-device memory/transfer/context/kernel contracts, ABI assertions, warning-denied Windows link, provider tests and Apollo all-feature license/integration gates.
-- **Decision:** revise ADR 0001's contradictory dependency prescription against its no-toolkit dynamic-loading contract; first-party `libloading` use already supplies the loader mechanism.
-- **Begun:** read-only caller/header audit and dependency closure complete at `2c6ffc2`; implementation will reuse the clean existing master lane after its board claim is visible. This scope is disjoint from the live WGPU provider item.
+## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — done
+- Native driver ownership and ABI delivered in [PR #277](https://github.com/ryancinsight/hephaestus/pull/277), merge `242520e`; [ADR 0001](docs/adr/0001-cuda-backend.md), [Atlas item](../../backlog.md#atlas-cuda-driver-boundary), [Apollo consumer](../apollo/backlog.md#apollo-cuda-crt-linkage).
 
 ## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — review <a id="heph-wgpu-consumer-2026-09-04"></a>
 
@@ -23,7 +15,7 @@
 - **Acceptance:** `hephaestus-wgpu` has no `moirai-runtime` or `moirai-gpu`
   dependency, provider-owned functionality remains real and warning-clean, and
   the generic `ComputeDevice` seam remains usable by downstream adapters. ADR
-  [`0057`](docs/adr/0057-provider-consumer-dependency-direction.md).
+  [`0058`](docs/adr/0058-provider-consumer-dependency-direction.md).
 - **Integrator:** atlas-session; branch `arch/moirai-hephaestus-gpu-route`;
   consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
 - **Delivery:** PR [#272](https://github.com/ryancinsight/hephaestus/pull/272) at
@@ -31,6 +23,128 @@
   module nextest and format gate pass. The full WGPU gate still contains the
   pre-existing `application::stream::tests::module_cases_share_process_state`
   timeout and remains unclaimed follow-up work.
+
+<a id="heph-cuda-adapterless-driver"></a>
+## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — in-progress
+
+- **Integrator:** codex/root; **last-update:** 2026-09-06; scope `.github/workflows/cuda.yml` on a separate default-based fix.
+- **Outcome:** adapterless CUDA tests observe driver absence instead of the toolkit's nonfunctional stub driver; preserve native driver error statuses and test contracts.
+- **Evidence:** hosted master run `34010125103` injects the stub `libcuda.so.1` through `LD_LIBRARY_PATH`; `cuInit` returns 34 and the rectangular contract correctly rejects the driver fault. Atlas log: `output/cuda-driver-boundary/provider-ci-failure.txt`.
+- **Acceptance:** hosted no-device contracts pass without an injected stub; status 34 remains an initialization failure and required-device tests continue rejecting arbitrary driver faults.
+- **Verification:** workflow inspection and hosted CUDA gate on the exact fix revision; no native driver or numerical changes.
+
+<a id="heph-nvrtc-loader-errors"></a>
+## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
+
+- **Outcome/scope:** preserve library, directory-enumeration and missing-export errors in `infrastructure/compiler.rs` runtime compiler acquisition; no driver ABI or mathematical kernel change.
+- **Evidence:** `NvrtcDriver::get` discards required-symbol errors with `.ok()?`; `find_nvrtc_library` suppresses library and directory errors, reporting every failure as unavailable.
+- **Acceptance:** real absent-library, present-invalid-library and missing-export cases retain their identities and error categories; existing real-device kernel compilation and dispatch contracts pass.
+- **Dependencies/authority:** the native driver boundary item; authorized provider change, separate compiler acquisition contract.
+- **Verification:** locked warning-denied checks, required-device bounded Nextest, native-loader failure tests and independent review; no fake compiler or weakened runtime budgets.
+
+## HEPH-STAGGERED-3D-2026-09-04 — Device 3-D staggered gradient/divergence pair [minor] [arch] — review <a id="heph-staggered-3d-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/hephaestus-staggered-3d`; **lease:**
+  `crates/hephaestus-core/src/domain/staggered.rs`,
+  `crates/hephaestus-wgpu/src/application/stencil/`,
+  `crates/hephaestus-metal/src/application/stencil.rs`,
+  `crates/hephaestus-conformance/src/staggered.rs`, `Cargo.lock` — 2026-09-04.
+- **Outcome:** the device half of `leto_ops::StaggeredLeapfrog3D`.
+  `Staggered3DOps<D>` with `Staggered3DParams` and `StaggeredAxis` in
+  hephaestus-core, WGSL kernels in hephaestus-wgpu, Metal by delegation, and
+  shared conformance clauses. Completes the CPU/GPU seam Coeus PR #369 opened:
+  a consumer binds one trait and reaches either backend.
+- **Separate trait, not new methods on `StencilOps`:** a backend without
+  staggered kernels would otherwise have to supply bodies, and a body returning
+  zeros or an error is a mock wearing a trait impl. CUDA and ROCm advertise the
+  capability when they have it (`HEPH-STAGGERED-3D-CUDA-ROCM`).
+- **The divergence gathers.** Leto scatters `-Gᵀ`, which makes the adjoint true
+  by construction; a GPU cannot scatter without atomics, so the kernel gathers a
+  transpose derived by hand — including the wall closure the CPU comment warns
+  is the easy thing to get wrong. The derivation is written out in the module
+  docs and is checked three ways rather than trusted.
+- **Taps are a parameter, not derived in core.** hephaestus-core carries Leto
+  layout vocabulary and no CPU compute dependency (atlas ADR 0001); a linear
+  solve there would be exactly the dependency that boundary excludes. The caller
+  passes `leto_ops::staggered_first_derivative_coefficients` output, and the
+  conformance clauses close the gap that opens.
+- **Documented capability difference:** the device kernels require
+  `extent >= 2N` on the swept axis so one reflection step is exact.
+  `Staggered3DParams::new` rejects thinner grids with a typed error; Leto's
+  looping reflection still serves them on the CPU. A rejected configuration,
+  not a silent divergence.
+- **Evidence (2026-09-04):** `cargo fmt --check`, `cargo clippy --locked
+  --workspace --all-targets -- -D warnings`, `cargo nextest run --locked -p
+  hephaestus-core -p hephaestus-host -p hephaestus` **121/121**, `cargo test
+  --locked --doc --workspace --exclude hephaestus-python`, `cargo doc --locked
+  --workspace --no-deps` warning-free. The WGPU contract suite ran against a
+  **live adapter** with `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1`: **187/187** cases,
+  up from 179, the eight new ones being the CPU differential on every axis at
+  orders 2/4/6/8, the constant-field wall check, the device-side adjoint
+  identity, the thin-grid rejection, the storage-length rejection, and the
+  shared conformance clause.
+- **The differential tests were proven live, not assumed:** flipping the sign of
+  the low-wall reflected term in the gathered divergence failed exactly
+  `staggered_divergence_matches_cpu_on_every_axis`,
+  `staggered_high_order_matches_cpu`, and `the_device_pair_is_a_negative_adjoint`
+  — the three that should catch it — and the mutation was reverted.
+- **Decision record:** [ADR 0057](docs/adr/0057-device-staggered-pair.md).
+- **Follow-on:** `HEPH-STAGGERED-3D-CUDA-ROCM` — CUDA and ROCm kernels for the
+  same trait. The conformance clauses already exist and judge them on the same
+  three oracles; until then those backends simply do not implement
+  `Staggered3DOps`, which is the honest state and the reason it is a separate
+  trait.
+- **Last-update:** 2026-09-04.
+
+## HEPH-PROVIDER-MERGED-2026-09-04 [patch] [arch] — review <a id="heph-provider-merged-2026-09-04"></a>
+
+- **Integrator:** Codex on `build/hephaestus-source-identity`; **lease:** none.
+- **Outcome:** remove obsolete Aequitas, Eunomia, Leto, and Moirai revision
+  pins after merge so Hephaestus exports one layout and numeric type identity.
+- **Acceptance:** standalone source scans and Apollo NUFFT compile use one
+  Eunomia and Leto identity; WGPU-backed crates share the serialized test
+  resource; configured Hephaestus gates pass; no consumer
+  patch or conversion layer is introduced.
+- **Dependencies:** Aequitas #51, Eunomia #87, Leto #168, and Moirai #256 are
+  merged; **Last-update:** 2026-09-04.
+- **Evidence:** source graph has one Eunomia and one Leto identity at Leto
+  `3c1f9f1`; rejected Mnemosyne PR head `a07f999` is absent; all-target
+  check and Clippy, format, focused WGPU/Python tests, doctests, and rustdoc
+  pass. The full 435-test run reaches 406 passes before a serialized WGPU test
+  exceeds the unchanged 60-second budget; each implicated test passes alone in
+  0.4–3.3 seconds. Independent static judge: approve.
+
+## HEPH-CUDA-FUSION-2026-09-04 [minor] [arch] — review <a id="heph-cuda-fusion-2026-09-04"></a>
+
+- **Outcome:** keep Hephaestus as the single GPU implementation owner for
+  Coeus CUDA fusion and WGPU elementwise execution, so Coeus retains only
+  expression and layout adaptation.
+- **Scope / non-goals:** the core fusion seam, CUDA source generation, signed
+  dynamic-layout metadata, provider cache/launch path, WGPU elementwise
+  expressions, rank-eight strided metadata, cross-backend exports, provider
+  conformance, and provider docs. Existing ordinary operation families and
+  Eunomia scalar/layout contracts remain unchanged, except for closing the
+  existing HipC activation-expression gap required by the generic Coeus ROCm
+  bridge; no ROCm implementation is duplicated in Coeus.
+- **Acceptance:** Hephaestus implements the generic core CUDA fusion and WGPU
+  elementwise seams with real backend execution, validates ownership, layouts,
+  broadcasts, empty reductions, output injectivity, and rank-eight metadata,
+  and passes exact provider gates; Coeus can delete its consumer-owned CUDA
+  and WGPU elementwise runtimes without a shim.
+- **Integrator:** atlas-session; branch `arch/hephaestus-cuda-fusion-001`.
+- **Dependency:** Coeus item
+  `COEUS-HEPHAESTUS-CUDA-FUSION-001`; existing provider fusion seam is
+  [ADR 0055](docs/adr/0055-fusion-seam.md).
+- **Delivery:** PR [#274](https://github.com/ryancinsight/hephaestus/pull/274) carries
+  provider revision `1d3d5df` after combined locked no-feature Nextest 142/142
+  and CUDA Nextest 177/177, with strict workspace Clippy passing in both
+  configurations. Static and dynamic rank-eight elementwise plus rank-eight
+  L1/max reduction are differentially verified on the CUDA device. The
+  provider-owned HipC activation expressions close the Coeus ROCm bridge gap
+  without adding a downstream implementation. Independent architectural review
+  is required.
+- **Last-update:** 2026-09-04.
+
 
 ## HEPH-SEMVER-BUDGET-IDENTITY-2026-09-03 [patch] [arch] — done <a id="heph-semver-budget-identity-2026-09-03"></a>
 
@@ -44,14 +158,12 @@
 - **Acceptance:** Hephaestus constructs `moirai_gpu::KernelResourceBudget`,
   no direct `mnemosyne-memory-core` edge remains, standalone locked checks and
   warning-denied provider gates pass, and the hosted SemVer failure is removed.
-- **Follow-up source edge:** Leto PR #164 (`1caa846`) is temporarily pinned so
-  Hephaestus does not reintroduce Leto's pre-Hermes/Moirai-identity dependency
-  graph; remove that pin after the Leto PR merges and regenerate `Cargo.lock`.
+- **Follow-up source edge:** closed by `HEPH-PROVIDER-MERGED-2026-09-04` after
+  the corrected Leto and Moirai provider changes merged.
 - **Risk / delivery:** [patch] internal dependency ownership. Merged as PR
   #270 at `7d0a474`; hosted SemVer, CUDA, ROCm, WGPU, Metal, host, lockfile,
-  and documentation gates pass. Moirai PR #256 remains pinned at `773c117`
-  until it merges; that pin is the recorded follow-up source edge, not a
-  blocker for this item.
+  and documentation gates pass. The temporary Moirai pin was removed after PR
+  #256 merged under `HEPH-PROVIDER-MERGED-2026-09-04`.
 
 ## HEPH-EUNOMIA-LAYOUT-SEAM-2026-09-03 [major] [arch] — done <a id="heph-eunomia-layout-seam-2026-09-03"></a>
 
@@ -67,11 +179,11 @@
   markers; host↔device byte views use `eunomia::layout` with no copy added;
   all first-party crates compile and their value-semantic suites pass; direct
   source and manifest scans contain no Hephaestus-owned `bytemuck` contract.
-- **Dependencies / risk:** Eunomia PR #87 is pending at `fdbf122`; Hephaestus
-  pins that revision, with Aequitas PR #51 still pinned for the same
-  source-identity sweep. Leto PR #163 merged at `d8229cf`, so its temporary
-  revision is removed here. This breaks the public generic bound and is a major
-  co-evolution change; vendor transitive graphs remain outside this item.
+- **Dependencies / risk:** The co-evolution pins used while Eunomia PR #87 and
+  Aequitas PR #51 were open were removed after merge by
+  `HEPH-PROVIDER-MERGED-2026-09-04`. This breaks the public generic bound and is
+  a major co-evolution change; vendor transitive graphs remain outside this
+  item.
 - **Evidence:** all-target check, valid feature Clippy, format, lockfile check,
   default nextest (437/437), CUDA (165/165), WGPU (34/34), host/core (121/121),
   doctests, and warning-denied rustdoc pass. **Commit:** `c24de79`. **Last-update:** 2026-09-03.
@@ -834,20 +946,10 @@
   evidence shows the n² host→device transfer removed. `GpuCholesky::inner`
   keeps its host array; only the redundant upload goes.
 
-## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — todo (external blocker)
+<a id="heph-cuda-oxide-memcpy2d-abi"></a>
+## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — in-progress
 
-- Owner: unclaimed; root cause is upstream (cuda-oxide), outside the
-  allowlist — external integration requirement.
-- Outcome: replace the per-row 2-D region-copy workaround with one
-  `cuMemcpy2DAsync` per region once upstream fixes the ABI.
-- Evidence (audit 2026-08-27):
-  `crates/hephaestus-cuda/src/application/decomposition/region.rs` enqueues
-  per-row 1-D copies because cuda-oxide 0.4.0 generates `size_t` as
-  `c_ulong`, making `CUDA_MEMCPY2D` layout-incompatible with the CUDA driver
-  ABI on Windows/MSVC (module doc records this).
-- Re-open trigger: a cuda-oxide release with a corrected `CUDA_MEMCPY2D`
-  layout on Windows/MSVC; verify the struct layout against the driver header
-  before adopting.
+- Incorporated into [HEPH-CUDA-DRIVER-BOUNDARY](#heph-cuda-driver-boundary); provider-owned ABI replaces the upstream dependency and per-row workaround.
 
 ## ✅ HEPH-CUDA-LIMITS-SEMANTICS [minor] — done 2026-09-02
 
@@ -1113,7 +1215,7 @@
   class weighting or ignored labels, and performance claims without matched
   measurement.
 - Dependencies: merged Leto 0.40 cross-entropy oracle and its Eunomia 0.8/rkyv
-  0.8 provider graph; WGPU 30, cuda-oxide 0.4, and the existing HIP toolchain.
+  0.8 provider graph; WGPU 30, the native CUDA driver boundary, and the existing HIP toolchain.
 - Acceptance: one core loss seam validates complete requests before dispatch;
   all four providers pass shared f32 forward/backward and typed rejection
   contracts without host payload transfer or fallback; warning-denied gates,
@@ -1446,8 +1548,7 @@
   lost; the sparse-seam content is disjoint.
 
 Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
-Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
-cuda-oxide + cutile).
+Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.md).
 
 ## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — done
 
@@ -4244,30 +4345,9 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     build ad-hoc `encode_*` variants now that KS-3 would make redundant for
     these call sites; re-open WG-P4 independently only if KS-3 stalls or
     excludes this op family.
-- [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
-  (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
-  with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
-  null-stream kernel completion explicit before later host touchpoints. The
-  Stage 1 substrate also follows ADR-0001 directly: cuda-oxide initializes the
-  driver, creates/binds the context, allocates device memory with
-  `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte counts, and frees
-  with context-bound `cuMemFree_v2`. CUDA allocation hints resolve through one
-  non-managed primary-buffer tier: all allocatable placement hints are recorded
-  as `MemoryTier::Device`, budget-only tiers are rejected, and
-  `MappablePrimaryBuffers` is false. This removes the managed-memory path that
-  triggered WDDM `STATUS_IN_PAGE_ERROR` faults. The blocked-decomposition
-  region helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
-  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: focused live-CUDA
-  `cargo nextest run -p hephaestus-cuda
-  reduction_sum_matches_cpu_reference reduction_min_max_matches_cpu_reference
-  reduction_width_is_part_of_dispatch_contract
-  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
-  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
-  hessenberg_reconstructs_and_preserves_similarity_invariants
-  non_default_block_width_produces_identical_results` passes 9/9. Residual
-  tracking is limited to the documented concurrent-device-acquisition case;
-  current focused evidence is `cargo nextest run -p hephaestus-cuda
-  concurrent_device_acquisition_is_safe` (1/1).
+- [KS-8] [patch] CUDA managed-memory WDDM aborts — done (2026-07-06).
+  Context-bound device allocations replace managed memory; current driver and
+  transfer contracts live in [ADR 0001](docs/adr/0001-cuda-backend.md).
 - [KS-9] [minor] `hephaestus-metal` decision: retain the dedicated typed
   backend crate over wgpu-Metal. Status: **done** (2026-07-24). The crate owns
   `MetalDevice`/`MetalBuffer`, preserves the backend-neutral application
@@ -4585,18 +4665,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
 - [x] [patch] Fix `as usize` casts on test-only `u64` values in
   `pipeline.rs` tests; replaced with `try_into().expect("invariant: ...")`.
 
-## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
-- [x] [arch] Gating ADR accepted: `docs/adr/0001-cuda-backend.md` — cuda-oxide
-  owns the device substrate (driver/context/streams/memory/transfers, mapping
-  one-to-one onto `ComputeDevice`), cutile owns tile/PTX kernel authoring,
-  with a strict SoC boundary between them; dynamic driver loading preserves
-  no-toolkit-to-compile; adapterless hosts skip like the wgpu suite.
-- [x] [arch] `hephaestus-cuda` stage 1: device substrate on cuda-oxide
-  (acquisition, typed `PhantomData<T>` buffers, transfers) + contract tests.
-- [x] [minor] Stage 2: elementwise/reduction kernels via cutile; stage 3:
-  strided variants over the shared packed layout metadata.
-- [x] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
-  the wgpu backend and CPU references.
+## Phase 2: CUDA backend [arch]
+
+- Current substrate contract: [ADR 0001](docs/adr/0001-cuda-backend.md).
+- Native boundary verification: [HEPH-CUDA-DRIVER-BOUNDARY](#heph-cuda-driver-boundary).
 
 ## Phase 2.5: heterogeneous topology integration (atlas ADR 0002) [arch]
 - [x] [minor] Placement-aware allocation: thread themis `PlacementHint` /

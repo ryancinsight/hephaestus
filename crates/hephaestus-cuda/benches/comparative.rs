@@ -22,6 +22,21 @@ fn per_iteration(elapsed: Duration) -> Duration {
     elapsed / u32::try_from(ITERATIONS).expect("invariant: benchmark iterations fit u32")
 }
 
+fn expected_map_reduction_norm() -> f32 {
+    // The input repeats [-8, ..., 8]. Each period contributes
+    // 2 * sum(k^2, k=1..8) = 408; only the final prefix remains.
+    // For 2^20 elements the exact sum is 25_165_784, representable in
+    // binary32. A serial binary32 sum instead gives 25_001_304 because
+    // unit increments round away above 2^24, invalidating that oracle.
+    let remainder: f32 = (0..ELEMENTWISE_LEN % 17)
+        .map(|index| {
+            let value = index as f32 - 8.0;
+            value * value
+        })
+        .sum();
+    ((ELEMENTWISE_LEN / 17) as f32 * 408.0 + remainder).sqrt()
+}
+
 fn assert_close(actual: &[f32], expected: &[f32], tolerance: f32) {
     assert_eq!(actual.len(), expected.len());
     for (index, (&actual, &expected)) in actual.iter().zip(expected).enumerate() {
@@ -196,7 +211,7 @@ fn benchmark_map_reductions(device: &CudaDevice) {
 
     let expected_dot: f32 = host.iter().zip(&rhs_host).map(|(&a, &b)| a * b).sum();
     let expected_l1: f32 = host.iter().map(|value| value.abs()).sum();
-    let expected_l2 = host.iter().map(|value| value * value).sum::<f32>().sqrt();
+    let expected_l2 = expected_map_reduction_norm();
     let expected_max = host
         .iter()
         .map(|value| value.abs())
@@ -279,7 +294,7 @@ fn benchmark_prepared_map_reductions(device: &CudaDevice) {
         layout: &layout,
     };
     let expected_dot: f32 = host.iter().zip(&rhs_host).map(|(&a, &b)| a * b).sum();
-    let expected_l2 = host.iter().map(|value| value * value).sum::<f32>().sqrt();
+    let expected_l2 = expected_map_reduction_norm();
 
     let prepared_dot = prepare_dot(device, operand, rhs_operand).unwrap();
     let prepared_l2 = prepare_norm_l2(device, operand).unwrap();

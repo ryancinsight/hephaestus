@@ -6,9 +6,9 @@ use hephaestus_core::DeviceBuffer;
 
 /// A raw CUDA device pointer (`CUdeviceptr`), an opaque device address.
 ///
-/// Kept as cuda-oxide's driver ABI type without exposing cuda-oxide in public
+/// Kept as the CUDA driver's driver ABI type without exposing the CUDA driver in public
 /// APIs; consumers see an opaque integer address for custom kernel launches.
-pub type DevicePtr = cuda_oxide::sys::CUdeviceptr;
+pub type DevicePtr = u64;
 
 /// A typed, device-resident linear buffer of `len` elements of `T`.
 ///
@@ -65,6 +65,15 @@ impl<T> CudaBuffer<T> {
     pub(crate) fn aliases<U>(&self, other: &CudaBuffer<U>) -> bool {
         self.ptr != 0 && self.ptr == other.ptr
     }
+
+    /// Return whether this allocation belongs to `device`'s CUDA context.
+    #[must_use]
+    #[inline]
+    pub(crate) fn belongs_to(&self, device: &crate::CudaDevice) -> bool {
+        self.context
+            .as_ref()
+            .is_some_and(|context| std::sync::Arc::ptr_eq(context, device.cuda_context()))
+    }
 }
 
 impl<T> DeviceBuffer<T> for CudaBuffer<T> {
@@ -89,7 +98,11 @@ impl<T> Drop for CudaBuffer<T> {
             // driver call (`cuLaunchKernel` over `raw`); restore the
             // previously current context so the drop-time bind cannot
             // silently retarget the dropping thread.
-            let previous = CurrentContext::capture();
+            let Ok(previous) = CurrentContext::capture(context.driver) else {
+                // Without the previous context, retain this one resource in
+                // the driver rather than retarget the dropping thread.
+                return;
+            };
             if context.bind().is_ok() {
                 // Drop soundness. A buffer may still be referenced by a kernel
                 // in flight when it is dropped, so the free must not take
@@ -118,20 +131,31 @@ impl<T> Drop for CudaBuffer<T> {
                     // context, and this buffer owns that allocation exactly
                     // once. Freeing on the same stream orders the release
                     // after every prior use of the pointer on it.
-                    unsafe { cuda_oxide::sys::cuMemFreeAsync(self.ptr, std::ptr::null_mut()) }
+                    unsafe { (context.driver.memory.free_ordered)(self.ptr, std::ptr::null_mut()) }
                 } else {
                     // SAFETY: `self.ptr` is non-null (guarded above), was
-                    // returned by cuda-oxide's `cuMemAlloc_v2` in this context,
+                    // returned by the CUDA driver's `cuMemAlloc_v2` in this context,
                     // and this buffer owns that allocation exactly once.
-                    unsafe { cuda_oxide::sys::cuMemFree_v2(self.ptr) }
+                    unsafe { (context.driver.memory.free)(self.ptr) }
                 };
-                debug_assert_eq!(res, 0, "device free failed with code {res}");
-            } else {
-                debug_assert!(false, "CudaBuffer drop: context bind failed");
+                if res != 0 {
+                    let operation = if context.stream_ordered {
+                        "cuMemFreeAsync"
+                    } else {
+                        "cuMemFree_v2"
+                    };
+                    tracing::error!(
+                        operation,
+                        status = res,
+                        "CUDA buffer release failed; allocation retained"
+                    );
+                    // Preserve thread routing and leave this unreleased
+                    // allocation/module with CUDA after a release failure.
+                    previous.restore();
+                    return;
+                }
             }
-            if let Some(previous) = previous {
-                previous.restore();
-            }
+            previous.restore();
         }
     }
 }

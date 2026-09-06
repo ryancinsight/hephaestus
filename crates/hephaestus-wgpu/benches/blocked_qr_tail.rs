@@ -7,6 +7,8 @@
 //! the same device-resident input and waits for completion; a separate value
 //! check compares the complete `R` factor against Leto before measurement.
 
+#![cfg(feature = "decomposition")]
+
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};

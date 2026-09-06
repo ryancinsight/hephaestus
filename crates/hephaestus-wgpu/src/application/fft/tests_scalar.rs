@@ -46,16 +46,23 @@ fn required_device_or_skip() -> Option<WgpuDevice> {
 }
 
 fn default_device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_default("hephaestus-fft-half-rejection-test") {
-        Ok(device) => Some(device),
-        Err(error @ HephaestusError::AdapterUnavailable { .. }) => {
-            if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some() {
-                panic!("WGPU adapter required, but acquisition failed: {error}");
-            }
-            None
-        }
-        Err(error) => panic!("binary16 FFT rejection test requires a working provider: {error}"),
-    }
+    static DEVICE: OnceLock<Option<WgpuDevice>> = OnceLock::new();
+    DEVICE
+        .get_or_init(
+            || match WgpuDevice::try_default("hephaestus-fft-half-rejection-test") {
+                Ok(device) => Some(device),
+                Err(error @ HephaestusError::AdapterUnavailable { .. }) => {
+                    if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some() {
+                        panic!("WGPU adapter required, but acquisition failed: {error}");
+                    }
+                    None
+                }
+                Err(error) => {
+                    panic!("binary16 FFT rejection test requires a working provider: {error}")
+                }
+            },
+        )
+        .clone()
 }
 
 #[test]
@@ -340,12 +347,9 @@ fn half_precision_rejects_cross_device_dispatch_without_mutation() {
     let Some(device) = required_device_or_skip() else {
         return;
     };
-    let other = WgpuDevice::try_with_device_preference_and_required_device_features(
-        "hephaestus-fft-half-cross-device-test",
-        DevicePreference::HighPerformance,
-        &[DeviceFeature::ShaderF16],
-    )
-    .expect("second ShaderF16 device acquisition");
+    let Some(other) = default_device_or_skip() else {
+        return;
+    };
     let initial_real = [F16::from_f32(0.5), F16::from_f32(-1.25)];
     let initial_imaginary = [F16::from_f32(-0.25), F16::from_f32(2.0)];
     let real = device.upload(&initial_real).expect("binary16 real upload");

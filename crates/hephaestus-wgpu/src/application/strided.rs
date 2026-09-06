@@ -27,10 +27,10 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Maximum rank the packed rank-4 metadata covers. Lower-rank layouts are
+/// Maximum rank the packed metadata covers. Lower-rank layouts are
 /// padded with leading size-1 / stride-0 dimensions, which contribute nothing
 /// to the offset computation.
-pub const MAX_STRIDED_RANK: usize = 4;
+pub const MAX_STRIDED_RANK: usize = 8;
 
 /// A device buffer paired with the leto layout describing its logical view:
 /// the unit every strided operand is passed as. Plain `Copy` references —
@@ -49,26 +49,28 @@ struct StridedBinaryKernel<Op>(PhantomData<Op>);
 struct StridedUnaryKernel<Op>(PhantomData<Op>);
 struct StridedScalarKernel<Op>(PhantomData<Op>);
 
-/// Packed layout metadata matching the WGSL `Meta` uniform: rank-4 padded
+/// Packed layout metadata matching the WGSL `Meta` uniform: rank-8 padded
 /// shape, per-operand strides, and `[a_off, b_off, out_off, len]`. The unary
 /// family reuses the same struct with the `b` lanes zeroed so one packing
 /// path and one uniform layout serve every strided kernel.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(crate) struct StridedMeta {
-    pub(crate) shape: [u32; 4],
-    pub(crate) a_strides: [i32; 4],
-    pub(crate) b_strides: [i32; 4],
-    pub(crate) out_strides: [i32; 4],
+    pub(crate) shape: [u32; 8],
+    pub(crate) a_strides: [i32; 8],
+    pub(crate) b_strides: [i32; 8],
+    pub(crate) out_strides: [i32; 8],
     pub(crate) offsets: [u32; 4],
 }
 
+const _: () = assert!(core::mem::size_of::<StridedMeta>() == 144);
+
 /// WGSL `Meta` declaration shared by every strided kernel.
 pub(crate) const WGSL_META: &str = r"struct Meta {
-    shape: vec4<u32>,
-    a_strides: vec4<i32>,
-    b_strides: vec4<i32>,
-    out_strides: vec4<i32>,
+    shape: array<vec4<u32>, 2>,
+    a_strides: array<vec4<i32>, 2>,
+    b_strides: array<vec4<i32>, 2>,
+    out_strides: array<vec4<i32>, 2>,
     offsets: vec4<u32>,
 }
 ";
@@ -80,13 +82,15 @@ pub(crate) const WGSL_DECODE: &str = r"    var rem = i;
     var a_off = i32(lmeta.offsets.x);
     var b_off = i32(lmeta.offsets.y);
     var o_off = i32(lmeta.offsets.z);
-    for (var d: i32 = 3; d >= 0; d = d - 1) {
-        let dim = lmeta.shape[d];
+    for (var d: i32 = 7; d >= 0; d = d - 1) {
+        let group = d / 4;
+        let lane = d % 4;
+        let dim = lmeta.shape[group][lane];
         let idx = i32(rem % dim);
         rem = rem / dim;
-        a_off = a_off + idx * lmeta.a_strides[d];
-        b_off = b_off + idx * lmeta.b_strides[d];
-        o_off = o_off + idx * lmeta.out_strides[d];
+        a_off = a_off + idx * lmeta.a_strides[group][lane];
+        b_off = b_off + idx * lmeta.b_strides[group][lane];
+        o_off = o_off + idx * lmeta.out_strides[group][lane];
     }
 ";
 
@@ -112,19 +116,19 @@ pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
 }
 
 #[inline]
-pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
-    let mut out = [1u32; 4];
+pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 8]> {
+    let mut out = [1u32; 8];
     for (d, &dim) in shape.iter().enumerate() {
-        out[4 - N + d] = to_u32(dim, "dimension")?;
+        out[8 - N + d] = to_u32(dim, "dimension")?;
     }
     Ok(out)
 }
 
 #[inline]
-pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
-    let mut out = [0i32; 4];
+pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 8]> {
+    let mut out = [0i32; 8];
     for (d, &stride) in strides.iter().enumerate() {
-        out[4 - N + d] = to_i32(stride, "stride")?;
+        out[8 - N + d] = to_i32(stride, "stride")?;
     }
     Ok(out)
 }
@@ -308,7 +312,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
 
     let out_layout = out.layout;
@@ -397,7 +401,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
     let len = out_layout.checked_size().map_err(map_layout_err)?;
@@ -454,7 +458,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
@@ -487,7 +491,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
 
     let out_layout = out.layout;
@@ -506,7 +510,7 @@ where
     let meta = StridedMeta {
         shape: pad_shape(out_layout.shape())?,
         a_strides: pad_strides(a_layout.strides())?,
-        b_strides: [0; 4],
+        b_strides: [0; 8],
         out_strides: pad_strides(out_layout.strides())?,
         offsets: [
             to_u32(a_layout.offset(), "input offset")?,
@@ -551,7 +555,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
 
     let out_layout = Layout::c_contiguous(output_shape).map_err(map_layout_err)?;
@@ -589,7 +593,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
 
     let out_layout = out.layout;
@@ -609,7 +613,7 @@ where
         shape: pad_shape(out_layout.shape())?,
         a_strides: pad_strides(a_layout.strides())?,
         // `b` operand is unused by the scalar kernel; zeroed for the shared decode.
-        b_strides: [0i32; 4],
+        b_strides: [0i32; 8],
         out_strides: pad_strides(out_layout.strides())?,
         offsets: [
             to_u32(a_layout.offset(), "input offset")?,

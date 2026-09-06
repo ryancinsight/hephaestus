@@ -178,4 +178,7 @@ impl ParameterizedUnaryOps<RocmDevice> for RocmParameterizedUnaryOps {
     }
 }
 
-pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
+pub use hephaestus_core::{
+    CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
+    LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
+};

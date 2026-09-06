@@ -55,9 +55,10 @@ pub mod scan;
 pub mod sliding_window;
 /// Device-neutral sparse operator contracts.
 pub mod sparse;
+/// Backend-neutral two-dimensional Laplacian stencil parameters.
+pub mod staggered;
 /// Provider-owned stateful parameter-update rules and dispatch seam.
 pub mod stateful_update;
-/// Backend-neutral two-dimensional Laplacian stencil parameters.
 pub mod stencil;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;

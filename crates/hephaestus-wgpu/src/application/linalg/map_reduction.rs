@@ -161,7 +161,7 @@ where
         shape: pad_shape(a.layout.shape())?,
         a_strides: pad_strides(a.layout.strides())?,
         b_strides: pad_strides(b_layout.strides())?,
-        out_strides: [1, 1, 1, 1],
+        out_strides: [1; 8],
         offsets: [
             to_u32(a.layout.offset(), "input offset")?,
             to_u32(b_layout.offset(), "input offset")?,

@@ -9,7 +9,7 @@
 
 | ADR | Title | Status |
 | --- | ----- | ------ |
-| [0001](0001-cuda-backend.md) | CUDA backend composing cuda-oxide + cutile | Accepted |
+| [0001](0001-cuda-backend.md) | Provider-owned CUDA driver boundary | Accepted |
 | [0002](0002-atlas-compute-boundaries.md) | Atlas compute-boundary integration | Accepted |
 | [0003](0003-blocked-decomposition-consolidation.md) | Blocked-decomposition host-loop consolidation | Accepted |
 | [0004](0004-wg-p4-composite-op-submit-batching.md) | WG-P4 composite-op submit batching (norm_l2 / matpow) | Accepted |
@@ -65,4 +65,5 @@
 | [0054](0054-bounded-default-device-waits.md) | Bounded default device waits | Accepted |
 | [0055](0055-fusion-seam.md) | Provider-owned runtime-rank fusion seam | Accepted |
 | [0056](0056-eunomia-layout-seam.md) | Eunomia-owned device layout seam | Accepted |
-| [0057](0057-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Proposed |
+| [0057](0057-device-staggered-pair.md) | The device staggered pair gathers a derived transpose | Accepted |
+| [0058](0058-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Proposed |

@@ -1,8 +1,9 @@
 //! Contract clauses for runtime-parameter unary dispatch.
 
 use hephaestus_core::{
-    ComputeDevice, HardtanhGradOp, HardtanhOp, HephaestusError, ParameterizedUnaryOps, StridedView,
-    ThresholdGradOp, ThresholdOp,
+    CeluGradOp, CeluOp, ComputeDevice, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
+    HephaestusError, LeakyReluGradOp, LeakyReluOp, ParameterizedUnaryOps, SoftshrinkGradOp,
+    SoftshrinkOp, StridedView, ThresholdGradOp, ThresholdOp,
 };
 use leto::Layout;
 
@@ -44,6 +45,22 @@ where
     logical_values(&storage)
 }
 
+fn assert_close(actual: [f32; 6], expected: [f32; 6], name: &str, clause: &str) {
+    // The non-linear clauses contain one elementary-function evaluation and
+    // at most three native-f32 arithmetic operations. The bound allows 64
+    // unit roundoffs at the largest operand scale for backend math-library
+    // variation without masking a branch or parameter defect.
+    let tolerance = 64.0 * f32::EPSILON;
+    for (index, (&actual, &expected)) in actual.iter().zip(&expected).enumerate() {
+        let scale = actual.abs().max(expected.abs()).max(1.0);
+        assert!(
+            (actual - expected).abs() <= tolerance * scale,
+            "{name}: {clause} index {index}: actual {actual} expected {expected} bound {}",
+            tolerance * scale
+        );
+    }
+}
+
 /// Run every runtime-parameter unary clause against one backend.
 ///
 /// # Panics
@@ -58,10 +75,19 @@ where
     HardtanhGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
     ThresholdOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
     ThresholdGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    LeakyReluOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    LeakyReluGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    HardshrinkOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    HardshrinkGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    SoftshrinkOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    SoftshrinkGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    CeluOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
+    CeluGradOp: hephaestus_core::ParameterizedUnaryExpr<O::Dialect>,
 {
     let physical = [
         99.0_f32, -2.0, 98.0, -0.75, 97.0, -0.25, 96.0, 0.5, 95.0, 1.25, 94.0, 2.0,
     ];
+    let logical_input = [-2.0_f32, -0.75, -0.25, 0.5, 1.25, 2.0];
     let input = device.upload(&physical).expect("input upload");
     let input_layout =
         Layout::try_new([2, 3], [6, 2], 1).expect("valid conformance fixture layout");
@@ -116,6 +142,112 @@ where
         ),
         [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
         "{name}: Threshold strict-greater-than gradient"
+    );
+    assert_eq!(
+        dispatch::<D, O, LeakyReluOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.25, 0.0],
+            &output_layout,
+        ),
+        [-0.5, -0.1875, -0.0625, 0.5, 1.25, 2.0],
+        "{name}: LeakyReLU parameter-sensitive values"
+    );
+    assert_eq!(
+        dispatch::<D, O, LeakyReluGradOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.25, 0.0],
+            &output_layout,
+        ),
+        [0.25, 0.25, 0.25, 1.0, 1.0, 1.0],
+        "{name}: LeakyReLU gradient boundary"
+    );
+    assert_eq!(
+        dispatch::<D, O, HardshrinkOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        [-2.0, -0.75, 0.0, 0.0, 1.25, 2.0],
+        "{name}: Hardshrink strict threshold"
+    );
+    assert_eq!(
+        dispatch::<D, O, HardshrinkGradOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        [1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+        "{name}: Hardshrink gradient boundary"
+    );
+    assert_eq!(
+        dispatch::<D, O, SoftshrinkOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        [-1.5, -0.25, 0.0, 0.0, 0.75, 1.5],
+        "{name}: Softshrink threshold"
+    );
+    assert_eq!(
+        dispatch::<D, O, SoftshrinkGradOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        [1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+        "{name}: Softshrink gradient boundary"
+    );
+    let celu_expected = logical_input.map(|x| {
+        if x >= 0.0 {
+            x
+        } else {
+            0.5 * (f32::exp(x / 0.5) - 1.0)
+        }
+    });
+    assert_close(
+        dispatch::<D, O, CeluOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        celu_expected,
+        name,
+        "CELU values",
+    );
+    let celu_grad_expected = logical_input.map(|x| if x >= 0.0 { 1.0 } else { f32::exp(x / 0.5) });
+    assert_close(
+        dispatch::<D, O, CeluGradOp>(
+            device,
+            operations,
+            &input,
+            &input_layout,
+            [0.5, 0.0],
+            &output_layout,
+        ),
+        celu_grad_expected,
+        name,
+        "CELU gradient values",
     );
     assert_eq!(
         dispatch::<D, O, HardtanhOp>(

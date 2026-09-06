@@ -90,6 +90,7 @@ fn assert_close(actual: f32, expected: f32, tolerance: f32) {
     );
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32) {
     assert_eq!(got.len(), expected.len());
     for (index, (&got, &expected)) in got.iter().zip(expected.iter()).enumerate() {
@@ -101,6 +102,7 @@ fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32)
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn assert_complex_spectra_close(
     got: &[eunomia::Complex<f32>],
     expected: &[eunomia::Complex<f32>],
@@ -128,6 +130,7 @@ fn assert_complex_spectra_close(
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn reconstruct_svd(
     u: &[f32],
     singular_values: &[f32],
@@ -151,6 +154,7 @@ fn reconstruct_svd(
     reconstructed
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 fn matmul_host(
     lhs: &[f32],
     lhs_rows: usize,
@@ -171,6 +175,7 @@ fn matmul_host(
     out
 }
 
+#[cfg(feature = "decomposition")]
 fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut out = vec![0.0f32; rows * cols];
     for row in 0..rows {
@@ -181,6 +186,7 @@ fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     out
 }
 
+#[cfg(feature = "decomposition")]
 fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     let transposed = transpose_host(matrix, n, n);
     let gram = matmul_host(&transposed, n, n, matrix, n);
@@ -195,6 +201,7 @@ fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn sort_complex(values: &mut [eunomia::Complex<f32>]) {
     values.sort_by(|lhs, rhs| {
         lhs.re
@@ -203,6 +210,7 @@ fn sort_complex(values: &mut [eunomia::Complex<f32>]) {
     });
 }
 
+#[cfg(feature = "decomposition")]
 fn assert_complex_spectrum_close(
     actual: &[eunomia::Complex<f32>],
     expected: &[eunomia::Complex<f32>],
@@ -224,6 +232,7 @@ fn assert_complex_spectrum_close(
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn packed_lu_product(packed: &[f32], n: usize) -> Vec<f32> {
     let mut out = vec![0.0f32; n * n];
     for row in 0..n {
@@ -2419,6 +2428,7 @@ pub(super) fn det_of_near_singular_triangular_is_exact_pivot_product() {
     assert!((got[0] - leto_det).abs() <= tol);
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2473,6 +2483,7 @@ pub(super) fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
     assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2497,6 +2508,7 @@ pub(super) fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn eigenvalues_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2532,6 +2544,7 @@ pub(super) fn eigenvalues_match_closed_form_diagonal() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn eigenvalues_match_exact_complex_pair_blocks() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2575,6 +2588,7 @@ pub(super) fn eigenvalues_match_exact_complex_pair_blocks() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn eigenvalues_match_structured_and_dense_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2626,6 +2640,7 @@ pub(super) fn eigenvalues_match_structured_and_dense_leto_oracles() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2664,6 +2679,7 @@ pub(super) fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
     assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn eigenvalues_rejects_non_square_input() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2688,6 +2704,7 @@ pub(super) fn eigenvalues_rejects_non_square_input() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn singular_values_match_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2714,6 +2731,7 @@ pub(super) fn singular_values_match_closed_form_diagonal() {
     assert_close(got[1], 2.0, 1.0e-5);
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn svd_decompose_reconstructs_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2759,6 +2777,7 @@ pub(super) fn svd_decompose_reconstructs_leto_reference() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2796,6 +2815,7 @@ pub(super) fn svd_rank_revealing_accepts_rank_deficient_matrix() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2871,6 +2891,7 @@ pub(super) fn bidiagonalize_reconstructs_and_preserves_singular_values() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn bidiagonalize_rejects_wide_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2896,6 +2917,7 @@ pub(super) fn bidiagonalize_rejects_wide_matrix() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
     let Some(device) = device_or_skip() else {
         return;
@@ -2983,6 +3005,7 @@ pub(super) fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
         .unwrap();
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn schur_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3012,6 +3035,7 @@ pub(super) fn schur_rejects_rectangular_matrix() {
         .unwrap();
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3105,6 +3129,7 @@ pub(super) fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
     assert_close(got_h_norm[0], got_a_norm[0], 1.0e-3);
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn hessenberg_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3130,6 +3155,7 @@ pub(super) fn hessenberg_rejects_rectangular_matrix() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3198,6 +3224,7 @@ pub(super) fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3226,6 +3253,7 @@ pub(super) fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn full_piv_lu_rejects_rectangular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3251,6 +3279,7 @@ pub(super) fn full_piv_lu_rejects_rectangular_matrix() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_pivoted_decompositions_match_ordinary_contracts() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3399,6 +3428,7 @@ pub(super) fn write_sub_buffer_empty_tail_write_is_noop() {
 
 // ── Extended differential decomposition tests ─────────────────────────────
 
+#[cfg(feature = "decomposition")]
 pub(super) fn cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3422,6 +3452,7 @@ pub(super) fn cholesky_rejects_singular_matrix() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3575,6 +3606,7 @@ pub(super) fn linalg_reductions_accept_strided_views() {
 
 // ── Blocked decomposition differential tests ────────────────────────────
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_lu_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3645,6 +3677,7 @@ pub(super) fn blocked_lu_matches_leto_reference() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_lu_identity_yields_identity_factors() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3672,6 +3705,7 @@ pub(super) fn blocked_lu_identity_yields_identity_factors() {
     assert_eq!(gpu_lu.det(), 1.0);
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_lu_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3717,6 +3751,7 @@ pub(super) fn blocked_lu_solve_known_system_accurate() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_lu_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3740,6 +3775,7 @@ pub(super) fn blocked_lu_rejects_singular_matrix() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3844,6 +3880,7 @@ pub(super) fn blocked_qr_matches_leto_reference() {
 /// (2 panels, delegating) and one at `n = 129` (5 panels, device path). A
 /// shape inside the delegating regime alone would assert nothing about the
 /// device write-back — the two handles would be the same uploaded buffer.
+#[cfg(feature = "decomposition")]
 pub(super) fn qr_r_buffer_is_upper_triangular_on_both_entry_points() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3854,6 +3891,7 @@ pub(super) fn qr_r_buffer_is_upper_triangular_on_both_entry_points() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn qr_r_buffer_contract_at_shape(
     device: &hephaestus_wgpu::WgpuDevice,
     m: usize,
@@ -3945,6 +3983,7 @@ fn qr_r_buffer_contract_at_shape(
 
 /// The device-accumulated **Q** must match leto's host accumulation at both
 /// QR routing regimes, and must be orthogonal.
+#[cfg(feature = "decomposition")]
 pub(super) fn qr_accumulated_q_matches_host_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -3958,6 +3997,7 @@ pub(super) fn qr_accumulated_q_matches_host_reference() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 fn qr_accumulated_q_contract_at_shape(
     device: &hephaestus_wgpu::WgpuDevice,
     m: usize,
@@ -4052,6 +4092,7 @@ fn qr_accumulated_q_contract_at_shape(
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4148,6 +4189,7 @@ pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_identity_yields_identity_r() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4189,6 +4231,7 @@ pub(super) fn blocked_qr_identity_yields_identity_r() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4237,6 +4280,7 @@ pub(super) fn blocked_qr_solve_known_system_accurate() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_rejects_underdetermined() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4260,6 +4304,7 @@ pub(super) fn blocked_qr_rejects_underdetermined() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4299,6 +4344,7 @@ pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
 /// panel values, and any divergence means the capture indexes the panel
 /// wrongly. `solve` then forces the deferred host factor to materialize from
 /// the device buffer.
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_retains_factor_diagonal_across_panels() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4423,6 +4469,7 @@ pub(super) fn blocked_cholesky_retains_factor_diagonal_across_panels() {
 /// regression in that pass leaves `0.5` in the factor rather than something
 /// that could be mistaken for rounding noise. `n` exceeds the 64-element
 /// block size so at least one such region exists.
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4474,6 +4521,7 @@ pub(super) fn blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_spd_reconstruction_matches_original() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4535,6 +4583,7 @@ pub(super) fn blocked_cholesky_spd_reconstruction_matches_original() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_solve_known_system_accurate() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4600,6 +4649,7 @@ pub(super) fn blocked_cholesky_solve_known_system_accurate() {
 /// factor, differ by at most `24γₙ` with `γₙ = n·u / (1 − n·u)`, `u = 2⁻²⁴`.
 /// Dropping one trailing update moves rows past the first block by
 /// `Σ_c P[r,c]·y[c] ≳ 0.2·min y` — three orders above the bound.
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_solve_multi_panel_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4685,6 +4735,7 @@ pub(super) fn blocked_cholesky_solve_multi_panel_matches_leto_reference() {
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_rejects_singular_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4708,6 +4759,7 @@ pub(super) fn blocked_cholesky_rejects_singular_matrix() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn udu_decompose_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4764,6 +4816,7 @@ pub(super) fn udu_decompose_rejects_invalid_contracts() {
     ));
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4804,6 +4857,7 @@ pub(super) fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
     ));
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_pinv_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4829,6 +4883,7 @@ pub(super) fn linalg_pinv_matches_closed_form_diagonal() {
     assert_eq!(got, vec![0.5, 0.0, 0.0, 0.25]);
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4867,6 +4922,7 @@ pub(super) fn linalg_pinv_rank_deficient_satisfies_moore_penrose() {
     assert_close_slice(&ap_a_ap, &got, 1.0e-4, 1.0e-4);
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4902,6 +4958,7 @@ pub(super) fn linalg_pinv_handles_rectangular_full_rank_matrix() {
     assert_close_slice(&a_ap_a, &matrix_host, 1.0e-4, 1.0e-4);
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_pinv_rejects_non_finite_input() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4926,6 +4983,7 @@ pub(super) fn linalg_pinv_rejects_non_finite_input() {
     ));
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_matexp_matches_closed_form_diagonal() {
     let Some(device) = device_or_skip() else {
         return;
@@ -4958,6 +5016,7 @@ pub(super) fn linalg_matexp_matches_closed_form_diagonal() {
     }
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5002,6 +5061,7 @@ pub(super) fn linalg_matexp_matches_nilpotent_and_rotation_closed_forms() {
     );
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_matexp_matches_leto_general_matrix() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5032,6 +5092,7 @@ pub(super) fn linalg_matexp_matches_leto_general_matrix() {
     assert_close_slice(&got, &expected_host, 1.0e-3, 1.0e-4);
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn linalg_matexp_rejects_invalid_contracts() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5072,6 +5133,7 @@ pub(super) fn linalg_matexp_rejects_invalid_contracts() {
     ));
 }
 
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub(super) fn test_wgpu_uniform_and_normal_with_seed() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5101,6 +5163,7 @@ pub(super) fn test_wgpu_uniform_and_normal_with_seed() {
     assert!(got_n.iter().any(|&val| val != 0.0));
 }
 
+#[cfg(feature = "sparse")]
 pub(super) fn test_wgpu_sparse_matrix_spmv_spmm() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5246,6 +5309,7 @@ pub(super) fn test_wgpu_sparse_matrix_spmv_spmm() {
 /// The broadcast case is the wrong-extent case: its validated storage
 /// extent (4 elements here) is smaller than rows*cols, so the former raw
 /// whole-matrix copy exceeded the operand's storage.
+#[cfg(feature = "decomposition")]
 fn assert_blocked_rejects_non_dense<F, O>(device: &WgpuDevice, entry: F, label: &str)
 where
     F: Fn(&WgpuDevice, hephaestus_wgpu::StridedOperand<'_, f32, 2>) -> hephaestus_core::Result<O>,
@@ -5282,6 +5346,7 @@ where
     }
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_cholesky_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5293,6 +5358,7 @@ pub(super) fn blocked_cholesky_rejects_non_dense_operands() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_lu_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5300,6 +5366,7 @@ pub(super) fn blocked_lu_rejects_non_dense_operands() {
     assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::lu_decompose_blocked, "LU");
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_qr_rejects_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5307,6 +5374,7 @@ pub(super) fn blocked_qr_rejects_non_dense_operands() {
     assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::qr_decompose_blocked, "QR");
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     let Some(device) = device_or_skip() else {
         return;
@@ -5323,6 +5391,7 @@ pub(super) fn blocked_pivoted_decompositions_reject_non_dense_operands() {
     );
 }
 
+#[cfg(feature = "decomposition")]
 pub(super) fn empty_qr_preserves_shape_and_identity() {
     let Some(device) = device_or_skip() else {
         return;

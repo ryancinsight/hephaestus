@@ -30,6 +30,12 @@ impl<T> CudaBuffer<T> {
     pub(crate) fn aliases<U>(&self, _other: &CudaBuffer<U>) -> bool {
         false
     }
+
+    #[must_use]
+    #[inline]
+    pub(crate) fn belongs_to(&self, _device: &crate::CudaDevice) -> bool {
+        false
+    }
 }
 
 impl<T> DeviceBuffer<T> for CudaBuffer<T> {

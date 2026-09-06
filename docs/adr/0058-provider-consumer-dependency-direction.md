@@ -1,4 +1,4 @@
-# ADR 0057: Provider-consumer dependency direction
+# ADR 0058: Provider-consumer dependency direction
 
 - Status: Proposed
 - Date: 2026-09-04

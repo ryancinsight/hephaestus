@@ -282,6 +282,62 @@ fn strided_rank3_batched_matches_cpu() {
 }
 
 #[test]
+fn strided_rank8_batched_matches_cpu() {
+    let Some(dev) = device("strided_rank8_batched_matches_cpu") else {
+        return;
+    };
+    let shape = [2usize; 8];
+    let a_strides = [1isize, 2, 4, 8, 16, 32, 64, 128];
+    let a_dynamic_strides = [1usize, 2, 4, 8, 16, 32, 64, 128];
+    let a_host: Vec<f32> = (0..256).map(|i| i as f32 * 0.5).collect();
+    let a_layout = Layout::try_new(shape, a_strides, 0).expect("valid rank-eight layout");
+    let b_host: Vec<f32> = (0..256).map(|i| 100.0 - i as f32).collect();
+    let b_layout = Layout::c_contiguous(shape).unwrap();
+    let out_layout = Layout::c_contiguous(shape).unwrap();
+
+    let mut expected = vec![0.0f32; 256];
+    cpu_reference(
+        &a_host,
+        &a_layout,
+        &b_host,
+        &b_layout,
+        &mut expected,
+        &out_layout,
+        |x, y| x + y,
+    );
+
+    let a = dev.upload(&a_host).unwrap();
+    let b = dev.upload(&b_host).unwrap();
+    let out = dev.alloc_zeroed::<f32>(256).unwrap();
+    binary_elementwise_strided_into::<AddOp, f32, 8>(
+        &dev,
+        op(&a, &a_layout),
+        op(&b, &b_layout),
+        op(&out, &out_layout),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 256];
+    dev.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+
+    let dynamic_out = dev.alloc_zeroed::<f32>(256).unwrap();
+    binary_elementwise_strided_dyn_into::<AddOp, f32>(
+        &dev,
+        dyn_op(&a, &shape, &a_dynamic_strides, 0),
+        dyn_op(&b, &shape, &[128, 64, 32, 16, 8, 4, 2, 1], 0),
+        dyn_op(&dynamic_out, &shape, &[128, 64, 32, 16, 8, 4, 2, 1], 0),
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    let mut dynamic_got = vec![0.0f32; 256];
+    dev.download(&dynamic_out, &mut dynamic_got).unwrap();
+    assert_eq!(dynamic_got, expected);
+}
+
+#[test]
 fn strided_unary_transposed_matches_cpu() {
     let Some(dev) = device("strided_unary_transposed_matches_cpu") else {
         return;

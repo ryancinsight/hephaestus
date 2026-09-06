@@ -39,32 +39,6 @@ struct SeamScalarKernel<Op>(PhantomData<Op>);
 
 // ── Shader sources (mirror the strided module; TypeId keeps pipelines separate) ─
 
-fn wgsl_meta() -> &'static str {
-    "struct Meta {
-        shape: vec4<u32>,
-        a_strides: vec4<i32>,
-        b_strides: vec4<i32>,
-        out_strides: vec4<i32>,
-        offsets: vec4<u32>,
-    }"
-}
-
-fn wgsl_decode() -> &'static str {
-    "    var rem = i;
-    var a_off = i32(lmeta.offsets.x);
-    var b_off = i32(lmeta.offsets.y);
-    var o_off = i32(lmeta.offsets.z);
-    for (var d: i32 = 3; d >= 0; d = d - 1) {
-        let dim = lmeta.shape[d];
-        let idx = i32(rem % dim);
-        rem = rem / dim;
-        a_off = a_off + idx * lmeta.a_strides[d];
-        b_off = b_off + idx * lmeta.b_strides[d];
-        o_off = o_off + idx * lmeta.out_strides[d];
-    }
-"
-}
-
 fn unary_shader<T: DialectScalar<Wgsl>, Op: UnaryExpr<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
@@ -80,10 +54,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[u32(o_off)] = {expr};
 }}
 "#,
-        meta = wgsl_meta(),
+        meta = crate::application::strided::WGSL_META,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
-        decode = wgsl_decode(),
+        decode = crate::application::strided::WGSL_DECODE,
         expr = <Op as UnaryExpr<Wgsl>>::EXPR,
     )
 }
@@ -105,10 +79,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[u32(o_off)] = {expr};
 }}
 "#,
-        meta = wgsl_meta(),
+        meta = crate::application::strided::WGSL_META,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
-        decode = wgsl_decode(),
+        decode = crate::application::strided::WGSL_DECODE,
         expr = expr,
     )
 }
@@ -167,7 +141,7 @@ where
     let meta = crate::application::strided::StridedMeta {
         shape: pad_shape(out_layout.shape())?,
         a_strides: pad_strides(a_layout.strides())?,
-        b_strides: [0; 4],
+        b_strides: [0; 8],
         out_strides: pad_strides(out_layout.strides())?,
         offsets: [
             crate::application::strided::to_u32(a_layout.offset(), "input offset")?,
@@ -244,10 +218,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     out[u32(o_off)] = {expr};
 }}
 "#,
-        meta = wgsl_meta(),
+        meta = crate::application::strided::WGSL_META,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
-        decode = wgsl_decode(),
+        decode = crate::application::strided::WGSL_DECODE,
         expr = <Op as BinaryExpr<Wgsl>>::EXPR,
     )
 }
@@ -293,7 +267,7 @@ where
     let meta = crate::application::strided::StridedMeta {
         shape: pad_shape(out_layout.shape())?,
         a_strides: pad_strides(a_layout.strides())?,
-        b_strides: [0; 4],
+        b_strides: [0; 8],
         out_strides: pad_strides(out_layout.strides())?,
         offsets: [
             crate::application::strided::to_u32(a_layout.offset(), "input offset")?,

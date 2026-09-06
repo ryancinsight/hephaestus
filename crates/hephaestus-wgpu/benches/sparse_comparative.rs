@@ -1,5 +1,7 @@
 //! Focused sparse CSR benchmark: Hephaestus WGPU kernels against Leto CPU.
 
+#![cfg(feature = "sparse")]
+
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 

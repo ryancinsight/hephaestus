@@ -21,9 +21,10 @@ pub use scalar::{scalar_elementwise, scalar_elementwise_into};
 pub use unary::{
     AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, EluGradOp,
     EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
-    GeluTanhGradOp, GeluTanhOp, IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp,
-    MishOp, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp,
-    SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, TanOp, TanhGradOp,
+    GeluTanhGradOp, GeluTanhOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp,
+    IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp, MishOp, NegOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, TanOp, TanhGradOp,
     TanhOp, TruncOp, unary_elementwise, unary_elementwise_into,
 };
 

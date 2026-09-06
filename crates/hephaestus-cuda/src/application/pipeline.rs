@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 mod key;
 
-pub(crate) use key::PipelineKey;
+pub(crate) use key::{FusionPipelineKey, PipelineKey};
 
 #[cfg(feature = "cuda")]
 pub(crate) use crate::infrastructure::compiler::SafeCachedKernel;
@@ -39,74 +39,7 @@ pub(crate) fn cached_kernel(
 ) -> Result<Arc<SafeCachedKernel>> {
     #[cfg(feature = "cuda")]
     {
-        let cell = device
-            .pipeline_cache
-            .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
-            .map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("pipeline cache segment poisoned: {e}"),
-            })?;
-        if let Some(kernel) = cell.get() {
-            return Ok(kernel.clone());
-        }
-
-        // Compile outside any cache lock. Module loading requires this
-        // device's context current on the calling thread.
-        device.bind()?;
-        let src = source();
-        let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
-            HephaestusError::DispatchFailed {
-                message: format!("CUDA compilation failed for {func_name}: {e}"),
-            }
-        })?;
-
-        let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
-            message: format!("PTX is not a valid CString: {e}"),
-        })?;
-
-        let func_name_c =
-            std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
-                message: format!("kernel name is not a valid CString: {e}"),
-            })?;
-
-        let mut module: cuda_oxide::sys::CUmodule = std::ptr::null_mut();
-        // SAFETY: this device's context is current on this thread (`bind`
-        // above); `ptx_c` is a NUL-terminated PTX image kept alive across the
-        // call; `module` is a valid out-pointer for one `CUmodule`.
-        let compiled = unsafe {
-            let res = cuda_oxide::sys::cuModuleLoadData(
-                &mut module as *mut cuda_oxide::sys::CUmodule,
-                ptx_c.as_ptr() as *const std::ffi::c_void,
-            );
-            if res != 0 {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuModuleLoadData failed with code: {res}"),
-                });
-            }
-
-            let mut func: cuda_oxide::sys::CUfunction = std::ptr::null_mut();
-            let res = cuda_oxide::sys::cuModuleGetFunction(
-                &mut func as *mut cuda_oxide::sys::CUfunction,
-                module as *mut _,
-                func_name_c.as_ptr(),
-            );
-            if res != 0 {
-                let unload = cuda_oxide::sys::cuModuleUnload(module as *mut _);
-                debug_assert_eq!(unload, 0, "cuModuleUnload during error cleanup");
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!("cuModuleGetFunction('{func_name}') failed with code: {res}"),
-                });
-            }
-
-            Arc::new(SafeCachedKernel::new(
-                module,
-                func,
-                device.cuda_context().clone(),
-            ))
-        };
-
-        // Another thread may have won the race; its kernel is kept and ours
-        // drops (module unload via SafeCachedKernel::drop).
-        Ok(cell.get_or_init(|| compiled).clone())
+        cached_kernel_in(device, &device.pipeline_cache, key, func_name, source)
     }
 
     #[cfg(not(feature = "cuda"))]
@@ -116,6 +49,121 @@ pub(crate) fn cached_kernel(
             message: "hephaestus-cuda built without the `cuda` feature".to_string(),
         })
     }
+}
+
+/// Retrieve a runtime-fusion kernel through the same compiler and launch
+/// ownership as fixed operation kernels.
+pub(crate) fn cached_fusion_kernel(
+    device: &CudaDevice,
+    key: FusionPipelineKey,
+    func_name: &str,
+    source: impl FnOnce() -> String,
+) -> Result<Arc<SafeCachedKernel>> {
+    #[cfg(feature = "cuda")]
+    {
+        cached_kernel_in(
+            device,
+            &device.fusion_pipeline_cache,
+            key,
+            func_name,
+            source,
+        )
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (device, key, func_name, source);
+        Err(HephaestusError::AdapterUnavailable {
+            message: "hephaestus-cuda built without the `cuda` feature".to_string(),
+        })
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn cached_kernel_in<K>(
+    device: &CudaDevice,
+    cache: &moirai_sync::sync::ConcurrentHashMap<
+        K,
+        Arc<std::sync::OnceLock<Arc<SafeCachedKernel>>>,
+    >,
+    key: K,
+    func_name: &str,
+    source: impl FnOnce() -> String,
+) -> Result<Arc<SafeCachedKernel>>
+where
+    K: Hash + Eq,
+{
+    let cell = cache
+        .get_or_insert_with(key, || std::sync::Arc::new(std::sync::OnceLock::new()))
+        .map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("pipeline cache segment poisoned: {e}"),
+        })?;
+    if let Some(kernel) = cell.get() {
+        return Ok(kernel.clone());
+    }
+
+    // Compile outside any cache lock. Module loading requires this device's
+    // context current on the calling thread.
+    device.bind()?;
+    let src = source();
+    let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
+        HephaestusError::DispatchFailed {
+            message: format!("CUDA compilation failed for {func_name}: {e}"),
+        }
+    })?;
+
+    let ptx_c = std::ffi::CString::new(ptx).map_err(|e| HephaestusError::DispatchFailed {
+        message: format!("PTX is not a valid CString: {e}"),
+    })?;
+
+    let func_name_c =
+        std::ffi::CString::new(func_name).map_err(|e| HephaestusError::DispatchFailed {
+            message: format!("kernel name is not a valid CString: {e}"),
+        })?;
+
+    let mut module: *mut core::ffi::c_void = std::ptr::null_mut();
+    // SAFETY: this device's context is current on this thread (`bind` above);
+    // `ptx_c` is a NUL-terminated PTX image kept alive across the call;
+    // `module` is a valid out-pointer for one `CUmodule`.
+    let compiled = unsafe {
+        let res = (device.driver().kernel.load)(
+            &mut module as *mut *mut core::ffi::c_void,
+            ptx_c.as_ptr() as *const std::ffi::c_void,
+        );
+        if res != 0 {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!("cuModuleLoadData failed with code: {res}"),
+            });
+        }
+
+        let mut func: *mut core::ffi::c_void = std::ptr::null_mut();
+        let res = (device.driver().kernel.function)(
+            &mut func as *mut *mut core::ffi::c_void,
+            module as *mut _,
+            func_name_c.as_ptr(),
+        );
+        if res != 0 {
+            let unload = (device.driver().kernel.unload)(module as *mut _);
+            let lookup_failure = format!("cuModuleGetFunction('{func_name}') -> {res}");
+            return Err(HephaestusError::DispatchFailed {
+                message: if unload == 0 {
+                    lookup_failure
+                } else {
+                    format!("{lookup_failure}; cuModuleUnload during cleanup -> {unload}")
+                },
+            });
+        }
+
+        Arc::new(SafeCachedKernel::new(
+            module,
+            func,
+            device.cuda_context().clone(),
+        ))
+    };
+
+    // Another thread may have won the race; its kernel is kept and ours drops
+    // through SafeCachedKernel's context-aware destructor.
+    Ok(cell.get_or_init(|| compiled).clone())
 }
 
 /// Grid/block launch configuration for [`launch_kernel`].
@@ -212,7 +260,7 @@ pub(crate) fn launch_kernel(
     // routes through `cuMemFree`-family calls, which the driver orders after
     // in-flight work on the default stream (implicit synchronization on free).
     let res = unsafe {
-        cuda_oxide::sys::cuLaunchKernel(
+        (device.driver().kernel.launch)(
             kernel.func,
             config.grid.0,
             config.grid.1,

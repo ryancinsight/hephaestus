@@ -157,18 +157,17 @@ impl PyArray {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use crate::test_support::prepare_python;
+    use crate::test_support::{default_wgpu_device, prepare_python};
     use numpy::PyArrayMethods;
 
-    #[test]
-    fn test_py_array_tolist_and_numpy() {
+    pub(crate) fn array_tolist_and_numpy_preserve_values() {
         prepare_python();
         Python::attach(|py| {
-            let device = PyDevice::new(None).unwrap();
+            let device = default_wgpu_device();
             let data = vec![1.0f32, 2.0, 3.0, 4.0];
-            let py_arr = PyArray::new(py, data.clone(), &device).unwrap();
+            let py_arr = PyArray::new(py, data.clone(), device).unwrap();
             assert_eq!(py_arr.tolist(py).unwrap(), data);
 
             let np_arr = py_arr.to_numpy(py).unwrap();

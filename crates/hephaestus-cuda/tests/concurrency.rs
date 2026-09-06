@@ -10,9 +10,14 @@ use hephaestus_cuda::CudaDevice;
 
 #[test]
 fn concurrent_device_acquisition_is_safe() {
-    if CudaDevice::try_default().is_err() {
-        eprintln!("skip concurrent_device_acquisition_is_safe: no CUDA device");
-        return;
+    match CudaDevice::try_default() {
+        Ok(_) => {}
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. })
+            if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_none() =>
+        {
+            return;
+        }
+        Err(error) => panic!("CUDA acquisition failed: {error}"),
     }
 
     const THREADS: usize = 16;

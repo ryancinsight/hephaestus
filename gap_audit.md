@@ -824,31 +824,6 @@ No open feature-combination defect is currently recorded in the backend scope.
   `cargo clippy -p hephaestus-core -p hephaestus-wgpu -p hephaestus-cuda
   --all-targets --no-deps -- -D warnings`.
 
-- [patch] CUDA Stage 1 now uses ADR-0001's cuda-oxide substrate instead of the
-  previous managed-memory allocation path, and the CUDA launch SSOT drains the
-  current context with a Windows-gated `cuCtxSynchronize` after every
-  `cuLaunchKernel`. `CudaDevice` initializes the driver, creates and binds a
-  cuda-oxide context, allocates with `cuMemAlloc_v2`, copies with checked
-  `cuMemcpy*` byte counts, and frees with context-bound `cuMemFree_v2`;
-  `CudaBuffer<T>` keeps `PhantomData<T>` and the owning context for typed,
-  context-correct destruction. CUDA allocation hints resolve through one
-  non-managed primary-buffer tier: allocatable hints record
-  `MemoryTier::Device`, budget-only tiers are rejected, and
-  `MappablePrimaryBuffers` is false. This resolves the former KS-8 WDDM
-  `STATUS_IN_PAGE_ERROR` compute aborts. The blocked-decomposition region
-  helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
-  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence tier: compile-time
-  validation, clippy, rustdoc, and value-semantic live-CUDA/no-driver contract
-  tests. Current focused closure checks: `cargo nextest run -p hephaestus-cuda
-  reduction_sum_matches_cpu_reference reduction_min_max_matches_cpu_reference
-  reduction_width_is_part_of_dispatch_contract
-  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
-  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
-  hessenberg_reconstructs_and_preserves_similarity_invariants
-  non_default_block_width_produces_identical_results` (9/9). The formerly
-  aborting concurrent-acquisition contract is now part of the full 109/109
-  CUDA nextest after HEPH-CUDA-CONCURRENT-1.
-
 - [minor] CUDA now implements the provider capability trait without fabricating
   WGPU-only descriptor values. `CudaDevice` snapshots `DeviceLimits` from real
   CUDA driver attributes and current memory info, reports `None` for
@@ -1531,11 +1506,9 @@ host before uploading device buffers.
   parity for the CUDA kernels. CUDA blocked Cholesky remains CUDA-feature gated and
   is not part of the default stub-mode claim. Evidence tier: static diagnostics and
   stub-mode contract tests. (Blocked on CUDA hardware availability.)
-- [patch] `cuda-oxide` 0.4.0's build script links `cuda.lib`, so the default
-  `hephaestus-cuda` feature needs `CUDA_LIB_PATH` pointing at a CUDA import
-  library even though adapterless runtime tests skip and the
-  `--no-default-features` stub compiles without a CUDA driver/device. This is an
-  upstream build-script constraint, not a Hephaestus runtime-device contract.
+- Native CUDA ABI/loading and physical-device verification are tracked in
+  [HEPH-CUDA-DRIVER-BOUNDARY](backlog.md#heph-cuda-driver-boundary).
+
 
 ## Next Increment
 

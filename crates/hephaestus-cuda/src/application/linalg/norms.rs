@@ -29,13 +29,13 @@ use crate::infrastructure::buffer::CudaBuffer;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(crate) struct MapReductionMeta {
-    shape: [u32; 4],
-    a_strides: [i32; 4],
-    b_strides: [i32; 4],
+    shape: [u32; 8],
+    a_strides: [i32; 8],
+    b_strides: [i32; 8],
     offsets: [u32; 4],
 }
 
-const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 64);
+const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 112);
 
 pub(crate) trait MapReductionOp: Copy + Send + Sync + 'static {
     type ReduceOp: CombineExpr<CudaC>;
@@ -96,9 +96,9 @@ where
     format!(
         r#"
 struct MapReductionMeta {{
-    unsigned int shape[4];
-    int a_strides[4];
-    int b_strides[4];
+    unsigned int shape[8];
+    int a_strides[8];
+    int b_strides[8];
     unsigned int offsets[4];
 }};
 
@@ -117,7 +117,7 @@ extern "C" __global__ void map_reduction_kernel(
         unsigned int rem = i;
         int a_off = (int)meta.offsets[0];
         int b_off = (int)meta.offsets[1];
-        for (int dimension = 3; dimension >= 0; --dimension) {{
+        for (int dimension = 7; dimension >= 0; --dimension) {{
             unsigned int dim = meta.shape[dimension];
             unsigned int index = rem % dim;
             rem /= dim;
@@ -251,7 +251,7 @@ where
     const {
         assert!(
             N <= MAX_STRIDED_RANK,
-            "CUDA strided reductions support rank <= 4"
+            "CUDA strided reductions exceed metadata capacity"
         );
     }
     let len = a_layout.checked_size().map_err(map_layout_err)?;
@@ -261,9 +261,9 @@ where
             a,
             b,
             meta: MapReductionMeta {
-                shape: [1; 4],
-                a_strides: [0; 4],
-                b_strides: [0; 4],
+                shape: [1; 8],
+                a_strides: [0; 8],
+                b_strides: [0; 8],
                 offsets: [0; 4],
             },
             partial: device.upload(&[T::IDENTITY])?,
@@ -454,9 +454,9 @@ mod tests {
     #[test]
     fn source_declares_strided_map_reduction_contract() {
         let source = shader_source::<DotMap, f32>(BlockWidth::DEFAULT);
-        assert!(source.contains("shape[4]"));
-        assert!(source.contains("a_strides[4]"));
-        assert!(source.contains("b_strides[4]"));
+        assert!(source.contains("shape[8]"));
+        assert!(source.contains("a_strides[8]"));
+        assert!(source.contains("b_strides[8]"));
         assert!(source.contains("shared_data"));
         assert!(source.contains("lhs * rhs"));
         assert!(source.contains("__syncthreads();"));

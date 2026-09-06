@@ -1,0 +1,62 @@
+[build-system]
+requires = ["maturin>=1.9.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "hephaestus-python"
+# Single source of truth: maturin reads the version from Cargo.toml, which
+# inherits the workspace version.
+dynamic = ["version"]
+description = "GPU array compute for Python: typed device buffers and kernel dispatch over the Hephaestus accelerator substrate"
+readme = "README.md"
+# Matches the wheel matrix in .github/workflows/python-release.yml. The
+# bindings are not abi3, so this floor is the lowest interpreter built rather
+# than an abi3 minimum.
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+authors = [
+    { name = "Ryan Clanton", email = "ryanclanton@outlook.com" },
+]
+keywords = ["gpu", "wgpu", "cuda", "array", "rust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Environment :: GPU",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: System :: Hardware :: Symmetric Multi-processing",
+]
+dependencies = [
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ryancinsight/hephaestus"
+Repository = "https://github.com/ryancinsight/hephaestus"
+Issues = "https://github.com/ryancinsight/hephaestus/issues"
+
+[tool.maturin]
+module-name = "pyhephaestus"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"

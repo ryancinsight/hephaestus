@@ -106,23 +106,22 @@ pub(crate) fn normal_with_seed(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use crate::test_support::prepare_python;
+    use crate::test_support::{default_wgpu_device, prepare_python};
 
-    #[test]
-    fn test_py_rng_initializers() {
+    pub(crate) fn random_initializers_preserve_seeded_contracts() {
         prepare_python();
         Python::attach(|py| {
-            let device = PyDevice::new(None).unwrap();
-            let u = uniform_with_seed(py, vec![100], -1.0, 2.0, 13, &device).unwrap();
+            let device = default_wgpu_device();
+            let u = uniform_with_seed(py, vec![100], -1.0, 2.0, 13, device).unwrap();
             assert_eq!(u.shape, vec![100]);
             let u_list = u.tolist(py).unwrap();
             for &val in &u_list {
                 assert!((-1.0..2.0).contains(&val));
             }
 
-            let n = normal_with_seed(py, vec![100], 0.0, 1.0, 13, &device).unwrap();
+            let n = normal_with_seed(py, vec![100], 0.0, 1.0, 13, device).unwrap();
             assert_eq!(n.shape, vec![100]);
             let n_list = n.tolist(py).unwrap();
             assert!(n_list.iter().any(|&val| val != 0.0));

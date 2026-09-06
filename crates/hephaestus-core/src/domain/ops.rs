@@ -264,6 +264,30 @@ pub struct EluOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EluGradOp;
 
+/// Hard sigmoid activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardsigmoidOp;
+
+/// Hard sigmoid activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardsigmoidGradOp;
+
+/// Hard swish activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardswishOp;
+
+/// Hard swish activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HardswishGradOp;
+
+/// Softsign activation operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftsignOp;
+
+/// Softsign activation gradient operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SoftsignGradOp;
+
 impl UnaryExpr<Wgsl> for ExpOp {
     const EXPR: &'static str = "exp(x)";
 }
@@ -544,6 +568,32 @@ impl_activation_unary_exprs!(
         EluGradOp,
         "select(exp(x), 1.0, x >= 0.0)",
         "x >= 0.0f ? 1.0f : expf(x)"
+    ),
+    (
+        HardsigmoidOp,
+        "clamp(x / 6.0 + 0.5, 0.0, 1.0)",
+        "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"
+    ),
+    (
+        HardsigmoidGradOp,
+        "select(0.0, 1.0 / 6.0, (x > -3.0) && (x < 3.0))",
+        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+    ),
+    (
+        HardswishOp,
+        "x * clamp(x + 3.0, 0.0, 6.0) / 6.0",
+        "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"
+    ),
+    (
+        HardswishGradOp,
+        "select(select(0.0, (2.0 * x + 3.0) / 6.0, (x > -3.0) && (x < 3.0)), 1.0, x >= 3.0)",
+        "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+    ),
+    (SoftsignOp, "x / (1.0 + abs(x))", "x / (1.0f + fabsf(x))"),
+    (
+        SoftsignGradOp,
+        "1.0 / ((1.0 + abs(x)) * (1.0 + abs(x)))",
+        "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
     ),
 );
 
@@ -879,6 +929,21 @@ impl_hip_unary_exprs!(
     ),
     (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
     (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
+    (HardsigmoidOp, "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"),
+    (
+        HardsigmoidGradOp,
+        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+    ),
+    (HardswishOp, "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"),
+    (
+        HardswishGradOp,
+        "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+    ),
+    (SoftsignOp, "x / (1.0f + fabsf(x))"),
+    (
+        SoftsignGradOp,
+        "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
+    ),
 );
 
 macro_rules! impl_hip_binary_exprs {
@@ -1001,6 +1066,12 @@ impl IdentityToken<SumOp, CudaC> for u32 {
 impl IdentityToken<SumOp, CudaC> for i32 {
     const TOKEN: &'static str = "0";
 }
+impl IdentityToken<SumOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(0.0f)";
+}
+impl IdentityToken<SumOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(0.0f)";
+}
 
 impl IdentityToken<ProdOp, Wgsl> for f32 {
     const TOKEN: &'static str = "1.0";
@@ -1019,6 +1090,12 @@ impl IdentityToken<ProdOp, CudaC> for u32 {
 }
 impl IdentityToken<ProdOp, CudaC> for i32 {
     const TOKEN: &'static str = "1";
+}
+impl IdentityToken<ProdOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(1.0f)";
+}
+impl IdentityToken<ProdOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(1.0f)";
 }
 
 impl IdentityToken<MinOp, Wgsl> for f32 {
@@ -1039,6 +1116,12 @@ impl IdentityToken<MinOp, CudaC> for u32 {
 impl IdentityToken<MinOp, CudaC> for i32 {
     const TOKEN: &'static str = "2147483647";
 }
+impl IdentityToken<MinOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(65504.0f)";
+}
+impl IdentityToken<MinOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(3.38953139e+38f)";
+}
 
 impl IdentityToken<MaxOp, Wgsl> for f32 {
     const TOKEN: &'static str = "-3.402823466e+38";
@@ -1057,6 +1140,12 @@ impl IdentityToken<MaxOp, CudaC> for u32 {
 }
 impl IdentityToken<MaxOp, CudaC> for i32 {
     const TOKEN: &'static str = "-2147483648";
+}
+impl IdentityToken<MaxOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(-65504.0f)";
+}
+impl IdentityToken<MaxOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(-3.38953139e+38f)";
 }
 
 impl IdentityToken<CumSumOp, Wgsl> for f32 {
@@ -1151,6 +1240,30 @@ mod tests {
         assert_eq!(
             <EluGradOp as UnaryExpr<Wgsl>>::EXPR,
             "select(exp(x), 1.0, x >= 0.0)"
+        );
+        assert_eq!(
+            <HardsigmoidOp as UnaryExpr<HipC>>::EXPR,
+            "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"
+        );
+        assert_eq!(
+            <HardsigmoidGradOp as UnaryExpr<HipC>>::EXPR,
+            "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
+        );
+        assert_eq!(
+            <HardswishOp as UnaryExpr<HipC>>::EXPR,
+            "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"
+        );
+        assert_eq!(
+            <HardswishGradOp as UnaryExpr<HipC>>::EXPR,
+            "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
+        );
+        assert_eq!(
+            <SoftsignOp as UnaryExpr<HipC>>::EXPR,
+            "x / (1.0f + fabsf(x))"
+        );
+        assert_eq!(
+            <SoftsignGradOp as UnaryExpr<HipC>>::EXPR,
+            "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
         );
         assert_eq!(
             <Log10Op as UnaryExpr<Wgsl>>::EXPR,

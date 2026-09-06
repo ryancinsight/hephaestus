@@ -131,19 +131,23 @@ fn cuda_input_buffer_may_drop_while_its_kernel_is_in_flight() {
 /// `device_local_copy_uses_one_synchronous_copy_without_context_barrier`.
 #[test]
 fn cuda_allocation_and_free_select_the_same_allocator() {
-    let device_source = include_str!("../src/infrastructure/device.rs");
+    let device_source = include_str!("../src/infrastructure/device/access.rs");
     let buffer_source = include_str!("../src/infrastructure/buffer.rs");
+    let context_source = include_str!("../src/infrastructure/device/context.rs");
 
     // Allocation branches on the context flag and offers both allocators.
     assert!(device_source.contains("if self.context.stream_ordered"));
-    assert_eq!(device_source.matches("cuMemAllocAsync(").count(), 1);
-    assert_eq!(device_source.matches("cuMemAlloc_v2(").count(), 1);
+    assert_eq!(
+        device_source.matches("memory.allocate_ordered)(").count(),
+        1
+    );
+    assert_eq!(device_source.matches("memory.allocate)(").count(), 1);
 
     // The free branches on the same flag and offers exactly the matching pair.
     assert!(buffer_source.contains("if context.stream_ordered"));
-    assert_eq!(buffer_source.matches("cuMemFreeAsync(").count(), 1);
-    assert_eq!(buffer_source.matches("cuMemFree_v2(").count(), 1);
+    assert_eq!(buffer_source.matches("memory.free_ordered)(").count(), 1);
+    assert_eq!(buffer_source.matches("memory.free)(").count(), 1);
 
     // The capability is probed, never assumed.
-    assert!(device_source.contains("CU_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED"));
+    assert!(context_source.contains("Attribute::MemoryPoolsSupported"));
 }

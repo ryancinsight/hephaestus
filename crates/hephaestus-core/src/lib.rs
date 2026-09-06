@@ -78,15 +78,17 @@ pub use domain::ops::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, CeilOp,
     CombineExpr, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ErfOp, ErfcOp,
     Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp, GeluTanhGradOp,
-    GeluTanhOp, GtOp, IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op,
-    LtOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
-    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp,
-    TypedBinaryExpr, UnaryExpr,
+    GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp, IdentityOp,
+    IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp, MaxOp, MinOp, MishGradOp,
+    MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
+    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
+    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp,
+    TruncOp, TypedBinaryExpr, UnaryExpr,
 };
 pub use domain::parameterized::{
-    HardtanhGradOp, HardtanhOp, ParameterizedUnaryExpr, ParameterizedUnaryOps, ThresholdGradOp,
-    ThresholdOp, validate_parameterized_output,
+    CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
+    LeakyReluGradOp, LeakyReluOp, ParameterizedUnaryExpr, ParameterizedUnaryOps, SoftshrinkGradOp,
+    SoftshrinkOp, ThresholdGradOp, ThresholdOp, validate_parameterized_output,
 };
 pub use domain::pooling::{
     PoolingBackwardOperands, PoolingForwardOperands, PoolingMode, PoolingOps, PoolingPlan,
@@ -103,6 +105,7 @@ pub use domain::sliding_window::{
     plan_sliding_window_fold, plan_sliding_window_unfold,
 };
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
+pub use domain::staggered::{Staggered3DOps, Staggered3DParams, StaggeredAxis};
 pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
     RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,

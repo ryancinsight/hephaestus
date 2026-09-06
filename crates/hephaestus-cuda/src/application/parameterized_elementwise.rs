@@ -98,7 +98,10 @@ where
     Op: ParameterizedUnaryExpr<CudaC>,
 {
     const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
+        assert!(
+            N <= MAX_STRIDED_RANK,
+            "strided dispatch exceeds metadata capacity"
+        );
     }
     let input_layout = input
         .layout
@@ -119,7 +122,7 @@ where
     let meta = StridedMeta {
         shape: pad_shape(output.layout.shape())?,
         a_strides: pad_strides(input_layout.strides())?,
-        b_strides: [0; 4],
+        b_strides: [0; 8],
         out_strides: pad_strides(output.layout.strides())?,
         offsets: [
             to_u32(input_layout.offset(), "input offset")?,
@@ -172,4 +175,7 @@ impl ParameterizedUnaryOps<CudaDevice> for CudaParameterizedUnaryOps {
     }
 }
 
-pub use hephaestus_core::{HardtanhGradOp, HardtanhOp, ThresholdGradOp, ThresholdOp};
+pub use hephaestus_core::{
+    CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
+    LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
+};
