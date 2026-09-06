@@ -34,8 +34,6 @@ use super::validate::validate_dense_operand;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
-#[cfg(feature = "cuda")]
-use crate::infrastructure::device::cuda_byte_count;
 
 #[cfg(feature = "cuda")]
 mod householder;
@@ -214,7 +212,7 @@ pub fn qr_decompose_blocked(
         let work_buf = device.alloc_uninitialized::<f32>(m * n)?;
         device.bind()?;
         let bytes = m * n * std::mem::size_of::<f32>();
-        let byte_count = cuda_byte_count(bytes, "blocked QR startup copy byte count")?;
+
         // SAFETY: this device's context is current (`bind` above). `work_buf`
         // is a live, freshly allocated `m * n`-element device allocation, and
         // `matrix.buffer` holds at least `m * n` elements: the operand is
@@ -224,9 +222,8 @@ pub fn qr_decompose_blocked(
         // asynchronous on the null stream; both allocations outlive it
         // because frees route through synchronizing `cuMemFree`-family
         // calls.
-        let res = unsafe {
-            cuda_oxide::sys::cuMemcpyDtoD_v2(work_buf.raw(), matrix.buffer.raw(), byte_count)
-        };
+        let res =
+            unsafe { (device.driver().memory.copy)(work_buf.raw(), matrix.buffer.raw(), bytes) };
         if res != 0 {
             return Err(HephaestusError::TransferFailed {
                 message: format!("QR startup cuMemcpyDtoD_v2 failed: {res}"),

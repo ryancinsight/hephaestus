@@ -12,13 +12,12 @@ keywords = ["gpu", "cuda", "nvidia", "compute", "kernel"]
 categories.workspace = true
 
 [features]
-# Default includes the CUDA toolchain so the crate builds and runs with CUDA
-# support enabled by default. The driver is still loaded dynamically at runtime,
-# so deployment does not require static CUDA linkage.
+# CUDA support loads the system driver and runtime compiler on demand.
+# Building this backend needs neither toolkit headers nor a CUDA import library.
 default = ["parallel", "mnemosyne-memory", "decomposition", "cuda"]
 parallel = []
 mnemosyne-memory = []
-cuda = ["dep:cuda-oxide", "dep:libloading"]
+cuda = ["dep:libloading"]
 ## Enable dense matrix decompositions (Cholesky, LU, QR) backed by leto-ops.
 ## The decomposition modules launch CUDA kernels and therefore require the
 ## CUDA device substrate as part of the same feature contract.
@@ -33,9 +32,8 @@ smallvec = { workspace = true }
 themis = { workspace = true }
 moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
+tracing = { workspace = true }
 libloading = { version = "0.8", optional = true }
-# cuda-oxide owns the device substrate per ADR 0001.
-cuda-oxide = { version = "0.4.0", optional = true }
 
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
@@ -48,10 +46,6 @@ required-features = ["decomposition"]
 
 [[example]]
 name = "cuda_init"
-required-features = ["cuda"]
-
-[[example]]
-name = "cuda_raw"
 required-features = ["cuda"]
 
 [lints]

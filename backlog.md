@@ -1,16 +1,25 @@
 # Backlog — hephaestus
 
 <a id="heph-cuda-driver-boundary"></a>
-## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — in-progress
+## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — review
 
-- **Integrator:** codex/root; **last-update:** 2026-09-05; consumer [APOLLO-CUDA-CRT-LINKAGE](../apollo/backlog.md#apollo-cuda-crt-linkage).
+- **Integrator:** codex/root; **last-update:** 2026-09-05; consumer [APOLLO-CUDA-CRT-LINKAGE](../apollo/backlog.md#apollo-cuda-crt-linkage); parent [Atlas item](../../backlog.md#atlas-cuda-driver-boundary).
 - **Outcome:** replace `cuda-oxide` with the provider's native dynamically loaded driver boundary, preserving the public compute seam and numeric driver errors.
 - **Scope:** eleven CUDA binding callers, private ABI/loader, manifest/lock, transfer contracts, crate docs and governing ADR 0001; Atlas ADR 0001 is the parent decision. No FFT kernel or license-policy changes.
 - **Evidence:** `infrastructure/device.rs::current_memory_info` supplies dependency `size_t = c_ulong` outputs to `cuMemGetInfo_v2`; Windows x64 supplies 32-bit storage where CUDA 13.3 requires 64-bit outputs. The same dependency also links `cuda.lib` with LIBCMT and violates Apollo's all-feature license policy.
 - **Acceptance:** header-grounded pointer-sized byte counts and opaque-handle ABI; owned library lifetime; distinct absence, symbol, initialization and operation errors; dependency absent from the activated graph; no static CUDA import library.
-- **Verification:** existing physical-device memory/transfer/context/kernel contracts, ABI assertions, warning-denied Windows link, provider tests and Apollo all-feature license/integration gates.
+- **Verification:** 305 required-device/host tests, 184 release CUDA tests, 112 no-default-feature tests, workspace Clippy/docs, both 196-check SemVer comparisons and standalone all-feature deny pass. The added full-size norm oracle regression passes debug/release; example and complete comparative smoke pass under 60 seconds. Source hashes and run logs: Atlas `output/cuda-driver-boundary`.
 - **Decision:** revise ADR 0001's contradictory dependency prescription against its no-toolkit dynamic-loading contract; first-party `libloading` use already supplies the loader mechanism.
-- **Begun:** read-only caller/header audit and dependency closure complete at `2c6ffc2`; implementation will reuse the clean existing master lane after its board claim is visible. This scope is disjoint from the live WGPU provider item.
+- **Entry:** standalone all-target/all-feature CUDA check passes at `83f5e13`; no native baseline executes the confirmed unsafe ABI. Implementation follows the revised [ADR 0001](docs/adr/0001-cuda-backend.md) on the clean published-provider base.
+
+<a id="heph-nvrtc-loader-errors"></a>
+## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
+
+- **Outcome/scope:** preserve library, directory-enumeration and missing-export errors in `infrastructure/compiler.rs` runtime compiler acquisition; no driver ABI or mathematical kernel change.
+- **Evidence:** `NvrtcDriver::get` discards required-symbol errors with `.ok()?`; `find_nvrtc_library` suppresses library and directory errors, reporting every failure as unavailable.
+- **Acceptance:** real absent-library, present-invalid-library and missing-export cases retain their identities and error categories; existing real-device kernel compilation and dispatch contracts pass.
+- **Dependencies/authority:** the native driver boundary item; authorized provider change, separate compiler acquisition contract.
+- **Verification:** locked warning-denied checks, required-device bounded Nextest, native-loader failure tests and independent review; no fake compiler or weakened runtime budgets.
 
 ## HEPH-STAGGERED-3D-2026-09-04 — Device 3-D staggered gradient/divergence pair [minor] [arch] — review <a id="heph-staggered-3d-2026-09-04"></a>
 
@@ -916,20 +925,10 @@
   evidence shows the n² host→device transfer removed. `GpuCholesky::inner`
   keeps its host array; only the redundant upload goes.
 
-## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — todo (external blocker)
+<a id="heph-cuda-oxide-memcpy2d-abi"></a>
+## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — in-progress
 
-- Owner: unclaimed; root cause is upstream (cuda-oxide), outside the
-  allowlist — external integration requirement.
-- Outcome: replace the per-row 2-D region-copy workaround with one
-  `cuMemcpy2DAsync` per region once upstream fixes the ABI.
-- Evidence (audit 2026-08-27):
-  `crates/hephaestus-cuda/src/application/decomposition/region.rs` enqueues
-  per-row 1-D copies because cuda-oxide 0.4.0 generates `size_t` as
-  `c_ulong`, making `CUDA_MEMCPY2D` layout-incompatible with the CUDA driver
-  ABI on Windows/MSVC (module doc records this).
-- Re-open trigger: a cuda-oxide release with a corrected `CUDA_MEMCPY2D`
-  layout on Windows/MSVC; verify the struct layout against the driver header
-  before adopting.
+- Incorporated into [HEPH-CUDA-DRIVER-BOUNDARY](#heph-cuda-driver-boundary); provider-owned ABI replaces the upstream dependency and per-row workaround.
 
 ## ✅ HEPH-CUDA-LIMITS-SEMANTICS [minor] — done 2026-09-02
 
@@ -1195,7 +1194,7 @@
   class weighting or ignored labels, and performance claims without matched
   measurement.
 - Dependencies: merged Leto 0.40 cross-entropy oracle and its Eunomia 0.8/rkyv
-  0.8 provider graph; WGPU 30, cuda-oxide 0.4, and the existing HIP toolchain.
+  0.8 provider graph; WGPU 30, the native CUDA driver boundary, and the existing HIP toolchain.
 - Acceptance: one core loss seam validates complete requests before dispatch;
   all four providers pass shared f32 forward/backward and typed rejection
   contracts without host payload transfer or fallback; warning-denied gates,
@@ -1528,8 +1527,7 @@
   lost; the sparse-seam content is disjoint.
 
 Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
-Source decision: atlas ADR 0001 (shared GPU substrate; wgpu + CUDA composing
-cuda-oxide + cutile).
+Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.md).
 
 ## HEPH-OWNED-DOWNLOAD-1 [minor] [perf] — done
 
@@ -4326,30 +4324,9 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
     build ad-hoc `encode_*` variants now that KS-3 would make redundant for
     these call sites; re-open WG-P4 independently only if KS-3 stalls or
     excludes this op family.
-- [KS-8] [patch] CUDA managed-memory WDDM 0xc0000006 aborts. Status: **done**
-  (2026-07-06 focused recheck). The CUDA launch SSOT drains the current context
-  with a Windows-gated `cuCtxSynchronize` after each `cuLaunchKernel`, making
-  null-stream kernel completion explicit before later host touchpoints. The
-  Stage 1 substrate also follows ADR-0001 directly: cuda-oxide initializes the
-  driver, creates/binds the context, allocates device memory with
-  `cuMemAlloc_v2`, transfers with checked `cuMemcpy*` byte counts, and frees
-  with context-bound `cuMemFree_v2`. CUDA allocation hints resolve through one
-  non-managed primary-buffer tier: all allocatable placement hints are recorded
-  as `MemoryTier::Device`, budget-only tiers are rejected, and
-  `MappablePrimaryBuffers` is false. This removes the managed-memory path that
-  triggered WDDM `STATUS_IN_PAGE_ERROR` faults. The blocked-decomposition
-  region helper uses row-wise 1D copies instead of cuda-oxide 0.4.0's
-  Windows-incompatible `CUDA_MEMCPY2D` layout. Evidence: focused live-CUDA
-  `cargo nextest run -p hephaestus-cuda
-  reduction_sum_matches_cpu_reference reduction_min_max_matches_cpu_reference
-  reduction_width_is_part_of_dispatch_contract
-  reduction_axis_reduction_generic_matches_cpu linalg_dot_matches_cpu_reference
-  linalg_trace_matches_cpu_reference linalg_norms_match_cpu_reference
-  hessenberg_reconstructs_and_preserves_similarity_invariants
-  non_default_block_width_produces_identical_results` passes 9/9. Residual
-  tracking is limited to the documented concurrent-device-acquisition case;
-  current focused evidence is `cargo nextest run -p hephaestus-cuda
-  concurrent_device_acquisition_is_safe` (1/1).
+- [KS-8] [patch] CUDA managed-memory WDDM aborts — done (2026-07-06).
+  Context-bound device allocations replace managed memory; current driver and
+  transfer contracts live in [ADR 0001](docs/adr/0001-cuda-backend.md).
 - [KS-9] [minor] `hephaestus-metal` decision: retain the dedicated typed
   backend crate over wgpu-Metal. Status: **done** (2026-07-24). The crate owns
   `MetalDevice`/`MetalBuffer`, preserves the backend-neutral application
@@ -4667,18 +4644,10 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
 - [x] [patch] Fix `as usize` casts on test-only `u64` values in
   `pipeline.rs` tests; replaced with `try_into().expect("invariant: ...")`.
 
-## Phase 2: CUDA backend (cuda-oxide + cutile composed) [arch]
-- [x] [arch] Gating ADR accepted: `docs/adr/0001-cuda-backend.md` — cuda-oxide
-  owns the device substrate (driver/context/streams/memory/transfers, mapping
-  one-to-one onto `ComputeDevice`), cutile owns tile/PTX kernel authoring,
-  with a strict SoC boundary between them; dynamic driver loading preserves
-  no-toolkit-to-compile; adapterless hosts skip like the wgpu suite.
-- [x] [arch] `hephaestus-cuda` stage 1: device substrate on cuda-oxide
-  (acquisition, typed `PhantomData<T>` buffers, transfers) + contract tests.
-- [x] [minor] Stage 2: elementwise/reduction kernels via cutile; stage 3:
-  strided variants over the shared packed layout metadata.
-- [x] [minor] Differential parity of the CUDA elementwise/reduction dispatch vs
-  the wgpu backend and CPU references.
+## Phase 2: CUDA backend [arch]
+
+- Current substrate contract: [ADR 0001](docs/adr/0001-cuda-backend.md).
+- Native boundary verification: [HEPH-CUDA-DRIVER-BOUNDARY](#heph-cuda-driver-boundary).
 
 ## Phase 2.5: heterogeneous topology integration (atlas ADR 0002) [arch]
 - [x] [minor] Placement-aware allocation: thread themis `PlacementHint` /

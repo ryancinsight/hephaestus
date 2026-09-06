@@ -10,7 +10,9 @@ use hephaestus_cuda::CudaDevice;
 fn cuda_satisfies_the_transfer_contract() {
     let device = match CudaDevice::try_default() {
         Ok(device) => device,
-        Err(error) if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_none() => {
+        Err(error @ hephaestus_core::HephaestusError::AdapterUnavailable { .. })
+            if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_none() =>
+        {
             eprintln!("skip CUDA transfer conformance: device unavailable ({error})");
             return;
         }
@@ -21,7 +23,7 @@ fn cuda_satisfies_the_transfer_contract() {
 
 #[test]
 fn device_local_copy_uses_one_synchronous_copy_without_context_barrier() {
-    let device_source = include_str!("../src/infrastructure/device.rs");
+    let device_source = include_str!("../src/infrastructure/device/compute.rs");
     let copy_buffer = function_body(device_source, "fn copy_buffer<T: Pod>");
     assert_eq!(copy_buffer.matches("stream.copy(src, dst)?").count(), 1);
     assert_eq!(copy_buffer.matches("stream.submit()").count(), 1);
@@ -36,7 +38,7 @@ fn device_local_copy_uses_one_synchronous_copy_without_context_barrier() {
     let stream_source = include_str!("../src/application/stream.rs");
     let copy = function_body(stream_source, "fn copy<T: Pod>");
     assert_eq!(
-        copy.matches("cuMemcpyDtoD_v2(dst.raw(), src.raw(), byte_count)")
+        copy.matches("memory.copy)(dst.raw(), src.raw(), byte_len)")
             .count(),
         1
     );
@@ -45,7 +47,7 @@ fn device_local_copy_uses_one_synchronous_copy_without_context_barrier() {
     let stream_sync = function_body(device_source, "fn synchronize_default_stream");
     assert_eq!(
         stream_sync
-            .matches("cuda_oxide::sys::cuStreamSynchronize(core::ptr::null_mut())")
+            .matches("context.synchronize_stream)(core::ptr::null_mut())")
             .count(),
         1
     );
@@ -72,4 +74,34 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
         }
     }
     panic!("function body end");
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+fn memory_capacity_uses_pointer_sized_driver_outputs() {
+    use hephaestus_core::{ComputeDevice, ComputeDeviceCapabilities, HephaestusError};
+    let device = match CudaDevice::try_default() {
+        Ok(device) => device,
+        Err(HephaestusError::AdapterUnavailable { .. })
+            if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_none() =>
+        {
+            return;
+        }
+        Err(error) => panic!("CUDA memory ABI requires a working device: {error}"),
+    };
+    let total = device.device_limits().max_buffer_size;
+    let free = device.free_memory_bytes().expect("query free memory");
+    assert!(total > 0, "a real CUDA device has memory capacity");
+    assert!(free <= total, "free bytes cannot exceed physical capacity");
+    let expected = [0x1234_5678_u64, u64::MAX, 0, 1 << 63];
+    let buffer = device
+        .upload(&expected)
+        .expect("allocate after memory query");
+    let retained = device.clone();
+    drop(device);
+    let mut actual = [0; 4];
+    retained
+        .download(&buffer, &mut actual)
+        .expect("retained context transfer");
+    assert_eq!(actual, expected);
 }

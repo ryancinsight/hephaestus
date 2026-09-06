@@ -19,3 +19,6 @@ pub mod compiler;
 
 #[cfg(all(feature = "cuda", feature = "decomposition"))]
 pub(crate) mod pinned;
+
+#[cfg(feature = "cuda")]
+pub(crate) mod driver;

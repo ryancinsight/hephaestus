@@ -41,15 +41,15 @@ pub struct NvrtcDriver {
 /// current before unloading — modules are context-owned, and the last `Arc`
 /// may be released on any thread.
 pub struct SafeCachedKernel {
-    pub module: cuda_oxide::sys::CUmodule,
-    pub func: cuda_oxide::sys::CUfunction,
+    pub module: *mut core::ffi::c_void,
+    pub func: *mut core::ffi::c_void,
     context: std::sync::Arc<CudaContext>,
 }
 
 impl SafeCachedKernel {
     pub(crate) fn new(
-        module: cuda_oxide::sys::CUmodule,
-        func: cuda_oxide::sys::CUfunction,
+        module: *mut core::ffi::c_void,
+        func: *mut core::ffi::c_void,
         context: std::sync::Arc<CudaContext>,
     ) -> Self {
         Self {
@@ -77,24 +77,34 @@ impl Drop for SafeCachedKernel {
         }
         // Unloading requires the owning context current on this thread. Drop
         // cannot surface errors; a failed bind or unload leaks the module
-        // (bounded: at most one per cache key per device lifetime) and trips
-        // the debug assertion in dev/test builds. The drop can run between a
+        // (bounded: at most one per cache key per device lifetime). Drop does
+        // not panic on a release fault. It can run between a
         // consumer's `device.bind()` and a raw-handle driver call; restore
         // the previously current context so the drop-time bind cannot
         // silently retarget the dropping thread.
-        let previous = CurrentContext::capture();
+        let Ok(previous) = CurrentContext::capture(self.context.driver) else {
+            // Without the previous context, retain this one resource in
+            // the driver rather than retarget the dropping thread.
+            return;
+        };
         if self.context.bind().is_ok() {
             // SAFETY: `module` is a live handle owned by this value, the
             // owning context is current (bind above), and no other user
             // exists — Drop runs at the last Arc release.
-            let res = unsafe { cuda_oxide::sys::cuModuleUnload(self.module) };
-            debug_assert_eq!(res, 0, "cuModuleUnload failed with code {res}");
-        } else {
-            debug_assert!(false, "SafeCachedKernel drop: context bind failed");
+            let res = unsafe { (self.context.driver.kernel.unload)(self.module) };
+            if res != 0 {
+                tracing::error!(
+                    operation = "cuModuleUnload",
+                    status = res,
+                    "CUDA resource release failed; resource retained"
+                );
+                // Preserve thread routing and leave this unreleased
+                // allocation/module with CUDA after a release failure.
+                previous.restore();
+                return;
+            }
         }
-        if let Some(previous) = previous {
-            previous.restore();
-        }
+        previous.restore();
     }
 }
 
@@ -213,19 +223,6 @@ fn find_nvrtc_library() -> Option<Library> {
     None
 }
 
-/// Destroy an NVRTC program, checking the result (cleanup-path SSOT).
-///
-/// A failed destroy leaks the program object; it cannot be surfaced from
-/// cleanup paths that are already returning a primary error, so it trips the
-/// debug assertion in dev/test builds instead of being silently discarded.
-fn destroy_program(nvrtc: &NvrtcDriver, prog: &mut nvrtcProgram) {
-    // SAFETY (caller-upheld, all call sites in this module): `prog` was
-    // created by `nvrtcCreateProgram` on this same dynamically-loaded NVRTC
-    // instance and has not been destroyed yet.
-    let res = unsafe { (nvrtc.nvrtcDestroyProgram)(prog) };
-    debug_assert_eq!(res, 0, "nvrtcDestroyProgram failed with code {res}");
-}
-
 /// Compile a CUDA C++ source code string to PTX at runtime using NVRTC.
 pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
     let nvrtc = NvrtcDriver::get().ok_or_else(|| "NVRTC driver not available".to_string())?;
@@ -240,7 +237,7 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
     // CStrings kept alive across the calls; `prog` is a valid out-pointer,
     // and after a successful create every subsequent call passes the same
     // live program handle, which is destroyed exactly once on every exit
-    // path via `destroy_program`. The log and PTX buffers are heap
+    // path after the compilation result is collected. The log and PTX buffers are heap
     // allocations sized by the immediately preceding NVRTC size queries
     // before the driver writes into them.
     unsafe {
@@ -256,69 +253,81 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
             return Err(format!("nvrtcCreateProgram failed: {}", res));
         }
 
-        let options = [std::ffi::CString::new("--std=c++11")
-            .expect("infallible: C++ standard flag contains no null bytes")];
-        let options_ptr: Vec<*const std::ffi::c_char> =
-            options.iter().map(|o| o.as_ptr()).collect();
+        let compiled = (|| {
+            let options = [std::ffi::CString::new("--std=c++11")
+                .expect("infallible: C++ standard flag contains no null bytes")];
+            let options_ptr: Vec<*const std::ffi::c_char> =
+                options.iter().map(|o| o.as_ptr()).collect();
 
-        let compile_res = (nvrtc.nvrtcCompileProgram)(
-            prog,
-            options_ptr.len() as std::ffi::c_int,
-            options_ptr.as_ptr(),
-        );
+            let compile_res = (nvrtc.nvrtcCompileProgram)(
+                prog,
+                options_ptr.len() as std::ffi::c_int,
+                options_ptr.as_ptr(),
+            );
 
-        if compile_res != 0 {
-            // Best-effort log retrieval: a failed size/log query yields an
-            // empty log rather than reading uninitialized bytes.
-            let mut log_size: usize = 0;
-            let log_str = if (nvrtc.nvrtcGetProgramLogSize)(prog, &mut log_size) == 0
-                && log_size > 0
-            {
-                let mut log_bytes = vec![0u8; log_size];
-                if (nvrtc.nvrtcGetProgramLog)(prog, log_bytes.as_mut_ptr() as *mut std::ffi::c_char)
-                    == 0
-                {
-                    while log_bytes.last() == Some(&0) {
-                        log_bytes.pop();
-                    }
-                    String::from_utf8_lossy(&log_bytes).into_owned()
-                } else {
-                    "<nvrtcGetProgramLog failed>".to_string()
-                }
-            } else {
-                "<no compile log available>".to_string()
-            };
+            if compile_res != 0 {
+                // Best-effort log retrieval: a failed size/log query yields an
+                // empty log rather than reading uninitialized bytes.
+                let mut log_size: usize = 0;
+                let log_str =
+                    if (nvrtc.nvrtcGetProgramLogSize)(prog, &mut log_size) == 0 && log_size > 0 {
+                        let mut log_bytes = vec![0u8; log_size];
+                        if (nvrtc.nvrtcGetProgramLog)(
+                            prog,
+                            log_bytes.as_mut_ptr() as *mut std::ffi::c_char,
+                        ) == 0
+                        {
+                            while log_bytes.last() == Some(&0) {
+                                log_bytes.pop();
+                            }
+                            String::from_utf8_lossy(&log_bytes).into_owned()
+                        } else {
+                            "<nvrtcGetProgramLog failed>".to_string()
+                        }
+                    } else {
+                        "<no compile log available>".to_string()
+                    };
 
-            destroy_program(nvrtc, &mut prog);
-            return Err(format!(
-                "nvrtcCompileProgram failed (code {}). Log:\n{}",
-                compile_res, log_str
-            ));
+                return Err(format!(
+                    "nvrtcCompileProgram failed (code {}). Log:\n{}",
+                    compile_res, log_str
+                ));
+            }
+
+            let mut ptx_size: usize = 0;
+            let ptx_res = (nvrtc.nvrtcGetPTXSize)(prog, &mut ptx_size);
+            if ptx_res != 0 {
+                return Err(format!("nvrtcGetPTXSize failed: {}", ptx_res));
+            }
+
+            let mut ptx_bytes = vec![0u8; ptx_size];
+            let ptx_get_res =
+                (nvrtc.nvrtcGetPTX)(prog, ptx_bytes.as_mut_ptr() as *mut std::ffi::c_char);
+            if ptx_get_res != 0 {
+                return Err(format!("nvrtcGetPTX failed: {}", ptx_get_res));
+            }
+
+            while ptx_bytes.last() == Some(&0) {
+                ptx_bytes.pop();
+            }
+
+            let ptx_str = String::from_utf8(ptx_bytes)
+                .map_err(|e| format!("PTX is not valid UTF-8: {}", e))?;
+            Ok(ptx_str)
+        })();
+        let destroy_status = (nvrtc.nvrtcDestroyProgram)(&mut prog);
+        if destroy_status != 0 {
+            tracing::error!(
+                operation = "nvrtcDestroyProgram",
+                status = destroy_status,
+                "NVRTC program release failed; program retained"
+            );
+            let cleanup = format!("nvrtcDestroyProgram -> {destroy_status}");
+            return Err(match compiled {
+                Ok(_) => cleanup,
+                Err(primary) => format!("{primary}; {cleanup}"),
+            });
         }
-
-        let mut ptx_size: usize = 0;
-        let ptx_res = (nvrtc.nvrtcGetPTXSize)(prog, &mut ptx_size);
-        if ptx_res != 0 {
-            destroy_program(nvrtc, &mut prog);
-            return Err(format!("nvrtcGetPTXSize failed: {}", ptx_res));
-        }
-
-        let mut ptx_bytes = vec![0u8; ptx_size];
-        let ptx_get_res =
-            (nvrtc.nvrtcGetPTX)(prog, ptx_bytes.as_mut_ptr() as *mut std::ffi::c_char);
-        if ptx_get_res != 0 {
-            destroy_program(nvrtc, &mut prog);
-            return Err(format!("nvrtcGetPTX failed: {}", ptx_get_res));
-        }
-
-        destroy_program(nvrtc, &mut prog);
-
-        while ptx_bytes.last() == Some(&0) {
-            ptx_bytes.pop();
-        }
-
-        let ptx_str =
-            String::from_utf8(ptx_bytes).map_err(|e| format!("PTX is not valid UTF-8: {}", e))?;
-        Ok(ptx_str)
+        compiled
     }
 }

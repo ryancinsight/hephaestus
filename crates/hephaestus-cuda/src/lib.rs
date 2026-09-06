@@ -17,7 +17,7 @@
 //! without source changes. Hephaestus is to the GPU what `leto` is to the CPU;
 //! this crate adds the CUDA pathway alongside the portable wgpu one.
 //!
-//! The CUDA toolchain composes cuda-oxide for device acquisition, context
+//! The CUDA toolchain composes the CUDA driver for device acquisition, context
 //! management, `CUdeviceptr` allocation, and host/device transfer with cutile
 //! for kernel authoring above that substrate. Without the `cuda` feature, the
 //! crate compiles as a stub whose [`CudaDevice::try_default`] reports the

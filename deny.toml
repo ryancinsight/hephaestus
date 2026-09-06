@@ -17,10 +17,6 @@ allow = [
 ]
 confidence-threshold = 0.8
 
-[[licenses.exceptions]]
-allow = ["GPL-3.0-or-later"]
-crate = "cuda-oxide@0.4.0"
-
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
@@ -31,7 +27,6 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
-    "https://github.com/NVlabs/cutile-rs",
     "https://github.com/ryancinsight/aequitas",
     "https://github.com/ryancinsight/eunomia",
     "https://github.com/ryancinsight/hermes.git",
