@@ -25,13 +25,8 @@
   timeout and remains unclaimed follow-up work.
 
 <a id="heph-cuda-adapterless-driver"></a>
-## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — in-progress
-
-- **Integrator:** codex/root; **last-update:** 2026-09-06; scope `.github/workflows/cuda.yml` on a separate default-based fix.
-- **Outcome:** adapterless CUDA tests observe driver absence instead of the toolkit's nonfunctional stub driver; preserve native driver error statuses and test contracts.
-- **Evidence:** hosted master run `34010125103` injects the stub `libcuda.so.1` through `LD_LIBRARY_PATH`; `cuInit` returns 34 and the rectangular contract correctly rejects the driver fault. Atlas log: `output/cuda-driver-boundary/provider-ci-failure.txt`.
-- **Acceptance:** hosted no-device contracts pass without an injected stub; status 34 remains an initialization failure and required-device tests continue rejecting arbitrary driver faults.
-- **Verification:** workflow inspection and hosted CUDA gate on the exact fix revision; no native driver or numerical changes.
+## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — done
+- [PR #278](https://github.com/ryancinsight/hephaestus/pull/278), merge `59436b5`; hosted CUDA adapterless contracts pass on `1f96333` (run `34010979990`). Driver faults retain their status; native source is unchanged.
 
 <a id="heph-nvrtc-loader-errors"></a>
 ## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
