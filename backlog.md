@@ -1,5 +1,17 @@
 # Backlog — hephaestus
 
+<a id="heph-cuda-driver-boundary"></a>
+## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — in-progress
+
+- **Integrator:** codex/root; **last-update:** 2026-09-05; consumer [APOLLO-CUDA-CRT-LINKAGE](../apollo/backlog.md#apollo-cuda-crt-linkage).
+- **Outcome:** replace `cuda-oxide` with the provider's native dynamically loaded driver boundary, preserving the public compute seam and numeric driver errors.
+- **Scope:** eleven CUDA binding callers, private ABI/loader, manifest/lock, transfer contracts, crate docs and governing ADR 0001; Atlas ADR 0001 is the parent decision. No FFT kernel or license-policy changes.
+- **Evidence:** `infrastructure/device.rs::current_memory_info` supplies dependency `size_t = c_ulong` outputs to `cuMemGetInfo_v2`; Windows x64 supplies 32-bit storage where CUDA 13.3 requires 64-bit outputs. The same dependency also links `cuda.lib` with LIBCMT and violates Apollo's all-feature license policy.
+- **Acceptance:** header-grounded pointer-sized byte counts and opaque-handle ABI; owned library lifetime; distinct absence, symbol, initialization and operation errors; dependency absent from the activated graph; no static CUDA import library.
+- **Verification:** existing physical-device memory/transfer/context/kernel contracts, ABI assertions, warning-denied Windows link, provider tests and Apollo all-feature license/integration gates.
+- **Decision:** revise ADR 0001's contradictory dependency prescription against its no-toolkit dynamic-loading contract; first-party `libloading` use already supplies the loader mechanism.
+- **Begun:** read-only caller/header audit and dependency closure complete at `2c6ffc2`; implementation will reuse the clean existing master lane after its board claim is visible. This scope is disjoint from the live WGPU provider item.
+
 ## HEPH-STAGGERED-3D-2026-09-04 — Device 3-D staggered gradient/divergence pair [minor] [arch] — review <a id="heph-staggered-3d-2026-09-04"></a>
 
 - **Integrator:** Claude on `feat/hephaestus-staggered-3d`; **lease:**
