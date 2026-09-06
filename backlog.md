@@ -1,16 +1,17 @@
 # Backlog — hephaestus
 
 <a id="heph-cuda-driver-boundary"></a>
-## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — review
+## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — done
+- Native driver ownership and ABI delivered in [PR #277](https://github.com/ryancinsight/hephaestus/pull/277), merge `242520e`; [ADR 0001](docs/adr/0001-cuda-backend.md), [Atlas item](../../backlog.md#atlas-cuda-driver-boundary), [Apollo consumer](../apollo/backlog.md#apollo-cuda-crt-linkage).
 
-- **Integrator:** codex/root; **last-update:** 2026-09-05; consumer [APOLLO-CUDA-CRT-LINKAGE](../apollo/backlog.md#apollo-cuda-crt-linkage); parent [Atlas item](../../backlog.md#atlas-cuda-driver-boundary).
-- **Outcome:** replace `cuda-oxide` with the provider's native dynamically loaded driver boundary, preserving the public compute seam and numeric driver errors.
-- **Scope:** eleven CUDA binding callers, private ABI/loader, manifest/lock, transfer contracts, crate docs and governing ADR 0001; Atlas ADR 0001 is the parent decision. No FFT kernel or license-policy changes.
-- **Evidence:** `infrastructure/device.rs::current_memory_info` supplies dependency `size_t = c_ulong` outputs to `cuMemGetInfo_v2`; Windows x64 supplies 32-bit storage where CUDA 13.3 requires 64-bit outputs. The same dependency also links `cuda.lib` with LIBCMT and violates Apollo's all-feature license policy.
-- **Acceptance:** header-grounded pointer-sized byte counts and opaque-handle ABI; owned library lifetime; distinct absence, symbol, initialization and operation errors; dependency absent from the activated graph; no static CUDA import library.
-- **Verification:** 305 required-device/host tests, 184 release CUDA tests, 112 no-default-feature tests, workspace Clippy/docs, both 196-check SemVer comparisons and standalone all-feature deny pass. The added full-size norm oracle regression passes debug/release; example and complete comparative smoke pass under 60 seconds. Source hashes and run logs: Atlas `output/cuda-driver-boundary`.
-- **Decision:** revise ADR 0001's contradictory dependency prescription against its no-toolkit dynamic-loading contract; first-party `libloading` use already supplies the loader mechanism.
-- **Entry:** standalone all-target/all-feature CUDA check passes at `83f5e13`; no native baseline executes the confirmed unsafe ABI. Implementation follows the revised [ADR 0001](docs/adr/0001-cuda-backend.md) on the clean published-provider base.
+<a id="heph-cuda-adapterless-driver"></a>
+## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — review
+
+- **Integrator:** codex/root; **last-update:** 2026-09-06; scope `.github/workflows/cuda.yml` on `codex/cuda-adapterless-driver`.
+- **Outcome:** adapterless CUDA tests observe driver absence instead of the toolkit's nonfunctional stub driver; preserve native driver error statuses and test contracts.
+- **Evidence:** hosted master run `34010125103` injects the stub `libcuda.so.1` through `LD_LIBRARY_PATH`; `cuInit` returns 34 and the rectangular contract correctly rejects the driver fault. Atlas log: `output/cuda-driver-boundary/provider-ci-failure.txt`.
+- **Acceptance:** hosted no-device contracts pass without an injected stub; status 34 remains an initialization failure and required-device tests continue rejecting arbitrary driver faults.
+- **Verification:** YAML and shell syntax checks; hosted CUDA gate must pass on the exact fix revision. Native source and numerical tests are unchanged from verified `242520e`.
 
 <a id="heph-nvrtc-loader-errors"></a>
 ## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
