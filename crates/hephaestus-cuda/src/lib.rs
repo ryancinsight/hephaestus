@@ -105,6 +105,9 @@ pub type CudaScanOps = hephaestus_core::AxisScanOps<CudaDevice>;
 /// A scan prepared against one operand pair on this device.
 pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaDevice, T>;
 pub use application::sparse::seam::CudaSparseOps;
+pub use application::staggered::{
+    CudaStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,
+};
 pub use application::stateful_update::CudaStatefulUpdateOps;
 pub use application::stencil::CudaStencilOps;
 pub use application::stencil::{

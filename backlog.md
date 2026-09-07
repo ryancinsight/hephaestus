@@ -46,6 +46,56 @@
 - **Dependencies/authority:** the native driver boundary item; authorized provider change, separate compiler acquisition contract.
 - **Verification:** locked warning-denied checks, required-device bounded Nextest, native-loader failure tests and independent review; no fake compiler or weakened runtime budgets.
 
+## HEPH-STAGGERED-3D-CUDA — CUDA kernels for the staggered pair [minor] — review <a id="heph-staggered-3d-cuda"></a>
+
+- **Integrator:** Claude on `feat/hephaestus-staggered-cuda`; **lease:**
+  `crates/hephaestus-cuda/src/application/staggered.rs`,
+  `crates/hephaestus-cuda/tests/staggered3d.rs`, `Cargo.lock` — 2026-09-06.
+- **Outcome:** `CudaStaggered3DOps` implements `Staggered3DOps<CudaDevice>` with
+  both entry points compiled from one CUDA C source, so the pair cannot drift
+  apart. The gathered-transpose derivation is not restated — it lives once in
+  `hephaestus-wgpu`'s module docs and ADR 0057; this kernel is that formula in
+  CUDA C.
+- **Evidence (2026-09-06), on a live device:** the suite ran with
+  `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1` on an RTX 5080 (CUDA 13.3), so these are
+  real launches rather than skipped cases — **5/5**: the CPU differential
+  against `leto_ops::StaggeredLeapfrog3D` on every axis at orders 2/4/6/8 for
+  both operators, the constant-field wall check, the device-side adjoint
+  identity with a non-degeneracy guard, the storage-length rejection, and the
+  shared conformance clause. Gate: `cargo fmt --check`, `cargo clippy --locked
+  --workspace --all-targets -- -D warnings`, `cargo nextest run --locked -p
+  hephaestus-core -p hephaestus-host -p hephaestus` 121/121, `cargo test
+  --locked --doc --workspace --exclude hephaestus-python`, `cargo doc --locked
+  --workspace --no-deps` warning-free, and the WGPU contract suite still
+  187/187 on its own live adapter.
+- **The differential was proven live:** flipping the sign of the low-wall
+  reflected term in the gathered divergence failed exactly three of the five
+  clauses — the CPU differential, the conformance clause, and the device
+  adjoint identity — while the constant-field and length-mismatch clauses
+  correctly stayed green, since the mutation does not reach them. Reverted and
+  re-run 5/5.
+- **Last-update:** 2026-09-06.
+
+## HEPH-STAGGERED-3D-ROCM — ROCm kernels for the staggered pair [minor] — todo <a id="heph-staggered-3d-rocm"></a>
+
+- **Outcome:** `RocmStaggered3DOps` implementing `Staggered3DOps<RocmDevice>`,
+  judged by the same conformance clauses the WGPU and CUDA backends pass.
+- **Consolidation requirement, not a copy:** the staggered kernel source is
+  plain CUDA/HIP C with no vendor intrinsics, so the ROCm implementation would
+  be byte-identical to the CUDA one. It is the second consumer, which is where
+  consolidation fires: the source moves to a shared home both backends compile
+  — not pasted into a second crate. Choosing that home is part of this item;
+  the existing per-backend Laplacian sources are the precedent to avoid, not to
+  follow.
+- **Blocker:** no AMD device on the development host, so the differential
+  against the CPU pair — the only oracle that makes the gathered transpose
+  trustworthy — cannot run here. Landing an unverifiable copy of a kernel whose
+  wall closure was hand-derived is what the CUDA increment's mutation check
+  exists to prevent.
+- **Re-open trigger:** an AMD device reachable from a development host or a CI
+  runner, or a ROCm emulation path the conformance clauses can drive.
+- **Last-update:** 2026-09-06.
+
 ## HEPH-STAGGERED-3D-2026-09-04 — Device 3-D staggered gradient/divergence pair [minor] [arch] — review <a id="heph-staggered-3d-2026-09-04"></a>
 
 - **Integrator:** Claude on `feat/hephaestus-staggered-3d`; **lease:**
@@ -93,11 +143,10 @@
   `staggered_high_order_matches_cpu`, and `the_device_pair_is_a_negative_adjoint`
   — the three that should catch it — and the mutation was reverted.
 - **Decision record:** [ADR 0057](docs/adr/0057-device-staggered-pair.md).
-- **Follow-on:** `HEPH-STAGGERED-3D-CUDA-ROCM` — CUDA and ROCm kernels for the
-  same trait. The conformance clauses already exist and judge them on the same
-  three oracles; until then those backends simply do not implement
-  `Staggered3DOps`, which is the honest state and the reason it is a separate
-  trait.
+- **Follow-on, split 2026-09-06:** CUDA delivered under
+  [`HEPH-STAGGERED-3D-CUDA`](#heph-staggered-3d-cuda); ROCm parked under
+  [`HEPH-STAGGERED-3D-ROCM`](#heph-staggered-3d-rocm) for want of a device to
+  verify it against.
 - **Last-update:** 2026-09-04.
 
 ## HEPH-PROVIDER-MERGED-2026-09-04 [patch] [arch] — review <a id="heph-provider-merged-2026-09-04"></a>
