@@ -1,5 +1,15 @@
 # Backlog — hephaestus
 
+<a id="heph-cuda-stub-availability"></a>
+## HEPH-CUDA-STUB-AVAILABILITY — Classify an unavailable real driver [patch] — review
+- Outcome: CUDA initialization status 34 reports adapter absence with the stub-library diagnostic; other driver failures remain faults.
+- Scope: driver status mapping, its tests, and acquisition Rustdoc; no loader search-order or consumer guard changes.
+- Acceptance: exact 34/100 absence and 1/3/35/36/46/803/999 fault categories; real required-device transfer still passes.
+- Evidence: CUDA 13.2 `cuda.h` defines `CUDA_ERROR_STUB_LIBRARY = 34`; Coeus's development-image job intentionally loads that SDK stub.
+- Verification: red mapping run `c85eda77`; corrected mapping/real-loader and required-device transfer run `d4350d1e` passes 5/5 (RTX 5080, driver 610.47); CUDA all-targets strict Clippy and scoped format checks pass at the `b249e61` working diff.
+- Host gate: session `70691` passes workspace format/strict all-target Clippy, core/host/root Nextest, workspace doctests (Python excluded), and warning-denied Rustdoc; source diff hash `e0ec6d24eb20a072ed6585adf7a6a30036869b12`. Parent source review accepts the scoped change.
+- Integrator: root; contributor: review_gpu; base: `b249e61`; last-update: 2026-09-07.
+
 <a id="heph-lockfile-queue-latency"></a>
 ## HEPH-LOCKFILE-QUEUE-LATENCY: Bound hosted guard queue latency [patch] - todo
 - Outcome: the lockfile guard receives a hosted runner within its five-minute runtime target.
