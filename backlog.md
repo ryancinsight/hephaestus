@@ -1,13 +1,19 @@
 # Backlog — hephaestus
 
+<a id="heph-lockfile-queue-latency"></a>
+## HEPH-LOCKFILE-QUEUE-LATENCY: Bound hosted guard queue latency [patch] - todo
+- Outcome: the lockfile guard receives a hosted runner within its five-minute runtime target.
+- Scope: shared guard scheduling and duplicate trigger load; preserve the guard and current required verification.
+- Acceptance: record runner-assignment delay below five minutes on the next comparable PR/default-branch deliveries; exact locked guard still passes.
+- Dependency: Atlas shared `.github/workflows/lockfile-guard.yml`, pinned here at `886d85b0`; diagnose account hosted capacity before changing routing.
+- Evidence: PR #285 job `101619278287` queues 24m09s, then passes in 19s; earlier identical jobs queue 9m30s and 23m51s, then pass in 18s and 15s.
+- Limits: `ubuntu-latest` works for other jobs; no configuration fault, billing failure, or platform-wide outage is established.
+- Verification: `python scripts/lockfile.py --check` passes at `7a3a9ec` with 49 first-party Git sources; local execution preserves the guard while hosted delivery is delayed.
+- Last-update: 2026-09-07; driver: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285).
+
 <a id="heph-wgpu-device-request-fault"></a>
-## HEPH-WGPU-DEVICE-REQUEST-FAULT — Preserve logical-device acquisition failures [patch] — in-progress
-- Outcome: adapter absence alone permits fallback; an acquired adapter's failed device request returns `DeviceUnavailable`.
-- Scope: default WGPU acquisition, caller documentation, and real-adapter regression; explicit backend selection remains exact.
-- Acceptance: an unsupported real-adapter limit yields typed device failure without a second adapter attempt; normal WGPU device contracts pass.
-- Integrator: Codex review_gpu; last-update: 2026-09-07; shared branch `build/hephaestus-moirai-06`.
-- Delivery: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285), source `f7c747a`; independent source review finds no blocking defect.
-- Evidence: real-adapter red/green runs `5a78068e`/`94edca71`; full local gates pass, including 226 CUDA/WGPU tests (`48ab85ae`) and 11 bounded FFT smoke cases.
+## HEPH-WGPU-DEVICE-REQUEST-FAULT — Preserve logical-device acquisition failures [patch] — done
+- Typed acquisition errors and the real-adapter regression land in [PR #285](https://github.com/ryancinsight/hephaestus/pull/285), merge `ae871dc`; all hosted checks and 226 local CUDA/WGPU tests pass. The default branch now requires the existing host, ADR, and lockfile checks for automatic merging.
 
 <a id="heph-cuda-context-reacquisition"></a>
 ## HEPH-CUDA-CONTEXT-REACQUISITION — Reacquire after final context release [patch] — done
