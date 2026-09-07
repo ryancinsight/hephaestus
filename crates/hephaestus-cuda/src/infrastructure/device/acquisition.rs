@@ -14,7 +14,8 @@ impl CudaDevice {
     /// Acquire the default CUDA device (ordinal 0).
     ///
     /// Returns [`HephaestusError::AdapterUnavailable`] when no CUDA driver or
-    /// device is present, rather than fabricating a device. The acquired
+    /// device is present, including when the loaded CUDA library is an SDK
+    /// stub. Other initialization failures remain device errors. The acquired
     /// device is bound to the calling thread.
     pub fn try_default() -> Result<Self> {
         Self::try_with_ordinal(0)
@@ -25,8 +26,9 @@ impl CudaDevice {
     /// # Errors
     ///
     /// Returns [`HephaestusError::AdapterUnavailable`] when the CUDA driver or
-    /// requested ordinal is unavailable. Returns
-    /// [`HephaestusError::DeviceUnavailable`] when the context cannot be bound.
+    /// requested ordinal is unavailable, or the loaded library is an SDK stub.
+    /// Returns [`HephaestusError::DeviceUnavailable`] for other initialization
+    /// failures or when the context cannot be bound.
     pub fn try_with_ordinal(device_ordinal: usize) -> Result<Self> {
         let device_ordinal =
             i32::try_from(device_ordinal).map_err(|_| HephaestusError::AdapterUnavailable {

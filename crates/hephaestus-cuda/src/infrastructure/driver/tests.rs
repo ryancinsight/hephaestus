@@ -44,13 +44,18 @@ fn required_symbol_failure_preserves_export_identity() {
 
 #[test]
 fn initialization_statuses_preserve_failure_categories() {
-    match LoadError::Initialize(100).report() {
-        hephaestus_core::HephaestusError::AdapterUnavailable { message } => {
-            assert_eq!(message, "cuInit -> 100 (CUDA_ERROR_NO_DEVICE)")
+    for (status, name) in [
+        (34, "CUDA_ERROR_STUB_LIBRARY"),
+        (100, "CUDA_ERROR_NO_DEVICE"),
+    ] {
+        match LoadError::Initialize(status).report() {
+            hephaestus_core::HephaestusError::AdapterUnavailable { message } => {
+                assert_eq!(message, format!("cuInit -> {status} ({name})"));
+            }
+            error => panic!("wrong absent-driver/device category: {error}"),
         }
-        error => panic!("wrong no-device category: {error}"),
     }
-    for status in [1, 3, 35, 999] {
+    for status in [1, 3, 35, 36, 46, 803, 999] {
         match LoadError::Initialize(status).report() {
             hephaestus_core::HephaestusError::DeviceUnavailable { message } => {
                 assert_eq!(message, format!("cuInit -> {status}"))

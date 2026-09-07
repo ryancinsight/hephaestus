@@ -42,6 +42,11 @@ impl LoadError {
             Self::Symbol { name, source } => HephaestusError::DeviceUnavailable {
                 message: format!("CUDA driver required symbol {name}: {source:?}"),
             },
+            // CUDA's CUresult contract defines 34 as a loaded stub library:
+            // no real driver is available through this process's library.
+            Self::Initialize(34) => HephaestusError::AdapterUnavailable {
+                message: "cuInit -> 34 (CUDA_ERROR_STUB_LIBRARY)".to_owned(),
+            },
             Self::Initialize(100) => HephaestusError::AdapterUnavailable {
                 message: "cuInit -> 100 (CUDA_ERROR_NO_DEVICE)".to_owned(),
             },
