@@ -30,17 +30,13 @@
 - **Scope / non-goals:** WGPU provider acquisition waits, planner ownership,
   provider manifests, tests, docs, and lockfile. Kernel semantics and vendor
   backends are unchanged; Moirai scheduling stays in Moirai.
-- **Acceptance:** `hephaestus-wgpu` has no `moirai-runtime` or `moirai-gpu`
-  dependency, provider-owned functionality remains real and warning-clean, and
+- **Acceptance:** `hephaestus-wgpu` has no direct `moirai-runtime` dependency or resolved `moirai-gpu`
+  package, provider-owned functionality remains real and warning-clean, and
   the generic `ComputeDevice` seam remains usable by downstream adapters. ADR
   [`0058`](docs/adr/0058-provider-consumer-dependency-direction.md).
-- **Integrator:** atlas-session; branch `arch/moirai-hephaestus-gpu-route`;
+- **Integrator:** Codex review_gpu; branch `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07;
   consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
-- **Delivery:** PR [#272](https://github.com/ryancinsight/hephaestus/pull/272) at
-  `1f6defb` plus the pending default-selection correction; the exact device
-  module nextest and format gate pass. The full WGPU gate still contains the
-  pre-existing `application::stream::tests::module_cases_share_process_state`
-  timeout and remains unclaimed follow-up work.
+- **Evidence:** `263f2d7`: locked workspace Clippy, 121 host tests, four doctests, warning-denied docs, 224 required-device CUDA/WGPU tests, no-default builds, and 11 bounded FFT smoke scenarios pass. Stream regression passes in 1.878s. PR [#272](https://github.com/ryancinsight/hephaestus/pull/272); physical HIP/Metal execution remains unavailable locally.
 
 <a id="heph-cuda-adapterless-driver"></a>
 ## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — done
