@@ -4074,4 +4074,4 @@ Execution owner: Codex on `codex/hephaestus-empty-batch-noop`. Claimed files:
 
 ## Codex review_gpu
 
-- [ ] [HEPH-WGPU-DEVICE-REQUEST-FAULT](backlog.md#heph-wgpu-device-request-fault): reproduce a rejected real-adapter limit, preserve the typed fault, then run provider gates and deliver the reviewed fix.
+- [ ] [HEPH-WGPU-DEVICE-REQUEST-FAULT](backlog.md#heph-wgpu-device-request-fault): collect PR #285 delivery and compact the completed item.
