@@ -219,7 +219,8 @@ pub struct ThresholdGradOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LeakyReluOp;
 
-/// Leaky ReLU gradient marker; `first` is the negative slope.
+/// Leaky ReLU gradient marker; `first` is the negative slope, including at
+/// both signed zeros.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LeakyReluGradOp;
 
@@ -268,7 +269,7 @@ impl ParameterizedUnaryExpr<Wgsl> for LeakyReluOp {
 }
 
 impl ParameterizedUnaryExpr<Wgsl> for LeakyReluGradOp {
-    const EXPR: &'static str = "select(first, 1.0, x >= 0.0)";
+    const EXPR: &'static str = "select(first, 1.0, x > 0.0)";
 }
 
 impl ParameterizedUnaryExpr<Wgsl> for HardshrinkOp {
@@ -318,7 +319,7 @@ macro_rules! impl_c_family {
         }
 
         impl ParameterizedUnaryExpr<$dialect> for LeakyReluGradOp {
-            const EXPR: &'static str = "x >= 0.0f ? 1.0f : first";
+            const EXPR: &'static str = "x > 0.0f ? 1.0f : first";
         }
 
         impl ParameterizedUnaryExpr<$dialect> for HardshrinkOp {
@@ -375,6 +376,18 @@ mod tests {
         assert_eq!(
             <LeakyReluOp as ParameterizedUnaryExpr<Wgsl>>::EXPR,
             "select(first * x, x, x >= 0.0)"
+        );
+        assert_eq!(
+            <LeakyReluGradOp as ParameterizedUnaryExpr<Wgsl>>::EXPR,
+            "select(first, 1.0, x > 0.0)"
+        );
+        assert_eq!(
+            <LeakyReluGradOp as ParameterizedUnaryExpr<CudaC>>::EXPR,
+            "x > 0.0f ? 1.0f : first"
+        );
+        assert_eq!(
+            <LeakyReluGradOp as ParameterizedUnaryExpr<HipC>>::EXPR,
+            "x > 0.0f ? 1.0f : first"
         );
         assert_eq!(
             <SoftshrinkOp as ParameterizedUnaryExpr<CudaC>>::EXPR,

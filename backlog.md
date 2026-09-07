@@ -1,5 +1,14 @@
 # Backlog — hephaestus
 
+<a id="heph-leaky-relu-origin"></a>
+## HEPH-LEAKY-RELU-ORIGIN — Preserve the slope at zero [patch] — review
+- Outcome: parameterized Leaky ReLU gradients return the negative slope at both signed zeros.
+- Scope: shared expression dialects and parameterized unary contract; unrelated activations remain outside this item.
+- Acceptance: exact device output for negative, signed-zero, and positive operands; core expression checks and WGPU contracts pass.
+- Integrator: Codex review_gpu on `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07.
+- Evidence: core Nextest 111/111 (45ab80e6); required-device WGPU contracts pass (f7599fa9); affected all-target Clippy warning-clean. CUDA/ROCm/Metal execution remains part of provider integration gates.
+- Driver: Coeus activation parity audit, [consumer board](../coeus/docs/backlog.md).
+
 <a id="heph-cuda-driver-boundary"></a>
 ## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — done
 - Native driver ownership and ABI delivered in [PR #277](https://github.com/ryancinsight/hephaestus/pull/277), merge `242520e`; [ADR 0001](docs/adr/0001-cuda-backend.md), [Atlas item](../../backlog.md#atlas-cuda-driver-boundary), [Apollo consumer](../apollo/backlog.md#apollo-cuda-crt-linkage).
