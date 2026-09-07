@@ -1,42 +1,20 @@
 # Backlog — hephaestus
 
 <a id="heph-rocm-elementwise-rank"></a>
-## HEPH-ROCM-ELEMENTWISE-RANK — Support eight-dimensional operands [patch] — review
-- Outcome: ROCm elementwise and parameterized unary operations instantiate every rank the shared Coeus bridge supports.
-- Scope: strided metadata, shared elementwise routing, and associated ROCm tests/docs; other kernels remain outside this item.
-- Acceptance: rank-eight metadata and indexing agree with the layout oracle; all shipped call sites compile under the locked graph; unavailable ROCm device execution is explicit.
-- Integrator: Codex review_gpu on `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07.
-- Evidence: locked ROCm no-default Nextest 33/33 and all-target Clippy pass on 2026-09-07; rank/address arithmetic independently reviewed. Host packing and generated HIP source are covered; physical HIP execution is unavailable on this Windows host.
-- Driver: Coeus generic rank-eight compilation failure, [consumer board](../coeus/docs/backlog.md).
+## HEPH-ROCM-ELEMENTWISE-RANK — Support eight-dimensional operands [patch] — done
+- Rank-eight metadata and signed 64-bit HIP addresses land in [PR #272](https://github.com/ryancinsight/hephaestus/pull/272), merge `8b2b5f0`; host packing/source tests pass 33/33, with physical HIP execution unavailable locally.
 
 <a id="heph-leaky-relu-origin"></a>
-## HEPH-LEAKY-RELU-ORIGIN — Preserve the slope at zero [patch] — review
-- Outcome: parameterized Leaky ReLU gradients return the negative slope at both signed zeros.
-- Scope: shared expression dialects and parameterized unary contract; unrelated activations remain outside this item.
-- Acceptance: exact device output for negative, signed-zero, and positive operands; core expression checks and WGPU contracts pass.
-- Integrator: Codex review_gpu on `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07.
-- Evidence: core Nextest 111/111 (45ab80e6); required-device WGPU contracts pass (f7599fa9); affected all-target Clippy warning-clean. CUDA/ROCm/Metal execution remains part of provider integration gates.
-- Driver: Coeus activation parity audit, [consumer board](../coeus/docs/backlog.md).
+## HEPH-LEAKY-RELU-ORIGIN — Preserve the slope at zero [patch] — done
+- Signed-zero gradients and shared device oracles land in [PR #272](https://github.com/ryancinsight/hephaestus/pull/272), merge `8b2b5f0`; required-device CUDA/WGPU contracts pass.
 
 <a id="heph-cuda-driver-boundary"></a>
 ## HEPH-CUDA-DRIVER-BOUNDARY — Own the CUDA driver ABI and loading [patch] [arch] — done
 - Native driver ownership and ABI delivered in [PR #277](https://github.com/ryancinsight/hephaestus/pull/277), merge `242520e`; [ADR 0001](docs/adr/0001-cuda-backend.md), [Atlas item](../../backlog.md#atlas-cuda-driver-boundary), [Apollo consumer](../apollo/backlog.md#apollo-cuda-crt-linkage).
 
-## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — review <a id="heph-wgpu-consumer-2026-09-04"></a>
-
-- **Outcome:** remove consumer-runtime ownership from `hephaestus-wgpu` so
-  Moirai can use the provider through `hephaestus-core` without a dependency
-  cycle.
-- **Scope / non-goals:** WGPU provider acquisition waits, planner ownership,
-  provider manifests, tests, docs, and lockfile. Kernel semantics and vendor
-  backends are unchanged; Moirai scheduling stays in Moirai.
-- **Acceptance:** `hephaestus-wgpu` has no direct `moirai-runtime` dependency or resolved `moirai-gpu`
-  package, provider-owned functionality remains real and warning-clean, and
-  the generic `ComputeDevice` seam remains usable by downstream adapters. ADR
-  [`0058`](docs/adr/0058-provider-consumer-dependency-direction.md).
-- **Integrator:** Codex review_gpu; branch `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07;
-  consumer companion: Moirai `MOI-GPU-HEPHAESTUS-ROUTE-2026-09-04`.
-- **Evidence:** `263f2d7`: locked workspace Clippy, 121 host tests, four doctests, warning-denied docs, 224 required-device CUDA/WGPU tests, no-default builds, and 11 bounded FFT smoke scenarios pass. Stream regression passes in 1.878s. PR [#272](https://github.com/ryancinsight/hephaestus/pull/272); physical HIP/Metal execution remains unavailable locally.
+<a id="heph-wgpu-consumer-2026-09-04"></a>
+## HEPH-WGPU-CONSUMER-2026-09-04 [major] [arch] — done
+- Provider dependency direction lands in [PR #272](https://github.com/ryancinsight/hephaestus/pull/272), merge `8b2b5f0`; [ADR 0058](docs/adr/0058-provider-consumer-dependency-direction.md) records exact verification and retained transitive CPU dependencies.
 
 <a id="heph-cuda-adapterless-driver"></a>
 ## HEPH-CUDA-ADAPTERLESS-DRIVER — Remove injected stub driver from adapterless CI [patch] — done
