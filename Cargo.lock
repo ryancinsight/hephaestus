@@ -631,6 +631,7 @@ dependencies = [
  "smallvec",
  "themis-topology",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

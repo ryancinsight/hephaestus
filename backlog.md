@@ -1,5 +1,14 @@
 # Backlog — hephaestus
 
+<a id="heph-cuda-context-reacquisition"></a>
+## HEPH-CUDA-CONTEXT-REACQUISITION — Reacquire after final context release [patch] — review
+- Outcome: pin sole-context drop and immediate same-thread acquisition with exact transfer checks and scoped lifecycle tracing.
+- Scope: CUDA lifetime test and test-only subscriber dependency; production context code is unchanged from `263f2d7`.
+- Acceptance: required-device Nextest exercises acquire, final-owner drop, immediate reacquisition, and exact upload/readback under the committed 60-second budget.
+- Integrator: Codex review_gpu; last-update: 2026-09-07; lane `codex/cuda-context-reacquisition` at baseline `e803663`.
+- Evidence: Nextest `0dc30ba2` passes 1/1 in 0.254s with no CUDA Drop error events; strict all-target CUDA Clippy and formatting pass. Independent source judge accepts the oracle.
+- Residual: Coeus's reported `cuCtxCreate_v2 -> 999` remains unreproduced; this test establishes usability, not the cause of the original driver fault. No speculative synchronization change is made.
+
 <a id="heph-rocm-elementwise-rank"></a>
 ## HEPH-ROCM-ELEMENTWISE-RANK — Support eight-dimensional operands [patch] — done
 - Rank-eight metadata and signed 64-bit HIP addresses land in [PR #272](https://github.com/ryancinsight/hephaestus/pull/272), merge `8b2b5f0`; host packing/source tests pass 33/33, with physical HIP execution unavailable locally.

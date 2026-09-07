@@ -5,6 +5,47 @@ use crate::CudaDevice;
 use hephaestus_core::{ComputeDevice, HephaestusError};
 
 #[test]
+fn sole_context_release_preserves_immediate_reacquisition() {
+    let _subscriber = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .with_max_level(tracing::Level::TRACE)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+            .finish(),
+    );
+    let first = {
+        let _span = tracing::info_span!("arrange").entered();
+        match CudaDevice::try_default() {
+            Ok(device) => device,
+            Err(HephaestusError::AdapterUnavailable { .. })
+                if std::env::var_os("HEPHAESTUS_CUDA_REQUIRE_DEVICE").is_none() =>
+            {
+                return;
+            }
+            Err(error) => panic!("CUDA reacquisition requires a working driver: {error}"),
+        }
+    };
+    let second = {
+        let _span = tracing::info_span!("act").entered();
+        // Acquisition performs a real transfer probe. Dropping its final owner
+        // exercises probe-buffer release followed by context destruction.
+        drop(first);
+        CudaDevice::try_default()
+            .expect("invariant: final context release permits immediate reacquisition")
+    };
+    let _span = tracing::info_span!("assert").entered();
+    let expected = [0x1234_5678_u32, u32::MAX, 0, 1 << 31];
+    let buffer = second
+        .upload(&expected)
+        .expect("invariant: the reacquired context supports device allocation and upload");
+    let mut actual = [0; 4];
+    second
+        .download(&buffer, &mut actual)
+        .expect("invariant: the reacquired context supports device readback");
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn final_resource_release_preserves_another_current_context() {
     let first = match CudaDevice::try_default() {
         Ok(device) => device,
