@@ -6,7 +6,6 @@
 - Scope: default WGPU acquisition, caller documentation, and real-adapter regression; explicit backend selection remains exact.
 - Acceptance: an unsupported real-adapter limit yields typed device failure without a second adapter attempt; normal WGPU device contracts pass.
 - Integrator: Codex review_gpu; last-update: 2026-09-07; shared branch `build/hephaestus-moirai-06`.
-- lease: Codex review_gpu `crates/hephaestus-wgpu/src/infrastructure/device.rs`, `device/acquisition.rs`, `device/acquisition/`, and crate README; 2026-09-07T04:01:00Z.
 - Driver: Coeus required-device availability audit exposes logical-device errors mislabeled as adapter absence.
 
 <a id="heph-cuda-context-reacquisition"></a>

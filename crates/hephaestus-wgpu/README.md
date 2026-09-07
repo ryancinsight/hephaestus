@@ -41,6 +41,12 @@ as `hephaestus::wgpu`.
   measurement harnesses.
 - The shared backend-neutral volume ray-integral and 2D Laplacian contracts.
 
+Default acquisition tries a software adapter only when no hardware adapter can
+be acquired. A selected adapter that rejects device creation returns
+`HephaestusError::DeviceUnavailable`; only adapter absence returns
+`AdapterUnavailable`. `WGPU_BACKEND` restricts both attempts to the requested
+backend set.
+
 Metal is an adapter preference of this crate, not a separate backend
 (ADR 0047): `WgpuDevice::try_metal` acquires a Metal-only adapter and the same
 WGSL kernels execute through the native Apple Metal path.
