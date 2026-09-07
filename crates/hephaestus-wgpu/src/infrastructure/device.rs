@@ -792,10 +792,12 @@ impl WgpuDevice {
         }
 
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-        desc.backends = wgpu::Backends::all();
+        desc.backends = wgpu::Instance::enabled_backend_features();
         let instance = wgpu::Instance::new(desc);
         let mut devices = Vec::new();
-        let mut adapters = moirai::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        let mut adapters = futures::executor::block_on(
+            instance.enumerate_adapters(wgpu::Instance::enabled_backend_features()),
+        );
         adapters.retain(|adapter| accept_adapter(&adapter.get_info()));
         adapters.sort_by_key(|adapter| rank_adapter(&adapter.get_info()));
 
@@ -913,17 +915,18 @@ impl WgpuDevice {
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
     ) -> Result<Self> {
-        let (device, queue) = moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some(label),
-            required_features,
-            required_limits,
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|error| HephaestusError::DeviceUnavailable {
-            message: error.to_string(),
-        })?;
+        let (device, queue) =
+            futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some(label),
+                required_features,
+                required_limits,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::Off,
+            }))
+            .map_err(|error| HephaestusError::DeviceUnavailable {
+                message: error.to_string(),
+            })?;
         Ok(Self::new(Arc::new(device), Arc::new(queue)).with_adapter_metadata(adapter))
     }
 
@@ -960,7 +963,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features: select_features(adapter),
                     required_limits: select_limits(adapter),
@@ -995,7 +998,7 @@ impl WgpuDevice {
             ];
 
             for (kind, options) in candidates {
-                match moirai::block_on(instance.request_adapter(&options)) {
+                match futures::executor::block_on(instance.request_adapter(&options)) {
                     Err(error) => {
                         failures.push(format!("{backends:?}/{kind}: no adapter ({error})"));
                     }
@@ -1021,20 +1024,12 @@ impl WgpuDevice {
             None
         };
 
-        // An operator-selected backend is honoured exactly; otherwise Windows
-        // tries DX12 before Vulkan and every other host takes wgpu's own
-        // default set.
-        //
-        // The DX12 rung is currently inert: the workspace builds `wgpu` with
-        // `vulkan` and `metal` only, so DX12 reports "dx12 support not compiled
-        // in" and Windows always lands on Vulkan. The rung is kept because it
-        // costs one instance creation and becomes live the moment the feature
-        // is enabled; enabling it today fails to build, because
-        // `gpu-allocator 0.28`'s d3d12 module and the `windows` crate version
-        // unified into this graph disagree on `ID3D12Device`. Until that is
-        // resolved, an operator selecting DX12 gets a typed error naming the
-        // missing backend rather than a silent fallback to a backend they did
-        // not ask for.
+        // An operator-selected backend is honoured exactly; otherwise the
+        // compile-time enabled backend set is used. `Backends::all()` is the
+        // complete bitmask, not the set compiled into this crate. Probing an
+        // absent backend can leave a native WGPU teardown path alive after
+        // acquisition returns; on Windows this was observed with disabled
+        // DX12 before the Vulkan attempt began.
         //
         // Selection reads `wgpu::Backends::from_env`, which is the single
         // variable wgpu itself consults (`WGPU_BACKEND`). Testing for a
@@ -1043,10 +1038,7 @@ impl WgpuDevice {
         // its defaults.
         let ladder: Vec<wgpu::Backends> = match wgpu::Backends::from_env() {
             Some(requested) => vec![requested],
-            None if cfg!(target_os = "windows") => {
-                vec![wgpu::Backends::DX12, wgpu::Backends::VULKAN]
-            }
-            None => vec![wgpu::Backends::all()],
+            None => vec![wgpu::Instance::enabled_backend_features()],
         };
 
         for backends in ladder {
@@ -1075,7 +1067,7 @@ impl WgpuDevice {
                 (wgpu::Device, wgpu::Queue),
                 wgpu::RequestDeviceError,
             > {
-                moirai::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                     label: Some(label),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
@@ -1085,14 +1077,14 @@ impl WgpuDevice {
                 }))
             };
 
-            if let Ok(adapter) =
-                moirai::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            if let Ok(adapter) = futures::executor::block_on(instance.request_adapter(
+                &wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: None,
                     force_fallback_adapter: false,
                     apply_limit_buckets: false,
-                }))
-            {
+                },
+            )) {
                 let topology = Self::topology_from_adapter(&adapter);
                 if let Ok((device, queue)) = try_device(&adapter) {
                     let mut acquired = Self::new(Arc::new(device), Arc::new(queue));

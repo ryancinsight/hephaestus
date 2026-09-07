@@ -1,16 +1,24 @@
-//! Rank-≤4 strided elementwise dispatch over Leto layouts.
+//! Rank-≤8 strided elementwise dispatch over Leto layouts.
 //!
 //! One packed metadata contract serves binary, unary, and scalar kernels. The
 //! device decodes each logical output index into per-operand offsets, so
 //! transposed, sliced, and broadcast inputs execute directly from their device
 //! storage without a host materialization copy.
 
-use eunomia::{Pod, Zeroable};
+use eunomia::Pod;
 use hephaestus_core::{
-    BinaryExpr, BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
-    Result, TypedBinaryExpr, UnaryExpr,
+    BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HipC, Result, TypedBinaryExpr, UnaryExpr,
 };
 use leto::Layout;
+
+pub(crate) mod kernel;
+pub(crate) mod metadata;
+
+use kernel::{binary_shader, scalar_shader, unary_shader};
+pub use metadata::MAX_STRIDED_RANK;
+use metadata::{
+    StridedMeta, binary_strided_meta, map_layout_err, scalar_strided_meta, unary_strided_meta,
+};
 
 use crate::RocmDevice;
 use crate::application::pipeline::{
@@ -18,185 +26,6 @@ use crate::application::pipeline::{
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
-
-/// Maximum rank represented by the packed strided metadata.
-pub const MAX_STRIDED_RANK: usize = 4;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct StridedMeta {
-    pub(crate) shape: [u32; 4],
-    pub(crate) a_strides: [i32; 4],
-    pub(crate) b_strides: [i32; 4],
-    pub(crate) out_strides: [i32; 4],
-    pub(crate) offsets: [u32; 4],
-}
-
-const _: () = assert!(core::mem::size_of::<StridedMeta>() == 80);
-
-pub(crate) const HIP_META: &str = r#"
-struct Meta {
-    unsigned int shape[4];
-    int a_strides[4];
-    int b_strides[4];
-    int out_strides[4];
-    unsigned int offsets[4];
-};
-"#;
-
-pub(crate) const HIP_DECODE: &str = r#"
-    unsigned int rem = i;
-    int a_offset = (int)lmeta.offsets[0];
-    int b_offset = (int)lmeta.offsets[1];
-    int out_offset = (int)lmeta.offsets[2];
-    for (int dimension = 3; dimension >= 0; dimension--) {
-        unsigned int extent = lmeta.shape[dimension];
-        int index = (int)(rem % extent);
-        rem = rem / extent;
-        a_offset += index * lmeta.a_strides[dimension];
-        b_offset += index * lmeta.b_strides[dimension];
-        out_offset += index * lmeta.out_strides[dimension];
-    }
-"#;
-
-pub(crate) fn binary_shader<T: DialectScalar<HipC>>(expr: &'static str) -> String {
-    format!(
-        r#"
-{meta}
-extern "C" __global__ void binary_strided_kernel(
-    Meta lmeta,
-    const {ty}* lhs_ptr,
-    const {ty}* rhs_ptr,
-    {ty}* out
-) {{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= lmeta.offsets[3]) {{
-        return;
-    }}
-{decode}
-    {ty} lhs = lhs_ptr[a_offset];
-    {ty} rhs = rhs_ptr[b_offset];
-    out[out_offset] = {expr};
-}}
-"#,
-        meta = HIP_META,
-        decode = HIP_DECODE,
-        ty = T::TYPE_TOKEN,
-        expr = expr,
-    )
-}
-
-pub(crate) fn unary_shader<Op: UnaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
-    format!(
-        r#"
-{meta}
-extern "C" __global__ void unary_strided_kernel(
-    Meta lmeta,
-    const {ty}* input,
-    {ty}* out
-) {{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= lmeta.offsets[3]) {{
-        return;
-    }}
-{decode}
-    {ty} x = input[a_offset];
-    out[out_offset] = {expr};
-}}
-"#,
-        meta = HIP_META,
-        decode = HIP_DECODE,
-        ty = T::TYPE_TOKEN,
-        expr = Op::EXPR,
-    )
-}
-
-pub(crate) fn scalar_shader<Op: BinaryExpr<HipC>, T: DialectScalar<HipC>>() -> String {
-    format!(
-        r#"
-{meta}
-extern "C" __global__ void scalar_strided_kernel(
-    Meta lmeta,
-    const {ty}* input,
-    {ty} scalar,
-    {ty}* out
-) {{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= lmeta.offsets[3]) {{
-        return;
-    }}
-{decode}
-    {ty} lhs = input[a_offset];
-    {ty} rhs = scalar;
-    out[out_offset] = {expr};
-}}
-"#,
-        meta = HIP_META,
-        decode = HIP_DECODE,
-        ty = T::TYPE_TOKEN,
-        expr = Op::EXPR,
-    )
-}
-
-pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
-    let mut padded = [1_u32; 4];
-    for (axis, &extent) in shape.iter().enumerate() {
-        padded[4 - N + axis] =
-            u32::try_from(extent).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("dimension {extent} exceeds u32 range"),
-            })?;
-    }
-    Ok(padded)
-}
-
-pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
-    let mut padded = [0_i32; 4];
-    for (axis, &stride) in strides.iter().enumerate() {
-        padded[4 - N + axis] =
-            i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("stride {stride} exceeds i32 range"),
-            })?;
-    }
-    Ok(padded)
-}
-
-fn validate_output<T: Pod, const N: usize>(output: StridedOperand<'_, T, N>) -> Result<usize> {
-    if output.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-    output
-        .layout
-        .validate_storage_len(output.buffer.len())
-        .map_err(|error| HephaestusError::DispatchFailed {
-            message: format!("layout rejected: {error}"),
-        })?;
-    output
-        .layout
-        .checked_size()
-        .map_err(|error| HephaestusError::DispatchFailed {
-            message: format!("layout rejected: {error}"),
-        })
-}
-
-pub(crate) fn dispatch_len(len: usize) -> Result<u32> {
-    u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("strided dispatch length {len} exceeds u32 range"),
-    })
-}
-
-pub(crate) fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {error}"),
-    }
-}
 
 struct BinaryKernelLaunch<'a, T> {
     lhs: &'a RocmBuffer<T>,
@@ -207,104 +36,6 @@ struct BinaryKernelLaunch<'a, T> {
     len: usize,
     operation: core::any::TypeId,
     expr: &'static str,
-}
-
-/// Validate, broadcast, and alias-check a binary strided operand triple,
-/// producing the launch metadata; `None` when the dispatch is empty.
-pub(crate) fn binary_strided_meta<T, const N: usize>(
-    lhs: &StridedOperand<'_, T, N>,
-    rhs: &StridedOperand<'_, T, N>,
-    output: &StridedOperand<'_, T, N>,
-) -> Result<Option<(StridedMeta, usize)>>
-where
-    T: Pod,
-{
-    let lhs_layout = lhs
-        .layout
-        .broadcast(output.layout.shape())
-        .map_err(map_layout_err)?;
-    let rhs_layout = rhs
-        .layout
-        .broadcast(output.layout.shape())
-        .map_err(map_layout_err)?;
-    lhs_layout
-        .validate_storage_len(lhs.buffer.len())
-        .map_err(map_layout_err)?;
-    rhs_layout
-        .validate_storage_len(rhs.buffer.len())
-        .map_err(map_layout_err)?;
-    if lhs.buffer.aliases(output.buffer) || rhs.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias either input buffer".to_string(),
-        });
-    }
-    let len = validate_output(*output)?;
-    if len == 0 {
-        return Ok(None);
-    }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape())?,
-        a_strides: pad_strides(lhs_layout.strides())?,
-        b_strides: pad_strides(rhs_layout.strides())?,
-        out_strides: pad_strides(output.layout.strides())?,
-        offsets: [
-            u32::try_from(lhs_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            u32::try_from(rhs_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            u32::try_from(output.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
-    };
-    Ok(Some((meta, len)))
-}
-
-/// Validate, broadcast, and alias-check a unary strided operand pair,
-/// producing the launch metadata; `None` when the dispatch is empty.
-pub(crate) fn unary_strided_meta<T, const N: usize>(
-    input: &StridedOperand<'_, T, N>,
-    output: &StridedOperand<'_, T, N>,
-) -> Result<Option<(StridedMeta, usize)>>
-where
-    T: Pod,
-{
-    let input_layout = input
-        .layout
-        .broadcast(output.layout.shape())
-        .map_err(map_layout_err)?;
-    input_layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias input buffer".to_string(),
-        });
-    }
-    let len = validate_output(*output)?;
-    if len == 0 {
-        return Ok(None);
-    }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape())?,
-        a_strides: pad_strides(input_layout.strides())?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides())?,
-        offsets: [
-            u32::try_from(input_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            0,
-            u32::try_from(output.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
-    };
-    Ok(Some((meta, len)))
 }
 
 fn launch_binary_expression<T>(
@@ -438,9 +169,6 @@ fn binary_elementwise_strided_into_expression<T, const N: usize>(
 where
     T: DialectScalar<HipC> + Pod,
 {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
     let Some((meta, len)) = binary_strided_meta(&lhs, &rhs, &output)? else {
         return Ok(());
     };
@@ -573,9 +301,6 @@ where
     Op: UnaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
     let Some((meta, len)) = unary_strided_meta(&input, &output)? else {
         return Ok(());
     };
@@ -620,9 +345,6 @@ where
     Op: BinaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
     let Some((meta, len)) = scalar_strided_meta(&input, &output)? else {
         return Ok(());
     };
@@ -635,60 +357,6 @@ where
         width,
         len,
     )
-}
-
-/// Validate a broadcast-scalar operand pair and build its dispatch metadata,
-/// or `None` when the logical output is empty.
-///
-/// # Errors
-///
-/// Returns a layout validation failure or an aliasing violation.
-pub(crate) fn scalar_strided_meta<T, const N: usize>(
-    input: &StridedOperand<'_, T, N>,
-    output: &StridedOperand<'_, T, N>,
-) -> Result<Option<(StridedMeta, usize)>>
-where
-    T: Pod,
-{
-    let input_layout = input
-        .layout
-        .broadcast(output.layout.shape())
-        .map_err(map_layout_err)?;
-    input_layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias input buffer".to_string(),
-        });
-    }
-    let len = validate_output(*output)?;
-    if len == 0 {
-        return Ok(None);
-    }
-    Ok(Some((
-        StridedMeta {
-            shape: pad_shape(output.layout.shape())?,
-            a_strides: pad_strides(input_layout.strides())?,
-            b_strides: [0; 4],
-            out_strides: pad_strides(output.layout.strides())?,
-            offsets: [
-                u32::try_from(input_layout.offset()).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: "input offset exceeds u32 range".to_string(),
-                    }
-                })?,
-                0,
-                u32::try_from(output.layout.offset()).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: "output offset exceeds u32 range".to_string(),
-                    }
-                })?,
-                dispatch_len(len)?,
-            ],
-        },
-        len,
-    )))
 }
 
 /// Allocate a C-contiguous output and run a strided scalar operation.
@@ -717,24 +385,4 @@ where
         width,
     )?;
     Ok(output)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{binary_shader, scalar_shader, unary_shader};
-
-    #[test]
-    fn sources_share_rank_four_decode_and_operation_contracts() {
-        let binary = binary_shader::<i32>("lhs + rhs");
-        let unary = unary_shader::<hephaestus_core::IdentityOp, i32>();
-        let scalar = scalar_shader::<hephaestus_core::MulOp, i32>();
-        for source in [&binary, &unary, &scalar] {
-            assert!(source.contains("unsigned int shape[4]"));
-            assert!(source.contains("for (int dimension = 3; dimension >= 0"));
-            assert!(source.contains("lmeta.out_strides[dimension]"));
-        }
-        assert!(binary.contains("out[out_offset] = lhs + rhs"));
-        assert!(unary.contains("out[out_offset] = x"));
-        assert!(scalar.contains("out[out_offset] = lhs * rhs"));
-    }
 }

@@ -30,7 +30,6 @@ eunomia = { workspace = true }
 leto-ops = { workspace = true }
 smallvec = { workspace = true }
 themis = { workspace = true }
-moirai-gpu = { workspace = true }
 moirai-sync = { workspace = true }
 tracing = { workspace = true }
 libloading = { version = "0.8", optional = true }

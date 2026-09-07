@@ -167,6 +167,25 @@ where
         [0.25, 0.25, 0.25, 1.0, 1.0, 1.0],
         "{name}: LeakyReLU gradient boundary"
     );
+    let boundary_input = device
+        .upload(&[-1.0_f32, -0.0, 0.0, 1.0, -0.5, 0.5])
+        .expect("LeakyReLU boundary input upload");
+    let boundary_layout =
+        Layout::try_new([2, 3], [3, 1], 0).expect("dense LeakyReLU boundary layout");
+    for slope in [0.25, 0.5] {
+        assert_eq!(
+            dispatch::<D, O, LeakyReluGradOp>(
+                device,
+                operations,
+                &boundary_input,
+                &boundary_layout,
+                [slope, 0.0],
+                &output_layout,
+            ),
+            [slope, slope, slope, 1.0, slope, 1.0],
+            "{name}: LeakyReLU selects the negative slope at both signed zeros"
+        );
+    }
     assert_eq!(
         dispatch::<D, O, HardshrinkOp>(
             device,

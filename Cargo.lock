@@ -627,7 +627,6 @@ dependencies = [
  "leto",
  "leto-ops",
  "libloading",
- "moirai-gpu",
  "moirai-sync",
  "smallvec",
  "themis-topology",
@@ -696,13 +695,12 @@ dependencies = [
  "aequitas",
  "criterion",
  "eunomia",
+ "futures",
  "hephaestus-conformance",
  "hephaestus-core",
  "leto",
  "leto-ops",
  "loom",
- "moirai-gpu",
- "moirai-runtime",
  "moirai-sync",
  "pollster",
  "smallvec",
@@ -1248,17 +1246,6 @@ dependencies = [
  "moirai-core",
  "moirai-pal",
  "moirai-scheduler",
- "moirai-utils",
- "themis-topology",
-]
-
-[[package]]
-name = "moirai-gpu"
-version = "0.5.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#4db2dc193b9f6e9b7e7c228347e9b5c6e57761dd"
-dependencies = [
- "mnemosyne-memory-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git?rev=7f1737513c6688daf012f3439159a27253c81184)",
- "moirai-core",
  "moirai-utils",
  "themis-topology",
 ]

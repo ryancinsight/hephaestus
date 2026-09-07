@@ -47,9 +47,6 @@ where
     where
         Op: UnaryExpr<Self::Dialect>,
     {
-        const {
-            assert!(N <= crate::application::strided_elementwise::MAX_STRIDED_RANK);
-        }
         prepare_unary_elementwise_strided_into::<Op, T, N>(
             device,
             StridedOperand {
@@ -82,9 +79,6 @@ where
     where
         Op: BinaryExpr<Self::Dialect>,
     {
-        const {
-            assert!(N <= crate::application::strided_elementwise::MAX_STRIDED_RANK);
-        }
         prepare_binary_elementwise_strided_into::<Op, T, N>(
             device,
             StridedOperand {
@@ -121,9 +115,6 @@ where
     where
         Op: BinaryExpr<Self::Dialect>,
     {
-        const {
-            assert!(N <= crate::application::strided_elementwise::MAX_STRIDED_RANK);
-        }
         prepare_scalar_elementwise_strided_into::<Op, T, N>(
             device,
             StridedOperand {
@@ -157,9 +148,6 @@ where
     where
         Op: TypedBinaryExpr<Self::Dialect, T>,
     {
-        const {
-            assert!(N <= crate::application::strided_elementwise::MAX_STRIDED_RANK);
-        }
         prepare_binary_elementwise_strided_typed_into::<Op, T, N>(
             device,
             StridedOperand {

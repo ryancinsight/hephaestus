@@ -66,3 +66,4 @@
 | [0055](0055-fusion-seam.md) | Provider-owned runtime-rank fusion seam | Accepted |
 | [0056](0056-eunomia-layout-seam.md) | Eunomia-owned device layout seam | Accepted |
 | [0057](0057-device-staggered-pair.md) | The device staggered pair gathers a derived transpose | Accepted |
+| [0058](0058-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Accepted |
