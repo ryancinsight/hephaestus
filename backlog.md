@@ -1,5 +1,14 @@
 # Backlog — hephaestus
 
+<a id="heph-wgpu-device-request-fault"></a>
+## HEPH-WGPU-DEVICE-REQUEST-FAULT — Preserve logical-device acquisition failures [patch] — in-progress
+- Outcome: adapter absence alone permits fallback; an acquired adapter's failed device request returns `DeviceUnavailable`.
+- Scope: default WGPU acquisition, caller documentation, and real-adapter regression; explicit backend selection remains exact.
+- Acceptance: an unsupported real-adapter limit yields typed device failure without a second adapter attempt; normal WGPU device contracts pass.
+- Integrator: Codex review_gpu; last-update: 2026-09-07; shared branch `build/hephaestus-moirai-06`.
+- Delivery: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285), source `f7c747a`; independent source review finds no blocking defect.
+- Evidence: real-adapter red/green runs `5a78068e`/`94edca71`; full local gates pass, including 226 CUDA/WGPU tests (`48ab85ae`) and 11 bounded FFT smoke cases.
+
 <a id="heph-cuda-context-reacquisition"></a>
 ## HEPH-CUDA-CONTEXT-REACQUISITION — Reacquire after final context release [patch] — done
 - Regression and scoped diagnostics land in [PR #283](https://github.com/ryancinsight/hephaestus/pull/283), merge `29d8570`; required-device run `0dc30ba2` passes in 0.254s, strict Clippy passes. The original Coeus status 999 remains unreproduced; no production fix is claimed.

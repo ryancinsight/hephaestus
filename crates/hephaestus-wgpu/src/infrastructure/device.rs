@@ -1,3 +1,5 @@
+mod acquisition;
+
 use core::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -649,12 +651,13 @@ impl WgpuDevice {
     /// requested Hephaestus device feature.
     ///
     /// Uses the backend's downlevel-default WGPU limits. Adapter selection
-    /// rejects an adapter when it cannot create a device with the complete
-    /// requested feature set; it never silently drops a required feature.
+    /// returns a device failure when the selected adapter cannot create a device
+    /// with the complete requested feature set; required features never drop.
     ///
     /// # Errors
     ///
-    /// [`HephaestusError::AdapterUnavailable`] when no available adapter can
+    /// [`HephaestusError::AdapterUnavailable`] when no adapter can be acquired.
+    /// [`HephaestusError::DeviceUnavailable`] when the selected adapter cannot
     /// create a device with every requested feature.
     pub fn try_with_device_preference_and_required_device_features(
         label: &str,
@@ -938,121 +941,6 @@ impl WgpuDevice {
     ) -> Result<Self> {
         Self::try_default_with_adapter_config(label, power_preference, select_features, move |_| {
             required_limits.clone()
-        })
-    }
-
-    fn try_default_with_adapter_config(
-        label: &str,
-        power_preference: wgpu::PowerPreference,
-        select_features: impl Fn(&wgpu::Adapter) -> wgpu::Features,
-        select_limits: impl Fn(&wgpu::Adapter) -> wgpu::Limits,
-    ) -> Result<Self> {
-        // Each attempt records why it failed. Acquisition has three independent
-        // failure modes -- the backend enumerates no adapter, the adapter
-        // rejects the requested features or limits, or the operator selected a
-        // backend this host does not have -- and collapsing them into one
-        // message costs a bisection every time acquisition breaks.
-        let mut failures: Vec<String> = Vec::new();
-
-        let try_acquire = |backends: wgpu::Backends, failures: &mut Vec<String>| -> Option<Self> {
-            let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-            descriptor.backends = backends;
-            let instance = wgpu::Instance::new(descriptor);
-
-            let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
-                (wgpu::Device, wgpu::Queue),
-                wgpu::RequestDeviceError,
-            > {
-                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                    label: Some(label),
-                    required_features: select_features(adapter),
-                    required_limits: select_limits(adapter),
-                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                    trace: wgpu::Trace::Off,
-                }))
-            };
-
-            // Hardware first, then the software fallback adapter. The fallback
-            // is a different adapter rather than a different backend, so both
-            // attempts share one instance.
-            let candidates = [
-                (
-                    "hardware",
-                    wgpu::RequestAdapterOptions {
-                        power_preference,
-                        compatible_surface: None,
-                        force_fallback_adapter: false,
-                        apply_limit_buckets: false,
-                    },
-                ),
-                (
-                    "fallback",
-                    wgpu::RequestAdapterOptions {
-                        power_preference: wgpu::PowerPreference::LowPower,
-                        compatible_surface: None,
-                        force_fallback_adapter: true,
-                        apply_limit_buckets: false,
-                    },
-                ),
-            ];
-
-            for (kind, options) in candidates {
-                match futures::executor::block_on(instance.request_adapter(&options)) {
-                    Err(error) => {
-                        failures.push(format!("{backends:?}/{kind}: no adapter ({error})"));
-                    }
-                    Ok(adapter) => match try_device(&adapter) {
-                        Ok((device, queue)) => {
-                            return Some(
-                                Self::new(Arc::new(device), Arc::new(queue))
-                                    .with_adapter_metadata(&adapter),
-                            );
-                        }
-                        Err(error) => {
-                            let info = adapter.get_info();
-                            failures.push(format!(
-                                "{backends:?}/{kind}: adapter {name:?} ({backend:?}) rejected the \
-                                 device request ({error})",
-                                name = info.name,
-                                backend = info.backend,
-                            ));
-                        }
-                    },
-                }
-            }
-            None
-        };
-
-        // An operator-selected backend is honoured exactly; otherwise the
-        // compile-time enabled backend set is used. `Backends::all()` is the
-        // complete bitmask, not the set compiled into this crate. Probing an
-        // absent backend can leave a native WGPU teardown path alive after
-        // acquisition returns; on Windows this was observed with disabled
-        // DX12 before the Vulkan attempt began.
-        //
-        // Selection reads `wgpu::Backends::from_env`, which is the single
-        // variable wgpu itself consults (`WGPU_BACKEND`). Testing for a
-        // variable wgpu does not read -- `WGPU_BACKENDS`, say -- would send
-        // acquisition down the operator-selected path while wgpu quietly used
-        // its defaults.
-        let ladder: Vec<wgpu::Backends> = match wgpu::Backends::from_env() {
-            Some(requested) => vec![requested],
-            None => vec![wgpu::Instance::enabled_backend_features()],
-        };
-
-        for backends in ladder {
-            if let Some(device) = try_acquire(backends, &mut failures) {
-                return Ok(device);
-            }
-        }
-
-        Err(HephaestusError::AdapterUnavailable {
-            message: format!(
-                "no compatible GPU adapter or device could be acquired for {label:?}; \
-                 attempts: [{}]",
-                failures.join("; ")
-            ),
         })
     }
 
