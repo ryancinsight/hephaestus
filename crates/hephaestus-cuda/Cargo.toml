@@ -36,6 +36,7 @@ libloading = { version = "0.8", optional = true }
 
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
+tracing-subscriber = { workspace = true }
 aequitas = { workspace = true }
 
 [[bench]]
