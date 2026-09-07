@@ -58,7 +58,7 @@ pub mod storage_kernel;
 pub mod stream;
 /// Layout-aware operand descriptors.
 pub mod strided;
-/// Rank-≤4 layout-aware elementwise operations.
+/// Rank-≤8 layout-aware elementwise operations.
 pub mod strided_elementwise;
 /// Dense vector recurrences and prepared reductions.
 pub mod vector;

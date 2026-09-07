@@ -158,3 +158,22 @@ dbg_macro = "deny"
 # guarantee is the measured zero, re-checked whenever this floor is re-censused.
 print_stdout = "allow" # 78 (0 prod)
 print_stderr = "allow" # 78 (0 prod)
+
+# Keep standalone verification within the Atlas shared-cache debuginfo budget.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.build-override]
+debug = false
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.test.package."*"]
+debug = false
+
+[profile.test.build-override]
+debug = false

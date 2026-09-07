@@ -1,5 +1,14 @@
 # Backlog — hephaestus
 
+<a id="heph-rocm-elementwise-rank"></a>
+## HEPH-ROCM-ELEMENTWISE-RANK — Support eight-dimensional operands [patch] — review
+- Outcome: ROCm elementwise and parameterized unary operations instantiate every rank the shared Coeus bridge supports.
+- Scope: strided metadata, shared elementwise routing, and associated ROCm tests/docs; other kernels remain outside this item.
+- Acceptance: rank-eight metadata and indexing agree with the layout oracle; all shipped call sites compile under the locked graph; unavailable ROCm device execution is explicit.
+- Integrator: Codex review_gpu on `arch/moirai-hephaestus-gpu-route`; last-update: 2026-09-07.
+- Evidence: locked ROCm no-default Nextest 33/33 and all-target Clippy pass on 2026-09-07; rank/address arithmetic independently reviewed. Host packing and generated HIP source are covered; physical HIP execution is unavailable on this Windows host.
+- Driver: Coeus generic rank-eight compilation failure, [consumer board](../coeus/docs/backlog.md).
+
 <a id="heph-leaky-relu-origin"></a>
 ## HEPH-LEAKY-RELU-ORIGIN — Preserve the slope at zero [patch] — review
 - Outcome: parameterized Leaky ReLU gradients return the negative slope at both signed zeros.

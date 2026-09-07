@@ -10,8 +10,8 @@ use crate::application::pipeline::{
 };
 use crate::application::strided::StridedOperand;
 use crate::application::strided_elementwise::{
-    HIP_DECODE, HIP_META, MAX_STRIDED_RANK, StridedMeta, dispatch_len, map_layout_err, pad_shape,
-    pad_strides,
+    kernel::{hip_decode, hip_meta},
+    metadata::{StridedMeta, check_rank, map_layout_err},
 };
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
@@ -39,8 +39,8 @@ extern "C" __global__ void parameterized_unary_strided_kernel(
     output[out_offset] = {expr};
 }}
 "#,
-        meta = HIP_META,
-        decode = HIP_DECODE,
+        meta = hip_meta(),
+        decode = hip_decode(),
         ty = "float",
         expr = Op::EXPR,
     )
@@ -99,9 +99,7 @@ pub fn parameterized_unary_strided_into<Op, const N: usize>(
 where
     Op: ParameterizedUnaryExpr<HipC>,
 {
-    const {
-        assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 4");
-    }
+    check_rank::<N>()?;
     let input_layout = input
         .layout
         .broadcast(output.layout.shape())
@@ -118,22 +116,7 @@ where
     if len == 0 {
         return Ok(());
     }
-    let meta = StridedMeta {
-        shape: pad_shape(output.layout.shape())?,
-        a_strides: pad_strides(input_layout.strides())?,
-        b_strides: [0; 4],
-        out_strides: pad_strides(output.layout.strides())?,
-        offsets: [
-            u32::try_from(input_layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "input offset exceeds u32 range".to_string(),
-            })?,
-            0,
-            u32::try_from(output.layout.offset()).map_err(|_| HephaestusError::DispatchFailed {
-                message: "output offset exceeds u32 range".to_string(),
-            })?,
-            dispatch_len(len)?,
-        ],
-    };
+    let meta = StridedMeta::new(&input_layout, None, output.layout, len)?;
     launch_parameterized_unary::<Op>(
         device,
         input.buffer,
@@ -182,3 +165,16 @@ pub use hephaestus_core::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
     LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
 };
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parameterized_source_uses_the_same_ranked_metadata() {
+        let source = super::parameterized_unary_shader::<hephaestus_core::LeakyReluOp>();
+        assert!(source.contains(&super::hip_meta()));
+        assert!(source.contains(&super::hip_decode()));
+        assert!(source.contains("unsigned int shape[8]"));
+        assert!(source.contains("for (int dimension = 7; dimension >= 0; dimension--)"));
+        assert!(source.contains("output[out_offset] = x >= 0.0f ? x : first * x"));
+    }
+}

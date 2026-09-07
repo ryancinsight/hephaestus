@@ -11,7 +11,7 @@ the `hephaestus` facade as `hephaestus::rocm`.
 - Linux HIP device acquisition, driver-backed limits and topology, typed
   `RocmBuffer<T>`, transfer, and synchronization.
 - hipRTC-compiled and module-launched kernels across the operation families:
-  contiguous and rank-≤4 strided elementwise, reductions and rank-2 axis
+  contiguous and rank-≤8 strided elementwise, reductions and rank-2 axis
   reductions, scans, map-reductions, Kronecker products, matrix powers, matrix
   properties, tiled and batched matrix multiplication, and CSR sparse products.
   Sparse storage owns values, column indices, and row pointers in typed device

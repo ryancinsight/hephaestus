@@ -20,7 +20,8 @@ use crate::application::pipeline::{
 };
 use crate::application::strided::StridedOperand;
 use crate::application::strided_elementwise::{
-    StridedMeta, binary_shader, binary_strided_meta, unary_shader, unary_strided_meta,
+    kernel::{binary_shader, unary_shader},
+    metadata::{StridedMeta, binary_strided_meta, unary_strided_meta},
 };
 use crate::infrastructure::DevicePtr;
 
@@ -323,7 +324,7 @@ where
     Op: BinaryExpr<HipC>,
     T: DialectScalar<HipC> + Pod,
 {
-    let meta = crate::application::strided_elementwise::scalar_strided_meta(&a, &out)?;
+    let meta = crate::application::strided_elementwise::metadata::scalar_strided_meta(&a, &out)?;
     let Some((meta, len)) = meta else {
         return Ok(PreparedStridedScalar {
             a: a.buffer,
@@ -338,7 +339,7 @@ where
         width: width.get(),
     };
     let kernel = cached_kernel(device, key, "scalar_strided_kernel", || {
-        crate::application::strided_elementwise::scalar_shader::<Op, T>()
+        crate::application::strided_elementwise::kernel::scalar_shader::<Op, T>()
     })?;
     Ok(PreparedStridedScalar {
         a: a.buffer,
