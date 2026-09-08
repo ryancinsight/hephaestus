@@ -13,7 +13,10 @@ as `hephaestus::wgpu`.
 - Typed `WgpuBuffer<T>`, PhantomData-typed over `wgpu::Buffer`, with
   upload/download through a bounded pooled staging path. `WgpuBuffer::raw()` is
   the consumer escape hatch for callers building their own pipelines over
-  hephaestus-allocated storage.
+  hephaestus-allocated storage. Transient staging and uniform pools are private:
+  allocations return only to their creating pool. Custom interop buffers remain
+  caller-owned; public raw pool acquisition/recycling and guard exports are
+  removed under [ADR 0060](../../docs/adr/0060-pooled-buffer-ownership.md).
 - Monomorphized elementwise, reduction, scan, map-reduction, linalg, and sparse
   dispatch through ZST operation markers, with per-`(Op, T, BlockWidth)` WGSL
   generation. No type names appear in API identifiers.

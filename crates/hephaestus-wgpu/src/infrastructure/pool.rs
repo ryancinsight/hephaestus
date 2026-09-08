@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use hephaestus_core::{HephaestusError, Result};
 
-use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::device::StagingPoolAccounting;
+use moirai_sync::ShardedResourcePool;
 
 const MAP_PENDING: u8 = 0;
 const MAP_SUCCEEDED: u8 = 1;
@@ -198,74 +199,59 @@ impl std::ops::Deref for PoolBuffer {
     }
 }
 
-/// Generic RAII guard that recycles a wgpu buffer back to a pool on drop.
+/// A transient allocation held until its commands have been submitted.
 ///
-/// The recycle strategy `F` is a function that returns the buffer to its pool.
-/// Callers use the type-aliased guards [`StagingBufferGuard`] and
-/// [`UniformBufferGuard`] rather than instantiating this type directly.
-///
-/// This is the SSOT for all pooled-buffer RAII logic; both guard variants share
-/// the identical fields, `Deref` impl, and `Drop` impl.
-pub struct PoolBufferGuard<F>
-where
-    F: Fn(&WgpuDevice, wgpu::Buffer),
-{
-    device: WgpuDevice,
+/// Only provider code can borrow the raw handle. External raw-handle clones
+/// could outlive recycling and alias a later borrower or destroy its buffer.
+#[derive(Debug)]
+#[must_use]
+pub(crate) struct PooledBuffer {
     buffer: Option<wgpu::Buffer>,
-    recycle: F,
+    origin: BufferOrigin,
 }
 
-impl<F: Fn(&WgpuDevice, wgpu::Buffer)> PoolBufferGuard<F> {
-    #[inline]
-    #[must_use]
-    pub(crate) fn new(device: WgpuDevice, buffer: wgpu::Buffer, recycle: F) -> Self {
+#[derive(Debug)]
+pub(super) enum BufferOrigin {
+    Staging {
+        pool: Arc<ShardedResourcePool<PoolBuffer>>,
+        accounting: Arc<StagingPoolAccounting>,
+    },
+    Uniform {
+        pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    },
+}
+
+impl PooledBuffer {
+    pub(super) fn new(buffer: wgpu::Buffer, origin: BufferOrigin) -> Self {
         Self {
-            device,
             buffer: Some(buffer),
-            recycle,
+            origin,
         }
     }
 }
 
-impl<F: Fn(&WgpuDevice, wgpu::Buffer)> std::ops::Deref for PoolBufferGuard<F> {
+impl std::ops::Deref for PooledBuffer {
     type Target = wgpu::Buffer;
-    #[inline]
+
     fn deref(&self) -> &Self::Target {
         self.buffer
             .as_ref()
-            .expect("invariant: buffer is not dropped")
+            .expect("invariant: the owner retains its buffer until destruction")
     }
 }
 
-impl<F: Fn(&WgpuDevice, wgpu::Buffer)> Drop for PoolBufferGuard<F> {
-    #[inline]
+impl Drop for PooledBuffer {
     fn drop(&mut self) {
         if let Some(buffer) = self.buffer.take() {
-            (self.recycle)(&self.device, buffer);
+            match &self.origin {
+                BufferOrigin::Staging { pool, accounting } => {
+                    accounting.record_recycle(buffer.size());
+                    pool.recycle(PoolBuffer(buffer));
+                }
+                BufferOrigin::Uniform { pool } => pool.recycle(PoolBuffer(buffer)),
+            }
         }
     }
-}
-
-/// RAII guard that automatically recycles a staging buffer back to the device's pool on drop.
-pub type StagingBufferGuard = PoolBufferGuard<fn(&WgpuDevice, wgpu::Buffer)>;
-
-/// RAII guard that automatically recycles a uniform buffer back to the device's pool on drop.
-pub type UniformBufferGuard = PoolBufferGuard<fn(&WgpuDevice, wgpu::Buffer)>;
-
-/// Construct a [`StagingBufferGuard`] — wraps a buffer that is returned to the
-/// staging pool on drop.
-#[inline]
-#[must_use]
-pub(crate) fn staging_guard(device: WgpuDevice, buffer: wgpu::Buffer) -> StagingBufferGuard {
-    PoolBufferGuard::new(device, buffer, |d, b| d.recycle_staging_buffer(b))
-}
-
-/// Construct a [`UniformBufferGuard`] — wraps a buffer that is returned to the
-/// uniform pool on drop.
-#[inline]
-#[must_use]
-pub(crate) fn uniform_guard(device: WgpuDevice, buffer: wgpu::Buffer) -> UniformBufferGuard {
-    PoolBufferGuard::new(device, buffer, |d, b| d.recycle_uniform_buffer(b))
 }
 
 #[cfg(test)]

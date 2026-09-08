@@ -6,7 +6,7 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::application::strided::to_u32;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::UniformBufferGuard;
+use crate::infrastructure::pool::PooledBuffer;
 use core::marker::PhantomData;
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
@@ -27,7 +27,7 @@ pub struct PreparedSpmv<T> {
     pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
     groups: u32,
-    _meta_buffer: UniformBufferGuard,
+    _meta_buffer: PooledBuffer,
     marker: PhantomData<T>,
 }
 
@@ -144,8 +144,8 @@ pub fn prepare_spmv<T: DialectScalar<Wgsl> + MatmulZero + Pod>(
         "hephaestus-spmv",
         || spmv_shader_source::<T>(width),
     );
-    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmvMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<SpmvMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));

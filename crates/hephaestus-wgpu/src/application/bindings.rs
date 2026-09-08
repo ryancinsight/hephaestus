@@ -20,7 +20,8 @@ pub(crate) type BindGroups = SmallVec<[(u32, wgpu::BindGroup); INLINE_BIND_GROUP
 pub(crate) const INLINE_UNIFORM_BUFFERS: usize = 4;
 
 /// Uniform-buffer lifetime guards with inline storage for short command streams.
-pub(crate) type UniformBuffers = SmallVec<[wgpu::Buffer; INLINE_UNIFORM_BUFFERS]>;
+pub(crate) type UniformBuffers =
+    SmallVec<[crate::infrastructure::pool::PooledBuffer; INLINE_UNIFORM_BUFFERS]>;
 
 #[cfg(test)]
 mod tests {

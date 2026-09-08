@@ -163,9 +163,7 @@ impl WgpuCommandStream<'_> {
             self.encoder,
             Some(timeout),
         )?;
-        for buffer in self.uniform_buffers {
-            self.device.recycle_uniform_buffer(buffer);
-        }
+        drop(self.uniform_buffers);
         Ok(())
     }
 
@@ -179,9 +177,7 @@ impl WgpuCommandStream<'_> {
             self.encoder,
             None,
         )?;
-        for buffer in self.uniform_buffers {
-            self.device.recycle_uniform_buffer(buffer);
-        }
+        drop(self.uniform_buffers);
         Ok(submission_index)
     }
 }

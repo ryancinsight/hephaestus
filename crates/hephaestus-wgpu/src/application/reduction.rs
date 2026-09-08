@@ -44,7 +44,7 @@ pub struct PreparedAxisReduction<T> {
     /// it recycles back to the pool on drop (the bind group also keeps the
     /// underlying buffer alive; without the guard the buffer would escape the
     /// pool permanently).
-    _meta_buffer: Option<crate::infrastructure::pool::UniformBufferGuard>,
+    _meta_buffer: Option<crate::infrastructure::pool::PooledBuffer>,
     /// Storage binding used when the reduced input axis is empty. WGPU rejects
     /// zero-byte storage bindings even though the kernel only needs the output
     /// identity for that case.
@@ -578,9 +578,8 @@ fn dispatch_axis_reduction<T>(
 where
     T: Pod,
 {
-    let raw_meta_buffer =
-        device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+
     let empty_input_buffer = if input.buffer.len == 0 {
         Some(device.alloc_zeroed::<T>(1)?)
     } else {
@@ -641,9 +640,8 @@ fn prepared_axis_reduction<T>(
 where
     T: Pod,
 {
-    let raw_meta_buffer =
-        device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AxisReductionMeta>(1)?)?;
+
     let empty_input_buffer = if input.buffer.len == 0 {
         Some(device.alloc_zeroed::<T>(1)?)
     } else {

@@ -5,4 +5,3 @@ pub mod buffer;
 /// Device/queue acquisition and the `ComputeDevice` implementation.
 pub mod device;
 pub(crate) mod pool;
-pub use pool::{StagingBufferGuard, UniformBufferGuard};

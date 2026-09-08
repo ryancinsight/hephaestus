@@ -15,7 +15,7 @@ use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::application::prepared::checked_bind_group;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::{UniformBufferGuard, uniform_guard};
+use crate::infrastructure::pool::PooledBuffer;
 
 const WORKGROUP_WIDTH: hephaestus_core::BlockWidth = hephaestus_core::BlockWidth::DEFAULT;
 
@@ -202,9 +202,9 @@ fn binding<T>(binding: u32, buffer: &WgpuBuffer<T>) -> wgpu::BindGroupEntry<'_> 
     }
 }
 
-fn metadata_buffer(device: &WgpuDevice, metadata: &WindowMeta) -> Result<UniformBufferGuard> {
-    let raw = device.get_uniform_buffer(WgpuDevice::byte_size::<WindowMeta>(1)?)?;
-    let buffer = uniform_guard(device.clone(), raw);
+fn metadata_buffer(device: &WgpuDevice, metadata: &WindowMeta) -> Result<PooledBuffer> {
+    let buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<WindowMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&buffer, 0, eunomia::layout::bytes_of(metadata));

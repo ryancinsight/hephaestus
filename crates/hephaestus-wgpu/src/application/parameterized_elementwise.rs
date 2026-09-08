@@ -107,11 +107,10 @@ where
         shader_source::<Op>(width)
     });
 
-    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
-    let raw_parameters = device.get_uniform_buffer(WgpuDevice::byte_size::<[f32; 2]>(1)?)?;
-    let parameter_buffer =
-        crate::infrastructure::pool::uniform_guard(device.clone(), raw_parameters);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+
+    let parameter_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<[f32; 2]>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));

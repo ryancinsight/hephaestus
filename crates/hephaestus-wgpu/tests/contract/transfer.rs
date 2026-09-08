@@ -3,34 +3,6 @@ use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use hephaestus_wgpu::WgpuDevice;
 
 #[test]
-fn transfer_pools_reject_enabled_limit_overflow() -> Result<()> {
-    let Some(probe) = device_or_skip() else {
-        return Ok(());
-    };
-    let mut limits = probe.limits();
-    limits.max_buffer_size = 256;
-    limits.max_storage_buffer_binding_size = 256;
-    limits.max_uniform_buffer_binding_size = 256;
-    let device = WgpuDevice::try_default_with_limits("transfer pool limits", limits)?;
-    for (outcome, expected) in [
-        (device.get_staging_buffer(257), "264"),
-        (device.get_uniform_buffer(257), "260"),
-    ] {
-        match outcome {
-            Err(HephaestusError::AllocationFailed { message }) => {
-                assert!(message.contains(expected), "{message}");
-                assert!(message.contains("max_buffer_size=256"), "{message}");
-            }
-            other => panic!("expected enabled-limit rejection, got {other:?}"),
-        }
-    }
-    let expected = [19_u8; 256];
-    let buffer = device.upload(&expected)?;
-    assert_eq!(device.download_owned(&buffer)?, expected);
-    Ok(())
-}
-
-#[test]
 fn transfer_writes_reject_foreign_buffers_without_mutation() -> Result<()> {
     let Some(owner) = device_or_skip() else {
         return Ok(());

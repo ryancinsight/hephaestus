@@ -165,8 +165,8 @@ fn encode_strided(
 
     // Pooled meta uniform: queue.write_buffer is ordered on the queue
     // timeline, so recycling after submit cannot race in-flight dispatches.
-    let raw_meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buffer);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(meta));
@@ -626,8 +626,8 @@ where
     // Pooled uniform scalar (matches the contiguous scalar path): no per-call
     // storage operand allocation. queue.write_buffer is queue-ordered, so the
     // recycled uniform cannot race in-flight dispatches.
-    let raw_scalar_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar_buf);
+    let scalar_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+
     device
         .queue()
         .write_buffer(&scalar_buffer, 0, eunomia::layout::bytes_of(&scalar));

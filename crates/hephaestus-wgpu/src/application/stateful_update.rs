@@ -162,13 +162,12 @@ impl StatefulUpdateOps<WgpuDevice> for WgpuStatefulUpdateOps {
         let pipeline = cached_pipeline(device, key, "hephaestus-stateful-update", || {
             shader_source::<Rule>(width)
         });
-        let raw_meta =
+        let meta_buffer =
             device.get_uniform_buffer(WgpuDevice::byte_size::<StatefulUpdateMeta>(1)?)?;
-        let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
-        let raw_parameters =
-            device.get_uniform_buffer(WgpuDevice::byte_size::<Rule::Parameters>(1)?)?;
+
         let parameter_buffer =
-            crate::infrastructure::pool::uniform_guard(device.clone(), raw_parameters);
+            device.get_uniform_buffer(WgpuDevice::byte_size::<Rule::Parameters>(1)?)?;
+
         device
             .queue()
             .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&plan.metadata()));

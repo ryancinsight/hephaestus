@@ -68,3 +68,4 @@
 | [0057](0057-device-staggered-pair.md) | The device staggered pair gathers a derived transpose | Accepted |
 | [0058](0058-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Accepted |
 | [0059](0059-wgpu-storage-allocation.md) | Fallible WGPU storage allocation | Accepted |
+| [0060](0060-pooled-buffer-ownership.md) | Keep pooled buffer ownership inside the provider | Accepted |

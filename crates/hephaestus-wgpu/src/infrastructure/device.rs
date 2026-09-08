@@ -1,6 +1,9 @@
 mod acquisition;
 mod allocation;
+#[cfg(test)]
+mod pool_tests;
 
+use super::pool::{BufferOrigin, PooledBuffer};
 use core::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -106,7 +109,7 @@ const STAGING_POOL_IDLE_DECAY: Duration = Duration::from_secs(10);
 /// can only trigger a `clear` of space that is (partly) already gone, never
 /// retain beyond the policy.
 #[derive(Debug)]
-struct StagingPoolAccounting {
+pub(super) struct StagingPoolAccounting {
     /// Monotonic clock base; `last_use_ms` is an offset from this.
     base: Instant,
     last_use_ms: AtomicU64,
@@ -179,7 +182,7 @@ impl StagingPoolAccounting {
         STAGING_POOL_IDLE_DECAY
     }
 
-    fn record_recycle(&self, bytes: u64) {
+    pub(super) fn record_recycle(&self, bytes: u64) {
         self.retained_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.touch();
     }
@@ -284,7 +287,7 @@ pub(crate) fn poll_failure(
 
 /// An acquired wgpu device + queue pair.
 ///
-/// `Clone` is cheap (three `Arc` clones). This is the single authoritative
+/// Clones share the device, caches and transient pools. This is the authoritative
 /// adapter/device acquisition for Atlas wgpu consumers; apollo's
 /// `apollo-wgpu-helpers` delegates here instead of carrying its own copy.
 #[derive(Clone, Debug)]
@@ -297,8 +300,8 @@ pub struct WgpuDevice {
     topology: Option<Arc<themis::GpuTopology>>,
     pub(crate) pipeline_cache: PipelineCache,
     pub(crate) fusion_pipeline_cache: FusionPipelineCache,
-    pub(crate) staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
-    pub(crate) uniform_pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    staging_pool: Arc<ShardedResourcePool<PoolBuffer>>,
+    uniform_pool: Arc<ShardedResourcePool<PoolBuffer>>,
     map_completion_pool: Arc<MapCompletionPool>,
     staging_accounting: Arc<StagingPoolAccounting>,
 }
@@ -1124,10 +1127,10 @@ impl WgpuDevice {
     /// without overflowing `u64`, exceeds the enabled device buffer limit, or
     /// allocation fails. [`HephaestusError::DispatchFailed`] preserves scoped
     /// WGPU validation and internal errors.
-    pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
+    pub(crate) fn get_staging_buffer(&self, size: u64) -> Result<PooledBuffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
         self.maybe_decay_staging();
-        Ok(
+        Ok(PooledBuffer::new(
             if let Some(buffer) = self.staging_pool.take_at_least(staging_size) {
                 self.staging_accounting.record_hit(buffer.0.size());
                 buffer.0
@@ -1140,13 +1143,11 @@ impl WgpuDevice {
                     mapped_at_creation: false,
                 })?
             },
-        )
-    }
-
-    /// Return a staging buffer back to the bounded pool for reuse.
-    pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
-        self.staging_accounting.record_recycle(buffer.size());
-        self.staging_pool.recycle(PoolBuffer(buffer));
+            BufferOrigin::Staging {
+                pool: Arc::clone(&self.staging_pool),
+                accounting: Arc::clone(&self.staging_accounting),
+            },
+        ))
     }
 
     /// Release parked staging retention when no staging transfer has happened
@@ -1175,9 +1176,9 @@ impl WgpuDevice {
     /// without overflowing `u64`, exceeds the enabled device buffer limit, or
     /// allocation fails. [`HephaestusError::DispatchFailed`] preserves scoped
     /// WGPU validation and internal errors.
-    pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
+    pub(crate) fn get_uniform_buffer(&self, size: u64) -> Result<PooledBuffer> {
         let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
-        Ok(
+        Ok(PooledBuffer::new(
             if let Some(buffer) = self.uniform_pool.take_at_least(uniform_size) {
                 buffer.0
             } else {
@@ -1188,12 +1189,10 @@ impl WgpuDevice {
                     mapped_at_creation: false,
                 })?
             },
-        )
-    }
-
-    /// Return a uniform buffer back to the bounded pool for reuse.
-    pub fn recycle_uniform_buffer(&self, buffer: wgpu::Buffer) {
-        self.uniform_pool.recycle(PoolBuffer(buffer));
+            BufferOrigin::Uniform {
+                pool: Arc::clone(&self.uniform_pool),
+            },
+        ))
     }
 
     /// Drop transient staging and uniform buffers retained for reuse.
@@ -1203,6 +1202,26 @@ impl WgpuDevice {
     /// ownership boundary to release cached allocations before the host runtime
     /// tears down GPU state. The small fixed readback-completion slots remain
     /// device-owned because pending WGPU callbacks can still reference them.
+    ///
+    /// Transient allocations are provider-owned. Custom interop allocations
+    /// created through [`Self::device`] remain caller-owned and cannot be
+    /// inserted into these pools.
+    ///
+    /// ```compile_fail
+    /// use hephaestus_wgpu::WgpuDevice;
+    /// let owner = WgpuDevice::try_default("owner").unwrap();
+    /// let donor = WgpuDevice::try_default("donor").unwrap();
+    /// let foreign = donor.get_staging_buffer(8).unwrap();
+    /// owner.recycle_staging_buffer(foreign);
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use hephaestus_wgpu::WgpuDevice;
+    /// let owner = WgpuDevice::try_default("owner").unwrap();
+    /// let donor = WgpuDevice::try_default("donor").unwrap();
+    /// let foreign = donor.get_uniform_buffer(4).unwrap();
+    /// owner.recycle_uniform_buffer(foreign);
+    /// ```
     #[inline]
     pub fn clear_transient_pools(&self) {
         self.staging_pool.clear();
@@ -1613,9 +1632,8 @@ impl WgpuDevice {
             padded,
             byte_len,
         } = region;
-        let raw_staging = self.get_staging_buffer(padded)?;
-        let staging_size = raw_staging.size();
-        let staging = crate::infrastructure::pool::staging_guard(self.clone(), raw_staging);
+        let staging = self.get_staging_buffer(padded)?;
+        let staging_size = staging.size();
         // Capacity overflow is resolved before queue submission. The two
         // owners keep retained state quarantined until both this reader and
         // the WGPU callback have terminated, including error and unwind paths.

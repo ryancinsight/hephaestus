@@ -1,35 +1,28 @@
 # Backlog — hephaestus
 
 <a id="heph-wgpu-storage-allocation"></a>
-## HEPH-WGPU-STORAGE-ALLOCATION — Return storage allocation failures [patch] — review
-- Outcome: WGPU storage allocation and upload return typed enabled-limit, allocation, validation, and internal failures.
-- Scope: device allocation/upload and padding reservation; transfer writes and stream commands remain separate items.
-- Acceptance: above-enabled-limit requests fail before allocation; empty, odd, and aligned uploads roundtrip exactly; all error scopes are consumed without an unbounded wait.
-- Driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage) and prefix-copy scratch allocation.
-- Decision: reserve [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md); preserve [ADR 0008](docs/adr/0008-odd-length-wgpu-storage.md) padding and [ADR 0054](docs/adr/0054-bounded-default-device-waits.md) deadlines.
-- Verification: combined run ae082932 passes 39 required-device tests, strict all-target Clippy, two doctests, strict Rustdoc and the bounded fft_prepared smoke; independent source review finds no blocker. No physical OOM or performance claim.
-- Integrator: review_plan; branch: build/hephaestus-moirai-06; last-update: 2026-09-08.
+## HEPH-WGPU-STORAGE-ALLOCATION — Return storage allocation failures [patch] — done
+- Typed WGPU allocation/upload errors; merged PR #288 `f6f55f4`, implementation `1afceb3`; [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md).
 
 <a id="heph-wgpu-transfer-errors"></a>
-## HEPH-WGPU-TRANSFER-ERRORS — Preserve transfer preparation failures [patch] — review
-- Outcome: WGPU transfer staging and queue writes return typed allocation, validation, internal, and timeout failures.
-- Scope: infrastructure/device.rs staging/uniform pool allocation, write_buffer and write_sub_buffer; reuse allocation scope handling without changing stream arithmetic.
-- Acceptance: real invalid lengths/offsets/limits reject before mutation; exact full/subrange transfers preserve untouched bytes; all scopes consumed; existing bounded readback remains bounded.
-- Dependency: [storage allocation](#heph-wgpu-storage-allocation); preserve [ADR 0008](docs/adr/0008-odd-length-wgpu-storage.md) padding and [ADR 0054](docs/adr/0054-bounded-default-device-waits.md) deadlines.
-- Evidence: required-device baseline `c8ae1ee2` reproduces oversized staging allocation and foreign-device write panics. Shared scoped buffer operations and destination ownership checks close both paths; ADR 0059 records thread-local scope ownership.
-- Verification: required-device run `55ca5a53` passes 44/44, zero skipped; strict all-target Clippy, both feature checks, format, 2 doctests, strict Rustdoc and the committed 60-second FFT smoke pass. Five new cases cover limits, foreign/destroyed buffers, exact subranges and concurrent error isolation; independent successor review reports no blocking finding. Physical OOM, asynchronous device-loss rollback and arbitrary raw pool recycling are outside this evidence.
-- Integrator: review_gpu; branch: build/hephaestus-moirai-06; base: merged PR #288 `f6f55f4`; source-input SHA-256 `4edf0de456bebf48f9f2912babd1d468abbcd29c18168213dc2e61f39de1bc0e`; lock unchanged `eff5a265`.
-- Last-update: 2026-09-08; driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage).
+## HEPH-WGPU-TRANSFER-ERRORS — Preserve transfer preparation failures [patch] — done
+- Typed staging allocation and queue-write faults; merged PR #289 `1c34d14`, implementation `71f9b2d`; [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md).
+
+<a id="heph-wgpu-pool-ownership"></a>
+## HEPH-WGPU-POOL-OWNERSHIP — Bind recycled storage to its origin [major] [arch] — review
+- Outcome: external safe callers cannot insert foreign or escaped raw handles into provider pools; internal acquisitions return an owner that recycles only to its captured device/pool.
+- Scope: all WGPU pool acquisition/recycle callers and exported guard aliases; remove unused public pool access. No raw-ID comparison, compatibility alias, raw queue redesign or release bump.
+- Acceptance: preserve red `68d62fe9` foreign staging/uniform cases as compile-fail coverage; exact two-device pool reuse and existing full WGPU arithmetic/readback pass; no public pooled raw-handle escape remains.
+- Evidence: both safe sequences panic at `71f9b2d` after instance-local resource IDs collide; complete Atlas Rust search finds only WGPU internal callers (35 files), no external first-party pool user.
+- Decision: accepted [ADR 0060](docs/adr/0060-pooled-buffer-ownership.md); document API removal and caller-owned buffer migration. Independent design/diff review and SemVer gate required.
+- Dependencies: merged PR #289 `1c34d14`; [transfer errors](#heph-wgpu-transfer-errors).
+- Verification: required-device run `5c20b085` passes 46/46, no skips; feature checks, strict all-target Clippy, format, 4 doctests, strict Rustdoc and the 60-second FFT smoke pass. SemVer confirms the removed methods require a major release; two independent source reviews accept the migration. No physical OOM/performance claim.
+- Exact source-input SHA-256: `487e18e8a9f178130385ef8fc7918fddaa269b4d5ae565a97e0301aadaf38f9b`; baseline `1c34d14`, unchanged lock `eff5a265`.
+- Integrator: review_gpu; branch: codex/hephaestus-pool-ownership; last-update: 2026-09-08.
 
 <a id="heph-wgpu-buffer-extents"></a>
-## HEPH-WGPU-BUFFER-EXTENTS — Preserve logical byte extents [patch] — review
-- Outcome: whole-buffer copy/clear accepts padded scalar lengths; prefix copies preserve every byte outside the prefix.
-- Scope: WGPU stream storage commands and real device regressions; no allocation/error-scope migration or performance claim.
-- Acceptance: exact values for byte, halfword, word, and half scalars, empty/odd/aligned lengths, prefix boundaries and retained suffixes; typed length rejection preserves destinations.
-- Dependency/driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage); [ADR 0036](docs/adr/0036-device-local-cow-copy.md).
-- Verification: required-device red `3f59030d`; combined WGPU run `ae082932` passes 39/39 with no skips; both feature checks, strict all-target Clippy, format, 2 doctests, strict Rustdoc and the committed 60-second FFT smoke pass. Independent source review closes all findings.
-- Evidence: base `2ca62681`, source-input SHA-256 `291ef3403affaa3ea25d5df08480d19c0b2138cb8814dba292357364540d9fbe`, unchanged lock `eff5a265`; required-device RTX 5080 run; no physical Metal or performance claim.
-- Integrator: review_gpu; branch: build/hephaestus-moirai-06; last-update: 2026-09-08.
+## HEPH-WGPU-BUFFER-EXTENTS — Preserve logical byte extents [patch] — done
+- Odd-byte whole copy/clear and exact prefix preservation; merged PR #288 `f6f55f4`, implementation `53f59a7`.
 
 <a id="heph-cuda-stub-availability"></a>
 ## HEPH-CUDA-STUB-AVAILABILITY — Classify an unavailable real driver [patch] — review

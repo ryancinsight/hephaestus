@@ -12,6 +12,8 @@
 
 #[path = "contract/allocation.rs"]
 mod allocation;
+#[path = "contract/recycling.rs"]
+mod recycling;
 #[path = "contract/storage.rs"]
 mod storage;
 #[path = "contract/transfer.rs"]
