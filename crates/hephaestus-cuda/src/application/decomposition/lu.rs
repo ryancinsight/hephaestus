@@ -341,7 +341,10 @@ pub(crate) mod gemm_impl {
         .to_string()
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parameters are the operation's independent descriptors; bundling them into a struct renames the same fields without removing a call-site decision"
+    )]
     pub(crate) fn gemm_trailing_update(
         device: &CudaDevice,
         a_buf: &CudaBuffer<f32>,
