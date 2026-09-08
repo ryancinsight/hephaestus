@@ -107,6 +107,7 @@ pub(super) fn query_device_features(driver: &Driver, device: &i32) -> Result<Cud
     let compute_capability = major * 10 + minor;
 
     Ok(CudaDeviceFeatures {
+        compute_capability,
         shader_f64: compute_capability >= 13,
         immediate_data: true,
     })

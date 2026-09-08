@@ -96,8 +96,6 @@ impl FusionLayoutInfo {
 
 /// Scalar capabilities needed by provider-owned CUDA fusion.
 pub trait CudaFusionScalar: DialectScalar<CudaC> + Pod + Send + Sync + 'static {
-    /// CUDA header declarations required by this scalar's device type.
-    const PRELUDE: &'static str;
     /// CUDA literal for the additive identity.
     const ZERO: &'static str;
     /// CUDA literal for the multiplicative identity.
@@ -113,7 +111,6 @@ pub trait CudaFusionScalar: DialectScalar<CudaC> + Pod + Send + Sync + 'static {
 macro_rules! impl_fusion_scalar {
     ($ty:ty, $divisor:literal) => {
         impl CudaFusionScalar for $ty {
-            const PRELUDE: &'static str = "";
             const ZERO: &'static str = <Self as IdentityToken<SumOp, CudaC>>::TOKEN;
             const ONE: &'static str = <Self as IdentityToken<ProdOp, CudaC>>::TOKEN;
             const LOWEST: &'static str = <Self as IdentityToken<MaxOp, CudaC>>::TOKEN;
@@ -128,7 +125,6 @@ impl_fusion_scalar!(i32, "static_cast<int>(axis_length)");
 impl_fusion_scalar!(u32, "static_cast<unsigned int>(axis_length)");
 
 impl CudaFusionScalar for f64 {
-    const PRELUDE: &'static str = "";
     const ZERO: &'static str = "0.0";
     const ONE: &'static str = "1.0";
     const LOWEST: &'static str = "-1.7976931348623157e+308";
@@ -137,7 +133,6 @@ impl CudaFusionScalar for f64 {
 }
 
 impl CudaFusionScalar for eunomia::F16 {
-    const PRELUDE: &'static str = "#include <cuda_fp16.h>\n";
     const ZERO: &'static str = <Self as IdentityToken<SumOp, CudaC>>::TOKEN;
     const ONE: &'static str = <Self as IdentityToken<ProdOp, CudaC>>::TOKEN;
     const LOWEST: &'static str = <Self as IdentityToken<MaxOp, CudaC>>::TOKEN;
@@ -146,7 +141,6 @@ impl CudaFusionScalar for eunomia::F16 {
 }
 
 impl CudaFusionScalar for eunomia::Bf16 {
-    const PRELUDE: &'static str = "#include <cuda_bf16.h>\n";
     const ZERO: &'static str = <Self as IdentityToken<SumOp, CudaC>>::TOKEN;
     const ONE: &'static str = <Self as IdentityToken<ProdOp, CudaC>>::TOKEN;
     const LOWEST: &'static str = <Self as IdentityToken<MaxOp, CudaC>>::TOKEN;

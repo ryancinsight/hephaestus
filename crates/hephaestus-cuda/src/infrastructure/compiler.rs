@@ -3,6 +3,8 @@ use std::sync::OnceLock;
 
 use crate::infrastructure::device::{CudaContext, CurrentContext};
 
+mod headers;
+
 #[allow(non_camel_case_types)]
 pub type nvrtcProgram = *mut std::ffi::c_void;
 #[allow(non_camel_case_types)]
@@ -224,7 +226,7 @@ fn find_nvrtc_library() -> Option<Library> {
 }
 
 /// Compile a CUDA C++ source code string to PTX at runtime using NVRTC.
-pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
+pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<String, String> {
     let nvrtc = NvrtcDriver::get().ok_or_else(|| "NVRTC driver not available".to_string())?;
 
     let src_c = std::ffi::CString::new(src).map_err(|e| e.to_string())?;
@@ -254,8 +256,25 @@ pub fn compile_cuda_to_ptx(src: &str) -> Result<String, String> {
         }
 
         let compiled = (|| {
-            let options = [std::ffi::CString::new("--std=c++11")
-                .expect("infallible: C++ standard flag contains no null bytes")];
+            let mut options = vec![
+                std::ffi::CString::new("--std=c++11")
+                    .expect("invariant: standard flag contains no null bytes"),
+                std::ffi::CString::new(format!(
+                    "--gpu-architecture=compute_{}",
+                    device.compute_capability()
+                ))
+                .expect("invariant: decimal architecture contains no null bytes"),
+            ];
+            if let Some(directory) =
+                headers::include_directory(nvrtc.nvrtcCreateProgram as *const core::ffi::c_void)?
+            {
+                options.push(
+                    std::ffi::CString::new(format!("--include-path={}", directory.display()))
+                        .map_err(|error| {
+                            format!("CUDA header path contains a null byte: {error}")
+                        })?,
+                );
+            }
             let options_ptr: Vec<*const std::ffi::c_char> =
                 options.iter().map(|o| o.as_ptr()).collect();
 

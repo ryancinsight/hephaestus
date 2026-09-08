@@ -1,5 +1,11 @@
 # Checklist — hephaestus
 
+## review_gpu — CUDA scalar products
+
+- [x] Collect required-device value/PTX and strict Clippy results for [scalar products](backlog.md#heph-cuda-dense-product-scalars).
+- [x] Run the full configured host/CUDA gates and public migration SemVer check for [scalar products](backlog.md#heph-cuda-dense-product-scalars).
+- [ ] Integrate independent review, commit and publish [scalar products](backlog.md#heph-cuda-dense-product-scalars) through the repository merge gate.
+
 Sprint target: 0.18.0. Phase: Closure.
 
 ## HEPH-CONFORMANCE-RATCHET-2026-08-31 — Codex

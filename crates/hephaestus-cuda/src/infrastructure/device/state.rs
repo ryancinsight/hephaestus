@@ -35,6 +35,7 @@ pub struct CudaDevice {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct CudaDeviceFeatures {
+    pub(super) compute_capability: i32,
     pub(super) shader_f64: bool,
     pub(super) immediate_data: bool,
 }
