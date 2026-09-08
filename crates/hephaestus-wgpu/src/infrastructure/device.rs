@@ -1121,7 +1121,9 @@ impl WgpuDevice {
     /// # Errors
     ///
     /// [`HephaestusError::AllocationFailed`] when `size` cannot be aligned
-    /// without overflowing `u64`.
+    /// without overflowing `u64`, exceeds the enabled device buffer limit, or
+    /// allocation fails. [`HephaestusError::DispatchFailed`] preserves scoped
+    /// WGPU validation and internal errors.
     pub fn get_staging_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let staging_size = Self::aligned_size(size, wgpu::MAP_ALIGNMENT)?;
         self.maybe_decay_staging();
@@ -1131,12 +1133,12 @@ impl WgpuDevice {
                 buffer.0
             } else {
                 self.staging_accounting.record_miss();
-                self.device.create_buffer(&wgpu::BufferDescriptor {
+                self.allocate_buffer(&wgpu::BufferDescriptor {
                     label: Some("hephaestus-recycled-staging"),
                     size: staging_size,
                     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
-                })
+                })?
             },
         )
     }
@@ -1170,19 +1172,21 @@ impl WgpuDevice {
     /// # Errors
     ///
     /// [`HephaestusError::AllocationFailed`] when `size` cannot be aligned
-    /// without overflowing `u64`.
+    /// without overflowing `u64`, exceeds the enabled device buffer limit, or
+    /// allocation fails. [`HephaestusError::DispatchFailed`] preserves scoped
+    /// WGPU validation and internal errors.
     pub fn get_uniform_buffer(&self, size: u64) -> Result<wgpu::Buffer> {
         let uniform_size = Self::aligned_size(size, wgpu::COPY_BUFFER_ALIGNMENT)?;
         Ok(
             if let Some(buffer) = self.uniform_pool.take_at_least(uniform_size) {
                 buffer.0
             } else {
-                self.device.create_buffer(&wgpu::BufferDescriptor {
+                self.allocate_buffer(&wgpu::BufferDescriptor {
                     label: Some("hephaestus-recycled-uniform"),
                     size: uniform_size,
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
-                })
+                })?
             },
         )
     }
@@ -1320,7 +1324,11 @@ impl WgpuDevice {
     /// # Errors
     ///
     /// [`HephaestusError::LengthMismatch`] if the requested range falls outside the buffer bounds.
-    /// [`HephaestusError::AllocationFailed`] if element byte conversion overflows `u64`.
+    /// [`HephaestusError::AllocationFailed`] if byte conversion, host padding, or
+    /// queue staging allocation fails. [`HephaestusError::TransferFailed`] if
+    /// the requested interior range is not copy-aligned.
+    /// [`HephaestusError::DispatchFailed`] if the destination belongs to another
+    /// device or WGPU rejects the write. Rejected requests preserve its values.
     pub fn write_sub_buffer<T: Pod>(
         &self,
         buffer: &WgpuBuffer<T>,
@@ -1364,9 +1372,21 @@ impl WgpuDevice {
                 ),
             });
         };
-        self.queue
-            .write_buffer(buffer.raw(), byte_offset, payload.as_ref());
-        Ok(())
+        self.write_bytes(buffer, byte_offset, payload.as_ref())
+    }
+
+    fn write_bytes<T: Pod>(&self, buffer: &WgpuBuffer<T>, offset: u64, bytes: &[u8]) -> Result<()> {
+        // WGPU resource IDs belong to an instance. A foreign handle can fail
+        // resource lookup before WGPU reaches its scoped validation path.
+        if !buffer.belongs_to(&self.pipeline_cache) {
+            return Err(HephaestusError::DispatchFailed {
+                message: "WGPU transfer destination belongs to a different device".to_owned(),
+            });
+        }
+        self.buffer_operation("hephaestus-buffer-write", || {
+            self.queue.write_buffer(buffer.raw(), offset, bytes);
+            Ok(())
+        })
     }
 }
 
@@ -1482,8 +1502,7 @@ impl ComputeDevice for WgpuDevice {
             });
         }
         let payload = Self::padded_host_bytes(host)?;
-        self.queue.write_buffer(buffer.raw(), 0, payload.as_ref());
-        Ok(())
+        self.write_bytes(buffer, 0, payload.as_ref())
     }
 
     #[inline]

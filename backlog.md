@@ -11,13 +11,14 @@
 - Integrator: review_plan; branch: build/hephaestus-moirai-06; last-update: 2026-09-08.
 
 <a id="heph-wgpu-transfer-errors"></a>
-## HEPH-WGPU-TRANSFER-ERRORS — Preserve transfer preparation failures [patch] — todo
+## HEPH-WGPU-TRANSFER-ERRORS — Preserve transfer preparation failures [patch] — review
 - Outcome: WGPU transfer staging and queue writes return typed allocation, validation, internal, and timeout failures.
 - Scope: infrastructure/device.rs staging/uniform pool allocation, write_buffer and write_sub_buffer; reuse allocation scope handling without changing stream arithmetic.
 - Acceptance: real invalid lengths/offsets/limits reject before mutation; exact full/subrange transfers preserve untouched bytes; all scopes consumed; existing bounded readback remains bounded.
 - Dependency: [storage allocation](#heph-wgpu-storage-allocation); preserve [ADR 0008](docs/adr/0008-odd-length-wgpu-storage.md) padding and [ADR 0054](docs/adr/0054-bounded-default-device-waits.md) deadlines.
-- Evidence: staging/uniform pool misses still call create_buffer without scopes; queue write paths currently return Ok after an unscoped write.
-- Verification: required-device focused regressions, strict Clippy, format, doctests, and independent review; physical OOM is not simulated as provider evidence.
+- Evidence: required-device baseline `c8ae1ee2` reproduces oversized staging allocation and foreign-device write panics. Shared scoped buffer operations and destination ownership checks close both paths; ADR 0059 records thread-local scope ownership.
+- Verification: required-device run `55ca5a53` passes 44/44, zero skipped; strict all-target Clippy, both feature checks, format, 2 doctests, strict Rustdoc and the committed 60-second FFT smoke pass. Five new cases cover limits, foreign/destroyed buffers, exact subranges and concurrent error isolation; independent successor review reports no blocking finding. Physical OOM, asynchronous device-loss rollback and arbitrary raw pool recycling are outside this evidence.
+- Integrator: review_gpu; branch: build/hephaestus-moirai-06; base: merged PR #288 `f6f55f4`; source-input SHA-256 `4edf0de456bebf48f9f2912babd1d468abbcd29c18168213dc2e61f39de1bc0e`; lock unchanged `eff5a265`.
 - Last-update: 2026-09-08; driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage).
 
 <a id="heph-wgpu-buffer-extents"></a>
