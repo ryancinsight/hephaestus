@@ -67,3 +67,4 @@
 | [0056](0056-eunomia-layout-seam.md) | Eunomia-owned device layout seam | Accepted |
 | [0057](0057-device-staggered-pair.md) | The device staggered pair gathers a derived transpose | Accepted |
 | [0058](0058-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Accepted |
+| [0059](0059-wgpu-storage-allocation.md) | Fallible WGPU storage allocation | Accepted |
