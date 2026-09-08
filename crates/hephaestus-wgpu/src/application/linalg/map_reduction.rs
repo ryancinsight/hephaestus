@@ -19,7 +19,7 @@ use crate::application::strided::{
 };
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::UniformBufferGuard;
+use crate::infrastructure::pool::PooledBuffer;
 
 struct MapReductionKernel<Op>(PhantomData<Op>);
 
@@ -77,7 +77,7 @@ struct PreparedMapReduction<T> {
     groups: u32,
     partial: WgpuBuffer<T>,
     reduction: Option<PreparedReduction<T>>,
-    _meta_buffer: Option<UniformBufferGuard>,
+    _meta_buffer: Option<PooledBuffer>,
 }
 
 impl<T> PreparedMapReduction<T> {
@@ -179,8 +179,8 @@ where
         "hephaestus-map-reduction",
         || shader::source::<Op, T>(width),
     );
-    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
-    let meta_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StridedMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));

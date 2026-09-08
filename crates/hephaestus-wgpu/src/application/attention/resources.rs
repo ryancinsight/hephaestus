@@ -6,14 +6,14 @@ use super::metadata::AttentionMeta;
 use crate::application::prepared::validate_buffer_owner;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::{UniformBufferGuard, uniform_guard};
+use crate::infrastructure::pool::PooledBuffer;
 
 pub(super) fn metadata_buffer(
     device: &WgpuDevice,
     metadata: &AttentionMeta,
-) -> Result<UniformBufferGuard> {
-    let raw = device.get_uniform_buffer(WgpuDevice::byte_size::<AttentionMeta>(1)?)?;
-    let buffer = uniform_guard(device.clone(), raw);
+) -> Result<PooledBuffer> {
+    let buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AttentionMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&buffer, 0, eunomia::layout::bytes_of(metadata));

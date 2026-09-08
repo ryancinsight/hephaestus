@@ -170,8 +170,8 @@ impl GpuQrDecomposition {
             reflector_count: to_u32(reflector_count, "reflector_count")?,
         };
 
-        let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<QMeta>(1)?)?;
-        let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
+        let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<QMeta>(1)?)?;
+
         device
             .queue()
             .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
@@ -670,8 +670,8 @@ pub fn qr_decompose_blocked(
         "hephaestus-hh",
         hh_shader_source,
     );
-    let raw_hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
-    let hh_meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_hh_meta_buf);
+    let hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
+
     let hh_bind_group = device
         .inner()
         .create_bind_group(&wgpu::BindGroupDescriptor {

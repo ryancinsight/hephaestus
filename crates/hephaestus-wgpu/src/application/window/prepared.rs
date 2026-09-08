@@ -3,7 +3,7 @@ use hephaestus_core::Result;
 use crate::application::pipeline::encode_compute_pass;
 use crate::application::prepared::{checked_submit, device_owner, validate_device_owner};
 use crate::infrastructure::device::{PipelineCache, WgpuDevice};
-use crate::infrastructure::pool::UniformBufferGuard;
+use crate::infrastructure::pool::PooledBuffer;
 
 /// One validated WGPU window kernel bound to its metadata and operands.
 pub(super) struct PreparedWindowKernel {
@@ -11,16 +11,12 @@ pub(super) struct PreparedWindowKernel {
     state: PreparedWindowState,
 }
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "boxing the common ready state would add an allocation to every preparation"
-)]
 enum PreparedWindowState {
     Empty,
     Ready {
         pipeline: wgpu::ComputePipeline,
         bind_group: wgpu::BindGroup,
-        _metadata: UniformBufferGuard,
+        _metadata: PooledBuffer,
         groups: u32,
         label: &'static str,
     },
@@ -38,7 +34,7 @@ impl PreparedWindowKernel {
         device: &WgpuDevice,
         pipeline: wgpu::ComputePipeline,
         bind_group: wgpu::BindGroup,
-        metadata: UniformBufferGuard,
+        metadata: PooledBuffer,
         groups: u32,
         label: &'static str,
     ) -> Self {

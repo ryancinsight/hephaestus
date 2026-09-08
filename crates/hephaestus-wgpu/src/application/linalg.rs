@@ -477,12 +477,9 @@ where
     let out_meta = map_layout(out.layout)?;
 
     let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let raw_a = device.get_uniform_buffer(size)?;
-    let raw_b = device.get_uniform_buffer(size)?;
-    let raw_out = device.get_uniform_buffer(size)?;
-    let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
-    let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
-    let out_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_out);
+    let a_layout_buf = device.get_uniform_buffer(size)?;
+    let b_layout_buf = device.get_uniform_buffer(size)?;
+    let out_layout_buf = device.get_uniform_buffer(size)?;
 
     device
         .queue()
@@ -654,12 +651,9 @@ where
     let c_meta = map_layout(out.layout)?;
 
     let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let raw_a = device.get_uniform_buffer(size)?;
-    let raw_b = device.get_uniform_buffer(size)?;
-    let raw_c = device.get_uniform_buffer(size)?;
-    let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
-    let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
-    let c_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_c);
+    let a_layout_buf = device.get_uniform_buffer(size)?;
+    let b_layout_buf = device.get_uniform_buffer(size)?;
+    let c_layout_buf = device.get_uniform_buffer(size)?;
 
     device
         .queue()
@@ -889,12 +883,9 @@ where
         let b_meta = map_layout(&rhs_mat_layout)?;
         let c_meta = map_layout(&out_mat_layout)?;
 
-        let raw_a = device.get_uniform_buffer(size)?;
-        let raw_b = device.get_uniform_buffer(size)?;
-        let raw_c = device.get_uniform_buffer(size)?;
-        let a_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_a);
-        let b_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_b);
-        let c_layout_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_c);
+        let a_layout_buf = device.get_uniform_buffer(size)?;
+        let b_layout_buf = device.get_uniform_buffer(size)?;
+        let c_layout_buf = device.get_uniform_buffer(size)?;
 
         device
             .queue()
@@ -1049,14 +1040,14 @@ where
         return Ok(output);
     }
     let metadata = map_layout(layout)?;
-    let raw_layout = device.get_uniform_buffer(WgpuDevice::byte_size::<GpuMatrixLayout>(1)?)?;
-    let layout_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_layout);
+    let layout_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<GpuMatrixLayout>(1)?)?;
+
     let identity_value_size = WgpuDevice::byte_size::<T>(1)?;
     let identity_alignment = u64::from(device.limits().min_uniform_buffer_offset_alignment)
         .max(wgpu::COPY_BUFFER_ALIGNMENT);
     let (one_offset, identity_buffer_size) = identity_buffer_layout::<T>(identity_alignment)?;
-    let raw_identity = device.get_uniform_buffer(identity_buffer_size)?;
-    let identity_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_identity);
+    let identity_buffer = device.get_uniform_buffer(identity_buffer_size)?;
+
     device
         .queue()
         .write_buffer(&layout_buffer, 0, eunomia::layout::bytes_of(&metadata));

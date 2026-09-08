@@ -58,8 +58,8 @@ where
     }
     let groups = workgroups(out.len, width)?;
 
-    let raw_scalar_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
-    let scalar_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_scalar_buf);
+    let scalar_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<T>(1)?)?;
+
     device
         .queue()
         .write_buffer(&scalar_buffer, 0, eunomia::layout::bytes_of(&scalar));

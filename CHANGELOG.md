@@ -4,6 +4,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [major] WGPU transient pool acquisition/recycling and exported staging/uniform
+  guard types are no longer public. Transfers and kernels retain pool ownership
+  internally; custom WGPU interop owns its allocations outside provider pools.
+  See [ADR 0060](docs/adr/0060-pooled-buffer-ownership.md) for migration.
+
 - [patch] WGPU and CUDA launch sizing now construct
   `moirai_gpu::KernelResourceBudget` through Moirai's planner facade and no
   longer carries a direct `mnemosyne-memory-core` dependency. This keeps the

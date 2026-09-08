@@ -3,7 +3,7 @@ use hephaestus_core::Result;
 use crate::application::pipeline::encode_compute_pass;
 use crate::application::prepared::{checked_submit, device_owner, validate_device_owner};
 use crate::infrastructure::device::{PipelineCache, WgpuDevice};
-use crate::infrastructure::pool::UniformBufferGuard;
+use crate::infrastructure::pool::PooledBuffer;
 
 /// One compiled convolution kernel bound to its operands and metadata.
 pub struct PreparedConvolutionKernel {
@@ -11,10 +11,6 @@ pub struct PreparedConvolutionKernel {
     state: PreparedKernelState,
 }
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "boxing the common ready state would add a heap allocation to every kernel preparation"
-)]
 enum PreparedKernelState {
     Empty {
         label: &'static str,
@@ -22,7 +18,7 @@ enum PreparedKernelState {
     Ready {
         pipeline: wgpu::ComputePipeline,
         bind_group: wgpu::BindGroup,
-        _metadata: UniformBufferGuard,
+        _metadata: PooledBuffer,
         groups: u32,
         label: &'static str,
     },
@@ -40,7 +36,7 @@ impl PreparedConvolutionKernel {
         device: &WgpuDevice,
         pipeline: wgpu::ComputePipeline,
         bind_group: wgpu::BindGroup,
-        metadata: UniformBufferGuard,
+        metadata: PooledBuffer,
         groups: u32,
         label: &'static str,
     ) -> Self {

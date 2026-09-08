@@ -221,8 +221,8 @@ impl<'a, P: Pod, const N: usize> MultiStorageKernel<WgpuDevice, P, [WgslStorageB
             return Ok(());
         }
 
-        let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
-        let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
+        let params_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+
         device
             .queue()
             .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));
@@ -404,8 +404,8 @@ where
             return Ok(());
         }
 
-        let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
-        let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
+        let params_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+
         device
             .queue()
             .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));
@@ -531,8 +531,8 @@ where
             return Ok(());
         }
 
-        let raw_params = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
-        let params_buffer = crate::infrastructure::pool::uniform_guard(device.clone(), raw_params);
+        let params_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+
         device
             .queue()
             .write_buffer(&params_buffer, 0, eunomia::layout::bytes_of(params));

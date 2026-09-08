@@ -325,8 +325,8 @@ pub(crate) fn gemm_trailing_update(
         gemm_shader_source,
     );
 
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<GemmMeta>(1)?)?;
-    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<GemmMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));

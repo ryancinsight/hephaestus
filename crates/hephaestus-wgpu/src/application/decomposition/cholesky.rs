@@ -23,7 +23,6 @@ use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::uniform_guard;
 
 // ---------------------------------------------------------------------------
 // SYRK uniform
@@ -211,8 +210,8 @@ fn syrk_trailing_update(
         syrk_shader_source,
     );
 
-    let raw_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
-    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta_buf);
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SyrkMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
@@ -578,8 +577,8 @@ fn zero_strict_upper(device: &WgpuDevice, matrix: &WgpuBuffer<f32>, n: usize) ->
         strict_upper_zero_shader_source,
     );
 
-    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<TriangleMeta>(1)?)?;
-    let meta_buf = crate::infrastructure::pool::uniform_guard(device.clone(), raw_meta);
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<TriangleMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));
@@ -947,8 +946,8 @@ fn device_solve(
     let mut metas = Vec::with_capacity(dispatches.len());
     let mut bind_groups = Vec::with_capacity(dispatches.len());
     for dispatch in &dispatches {
-        let raw_meta = device.get_uniform_buffer(meta_size)?;
-        let meta_buf = uniform_guard(device.clone(), raw_meta);
+        let meta_buf = device.get_uniform_buffer(meta_size)?;
+
         device
             .queue()
             .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&dispatch.meta));

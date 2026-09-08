@@ -17,7 +17,6 @@ use hephaestus_core::{ComputeDevice, HephaestusError, Result};
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::uniform_guard;
 
 /// Packed metadata for the split kernel, matching the WGSL `SplitMeta` struct.
 #[repr(C)]
@@ -140,8 +139,8 @@ pub fn split_packed_lu(
         split_packed_lu_shader_source,
     );
 
-    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<SplitMeta>(1)?)?;
-    let meta_buf = uniform_guard(device.clone(), raw_meta);
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<SplitMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&meta));

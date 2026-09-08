@@ -6,9 +6,7 @@ use std::any::TypeId;
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-use crate::infrastructure::pool::{
-    StagingBufferGuard, UniformBufferGuard, staging_guard, uniform_guard,
-};
+use crate::infrastructure::pool::PooledBuffer;
 
 pub(crate) fn matrix_region_len(rows: usize, cols: usize) -> Result<usize> {
     rows.checked_mul(cols)
@@ -138,9 +136,9 @@ pub(crate) struct MatrixRegionDownloadWorkspace<'buffer> {
     _source: &'buffer WgpuBuffer<f32>,
     temp: &'buffer WgpuBuffer<f32>,
     pipeline: wgpu::ComputePipeline,
-    staging: StagingBufferGuard,
+    staging: PooledBuffer,
     staging_size: u64,
-    _meta: UniformBufferGuard,
+    _meta: PooledBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
 }
@@ -178,11 +176,11 @@ impl<'buffer> MatrixRegionDownloadWorkspace<'buffer> {
             });
         }
         let staging_bytes = WgpuDevice::byte_size::<f32>(capacity)?;
-        let raw_staging = device.get_staging_buffer(staging_bytes)?;
-        let staging_size = raw_staging.size();
-        let staging = staging_guard(device.clone(), raw_staging);
-        let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-        let meta = uniform_guard(device.clone(), raw_meta);
+        let staging = device.get_staging_buffer(staging_bytes)?;
+        let staging_size = staging.size();
+
+        let meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
+
         let pipeline = cached_pipeline(
             device,
             (TypeId::of::<RegionCopyKernel>(), TypeId::of::<f32>(), 0),
@@ -443,7 +441,7 @@ pub(crate) fn download_matrix_region_workspace_pair_into(
 }
 
 struct ScatterTransfer {
-    _meta: UniformBufferGuard,
+    _meta: PooledBuffer,
     bind_group: wgpu::BindGroup,
     compact_len: usize,
 }
@@ -475,8 +473,8 @@ fn prepare_scatter(
         });
     }
     device.write_sub_buffer(temp_compact_buf, 0, compact_host)?;
-    let raw_meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
-    let meta = uniform_guard(device.clone(), raw_meta);
+    let meta = device.get_uniform_buffer(WgpuDevice::byte_size::<RegionCopyMeta>(1)?)?;
+
     device
         .queue()
         .write_buffer(&meta, 0, eunomia::layout::bytes_of(&region_meta(region)?));
