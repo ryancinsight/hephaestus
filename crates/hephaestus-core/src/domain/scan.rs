@@ -83,7 +83,10 @@ pub struct AxisScanDispatch {
 /// power of two, the axis is out of range, shapes mismatch, the buffers alias,
 /// the output layout has zero-stride aliasing, a layout does not fit its
 /// buffer, or an extent/stride exceeds the shader's `u32`/`i32` range.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the operation's independent descriptors; bundling them into a struct renames the same fields without removing a call-site decision"
+)]
 pub fn plan_axis_scan(
     input_layout: &Layout<2>,
     input_buf_len: usize,

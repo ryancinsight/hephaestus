@@ -210,7 +210,10 @@ fn checked_dimensions(rows: usize, cols: usize) -> Result<(u32, u32, usize)> {
     Ok((rows_u32, cols_u32, elements))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the operation's independent descriptors; bundling them into a struct renames the same fields without removing a call-site decision"
+)]
 fn launch_stage(
     device: &RocmDevice,
     stage: QrStage,

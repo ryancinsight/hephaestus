@@ -278,7 +278,10 @@ fn checked_dimension(n: usize) -> Result<(u32, usize)> {
     Ok((n_u32, elements))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the operation's independent descriptors; bundling them into a struct renames the same fields without removing a call-site decision"
+)]
 fn launch_stage(
     device: &RocmDevice,
     stage: FullPivLuStage,

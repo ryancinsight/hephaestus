@@ -121,7 +121,10 @@ fn validate_finite(a: &[f32], op: &str) -> Result<()> {
 ///
 /// # Errors
 /// Propagates [`panel_lu_packed`]'s failure (non-finite entry or zero pivot).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the operation's independent descriptors; bundling them into a struct renames the same fields without removing a call-site decision"
+)]
 pub fn factor_lu_panel(
     col_panel: &mut [f32],
     row_panel: &mut [f32],
