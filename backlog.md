@@ -1,5 +1,15 @@
 # Backlog — hephaestus
 
+<a id="heph-cuda-dense-product-scalars"></a>
+## HEPH-CUDA-DENSE-PRODUCT-SCALARS — Declare CUDA product scalar types [patch] — in-progress
+- Outcome: CUDA matrix, batched matrix and Kronecker products compile and execute every supported scalar using native arithmetic.
+- Scope: CUDA scalar declaration ownership, dense-product generators, existing device tests and governing [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md); no widening, capability removal or loader-error redesign.
+- Acceptance: required-device scalar matrix has exact product oracles and native rounding cases; reproduce the missing-half declaration before correction, then strict Clippy, focused/full device and host gates, docs and independent review.
+- Evidence: consumer run `0921b452` rejects `__half` in `matmul_kernel`; generators are unchanged between locked `f6f55f4` and current `3dfbae0`.
+- Dependencies: existing NVRTC compiler and scalar dialect vocabulary; upstream prerequisite for Coeus output ownership.
+- Integrator: review_gpu; branch: codex/hephaestus-dense-product-scalars; last-update: 2026-09-08.
+- Lease: review_gpu CUDA dense-product tests, linalg generators, fusion scalar declarations, compiler scalar-header support, core dialect vocabulary, ADR 0044 and affected README; 2026-09-08.
+
 <a id="heph-wgpu-storage-allocation"></a>
 ## HEPH-WGPU-STORAGE-ALLOCATION — Return storage allocation failures [patch] — done
 - Typed WGPU allocation/upload errors; merged PR #288 `f6f55f4`, implementation `1afceb3`; [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md).
