@@ -1,4 +1,5 @@
 mod acquisition;
+mod allocation;
 
 use core::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,7 +13,6 @@ use hephaestus_core::{
     validate_buffer_size, validate_slice_alignment,
 };
 use std::any::TypeId;
-use wgpu::util::DeviceExt;
 
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::pool::{MapCompletionPool, PoolBuffer};
@@ -1079,7 +1079,14 @@ impl WgpuDevice {
             return Ok(Cow::Borrowed(bytes));
         }
 
-        let mut padded = Vec::with_capacity(padded_len);
+        let mut padded = Vec::new();
+        padded.try_reserve_exact(padded_len).map_err(|error| {
+            HephaestusError::AllocationFailed {
+                message: format!(
+                    "WGPU host padding allocation for {padded_len} bytes failed: {error}"
+                ),
+            }
+        })?;
         padded.extend_from_slice(bytes);
         padded.resize(padded_len, 0);
         Ok(Cow::Owned(padded))
@@ -1389,15 +1396,8 @@ impl ComputeDevice for WgpuDevice {
     ) -> Result<WgpuBuffer<T>> {
         validate_buffer_size::<T>(len)?;
         let tier = Self::device_tier(hint)?;
-        let usage = wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::COPY_DST;
-        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("hephaestus-storage"),
-            size: Self::padded_size::<T>(len)?,
-            usage,
-            mapped_at_creation: false,
-        });
+        let size = self.storage_size::<T>(len)?;
+        let buffer = self.allocate_storage("hephaestus-storage", size, None)?;
         Ok(WgpuBuffer {
             buffer,
             len,
@@ -1413,27 +1413,11 @@ impl ComputeDevice for WgpuDevice {
         hint: themis::PlacementHint,
     ) -> Result<WgpuBuffer<T>> {
         validate_slice_alignment(host)?;
-        let padded_len = Self::padded_size::<T>(host.len())?;
-        let payload = Self::padded_host_bytes(host)?;
+        let padded_len = self.storage_size::<T>(host.len())?;
         let tier = Self::device_tier(hint)?;
-        let usage = wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::COPY_DST;
-        let buffer = if padded_len == 0 {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("hephaestus-upload"),
-                size: 0,
-                usage,
-                mapped_at_creation: false,
-            })
-        } else {
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("hephaestus-upload"),
-                    contents: payload.as_ref(),
-                    usage,
-                })
-        };
+        let payload = Self::padded_host_bytes(host)?;
+        let buffer =
+            self.allocate_storage("hephaestus-upload", padded_len, Some(payload.as_ref()))?;
         Ok(WgpuBuffer {
             buffer,
             len: host.len(),

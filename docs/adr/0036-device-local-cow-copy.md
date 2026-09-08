@@ -56,3 +56,24 @@ by this structural change alone.
 Revisit if a provider can prove an equivalent completion contract without a
 device-wide synchronization, or if a measured workload shows synchronization
 dominates COW mutation after host staging is removed.
+
+## Revision 2026-09-08: physical padding and prefix boundaries
+
+[HEPH-WGPU-BUFFER-EXTENTS](../../backlog.md#heph-wgpu-buffer-extents)
+applies [ADR 0008](0008-odd-length-wgpu-storage.md) to WGPU copies and clears
+for scalar buffers whose byte lengths are not multiples of four. Whole-buffer
+operations include physical allocation padding, which contains no other logical
+values. Prefix copies transfer aligned words
+and merge the final one to three bytes on-device, preserving destination bytes
+outside the requested prefix. Two four-byte scratch buffers keep this tail
+operation independent of full-buffer storage-binding limits. Tail allocation and
+pipeline/binding preparation precede all prefix encoding so preparation errors
+leave no partial copy in the command stream; no payload reaches
+the host. Cached tail pipelines specialize only the three possible byte masks.
+
+Rounding a prefix transfer upward is rejected because it overwrites logical
+suffix values. The regression covers exact values over empty, odd, and aligned
+lengths and every prefix boundary, including length rejection with unchanged
+destinations. The initial required-device run `3f59030d` fails on copy size one
+against WGPU's `COPY_BUFFER_ALIGNMENT` rule. This is correctness evidence;
+no transfer-performance claim is made.

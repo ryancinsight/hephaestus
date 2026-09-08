@@ -10,6 +10,11 @@
 //! Hosted software-adapter CI sets `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1` so an
 //! unavailable adapter fails that lane instead of being reported as evidence.
 
+#[path = "contract/allocation.rs"]
+mod allocation;
+#[path = "contract/storage.rs"]
+mod storage;
+
 use eunomia::Zeroable;
 use hephaestus_core::{BlockWidth, Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 use hephaestus_wgpu::{
