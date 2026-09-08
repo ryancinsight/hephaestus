@@ -20,6 +20,16 @@
 - Verification: required-device focused regressions, strict Clippy, format, doctests, and independent review; physical OOM is not simulated as provider evidence.
 - Last-update: 2026-09-08; driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage).
 
+<a id="heph-wgpu-buffer-extents"></a>
+## HEPH-WGPU-BUFFER-EXTENTS — Preserve logical byte extents [patch] — review
+- Outcome: whole-buffer copy/clear accepts padded scalar lengths; prefix copies preserve every byte outside the prefix.
+- Scope: WGPU stream storage commands and real device regressions; no allocation/error-scope migration or performance claim.
+- Acceptance: exact values for byte, halfword, word, and half scalars, empty/odd/aligned lengths, prefix boundaries and retained suffixes; typed length rejection preserves destinations.
+- Dependency/driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage); [ADR 0036](docs/adr/0036-device-local-cow-copy.md).
+- Verification: required-device red `3f59030d`; combined WGPU run `ae082932` passes 39/39 with no skips; both feature checks, strict all-target Clippy, format, 2 doctests, strict Rustdoc and the committed 60-second FFT smoke pass. Independent source review closes all findings.
+- Evidence: base `2ca62681`, source-input SHA-256 `291ef3403affaa3ea25d5df08480d19c0b2138cb8814dba292357364540d9fbe`, unchanged lock `eff5a265`; required-device RTX 5080 run; no physical Metal or performance claim.
+- Integrator: review_gpu; branch: build/hephaestus-moirai-06; last-update: 2026-09-08.
+
 <a id="heph-cuda-stub-availability"></a>
 ## HEPH-CUDA-STUB-AVAILABILITY — Classify an unavailable real driver [patch] — review
 - Outcome: CUDA initialization status 34 reports adapter absence with the stub-library diagnostic; other driver failures remain faults.

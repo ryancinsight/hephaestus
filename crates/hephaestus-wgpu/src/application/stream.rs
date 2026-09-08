@@ -23,6 +23,7 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::{PipelineCache, WgpuDevice};
 
 mod bound;
+mod storage;
 
 pub use bound::WgpuBoundGroupedDispatch;
 
@@ -478,10 +479,11 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
                 device_len: dst.len(),
             });
         }
-        let byte_len = WgpuDevice::byte_size::<T>(src.len())?;
-        if byte_len != 0 {
+        // Whole-buffer copies may include the allocation's physical padding:
+        // it contains no logical values belonging to another view.
+        if !src.aliases(dst) && src.raw().size() != 0 {
             self.encoder
-                .copy_buffer_to_buffer(src.raw(), 0, dst.raw(), 0, byte_len);
+                .copy_buffer_to_buffer(src.raw(), 0, dst.raw(), 0, src.raw().size());
         }
         Ok(())
     }
@@ -500,18 +502,14 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
             });
         }
         let byte_len = WgpuDevice::byte_size::<T>(elements)?;
-        if byte_len != 0 {
-            self.encoder
-                .copy_buffer_to_buffer(src.raw(), 0, dst.raw(), 0, byte_len);
-        }
-        Ok(())
+        self.copy_prefix_bytes(src, dst, byte_len)
     }
 
     fn fill_zero<T: Pod>(&mut self, dst: &WgpuBuffer<T>) -> Result<()> {
-        use hephaestus_core::DeviceBuffer;
-        let byte_len = WgpuDevice::byte_size::<T>(dst.len())?;
-        if byte_len != 0 {
-            self.encoder.clear_buffer(dst.raw(), 0, Some(byte_len));
+        // The whole physical allocation is private to this logical buffer.
+        // Clearing its padding makes sub-word scalar lengths valid as well.
+        if dst.raw().size() != 0 {
+            self.encoder.clear_buffer(dst.raw(), 0, None);
         }
         Ok(())
     }
