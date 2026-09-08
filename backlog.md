@@ -1,5 +1,16 @@
 # Backlog — hephaestus
 
+<a id="heph-wgpu-storage-allocation"></a>
+## HEPH-WGPU-STORAGE-ALLOCATION — Return storage allocation failures [patch] — in-progress
+- Outcome: WGPU storage allocation and upload return typed enabled-limit, allocation, validation, and internal failures.
+- Scope: device allocation/upload and padding reservation; transfer writes and stream commands remain separate items.
+- Acceptance: above-enabled-limit requests fail before allocation; empty, odd, and aligned uploads roundtrip exactly; all error scopes are consumed without an unbounded wait.
+- Driver: [Coeus storage](../coeus/docs/backlog.md#coeus-fallible-tensor-storage) and prefix-copy scratch allocation.
+- Decision: reserve [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md); preserve [ADR 0008](docs/adr/0008-odd-length-wgpu-storage.md) padding and [ADR 0054](docs/adr/0054-bounded-default-device-waits.md) deadlines.
+- Verification: required-device focused Nextest, strict Clippy, format, doctests, and independent source review; no simulated device OOM or performance claim.
+- Integrator: review_plan; branch: build/hephaestus-moirai-06; last-update: 2026-09-08.
+- lease: review_plan crates/hephaestus-wgpu/src/infrastructure/device.rs crates/hephaestus-wgpu/src/infrastructure/device/allocation.rs crates/hephaestus-wgpu/tests/contract/allocation.rs docs/adr/0059-wgpu-storage-allocation.md 2026-09-08T00:00Z.
+
 <a id="heph-cuda-stub-availability"></a>
 ## HEPH-CUDA-STUB-AVAILABILITY — Classify an unavailable real driver [patch] — review
 - Outcome: CUDA initialization status 34 reports adapter absence with the stub-library diagnostic; other driver failures remain faults.
