@@ -14,6 +14,8 @@
 mod allocation;
 #[path = "contract/storage.rs"]
 mod storage;
+#[path = "contract/transfer.rs"]
+mod transfer;
 
 use eunomia::Zeroable;
 use hephaestus_core::{BlockWidth, Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};

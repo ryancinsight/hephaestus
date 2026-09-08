@@ -59,3 +59,37 @@ reservation retains the standard allocation diagnostic; the existing public
 Hephaestus error contract stores provider diagnostics as text. This change
 does not promise recovery from WGPU's internal host allocator aborts. Staging
 pool allocation and transfer-write error scopes remain outside this item.
+
+## Revision 2026-09-08: transfer preparation
+
+[HEPH-WGPU-TRANSFER-ERRORS](../../backlog.md#heph-wgpu-transfer-errors)
+extends the same buffer error boundary to staging/uniform allocation and
+full/subrange queue writes. Pool misses validate the aligned physical size
+against the enabled limit before allocation. A single descriptor allocator
+serves storage, staging and uniform usage; every native creation and mapped
+initialization operation uses the shared scope consumer.
+
+Write destinations must belong to the calling device. Check the existing
+buffer owner identity before calling WGPU: a foreign instance's resource ID
+can panic during lookup before reaching scoped validation. Native queue
+writes capture allocation, validation and internal errors. Length, offset
+and interior-alignment rejection still occurs before a queue operation and
+preserves destination values; successful tail writes may zero only physical
+padding beyond the final logical value. This contract does not make a raw
+WGPU queue escape hatch fallible or roll back earlier submitted work.
+
+Locked WGPU 30.0.1 scopes are thread-specific, not one device-global stack:
+`backend/wgpu_core.rs` stores scopes by `ThreadId` at line 634, routes errors
+using the current thread at line 663, and pushes/pops that thread's stack at
+lines 1847 and 1866. Native queue writes report errors synchronously through
+that sink. The shared synchronous closure pushes, executes and consumes its
+scopes on the same thread; no serialization lock is required. A barrier-based
+real-descriptor test overlaps two complete scope stacks and asserts each
+thread receives only its own diagnostic. Revisit this argument if WGPU changes
+error delivery or this closure becomes asynchronous.
+
+The public baseline run `c8ae1ee2` reproduces both the 264-byte staging request
+against an enabled 256-byte limit and a cross-device write panic. Regressions
+also exercise destroyed-buffer queue errors, valid transfers after rejection,
+and exact retained bytes around accepted and rejected subranges. No physical
+OOM, driver-fault injection, or performance guarantee is claimed.
