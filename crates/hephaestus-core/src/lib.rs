@@ -17,6 +17,8 @@
 
 /// Device and buffer contracts.
 pub mod domain;
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_support;
 
 pub use domain::accelerator::device_api::{DeviceApi, LaunchGeometry};
 pub use domain::accelerator::scan::{

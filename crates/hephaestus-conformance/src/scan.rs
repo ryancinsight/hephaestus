@@ -7,6 +7,7 @@
 //! is fully determined by the direction, and every oracle is an exact
 //! equality.
 
+use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{
     CombineExpr, ComputeDevice, CumProdOp, CumSumOp, IdentityToken, OpIdentity, ScanDirection,
     ScanOps, StridedView,
@@ -137,9 +138,9 @@ where
         ScanDirection::Forward,
         StridedView::new(&out, &dense),
     );
-    assert!(
-        result.is_err(),
-        "{name}: axis 2 on a rank-2 operand must be rejected"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: scan axis 2 is out of bounds for rank-2 scan",
     );
     let mut got = [0.0f32; 12];
     device.download(&out, &mut got).expect("download");

@@ -562,6 +562,7 @@ pub fn split_packed_lu(packed: &[f32], n: usize) -> Result<(Vec<f32>, Vec<f32>)>
 mod tests {
     use super::*;
     use crate::domain::error::HephaestusError;
+    use crate::test_support::assert_rejects;
 
     // ── operand validators ───────────────────────────────────────────
 
@@ -815,7 +816,10 @@ mod tests {
         // Singular: [[0, 0], [0, 1]]
         let mut a = vec![0.0f32, 0.0, 0.0, 1.0];
         let result = panel_lu_packed(&mut a, 2);
-        assert!(result.is_err(), "singular matrix must be rejected");
+        assert_rejects(
+            &result,
+            "kernel dispatch failed: LU panel factorisation failed: pivot column 0 is exactly zero",
+        );
     }
 
     #[test]

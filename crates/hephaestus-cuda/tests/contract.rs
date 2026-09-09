@@ -11,6 +11,7 @@
 //! Hardware CI sets `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1` so acquisition failure
 //! fails the lane instead of being reported as device evidence.
 
+use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer,
     DeviceFeature, HephaestusError, Result,
@@ -2245,9 +2246,9 @@ fn cholesky_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by Cholesky"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky decomposition failed: Storage error: Cholesky pivot 0 is non-positive: matrix is not positive-definite",
     );
 }
 
@@ -2269,7 +2270,10 @@ fn lu_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(result.is_err(), "singular matrix must be rejected by LU");
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: LU decomposition failed: Storage error: LU pivot column 0 is exactly zero: matrix is singular",
+    );
 }
 
 // ── Blocked decomposition differential tests ────────────────────────────
@@ -2433,9 +2437,9 @@ fn blocked_lu_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by blocked LU"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: LU panel factorisation failed: pivot column 0 is exactly zero",
     );
 }
 
@@ -2813,9 +2817,9 @@ fn blocked_cholesky_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by blocked Cholesky"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky panel factorisation failed: pivot 0 is not positive (0); matrix is not positive-definite",
     );
 }
 

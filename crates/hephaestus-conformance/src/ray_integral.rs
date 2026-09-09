@@ -14,6 +14,7 @@
 //! under twice that bound. The miss oracle is exact: no step samples the
 //! volume, so the accumulator never leaves zero.
 
+use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{ComputeDevice, FieldGeometry, RAY_STRIDE, RayIntegralOps};
 
 /// Absolute bound derived above from the deepest march in these clauses.
@@ -119,9 +120,9 @@ where
     let short_out = device.upload(&[9.0f32]).expect("output upload");
     let result =
         ops.ray_line_integrals_into(device, &field, geometry(), &two_rays, 0.5, &short_out);
-    assert!(
-        result.is_err(),
-        "{name}: an output shorter than the ray count must be rejected"
+    assert_rejects(
+        &result,
+        "host length 12 does not match device buffer length 6",
     );
     let mut got = [0.0f32; 1];
     device.download(&short_out, &mut got).expect("download");

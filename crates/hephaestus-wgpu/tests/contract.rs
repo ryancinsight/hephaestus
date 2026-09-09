@@ -10,6 +10,7 @@
 //! Hosted software-adapter CI sets `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1` so an
 //! unavailable adapter fails that lane instead of being reported as evidence.
 
+use hephaestus_core::test_support::assert_rejects;
 #[path = "contract/allocation.rs"]
 mod allocation;
 #[path = "contract/recycling.rs"]
@@ -3455,9 +3456,9 @@ pub(super) fn cholesky_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by Cholesky"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky decomposition failed: Storage error: Cholesky pivot 0 is non-positive: matrix is not positive-definite",
     );
 }
 
@@ -3479,7 +3480,10 @@ pub(super) fn lu_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(result.is_err(), "singular matrix must be rejected by LU");
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: LU decomposition failed: Storage error: LU pivot column 0 is exactly zero: matrix is singular",
+    );
 }
 
 pub(super) fn linalg_norms_match_cpu_reference() {
@@ -3778,9 +3782,9 @@ pub(super) fn blocked_lu_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by blocked LU"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: LU panel factorisation failed: pivot column 0 is exactly zero",
     );
 }
 
@@ -4762,9 +4766,9 @@ pub(super) fn blocked_cholesky_rejects_singular_matrix() {
             layout: &layout,
         },
     );
-    assert!(
-        result.is_err(),
-        "singular matrix must be rejected by blocked Cholesky"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky panel factorisation failed: pivot 0 is not positive (0); matrix is not positive-definite",
     );
 }
 

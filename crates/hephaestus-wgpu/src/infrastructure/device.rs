@@ -1904,7 +1904,13 @@ mod tests {
                 |_| panic!("intentional mapped-consumer unwind"),
             );
         }));
-        assert!(unwind.is_err(), "mapped consumer must unwind");
+        let payload = unwind.expect_err("mapped consumer must unwind");
+        // The consumer's own panic must be the one that escaped, not a
+        // staging-path failure that happened to unwind first.
+        assert_eq!(
+            payload.downcast_ref::<&str>(),
+            Some(&"intentional mapped-consumer unwind")
+        );
 
         let actual = device
             .download_owned(&buffer)
