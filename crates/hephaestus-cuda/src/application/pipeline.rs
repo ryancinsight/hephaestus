@@ -106,7 +106,7 @@ where
     // context current on the calling thread.
     device.bind()?;
     let src = source();
-    let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src).map_err(|e| {
+    let ptx = crate::infrastructure::compiler::compile_cuda_to_ptx(&src, device).map_err(|e| {
         HephaestusError::DispatchFailed {
             message: format!("CUDA compilation failed for {func_name}: {e}"),
         }

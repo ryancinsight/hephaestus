@@ -87,6 +87,12 @@ pub trait DialectScalar<L: KernelDialect>: Pod {
     /// The dialect's scalar type token (e.g. `"f32"` in WGSL, `"float"` in
     /// CUDA/HIP C++).
     const TYPE_TOKEN: &'static str;
+
+    /// Source declarations required before using this scalar's type token.
+    ///
+    /// Built-in scalar types need no declarations. Header-based device types
+    /// name their owning SDK header so its arithmetic operators remain native.
+    const PRELUDE: &'static str = "";
 }
 
 impl DialectScalar<Wgsl> for f32 {
@@ -137,10 +143,12 @@ impl DialectScalar<CudaC> for f64 {
 
 impl DialectScalar<CudaC> for eunomia::F16 {
     const TYPE_TOKEN: &'static str = "__half";
+    const PRELUDE: &'static str = "#include <cuda_fp16.h>\n#if __CUDA_ARCH__ < 530\n#error native half arithmetic requires compute capability 5.3\n#endif\n";
 }
 
 impl DialectScalar<CudaC> for eunomia::Bf16 {
     const TYPE_TOKEN: &'static str = "__nv_bfloat16";
+    const PRELUDE: &'static str = "#include <cuda_bf16.h>\n#if __CUDA_ARCH__ < 800\n#error native bfloat16 arithmetic requires compute capability 8.0\n#endif\n";
 }
 
 impl DialectScalar<HipC> for f64 {

@@ -12,9 +12,9 @@ use crate::{CudaBuffer, CudaDevice};
 
 struct KronKernel<T>(PhantomData<T>);
 
-fn kron_shader_source<T: DialectScalar<CudaC>>() -> String {
+pub(super) fn kron_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct MatrixLayout {{
     unsigned int shape[2];
     int strides[2];
@@ -59,6 +59,7 @@ extern "C" __global__ void kron_kernel(
     out[out_offset] = a[a_offset] * b[b_offset];
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN
     )
 }

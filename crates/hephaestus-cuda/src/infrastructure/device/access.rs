@@ -8,6 +8,11 @@ use hephaestus_core::{HephaestusError, Result, validate_slice_alignment};
 use std::sync::Arc;
 
 impl CudaDevice {
+    /// The target architecture queried from this device during acquisition.
+    pub(crate) fn compute_capability(&self) -> i32 {
+        self.features.compute_capability
+    }
+
     pub(crate) fn driver(&self) -> &'static Driver {
         self.context.driver
     }

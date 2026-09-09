@@ -1,5 +1,47 @@
 # Backlog — hephaestus
 
+<a id="heph-cuda-dense-product-scalars"></a>
+## HEPH-CUDA-DENSE-PRODUCT-SCALARS — Declare CUDA product scalar types [major] [arch] — review
+- Outcome: CUDA matrix, batched matrix and Kronecker products compile and execute every supported scalar using native arithmetic.
+- Scope: CUDA scalar declaration ownership, dense-product generators, existing device tests and governing [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md); no widening, capability removal or loader-error redesign.
+- Acceptance: required-device scalar matrix has exact product oracles and native rounding cases; reproduce the missing-half declaration before correction, then strict Clippy, focused/full device and host gates, docs and independent review.
+- Evidence: consumer run `0921b452` rejects `__half` in `matmul_kernel`; generators are unchanged between locked `f6f55f4` and current `3dfbae0`.
+- Provider red: `4df024af` reports both missing half declarations; `097836c1` isolates absent header search paths. Corrected required-device products `49a9f6af` pass 2/2 (RTX 5080, CUDA 13.3), including ten scalar and native-rounding instantiations; PTX checks pass in the same test. Full required-device CUDA `abc3857d` passes 193/193 with no skips. Strict affected Clippy, host Nextest `d64593ca` 121/121, doctests and warning-denied rustdoc pass. Core/CUDA SemVer comparisons against `28769e1` execute 0 supported checks and skip 254; manual major classification remains authoritative, not compatibility proof.
+- Delivery: PR [#293](https://github.com/ryancinsight/hephaestus/pull/293) is pushed at `a603c24` and enqueued for an explicit merge commit; hosted checks are pending.
+- Dependencies: existing NVRTC compiler and scalar dialect vocabulary; upstream prerequisite for Coeus output ownership.
+- Integrator: review_gpu; branch: codex/hephaestus-dense-product-scalars; last-update: 2026-09-08.
+- Lease: review_gpu CUDA dense-product tests, linalg generators, pipeline/compiler header support, device capability properties/access/state, fusion scalar declarations, core dialect vocabulary, ADR 0044 and affected README; 2026-09-08.
+
+<a id="heph-cuda-elementwise-scalar-declarations"></a>
+## HEPH-CUDA-ELEMENTWISE-SCALAR-DECLARATIONS — Compile admitted elementwise scalars [patch] — todo
+- Outcome: CUDA elementwise operations compile every scalar admitted by their bounds and preserve each operation's native scalar contract.
+- Scope: existing CUDA binary/unary/scalar generators and shared tests; enumerate dependent scalar-bound generators before changing declaration composition. No dense-product scope expansion or widened arithmetic.
+- Evidence: source-only review at `28769e1` plus product correction finds `elementwise/binary.rs::shader_source` and `elementwise/scalar.rs::shader_source` emit `T::TYPE_TOKEN` without its required declarations, although their bounds admit F16/Bf16. No elementwise device reproduction has run.
+- Acceptance: reproduce missing declarations with real required-device operations; migrate generators to the shared dialect declaration owner; exact/derived-bound value and PTX oracles cover admitted types and reject unsupported native arithmetic.
+- Dependencies: [scalar declaration owner](#heph-cuda-dense-product-scalars); priority P1; risk: dispatch failure. Authority: repository Change through merge; integrator assigned on claim.
+- Verification: strict affected Clippy, bounded required-device scalar matrix, generated instruction review, docs and independent review.
+- Last-update: 2026-09-08.
+
+<a id="heph-cuda-product-address-range"></a>
+## HEPH-CUDA-PRODUCT-ADDRESS-RANGE — Preserve representable product addresses [patch] — todo
+- Outcome: rank-2 CUDA matrix and Kronecker products address validated layouts without signed 32-bit truncation or multiplication overflow.
+- Scope: product metadata conversion and address generation, shared product tests and [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md); no unrelated kernels.
+- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/mod.rs::map_layout` admits u32 origins and i32 strides, while `matmul.rs` and `kron.rs` cast origins and coordinate products to signed int. No large-address device reproduction has run.
+- Acceptance: reproduce with bounded metadata/source oracles at origins >= 2^31 and products beyond i32; derive checked signed address bounds, preserve negative strides, verify generated arithmetic and ordinary real-device strided products. Never execute a known invalid address natively.
+- Dependencies: scalar compiler correction; priority P1; risk: device addressing correctness. Authority: repository Change through merge; integrator assigned on claim.
+- Verification: focused metadata/codegen and required-device product tests, strict affected Clippy, docs and independent review; retain explicit physical-memory coverage limits.
+- Last-update: 2026-09-08.
+
+<a id="heph-cuda-product-empty-sum"></a>
+## HEPH-CUDA-PRODUCT-EMPTY-SUM — Write zero for empty matrix sums [patch] — todo
+- Outcome: matrix products with zero shared extent write the additive identity to every logical output cell while preserving storage outside the output view.
+- Scope: CUDA matrix and batched products, allocating forms and shared product tests; no unrelated zero-size operations.
+- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/matmul.rs::matmul_into` and `batched_matmul_into` return success when the shared extent is zero even with nonempty output; allocating forms therefore leave their output unwritten. No device reproduction has run.
+- Acceptance: first reproduce `[m,0] * [0,n]` and batched equivalents with cloned nonzero sentinel outputs; assert exact zeros, untouched strided backing cells and unchanged inputs. Empty output remains a no-op; allocating forms return initialized zeros.
+- Dependencies: scalar compiler correction; priority P1; risk: incorrect numeric output. Authority: repository Change through merge; integrator assigned on claim.
+- Verification: all admitted scalar instantiations, dense/strided outputs and batches under required-device nextest budgets, strict affected Clippy, [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md) contract update and independent review.
+- Last-update: 2026-09-08.
+
 <a id="heph-wgpu-storage-allocation"></a>
 ## HEPH-WGPU-STORAGE-ALLOCATION — Return storage allocation failures [patch] — done
 - Typed WGPU allocation/upload errors; merged PR #288 `f6f55f4`, implementation `1afceb3`; [ADR 0059](docs/adr/0059-wgpu-storage-allocation.md).

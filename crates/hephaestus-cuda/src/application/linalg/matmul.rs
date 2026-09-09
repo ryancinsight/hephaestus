@@ -24,12 +24,16 @@ use crate::{CudaBuffer, CudaDevice};
 /// current compute capability, unlike grid.x/y which scale with it).
 const MAX_GRID_Z: usize = 65_535;
 
+#[cfg(all(test, feature = "cuda"))]
+#[path = "matmul/tests.rs"]
+mod tests;
+
 struct MatmulKernel<T>(PhantomData<T>);
 struct BatchedMatmulKernel<T>(PhantomData<T>);
 
 fn matmul_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct MatrixLayout {{
     unsigned int shape[2];
     int strides[2];
@@ -101,6 +105,7 @@ extern "C" __global__ void matmul_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
     )
 }
@@ -198,7 +203,7 @@ where
 
 fn batched_matmul_shader_source<T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct MatrixLayout {{
     unsigned int shape[2];
     int strides[2];
@@ -282,6 +287,7 @@ extern "C" __global__ void batched_matmul_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
     )
 }
