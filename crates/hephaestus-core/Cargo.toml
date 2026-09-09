@@ -15,6 +15,9 @@ categories.workspace = true
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
+# Exposes `test_support` to the conformance suite and the backends' test
+# targets; carries no production code.
+test-util = []
 
 [dependencies]
 aequitas = { workspace = true }

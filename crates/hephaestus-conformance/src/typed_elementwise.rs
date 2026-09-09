@@ -13,6 +13,7 @@
 //! capability-gated, not a universal clause.
 
 use eunomia::Pod;
+use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{
     AddOp, BinaryExpr, ComputeDevice, DialectScalar, ElementwiseOps, EqOp, GeOp, GtOp,
     KernelDialect, LeOp, LtOp, MulOp, NeOp, StridedView, TypedBinaryExpr,
@@ -356,9 +357,9 @@ where
         StridedView::new(&b, &two),
         StridedView::new(&out, &three),
     );
-    assert!(
-        result.is_err(),
-        "{name}: mismatched operand shapes must be rejected"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: layout rejected: Incompatible broadcast: from [2] to [3]",
     );
     let mut got = [0u32; 3];
     device.download(&out, &mut got).expect("download");

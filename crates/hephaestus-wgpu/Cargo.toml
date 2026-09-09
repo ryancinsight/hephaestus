@@ -38,6 +38,7 @@ windows = { workspace = true }
 
 [dev-dependencies]
 hephaestus-conformance = { workspace = true }
+hephaestus-core = { workspace = true, features = ["test-util"] }
 criterion = { workspace = true }
 pollster = { workspace = true }
 leto-ops = { workspace = true }

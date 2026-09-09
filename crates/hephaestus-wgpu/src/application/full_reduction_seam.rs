@@ -80,7 +80,7 @@ where
         validate_buffer_owner(output.buffer, device, "full reduction output")?;
         if validate_out(output.buffer, output.layout)? != 1 {
             return Err(HephaestusError::DispatchFailed {
-                message: "full reduction output must have length 1".to_string(),
+                message: "full reduction output must have exactly 1 element".to_string(),
             });
         }
         if output.buffer.aliases(input.buffer) {

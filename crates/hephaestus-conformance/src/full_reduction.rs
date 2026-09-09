@@ -7,6 +7,7 @@
 //! exact in `f32` and reduction order cannot change the result, and its
 //! minimum (1) and maximum (3) are unambiguous. No tolerance is applicable.
 
+use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{
     CombineExpr, ComputeDevice, FullReductionOps, IdentityToken, MaxOp, MinOp, OpIdentity, ProdOp,
     StridedView, SumOp,
@@ -218,9 +219,9 @@ where
         StridedView::new(&source, &dense),
         StridedView::new(&out, &out_layout),
     );
-    assert!(
-        result.is_err(),
-        "{name}: a multi-element output must be rejected"
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: full reduction output must have exactly 1 element",
     );
     let mut got = [0.0f32; 2];
     device.download(&out, &mut got).expect("download");
