@@ -1,6 +1,16 @@
 # ADR 0061: Value semantics for kernel operators
 
 - Status: Proposed
+- Revision 2026-09-18 (fourth): a fourth review measured the third
+  revision's WGSL formulations over every f32 value: up to 2.5 ULP rather
+  than the claimed 2 and 1, `expm1` returning x instead of +inf past 88.72,
+  `log1p(-inf)` returning -inf, and a WGSL `log` accuracy bound (2^-21
+  absolute) loose enough that the regrouped forms need not beat the current
+  ones on a GPU. It also found the BinaryExpr dispatch rule sent f32 Add to a
+  method Add does not override, and measured GeluTanh and Silu with the same
+  underflow class. Decision 6 now fixes the principle and the defect list and
+  hands formulation to its own item, where GPU measurement can settle it;
+  Decisions 1 and 3 carry the corrected binary shape.
 - Revision 2026-09-18 (third): a third review compiled Decisions 3 and 5 and
   confirmed them, but found the WGSL `log1p`/`expm1` formulations overflow
   (`log(u) * x` is `inf` at `log1p(1e37)` in f32), `ErfcOp` and the Gelu
@@ -57,8 +67,9 @@ Three constraints decide the design:
 1. **Value traits, separate from the source traits.** Add `CombineValue`,
    `UnaryValue`, `BinaryValue`, `TypedBinaryValue<T>` and
    `ParameterizedUnaryValue` to `hephaestus-core`, each with one associated
-   function applying the operator to scalars, implemented beside every
-   operator marker's existing source impls. No supertrait relation, so
+   function applying the operator to scalars (`BinaryValue` has a second,
+   provided one; Decision 3), implemented beside every operator marker's
+   existing source impls. No supertrait relation, so
    existing implementors of the source traits (`hephaestus-wgpu`'s
    `SeamTypedExpr` adapter, test markers) are untouched. `StatefulUpdateRule`
    is sealed, so its value semantics are a method on that trait directly.
@@ -71,12 +82,18 @@ Three constraints decide the design:
    for example on `CombineExpr<L>`:
    `fn value<T: NumericElement>(lhs: T, rhs: T) -> Option<T> { None }`, and on
    `UnaryExpr<L>`: `fn value<T: RealField>(x: T) -> Option<T> { None }`.
-   `BinaryExpr<L>` carries both an integer-admitting
-   `fn value<T: NumericElement>` and a `fn real_value<T: RealField>`, because
-   its operators split: Add, Sub, Mul, Div, Min and Max admit every
-   `NumericElement`, while `PowOp` is defined only over reals; each operator
-   overrides the methods its value trait supports, and the host's per-scalar
-   trait (Decision 5) selects which one it calls. A
+   Binary operators split: Add, Sub, Mul and Div (every `BinaryExpr` marker
+   but one) admit every `NumericElement`, while `PowOp` is defined only over
+   reals. `BinaryValue` therefore has
+   `fn apply<T: NumericElement>(lhs: T, rhs: T) -> Option<T>` and a provided
+   `fn apply_real<T: RealField>(lhs: T, rhs: T) -> Option<T>` that defaults
+   to `Self::apply` (legal because `RealField` implies `NumericElement`).
+   Add implements only `apply`; Pow returns `None` from `apply` and overrides
+   `apply_real`. `BinaryExpr<L>` mirrors the pair as provided `value` and
+   `real_value`, both `None`, which the Host blanket overrides with the two
+   `BinaryValue` methods. The host's per-scalar trait (Decision 5) calls
+   `real_value` for f32 and f64 and `value` for every other scalar, so f32 Add
+   reaches `apply` through the default and i32 Pow is the typed error. A
    core-owned `Host: KernelDialect` (`IEEE_SPECIAL_VALUES = true`) carries
    blanket impls, `impl<Op: CombineValue> CombineExpr<Host> for Op`, that
    override the method with `Some(Op::combine(lhs, rhs))`. The host seam impl
@@ -96,12 +113,11 @@ Three constraints decide the design:
    `ElementwiseOps<D, u32>` and `ElementwiseOps<D, i32>` in full, including
    unary operators whose value method is bound on `RealField`. The host
    dispatches per scalar through a host-local trait implemented for each
-   seam scalar: f32 and f64 impls call the `RealField` value methods; u32 and
-   i32 impls call the `NumericElement` methods and return the typed
-   `DispatchFailed` error for real-valued operators. eunomia implements
-   `RealField` only for f32 and f64, so the F16 and Bf16 impls return the same
-   typed error for real-valued operators until eunomia implements `RealField`
-   for them, which is filed as its own eunomia item rather than assumed here.
+   seam scalar: f32 and f64 impls call the `RealField` value methods; u32,
+   i32, F16 and Bf16 impls call the `NumericElement` methods and return the
+   typed `DispatchFailed` error for real-only operators. eunomia implements
+   `RealField` only for f32 and f64; implementing it for F16 and Bf16 is its
+   own eunomia item, not assumed here.
    (A generic `impl<T: RealField>` beside concrete integer impls is rejected
    by coherence, since eunomia could later implement `RealField` for u32.)
    Integer arithmetic semantics follow WGSL, the one dialect that defines
@@ -116,41 +132,33 @@ Three constraints decide the design:
    that rely on it are rewritten to compute in the unsigned type and convert
    back.
 6. **The value function is the operator's definition.** Where a kernel
-   rendering diverges from it, the rendering is the defect. Eight operators
-   render with cancellation or overflow (WGSL, also used by Metal; CUDA C;
-   HIP C):
-   - `Expm1Op` renders `exp(x) - 1` and `Log1pOp` renders `log(1 + x)`:
-     100% relative error as x approaches 0.
-   - `EluOp` and `CeluOp` render `exp(x) - 1` on the negative branch: the
-     same cancellation.
-   - `SoftplusOp` renders `log(1 + exp(x))`: `inf` for x > 88 in f32 where
-     the value is x.
-   - WGSL `ErfcOp` renders `1 - erf(x)` through the polynomial `erf`: 0 for
-     x above about 4, where `erfc` is small but positive.
-   - `GeluOp` and `GeluGradOp` render `1 + erf(x / sqrt(2))` in all three
-     dialects: 0 for x below about -6. The cancellation-free form is
-     `erfc(-x / sqrt(2))`, which moves with the `ErfcOp` fix in WGSL.
+   rendering diverges from it beyond the rendering's derived tolerance, the
+   rendering is the defect, fixed in its dialect; the value function is
+   never widened to match. Measured defects, all in WGSL (also Metal's
+   dialect) and, except where noted, CUDA C and HIP C:
+   - cancellation near zero: `Expm1Op` (`exp(x) - 1`), `Log1pOp`
+     (`log(1 + x)`), and the negative branches of `EluOp` and `CeluOp`;
+   - overflow: `SoftplusOp` (`log(1 + exp(x))`, `inf` past x = 88 in f32),
+     with `MishOp` and `MishGradOp`, which embed it;
+   - tail underflow to zero where the value is a normal float: WGSL
+     `ErfcOp` (`1 - erf(x)`), `GeluOp` and `GeluGradOp`
+     (`1 + erf(x / sqrt(2))`), `GeluTanhOp`, and `SiluOp` between x = -92.2
+     and -88.7; `GeluTanhGradOp` and `SiluGradOp` share the forms and are
+     measured by the rendering item.
 
-   CUDA and HIP have `expm1`/`log1p` builtins. WGSL has none, so the WGSL
-   renderings use cancellation-free formulations, grouped so no intermediate
-   overflows. For `log1p`, with `u = 1 + x`: `x` if `u == 1` or `u` is
-   infinite, else `log(u) * (x / (u - 1))`. For `expm1`, with `u = exp(x)`:
-   `x` if `u == 1` or `u` is infinite, `-1` if `u - 1 == -1`, else
-   `(u - 1) * (x / log(u))`. The ungrouped products `log(u) * x` and
-   `(u - 1) * x` overflow (`log1p(1e37)` and `expm1(85)` become `inf` in f32)
-   and are rejected. A host f32 sweep against f64 references puts the grouped
-   forms within 2 and 1 ULP, with every limit case exact. For softplus:
-   `max(x, 0) + log1p(exp(-|x|))`. The rendering item cites a resolved
-   reference for each formulation, derives its WGSL tolerance, and runs on
-   Metal as well as Vulkan and DX12: wgpu-hal's Metal path keeps Apple's
-   default math mode, which may be fast-math and fold `(1 + x) - 1` to `x`,
-   undoing both formulations. `MishOp` and `MishGradOp` embed the softplus
-   rendering and move with it. The existing tests that pin the defective
-   strings in `ops.rs` (for example the `Expm1Op`/`CudaC` assertion) change
-   in the same item. Where a dialect has no exact builtin (WGSL `erf`,
-   `erfc`, `lgamma`), the clause tolerance is derived from that
-   approximation's documented error bound and stated per operator, never
-   tuned.
+   Choosing each replacement is that item's work, not this record's: the
+   candidate forms must be measured on Vulkan, DX12 and Metal, because the
+   WGSL `log`/`exp` accuracy bounds are absolute and loose, WGSL has no
+   `isInf`, and wgpu-hal's Metal path keeps Apple's default math mode, which
+   may fold `(1 + x) - 1` to `x`. The item records the forms already
+   rejected: `log(u) * x / (u - 1)` and `(u - 1) * x / log(u)` overflow; the
+   regrouped `log(u) * (x / (u - 1))` and `(u - 1) * (x / log(u))` reach
+   2.5 ULP on the host, return x for `expm1` past 88.72, and return -inf for
+   `log1p(-inf)`; the Abramowitz and Stegun 7.1.26 `erfc` is 3.5% off at
+   x = 9 and its bound is absolute, so a clause using it cannot detect the
+   tail defect. A tolerance is derived from each chosen form's published
+   relative bound, never tuned, and the tests pinning today's strings in
+   `ops.rs` change with the rendering.
 7. **Match the renderings' semantics exactly.** `RoundOp` rounds half to even
    (WGSL `round`, CUDA `rint`), not eunomia's half-away-from-zero `round`;
    `SignOp` returns 0 for ±0 and NaN, not eunomia's `signum`. Gradient
@@ -161,8 +169,8 @@ Three constraints decide the design:
    `log1p` and a ties-to-even `round_ties_even` on `FloatElement`, where
    eunomia's existing transcendental functions live (its `round` rounds half
    away from zero); and `wrapping_add`, `wrapping_sub`, `wrapping_mul` and a
-   division returning the dividend on a zero divisor or `MIN / -1` on
-   `NumericElement` (which has only `saturating_add`/`saturating_mul` and
+   integer division returning the dividend on a zero divisor or `MIN / -1`
+   (floats keep IEEE division) on `NumericElement` (which has only `saturating_add`/`saturating_mul` and
    `checked_add`/`checked_mul`, so a generic `lhs / rhs` panics in Rust on
    those inputs). They are added there, per first-party supremacy, before the
    operators that use them.
@@ -187,8 +195,9 @@ Three constraints decide the design:
   new items, so no existing implementor or caller changes. Change class
   [minor][arch]. Two patterns that compile today would break, and a search of
   every registered stack member at origin finds neither: a generic
-  `Op: CombineExpr<L> + Other` calling `Op::value()` where `Other` also
-  declares an associated `value` becomes ambiguous (E0034), and a downstream
+  `Op: CombineExpr<L> + Other` calling `Op::value()` (or, for binaries,
+  `Op::real_value()`) where `Other` also declares an associated item of that
+  name becomes ambiguous (E0034), and a downstream
   `impl<L> IdentityToken<LocalOp, L> for f32` beside an
   `OpIdentity<LocalOp>` impl overlaps the Host blanket (E0119).
 - `hephaestus-core` gains eunomia's `NumericElement`/`RealField` as bounds;
@@ -196,8 +205,9 @@ Three constraints decide the design:
 - All seven families become implementable on the host for the operators that
   carry value traits. Real-valued unary operators over integer scalars stay a
   typed error on the host.
-- Eight operator renderings across three dialects are corrected as a
-  precondition, with their pinned tests.
+- The operator renderings in Decision 6 are corrected by their own item
+  before the host clauses that exercise them land; the host's value
+  functions do not wait on it.
 
 ## Verification plan
 
@@ -208,7 +218,8 @@ Three constraints decide the design:
 - Each value function is tested at special values (±0, ±inf, NaN,
   subnormals, integer wraparound, integer division by zero and
   `i32::MIN / -1`) and representative points against a direct reference.
-- The corrected renderings are checked against the value functions on each
-  available backend with derived tolerances.
+- The rendering item checks each corrected rendering against the value
+  function on every available backend, Metal included, with tolerances
+  derived from the chosen forms' published relative bounds.
 - `hephaestus-host` then implements each seam and instantiates its existing
   conformance clause on the hosted runner.
