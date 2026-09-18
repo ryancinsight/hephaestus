@@ -17,6 +17,8 @@ pub mod dense_vector;
 mod operands;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
+/// Leto-backed seeded random initialization seam implementor.
+pub mod random;
 /// Leto-backed unfold/fold seam implementor.
 pub mod sliding_window;
 /// Leto-backed sparse-operator and batch-submit seam implementor.
@@ -26,6 +28,7 @@ pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
+pub use random::HostRandomOps;
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};
 
