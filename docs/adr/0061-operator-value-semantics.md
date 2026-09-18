@@ -1,6 +1,14 @@
 # ADR 0061: Value semantics for kernel operators
 
 - Status: Proposed
+- Revision 2026-09-18 (fifth): a fifth review confirmed the binary dispatch
+  shape by compilation and corrected Decision 6's measurements: the rejected
+  regrouped forms' limit failures come from their infinity guard, SiLU
+  underflows on [-91.86, -88.72], Softplus first overflows at 88.72, and
+  Mish, MishGrad and Softplus also underflow in the negative tail. It also
+  asked that Consequences and Verification cover every typed-error path, and
+  that the rendering item exist before it is cited; it is
+  [HEPH-KERNEL-TAIL-ACCURACY](../../backlog.md#heph-kernel-tail-accuracy).
 - Revision 2026-09-18 (fourth): a fourth review measured the third
   revision's WGSL formulations over every f32 value: up to 2.5 ULP rather
   than the claimed 2 and 1, `expm1` returning x instead of +inf past 88.72,
@@ -135,31 +143,39 @@ Three constraints decide the design:
 6. **The value function is the operator's definition.** Where a kernel
    rendering diverges from it beyond the rendering's derived tolerance, the
    rendering is the defect, fixed in its dialect; the value function is
-   never widened to match. Measured defects, all in WGSL (also Metal's
-   dialect) and, except where noted, CUDA C and HIP C:
+   never widened to match. Measured defects in f32 against f64 references,
+   in WGSL (also Metal's dialect) and, except where noted, CUDA C and HIP C:
    - cancellation near zero: `Expm1Op` (`exp(x) - 1`), `Log1pOp`
      (`log(1 + x)`), and the negative branches of `EluOp` and `CeluOp`;
-   - overflow: `SoftplusOp` (`log(1 + exp(x))`, `inf` past x = 88 in f32),
-     with `MishOp` and `MishGradOp`, which embed it;
+   - overflow: `SoftplusOp` (`log(1 + exp(x))`) is `inf` from x = 88.72,
+     where the value is x;
    - tail underflow to zero where the value is a normal float: WGSL
-     `ErfcOp` (`1 - erf(x)`), `GeluOp` and `GeluGradOp`
-     (`1 + erf(x / sqrt(2))`), `GeluTanhOp`, and `SiluOp` between x = -92.2
-     and -88.7; `GeluTanhGradOp` and `SiluGradOp` share the forms and are
-     measured by the rendering item.
+     `ErfcOp` (`1 - erf(x)`); `GeluOp` and `GeluGradOp`
+     (`1 + erf(x / sqrt(2))`); `GeluTanhOp` (-0 at x = -5.5 against
+     -5.93e-9); `SiluOp` on [-91.86, -88.72]; and `SoftplusOp`, `MishOp` and
+     `MishGradOp` in the negative tail (Softplus(-20) is 0 against 2.06e-9,
+     Mish(-20) 0 against -4.12e-8, MishGrad 5% off there). `GeluTanhGradOp`
+     and `SiluGradOp` share the forms and are measured by the rendering item.
 
-   Choosing each replacement is that item's work, not this record's: the
-   candidate forms must be measured on Vulkan, DX12 and Metal, because the
-   WGSL `log`/`exp` accuracy bounds are absolute and loose, WGSL has no
-   `isInf`, and wgpu-hal's Metal path keeps Apple's default math mode, which
-   may fold `(1 + x) - 1` to `x`. The item records the forms already
-   rejected: `log(u) * x / (u - 1)` and `(u - 1) * x / log(u)` overflow; the
-   regrouped `log(u) * (x / (u - 1))` and `(u - 1) * (x / log(u))` reach
-   2.5 ULP on the host, return x for `expm1` past 88.72, and return -inf for
-   `log1p(-inf)`; the Abramowitz and Stegun 7.1.26 `erfc` is 3.5% off at
-   x = 9 and its bound is absolute, so a clause using it cannot detect the
-   tail defect. A tolerance is derived from each chosen form's published
-   relative bound, never tuned, and the tests pinning today's strings in
-   `ops.rs` change with the rendering.
+   Choosing each replacement is the work of
+   [HEPH-KERNEL-TAIL-ACCURACY](../../backlog.md#heph-kernel-tail-accuracy),
+   not of this record: candidate forms must be measured on Vulkan, DX12 and
+   Metal, because WGSL has no `isInf`, wgpu-hal's Metal path sets no math
+   mode (`metal/device.rs:272`), so Apple's default, which may be fast-math
+   and fold `(1 + x) - 1` to `x`, applies, and the WGSL `log` accuracy bound
+   is reported as absolute (2^-21 on [0.5, 2]; the item confirms it against
+   the specification's accuracy table). The item records the forms already
+   rejected: the bare `log(u) * x / (u - 1)` and `(u - 1) * x / log(u)`
+   overflow (`log1p(1e37)` and `expm1(85)` are `inf`) and `expm1(89)` is
+   NaN where the value is `inf`; the regrouped `log(u) * (x / (u - 1))` and
+   `(u - 1) * (x / log(u))` reach 2.47 ULP over all f32 values, and with a
+   guard returning x when `u` is infinite they return x for `expm1` past
+   88.72 (the value is `inf`) and -inf for `log1p(-inf)` (the value is NaN);
+   the Abramowitz and Stegun 7.1.26 `erfc` is 3.5% off at x = 9 and its
+   bound is absolute, so a clause using it cannot detect the tail defect. A
+   tolerance is derived from each chosen form's published relative bound,
+   never tuned, and the tests pinning today's strings in `ops.rs` change with
+   the rendering.
 7. **Match the renderings' semantics exactly.** `RoundOp` rounds half to even
    (WGSL `round`, CUDA `rint`), not eunomia's half-away-from-zero `round`;
    `SignOp` returns 0 for ±0 and NaN, not eunomia's `signum`. Gradient
@@ -173,8 +189,8 @@ Three constraints decide the design:
    integer division returning the dividend on a zero divisor or `MIN / -1`
    (floats keep IEEE division) on `NumericElement`, which has only
    `saturating_add`/`saturating_mul` and `checked_add`/`checked_mul`, so a
-   generic `lhs / rhs` panics in Rust on those inputs. They are added there, per first-party supremacy, before the
-   operators that use them.
+   generic `lhs / rhs` panics in Rust on those inputs. They are added there,
+   per first-party supremacy, before the operators that use them.
 
 ## Alternatives
 
@@ -204,8 +220,9 @@ Three constraints decide the design:
 - `hephaestus-core` gains eunomia's `NumericElement`/`RealField` as bounds;
   today it uses only eunomia's `Pod`, `F16` and `Bf16`.
 - All seven families become implementable on the host for the operators that
-  carry value traits. Real-valued unary operators over integer scalars stay a
-  typed error on the host.
+  carry value traits. Real-only operators (the real-valued unary and
+  parameterized operators, and `PowOp`) stay a typed error on the host for
+  every scalar without `RealField`: u32, i32, F16 and Bf16.
 - The operator renderings in Decision 6 are corrected by their own item
   before the host clauses that exercise them land; the host's value
   functions do not wait on it.
@@ -216,6 +233,9 @@ Three constraints decide the design:
   `<Op as CombineExpr<Host>>::value` under only the source bound, and a
   downstream type implementing `CombineExpr<Host>` without a value trait,
   which yields `None`.
+- A dispatch test shows f32 Add reaching `apply` through the `apply_real`
+  default, Pow on f32 and f64 computing through `apply_real`, and Pow on i32
+  and F16 returning the typed error.
 - Each value function is tested at special values (±0, ±inf, NaN,
   subnormals, integer wraparound, integer division by zero and
   `i32::MIN / -1`) and representative points against a direct reference.
