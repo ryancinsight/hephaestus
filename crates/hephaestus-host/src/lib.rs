@@ -8,6 +8,8 @@
 //! performance path — consumers wanting fast CPU execution use leto
 //! directly.
 
+/// Leto-backed mean cross-entropy seam implementor.
+pub mod cross_entropy;
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
 /// Leto-backed dense-product seam implementor.
@@ -30,6 +32,7 @@ pub mod stencil;
 /// Volume ray line integrals over leto interpolation.
 pub mod volume;
 
+pub use cross_entropy::{HostCrossEntropyBackward, HostCrossEntropyForward, HostCrossEntropyOps};
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
