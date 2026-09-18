@@ -9,5 +9,6 @@ mod random;
 mod reduction;
 mod scan;
 mod sparse;
+mod stencil;
 mod transfer;
 mod volume;
