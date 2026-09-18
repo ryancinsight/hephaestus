@@ -186,11 +186,15 @@ pub fn validate_csr<T>(
     let malformed = |reason: String| crate::HephaestusError::DispatchFailed {
         message: format!("invalid CSR: {reason}"),
     };
-    if row_ptr.len() != rows + 1 {
+    let row_ptr_len = rows.checked_add(1).ok_or_else(|| {
+        malformed(format!(
+            "rows = {rows} leaves no room for row_ptr's rows + 1 entries"
+        ))
+    })?;
+    if row_ptr.len() != row_ptr_len {
         return Err(malformed(format!(
-            "row_ptr length {} must be rows + 1 = {}",
-            row_ptr.len(),
-            rows + 1
+            "row_ptr length {} must be rows + 1 = {row_ptr_len}",
+            row_ptr.len()
         )));
     }
     if col_indices.len() != values.len() {
@@ -222,4 +226,22 @@ pub fn validate_csr<T>(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_csr;
+
+    /// `rows + 1` overflowing must be a typed rejection: in a release build
+    /// the unchecked sum wrapped to 0, matched an empty `row_ptr`, and the
+    /// following `row_ptr[0]` panicked.
+    #[test]
+    fn a_row_count_whose_row_ptr_length_overflows_is_rejected() {
+        let error = validate_csr::<f32>(&[], &[], &[], usize::MAX, 1)
+            .expect_err("rows = usize::MAX must be rejected");
+        assert!(
+            error.to_string().contains("leaves no room for row_ptr"),
+            "{error}"
+        );
+    }
 }

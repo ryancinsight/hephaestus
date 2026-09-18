@@ -4840,3 +4840,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   - [x] Re-base `coeus-wgpu` onto `hephaestus-wgpu`.
   - [x] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
 - [ ] [minor] moirai: GPU co-scheduling adapter over hephaestus (moirai Stage D).
+
+<a id="heph-kernel-tail-accuracy"></a>
+## HEPH-KERNEL-TAIL-ACCURACY — Correct cancellation, overflow and tail underflow in operator renderings [patch] — todo
+- Outcome: every operator rendering listed in [ADR 0061](docs/adr/0061-operator-value-semantics.md) Decision 6 stays within a tolerance derived from its chosen form's published relative bound against the operator's value function, on Vulkan, DX12 and Metal (WGSL), CUDA C and HIP C.
+- Scope: `crates/hephaestus-core/src/domain/ops.rs` and `parameterized.rs` renderings of Expm1, Log1p, Elu, Celu, Softplus, Mish, MishGrad, Erfc (WGSL), Gelu, GeluGrad, GeluTanh, GeluTanhGrad, Silu, SiluGrad, and the tests pinning their strings; no value-function or seam change.
+- Evidence: ADR 0061 reviews two to five measured the defects and the rejected candidate forms in f32 against f64 (recorded in Decision 6); no device run yet.
+- Acceptance: a per-operator sweep over the failing ranges on each available backend; tolerances cite the chosen form's source; the WGSL `log` accuracy bound is confirmed against the specification's accuracy table before any form relies on it; Metal is measured wherever a macOS host is available, since its default math mode may fold the cancellation-free forms.
+- Dependencies: none for the renderings; the host clauses exercising these operators wait on it (ADR 0061 Consequences). Priority P1; risk: silent wrong values at tails.
+- Verification: strict Clippy, device sweeps on the RTX 5080 (Vulkan, DX12, CUDA), and on Metal where a macOS host is available (otherwise the Metal gap is recorded as residual risk), doc sync, independent review.
+- Last-update: 2026-09-18.
