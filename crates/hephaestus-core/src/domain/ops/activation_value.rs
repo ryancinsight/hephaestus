@@ -56,17 +56,19 @@
 //! defining formula; for an `f32` input it is that formula evaluated in
 //! `f64`, whose own rounding is about `2^-29` of an `f32` ULP per operation.
 //! The error of each form is its distance from that reference in units of
-//! the reference's own ULP. Every `f32` input of a window is evaluated
-//! (exhaustive), and each `f64` window is sampled with 2,000,000
-//! uniform inputs for each of five seeds. For every candidate threshold on a
-//! 0.01 grid (0.0025 for `TanhGrad`), the maximum error of the resulting
-//! selection is computed per window, and the threshold is placed where the
-//! windows around the switch attain their minimum while no window exceeds
-//! the smaller of the two single-form maxima. For `SiluGrad`, `GeluTanhGrad`
-//! and `MishGrad` the per-input profiles of the two forms interleave over a
-//! band near the crossover, so the maxima quoted on those constants are
-//! ties within that band rather than a sharp optimum; a difference of a few
-//! thousandths of an ULP between seeds is sampling spread.
+//! the reference's own ULP. Each candidate threshold (a 0.001 grid near the
+//! crossover) is scored in `f32`, every input evaluated, over the fixed
+//! windows quoted on each constant and over sliding windows of width 0.1
+//! (step 0.005) and 0.04 (step 0.0025) whose centres span ±1 around the
+//! input at the switch; a window fails when the selection's maximum exceeds
+//! the smaller of the always-direct and always-independent maxima over that
+//! window. The fixed windows are also sampled in `f64` with 2,000,000
+//! uniform inputs for each of five seeds. For `SiluGrad`, `GeluTanhGrad`
+//! and `MishGrad` the per-input profiles of the two forms alternate over a
+//! band near the crossover, so a narrow `f64` window can favour either form
+//! depending on the seed; an `f64` excess smaller than the seed-to-seed
+//! spread of the per-seed maxima in that window is sampling spread, not a
+//! regression.
 //!
 //! Every transcendental call is eunomia's own `FloatElement`/`RealField`
 //! method (ADR 0061 Decision 8); no formula below hand-rolls a function
@@ -122,33 +124,39 @@ fn is_infinite<T: RealField>(x: T) -> bool {
 /// subtraction; above it, `stable_sigmoid(−x)`.
 ///
 /// Measured by the method in the module documentation. Per input, direct
-/// is the more accurate form for every `x` up to about `2.6` and the
-/// independent form for every `x` above about `2.8`; between the two the
-/// forms alternate. Thresholds from `2.50` to `2.61` keep every window at or
-/// below the smaller single-form maximum in all six sample sets (`f32` and
-/// five `f64` seeds); `2.6` lies inside that range. Window maxima, `f32` /
-/// largest `f64` seed, at the previous threshold `2` → at `2.6`: `[1.5, 2.5]`
-/// 1.885 / 1.902 → 1.678 / 1.721 ULP (always-direct: 1.678 / 1.721),
-/// `[1.9, 2.1]` 1.885 / 1.894 → 1.366 / 1.381, `[2, 8]` 1.885 / 1.894 →
-/// 1.871 / 1.894 (always-independent: 1.885 / 1.894); `[0, 2]` stays
-/// 2.085 / 2.051 and `[8, 30]` 1.710 / 1.717.
-const SILU_GRAD_CROSSOVER: f64 = 2.6;
+/// is the more accurate form up to `x` of about `2.6` and the independent
+/// form above about `2.8`; between the two the forms alternate. In `f32`,
+/// thresholds from `2.626` to `2.635` leave no fixed or sliding window
+/// (1,212 windows, centres `1.6` to `3.6`) above the smaller single-form
+/// maximum; `2.625` leaves 37 (largest excess 0.080 ULP) and `2.636` four
+/// (0.024 ULP). Window maxima, `f32` / largest of five `f64` seeds, at the
+/// previous threshold `2` → at `2.63`: `[1.5, 2.5]` 1.885 / 1.902 → 1.678 /
+/// 1.721 ULP, `[1.9, 2.1]` 1.885 / 1.894 → 1.366 / 1.381, `[2.55, 2.65]`
+/// 1.871 / 1.904 → 1.791 / 1.901, `[2, 8]` 1.885 / 1.894 → 1.867 / 1.894;
+/// `[0, 2]` stays 2.085 / 2.051 and `[8, 30]` 1.710 / 1.717. The largest
+/// `f64` excess at `2.63`, 0.062 ULP in one seed of `[2.5, 2.7]`, is below
+/// that window's seed-to-seed spread of the always-direct maximum (1.854 to
+/// 1.948).
+const SILU_GRAD_CROSSOVER: f64 = 2.63;
 
 /// Largest `w = 2z` for which [`GeluTanhGradOp`] forms `1 − sigmoid(w)` by
 /// direct subtraction; above it, `stable_sigmoid(−w)`.
 ///
 /// Measured by the method in the module documentation. Per input, direct
-/// is the more accurate form for every `w` up to about `2.35` and the
-/// independent form for every `w` above about `2.5`; between the two the
-/// forms alternate. `2.43` is the only grid value within 0.01 ULP of the
-/// smaller single-form maximum in every window and sample set; its largest
-/// excess, 0.004 ULP in one `f64` seed of `[1, 1.4]`, is below that window's
-/// seed-to-seed spread (1.61 to 1.78 ULP). Window maxima, `f32` / largest
-/// `f64` seed, at the previous threshold `2` → at `2.43`: `[1, 1.4]` 1.852
-/// / 1.780 → 1.685 / 1.779 ULP, `[1.15, 1.25]` 1.742 / 1.771 → 1.338 /
-/// 1.460; `[1.2, 1.6]` stays 1.852 / 1.841, `[1.4, 2]` 1.795 / 1.831,
-/// `[0, 2]` 1.973 / 1.829 and `[2, 8]` 1.600 / 1.595.
-const GELU_TANH_GRAD_CROSSOVER: f64 = 2.43;
+/// is the more accurate form up to `w` of about `2.35` and the independent
+/// form above about `2.5`; between the two the forms alternate. In `f32`,
+/// thresholds from `2.459` to `2.476` leave no fixed or sliding window
+/// (1,211 windows, input centres `0.4` to `2.4`) above the smaller
+/// single-form maximum; `2.458` leaves seven (largest excess 0.077 ULP)
+/// and `2.477` 34 (0.111 ULP). Window maxima, `f32` / largest of five `f64`
+/// seeds, at the previous threshold `2` → at `2.47`: `[1, 1.4]` 1.852 /
+/// 1.780 → 1.685 / 1.779 ULP, `[1.15, 1.25]` 1.742 / 1.771 → 1.338 /
+/// 1.460, `[1.38, 1.42]` 1.791 / 1.835 → 1.714 / 1.826, `[1.2, 1.6]` 1.852 /
+/// 1.841 → 1.795 / 1.841; `[1.4, 2]` stays 1.795 / 1.831, `[0, 2]` 1.973 /
+/// 1.829 and `[2, 8]` 1.600 / 1.595. The largest `f64` excess at `2.47`,
+/// 0.063 ULP in one seed of `[1.2, 1.6]`, is below that window's
+/// seed-to-seed spread of the always-independent maximum (1.752 to 1.841).
+const GELU_TANH_GRAD_CROSSOVER: f64 = 2.47;
 
 /// Largest `sp = softplus(x)` for which [`MishGradOp`] forms `1 − tanh(sp)²`
 /// by direct subtraction; above it, `sech²(sp)`.
@@ -159,33 +167,38 @@ const GELU_TANH_GRAD_CROSSOVER: f64 = 2.43;
 /// more accurate form, to `sech²`.
 ///
 /// Measured by the method in the module documentation. Per input, direct
-/// is the more accurate form for every `sp` up to about `1.51` and `sech²`
-/// for every `sp` above about `1.61`; between the two the forms alternate.
-/// Thresholds from `1.17` to `1.61` keep every window at or below the
-/// smaller single-form maximum in all six sample sets, and `1.49` to `1.60`
-/// additionally minimise the `[1, 1.6]` window; `1.55` lies at the centre.
-/// Window maxima, `f32` / largest `f64` seed, at the previous threshold `2`
-/// → at `1.55`: `[1.6, 2.1]` 1.553 / 1.559 → 1.190 / 1.194 ULP (always-sech²:
-/// 1.190 / 1.194), `[1.8, 1.9]` 1.553 / 1.594 → 1.120 / 1.152, `[1, 1.6]`
-/// 1.396 / 1.466 → 1.246 / 1.243; `[0.5, 1]` stays 1.528 / 1.480, `[0, 2]`
-/// 2.355 / 2.321 and `[2, 8]` 1.049 / 1.024.
+/// is the more accurate form up to `sp` of about `1.51` and `sech²` above
+/// about `1.61`; between the two the forms alternate. No threshold clears
+/// every window: in `f32`, thresholds from `1.541` to `1.557` leave the
+/// fewest, 4 of 1,212 windows (input centres `0.3` to `2.3`), each exceeding
+/// the smaller single-form maximum by at most 0.0144 ULP (1.2208 against
+/// 1.2063 over `[1.3575, 1.3975]`, where direct is better throughout but
+/// covering it would move the switch past `1.62`); `1.540` leaves seven and
+/// `1.558` fifteen. Window maxima, `f32` / largest of five `f64` seeds, at the
+/// previous threshold `2` → at `1.55`: `[1.6, 2.1]` 1.553 / 1.559 → 1.190 /
+/// 1.194 ULP, `[1.8, 1.9]` 1.553 / 1.594 → 1.120 / 1.152, `[1, 1.6]` 1.396 /
+/// 1.466 → 1.246 / 1.243, `[1.26, 1.36]` 1.226 / 1.274 → 1.191 / 1.299;
+/// `[0.5, 1]` stays 1.528 / 1.480, `[0, 2]` 2.355 / 2.321 and `[2, 8]`
+/// 1.049 / 1.024. The largest `f64` excess at `1.55`, 0.073 ULP in one seed
+/// of `[1.26, 1.36]`, is below that window's seed-to-seed spread of the
+/// always-`sech²` maximum (1.238 to 1.347).
 const MISH_GRAD_CROSSOVER: f64 = 1.55;
 
 /// Largest `|y|` for which [`TanhGradOp`] forms `1 − y²` directly; above it,
 /// `(1 − y)(1 + y)`.
 ///
-/// Measured by the method in the module documentation. The two forms do
-/// not interleave: per input, direct has the smaller maximum error for
-/// every `|y|` up to `0.75` (at most 0.750 ULP below `√½` and 1.000 ULP
-/// from `√½` to `0.75`, where the factored form reaches 1.085), and the
-/// factored form for every `|y|` above `0.7525` (below 1.000 ULP up to
-/// `√¾`, where direct rises to 2.000). Thresholds from `0.75` to `0.865` keep
-/// every window at or below the smaller single-form maximum; `0.75` is the
-/// crossover itself. Window maxima, `f32` / largest `f64` seed, at the
-/// previous threshold `0.5` → at `0.75`: `[0.45, 0.55]` 1.000 / 1.000 →
-/// 0.750 / 0.750 ULP, `[0.6, 0.8]` 1.085 / 1.085 → 1.000 / 1.000,
-/// `[0.5, 1]` 1.085 / 1.085 → 1.035 / 1.033; `[0, 0.5]` stays 0.625 / 0.625
-/// and `[0.9, 1]` 1.015 / 1.016.
+/// Measured by the method in the module documentation. Direct errs by at
+/// most 0.750 ULP below `|y| = √½` and 1.000 ULP from `√½` up to `√¾`, where
+/// it rises to 2.000; the factored form reaches 1.085 just above `√½` and
+/// falls below 1.000 ULP near `0.75`. In `f32`, thresholds from `0.7500` to
+/// `0.7525` leave no fixed or sliding window (613 windows, centres `0` to
+/// `1`) above the smaller single-form maximum; `0.7495` leaves 41 (largest
+/// excess 0.0005 ULP) and `0.753` one (0.005 ULP). Window maxima, `f32` /
+/// largest of five `f64` seeds, at the previous threshold `0.5` → at `0.75`:
+/// `[0.45, 0.55]` 1.000 / 1.000 → 0.750 / 0.750 ULP, `[0.6, 0.8]` 1.085 /
+/// 1.085 → 1.000 / 1.000, `[0.5, 1]` 1.085 / 1.085 → 1.035 / 1.033;
+/// `[0, 0.5]` stays 0.625 / 0.625 and `[0.9, 1]` 1.015 / 1.016. No `f64`
+/// window exceeds the smaller single-form maximum at `0.75`.
 const TANH_GRAD_CROSSOVER: f64 = 0.75;
 
 impl UnaryValue for ErfOp {
@@ -378,15 +391,21 @@ impl UnaryValue for GeluTanhOp {
 /// directly. `1 - s` is formed by direct subtraction for
 /// `w = 2z ≤` `GELU_TANH_GRAD_CROSSOVER` and as `sigmoid(-w)` above it.
 ///
-/// The two branches keep different multiplication orders on purpose. The
-/// direct branch multiplies `s` and `1 - s` into the product one factor at a
-/// time (`two * x * s * (1 - s) * c0 * (…)`); near the derivative's root
-/// (`x ≈ -0.7525`), where the sum cancels, pre-grouping `s * (1 - s)` there
-/// changes individual results by hundreds of ULP of the result (at
-/// `x = -0.75311023_f32`: 0.016 ULP in this order, 512 ULP pre-grouped,
-/// against the double-double reference). The independent branch
-/// pre-groups `saturation = s * sigmoid(-w)`, the order its measured window
-/// maxima on `GELU_TANH_GRAD_CROSSOVER` were taken with.
+/// Each branch keeps the multiplication order of the single-form evaluation
+/// it is measured against: the direct branch multiplies `s` and `1 - s` into
+/// the product one factor at a time (`two * x * s * (1 - s) * c0 * (…)`),
+/// the independent branch pre-groups `saturation = s * sigmoid(-w)`. The
+/// two orders are equally accurate on average but round differently at
+/// individual inputs, and the other order per branch raises the `f32` window
+/// maxima measured by the method in the module documentation: pre-grouping
+/// the direct branch leaves 249 of 1,211 sliding windows above the smaller
+/// single-form maximum (largest excess 0.152 ULP, 1.936 against 1.784 over
+/// `[0.515, 0.555]`), and ungrouping the independent branch leaves 210 of
+/// 1,571 (0.093 ULP, 1.774 against 1.681 over `[1.625, 1.725]`). Within
+/// `±0.05` of the derivative's root near `x = -0.7525` the pre-grouped order
+/// would have the smaller maximum (4.473 against 4.681 ULP of the dominant
+/// term `s` in `f32`), but that gain does not carry over the rest of the
+/// direct region.
 impl UnaryValue for GeluTanhGradOp {
     fn apply<T: RealField>(x: T) -> T {
         if is_infinite(x) {
