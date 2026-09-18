@@ -15,6 +15,8 @@ pub mod decomposition;
 pub mod dense_product;
 /// Leto-backed dense-vector seam implementor.
 pub mod dense_vector;
+/// Host implementor of the unary/binary elementwise seams (ADR 0061).
+pub mod elementwise;
 mod operands;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
@@ -31,6 +33,9 @@ pub mod sparse;
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
+pub use elementwise::{
+    HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
+};
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use reduction::{
     HostAxisReductionOps, HostFullReductionOps, HostPreparedAxisReduction,

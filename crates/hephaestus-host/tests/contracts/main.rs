@@ -4,6 +4,7 @@
 mod decomposition;
 mod dense_product;
 mod dense_vector;
+mod elementwise;
 mod reduction;
 mod scan;
 mod sparse;
