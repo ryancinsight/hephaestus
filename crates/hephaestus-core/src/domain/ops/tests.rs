@@ -714,6 +714,22 @@ fn mish_grad_matches_the_stable_sech_squared_reference() {
     );
 }
 
+/// The *original* textbook tanh form of GeluTanhGrad's derivative,
+/// `0.5*(1 + tanh(z)) + 0.5*x*(1 - tanh(z)^2)*z'(x)` — not the
+/// sigmoid-rational rewrite (`s + k*s*(1-s)`) the implementation uses. A
+/// different transcendental (`tanh` vs `sigmoid`) and a different algebraic
+/// form entirely, so a shared bug in the rewrite cannot cancel out; valid
+/// wherever `z` is far from where this direct form's own `1 - tanh(z)^2`
+/// would itself cancel (moderate `x`, not the extreme tail).
+fn raw_gelu_tanh_grad(x: f64) -> f64 {
+    let c0 = 0.797_884_560_802_865_4_f64;
+    let c1 = 0.044715_f64;
+    let z = c0 * (x + c1 * x * x * x);
+    let tz = z.tanh();
+    let z_prime = c0 * (1.0 + 3.0 * c1 * x * x);
+    0.5 * (1.0 + tz) + 0.5 * x * (1.0 - tz * tz) * z_prime
+}
+
 /// `GeluTanhGradOp` computed `1 - s` by direct subtraction, which loses
 /// precision once `s = sigmoid(2z)` rounds close to `1`: ca3c28c gives `1.0`
 /// at `x = 4.96` (f32) against the measured reference 1.00000197 (16.5 ULP
@@ -722,22 +738,6 @@ fn mish_grad_matches_the_stable_sech_squared_reference() {
 /// via `1 - sigmoid(w) = sigmoid(-w)`, never subtracting from `1`.
 #[test]
 fn gelu_tanh_grad_matches_the_stable_one_minus_sigmoid_reference() {
-    // Independent reference: the *original* textbook tanh form (`0.5*(1 +
-    // tanh(z)) + 0.5*x*(1 - tanh(z)^2)*z'(x)`), not the sigmoid-rational
-    // rewrite (`s + k*s*(1-s)`) the implementation uses — a different
-    // transcendental (`tanh` vs `sigmoid`) and a different algebraic form
-    // entirely, so a shared bug in the rewrite cannot cancel out. At
-    // x = 4.96/7.09 (moderate, not extreme), `z` is far from where this
-    // direct form's own `1 - tanh(z)^2` would cancel.
-    let c0 = 0.797_884_560_802_865_4_f64;
-    let c1 = 0.044715_f64;
-    let raw_z = |x: f64| c0 * (x + c1 * x * x * x);
-    let raw_gelu_tanh_grad = |x: f64| {
-        let z = raw_z(x);
-        let tz = z.tanh();
-        let z_prime = c0 * (1.0 + 3.0 * c1 * x * x);
-        0.5 * (1.0 + tz) + 0.5 * x * (1.0 - tz * tz) * z_prime
-    };
     let x32 = f64::from(4.96_f32);
     let reference_f32 = raw_gelu_tanh_grad(x32);
     let got_f32 = f64::from(GeluTanhGradOp::apply(4.96_f32));
@@ -752,6 +752,27 @@ fn gelu_tanh_grad_matches_the_stable_one_minus_sigmoid_reference() {
     assert!(
         (got_f64 - reference_f64).abs() <= ulp_bound_f64(ACCURACY_N_ULP, reference_f64),
         "GeluTanhGrad(7.09f64) = {got_f64}, reference {reference_f64}"
+    );
+}
+
+/// `GeluTanhGradOp`'s `[2, 8]` window worst case under the first
+/// region-selection fix (5a95eb8): applying `SiluGrad`'s analytically
+/// derived `1 - sqrt(EPSILON)` threshold to `GeluTanhGrad` kept `x =
+/// 3.3078976` on the direct-subtraction path (its `w = 2z ≈ 7.86` had not
+/// yet crossed that threshold), matching ca3c28c's own 9.41 ULP defect
+/// there — 6ea4acd's unconditional independent form achieves 1.60 ULP
+/// across the whole window, and the measured-crossover threshold
+/// (`GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD = 3.5`) correctly routes this `w`
+/// to the independent form too. Fails against both ca3c28c and 5a95eb8
+/// (9.41 ULP either way); passes against the measured-crossover fix.
+#[test]
+fn gelu_tanh_grad_matches_the_measured_crossover_at_the_window_worst_case() {
+    let x = 3.307_897_6_f32;
+    let reference = raw_gelu_tanh_grad(f64::from(x));
+    let got = f64::from(GeluTanhGradOp::apply(x));
+    assert!(
+        (got - reference).abs() <= ulp_bound_f32(2.0, reference),
+        "GeluTanhGrad(3.3078976f32) = {got}, reference {reference}"
     );
 }
 
