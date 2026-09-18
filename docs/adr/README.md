@@ -69,3 +69,4 @@
 | [0058](0058-provider-consumer-dependency-direction.md) | Provider-consumer dependency direction | Accepted |
 | [0059](0059-wgpu-storage-allocation.md) | Fallible WGPU storage allocation | Accepted |
 | [0060](0060-pooled-buffer-ownership.md) | Keep pooled buffer ownership inside the provider | Accepted |
+| [0061](0061-operator-value-semantics.md) | Value semantics for kernel operators | Proposed |
