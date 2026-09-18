@@ -11,5 +11,6 @@ mod reduction;
 mod scan;
 mod sparse;
 mod stateful;
+mod stencil;
 mod transfer;
 mod volume;
