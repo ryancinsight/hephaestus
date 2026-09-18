@@ -67,8 +67,9 @@ where
         let output = prepared.operands.output;
         let input_cells = input.buffer.read();
         let mut output_cells = output.buffer.write();
-        let input_view = ArrayView::new(*input.layout, &input_cells);
-        let mut output_view = ArrayViewMut::new(*output.layout, &mut output_cells);
+        let input_view = ArrayView::try_new(*input.layout, &input_cells).map_err(map_leto_error)?;
+        let mut output_view =
+            ArrayViewMut::try_new(*output.layout, &mut output_cells).map_err(map_leto_error)?;
         leto_ops::unfold_into(&input_view, prepared.parameters, &mut output_view)
             .map_err(map_leto_error)
     }
@@ -103,8 +104,9 @@ where
         let output = prepared.operands.output;
         let input_cells = input.buffer.read();
         let mut output_cells = output.buffer.write();
-        let input_view = ArrayView::new(*input.layout, &input_cells);
-        let mut output_view = ArrayViewMut::new(*output.layout, &mut output_cells);
+        let input_view = ArrayView::try_new(*input.layout, &input_cells).map_err(map_leto_error)?;
+        let mut output_view =
+            ArrayViewMut::try_new(*output.layout, &mut output_cells).map_err(map_leto_error)?;
         leto_ops::fold_into(
             &input_view,
             prepared.output_spatial_shape,
