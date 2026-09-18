@@ -17,17 +17,11 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
-use crate::{HostBuffer, HostDevice};
+use crate::{HostBuffer, HostDevice, map_leto_error};
 
 /// Dense decompositions for the host reference device.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HostDecompositionOps;
-
-fn map_leto_err<E: core::fmt::Display>(error: E) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("host decomposition failed: {error}"),
-    }
-}
 
 fn buffer_of<T: Pod>(device: &HostDevice, values: &[T]) -> Result<HostBuffer<T>> {
     device.upload(values)
@@ -37,13 +31,15 @@ fn array_buffer(device: &HostDevice, array: &leto::Array2<f32>) -> Result<HostBu
     buffer_of(device, leto::Storage::as_slice(array.storage()))
 }
 
-/// Run `operation` over the input view's host memory as a leto view.
-fn with_view<R>(
+/// Run `operation` over the input view's host memory as a leto view,
+/// rejecting a layout that reaches past the buffer before any read.
+fn with_view<R, E: core::fmt::Display>(
     input: &StridedView<'_, HostBuffer<f32>, 2>,
-    operation: impl FnOnce(leto::ArrayView<'_, f32, 2>) -> R,
-) -> R {
+    operation: impl FnOnce(leto::ArrayView<'_, f32, 2>) -> core::result::Result<R, E>,
+) -> Result<R> {
     let cells = input.buffer.read();
-    operation(leto::ArrayView::<f32, 2>::new(*input.layout, &cells))
+    let view = leto::ArrayView::<f32, 2>::try_new(*input.layout, &cells).map_err(map_leto_error)?;
+    operation(view).map_err(map_leto_error)
 }
 
 /// Solve through a leto handle: download the rhs, apply, re-upload.
@@ -57,7 +53,8 @@ fn solve_with<E: core::fmt::Display>(
         Layout::c_contiguous([cells.len()]).map_err(|error| HephaestusError::DispatchFailed {
             message: format!("host rhs layout rejected: {error}"),
         })?;
-    let solution = solve(leto::ArrayView::<f32, 1>::new(layout, &cells)).map_err(map_leto_err)?;
+    let view = leto::ArrayView::<f32, 1>::try_new(layout, &cells).map_err(map_leto_error)?;
+    let solution = solve(view).map_err(map_leto_error)?;
     buffer_of(device, leto::Storage::as_slice(solution.storage()))
 }
 
@@ -355,8 +352,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Lu<'op>> {
-        let inner =
-            with_view(&input, |view| leto_ops::lu_decompose(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::lu_decompose(&view))?;
         let factors = array_buffer(device, inner.factors())?;
         Ok(HostLu { inner, factors })
     }
@@ -366,8 +362,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Qr<'op>> {
-        let inner =
-            with_view(&input, |view| leto_ops::qr_decompose(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::qr_decompose(&view))?;
         let r = array_buffer(device, &inner.r())?;
         Ok(HostQr { inner, r })
     }
@@ -377,8 +372,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Cholesky<'op>> {
-        let inner =
-            with_view(&input, |view| leto_ops::cholesky_decompose(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::cholesky_decompose(&view))?;
         let lower = array_buffer(device, inner.lower())?;
         Ok(HostCholesky { inner, lower })
     }
@@ -389,7 +383,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::ColPivQr<'op>> {
         let shape = (input.layout.shape()[0], input.layout.shape()[1]);
-        let inner = with_view(&input, |view| leto_ops::col_piv_qr(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::col_piv_qr(&view))?;
         Ok(HostColPivQr { inner, shape })
     }
 
@@ -399,7 +393,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>> {
         let order = input.layout.shape()[0];
-        let inner = with_view(&input, |view| leto_ops::full_piv_lu(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::full_piv_lu(&view))?;
         let factors = buffer_of(device, inner.lu_factors())?;
         Ok(HostFullPivLu {
             inner,
@@ -413,8 +407,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::SymmetricEigen<'op>> {
-        let inner = with_view(&input, |view| leto_ops::symmetric_eigen_jacobi(&view))
-            .map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::symmetric_eigen_jacobi(&view))?;
         Ok(HostSymmetricEigen {
             order: inner.eigenvalues.len(),
             eigenvalues: buffer_of(device, &inner.eigenvalues)?,
@@ -427,8 +420,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'_, HostBuffer<f32>, 2>,
     ) -> Result<HostBuffer<f32>> {
-        let values = with_view(&input, |view| leto_ops::symmetric_eigenvalues_jacobi(&view))
-            .map_err(map_leto_err)?;
+        let values = with_view(&input, |view| leto_ops::symmetric_eigenvalues_jacobi(&view))?;
         buffer_of(device, &values)
     }
 
@@ -438,8 +430,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Svd<'op>> {
         let shape = (input.layout.shape()[0], input.layout.shape()[1]);
-        let inner =
-            with_view(&input, |view| leto_ops::svd_decompose(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::svd_decompose(&view))?;
         Ok(HostSvd {
             shape,
             u: array_buffer(device, &inner.left_singular_vectors)?,
@@ -453,8 +444,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'_, HostBuffer<f32>, 2>,
     ) -> Result<HostBuffer<f32>> {
-        let values =
-            with_view(&input, |view| leto_ops::singular_values(&view)).map_err(map_leto_err)?;
+        let values = with_view(&input, |view| leto_ops::singular_values(&view))?;
         buffer_of(device, &values)
     }
 
@@ -463,8 +453,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         device: &HostDevice,
         input: StridedView<'_, HostBuffer<f32>, 2>,
     ) -> Result<HostBuffer<eunomia::Complex<f32>>> {
-        let values =
-            with_view(&input, |view| leto_ops::eigenvalues(&view)).map_err(map_leto_err)?;
+        let values = with_view(&input, |view| leto_ops::eigenvalues(&view))?;
         buffer_of(device, &values)
     }
 
@@ -474,7 +463,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Schur<'op>> {
         let order = input.layout.shape()[0];
-        let inner = with_view(&input, |view| leto_ops::schur(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::schur(&view))?;
         Ok(HostSchur {
             order,
             q: array_buffer(device, &inner.q())?,
@@ -488,7 +477,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Hessenberg<'op>> {
         let order = input.layout.shape()[0];
-        let inner = with_view(&input, |view| leto_ops::hessenberg(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::hessenberg(&view))?;
         Ok(HostHessenberg {
             order,
             q: array_buffer(device, inner.q())?,
@@ -502,8 +491,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Bidiagonal<'op>> {
         let shape = (input.layout.shape()[0], input.layout.shape()[1]);
-        let inner =
-            with_view(&input, |view| leto_ops::bidiagonalize(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::bidiagonalize(&view))?;
         Ok(HostBidiagonal {
             shape,
             u: array_buffer(device, inner.u())?,
@@ -518,8 +506,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::BunchKaufman<'op>> {
         let order = input.layout.shape()[0];
-        let inner =
-            with_view(&input, |view| leto_ops::bunch_kaufman(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::bunch_kaufman(&view))?;
         Ok(HostBunchKaufman {
             order,
             l: array_buffer(device, &inner.l())?,
@@ -534,8 +521,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'op, HostBuffer<f32>, 2>,
     ) -> Result<Self::Udu<'op>> {
         let order = input.layout.shape()[0];
-        let inner =
-            with_view(&input, |view| leto_ops::udu_decompose(&view)).map_err(map_leto_err)?;
+        let inner = with_view(&input, |view| leto_ops::udu_decompose(&view))?;
         Ok(HostUdu {
             order,
             u: array_buffer(device, &inner.u())?,
