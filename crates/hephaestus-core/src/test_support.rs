@@ -69,7 +69,7 @@ pub enum Fault {
 // correct device and prove nothing, which is the exact failure this module
 // exists to catch.
 
-/// A [`ComputeDevice`] that satisfies the trait and violates the contract.
+/// A [`ComputeDevice`](crate::ComputeDevice) that satisfies the trait and violates the contract.
 ///
 /// Exists so the conformance clauses have a negative control: run a clause
 /// against this device and it must panic, naming its own clause. Without that,
