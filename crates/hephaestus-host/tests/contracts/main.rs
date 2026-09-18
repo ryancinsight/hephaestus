@@ -4,5 +4,6 @@
 mod decomposition;
 mod dense_product;
 mod dense_vector;
+mod random;
 mod sparse;
 mod transfer;
