@@ -35,24 +35,33 @@
 //!   itself overflows (`|x| ≳ 5e19` in `f32`): once the inner sigmoid has
 //!   saturated (`s · (1 − s) == 0`), the vanished second term is never
 //!   formed, so it cannot multiply that `0` by an overflowing `x²`.
-//! - [`SiluGradOp`] and [`GeluTanhGradOp`] compute their `1 − sigmoid(w)`
-//!   companion through the private `one_minus_sigmoid` helper below, and
-//!   [`MishGradOp`] computes
-//!   `1 − tanh(sp)²` inline on the same shape of rule: pick the
-//!   analytically cheaper path *by region* rather than always taking the
-//!   identity-based complement. Direct subtraction from `1` is accurate
-//!   wherever the subtrahend is not itself close to `1` (it reuses the
-//!   already-rounded value rather than introducing a second, independently
-//!   rounded transcendental evaluation); only where the subtrahend rounds
-//!   close to `1` does direct subtraction cancel, and only there does the
-//!   identity form (`sigmoid(−w)`, or the hyperbolic `sech²(sp) =
-//!   4u/(1+u)²`, `u = exp(−2·sp)`) pay for its own rounding cost. A judge
-//!   harness sweep found that always taking the identity form regresses
+//! - [`SiluGradOp`], [`GeluTanhGradOp`] and [`MishGradOp`] each compute a
+//!   `1 − sigmoid(w)`-shaped companion (`1 − tanh(sp)²` for `MishGradOp`) by
+//!   picking the analytically cheaper path *by region* rather than always
+//!   taking the identity-based complement. Direct subtraction from `1` is
+//!   accurate wherever the subtrahend is not itself close to `1` (it reuses
+//!   the already-rounded value rather than introducing a second,
+//!   independently rounded transcendental evaluation); only where the
+//!   subtrahend rounds close to `1` does direct subtraction cancel, and
+//!   only there does the identity form (`sigmoid(−w)`, or the hyperbolic
+//!   `sech²(sp) = 4u/(1+u)²`, `u = exp(−2·sp)`) pay for its own rounding
+//!   cost. The three operators need three different region rules —
+//!   [`SiluGradOp`] the analytically derived `1 − sqrt(EPSILON)` threshold
+//!   (the private `one_minus_sigmoid` helper below), [`GeluTanhGradOp`] a
+//!   harness-measured crossover (the private
+//!   `GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD` constant) because its combining
+//!   expression amplifies the companion's own rounding more than `sig`
+//!   alone predicts, and [`MishGradOp`] a plain `t ≤ ½` split because
+//!   `softplus(x) ≤ ln 2` for `x ≤ 0` already keeps `t` away from
+//!   saturation there — a judge harness sweep found that always taking the
+//!   identity form, or applying one operator's rule to another, regresses
 //!   accuracy exactly where direct subtraction was already safe (e.g.
-//!   `SiluGrad(1.2578312_f32)` from 0.98 to 3.02 ULP). [`TanhGradOp`]
-//!   applies the related difference-of-squares factoring, `(1 − y)(1 + y)`
-//!   rather than `1 − y · y`, which has no such region split since it
-//!   reuses `y` itself rather than a second transcendental call.
+//!   `SiluGrad(1.2578312_f32)` from 0.98 to 3.02 ULP, or `GeluTanhGrad`'s
+//!   `[2, 8]` window from 1.60 to 9.41 ULP under `SiluGrad`'s own rule).
+//!   [`TanhGradOp`] applies the related difference-of-squares factoring,
+//!   `(1 − y)(1 + y)` rather than `1 − y · y`, which has no such region
+//!   split since it reuses `y` itself rather than a second transcendental
+//!   call.
 //!
 //! Every transcendental call is eunomia's own `FloatElement`/`RealField`
 //! method (ADR 0061 Decision 8); no formula below hand-rolls a function
@@ -299,15 +308,37 @@ impl UnaryValue for GeluTanhOp {
     }
 }
 
+/// Measured crossover for [`GeluTanhGradOp`]'s `1 - sigmoid(w)` companion
+/// (`w = 2z`, twice the tanh-approximated GELU's inner argument): direct
+/// subtraction from the already-computed `s` matches or beats the
+/// independently rounded `stable_sigmoid(-w)` up to `w ≈ 3.76`, measured by
+/// an exhaustive `f32` sweep of `[2, 8]` against a double-precision
+/// reference (judge harness `jv2`): the window's max ULP holds at 1.60 —
+/// matching 6ea4acd's own unconditional-`stable_sigmoid(-w)` max there
+/// exactly — for every threshold up to `w = 3.76`, and jumps to 3.14+ ULP
+/// at `w = 3.77`. Set at `3.5` for margin below that measured edge.
+///
+/// Unlike the private `one_minus_sigmoid` helper's `1 - sqrt(EPSILON)` rule (analytically
+/// derived from when a subtraction from `1` loses half its mantissa bits,
+/// and correct for [`SiluGradOp`]), that same rule under-switches here:
+/// `GeluTanhGradOp`'s combining expression, `s + 2x·s(1-s)·c0·(1+3c1x²)`,
+/// amplifies `s(1-s)`'s own rounding by the `x²`-growing coefficient, so
+/// direct subtraction stops being the better choice at a much smaller `w`
+/// than `sig` alone would suggest — reusing `one_minus_sigmoid` here kept
+/// `[2, 8]`'s max at 9.41 ULP (against 6ea4acd's achievable 1.60), so the
+/// switch point is measured directly against this operator's own
+/// expression instead of reasoning about `sig` in isolation.
+const GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD: f64 = 3.5;
+
 /// Takes the input (ADR 0061 Decision 7); not in the forward-output list, so
 /// it recomputes from `x` like the WGSL/CUDA rendering. Rewritten in terms of
 /// `s = sigmoid(2z)` using `1 + tanh(z) = 2s` and
 /// `1 - tanh(z)² = 4s(1 - s)`, so the derivative
 /// `0.5·(1+tanh(z)) + 0.5·x·(1-tanh(z)²)·z'(x)` never forms `1 + tanh(z)`
-/// directly. `1 - s` is computed by the private `one_minus_sigmoid` helper
-/// on the region rule (direct subtraction where `2z ≤ 0` is already safe, `stable_sigmoid`
-/// of the negated argument only where `s` rounds close to `1`) rather than
-/// always taking the independently rounded complement.
+/// directly. `1 - s` is computed direct (`1 - s`) or independent
+/// (`stable_sigmoid(-w)`) by the measured `GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD`
+/// region rule rather than always taking the independently rounded
+/// complement.
 impl UnaryValue for GeluTanhGradOp {
     fn apply<T: RealField>(x: T) -> T {
         if is_infinite(x) {
@@ -325,7 +356,11 @@ impl UnaryValue for GeluTanhGradOp {
         let z = gelu_tanh_arg(x);
         let w = z + z;
         let s = stable_sigmoid(w);
-        let one_minus_s = one_minus_sigmoid(w, s);
+        let one_minus_s = if w <= T::from_f64(GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD) {
+            <T as NumericElement>::ONE - s
+        } else {
+            stable_sigmoid(-w)
+        };
         let saturation = s * one_minus_s;
         if saturation == <T as NumericElement>::ZERO {
             // `s` has saturated to exactly `0` or `1` — this includes the
