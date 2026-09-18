@@ -4840,3 +4840,13 @@ audit `docs/audit/2026-07-02-hephaestus-gpu-substrate-audit.md`; branch
   - [x] Re-base `coeus-wgpu` onto `hephaestus-wgpu`.
   - [x] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
 - [ ] [minor] moirai: GPU co-scheduling adapter over hephaestus (moirai Stage D).
+
+<a id="heph-ray-integral-direction-contract"></a>
+## HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT — Integrate rays in world length for any direction [patch] — todo
+- Outcome: `RayIntegralOps` states whether the integral covers the whole line or the ray from its origin, and returns `∫ field dl` in world units for a direction of any non-zero length.
+- Scope: `RayIntegralOps` docs in `crates/hephaestus-core/src/domain/volume.rs`, the wgpu, CUDA, HIP and Metal kernels, the host implementor, and the conformance clause.
+- Evidence: every kernel weights samples by the chord length in the ray parameter `t` (`acc * actual`), which is world length only when `|direction| = 1`; a direction `2·u` halves the result. `t_enter` may be negative, so a ray starting inside the volume also integrates behind its origin. The clause uses unit directions and outside origins only, so neither behaviour is pinned. Source reading at `origin/master` 2026-09-18; no device run.
+- Acceptance: the contract names the integration domain; a clause case with a non-unit direction and one with an origin inside the volume, both against analytical oracles, pass on every backend and the host.
+- Dependencies: none. Priority P2; risk: silently scaled integrals for callers passing unnormalized directions.
+- Verification: strict Clippy, device clause runs (RTX 5080: Vulkan, DX12, CUDA), host nextest, doc sync.
+- Last-update: 2026-09-18.
