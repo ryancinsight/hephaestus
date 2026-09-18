@@ -360,6 +360,312 @@ fn value_oracles_hold_for_every_shipped_real_scalar() {
     assert_value_oracles_hold::<f64>();
 }
 
+/// The infinite-input regression set (ADR 0061 Decision 6). Every listed
+/// formula forms `0 · ∞` or `∞ / ∞` at `x = ±∞` because its sigmoid/tanh
+/// term saturates to exactly `0` or `1` there — `stable_sigmoid(-∞) == 0`
+/// and `stable_sigmoid(+∞) == 1` bit-exactly, so e.g. `x * stable_sigmoid(x)`
+/// at `x = -∞` is `-∞ · 0`. The value function must resolve each case to
+/// its analytic limit instead of propagating `NaN`, for every shipped real
+/// scalar (Generic Instantiation Coverage). Every assertion here fails
+/// against the pre-fix code at commit ca3c28c, which returns `NaN` in every
+/// case (confirmed by running this test before applying the fix).
+fn assert_infinite_inputs_resolve_to_the_analytic_limit<T>()
+where
+    T: RealField + core::fmt::Debug,
+{
+    let neg_inf = T::neg_infinity();
+    let pos_inf = T::infinity();
+
+    // Silu, Mish, Gelu, GeluTanh: x -> x as x -> +-inf; only the negative
+    // branch cancels (the naive product forms `-inf * 0`).
+    let got = SiluOp::apply(neg_inf);
+    assert!(
+        got == T::ZERO && got.is_sign_negative(),
+        "Silu(-inf) must be -0, got {got:?}"
+    );
+    assert_eq!(SiluOp::apply(pos_inf), pos_inf, "Silu(+inf) must be +inf");
+
+    let got = MishOp::apply(neg_inf);
+    assert!(
+        got == T::ZERO && got.is_sign_negative(),
+        "Mish(-inf) must be -0, got {got:?}"
+    );
+    assert_eq!(MishOp::apply(pos_inf), pos_inf, "Mish(+inf) must be +inf");
+
+    let got = GeluOp::apply(neg_inf);
+    assert!(
+        got == T::ZERO && got.is_sign_negative(),
+        "Gelu(-inf) must be -0, got {got:?}"
+    );
+    assert_eq!(GeluOp::apply(pos_inf), pos_inf, "Gelu(+inf) must be +inf");
+
+    let got = GeluTanhOp::apply(neg_inf);
+    assert!(
+        got == T::ZERO && got.is_sign_negative(),
+        "GeluTanh(-inf) must be -0, got {got:?}"
+    );
+    assert_eq!(
+        GeluTanhOp::apply(pos_inf),
+        pos_inf,
+        "GeluTanh(+inf) must be +inf"
+    );
+
+    // Their gradients and GeluGrad: the analytic derivative limit is 1 at
+    // +inf, 0 at -inf.
+    assert_eq!(
+        SiluGradOp::apply(pos_inf),
+        T::ONE,
+        "SiluGrad(+inf) must be 1"
+    );
+    assert_eq!(
+        SiluGradOp::apply(neg_inf),
+        T::ZERO,
+        "SiluGrad(-inf) must be 0"
+    );
+    assert_eq!(
+        MishGradOp::apply(pos_inf),
+        T::ONE,
+        "MishGrad(+inf) must be 1"
+    );
+    assert_eq!(
+        MishGradOp::apply(neg_inf),
+        T::ZERO,
+        "MishGrad(-inf) must be 0"
+    );
+    assert_eq!(
+        GeluGradOp::apply(pos_inf),
+        T::ONE,
+        "GeluGrad(+inf) must be 1"
+    );
+    assert_eq!(
+        GeluGradOp::apply(neg_inf),
+        T::ZERO,
+        "GeluGrad(-inf) must be 0"
+    );
+    assert_eq!(
+        GeluTanhGradOp::apply(pos_inf),
+        T::ONE,
+        "GeluTanhGrad(+inf) must be 1"
+    );
+    assert_eq!(
+        GeluTanhGradOp::apply(neg_inf),
+        T::ZERO,
+        "GeluTanhGrad(-inf) must be 0"
+    );
+
+    // Softsign: x / (1 + |x|) forms inf/inf at +-inf; the limit is +-1.
+    assert_eq!(
+        SoftsignOp::apply(pos_inf),
+        T::ONE,
+        "Softsign(+inf) must be 1"
+    );
+    assert_eq!(
+        SoftsignOp::apply(neg_inf),
+        -T::ONE,
+        "Softsign(-inf) must be -1"
+    );
+}
+
+#[test]
+fn infinite_inputs_resolve_to_the_analytic_limit_for_every_shipped_real_scalar() {
+    assert_infinite_inputs_resolve_to_the_analytic_limit::<f32>();
+    assert_infinite_inputs_resolve_to_the_analytic_limit::<f64>();
+}
+
+/// `GeluTanhGradOp` overflows on a *finite* input once `three * c1 * x * x`
+/// itself exceeds the format's range (`|x| ≈ 5.04e19` in `f32`, `≈ 3.7e154`
+/// in `f64`). By that magnitude the inner sigmoid has already saturated to
+/// exactly `0`/`1` bit-exactly (its argument overflows to `±∞` through the
+/// cubic term at a much smaller `|x|` — `c1 * x³` alone exceeds `f32::MAX`
+/// past `|x| ≈ 1.97e13`), so the vanished `s(1-s)` factor multiplies an
+/// overflowing `x²` (`0 · ∞ = NaN`) rather than the guard below returning
+/// the already-saturated `s` directly. Fails against ca3c28c, which returns
+/// `NaN` at every input here (confirmed before applying the fix).
+#[test]
+fn gelu_tanh_grad_resolves_the_overflowing_finite_tail() {
+    assert_eq!(GeluTanhGradOp::apply(5.04e19_f32), 1.0);
+    assert_eq!(GeluTanhGradOp::apply(-5.04e19_f32), 0.0);
+    assert_eq!(GeluTanhGradOp::apply(3.7e154_f64), 1.0);
+    assert_eq!(GeluTanhGradOp::apply(-3.7e154_f64), 0.0);
+}
+
+/// `HardswishOp` computed `x * clamp / 6`: for `x ≥ 3` the clamp saturates
+/// to `6` and the true value is `x` exactly, but `x * 6` overflows before
+/// the `/ 6` brings it back down once `x` exceeds `f32::MAX / 6 ≈ 5.67e37`
+/// (`f64::MAX / 6 ≈ 3.0e307`). Dividing the clamp by `6` before multiplying
+/// keeps every intermediate value at most `1`. Fails against ca3c28c, which
+/// returns `inf` at both inputs (confirmed before applying the fix).
+#[test]
+fn hardswish_does_not_overflow_once_the_clamp_saturates() {
+    assert_eq!(HardswishOp::apply(1e38_f32), 1e38_f32);
+    assert_eq!(HardswishOp::apply(1e308_f64), 1e308_f64);
+}
+
+/// `n` ULP of `f32`, as a relative bound: `f32::EPSILON` (`2^-23`) is
+/// exactly one ULP at magnitudes in `[1, 2)` and within a factor of 2 at any
+/// other normal magnitude — the standard "within `n` ULP" engineering
+/// bound. Used to judge an `f32` result against a much higher-precision
+/// `f64` reference (eunomia's f64 `exp`/`tanh` are libm-backed to a few ULP
+/// of `f64`, roughly `2^29` times finer than an `f32` ULP, so evaluating the
+/// same fixed formula in `f64` at the promoted input is authoritative at
+/// this resolution).
+fn ulp_bound_f32(n_ulp: f64, reference: f64) -> f64 {
+    n_ulp * f64::from(f32::EPSILON) * reference.abs()
+}
+
+/// `n` ULP of `f64`, as a relative bound (`f64::EPSILON = 2^-52`), used
+/// below to judge a result against an *independently derived* asymptotic
+/// reference — an analytic series expansion, not the code path under test —
+/// so the check is a real cross-verification (standards: Cross-Verification)
+/// rather than comparing the implementation against itself.
+fn ulp_bound_f64(n_ulp: f64, reference: f64) -> f64 {
+    n_ulp * f64::EPSILON * reference.abs()
+}
+
+/// `SiluGradOp` computed `1 - sigmoid(x)` by direct subtraction, which loses
+/// precision once `sigmoid(x)` rounds close to `1`: ca3c28c gives 1.0000019
+/// at `x = 16.64` (f32) against the measured reference 1.00000093 (8.2 ULP
+/// of f32), and at `x = 36.73` (f64) collapses to exactly `1.0` (19 ULP of
+/// f64) because `sigmoid(36.73)` itself rounds to bit-exact `1.0`, so
+/// `1 - sigmoid(x)` is exactly `0` and the whole correction term vanishes.
+/// `stable_sigmoid(-x)` computes the identical quantity via
+/// `1 - sigmoid(x) = sigmoid(-x)`, never subtracting two nearly-equal
+/// numbers.
+#[test]
+fn silu_grad_matches_the_stable_one_minus_sigmoid_reference() {
+    let reference_f32 = SiluGradOp::apply(f64::from(16.64_f32));
+    let got_f32 = f64::from(SiluGradOp::apply(16.64_f32));
+    assert!(
+        (got_f32 - reference_f32).abs() <= ulp_bound_f32(4.0, reference_f32),
+        "SiluGrad(16.64f32) = {got_f32}, reference {reference_f32}"
+    );
+
+    // Independent f64 reference: SiluGrad(x) = sigmoid(x) + x*sigmoid(x)*(1
+    // - sigmoid(x)). Writing q = exp(-x), sigmoid(x) = 1/(1+q) = 1 - q +
+    // O(q²), so SiluGrad(x) = 1 + q*(x - 1) + O(q²). At x = 36.73,
+    // q ≈ 1.1e-16, so the dropped O(q²) term is ~1e-32 relative to the
+    // O(q) ≈ 4e-15 leading correction — far below f64's own 2.2e-16
+    // epsilon, making this asymptotic expansion exact to full f64
+    // precision. It is derived independently of `stable_sigmoid`, so
+    // matching it is a real cross-check, not self-comparison.
+    let x = 36.73_f64;
+    let reference_f64 = 1.0 + (x - 1.0) * (-x).exp();
+    let got_f64 = SiluGradOp::apply(x);
+    assert!(
+        (got_f64 - reference_f64).abs() <= ulp_bound_f64(4.0, reference_f64),
+        "SiluGrad(36.73f64) = {got_f64}, reference {reference_f64}"
+    );
+}
+
+/// `MishGradOp` computed `1 - t * t` by direct subtraction, which loses
+/// precision once `t = tanh(softplus(x))` rounds close to `1`: ca3c28c
+/// gives 1.0000011 at `x = 9.01` (f32) against the measured reference
+/// 1.00000051 (4.75 ULP of f32), and at `x = 19.04` (f64) the same collapse
+/// to exactly `1.0` (10 ULP of f64). `sech²(sp) = 4u / (1+u)²`,
+/// `u = exp(-2·sp)` (the identity `1 - tanh(sp)² = sech²(sp)`) computes the
+/// identical quantity without subtracting from `1`.
+#[test]
+fn mish_grad_matches_the_stable_sech_squared_reference() {
+    let reference_f32 = MishGradOp::apply(f64::from(9.01_f32));
+    let got_f32 = f64::from(MishGradOp::apply(9.01_f32));
+    assert!(
+        (got_f32 - reference_f32).abs() <= ulp_bound_f32(4.0, reference_f32),
+        "MishGrad(9.01f32) = {got_f32}, reference {reference_f32}"
+    );
+
+    // Independent f64 reference: for large x, softplus(x) = x + O(exp(-x))
+    // so t = tanh(softplus(x)) = 1 - 2r + O(r²) with r = exp(-2x), and
+    // sigmoid(x) = 1 - exp(-x) + O(exp(-2x)). MishGrad(x) = t +
+    // x*(1-t²)*sigmoid(x) = (1-2r) + x*4r*(1-exp(-x)) + O(r²) =
+    // 1 + r*(4x - 2) + O(r·exp(-x), r²), both dropped terms ~1e-33 or
+    // smaller at x = 19.04 (r ≈ 2.9e-17) — exact to full f64 precision, and
+    // independent of the `sech²`/`stable_sigmoid` code path under test.
+    let x = 19.04_f64;
+    let r = (-2.0 * x).exp();
+    let reference_f64 = 1.0 + (4.0 * x - 2.0) * r;
+    let got_f64 = MishGradOp::apply(x);
+    assert!(
+        (got_f64 - reference_f64).abs() <= ulp_bound_f64(4.0, reference_f64),
+        "MishGrad(19.04f64) = {got_f64}, reference {reference_f64}"
+    );
+}
+
+/// `GeluTanhGradOp` computed `1 - s` by direct subtraction, which loses
+/// precision once `s = sigmoid(2z)` rounds close to `1`: ca3c28c gives `1.0`
+/// at `x = 4.96` (f32) against the measured reference 1.00000197 (16.5 ULP
+/// of f32), and at `x = 7.09` (f64) the same collapse to exactly `1.0`
+/// (44 ULP of f64). `stable_sigmoid(-2z)` computes the identical quantity
+/// via `1 - sigmoid(w) = sigmoid(-w)`, never subtracting from `1`.
+#[test]
+fn gelu_tanh_grad_matches_the_stable_one_minus_sigmoid_reference() {
+    let reference_f32 = GeluTanhGradOp::apply(f64::from(4.96_f32));
+    let got_f32 = f64::from(GeluTanhGradOp::apply(4.96_f32));
+    assert!(
+        (got_f32 - reference_f32).abs() <= ulp_bound_f32(4.0, reference_f32),
+        "GeluTanhGrad(4.96f32) = {got_f32}, reference {reference_f32}"
+    );
+
+    // Independent f64 reference, re-deriving `z` and the coefficient `k`
+    // directly from the operator's own closed form (never calling
+    // `stable_sigmoid`): with w = 2z, s = sigmoid(w) = 1 - exp(-w) +
+    // O(exp(-2w)), and the derivative's exact rational form is
+    // s + 2x·s(1-s)·c0·(1+3c1x²) = s + k·s(1-s) for k = 2x·c0·(1+3c1x²).
+    // s(1-s) = exp(-w) + O(exp(-2w)), so GeluTanhGrad(x) =
+    // 1 + (k - 1)*exp(-w) + O(exp(-2w)); at x = 7.09, w ≈ 36.8, so the
+    // dropped O(exp(-2w)) term is astronomically smaller than f64 epsilon.
+    let x = 7.09_f64;
+    let c0 = 0.797_884_560_802_865_4_f64;
+    let c1 = 0.044715_f64;
+    let z = c0 * (x + c1 * x * x * x);
+    let w = 2.0 * z;
+    let k = 2.0 * x * c0 * (1.0 + 3.0 * c1 * x * x);
+    let reference_f64 = 1.0 + (k - 1.0) * (-w).exp();
+    let got_f64 = GeluTanhGradOp::apply(x);
+    assert!(
+        (got_f64 - reference_f64).abs() <= ulp_bound_f64(4.0, reference_f64),
+        "GeluTanhGrad(7.09f64) = {got_f64}, reference {reference_f64}"
+    );
+}
+
+/// `TanhGradOp` computed `1 - y * y`, which squares `y` before subtracting —
+/// doubling the rounding error already present in `y` once it rounds close
+/// to `1`. ca3c28c gives 2.44141e-4 at `y = 0.99988` (f32) against the
+/// measured reference 2.44126e-4 (~1024 ULP of f32), and the same
+/// cancellation is far worse at `y = 1 - 6.7e-9` (f64, ~2.7e7 ULP of f64) —
+/// the closer `y` sits to `1`, the more severe. `(1 - y) * (1 + y)` keeps
+/// each factor's own rounding separate instead of compounding it in `y * y`.
+#[test]
+fn tanh_grad_matches_the_factored_difference_of_squares_reference() {
+    let y_f32 = 0.99988_f32;
+    let reference_f32 = TanhGradOp::apply(f64::from(y_f32));
+    let got_f32 = f64::from(TanhGradOp::apply(y_f32));
+    assert!(
+        (got_f32 - reference_f32).abs() <= ulp_bound_f32(4.0, reference_f32),
+        "TanhGrad(0.99988f32) = {got_f32}, reference {reference_f32}"
+    );
+
+    // Independent f64 reference: with y = 1 - delta, 1 - y² expands exactly
+    // (no series truncation) as delta*(2 - delta) — algebraically identical
+    // to `(1-y)*(1+y)` but computed from `delta` directly, never forming
+    // `y*y`. `delta` is recovered from the actual stored `y_f64` (`1 - y`,
+    // exact by Sterbenz's lemma since `y_f64` and `1.0` are within a factor
+    // of 2) rather than reused from the `6.7e-9` literal, so the reference
+    // is not contaminated by the literal's own rounding when `y_f64` was
+    // first formed (`1.0 - 6.7e-9` itself rounds to the nearest `f64`,
+    // ~1e-16 absolute); this isolates exactly the property under test — is
+    // `1 - y²` computed accurately given the `y` that is actually stored —
+    // without also asserting precision the input's own representation
+    // cannot supply.
+    let y_f64 = 1.0 - 6.7e-9;
+    let delta = 1.0 - y_f64;
+    let reference_f64 = delta * (2.0 - delta);
+    let got_f64 = TanhGradOp::apply(y_f64);
+    assert!(
+        (got_f64 - reference_f64).abs() <= ulp_bound_f64(4.0, reference_f64),
+        "TanhGrad(1 - 6.7e-9, f64) = {got_f64}, reference {reference_f64}"
+    );
+}
+
 /// Integer `Div` edge cases and `Add`/`Mul` wraparound, generic over `i32`
 /// and `u32` (the seam's shipped signed/unsigned integers).
 #[test]
