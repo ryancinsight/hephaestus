@@ -19,12 +19,15 @@ mod operands;
 pub mod pooling;
 /// Leto-backed unfold/fold seam implementor.
 pub mod sliding_window;
+/// Leto-backed sparse-operator and batch-submit seam implementor.
+pub mod sparse;
 
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
+pub use sparse::{HostPreparedApply, HostSparseOps};
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
