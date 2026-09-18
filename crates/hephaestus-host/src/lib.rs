@@ -18,6 +18,9 @@ pub mod dense_vector;
 /// Host implementor of the unary/binary elementwise seams (ADR 0061).
 pub mod elementwise;
 mod operands;
+/// Host implementor of the runtime-parameter unary elementwise seam (ADR
+/// 0061).
+pub mod parameterized;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
 /// Host implementor of the whole-operand and rank-2 axis reduction seams
@@ -29,6 +32,8 @@ pub mod scan;
 pub mod sliding_window;
 /// Leto-backed sparse-operator and batch-submit seam implementor.
 pub mod sparse;
+/// Host implementor of the stateful parameter-update seam (ADR 0061).
+pub mod stateful_update;
 
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
@@ -36,6 +41,7 @@ pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
 pub use elementwise::{
     HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
 };
+pub use parameterized::HostParameterizedUnaryOps;
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use reduction::{
     HostAxisReductionOps, HostFullReductionOps, HostPreparedAxisReduction,
@@ -44,6 +50,7 @@ pub use reduction::{
 pub use scan::{HostPreparedScan, HostScanOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};
+pub use stateful_update::HostStatefulUpdateOps;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 

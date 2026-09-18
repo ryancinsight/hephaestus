@@ -158,7 +158,10 @@ pub struct HostPreparedScalar<'op, T, const N: usize> {
 /// conformance clauses (`hephaestus-conformance`) assert this exact
 /// `"layout rejected: "` wording for a rejected broadcast, so every backend's
 /// diagnostic names the violated constraint identically.
-fn map_layout_err(e: leto::LetoError) -> HephaestusError {
+///
+/// `pub(crate)`: shared verbatim with [`crate::parameterized`], whose
+/// runtime-parameter unary seam broadcasts and iterates the same way.
+pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
         message: format!("layout rejected: {e}"),
     }
@@ -167,7 +170,9 @@ fn map_layout_err(e: leto::LetoError) -> HephaestusError {
 /// Broadcast `layout` to `target_shape` and validate it against `storage_len`.
 /// Mirrors `hephaestus-wgpu`'s per-operand broadcast + `validate_storage_len`
 /// step in `prepare_*_inner`.
-fn broadcast_operand<const N: usize>(
+///
+/// `pub(crate)`: shared with [`crate::parameterized`] (see [`map_layout_err`]).
+pub(crate) fn broadcast_operand<const N: usize>(
     layout: &Layout<N>,
     target_shape: [usize; N],
     storage_len: usize,
@@ -241,7 +246,9 @@ fn dispatch_unary<T: Copy, const N: usize>(prepared: &HostPreparedUnary<'_, T, N
 
 /// Write the next logical output element from an applied value, or the typed
 /// dispatch failure when the operator reported no application.
-fn write_next<T, const N: usize>(
+///
+/// `pub(crate)`: shared with [`crate::parameterized`] (see [`map_layout_err`]).
+pub(crate) fn write_next<T, const N: usize>(
     out_iter: &mut ElementIterMut<'_, T, N>,
     applied: Option<T>,
     op_name: &str,
