@@ -23,6 +23,8 @@ pub mod random;
 pub mod sliding_window;
 /// Leto-backed sparse-operator and batch-submit seam implementor.
 pub mod sparse;
+/// Volume ray line integrals over leto interpolation.
+pub mod volume;
 
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
@@ -31,6 +33,7 @@ pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use random::HostRandomOps;
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};
+pub use volume::HostRayIntegralOps;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 

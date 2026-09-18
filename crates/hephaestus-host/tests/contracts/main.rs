@@ -7,3 +7,4 @@ mod dense_vector;
 mod random;
 mod sparse;
 mod transfer;
+mod volume;
