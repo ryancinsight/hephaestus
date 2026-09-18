@@ -134,12 +134,11 @@ Three constraints decide the design:
    version hephaestus locks, whose HLSL and MSL writers implement exactly
    this division rule citing the WGSL specification (`back/hlsl/help.rs`,
    `back/msl/writer.rs`) and whose constant evaluator wraps i32/u32
-   arithmetic citing the WGSL integer-types section; the rendering item
-   confirms it against the specification text. CUDA and HIP renderings of
-   signed combines are audited for reliance on signed overflow, which is
-   undefined in C++; any that rely on it are rewritten to compute in the
-   unsigned type and convert
-   back.
+   arithmetic citing the WGSL integer-types section; the item implementing
+   the integer value functions confirms it against the specification text.
+   CUDA and HIP renderings of signed combines are audited for reliance on
+   signed overflow, which is undefined in C++; any that rely on it are
+   rewritten to compute in the unsigned type and convert back.
 6. **The value function is the operator's definition.** Where a kernel
    rendering diverges from it beyond the rendering's derived tolerance, the
    rendering is the defect, fixed in its dialect; the value function is
@@ -240,7 +239,8 @@ Three constraints decide the design:
   subnormals, integer wraparound, integer division by zero and
   `i32::MIN / -1`) and representative points against a direct reference.
 - The rendering item checks each corrected rendering against the value
-  function on every available backend, Metal included, with tolerances
+  function on every available backend (Metal wherever a macOS host is
+  available), with tolerances
   derived from the chosen forms' published relative bounds.
 - `hephaestus-host` then implements each seam and instantiates its existing
   conformance clause on the hosted runner.
