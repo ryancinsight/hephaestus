@@ -4,6 +4,10 @@ use super::*;
 use crate::domain::dialect::{CudaC, HipC, Host, Wgsl};
 use eunomia::RealField;
 
+mod double_double;
+
+use double_double::DoubleDouble;
+
 #[test]
 fn combine_and_identity_agree_per_dialect() {
     assert_eq!(<SumOp as CombineExpr<Wgsl>>::EXPR, "lhs + rhs");
@@ -596,12 +600,17 @@ struct AccuracyCase<T> {
 /// `f32`, 53 for `f64`).
 fn ulps_from_reference(got: f64, reference: (f64, f64), significand_bits: u32) -> f64 {
     let (hi, lo) = reference;
-    let biased_exponent = i32::try_from((hi.to_bits() >> 52) & 0x7ff)
+    ((got - hi) - lo).abs() / ulp_of(hi, significand_bits)
+}
+
+/// ULP of the normal value `value` in a format with `significand_bits` bits
+/// of precision: `2^(exponent(value) - significand_bits + 1)`.
+fn ulp_of(value: f64, significand_bits: u32) -> f64 {
+    let biased_exponent = i32::try_from((value.to_bits() >> 52) & 0x7ff)
         .expect("invariant: an 11-bit exponent field fits in i32");
     let precision =
         i32::try_from(significand_bits).expect("invariant: a significand width fits in i32");
-    let ulp = 2f64.powi(biased_exponent - 1023 - (precision - 1));
-    ((got - hi) - lo).abs() / ulp
+    2f64.powi(biased_exponent - 1023 - (precision - 1))
 }
 
 fn assert_accuracy_cases<T>(
@@ -628,10 +637,10 @@ fn assert_accuracy_cases<T>(
 }
 
 /// `SiluGradOp` switches from `1 - sigmoid(x)` to `sigmoid(-x)` above
-/// `x = 2.6`. The cases below the switch kill an always-independent form and
+/// `x = 2.63`. The cases below the switch kill an always-independent form and
 /// any threshold at or below `2.40` (`f32`) / `2.55` (`f64`); the cases above
 /// it kill an always-direct form and any threshold at or above `2.87` /
-/// `2.90`; the tail cases are the original direct-form cancellation, where
+/// `2.90`, so a threshold moved by 10% either way fails; the tail cases are the original direct-form cancellation, where
 /// `sigmoid(x)` has rounded so close to `1` that `1 - sigmoid(x)` keeps few
 /// significant bits.
 #[test]
@@ -689,10 +698,10 @@ fn silu_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
 }
 
 /// `GeluTanhGradOp` switches from `1 - s` to `sigmoid(-w)` above
-/// `w = 2z = 2.43`. The cases below the switch (`w ≈ 2.31`/`2.35`) kill an
+/// `w = 2z = 2.47`. The cases below the switch (`w ≈ 2.31`/`2.35`) kill an
 /// always-independent form and any threshold at or below them; the cases
-/// above it (`w ≈ 2.72`/`2.89`) kill an always-direct form and any threshold
-/// at or above them; the tail cases are the original direct-form
+/// above it (`w ≈ 2.68`/`2.70`) kill an always-direct form and any threshold
+/// at or above them, so a threshold moved by 10% either way fails; the tail cases are the original direct-form
 /// cancellation, where `s` has rounded to `1`.
 #[test]
 fn gelu_tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
@@ -707,10 +716,10 @@ fn gelu_tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover()
                 reference: (1.127_676_469_325_747_5, 1.007_740_701_404_698_9e-16),
                 bound_ulp: 1.0,
             },
-            // 0.005 / 2.005 ULP
+            // 0.089 / 1.911 ULP
             AccuracyCase {
-                input: 1.539_901_f32,
-                reference: (1.126_231_671_022_985_2, -7.382_833_630_541_793e-17),
+                input: 1.520_734_1_f32,
+                reference: (1.127_006_281_717_678, -1.096_801_909_540_929_4e-18),
                 bound_ulp: 1.0,
             },
             // 0.743 / 16.257 ULP
@@ -732,10 +741,10 @@ fn gelu_tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover()
                 reference: (1.128_251_526_320_643_6, 3.824_062_359_236_039_5e-17),
                 bound_ulp: 1.0,
             },
-            // 0.011 / 2.011 ULP
+            // 0.015 / 2.015 ULP
             AccuracyCase {
-                input: 1.622_138_832_544_816_5_f64,
-                reference: (1.121_703_762_355_825_3, 2.535_437_126_651_287e-18),
+                input: 1.530_396_691_565_789_6_f64,
+                reference: (1.126_630_199_140_305_6, -3.437_292_819_137_683e-18),
                 bound_ulp: 1.0,
             },
             // 0.047 / 42.953 ULP
@@ -748,43 +757,144 @@ fn gelu_tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover()
     );
 }
 
-/// Below its crossover `GeluTanhGradOp` multiplies `s` and `1 - s` into the
-/// product one factor at a time. Near the derivative's root (`x ≈ -0.7525`),
-/// where the two terms of the sum cancel, pre-grouping `s * (1 - s)` changes
-/// the result by hundreds of ULP of the (small) result; these cases kill that
-/// regrouping.
+/// The root of `GeluTanhGrad` near `x = -0.7524614`.
+const GELU_TANH_GRAD_ROOT: f64 = -0.752_461_4;
+
+/// `GeluTanhGrad(x)` and its dominant term `s = σ(w)` in double-double,
+/// from `σ(w) + k·σ(w)·σ(−w)` with `w = 2·c0·(x + c1·x³)` and
+/// `k = 2·c0·x·(1 + 3·c1·x²)`.
+fn gelu_tanh_grad_double_double(x: f64) -> (DoubleDouble, DoubleDouble) {
+    let c0 = 0.797_884_560_802_865_4_f64;
+    let c1 = 0.044715_f64;
+    let one = DoubleDouble::from_f64(1.0);
+    let xd = DoubleDouble::from_f64(x);
+    let x2 = xd.mul(xd);
+    let w =
+        DoubleDouble::from_f64(2.0 * c0).mul(xd.add(DoubleDouble::from_f64(c1).mul(x2).mul(xd)));
+    let e = w.neg().exp();
+    let s = one.div(one.add(e));
+    let one_minus_s = e.div(one.add(e));
+    let k = DoubleDouble::from_f64(2.0 * c0)
+        .mul(xd)
+        .mul(one.add(DoubleDouble::from_f64(3.0 * c1).mul(x2)));
+    (s.add(k.mul(s).mul(one_minus_s)), s)
+}
+
+/// Error of `got` from the double-double reference, in ULP of the dominant
+/// term `s` for a format with `significand_bits` bits of precision.
+fn gelu_tanh_grad_dominant_term_ulps(x: f64, got: f64, significand_bits: u32) -> f64 {
+    let (reference, dominant) = gelu_tanh_grad_double_double(x);
+    ((got - reference.hi) - reference.lo).abs() / ulp_of(dominant.hi, significand_bits)
+}
+
+/// Within `±0.05` of its root the two terms of `GeluTanhGrad` cancel, so an
+/// error is measured in ULP of the dominant term `s = σ(2z)` (the result's
+/// own ULP shrinks without bound at the root). Every 256th `f32` input of the
+/// window and 4,096 evenly spaced `f64` inputs are checked against the
+/// double-double reference.
+///
+/// Bound basis: the largest measured errors of the implementation over the
+/// whole window are 4.681 dominant-term ULP over every `f32` input and 4.293
+/// over 10,000,000 uniform `f64` samples (five seeds); `5.0` admits both with
+/// margin and rejects an error of more than a third of an ULP beyond them.
 #[test]
-fn gelu_tanh_grad_keeps_the_factor_by_factor_product_near_its_root() {
-    assert_accuracy_cases(
-        "GeluTanhGrad",
-        GeluTanhGradOp::apply,
-        f32::MANTISSA_DIGITS,
-        // 0.016 / 512.016 ULP
-        &[AccuracyCase {
-            input: -0.753_110_23_f32,
-            reference: (-2.790_838_475_258_729e-4, 8.615_294_917_626_665e-21),
-            bound_ulp: 1.0,
-        }],
+fn gelu_tanh_grad_stays_within_the_measured_bound_near_its_root() {
+    const BOUND_DOMINANT_ULP: f64 = 5.0;
+    let low = GELU_TANH_GRAD_ROOT - 0.05;
+    let high = GELU_TANH_GRAD_ROOT + 0.05;
+    // Negative `f32` bit patterns grow with magnitude.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the window bounds are representable to within one f32 rounding"
+    )]
+    let (first, last) = ((high as f32).to_bits(), (low as f32).to_bits());
+    let mut worst32 = 0.0_f64;
+    for bits in (first..=last).step_by(256) {
+        let x = f32::from_bits(bits);
+        let got = f64::from(GeluTanhGradOp::apply(x));
+        let error = gelu_tanh_grad_dominant_term_ulps(f64::from(x), got, f32::MANTISSA_DIGITS);
+        worst32 = worst32.max(error);
+    }
+    assert!(
+        worst32 <= BOUND_DOMINANT_ULP,
+        "f32 GeluTanhGrad near its root: {worst32} dominant-term ULP"
     );
-    assert_accuracy_cases(
-        "GeluTanhGrad",
-        GeluTanhGradOp::apply,
-        f64::MANTISSA_DIGITS,
-        // 0.004 / 256.004 ULP
-        &[AccuracyCase {
-            input: -0.753_678_829_444_234_f64,
-            reference: (-5.233_978_824_058_794e-4, 4.418_338_355_157_842e-22),
-            bound_ulp: 1.0,
-        }],
+    let samples = 4096_u32;
+    let mut worst64 = 0.0_f64;
+    for index in 0..samples {
+        let x = low + (high - low) * (f64::from(index) + 0.5) / f64::from(samples);
+        let got = GeluTanhGradOp::apply(x);
+        let error = gelu_tanh_grad_dominant_term_ulps(x, got, f64::MANTISSA_DIGITS);
+        worst64 = worst64.max(error);
+    }
+    assert!(
+        worst64 <= BOUND_DOMINANT_ULP,
+        "f64 GeluTanhGrad near its root: {worst64} dominant-term ULP"
+    );
+}
+
+/// `GeluTanhGrad` by the original tanh form
+/// `½·(1 + tanh z) + ½·x·(1 − tanh² z)·z′(x)`, evaluated in `f64` with
+/// `std`'s `tanh` — a different algebraic form and library from the
+/// implementation. Over the windows below `tanh z` stays below `0.93`, so
+/// `1 − tanh² z` loses at most four bits of `f64`, far below an `f32` ULP.
+fn gelu_tanh_grad_tanh_form(x: f64) -> f64 {
+    let c0 = 0.797_884_560_802_865_4_f64;
+    let c1 = 0.044715_f64;
+    let z = c0 * (x + c1 * x * x * x);
+    let t = z.tanh();
+    0.5 * (1.0 + t) + 0.5 * x * (1.0 - t * t) * c0 * (1.0 + 3.0 * c1 * x * x)
+}
+
+/// Largest error, in ULP of the reference, of `GeluTanhGrad` over every
+/// `f32` input in `[low, high]` (both positive).
+fn gelu_tanh_grad_f32_window_maximum(low: f32, high: f32) -> f64 {
+    let mut worst = 0.0_f64;
+    for bits in low.to_bits()..=high.to_bits() {
+        let x = f32::from_bits(bits);
+        let reference = gelu_tanh_grad_tanh_form(f64::from(x));
+        let got = f64::from(GeluTanhGradOp::apply(x));
+        worst = worst.max(ulps_from_reference(
+            got,
+            (reference, 0.0),
+            f32::MANTISSA_DIGITS,
+        ));
+    }
+    worst
+}
+
+/// Each `GeluTanhGradOp` branch keeps the multiplication order of the
+/// single-form evaluation it is measured against, and the other order raises
+/// the `f32` window maximum (see the operator's documentation). Over every
+/// `f32` input of each window below, the shipped order's maximum and the
+/// other order's were measured against a double-double reference; each
+/// bound lies between the two.
+///
+/// - `[0.515, 0.555]`, direct branch: 1.784 ULP factor by factor (shipped),
+///   1.936 pre-grouped. Bound 1.86.
+/// - `[1.625, 1.725]`, independent branch: 1.681 ULP pre-grouped (shipped),
+///   1.774 factor by factor. Bound 1.73.
+#[test]
+fn gelu_tanh_grad_multiplication_orders_hold_their_measured_window_maxima() {
+    let direct = gelu_tanh_grad_f32_window_maximum(0.515, 0.555);
+    assert!(direct <= 1.86, "direct-branch window maximum {direct} ULP");
+    let independent = gelu_tanh_grad_f32_window_maximum(1.625, 1.725);
+    assert!(
+        independent <= 1.73,
+        "independent-branch window maximum {independent} ULP"
     );
 }
 
 /// `MishGradOp` switches from `1 - t²` to `sech²(sp)` above `sp = 1.55`. The
-/// cases below the switch (`sp ≈ 1.03`/`1.11`) kill an always-`sech²` form
-/// and any threshold at or below them; the cases above it (`sp ≈ 1.96`/`1.97`) kill
-/// an always-direct form and any threshold at or above them; the tail
-/// cases are the original direct-form cancellation, where `t` has rounded to
-/// `1`.
+/// cases below the switch (`sp ≈ 1.03`/`1.11`, and `1.400`/`1.54999` just
+/// inside it) kill an always-`sech²` form and any threshold below them,
+/// including `1.55` moved down by 10% (`1.395`); the cases above it
+/// (`sp ≈ 1.5503`/`1.605`, and `1.96`/`1.97`) kill an always-direct form
+/// and any threshold at or above them, including `1.55` moved up by 10%
+/// (`1.705`). The two forms differ by one ULP just inside the switch, so
+/// those cases require the selected form to be correctly rounded (half an
+/// ULP). The tail cases are the original direct-form cancellation, where
+/// `t` has rounded to `1`.
 #[test]
 fn mish_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
     assert_accuracy_cases(
@@ -797,6 +907,18 @@ fn mish_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
                 input: 0.589_513_8_f32,
                 reference: (9.261_161_090_871_325e-1, 2.060_666_313_517_767_4e-17),
                 bound_ulp: 1.0,
+            },
+            // 0.009 / 1.009 ULP
+            AccuracyCase {
+                input: 1.116_696_7_f32,
+                reference: (1.067_210_794_586_083_1, 6.519_837_544_120_851e-17),
+                bound_ulp: 0.5,
+            },
+            // 0.015 / 1.015 ULP
+            AccuracyCase {
+                input: 1.311_765_7_f32,
+                reference: (1.084_256_766_469_009_3, 2.719_817_198_156_410_7e-18),
+                bound_ulp: 0.5,
             },
             // 0.447 / 1.553 ULP
             AccuracyCase {
@@ -823,6 +945,18 @@ fn mish_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
                 reference: (9.715_328_789_566_628e-1, -1.785_604_082_853_674_5e-18),
                 bound_ulp: 1.0,
             },
+            // 0.015 / 1.015 ULP
+            AccuracyCase {
+                input: 1.311_411_733_274_786_6_f64,
+                reference: (1.084_238_829_570_115, 3.254_164_456_260_444_2e-18),
+                bound_ulp: 0.5,
+            },
+            // 0.010 / 1.010 ULP
+            AccuracyCase {
+                input: 1.380_909_773_517_28_f64,
+                reference: (1.086_984_743_270_022_8, -2.295_144_350_268_792_2e-18),
+                bound_ulp: 0.5,
+            },
             // 0.430 / 1.570 ULP
             AccuracyCase {
                 input: 1.814_309_182_963_652_4_f64,
@@ -842,8 +976,10 @@ fn mish_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
 /// `TanhGradOp` switches from `1 - y*y` to `(1 - y) * (1 + y)` above
 /// `|y| = 0.75`. The small-`|y|` cases kill an always-factored form; the
 /// cases just above `√½` (`0.7071`) kill any threshold at or below them,
-/// including the previous `½`; the cases near `0.875`/`0.9` kill an
-/// always-direct form and any threshold at or above them; the cases near
+/// including the previous `½` and `0.75` moved down by 10% (`0.675`); the
+/// cases at `0.778`/`0.8125` kill any threshold at or above them, including
+/// `0.75` moved up by 10% (`0.825`), and those near `0.875`/`0.9` an
+/// always-direct form; the cases near
 /// `1` are the original direct-form cancellation. Where the two forms differ
 /// by exactly one ULP the bound is half an ULP: the selected form must be
 /// correctly rounded.
@@ -870,6 +1006,12 @@ fn tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
             AccuracyCase {
                 input: 0.707_112_13_f32,
                 reference: (4.999_924_306_528_918e-1, 0.0),
+                bound_ulp: 0.5,
+            },
+            // 0.000 / 1.000 ULP
+            AccuracyCase {
+                input: 0.812_500_24_f32,
+                reference: (3.398_433_625_697_521e-1, 0.0),
                 bound_ulp: 0.5,
             },
             // 0.000 / 2.000 ULP
@@ -901,6 +1043,12 @@ fn tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
             AccuracyCase {
                 input: 0.733_984_678_348_328_f64,
                 reference: (4.612_664_919_499_014_4e-1, -7.084_623_958_970_427e-19),
+                bound_ulp: 0.5,
+            },
+            // 0.000 / 1.000 ULP
+            AccuracyCase {
+                input: 0.777_782_521_737_601_f64,
+                reference: (3.950_543_488_794_982_5e-1, 8.953_235_885_114_249e-25),
                 bound_ulp: 0.5,
             },
             // 0.000 / 2.000 ULP
