@@ -1,7 +1,7 @@
 //! Expression and identity tests for the operation markers.
 
 use super::*;
-use crate::domain::dialect::{CudaC, HipC, Wgsl};
+use crate::domain::dialect::{CudaC, HipC, Host, Wgsl};
 
 #[test]
 fn combine_and_identity_agree_per_dialect() {
@@ -161,4 +161,46 @@ fn consumer_defined_op_composes_with_the_vocabulary() {
         expr_of::<AffineClampOp>(),
         "clamp(x * 2.0 + 1.0, 0.0, 10.0)"
     );
+}
+
+/// Integer combines wrap (the WGSL kernel semantics); float combines are
+/// IEEE; min/max keep `lhs` unless `rhs` is strictly smaller/larger.
+#[test]
+fn host_combines_apply_the_value_functions() {
+    assert_eq!(
+        <SumOp as CombineExpr<Host>>::value(i32::MAX, 1),
+        Some(i32::MIN)
+    );
+    assert_eq!(
+        <ProdOp as CombineExpr<Host>>::value(u32::MAX, 2),
+        Some(u32::MAX - 1)
+    );
+    assert_eq!(
+        <CumSumOp as CombineExpr<Host>>::value(1.5f32, 2.25),
+        Some(3.75)
+    );
+    assert_eq!(<CumProdOp as CombineExpr<Host>>::value(-3i32, 4), Some(-12));
+    assert_eq!(
+        <MinOp as CombineExpr<Host>>::value(2.0f64, -1.0),
+        Some(-1.0)
+    );
+    assert_eq!(<MaxOp as CombineExpr<Host>>::value(2u32, 7), Some(7));
+    let kept = <MinOp as CombineExpr<Host>>::value(1.0f32, f32::NAN).expect("min has a value");
+    assert_eq!(kept, 1.0, "a NaN rhs never displaces a held number");
+    assert_eq!(<SumOp as CombineExpr<Host>>::EXPR, "host");
+    assert_eq!(<f32 as IdentityToken<MinOp, Host>>::TOKEN, "host");
+}
+
+/// An operator implementing the host combine without a value function
+/// reports `None`, which the host turns into a typed error; other dialects
+/// never carry a value.
+#[test]
+fn a_host_combine_without_a_value_function_has_none() {
+    #[derive(Clone, Copy)]
+    struct Opaque;
+    impl CombineExpr<Host> for Opaque {
+        const EXPR: &'static str = "host";
+    }
+    assert_eq!(<Opaque as CombineExpr<Host>>::value(1.0f32, 2.0), None);
+    assert_eq!(<SumOp as CombineExpr<Wgsl>>::value(1.0f32, 2.0), None);
 }

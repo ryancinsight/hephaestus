@@ -60,6 +60,17 @@ pub struct CudaC;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct HipC;
 
+/// Host reference dialect marker (ADR 0061).
+///
+/// The host reference device executes operators rather than compiling them:
+/// an operator reaches it through its value function (for combines,
+/// [`CombineValue`](crate::CombineValue)), never through source text, so
+/// this dialect's `EXPR` and `TOKEN` constants are the fixed string
+/// `"host"` and are never rendered. Host arithmetic is Rust's, so IEEE-754
+/// special values hold exactly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Host;
+
 impl KernelDialect for Wgsl {
     const NAME: &'static str = "wgsl";
     const IEEE_SPECIAL_VALUES: bool = false;
@@ -74,6 +85,32 @@ impl KernelDialect for HipC {
     const NAME: &'static str = "hip-c";
     const IEEE_SPECIAL_VALUES: bool = true;
 }
+
+impl KernelDialect for Host {
+    const NAME: &'static str = "host";
+    const IEEE_SPECIAL_VALUES: bool = true;
+}
+
+/// Every scalar a seam accepts is representable on the host; the token names
+/// the Rust type for diagnostics, since host source is never generated.
+macro_rules! impl_host_scalars {
+    ($($scalar:ty => $token:literal),+ $(,)?) => {
+        $(
+            impl DialectScalar<Host> for $scalar {
+                const TYPE_TOKEN: &'static str = $token;
+            }
+        )+
+    };
+}
+
+impl_host_scalars!(
+    f32 => "f32",
+    f64 => "f64",
+    u32 => "u32",
+    i32 => "i32",
+    eunomia::F16 => "F16",
+    eunomia::Bf16 => "Bf16",
+);
 
 /// Maps a host scalar type to its shader type token in dialect `L` at compile
 /// time.

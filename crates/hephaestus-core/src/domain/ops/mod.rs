@@ -14,7 +14,7 @@
 //! - binary and combine expressions read `lhs` and `rhs`.
 
 use super::dialect::{DialectScalar, KernelDialect};
-use eunomia::Pod;
+use eunomia::{NumericElement, Pod};
 
 /// Element expression over the canonical unary operand `x` in dialect `L`.
 pub trait UnaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
@@ -47,6 +47,20 @@ pub trait TypedBinaryExpr<L: KernelDialect, T: DialectScalar<L>>:
 pub trait CombineExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
     /// Expression combining two partial results (e.g. `"max(lhs, rhs)"`).
     const EXPR: &'static str;
+
+    /// The combine applied to two values, for a dialect that executes
+    /// operators instead of rendering them (ADR 0061).
+    ///
+    /// `None` unless the operator carries [`CombineValue`]: the
+    /// [`Host`](crate::Host) blanket impl overrides this with
+    /// [`CombineValue::combine`], and an operator implementing this trait for
+    /// the host without a value function reports `None`, which the host turns
+    /// into a typed error. A seam impl can call this under the
+    /// `Op: CombineExpr<L>` bound it already receives.
+    #[must_use]
+    fn value<T: NumericElement>(_lhs: T, _rhs: T) -> Option<T> {
+        None
+    }
 }
 
 /// Host-side identity element of op `Op` for this scalar (dialect-free).
@@ -71,7 +85,7 @@ mod unary;
 mod tests;
 
 pub use binary::{AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp};
-pub use combine::{CumProdOp, CumSumOp, MaxOp, MinOp, ProdOp, SumOp};
+pub use combine::{CombineValue, CumProdOp, CumSumOp, MaxOp, MinOp, ProdOp, SumOp};
 pub use unary::{
     AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, EluGradOp,
     EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
