@@ -511,6 +511,9 @@ fn hardswish_does_not_overflow_once_the_clamp_saturates() {
 /// `is_nan` check now comes first in all five. Every assertion here fails
 /// against the pre-fix code (confirmed by running this test before
 /// applying the fix): all five silently returned `0` for a `NaN` input.
+/// `HardswishOp` propagates `NaN` through its arithmetic because its
+/// `x <= -3` short-circuit is `false` for `NaN`; the equivalent-looking
+/// `!(x > -3)` guard is `true` for `NaN` and would return `-0` instead.
 fn assert_nan_propagates_through_every_comparison_based_value_function<T>()
 where
     T: RealField + core::fmt::Debug,
@@ -525,6 +528,10 @@ where
     assert!(
         HardsigmoidGradOp::apply(nan).is_nan(),
         "HardsigmoidGrad(NaN) must be NaN"
+    );
+    assert!(
+        HardswishOp::apply(nan).is_nan(),
+        "Hardswish(NaN) must be NaN"
     );
     assert!(
         HardswishGradOp::apply(nan).is_nan(),
@@ -557,427 +564,358 @@ fn hardswish_resolves_negative_infinity_to_negative_zero() {
     );
 }
 
-/// The exact judge-cited regression inputs for the region-selection fix
-/// (`one_minus_sigmoid`/`MishGrad`'s `t ≤ ½` split): a naive "always take
-/// the independently rounded complement" choice (this crate's own first
-/// pass, 6ea4acd) regressed accuracy at each of these three points relative
-/// to ca3c28c, even though 6ea4acd was a strict improvement at the
-/// originally targeted tail inputs. Each assertion here fails against
-/// 6ea4acd and passes against both ca3c28c and the corrected second pass —
-/// the region-selected complement must match ca3c28c bit-for-bit at these
-/// specific inputs, not just "close".
-/// `sigmoid`/`softplus` reconstructions for the two tests below, built
-/// directly from `FloatElement::exp`/`ln_1p` via UFCS rather than the
-/// crate's own `stable_sigmoid`/`softplus_value`: a bug shared between the
-/// implementation and the oracle would otherwise cancel out of the
-/// differential check. These still use eunomia's own `exp`/`ln_1p` (not
-/// `std`'s), so the comparison isolates exactly the one thing under test —
-/// the region-selection/grouping choice — not which library's transcendental
-/// rounds the last bit differently (that independence is `raw_sigmoid`'s
-/// job, for the `f64`-vs-`f64` accuracy tests further down).
-fn indep_sigmoid_f32(x: f32) -> f32 {
-    if x >= 0.0 {
-        1.0 / (1.0 + <f32 as eunomia::FloatElement>::exp(-x))
-    } else {
-        let e = <f32 as eunomia::FloatElement>::exp(x);
-        e / (1.0 + e)
+/// One accuracy case: an input, its reference value as the unevaluated
+/// double-double sum `hi + lo`, and the largest admitted error in ULP of the
+/// reference.
+///
+/// Every reference below is a double-double (about 106-bit) evaluation of the
+/// operator's defining formula at the exact input value (an `f32` input is
+/// widened exactly): `SiluGrad(x) = σ(x)·(1 + x·σ(−x))`;
+/// `MishGrad(x) = tanh(sp) + x·sech²(sp)·σ(x)` with `sp = softplus(x)`;
+/// `GeluTanhGrad(x) = σ(w) + k·σ(w)·σ(−w)` with `w = 2·c0·(x + c1·x³)` and
+/// `k = 2·c0·x·(1 + 3·c1·x²)`, `c0 = 0.7978845608028654`, `c1 = 0.044715`;
+/// `TanhGrad(y) = 1 − y²` with `y²` formed exactly by an error-free product.
+/// Exponentials use a range-reduced Taylor series and `log1p` a Newton step
+/// in double-double, so no reference shares a code path with eunomia's
+/// `exp`/`ln_1p`/`tanh` or with the implementation's region choice.
+///
+/// Each case sits where the implementation's two forms (direct subtraction
+/// from `1`, and the independent form) differ by at least one ULP, so it
+/// fails when the switch routes the input to the wrong form. Each bound lies
+/// strictly between the measured error of the form the implementation
+/// selects and the measured error of the other form; both are recorded on
+/// the case as `selected / other`.
+struct AccuracyCase<T> {
+    input: T,
+    reference: (f64, f64),
+    bound_ulp: f64,
+}
+
+/// Distance of `got` from `reference`, in ULP of the reference's leading
+/// component for a format with `significand_bits` bits of precision (24 for
+/// `f32`, 53 for `f64`).
+fn ulps_from_reference(got: f64, reference: (f64, f64), significand_bits: u32) -> f64 {
+    let (hi, lo) = reference;
+    let biased_exponent = i32::try_from((hi.to_bits() >> 52) & 0x7ff)
+        .expect("invariant: an 11-bit exponent field fits in i32");
+    let precision =
+        i32::try_from(significand_bits).expect("invariant: a significand width fits in i32");
+    let ulp = 2f64.powi(biased_exponent - 1023 - (precision - 1));
+    ((got - hi) - lo).abs() / ulp
+}
+
+fn assert_accuracy_cases<T>(
+    operator: &str,
+    apply: impl Fn(T) -> T,
+    significand_bits: u32,
+    cases: &[AccuracyCase<T>],
+) where
+    T: RealField + core::fmt::Debug,
+{
+    for case in cases {
+        let got = apply(case.input);
+        let error = ulps_from_reference(got.to_f64(), case.reference, significand_bits);
+        assert!(
+            error <= case.bound_ulp,
+            "{operator}({:?}) = {got:?} is {error} ULP from the double-double \
+             reference {:e} + {:e}, above the bound {}",
+            case.input,
+            case.reference.0,
+            case.reference.1,
+            case.bound_ulp
+        );
     }
 }
-fn indep_softplus_f32(x: f32) -> f32 {
-    x.max(0.0)
-        + <f32 as eunomia::FloatElement>::ln_1p(<f32 as eunomia::FloatElement>::exp(-x.abs()))
-}
 
+/// `SiluGradOp` switches from `1 - sigmoid(x)` to `sigmoid(-x)` above
+/// `x = 2.6`. The cases below the switch kill an always-independent form and
+/// any threshold at or below `2.40` (`f32`) / `2.55` (`f64`); the cases above
+/// it kill an always-direct form and any threshold at or above `2.87` /
+/// `2.90`; the tail cases are the original direct-form cancellation, where
+/// `sigmoid(x)` has rounded so close to `1` that `1 - sigmoid(x)` keeps few
+/// significant bits.
 #[test]
-fn region_selected_complement_matches_ca3c28c_at_the_cited_regression_points() {
-    // Each oracle below reconstructs ca3c28c's exact original expression
-    // from `indep_sigmoid_f32`/`indep_softplus_f32` — never the crate's own
-    // `stable_sigmoid`/`softplus_value` (a latent bug shared between the
-    // implementation and this oracle would otherwise cancel out of a
-    // differential check that exists specifically to isolate the
-    // region-selection choice).
-    //
-    // ca3c28c and this fix both compute `1 - sigmoid(x)` for `x = 1.2578312`
-    // by direct subtraction (`sig ≈ 0.779`, nowhere near saturation); 6ea4acd
-    // instead always called `stable_sigmoid(-x)`, a second independently
-    // rounded transcendental evaluation that does not share ca3c28c's
-    // rounding, regressing this exact bit pattern from 0.98 to 3.02 ULP.
-    let x = 1.257_831_2_f32;
-    let sig = indep_sigmoid_f32(x);
-    let ca3c28c_oracle = sig * (1.0 + x * (1.0 - sig));
-    assert_eq!(
-        SiluGradOp::apply(x).to_bits(),
-        ca3c28c_oracle.to_bits(),
-        "SiluGrad(1.2578312f32) must match ca3c28c's direct-subtraction result bit-for-bit"
+fn silu_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
+    assert_accuracy_cases(
+        "SiluGrad",
+        SiluGradOp::apply,
+        f32::MANTISSA_DIGITS,
+        &[
+            // 0.115 / 1.885 ULP
+            AccuracyCase {
+                input: 2.405_141_8_f32,
+                reference: (1.099_837_793_692_915_3, 6.976_311_581_976_778e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.017 / 2.017 ULP
+            AccuracyCase {
+                input: 2.867_271_7_f32,
+                reference: (1.092_152_835_918_219_5, -6.123_557_629_831_417e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.215 / 7.785 ULP
+            AccuracyCase {
+                input: 16.64_f32,
+                reference: (1.000_000_928_061_517_4, 1.188_321_631_270_538_1e-17),
+                bound_ulp: 1.0,
+            },
+        ],
     );
-
-    // Same class of regression in GeluTanhGradOp's `1 - s` companion at
-    // `x = 0.69432867` (`s = sigmoid(2z) ≈ 0.974`, nowhere near `1`).
-    let x = 0.694_328_67_f32;
-    let c0 = 0.797_884_6_f32;
-    let c1 = 0.044715_f32;
-    let z = c0 * (x + c1 * x * x * x);
-    let s = indep_sigmoid_f32(z + z);
-    let ca3c28c_oracle = s + (x + x) * s * (1.0 - s) * c0 * (1.0 + (c1 + c1 + c1) * x * x);
-    assert_eq!(
-        GeluTanhGradOp::apply(x).to_bits(),
-        ca3c28c_oracle.to_bits(),
-        "GeluTanhGrad(0.69432867f32) must match ca3c28c's direct-subtraction result bit-for-bit"
-    );
-
-    // MishGradOp at `x = -1.3056784`: `softplus(x)` is small for negative
-    // `x` (≤ ln 2 ≈ 0.693), so `t = tanh(softplus(x)) ≤ tanh(ln 2) ≈ 0.6`,
-    // never close to saturating; 6ea4acd's unconditional `sech²` regressed
-    // this point from 17.36 to 49.36 ULP (measured against the judge
-    // harness's f64 reference), even though ca3c28c's direct `1 - t*t` was
-    // already fine here.
-    let x = -1.305_678_4_f32;
-    // `FloatElement::tanh`, not the inherent `f32::tanh`: inside the
-    // crate's *generic* `apply<T: RealField>`, `.tanh()` resolves through
-    // the trait bound (eunomia's `libm`-backed implementation) because `T`
-    // has no inherent methods; called here on a *concrete* `f32`, `.tanh()`
-    // would instead resolve to `f32`'s own inherent method (the system
-    // libm), a different implementation that can round differently in the
-    // last bit. Explicit UFCS forces the same trait method the generic code
-    // actually calls.
-    let t = <f32 as eunomia::FloatElement>::tanh(indep_softplus_f32(x));
-    let sig = indep_sigmoid_f32(x);
-    let ca3c28c_oracle = t + x * (1.0 - t * t) * sig;
-    assert_eq!(
-        MishGradOp::apply(x).to_bits(),
-        ca3c28c_oracle.to_bits(),
-        "MishGrad(-1.3056784f32) must match ca3c28c's direct-subtraction result bit-for-bit"
+    assert_accuracy_cases(
+        "SiluGrad",
+        SiluGradOp::apply,
+        f64::MANTISSA_DIGITS,
+        &[
+            // 0.091 / 1.909 ULP
+            AccuracyCase {
+                input: 2.552_028_415_350_948_f64,
+                reference: (1.098_860_025_164_296_6, -2.016_099_943_032_254_3e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.009 / 2.009 ULP
+            AccuracyCase {
+                input: 2.903_298_488_057_376_7_f64,
+                reference: (1.091_106_185_802_179_8, 1.901_338_674_739_636_7e-18),
+                bound_ulp: 1.0,
+            },
+            // 0.987 / 18.013 ULP
+            AccuracyCase {
+                input: 36.73_f64,
+                reference: (1.000_000_000_000_004, -2.907_402_465_278_531_4e-18),
+                bound_ulp: 2.0,
+            },
+        ],
     );
 }
 
-/// `GeluTanhGradOp`'s direct-region (`w ≤ 2`) combining expression applies
-/// `s` and `1 - s` as two separate factors (`two * x * s * one_minus_s *
-/// c0 * (…)`), matching ca3c28c's own ungrouped multiplication order;
-/// 6ea4acd's independent-region branch instead pre-groups them into a
-/// `saturation = s * one_minus_s` value before multiplying. These are
-/// mathematically identical reassociations but round differently: at the
-/// `root ± 0.001` window's worst point (`x = -0.7534259557723999_f32`,
-/// judge harness `jv3`, mode `win32 GeluTanhGrad`, 2026-09-18, dominant-term
-/// scaled), ca3c28c's ungrouped form and this implementation both give
-/// 3.930 ULP there against the double-double reference, while 6ea4acd's
-/// pre-grouped form gives 4.337 ULP. A mutation that consolidates the two
-/// branches back onto one shared combining expression (routing the direct
-/// region through the pre-grouped form, as an earlier draft's shared
-/// `one_minus_sigmoid`-based implementation did) reproduces 6ea4acd's
-/// grouping here and regresses this exact bit pattern — this test exists so
-/// that regression always has a dedicated kill (`mutants.txt`'s
-/// `gtg_sqrteps`).
+/// `GeluTanhGradOp` switches from `1 - s` to `sigmoid(-w)` above
+/// `w = 2z = 2.43`. The cases below the switch (`w ≈ 2.31`/`2.35`) kill an
+/// always-independent form and any threshold at or below them; the cases
+/// above it (`w ≈ 2.72`/`2.89`) kill an always-direct form and any threshold
+/// at or above them; the tail cases are the original direct-form
+/// cancellation, where `s` has rounded to `1`.
 #[test]
-fn gelu_tanh_grad_matches_ca3c28cs_multiplication_order_at_the_root_window_worst_case() {
-    let x = -0.753_425_96_f32;
-    let c0 = 0.797_884_6_f32;
-    let c1 = 0.044715_f32;
-    let z = c0 * (x + c1 * x * x * x);
-    let s = indep_sigmoid_f32(z + z);
-    let ca3c28c_oracle = s + (x + x) * s * (1.0 - s) * c0 * (1.0 + (c1 + c1 + c1) * x * x);
-    assert_eq!(
-        GeluTanhGradOp::apply(x).to_bits(),
-        ca3c28c_oracle.to_bits(),
-        "GeluTanhGrad(-0.7534259557723999f32) must match ca3c28c's ungrouped \
-         multiplication order bit-for-bit, not 6ea4acd's pre-grouped saturation"
+fn gelu_tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
+    assert_accuracy_cases(
+        "GeluTanhGrad",
+        GeluTanhGradOp::apply,
+        f32::MANTISSA_DIGITS,
+        &[
+            // 0.148 / 1.852 ULP
+            AccuracyCase {
+                input: 1.340_434_f32,
+                reference: (1.127_676_469_325_747_5, 1.007_740_701_404_698_9e-16),
+                bound_ulp: 1.0,
+            },
+            // 0.005 / 2.005 ULP
+            AccuracyCase {
+                input: 1.539_901_f32,
+                reference: (1.126_231_671_022_985_2, -7.382_833_630_541_793e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.743 / 16.257 ULP
+            AccuracyCase {
+                input: 4.96_f32,
+                reference: (1.000_001_995_905_308_4, -7.896_238_384_062_334e-17),
+                bound_ulp: 2.0,
+            },
+        ],
+    );
+    assert_accuracy_cases(
+        "GeluTanhGrad",
+        GeluTanhGradOp::apply,
+        f64::MANTISSA_DIGITS,
+        &[
+            // 0.172 / 1.828 ULP
+            AccuracyCase {
+                input: 1.359_537_479_066_083_7_f64,
+                reference: (1.128_251_526_320_643_6, 3.824_062_359_236_039_5e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.011 / 2.011 ULP
+            AccuracyCase {
+                input: 1.622_138_832_544_816_5_f64,
+                reference: (1.121_703_762_355_825_3, 2.535_437_126_651_287e-18),
+                bound_ulp: 1.0,
+            },
+            // 0.047 / 42.953 ULP
+            AccuracyCase {
+                input: 7.09_f64,
+                reference: (1.000_000_000_000_009_5, -1.037_975_140_742_717_5e-17),
+                bound_ulp: 1.0,
+            },
+        ],
     );
 }
 
-/// `n` ULP of `f32`, as a relative bound: `f32::EPSILON` (`2^-23`) is
-/// exactly one ULP at magnitudes in `[1, 2)` and within a factor of 2 at any
-/// other normal magnitude — the standard "within `n` ULP" engineering
-/// bound.
-fn ulp_bound_f32(n_ulp: f64, reference: f64) -> f64 {
-    n_ulp * f64::from(f32::EPSILON) * reference.abs()
-}
-
-/// `n` ULP of `f64`, as a relative bound (`f64::EPSILON = 2^-52`).
-fn ulp_bound_f64(n_ulp: f64, reference: f64) -> f64 {
-    n_ulp * f64::EPSILON * reference.abs()
-}
-
-/// A logistic sigmoid built directly from `f64::exp` (`std`, not eunomia),
-/// used only to construct the independent references below — never the
-/// crate's own `stable_sigmoid`, so a bug shared between the two would not
-/// cancel out of the comparison.
-fn raw_sigmoid(x: f64) -> f64 {
-    1.0 / (1.0 + (-x).exp())
-}
-
-/// `x.max(0) + ln_1p(exp(-|x|))` via `std`'s own `f64::ln_1p` (a different
-/// implementation than eunomia's `libm`-crate-backed `FloatElement::ln_1p`),
-/// independent of the crate's `softplus_value`.
-fn raw_softplus(x: f64) -> f64 {
-    x.max(0.0) + (-x.abs()).exp().ln_1p()
-}
-
-/// ULP-bound shared by the four accuracy tests below (`SiluGrad`,
-/// `MishGrad`, `GeluTanhGrad`, `TanhGrad`), for both `f32` and `f64`.
-///
-/// A prior `12.0` bound was derived from a composed error-propagation model
-/// (transcendental-call count × assumed-2-ULP-per-call, plus arithmetic
-/// rounding) rather than from direct measurement, and it was too loose in
-/// practice: with the `f64` `MishGrad` reference of that round (itself
-/// coincidentally equal to ca3c28c's own defective output at `x = 19.04`),
-/// the `mishgrad_direct` mutant (reverting the `sp ≤ 2` region check to
-/// always take the direct form) measured only `10.000` ULP from that
-/// reference — under the `12.0` bound — and survived every test
-/// (`mutants.txt`). This bound is instead set from the two extremes
-/// actually measured by the judge harness (`jv3`, `pt32`/`pt64` modes,
-/// 2026-09-18) against the double-double/independent-formula references
-/// used by the tests below, now that every reference is genuinely
-/// independent of the implementation (see each test's doc comment for its
-/// own point-specific citation):
-/// - The largest error of this *correct* implementation, across all eight
-///   points (`SiluGrad`/`MishGrad`/`GeluTanhGrad`/`TanhGrad` × `f32`/`f64`):
-///   `0.987` ULP (`SiluGrad`, `f64`, `x = 36.73`).
-/// - The smallest error of ca3c28c's always-direct form at the same eight
-///   points — a direct stand-in for what an "always take the direct
-///   branch" mutation (`silugrad_direct`/`mishgrad_direct`/`gtg_direct` in
-///   `mutants.txt`) reproduces: `4.739` ULP (`MishGrad`, `f32`, `x = 9.01`).
-///
-/// `3.0` sits with margin on both sides — `3.04×` above the largest
-/// correct-implementation error, `1.58×` below the smallest defect — so it
-/// rejects every measured always-direct regression (the next smallest is
-/// `7.785` ULP) while comfortably admitting the correct implementation's
-/// worst measured case.
-const ACCURACY_N_ULP: f64 = 3.0;
-
-/// `SiluGradOp` computed `1 - sigmoid(x)` by direct subtraction, which loses
-/// precision once `sigmoid(x)` rounds close to `1`: ca3c28c gives exactly
-/// `1.0` at `x = 16.64` (f32) against the measured reference `1.00000093`
-/// (7.785 ULP of f32 — not `1.0000019`, an earlier draft's miscomputation;
-/// jv3 harness `pt32 SiluGrad 16.64`, 2026-09-18), and at `x = 36.73` (f64)
-/// gives `1.000000000000008` against the double-double reference
-/// `1.000000000000004` (18.013 ULP of f64; `pt64 SiluGrad 36.73`) — both
-/// cases because `sigmoid(x)` itself has rounded so close to `1` that
-/// `1 - sigmoid(x)` (or the surrounding sum) loses most of its significant
-/// bits. `stable_sigmoid(-x)` computes the identical quantity via
-/// `1 - sigmoid(x) = sigmoid(-x)`, never subtracting two nearly-equal
-/// numbers.
+/// Below its crossover `GeluTanhGradOp` multiplies `s` and `1 - s` into the
+/// product one factor at a time. Near the derivative's root (`x ≈ -0.7525`),
+/// where the two terms of the sum cancel, pre-grouping `s * (1 - s)` changes
+/// the result by hundreds of ULP of the (small) result; these cases kill that
+/// regrouping.
 #[test]
-fn silu_grad_matches_the_stable_one_minus_sigmoid_reference() {
-    // Independent reference (never calls `stable_sigmoid` or `SiluGradOp`):
-    // `SiluGrad(x) = sigmoid(x) * (1 + x * sigmoid(-x))`, built from
-    // `raw_sigmoid` alone — the textbook forward-difference form, not the
-    // crate's own code path, so a shared bug would not cancel out.
-    let x32 = f64::from(16.64_f32);
-    let reference_f32 = raw_sigmoid(x32) * (1.0 + x32 * raw_sigmoid(-x32));
-    let got_f32 = f64::from(SiluGradOp::apply(16.64_f32));
-    assert!(
-        (got_f32 - reference_f32).abs() <= ulp_bound_f32(ACCURACY_N_ULP, reference_f32),
-        "SiluGrad(16.64f32) = {got_f32}, reference {reference_f32}"
+fn gelu_tanh_grad_keeps_the_factor_by_factor_product_near_its_root() {
+    assert_accuracy_cases(
+        "GeluTanhGrad",
+        GeluTanhGradOp::apply,
+        f32::MANTISSA_DIGITS,
+        // 0.016 / 512.016 ULP
+        &[AccuracyCase {
+            input: -0.753_110_23_f32,
+            reference: (-2.790_838_475_258_729e-4, 8.615_294_917_626_665e-21),
+            bound_ulp: 1.0,
+        }],
     );
-
-    // The `raw_sigmoid`-built formula above happens to round to the exact
-    // same `f64` bit pattern as this implementation's own output at
-    // `x = 36.73` (confirmed via the jv3 harness `testrefs` mode: "f64
-    // SiluGrad test_ref bitwise == 12dcca1 output: true") — not because the
-    // formula is wrong, but because at this magnitude both routes compute
-    // the same mathematical expression through the same rounding, making it
-    // coincidentally non-independent as a check on *this* implementation.
-    // The double-double value below is genuinely independent (an
-    // error-free-transformation computation, not a second evaluation of the
-    // same `sigmoid`-based formula). Source: jv3 harness `dd.rs`
-    // `dd_silugrad`, mode `testrefs`, 2026-09-18: `dd=1.000000000000004e0`.
-    let x64 = 36.73_f64;
-    let reference_f64 = 1.000_000_000_000_004_f64;
-    let got_f64 = SiluGradOp::apply(x64);
-    assert!(
-        (got_f64 - reference_f64).abs() <= ulp_bound_f64(ACCURACY_N_ULP, reference_f64),
-        "SiluGrad(36.73f64) = {got_f64}, reference {reference_f64}"
+    assert_accuracy_cases(
+        "GeluTanhGrad",
+        GeluTanhGradOp::apply,
+        f64::MANTISSA_DIGITS,
+        // 0.004 / 256.004 ULP
+        &[AccuracyCase {
+            input: -0.753_678_829_444_234_f64,
+            reference: (-5.233_978_824_058_794e-4, 4.418_338_355_157_842e-22),
+            bound_ulp: 1.0,
+        }],
     );
 }
 
-/// `MishGradOp` computed `1 - t * t` by direct subtraction, which loses
-/// precision once `t = tanh(softplus(x))` rounds close to `1`: ca3c28c
-/// gives `1.0000011` at `x = 9.01` (f32) against the measured reference
-/// `1.00000051` (4.739 ULP of f32), and at `x = 19.04` (f64) gives
-/// `1.0000000000000042` against the double-double reference
-/// `1.0000000000000022` (9.322 ULP of f64; jv3 harness `pt32`/`pt64
-/// MishGrad`, 2026-09-18) — `t` itself has already rounded to bit-exact
-/// `1.0` there, so `1 - t*t` computes `1 - 1 = 0` and the whole correction
-/// term vanishes, leaving only the surrounding sum's own rounding.
-/// `sech²(sp) = 4u / (1+u)²`, `u = exp(-2·sp)` (the identity
-/// `1 - tanh(sp)² = sech²(sp)`) computes the identical quantity without
-/// subtracting from `1`.
+/// `MishGradOp` switches from `1 - t²` to `sech²(sp)` above `sp = 1.55`. The
+/// cases below the switch (`sp ≈ 1.03`/`1.11`) kill an always-`sech²` form
+/// and any threshold at or below them; the cases above it (`sp ≈ 1.96`/`1.97`) kill
+/// an always-direct form and any threshold at or above them; the tail
+/// cases are the original direct-form cancellation, where `t` has rounded to
+/// `1`.
 #[test]
-fn mish_grad_matches_the_stable_sech_squared_reference() {
-    // Independent reference: `MishGrad(x) = t + x*(1-t*t)*sigmoid(x)`,
-    // `t = tanh(raw_softplus(x))`, built from `raw_softplus`/`raw_sigmoid`
-    // and a direct `1 - t*t` — never `sech²` or the crate's own
-    // `softplus_value`/`stable_sigmoid`. At x = 9.01, `raw_softplus`'s own
-    // `ln(1+q)` (q = exp(-x) ~ 1e-4) is nowhere near its own cancellation
-    // point (that needs q below f64 epsilon, ~2e-16), so this naive form is
-    // itself accurate to full f64 precision here (confirmed: 0.000 ULP
-    // against the double-double reference, jv3 harness `testrefs` mode).
-    let x32 = f64::from(9.01_f32);
-    let t32 = raw_softplus(x32).tanh();
-    let reference_f32 = t32 + x32 * (1.0 - t32 * t32) * raw_sigmoid(x32);
-    let got_f32 = f64::from(MishGradOp::apply(9.01_f32));
-    assert!(
-        (got_f32 - reference_f32).abs() <= ulp_bound_f32(ACCURACY_N_ULP, reference_f32),
-        "MishGrad(9.01f32) = {got_f32}, reference {reference_f32}"
+fn mish_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
+    assert_accuracy_cases(
+        "MishGrad",
+        MishGradOp::apply,
+        f32::MANTISSA_DIGITS,
+        &[
+            // 0.003 / 2.003 ULP
+            AccuracyCase {
+                input: 0.589_513_8_f32,
+                reference: (9.261_161_090_871_325e-1, 2.060_666_313_517_767_4e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.447 / 1.553 ULP
+            AccuracyCase {
+                input: 1.810_998_3_f32,
+                reference: (1.079_494_768_014_944_7, 6.340_200_556_247_342e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.261 / 4.739 ULP
+            AccuracyCase {
+                input: 9.01_f32,
+                reference: (1.000_000_507_972_837_8, -1.054_899_121_256_476_9e-17),
+                bound_ulp: 1.0,
+            },
+        ],
     );
-
-    // At `x = 19.04`, that same `raw_softplus`/`raw_sigmoid`-built formula
-    // rounds to `1.0000000000000042` — bit-for-bit ca3c28c's own defective
-    // output (confirmed via jv3 harness `testrefs` mode) — because both
-    // routes compute the same `1 - t*t` expression once `t` has already
-    // saturated to `1.0`, making the formula coincidentally non-independent
-    // as a check on *this* implementation's region choice at this specific
-    // point. The double-double value below is genuinely independent (an
-    // error-free-transformation computation, not a second evaluation of
-    // `1 - t*t`). Source: jv3 harness `dd.rs` `dd_mishgrad`, mode
-    // `testrefs`, 2026-09-18: `dd=1.0000000000000022e0`.
-    let x64 = 19.04_f64;
-    let reference_f64 = 1.000_000_000_000_002_2_f64;
-    let got_f64 = MishGradOp::apply(x64);
-    assert!(
-        (got_f64 - reference_f64).abs() <= ulp_bound_f64(ACCURACY_N_ULP, reference_f64),
-        "MishGrad(19.04f64) = {got_f64}, reference {reference_f64}"
+    assert_accuracy_cases(
+        "MishGrad",
+        MishGradOp::apply,
+        f64::MANTISSA_DIGITS,
+        &[
+            // 0.016 / 2.016 ULP
+            AccuracyCase {
+                input: 0.707_785_371_182_024_1_f64,
+                reference: (9.715_328_789_566_628e-1, -1.785_604_082_853_674_5e-18),
+                bound_ulp: 1.0,
+            },
+            // 0.430 / 1.570 ULP
+            AccuracyCase {
+                input: 1.814_309_182_963_652_4_f64,
+                reference: (1.079_334_820_511_441_7, -9.549_391_746_980_466e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.678 / 9.322 ULP
+            AccuracyCase {
+                input: 19.04_f64,
+                reference: (1.000_000_000_000_002_2, -7.144_888_117_181_882e-17),
+                bound_ulp: 2.0,
+            },
+        ],
     );
 }
 
-/// Dedicated regression test for `mutants.txt`'s `mishgrad_direct` mutation
-/// (reverting the `sp ≤ 2` region check so `MishGradOp` always takes the
-/// direct `1 - t*t` form): at `x = 19.04` (f64), the reverted form
-/// reproduces ca3c28c's defect exactly (`1.0000000000000042`, 9.322 ULP
-/// from the double-double reference `1.0000000000000022` — jv3 harness
-/// `testrefs` mode, 2026-09-18), while the correct sech²-branch
-/// implementation matches the double-double reference to within 1 ULP
-/// (measured: 0.678 ULP). Pinned independently of
-/// `mish_grad_matches_the_stable_sech_squared_reference` (whose bound and
-/// reference could tighten or loosen independently) so this specific
-/// mutation always has a dedicated, unambiguous kill.
+/// `TanhGradOp` switches from `1 - y*y` to `(1 - y) * (1 + y)` above
+/// `|y| = 0.75`. The small-`|y|` cases kill an always-factored form; the
+/// cases just above `√½` (`0.7071`) kill any threshold at or below them,
+/// including the previous `½`; the cases near `0.875`/`0.9` kill an
+/// always-direct form and any threshold at or above them; the cases near
+/// `1` are the original direct-form cancellation. Where the two forms differ
+/// by exactly one ULP the bound is half an ULP: the selected form must be
+/// correctly rounded.
 #[test]
-fn mish_grad_rejects_the_always_direct_regression_at_the_cited_mutant_point() {
-    let x = 19.04_f64;
-    let dd_reference = 1.000_000_000_000_002_2_f64;
-    let always_direct_defect = 1.000_000_000_000_004_2_f64; // ca3c28c's output;
-    // what reverting `sp <= 2` to always-`true` (or deleting the branch)
-    // reproduces bit-for-bit.
-    let got = MishGradOp::apply(x);
-    assert!(
-        (got - dd_reference).abs() <= ulp_bound_f64(2.0, dd_reference),
-        "MishGrad(19.04f64) = {got} must be within 2 ULP of the double-double reference {dd_reference}"
+fn tanh_grad_selects_the_more_accurate_form_on_each_side_of_its_crossover() {
+    assert_accuracy_cases(
+        "TanhGrad",
+        TanhGradOp::apply,
+        f32::MANTISSA_DIGITS,
+        &[
+            // 0.500 / 1.500 ULP
+            AccuracyCase {
+                input: 0.003_625_303_7_f32,
+                reference: (9.999_868_571_727_95e-1, 4.157_915_331_481_909_5e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.000 / 1.000 ULP
+            AccuracyCase {
+                input: 0.500_000_06_f32,
+                reference: (7.499_999_403_953_517e-1, 0.0),
+                bound_ulp: 0.5,
+            },
+            // 0.015 / 1.015 ULP
+            AccuracyCase {
+                input: 0.707_112_13_f32,
+                reference: (4.999_924_306_528_918e-1, 0.0),
+                bound_ulp: 0.5,
+            },
+            // 0.000 / 2.000 ULP
+            AccuracyCase {
+                input: 0.874_999_9_f32,
+                reference: (2.343_752_086_162_425e-1, 0.0),
+                bound_ulp: 1.0,
+            },
+            // 0.299 / 989.299 ULP
+            AccuracyCase {
+                input: 0.99988_f32,
+                reference: (2.399_539_036_694_875_4e-4, 0.0),
+                bound_ulp: 1.0,
+            },
+        ],
     );
-    assert!(
-        (got - always_direct_defect).abs() > ulp_bound_f64(2.0, dd_reference),
-        "MishGrad(19.04f64) = {got} must not reproduce ca3c28c's always-direct defect {always_direct_defect}"
-    );
-}
-
-/// The *original* textbook tanh form of GeluTanhGrad's derivative,
-/// `0.5*(1 + tanh(z)) + 0.5*x*(1 - tanh(z)^2)*z'(x)` — not the
-/// sigmoid-rational rewrite (`s + k*s*(1-s)`) the implementation uses. A
-/// different transcendental (`tanh` vs `sigmoid`) and a different algebraic
-/// form entirely, so a shared bug in the rewrite cannot cancel out; valid
-/// wherever `z` is far from where this direct form's own `1 - tanh(z)^2`
-/// would itself cancel (moderate `x`, not the extreme tail).
-fn raw_gelu_tanh_grad(x: f64) -> f64 {
-    let c0 = 0.797_884_560_802_865_4_f64;
-    let c1 = 0.044715_f64;
-    let z = c0 * (x + c1 * x * x * x);
-    let tz = z.tanh();
-    let z_prime = c0 * (1.0 + 3.0 * c1 * x * x);
-    0.5 * (1.0 + tz) + 0.5 * x * (1.0 - tz * tz) * z_prime
-}
-
-/// `GeluTanhGradOp` computed `1 - s` by direct subtraction, which loses
-/// precision once `s = sigmoid(2z)` rounds close to `1`: ca3c28c gives `1.0`
-/// at `x = 4.96` (f32) against the measured reference 1.00000197 (16.5 ULP
-/// of f32), and at `x = 7.09` (f64) the same collapse to exactly `1.0`
-/// (44 ULP of f64). `stable_sigmoid(-2z)` computes the identical quantity
-/// via `1 - sigmoid(w) = sigmoid(-w)`, never subtracting from `1`.
-#[test]
-fn gelu_tanh_grad_matches_the_stable_one_minus_sigmoid_reference() {
-    let x32 = f64::from(4.96_f32);
-    let reference_f32 = raw_gelu_tanh_grad(x32);
-    let got_f32 = f64::from(GeluTanhGradOp::apply(4.96_f32));
-    assert!(
-        (got_f32 - reference_f32).abs() <= ulp_bound_f32(ACCURACY_N_ULP, reference_f32),
-        "GeluTanhGrad(4.96f32) = {got_f32}, reference {reference_f32}"
-    );
-
-    let x64 = 7.09_f64;
-    let reference_f64 = raw_gelu_tanh_grad(x64);
-    let got_f64 = GeluTanhGradOp::apply(x64);
-    assert!(
-        (got_f64 - reference_f64).abs() <= ulp_bound_f64(ACCURACY_N_ULP, reference_f64),
-        "GeluTanhGrad(7.09f64) = {got_f64}, reference {reference_f64}"
-    );
-}
-
-/// `GeluTanhGradOp`'s `[2, 8]` window worst case under the first
-/// region-selection fix (5a95eb8): applying `SiluGrad`'s analytically
-/// derived `1 - sqrt(EPSILON)` threshold to `GeluTanhGrad` kept `x =
-/// 3.3078976` on the direct-subtraction path (its `w = 2z ≈ 7.86` had not
-/// yet crossed that threshold), matching ca3c28c's own 9.41 ULP defect
-/// there — 6ea4acd's unconditional independent form achieves 1.60 ULP
-/// across the whole window, and the measured-crossover threshold (`w ≤ 2`)
-/// correctly routes this `w` to the independent form too. The threshold is
-/// no longer a named `GELU_TANH_GRAD_ONE_MINUS_S_THRESHOLD` constant set to
-/// `3.5`: the fix that resolved the `root ± 0.001` window regression
-/// restructured `GeluTanhGradOp` into two explicit branches matching each
-/// reference's own multiplication grouping (see the impl's doc comment), so
-/// the shared `w ≤ 2` value now appears as `GeluTanhGradOp::apply`'s own
-/// inline branch condition rather than a value shared by reference with
-/// `one_minus_sigmoid`. Fails against both ca3c28c and 5a95eb8 (9.41 ULP
-/// either way); passes against the measured-crossover fix.
-#[test]
-fn gelu_tanh_grad_matches_the_measured_crossover_at_the_window_worst_case() {
-    let x = 3.307_897_6_f32;
-    let reference = raw_gelu_tanh_grad(f64::from(x));
-    let got = f64::from(GeluTanhGradOp::apply(x));
-    assert!(
-        (got - reference).abs() <= ulp_bound_f32(2.0, reference),
-        "GeluTanhGrad(3.3078976f32) = {got}, reference {reference}"
-    );
-}
-
-/// `TanhGradOp` computed `1 - y * y`, which squares `y` before subtracting —
-/// doubling the rounding error already present in `y` once it rounds close
-/// to `1`. ca3c28c gives 2.399683e-4 at `y = 0.99988` (f32) against the
-/// measured reference 2.3995390e-4 — a defect of approximately 989 ULP of
-/// f32 (`|ca3c28c - reference| / ulp32(reference)`; jv3 harness `pt32
-/// TanhGrad 0.99988`, 2026-09-18: `989.299` ULP. An earlier draft of this
-/// comment miscomputed this gap as "~1.5 ULP" and separately misquoted the
-/// reference value itself as 2.44141e-4/2.44126e-4), and the same
-/// cancellation is far worse at `y = 1 - 6.7e-9` (f64, ~2.7e7 ULP of f64) —
-/// the closer `y` sits to `1`, the more severe. `(1 - y) * (1 + y)` keeps
-/// each factor's own rounding separate instead of compounding it in
-/// `y * y`.
-#[test]
-fn tanh_grad_matches_the_factored_difference_of_squares_reference() {
-    // Independent f32 reference: `1 - y*y` computed at `f64` precision from
-    // the promoted `y`, not via `(1-y)*(1+y)` — a different grouping of the
-    // same subtraction, accurate here because `y64*y64` is nowhere near `1`
-    // at `f64`'s much finer resolution (only the `f32` squaring cancels).
-    let y32 = 0.99988_f32;
-    let y64 = f64::from(y32);
-    let reference_f32 = 1.0 - y64 * y64;
-    let got_f32 = f64::from(TanhGradOp::apply(y32));
-    assert!(
-        (got_f32 - reference_f32).abs() <= ulp_bound_f32(ACCURACY_N_ULP, reference_f32),
-        "TanhGrad(0.99988f32) = {got_f32}, reference {reference_f32}"
-    );
-
-    // f64 reference: the judge harness's double-double (extended-precision)
-    // computation of `1 - y*y` at `y = 1 - 6.7e-9`, via an error-free
-    // transformation (`p = y*y` rounded, `e = y.mul_add(y, -p)` its exact
-    // rounding error, giving `1 - p - e` to double-double precision) —
-    // genuinely independent of both `(1-y)*(1+y)` and a plain `f64`
-    // subtraction, and far more precise than either at this magnitude
-    // (`~1.3e-8`, close enough to `1` that even `f64`'s own `y*y` loses
-    // meaningful bits). Source: jv2 harness `dd.rs`/`dd_tanhgrad`, mode
-    // `boundary`, `2026-09-18`: `dd=1.3399999953607947e-8`.
-    let y_f64 = 1.0 - 6.7e-9;
-    let reference_f64 = 1.339_999_995_360_794_7e-8_f64;
-    let got_f64 = TanhGradOp::apply(y_f64);
-    assert!(
-        (got_f64 - reference_f64).abs() <= ulp_bound_f64(ACCURACY_N_ULP, reference_f64),
-        "TanhGrad(1 - 6.7e-9, f64) = {got_f64}, reference {reference_f64}"
+    assert_accuracy_cases(
+        "TanhGrad",
+        TanhGradOp::apply,
+        f64::MANTISSA_DIGITS,
+        &[
+            // 0.433 / 1.433 ULP
+            AccuracyCase {
+                input: 0.005_575_415_809_682_238_f64,
+                reference: (9.999_689_147_385_491e-1, 4.808_746_349_255_426_6e-17),
+                bound_ulp: 1.0,
+            },
+            // 0.013 / 1.013 ULP
+            AccuracyCase {
+                input: 0.733_984_678_348_328_f64,
+                reference: (4.612_664_919_499_014_4e-1, -7.084_623_958_970_427e-19),
+                bound_ulp: 0.5,
+            },
+            // 0.000 / 2.000 ULP
+            AccuracyCase {
+                input: 0.899_806_573_745_678_2_f64,
+                reference: (1.903_481_298_440_634e-1, 2.693_694_929_135_220_4e-23),
+                bound_ulp: 1.0,
+            },
+            // 0.015 / 27134340.015 ULP
+            AccuracyCase {
+                input: 0.999_999_993_3_f64,
+                reference: (1.339_999_995_360_794_7e-8, -2.509_200_139_160_843_5e-26),
+                bound_ulp: 1.0,
+            },
+        ],
     );
 }
 
