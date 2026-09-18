@@ -10,12 +10,15 @@
 
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
+/// Leto-backed dense-product seam implementor.
+pub mod dense_product;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
 /// Leto-backed unfold/fold seam implementor.
 pub mod sliding_window;
 
 pub use decomposition::HostDecompositionOps;
+pub use dense_product::HostDenseProductOps;
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 
