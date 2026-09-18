@@ -10,6 +10,8 @@
 
 /// Leto-backed scaled dot-product attention seam implementor.
 pub mod attention;
+/// Leto-backed regular and transposed convolution seam implementor.
+pub mod convolution;
 /// Leto-backed mean cross-entropy seam implementor.
 pub mod cross_entropy;
 /// Leto as a decomposition-seam implementor.
@@ -35,6 +37,10 @@ pub mod stencil;
 pub mod volume;
 
 pub use attention::{HostAttentionBackward, HostAttentionForward, HostAttentionOps};
+pub use convolution::{
+    HostConvolutionBackward, HostConvolutionForward, HostConvolutionOps,
+    HostConvolutionTransposedBackward, HostConvolutionTransposedForward,
+};
 pub use cross_entropy::{HostCrossEntropyBackward, HostCrossEntropyForward, HostCrossEntropyOps};
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
