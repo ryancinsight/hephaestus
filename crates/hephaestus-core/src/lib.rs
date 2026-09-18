@@ -57,7 +57,7 @@ pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
 };
-pub use domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
+pub use domain::dialect::{CudaC, DialectScalar, HipC, Host, KernelDialect, Wgsl};
 pub use domain::elementwise::ElementwiseOps;
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
@@ -77,15 +77,15 @@ pub use domain::loss::{
     plan_cross_entropy_forward,
 };
 pub use domain::ops::{
-    AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, CeilOp,
-    CombineExpr, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ErfOp, ErfcOp,
-    Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp, GeluTanhGradOp,
-    GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp, IdentityOp,
-    IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp, MaxOp, MinOp, MishGradOp,
-    MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
-    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp, TanhGradOp, TanhOp,
-    TruncOp, TypedBinaryExpr, UnaryExpr,
+    AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, BinaryValue,
+    CeilOp, CombineExpr, CombineValue, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp,
+    EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp,
+    GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp,
+    HardswishOp, IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
+    MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
+    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
+    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp,
+    TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr, UnaryValue,
 };
 pub use domain::parameterized::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,

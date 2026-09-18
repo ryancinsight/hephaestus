@@ -8,6 +8,7 @@
 //! performance path — consumers wanting fast CPU execution use leto
 //! directly.
 
+mod combine;
 /// Leto-backed mean cross-entropy seam implementor.
 pub mod cross_entropy;
 /// Leto as a decomposition-seam implementor.
@@ -16,11 +17,18 @@ pub mod decomposition;
 pub mod dense_product;
 /// Leto-backed dense-vector seam implementor.
 pub mod dense_vector;
+/// Host implementor of the unary/binary elementwise seams (ADR 0061).
+pub mod elementwise;
 mod operands;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
 /// Leto-backed seeded random initialization seam implementor.
 pub mod random;
+/// Host implementor of the whole-operand and rank-2 axis reduction seams
+/// (ADR 0061).
+pub mod reduction;
+/// Host implementor of the rank-2 axis scan seam (ADR 0061).
+pub mod scan;
 /// Leto-backed unfold/fold seam implementor.
 pub mod sliding_window;
 /// Leto-backed sparse-operator and batch-submit seam implementor.
@@ -36,8 +44,16 @@ pub use cross_entropy::{HostCrossEntropyBackward, HostCrossEntropyForward, HostC
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
+pub use elementwise::{
+    HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
+};
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
 pub use random::HostRandomOps;
+pub use reduction::{
+    HostAxisReductionOps, HostFullReductionOps, HostPreparedAxisReduction,
+    HostPreparedFullReduction,
+};
+pub use scan::{HostPreparedScan, HostScanOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};
 pub use staggered::HostStaggeredOps;
