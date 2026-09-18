@@ -127,9 +127,10 @@ Three constraints decide the design:
    this division rule citing the WGSL specification (`back/hlsl/help.rs`,
    `back/msl/writer.rs`) and whose constant evaluator wraps i32/u32
    arithmetic citing the WGSL integer-types section; the rendering item
-   confirms it against the specification text. CUDA and HIP renderings of signed combines are
-   audited for reliance on signed overflow, which is undefined in C++; any
-   that rely on it are rewritten to compute in the unsigned type and convert
+   confirms it against the specification text. CUDA and HIP renderings of
+   signed combines are audited for reliance on signed overflow, which is
+   undefined in C++; any that rely on it are rewritten to compute in the
+   unsigned type and convert
    back.
 6. **The value function is the operator's definition.** Where a kernel
    rendering diverges from it beyond the rendering's derived tolerance, the
@@ -168,11 +169,11 @@ Three constraints decide the design:
    from eunomia: `asin`, `atan`, `acosh`, `asinh`, `atanh`, `exp2`, `expm1`,
    `log1p` and a ties-to-even `round_ties_even` on `FloatElement`, where
    eunomia's existing transcendental functions live (its `round` rounds half
-   away from zero); and `wrapping_add`, `wrapping_sub`, `wrapping_mul` and a
+   away from zero); and `wrapping_add`, `wrapping_sub`, `wrapping_mul` and an
    integer division returning the dividend on a zero divisor or `MIN / -1`
-   (floats keep IEEE division) on `NumericElement` (which has only `saturating_add`/`saturating_mul` and
-   `checked_add`/`checked_mul`, so a generic `lhs / rhs` panics in Rust on
-   those inputs). They are added there, per first-party supremacy, before the
+   (floats keep IEEE division) on `NumericElement`, which has only
+   `saturating_add`/`saturating_mul` and `checked_add`/`checked_mul`, so a
+   generic `lhs / rhs` panics in Rust on those inputs. They are added there, per first-party supremacy, before the
    operators that use them.
 
 ## Alternatives
