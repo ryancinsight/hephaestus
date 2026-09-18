@@ -89,8 +89,9 @@ pub use domain::ops::{
 };
 pub use domain::parameterized::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
-    LeakyReluGradOp, LeakyReluOp, ParameterizedUnaryExpr, ParameterizedUnaryOps, SoftshrinkGradOp,
-    SoftshrinkOp, ThresholdGradOp, ThresholdOp, validate_parameterized_output,
+    LeakyReluGradOp, LeakyReluOp, ParameterizedUnaryExpr, ParameterizedUnaryOps,
+    ParameterizedUnaryValue, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
+    validate_parameterized_output,
 };
 pub use domain::pooling::{
     PoolingBackwardOperands, PoolingForwardOperands, PoolingMode, PoolingOps, PoolingPlan,
@@ -112,7 +113,7 @@ pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
     RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
-    plan_stateful_update,
+    StatefulUpdateStep, plan_stateful_update,
 };
 pub use domain::stencil::StencilOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
