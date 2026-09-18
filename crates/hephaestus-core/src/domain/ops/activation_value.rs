@@ -36,34 +36,37 @@
 //!   saturated (`s · (1 − s) == 0`), the vanished second term is never
 //!   formed, so it cannot multiply that `0` by an overflowing `x²`.
 //! - [`SiluGradOp`], [`GeluTanhGradOp`] and [`MishGradOp`] each compute a
-//!   `1 − sigmoid(w)`-shaped companion (`1 − tanh(sp)²` for `MishGradOp`) by
-//!   picking the analytically cheaper path *by region* rather than always
-//!   taking the identity-based complement. Direct subtraction from `1` is
-//!   accurate wherever the subtrahend is not itself close to `1` (it reuses
-//!   the already-rounded value rather than introducing a second,
-//!   independently rounded transcendental evaluation); only where the
-//!   subtrahend rounds close to `1` does direct subtraction cancel, and
-//!   only there does the identity form (`sigmoid(−w)`, or the hyperbolic
-//!   `sech²(sp) = 4u/(1+u)²`, `u = exp(−2·sp)`) pay for its own rounding
-//!   cost. All three thresholds are measured against the judge harness
-//!   (`jv3`) rather than derived from a closed-form model: an earlier
-//!   `1 − sqrt(EPSILON)` rule (the standard "half the mantissa bits lost"
-//!   cancellation threshold) is contradicted by measurement wherever the
-//!   companion is multiplied by a growing coefficient (`x` for `SiluGrad`,
-//!   `x²` for `GeluTanhGrad`) that amplifies its rounding well before `sig`
-//!   alone nears `1` — e.g. `SiluGrad(17.91047708666123_f64)` gave 13.18
-//!   ULP under it. [`SiluGradOp`] and [`GeluTanhGradOp`] share one
-//!   threshold (the private `one_minus_sigmoid` helper, on `w`); a coarser
-//!   sign-based split regresses moderate `w` where direct was already safe
-//!   (`SiluGrad(1.2578312_f32)` from 0.98 to 3.02 ULP under
-//!   always-independent). [`MishGradOp`] thresholds the analogous `tanh`
-//!   argument `sp` rather than `t` itself — `t ≤ ½` looks equivalent but
-//!   is not, since `softplus(0) = ln 2` already pushes `t` past `½` at
-//!   `x = 0`, wrongly routing the near-`0` region (still direct's regime)
-//!   to the independent form. [`TanhGradOp`] picks between `1 − y·y` and
-//!   `(1 − y)(1 + y)` by `|y|`: direct is *more* accurate for `|y| ≤ ½`
-//!   (fewer compounded roundings), and the factored form is the one that
-//!   avoids catastrophic cancellation as `|y| → 1`.
+//!   `1 − sigmoid(w)`-shaped companion (`1 − tanh(sp)²` for `MishGradOp`),
+//!   and [`TanhGradOp`] computes `1 − y²`, choosing between two forms by
+//!   region. The direct form subtracts the already-rounded value from `1`
+//!   and is the more accurate one while that value is not close to `1`;
+//!   the independent form (`sigmoid(−w)`, the hyperbolic
+//!   `sech²(sp) = 4u/(1+u)²` with `u = exp(−2·sp)`, or the factored
+//!   `(1 − y)(1 + y)`) never subtracts from `1` but pays for its own
+//!   additional roundings. Each operator switches at its own measured
+//!   crossover — `SILU_GRAD_CROSSOVER`, `GELU_TANH_GRAD_CROSSOVER`,
+//!   `MISH_GRAD_CROSSOVER` and `TANH_GRAD_CROSSOVER` — not at a
+//!   closed-form cancellation bound: `1 − sqrt(EPSILON)` ("half the
+//!   significand lost") ignores the growing coefficient (`x` for `SiluGrad`,
+//!   `x²` for `GeluTanhGrad`) that multiplies the companion and amplifies
+//!   its rounding long before `sigmoid(w)` itself nears `1`.
+//!
+//! The crossover measurements share one method. The reference for an `f64`
+//! input is a double-double (about 106-bit) evaluation of the operator's
+//! defining formula; for an `f32` input it is that formula evaluated in
+//! `f64`, whose own rounding is about `2^-29` of an `f32` ULP per operation.
+//! The error of each form is its distance from that reference in units of
+//! the reference's own ULP. Every `f32` input of a window is evaluated
+//! (exhaustive), and each `f64` window is sampled with 2,000,000
+//! uniform inputs for each of five seeds. For every candidate threshold on a
+//! 0.01 grid (0.0025 for `TanhGrad`), the maximum error of the resulting
+//! selection is computed per window, and the threshold is placed where the
+//! windows around the switch attain their minimum while no window exceeds
+//! the smaller of the two single-form maxima. For `SiluGrad`, `GeluTanhGrad`
+//! and `MishGrad` the per-input profiles of the two forms interleave over a
+//! band near the crossover, so the maxima quoted on those constants are
+//! ties within that band rather than a sharp optimum; a difference of a few
+//! thousandths of an ULP between seeds is sampling spread.
 //!
 //! Every transcendental call is eunomia's own `FloatElement`/`RealField`
 //! method (ADR 0061 Decision 8); no formula below hand-rolls a function
@@ -115,44 +118,75 @@ fn is_infinite<T: RealField>(x: T) -> bool {
     !x.is_finite() && !x.is_nan()
 }
 
-/// Measured crossover for `1 - sigmoid(w)`, shared by [`SiluGradOp`] and
-/// [`GeluTanhGradOp`] (`w = x` and `w = 2z` respectively): direct
-/// subtraction from the already-computed `sig` matches or beats the
-/// independently rounded `stable_sigmoid(-w)` for `w` up to about `2`–`3`
-/// (both operators, both `f32` and `f64`, hold their combined `[0, 8]`
-/// window at its best achievable max — 1.83/1.99 ULP for `SiluGrad`,
-/// 1.76/1.72 ULP for `GeluTanhGrad` — anywhere in that plateau); direct
-/// degrades roughly linearly in `w` past it (`SiluGrad`'s own `[0, w]`
-/// direct-max grows from ~2 ULP at `w=2` to ~14 ULP at `w=30` in `f64`,
-/// independent of type — the error is `O(w · EPSILON)` absolute, i.e.
-/// `O(w)` ULP, since the amplifying multiplier is `w` itself in both
-/// operators' combining expressions). Measured by an exhaustive `f32`
-/// sweep and a 300k-sample random `f64` sweep against a double-double
-/// reference (judge harness `jv3`, `h/src/main.rs` `win32`/`win64`).
+/// Largest `x` for which [`SiluGradOp`] forms `1 − sigmoid(x)` by direct
+/// subtraction; above it, `stable_sigmoid(−x)`.
 ///
-/// This replaces two earlier, wrong thresholds: an analytically derived
-/// `1 - sqrt(EPSILON)` rule (correct only for the *unamplified* case —
-/// `SiluGrad` and `GeluTanhGrad` both multiply the companion by a growing
-/// `w`-scaled coefficient, so cancellation bites at a far smaller `w` than
-/// "half the mantissa bits of `sig`" predicts; contradicted by measurement,
-/// e.g. `SiluGrad(17.91047708666123_f64)` gave 13.18 ULP under it), and a
-/// `GeluTanhGrad`-only constant of `3.5` tuned against a narrower `[2, 8]`
-/// window that turned out to regress the adjacent `[0, 2]` window (`w` at
-/// `x = 2` is already `≈3.76`, past that threshold).
+/// Measured by the method in the module documentation. Per input, direct
+/// is the more accurate form for every `x` up to about `2.6` and the
+/// independent form for every `x` above about `2.8`; between the two the
+/// forms alternate. Thresholds from `2.50` to `2.61` keep every window at or
+/// below the smaller single-form maximum in all six sample sets (`f32` and
+/// five `f64` seeds); `2.6` lies inside that range. Window maxima, `f32` /
+/// largest `f64` seed, at the previous threshold `2` → at `2.6`: `[1.5, 2.5]`
+/// 1.885 / 1.902 → 1.678 / 1.721 ULP (always-direct: 1.678 / 1.721),
+/// `[1.9, 2.1]` 1.885 / 1.894 → 1.366 / 1.381, `[2, 8]` 1.885 / 1.894 →
+/// 1.871 / 1.894 (always-independent: 1.885 / 1.894); `[0, 2]` stays
+/// 2.085 / 2.051 and `[8, 30]` 1.710 / 1.717.
+const SILU_GRAD_CROSSOVER: f64 = 2.6;
+
+/// Largest `w = 2z` for which [`GeluTanhGradOp`] forms `1 − sigmoid(w)` by
+/// direct subtraction; above it, `stable_sigmoid(−w)`.
 ///
-/// A single shared constant is threshold `w ≤ 2` is not itself derived from
-/// a closed-form model (unlike the rejected `sqrt(EPSILON)` rule) — the
-/// amplification differs slightly between the two operators' combining
-/// expressions, but both plateau over the same `w ∈ [1.5, 3]` range, so one
-/// measured value in the middle of that shared plateau serves both.
-#[must_use]
-fn one_minus_sigmoid<T: RealField>(w: T, sig: T) -> T {
-    if w <= T::from_f64(2.0) {
-        <T as NumericElement>::ONE - sig
-    } else {
-        stable_sigmoid(-w)
-    }
-}
+/// Measured by the method in the module documentation. Per input, direct
+/// is the more accurate form for every `w` up to about `2.35` and the
+/// independent form for every `w` above about `2.5`; between the two the
+/// forms alternate. `2.43` is the only grid value within 0.01 ULP of the
+/// smaller single-form maximum in every window and sample set; its largest
+/// excess, 0.004 ULP in one `f64` seed of `[1, 1.4]`, is below that window's
+/// seed-to-seed spread (1.61 to 1.78 ULP). Window maxima, `f32` / largest
+/// `f64` seed, at the previous threshold `2` → at `2.43`: `[1, 1.4]` 1.852
+/// / 1.780 → 1.685 / 1.779 ULP, `[1.15, 1.25]` 1.742 / 1.771 → 1.338 /
+/// 1.460; `[1.2, 1.6]` stays 1.852 / 1.841, `[1.4, 2]` 1.795 / 1.831,
+/// `[0, 2]` 1.973 / 1.829 and `[2, 8]` 1.600 / 1.595.
+const GELU_TANH_GRAD_CROSSOVER: f64 = 2.43;
+
+/// Largest `sp = softplus(x)` for which [`MishGradOp`] forms `1 − tanh(sp)²`
+/// by direct subtraction; above it, `sech²(sp)`.
+///
+/// The switch is on `sp`, not on `t = tanh(sp)`: `softplus(0) = ln 2`, so
+/// `t` already exceeds `½` at `x = 0`, and every threshold on `sp` below
+/// about `0.71` routes the neighbourhood of `x = 0`, where direct is the
+/// more accurate form, to `sech²`.
+///
+/// Measured by the method in the module documentation. Per input, direct
+/// is the more accurate form for every `sp` up to about `1.51` and `sech²`
+/// for every `sp` above about `1.61`; between the two the forms alternate.
+/// Thresholds from `1.17` to `1.61` keep every window at or below the
+/// smaller single-form maximum in all six sample sets, and `1.49` to `1.60`
+/// additionally minimise the `[1, 1.6]` window; `1.55` lies at the centre.
+/// Window maxima, `f32` / largest `f64` seed, at the previous threshold `2`
+/// → at `1.55`: `[1.6, 2.1]` 1.553 / 1.559 → 1.190 / 1.194 ULP (always-sech²:
+/// 1.190 / 1.194), `[1.8, 1.9]` 1.553 / 1.594 → 1.120 / 1.152, `[1, 1.6]`
+/// 1.396 / 1.466 → 1.246 / 1.243; `[0.5, 1]` stays 1.528 / 1.480, `[0, 2]`
+/// 2.355 / 2.321 and `[2, 8]` 1.049 / 1.024.
+const MISH_GRAD_CROSSOVER: f64 = 1.55;
+
+/// Largest `|y|` for which [`TanhGradOp`] forms `1 − y²` directly; above it,
+/// `(1 − y)(1 + y)`.
+///
+/// Measured by the method in the module documentation. The two forms do
+/// not interleave: per input, direct has the smaller maximum error for
+/// every `|y|` up to `0.75` (at most 0.750 ULP below `√½` and 1.000 ULP
+/// from `√½` to `0.75`, where the factored form reaches 1.085), and the
+/// factored form for every `|y|` above `0.7525` (below 1.000 ULP up to
+/// `√¾`, where direct rises to 2.000). Thresholds from `0.75` to `0.865` keep
+/// every window at or below the smaller single-form maximum; `0.75` is the
+/// crossover itself. Window maxima, `f32` / largest `f64` seed, at the
+/// previous threshold `0.5` → at `0.75`: `[0.45, 0.55]` 1.000 / 1.000 →
+/// 0.750 / 0.750 ULP, `[0.6, 0.8]` 1.085 / 1.085 → 1.000 / 1.000,
+/// `[0.5, 1]` 1.085 / 1.085 → 1.035 / 1.033; `[0, 0.5]` stays 0.625 / 0.625
+/// and `[0.9, 1]` 1.015 / 1.016.
+const TANH_GRAD_CROSSOVER: f64 = 0.75;
 
 impl UnaryValue for ErfOp {
     fn apply<T: RealField>(x: T) -> T {
@@ -223,22 +257,19 @@ impl UnaryValue for TanhOp {
     }
 }
 
-/// Takes the forward output `y = tanh(x)` (ADR 0061 Decision 7). For
-/// `|y| ≤ ½`, `1 - y*y` is direct and safe (`y*y ≤ ¼`, nowhere near `1`);
-/// measured against the judge harness (`jv3`), it is *more* accurate there
-/// than the factored form (0.625 vs 1.5 ULP in `f64`) — squaring first and
-/// subtracting from `1` costs one rounding, while `(1-y)*(1+y)` costs two
-/// independent roundings (`1-y`, `1+y`) then a third (the product), and
-/// those three compound when neither factor is small. Past `|y| = ½`, `y*y`
-/// approaches `1` and direct subtraction starts cancelling — that is where
-/// `(1 - y)(1 + y)` (each factor computed once, without ever forming the
-/// near-`1` square) is unconditionally better, growing catastrophically
-/// worse than the factored form as `|y| → 1` (direct is off by millions of
-/// ULP at `|y| ≈ 1 - 1e-9` in `f64`; factored stays sub-ULP throughout).
+/// Takes the forward output `y = tanh(x)` (ADR 0061 Decision 7). For small
+/// `|y|`, `1 - y*y` rounds twice (the square, then the difference) while
+/// `(1 - y) * (1 + y)` rounds three times, and the direct form is the more
+/// accurate one (at most 0.625 ULP against the factored form's 1.5 for
+/// `|y| ≤ ½`). As `|y| → 1` the direct form subtracts a rounded square from
+/// a nearly equal `1` and loses the significand (0.99988 in `f32`: 989 ULP;
+/// `1 - 6.7e-9` in `f64`: about 2.7e7 ULP), while the factored form stays
+/// within about 1 ULP. The switch sits at the measured crossover
+/// `TANH_GRAD_CROSSOVER`.
 impl UnaryValue for TanhGradOp {
     fn apply<T: RealField>(y: T) -> T {
         let one = <T as NumericElement>::ONE;
-        if <T as NumericElement>::abs(y) <= T::from_f64(0.5) {
+        if <T as NumericElement>::abs(y) <= T::from_f64(TANH_GRAD_CROSSOVER) {
             one - y * y
         } else {
             (one - y) * (one + y)
@@ -344,27 +375,18 @@ impl UnaryValue for GeluTanhOp {
 /// `s = sigmoid(2z)` using `1 + tanh(z) = 2s` and
 /// `1 - tanh(z)² = 4s(1 - s)`, so the derivative
 /// `0.5·(1+tanh(z)) + 0.5·x·(1-tanh(z)²)·z'(x)` never forms `1 + tanh(z)`
-/// directly. `1 - s` is computed by the shared private `one_minus_sigmoid`
-/// helper's region rule (measured crossover on `w = 2z`, shared with
-/// [`SiluGradOp`]) rather than always taking the independently rounded
-/// complement.
+/// directly. `1 - s` is formed by direct subtraction for
+/// `w = 2z ≤` `GELU_TANH_GRAD_CROSSOVER` and as `sigmoid(-w)` above it.
 ///
-/// The two branches below duplicate the final combining expression instead
-/// of sharing one — deliberately: ca3c28c's direct form combines `s` and
-/// `1 - s` into the product one factor at a time
-/// (`two * x * s * (1 - s) * c0 * (…)`), while 6ea4acd's independent form
-/// pre-groups them into a `saturation = s * (1 - s)` value first
-/// (`two * x * saturation * c0 * (…)`) — mathematically identical
-/// reassociations, but *not* the same floating-point rounding sequence.
-/// Matching each reference's own grouping in its own region (rather than
-/// sharing one expression for both) was necessary to hold every judge
-/// harness (`jv3`) window at `min(ca3c28c, 6ea4acd)`: sharing either
-/// grouping across both regions left a small excess in whichever region did
-/// not originate that grouping (measured: the direct region needs
-/// ca3c28c's ungrouped form to match its `root ± 0.001` window exactly,
-/// 3.93 vs. an ungrouped-only 4.08 ULP; the independent region needs
-/// 6ea4acd's pre-grouped form to match its `[2, 8]` `f64` window exactly,
-/// 1.51 vs. an ungrouped-only 1.53 ULP).
+/// The two branches keep different multiplication orders on purpose. The
+/// direct branch multiplies `s` and `1 - s` into the product one factor at a
+/// time (`two * x * s * (1 - s) * c0 * (…)`); near the derivative's root
+/// (`x ≈ -0.7525`), where the sum cancels, pre-grouping `s * (1 - s)` there
+/// changes individual results by hundreds of ULP of the result (at
+/// `x = -0.75311023_f32`: 0.016 ULP in this order, 512 ULP pre-grouped,
+/// against the double-double reference). The independent branch
+/// pre-groups `saturation = s * sigmoid(-w)`, the order its measured window
+/// maxima on `GELU_TANH_GRAD_CROSSOVER` were taken with.
 impl UnaryValue for GeluTanhGradOp {
     fn apply<T: RealField>(x: T) -> T {
         if is_infinite(x) {
@@ -385,7 +407,7 @@ impl UnaryValue for GeluTanhGradOp {
         let one = <T as NumericElement>::ONE;
         let two = one + one;
         let three = two + one;
-        if w <= T::from_f64(2.0) {
+        if w <= T::from_f64(GELU_TANH_GRAD_CROSSOVER) {
             let one_minus_s = one - s;
             if s * one_minus_s == <T as NumericElement>::ZERO {
                 // `s` has saturated to exactly `0` or `1` — this includes
@@ -436,10 +458,8 @@ impl UnaryValue for SiluOp {
 
 /// Takes the input, matching the WGSL/CUDA rendering (not listed among the
 /// forward-output gradients of ADR 0061 Decision 7). `1 - sigmoid(x)` is
-/// computed by the private `one_minus_sigmoid` helper on the region rule
-/// (direct subtraction where `x ≤ 0` is already safe, `stable_sigmoid(-x)` only where `sig`
-/// rounds close to `1`) rather than always taking the independently rounded
-/// complement.
+/// formed by direct subtraction for `x ≤` `SILU_GRAD_CROSSOVER` and as
+/// `stable_sigmoid(-x)` above it.
 impl UnaryValue for SiluGradOp {
     fn apply<T: RealField>(x: T) -> T {
         if is_infinite(x) {
@@ -453,7 +473,11 @@ impl UnaryValue for SiluGradOp {
             };
         }
         let sig = stable_sigmoid(x);
-        let one_minus_sig = one_minus_sigmoid(x, sig);
+        let one_minus_sig = if x <= T::from_f64(SILU_GRAD_CROSSOVER) {
+            <T as NumericElement>::ONE - sig
+        } else {
+            stable_sigmoid(-x)
+        };
         sig * (<T as NumericElement>::ONE + x * one_minus_sig)
     }
 }
@@ -494,11 +518,10 @@ impl UnaryValue for MishOp {
 /// Takes the input, matching the WGSL/CUDA rendering (not listed among the
 /// forward-output gradients of ADR 0061 Decision 7). Reuses the same accurate
 /// `softplus_value` and `stable_sigmoid` building blocks as [`MishOp`].
-/// `1 - t²` is computed on a region rule (see the `apply` body): direct
-/// subtraction where `t ≤ ½` is already safe, and only past that the
-/// hyperbolic identity `sech²(sp) = 4u / (1 + u)²`, `u = exp(-2·sp)`
-/// (`1 - tanh(y)² = sech²(y)`), which loses relative precision of its own
-/// when `t` is small — never always one or the other.
+/// `1 - t²`, `t = tanh(sp)`, is formed by direct subtraction for
+/// `sp ≤` `MISH_GRAD_CROSSOVER` and above it as the hyperbolic identity
+/// `sech²(sp) = 4u / (1 + u)²`, `u = exp(-2·sp)`, which never subtracts from
+/// `1` but rounds more often than the direct form.
 impl UnaryValue for MishGradOp {
     fn apply<T: RealField>(x: T) -> T {
         if is_infinite(x) {
@@ -514,21 +537,7 @@ impl UnaryValue for MishGradOp {
         let sp = softplus_value(x);
         let t = sp.tanh();
         let one = <T as NumericElement>::ONE;
-        // Thresholded on `sp` (the `tanh` argument), not on `t` itself —
-        // mirroring [`one_minus_sigmoid`]'s threshold on `w` rather than on
-        // `sig`. A `t ≤ ½` split looks equivalent (both are monotonic in
-        // `x`) but is not: `softplus(0) = ln 2`, so `t = tanh(ln 2) ≈ 0.6`
-        // already exceeds `½` at `x = 0`, routing the entire non-negative
-        // half-line to the independent `sech²` form — including `x` near
-        // `0`, where `1 - t*t` is still direct's best regime (measured:
-        // `x = 0.03283152_f32` regressed under `t ≤ ½`, sech² there giving
-        // worse ULP than direct). `sp ≤ 2` keeps that near-`0` region on
-        // direct and switches only once `sp` itself has grown enough to
-        // amplify `1 - t*t`'s rounding the way `one_minus_sigmoid`'s `w`
-        // does for `SiluGrad`/`GeluTanhGrad` — measured against the judge
-        // harness (`jv3`) to hold every reported window at its
-        // `min(ca3c28c, 6ea4acd)` bound.
-        let one_minus_t_sq = if sp <= T::from_f64(2.0) {
+        let one_minus_t_sq = if sp <= T::from_f64(MISH_GRAD_CROSSOVER) {
             one - t * t
         } else {
             let two = one + one;
