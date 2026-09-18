@@ -70,8 +70,9 @@ where
         let output = prepared.operands.output;
         let input_cells = input.buffer.read();
         let mut output_cells = output.buffer.write();
-        let input_view = ArrayView::new(*input.layout, &input_cells);
-        let mut output_view = ArrayViewMut::new(*output.layout, &mut output_cells);
+        let input_view = ArrayView::try_new(*input.layout, &input_cells).map_err(map_leto_error)?;
+        let mut output_view =
+            ArrayViewMut::try_new(*output.layout, &mut output_cells).map_err(map_leto_error)?;
         leto_ops::pooling_forward_into(
             &input_view,
             prepared.parameters,
@@ -113,12 +114,15 @@ where
         let grad_input = prepared.operands.grad_input;
         let grad_output_cells = grad_output.buffer.read();
         let mut grad_input_cells = grad_input.buffer.write();
-        let grad_output_view = ArrayView::new(*grad_output.layout, &grad_output_cells);
-        let mut grad_input_view = ArrayViewMut::new(*grad_input.layout, &mut grad_input_cells);
+        let grad_output_view =
+            ArrayView::try_new(*grad_output.layout, &grad_output_cells).map_err(map_leto_error)?;
+        let mut grad_input_view = ArrayViewMut::try_new(*grad_input.layout, &mut grad_input_cells)
+            .map_err(map_leto_error)?;
         match prepared.operands.input {
             Some(input) => {
                 let input_cells = input.buffer.read();
-                let input_view = ArrayView::new(*input.layout, &input_cells);
+                let input_view =
+                    ArrayView::try_new(*input.layout, &input_cells).map_err(map_leto_error)?;
                 leto_ops::pooling_backward_accumulate(
                     &grad_output_view,
                     Some(&input_view),
