@@ -6,4 +6,6 @@ mod dense_product;
 mod dense_vector;
 mod random;
 mod sparse;
+mod stencil;
 mod transfer;
+mod volume;
