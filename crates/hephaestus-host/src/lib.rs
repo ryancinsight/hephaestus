@@ -135,7 +135,7 @@ impl HostDevice {
 
 pub(crate) fn map_leto_error<E: core::fmt::Display>(error: E) -> HephaestusError {
     HephaestusError::DispatchFailed {
-        message: format!("host window operation failed: {error}"),
+        message: format!("leto rejected the host operation: {error}"),
     }
 }
 

@@ -34,10 +34,13 @@ where
     ) -> Result<()> {
         require_disjoint_output(lhs.buffer, rhs.buffer, output.buffer)?;
         let mut out_cells = output.buffer.write();
-        let mut out_view = ArrayViewMut::<T, 2>::new(*output.layout, &mut out_cells);
+        let mut out_view = ArrayViewMut::<T, 2>::try_new(*output.layout, &mut out_cells)
+            .map_err(map_leto_error)?;
         with_operands(lhs.buffer, rhs.buffer, |lhs_cells, rhs_cells| {
-            let lhs_view = ArrayView::<T, 2>::new(*lhs.layout, lhs_cells);
-            let rhs_view = ArrayView::<T, 2>::new(*rhs.layout, rhs_cells);
+            let lhs_view =
+                ArrayView::<T, 2>::try_new(*lhs.layout, lhs_cells).map_err(map_leto_error)?;
+            let rhs_view =
+                ArrayView::<T, 2>::try_new(*rhs.layout, rhs_cells).map_err(map_leto_error)?;
             leto_ops::matmul(&lhs_view, &rhs_view, &mut out_view).map_err(map_leto_error)
         })
     }
@@ -51,10 +54,13 @@ where
     ) -> Result<()> {
         require_disjoint_output(lhs.buffer, rhs.buffer, output.buffer)?;
         let mut out_cells = output.buffer.write();
-        let mut out_view = ArrayViewMut::<T, 3>::new(*output.layout, &mut out_cells);
+        let mut out_view = ArrayViewMut::<T, 3>::try_new(*output.layout, &mut out_cells)
+            .map_err(map_leto_error)?;
         with_operands(lhs.buffer, rhs.buffer, |lhs_cells, rhs_cells| {
-            let lhs_view = ArrayView::<T, 3>::new(*lhs.layout, lhs_cells);
-            let rhs_view = ArrayView::<T, 3>::new(*rhs.layout, rhs_cells);
+            let lhs_view =
+                ArrayView::<T, 3>::try_new(*lhs.layout, lhs_cells).map_err(map_leto_error)?;
+            let rhs_view =
+                ArrayView::<T, 3>::try_new(*rhs.layout, rhs_cells).map_err(map_leto_error)?;
             leto_ops::batched_matmul(&lhs_view, &rhs_view, &mut out_view).map_err(map_leto_error)
         })
     }
@@ -71,15 +77,18 @@ where
         // shape with checked arithmetic and returns a dense `Array2`, which
         // is then assigned into the output view.
         let product: Array2<T> = with_operands(lhs.buffer, rhs.buffer, |lhs_cells, rhs_cells| {
-            let lhs_view = ArrayView::<T, 2>::new(*lhs.layout, lhs_cells);
-            let rhs_view = ArrayView::<T, 2>::new(*rhs.layout, rhs_cells);
+            let lhs_view =
+                ArrayView::<T, 2>::try_new(*lhs.layout, lhs_cells).map_err(map_leto_error)?;
+            let rhs_view =
+                ArrayView::<T, 2>::try_new(*rhs.layout, rhs_cells).map_err(map_leto_error)?;
             leto_ops::kron(&lhs_view, &rhs_view).map_err(map_leto_error)
         })?;
         // `try_assign` validates the destination shape against `product`
         // before writing any element, so a wrong-shaped `output` view is
         // rejected with no partial write (leto's `assign_into` contract).
         let mut out_cells = output.buffer.write();
-        let mut out_view = ArrayViewMut::<T, 2>::new(*output.layout, &mut out_cells);
+        let mut out_view = ArrayViewMut::<T, 2>::try_new(*output.layout, &mut out_cells)
+            .map_err(map_leto_error)?;
         out_view.try_assign(&product).map_err(map_leto_error)
     }
 }

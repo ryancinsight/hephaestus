@@ -104,7 +104,7 @@ fn norm_of<T: Pod + RealScalar, E: core::fmt::Display>(
 ) -> Result<T> {
     let cells = vector.read();
     let layout = Layout::c_contiguous([cells.len()]).map_err(map_leto_error)?;
-    norm(&ArrayView::new(layout, &cells)).map_err(map_leto_error)
+    norm(&ArrayView::try_new(layout, &cells).map_err(map_leto_error)?).map_err(map_leto_error)
 }
 
 impl<T> DenseVectorOps<HostDevice, T> for HostDenseVectorOps
