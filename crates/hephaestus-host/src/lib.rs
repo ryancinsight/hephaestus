@@ -23,6 +23,8 @@ mod operands;
 pub mod parameterized;
 /// Leto-backed pooling seam implementor.
 pub mod pooling;
+/// Leto-backed seeded random initialization seam implementor.
+pub mod random;
 /// Host implementor of the whole-operand and rank-2 axis reduction seams
 /// (ADR 0061).
 pub mod reduction;
@@ -34,6 +36,8 @@ pub mod sliding_window;
 pub mod sparse;
 /// Host implementor of the stateful parameter-update seam (ADR 0061).
 pub mod stateful_update;
+/// Volume ray line integrals over leto interpolation.
+pub mod volume;
 
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
@@ -43,6 +47,7 @@ pub use elementwise::{
 };
 pub use parameterized::HostParameterizedUnaryOps;
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
+pub use random::HostRandomOps;
 pub use reduction::{
     HostAxisReductionOps, HostFullReductionOps, HostPreparedAxisReduction,
     HostPreparedFullReduction,
@@ -51,6 +56,7 @@ pub use scan::{HostPreparedScan, HostScanOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};
 pub use stateful_update::HostStatefulUpdateOps;
+pub use volume::HostRayIntegralOps;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
