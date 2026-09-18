@@ -19,4 +19,4 @@ pub use parameters::{
     AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
 pub use plan::{StatefulUpdatePlan, plan_stateful_update};
-pub use rules::{AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule};
+pub use rules::{AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule, StatefulUpdateStep};
