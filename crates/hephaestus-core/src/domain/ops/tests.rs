@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::domain::dialect::{CudaC, HipC, Host, Wgsl};
+use eunomia::RealField;
 
 #[test]
 fn combine_and_identity_agree_per_dialect() {
@@ -203,4 +204,184 @@ fn a_host_combine_without_a_value_function_has_none() {
     }
     assert_eq!(<Opaque as CombineExpr<Host>>::value(1.0f32, 2.0), None);
     assert_eq!(<SumOp as CombineExpr<Wgsl>>::value(1.0f32, 2.0), None);
+}
+
+/// Integer `Add`/`Sub`/`Mul` wrap; `Div` returns the dividend on a zero
+/// divisor or `MIN / -1` (WGSL semantics, ADR 0061 Decision 5); float `Div`
+/// is IEEE.
+#[test]
+fn host_binary_value_functions_match_the_operator_definition() {
+    assert_eq!(
+        <AddOp as BinaryExpr<Host>>::value(i32::MAX, 1),
+        Some(i32::MIN)
+    );
+    assert_eq!(
+        <SubOp as BinaryExpr<Host>>::value(i32::MIN, 1),
+        Some(i32::MAX)
+    );
+    assert_eq!(
+        <MulOp as BinaryExpr<Host>>::value(u32::MAX, 2),
+        Some(u32::MAX - 1)
+    );
+    assert_eq!(<DivOp as BinaryExpr<Host>>::value(7i32, 0), Some(7));
+    assert_eq!(
+        <DivOp as BinaryExpr<Host>>::value(i32::MIN, -1),
+        Some(i32::MIN)
+    );
+    assert_eq!(<DivOp as BinaryExpr<Host>>::value(7.0f32, 2.0), Some(3.5));
+    assert_eq!(<AddOp as BinaryExpr<Host>>::EXPR, "host");
+}
+
+/// ADR 0061 Verification plan: `f32` `Add` reaches `apply` through the
+/// `apply_real` default (Add implements only `apply`), and `Pow` computes
+/// through `apply_real` while its `apply` (the `NumericElement`-generic path
+/// every integer scalar dispatches through) reports `None` for both `f32`
+/// and `i32` alike — the host's per-scalar dispatch (`hephaestus-host`) is
+/// what routes `f32` to `real_value` and `i32` to `value`.
+#[test]
+fn binary_dispatch_matches_the_adr_0061_verification_plan() {
+    assert_eq!(
+        <AddOp as BinaryExpr<Host>>::real_value(2.0f32, 3.0),
+        Some(5.0)
+    );
+    assert_eq!(<PowOp as BinaryExpr<Host>>::value::<f32>(2.0, 3.0), None);
+    assert_eq!(<PowOp as BinaryExpr<Host>>::value::<i32>(2, 3), None);
+    assert_eq!(
+        <PowOp as BinaryExpr<Host>>::real_value(2.0f32, 3.0),
+        Some(8.0)
+    );
+}
+
+/// Comparisons produce the type's `1`/`0` indicator, generic over every
+/// `NumericElement` scalar; NaN follows `PartialOrd`'s unordered contract.
+#[test]
+fn host_typed_binary_value_functions_produce_indicators() {
+    assert_eq!(
+        <EqOp as TypedBinaryExpr<Host, f32>>::value(1.0, 1.0),
+        Some(1.0)
+    );
+    assert_eq!(
+        <EqOp as TypedBinaryExpr<Host, f32>>::value(1.0, 2.0),
+        Some(0.0)
+    );
+    assert_eq!(
+        <NeOp as TypedBinaryExpr<Host, f32>>::value(f32::NAN, f32::NAN),
+        Some(1.0)
+    );
+    assert_eq!(
+        <LtOp as TypedBinaryExpr<Host, f32>>::value(f32::NAN, 1.0),
+        Some(0.0)
+    );
+    assert_eq!(<LtOp as TypedBinaryExpr<Host, i32>>::value(-5, 2), Some(1));
+    assert_eq!(<GeOp as TypedBinaryExpr<Host, u32>>::value(3, 3), Some(1));
+    assert_eq!(<EqOp as TypedBinaryExpr<Host, f32>>::EXPR, "host");
+}
+
+/// The value-function cancellation and rounding oracles ADR 0061 names,
+/// exercised once for every shipped real scalar (`f32`, `f64`) rather than
+/// per-type copies (standards: Generic Instantiation Coverage).
+///
+/// Tolerances are relative and derived from each function's own error
+/// budget: `expm1`/`log1p`/`erfc` are libm-backed to a few ULP, so `1e-3`
+/// relative is generous headroom above rounding noise while still catching a
+/// cancellation collapse to zero (a collapse fails by 100%, not by ULPs).
+fn assert_value_oracles_hold<T>()
+where
+    T: RealField + core::fmt::Debug,
+{
+    let tiny = T::from_f64(1e-10);
+    let relative = |got: T, reference: f64| (got.to_f64() - reference).abs() / reference.abs();
+
+    // exp(1e-10) - 1 would cancel to 0 at f32's ~1.2e-7 machine epsilon;
+    // exp_m1 keeps the full relative value.
+    assert!(
+        relative(<Expm1Op as UnaryValue>::apply(tiny), 1e-10) < 1e-3,
+        "expm1(1e-10) must retain relative precision"
+    );
+    // ln(1 + 1e-10) suffers the same cancellation; ln_1p does not.
+    assert!(
+        relative(<Log1pOp as UnaryValue>::apply(tiny), 1e-10) < 1e-3,
+        "log1p(1e-10) must retain relative precision"
+    );
+
+    // softplus(-20) = ln(1+exp(-20)); the naive rendering underflows
+    // ln(1+0) = 0 (ADR 0061 Decision 6), the value function must not.
+    assert!(
+        relative(
+            <SoftplusOp as UnaryValue>::apply(T::from_f64(-20.0)),
+            2.061_153_622e-9
+        ) < 1e-3,
+        "softplus(-20) must match the reference tail value"
+    );
+    // softplus(100) = 100 + a term far below 100's ULP; must not overflow
+    // exp(100) into the sum.
+    assert_eq!(
+        <SoftplusOp as UnaryValue>::apply(T::from_f64(100.0)),
+        T::from_f64(100.0),
+        "softplus(100) must equal 100 exactly"
+    );
+
+    // gelu(-10) is a tiny but normal float; a naive 1+erf(-10/sqrt2)
+    // cancellation would give exactly 0 (ADR 0061 Decision 6).
+    let gelu_neg10 = <GeluOp as UnaryValue>::apply(T::from_f64(-10.0));
+    assert!(
+        gelu_neg10 != T::ZERO && gelu_neg10 < T::ZERO,
+        "gelu(-10) must be a nonzero, negative-signed normal float, got {gelu_neg10:?}"
+    );
+
+    // silu(-89) sits in the WGSL rendering's measured underflow band
+    // [-91.86, -88.72] (ADR 0061 Decision 6); the value function must not
+    // reproduce it.
+    let silu_neg89 = <SiluOp as UnaryValue>::apply(T::from_f64(-89.0));
+    assert!(
+        silu_neg89 != T::ZERO,
+        "silu(-89) must not underflow to zero, got {silu_neg89:?}"
+    );
+
+    // RoundOp rounds ties to even, not away from zero.
+    assert_eq!(
+        <RoundOp as UnaryValue>::apply(T::from_f64(2.5)),
+        T::from_f64(2.0)
+    );
+    assert_eq!(
+        <RoundOp as UnaryValue>::apply(T::from_f64(3.5)),
+        T::from_f64(4.0)
+    );
+
+    // SignOp is 0 at +-0 and NaN, not eunomia's signed `signum`.
+    assert_eq!(<SignOp as UnaryValue>::apply(T::ZERO), T::ZERO);
+    assert_eq!(<SignOp as UnaryValue>::apply(-T::ZERO), T::ZERO);
+    assert_eq!(<SignOp as UnaryValue>::apply(T::NAN), T::ZERO);
+}
+
+#[test]
+fn value_oracles_hold_for_every_shipped_real_scalar() {
+    assert_value_oracles_hold::<f32>();
+    assert_value_oracles_hold::<f64>();
+}
+
+/// Integer `Div` edge cases and `Add`/`Mul` wraparound, generic over `i32`
+/// and `u32` (the seam's shipped signed/unsigned integers).
+#[test]
+fn integer_binary_edge_cases_hold_for_every_shipped_integer_scalar() {
+    assert_eq!(<DivOp as BinaryExpr<Host>>::value(5i32, 0), Some(5));
+    assert_eq!(
+        <DivOp as BinaryExpr<Host>>::value(i32::MIN, -1),
+        Some(i32::MIN)
+    );
+    assert_eq!(<DivOp as BinaryExpr<Host>>::value(5u32, 0), Some(5));
+    assert_eq!(<DivOp as BinaryExpr<Host>>::value(7i32, 2), Some(3));
+    assert_eq!(
+        <AddOp as BinaryExpr<Host>>::value(i32::MAX, 1),
+        Some(i32::MIN)
+    );
+    assert_eq!(<AddOp as BinaryExpr<Host>>::value(u32::MAX, 1), Some(0u32));
+    assert_eq!(
+        <MulOp as BinaryExpr<Host>>::value(i32::MAX, 2),
+        Some(i32::MAX.wrapping_mul(2))
+    );
+    assert_eq!(
+        <MulOp as BinaryExpr<Host>>::value(u32::MAX, 2),
+        Some(u32::MAX.wrapping_mul(2))
+    );
 }
