@@ -2,7 +2,7 @@
 
 use super::{CumProdOp, CumSumOp, MaxOp, MinOp, ProdOp, SumOp};
 use super::{IdentityToken, OpIdentity};
-use crate::domain::dialect::{CudaC, HipC, Wgsl};
+use crate::domain::dialect::{CudaC, DialectScalar, HipC, Host, Wgsl};
 
 // ── Identities ───────────────────────────────────────────────────────────
 // Host values are dialect-free; literal tokens differ per dialect (WGSL has
@@ -205,6 +205,12 @@ impl IdentityToken<CumProdOp, CudaC> for u32 {
 }
 impl IdentityToken<CumProdOp, CudaC> for i32 {
     const TOKEN: &'static str = "1";
+}
+
+/// The host renders no literals: any scalar with a host-side identity for
+/// `Op` has the fixed host token.
+impl<Op, T: OpIdentity<Op> + DialectScalar<Host>> IdentityToken<Op, Host> for T {
+    const TOKEN: &'static str = "host";
 }
 
 macro_rules! impl_hip_identity_tokens {
