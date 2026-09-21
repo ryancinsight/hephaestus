@@ -562,8 +562,12 @@ restore_gate_lock() {
 trap restore_gate_lock EXIT INT TERM
 
 # Formatting is workspace-wide and near-instant, and its failure is the
-# cheapest one to find here rather than on a runner.
-if ! (cd "$gate_cwd" && cargo fmt $gate_manifest -- --check >/dev/null); then
+# cheapest one to find here rather than on a runner. `--all` is required, not
+# stylistic: from a lane the gate runs elsewhere with `--manifest-path`, and
+# `cargo fmt` given a virtual workspace root without it reports "Failed to find
+# targets" and exits non-zero, so every lane push failed on a formatting error
+# that did not exist.
+if ! (cd "$gate_cwd" && cargo fmt --all $gate_manifest -- --check >/dev/null); then
   cat >&2 <<'MESSAGE'
 
 pre-push: `cargo fmt --check` fails, so the architecture validation would.
