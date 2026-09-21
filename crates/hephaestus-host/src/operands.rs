@@ -4,6 +4,8 @@
 //! two roles must take a single guard for both: a second guard on a lock the
 //! thread already holds is a deadlock or a panic, never an alias.
 
+use std::sync::RwLockReadGuard;
+
 use hephaestus_core::{HephaestusError, Result};
 
 use crate::HostBuffer;
@@ -45,4 +47,41 @@ pub(crate) fn with_operands<T, R>(
     }
     let rhs_cells = rhs.read();
     body(&lhs_cells, &rhs_cells)
+}
+
+/// Read an arbitrary number of read-only operand buffers, taking exactly one
+/// guard per distinct underlying allocation.
+///
+/// Attention and convolution admit read-operand lists (query/key/value/keep
+/// mask; input/weight/bias) with no restriction against the operands aliasing
+/// each other — only a writable destination is ever rejected for aliasing a
+/// read operand — so a dispatch naming one buffer under two or more roles
+/// (self-attention's `query == key == value`, for example) must still take
+/// exactly one guard for it, per [`with_operands`]'s reentrant-lock hazard.
+/// `body` receives one slice per entry of `buffers`, in the same order,
+/// backed by the deduplicated guards.
+pub(crate) fn with_operand_reads<T, R>(
+    buffers: &[&HostBuffer<T>],
+    body: impl FnOnce(&[&[T]]) -> R,
+) -> R {
+    let mut guards: Vec<RwLockReadGuard<'_, Vec<T>>> = Vec::with_capacity(buffers.len());
+    let mut owners: Vec<usize> = Vec::with_capacity(buffers.len());
+    for (index, buffer) in buffers.iter().enumerate() {
+        let owner = buffers[..index]
+            .iter()
+            .position(|other| other.aliases(buffer))
+            .map_or_else(
+                || {
+                    guards.push(buffer.read());
+                    guards.len() - 1
+                },
+                |previous| owners[previous],
+            );
+        owners.push(owner);
+    }
+    let slices: Vec<&[T]> = owners
+        .iter()
+        .map(|&owner| guards[owner].as_slice())
+        .collect();
+    body(&slices)
 }
