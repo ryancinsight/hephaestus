@@ -119,11 +119,10 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, 
 ///
 /// Panics with the violated clause's own located message when the backend does
 /// not satisfy the contract.
-// The twenty parameters are the seam set, not an accident of one call site: a
-// backend is conformant only when it supplies all of them. Named as a
-// signature it would be the same type twice over, and the alias would have to
-// repeat the parameter list to be usable.
-#[allow(clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
+)]
 pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>(
     backend: &BackendUnderTest<'_, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>,
 ) where
