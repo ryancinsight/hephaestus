@@ -13,127 +13,20 @@
 //! - unary expressions read `x`;
 //! - binary and combine expressions read `lhs` and `rhs`.
 
-use super::dialect::{DialectScalar, KernelDialect};
-use eunomia::{NumericElement, Pod, RealField};
-
-/// Element expression over the canonical unary operand `x` in dialect `L`.
-pub trait UnaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
-    /// Expression mapping `x` (e.g. `"exp(-x)"`).
-    const EXPR: &'static str;
-
-    /// The unary operator applied to a value, for a dialect that executes
-    /// operators instead of rendering them (ADR 0061).
-    ///
-    /// `None` unless the operator carries [`UnaryValue`]: the
-    /// [`Host`](crate::Host) blanket impl overrides this with
-    /// [`UnaryValue::apply`], and an operator implementing this trait for the
-    /// host without a value function reports `None`, which the host turns
-    /// into a typed error. A seam impl can call this under the
-    /// `Op: UnaryExpr<L>` bound it already receives. Real-valued only:
-    /// unary and parameterized operators are transcendental functions with no
-    /// integer definition (ADR 0061 Decision 2).
-    #[must_use]
-    fn value<T: RealField>(_x: T) -> Option<T> {
-        None
-    }
-}
-
-/// Element expression over the canonical operands `lhs`, `rhs` in dialect `L`.
-pub trait BinaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
-    /// Expression combining `lhs` and `rhs` (e.g. `"lhs + rhs"`).
-    const EXPR: &'static str;
-
-    /// The binary operator applied to two values, admitting every
-    /// [`NumericElement`] (ADR 0061 Decision 2 — arithmetic other than
-    /// [`PowOp`], which is real-only and defines only [`Self::real_value`]).
-    ///
-    /// `None` unless the operator carries [`BinaryValue`]; see
-    /// [`UnaryExpr::value`] for the host-dispatch mechanics this mirrors.
-    #[must_use]
-    fn value<T: NumericElement>(_lhs: T, _rhs: T) -> Option<T> {
-        None
-    }
-
-    /// The binary operator applied to two real values.
-    ///
-    /// Independently `None` by default (never derived from
-    /// [`Self::value`]): the [`Host`](crate::Host) blanket overrides both
-    /// methods from the two [`BinaryValue`] methods, so an operator such as
-    /// [`PowOp`] that defines only the real path leaves [`Self::value`]
-    /// reporting `None` for every scalar while this reports the computed
-    /// value for `f32`/`f64`.
-    #[must_use]
-    fn real_value<T: RealField>(_lhs: T, _rhs: T) -> Option<T> {
-        None
-    }
-}
-
-/// Scalar-aware binary expression over the canonical operands `lhs`, `rhs`.
-///
-/// This seam is required when the result expression depends on the scalar
-/// representation. Comparisons are the current example: WGSL and CUDA/HIP
-/// require different zero/one literal tokens for floating-point and integer
-/// masks. Arithmetic operations should use [`BinaryExpr`] when one expression
-/// is valid for every scalar supported by the operation.
-pub trait TypedBinaryExpr<L: KernelDialect, T: DialectScalar<L>>:
-    Copy + Send + Sync + 'static
-{
-    /// Expression combining `lhs` and `rhs` for scalar `T` in dialect `L`.
-    const EXPR: &'static str;
-
-    /// The typed comparison applied to two values (ADR 0061).
-    ///
-    /// `None` unless the operator carries [`TypedBinaryValue`]; see
-    /// [`UnaryExpr::value`] for the host-dispatch mechanics this mirrors.
-    #[must_use]
-    fn value(_lhs: T, _rhs: T) -> Option<T> {
-        None
-    }
-}
-
-/// Associative combine expression over `lhs`, `rhs` in dialect `L`, used by
-/// reductions and scans.
-pub trait CombineExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
-    /// Expression combining two partial results (e.g. `"max(lhs, rhs)"`).
-    const EXPR: &'static str;
-
-    /// The combine applied to two values, for a dialect that executes
-    /// operators instead of rendering them (ADR 0061).
-    ///
-    /// `None` unless the operator carries [`CombineValue`]: the
-    /// [`Host`](crate::Host) blanket impl overrides this with
-    /// [`CombineValue::combine`], and an operator implementing this trait for
-    /// the host without a value function reports `None`, which the host turns
-    /// into a typed error. A seam impl can call this under the
-    /// `Op: CombineExpr<L>` bound it already receives.
-    #[must_use]
-    fn value<T: NumericElement>(_lhs: T, _rhs: T) -> Option<T> {
-        None
-    }
-}
-
-/// Host-side identity element of op `Op` for this scalar (dialect-free).
-pub trait OpIdentity<Op>: Pod {
-    /// The identity value (e.g. `0` for sum, `T::MAX` for min).
-    const IDENTITY: Self;
-}
-
-/// Shader literal token of op `Op`'s identity for this scalar in dialect `L`.
-pub trait IdentityToken<Op, L: KernelDialect>: DialectScalar<L> {
-    /// The dialect literal (e.g. `"0.0"` in WGSL, `"0.0f"` in CUDA C++).
-    const TOKEN: &'static str;
-}
-
 mod activation;
 mod activation_value;
 mod binary;
 mod combine;
+mod expr;
 mod identity;
 mod unary;
 mod unary_value;
 
 #[cfg(test)]
 mod tests;
+
+pub use expr::{BinaryExpr, CombineExpr, TypedBinaryExpr, UnaryExpr};
+pub use identity::{IdentityToken, OpIdentity};
 
 pub use binary::{
     AddOp, BinaryValue, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp,
