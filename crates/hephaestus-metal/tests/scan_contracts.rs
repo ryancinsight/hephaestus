@@ -5,7 +5,7 @@
 //! this file only supplies the device and the backend's seam value.
 
 #![cfg(target_os = "macos")]
-use hephaestus_conformance::assert_scan_contract;
+use hephaestus_conformance::{assert_scan_contract, assert_scan_i32_leto_contract};
 use hephaestus_metal::{MetalDevice, MetalScanOps};
 
 #[test]
@@ -13,4 +13,5 @@ fn metal_satisfies_the_scan_contract() {
     let device =
         MetalDevice::try_default().expect("Metal scan conformance requires a physical device");
     assert_scan_contract(&device, &MetalScanOps::default());
+    assert_scan_i32_leto_contract(&device, &MetalScanOps::default());
 }

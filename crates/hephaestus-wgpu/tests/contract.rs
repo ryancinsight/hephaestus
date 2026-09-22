@@ -1762,42 +1762,6 @@ pub(super) fn cumprod_convenience_preserves_strided_and_empty_contract() {
     ));
 }
 
-pub(super) fn axis_scan_long_line_matches_leto_reference() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, cumsum_into};
-    use leto::Layout;
-
-    let cols = 513usize;
-    let host: Vec<i32> = (0..2 * cols)
-        .map(|index| i32::try_from(index).expect("test index fits i32") - 300)
-        .collect();
-    let input = device.upload(&host).unwrap();
-    let layout = Layout::c_contiguous([2, cols]).unwrap();
-    let output = device.alloc_zeroed::<i32>(host.len()).unwrap();
-    cumsum_into::<i32>(
-        &device,
-        StridedOperand {
-            buffer: &input,
-            layout: &layout,
-        },
-        1,
-        StridedOperand {
-            buffer: &output,
-            layout: &layout,
-        },
-        BlockWidth::DEFAULT,
-    )
-    .unwrap();
-
-    let leto_input = leto::Array::from_shape_vec([2, cols], host).unwrap();
-    let expected = leto_ops::cumsum(&leto_input.view(), 1).unwrap().into_vec();
-    let mut got = vec![0i32; expected.len()];
-    device.download(&output, &mut got).unwrap();
-    assert_eq!(got, expected);
-}
-
 pub(super) fn acquisition_reports_themis_topology_from_adapter() {
     let Some(device) = device_or_skip() else {
         return;
@@ -1943,7 +1907,7 @@ pub(super) fn linalg_batched_matmul_matches_cpu_reference() {
     assert_eq!(allocated_got, expected);
 }
 
-pub(super) fn linalg_kron_matches_leto_reference() {
+pub(super) fn linalg_allocating_kron_matches_the_into_path() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -1952,19 +1916,18 @@ pub(super) fn linalg_kron_matches_leto_reference() {
 
     let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
     let b_host = vec![7.0f32, 8.0, 9.0, 10.0];
-    let leto_a = leto::Array::from_shape_vec([2, 3], a_host.clone()).unwrap();
-    let leto_b = leto::Array::from_shape_vec([2, 2], b_host.clone()).unwrap();
-    let expected = leto_ops::kron(&leto_a.view(), &leto_b.view())
-        .unwrap()
-        .into_vec();
 
     let a = device.upload(&a_host).unwrap();
     let b = device.upload(&b_host).unwrap();
-    let out = device.alloc_zeroed::<f32>(expected.len()).unwrap();
     let a_layout = Layout::c_contiguous([2, 3]).unwrap();
     let b_layout = Layout::c_contiguous([2, 2]).unwrap();
     let out_layout = Layout::c_contiguous([4, 6]).unwrap();
 
+    // The seam (`kron_into`) owns the correctness contract — the shared
+    // conformance clause pins it exactly, on every backend. What is
+    // backend-specific here is the allocating wrapper: it must agree with
+    // the seam element-for-element rather than re-deriving anything.
+    let out = device.alloc_zeroed::<f32>(24).unwrap();
     kron_into(
         &device,
         StridedOperand {
@@ -1981,10 +1944,8 @@ pub(super) fn linalg_kron_matches_leto_reference() {
         },
     )
     .unwrap();
-
-    let mut got = vec![0.0f32; expected.len()];
-    device.download(&out, &mut got).unwrap();
-    assert_eq!(got, expected);
+    let mut into_got = vec![0.0f32; 24];
+    device.download(&out, &mut into_got).unwrap();
 
     let allocated = kron(
         &device,
@@ -1998,9 +1959,12 @@ pub(super) fn linalg_kron_matches_leto_reference() {
         },
     )
     .unwrap();
-    let mut allocated_got = vec![0.0f32; expected.len()];
-    device.download(&allocated, &mut allocated_got).unwrap();
-    assert_eq!(allocated_got, expected);
+    let mut alloc_got = vec![0.0f32; 24];
+    device.download(&allocated, &mut alloc_got).unwrap();
+    assert_eq!(
+        alloc_got, into_got,
+        "the allocating kron wrapper must match kron_into element-for-element"
+    );
 }
 
 pub(super) fn linalg_matpow_matches_leto_reference() {

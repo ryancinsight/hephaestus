@@ -173,4 +173,38 @@ where
         ],
         "{name}: exact Kronecker product"
     );
+
+    // Rectangular operands exercise the product-shape arithmetic the square
+    // fixture cannot: 2x3 ⊗ 2x2 = 4x6, every entry an integer product.
+    // This is the fixture the backends' per-operation leto-differential
+    // copies used to own (SUBSTRATE-003 fold).
+    let lhs = device
+        .upload(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("rectangular lhs upload");
+    let rhs = device
+        .upload(&[7.0f32, 8.0, 9.0, 10.0])
+        .expect("rectangular rhs upload");
+    let out = device.alloc_zeroed::<f32>(24).expect("rectangular alloc");
+    let two_by_three = Layout::c_contiguous([2, 3]).expect("2x3 layout");
+    let two = Layout::c_contiguous([2, 2]).expect("2x2 layout");
+    let four_by_six = Layout::c_contiguous([4, 6]).expect("4x6 layout");
+    ops.kron_into(
+        device,
+        StridedView::new(&lhs, &two_by_three),
+        StridedView::new(&rhs, &two),
+        StridedView::new(&out, &four_by_six),
+    )
+    .expect("rectangular kron dispatch");
+    let mut got = [0.0f32; 24];
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got,
+        [
+            7.0, 8.0, 14.0, 16.0, 21.0, 24.0, //
+            9.0, 10.0, 18.0, 20.0, 27.0, 30.0, //
+            28.0, 32.0, 35.0, 40.0, 42.0, 48.0, //
+            36.0, 40.0, 45.0, 50.0, 54.0, 60.0,
+        ],
+        "{name}: exact rectangular Kronecker product"
+    );
 }

@@ -4,7 +4,7 @@
 //! [`hephaestus_core::ComputeDevice`] and [`hephaestus_core::ScanOps`];
 //! this file only supplies the device and the backend's seam value.
 
-use hephaestus_conformance::assert_scan_contract;
+use hephaestus_conformance::{assert_scan_contract, assert_scan_i32_leto_contract};
 use hephaestus_wgpu::WgpuScanOps;
 
 pub(super) fn wgpu_satisfies_the_scan_contract() {
@@ -12,4 +12,5 @@ pub(super) fn wgpu_satisfies_the_scan_contract() {
         return;
     };
     assert_scan_contract(&device, &WgpuScanOps);
+    assert_scan_i32_leto_contract(&device, &WgpuScanOps);
 }

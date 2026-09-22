@@ -139,7 +139,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     N: ParameterizedUnaryOps<D>,
     T: RandomInitOps<D, f32>,
     O: RayIntegralOps<D>,
-    B: ScanOps<D, f32>,
+    B: ScanOps<D, f32> + ScanOps<D, i32>,
     S: SparseOperatorOps<D, f32>,
     H: BatchSubmitOps<D, f32>,
     L: Staggered3DOps<D>,
@@ -222,12 +222,14 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     CeluOp: ParameterizedUnaryExpr<<N as ParameterizedUnaryOps<D>>::Dialect>,
     CeluGradOp: ParameterizedUnaryExpr<<N as ParameterizedUnaryOps<D>>::Dialect>,
     // scan markers
-    CumSumOp: CombineExpr<<B as ScanOps<D, f32>>::Dialect>,
+    CumSumOp:
+        CombineExpr<<B as ScanOps<D, f32>>::Dialect> + CombineExpr<<B as ScanOps<D, i32>>::Dialect>,
     CumProdOp: CombineExpr<<B as ScanOps<D, f32>>::Dialect>,
     f32: OpIdentity<CumSumOp>
         + IdentityToken<CumSumOp, <B as ScanOps<D, f32>>::Dialect>
         + OpIdentity<CumProdOp>
         + IdentityToken<CumProdOp, <B as ScanOps<D, f32>>::Dialect>,
+    i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, <B as ScanOps<D, i32>>::Dialect>,
     // stateful-update markers
     Sgd: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = SgdParameters>,
     Adam: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamParameters>,
@@ -254,6 +256,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     crate::random_init::assert_random_init_contract(device, backend.random_init);
     crate::ray_integral::assert_ray_integral_contract(device, backend.ray_integral);
     crate::scan::assert_scan_contract(device, backend.scan);
+    crate::scan::assert_scan_i32_leto_contract(device, backend.scan);
     crate::sparse::assert_sparse_operator_contract(device, backend.sparse_operator);
     crate::sparse::assert_batch_submit_contract(device, backend.batch_submit);
     crate::staggered::assert_staggered_3d_contract(device, backend.staggered_3d);
