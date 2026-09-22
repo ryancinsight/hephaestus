@@ -2,14 +2,13 @@
 
 <a id="hephaestus-scan-leto-001"></a>
 
-## HEPHAESTUS-SCAN-LETO-001 — Share the Leto scan clause across scalar types — in-progress
+## HEPHAESTUS-SCAN-LETO-001 — Share the Leto scan clause across scalar types — review
 - Outcome: One scalar-generic long-line Leto differential validates every backend's scan path.
 - Scope: conformance clause, exports, composite caller, five backend scan tests and this item; no kernel changes.
 - Acceptance: Replace the type-specific helper with one generic clause, instantiate it for i32 and f32 on each backend, preserve signed inputs and exact Leto equality, and keep type_suffixed_fns at or below baseline.
 - Depends on: [Atlas pin reconciliation ATLAS-GITLINK-DRIFT-056](../../backlog.md#ATLAS-GITLINK-DRIFT-056).
 - Integrator: /root; regions: crates/hephaestus-conformance/src/scan.rs, src/lib.rs, src/assert_backend.rs, backend tests/scan_contracts.rs, backlog.md.
-- Lease: /root crates/hephaestus-conformance/src/scan.rs, crates/hephaestus-conformance/src/lib.rs, crates/hephaestus-conformance/src/assert_backend.rs, backend tests/scan_contracts.rs 2026-09-22T21:03:22Z.
-- Verification: strict Clippy, locked nextest/doc tests for affected packages, all available backend scan matrices, conformance scan.
+- Verification: fmt; host nextest 58/58; CUDA scan 1/1 on RTX 5080; WGPU contracts 8/8 with a required adapter; strict Clippy for conformance, host, CUDA, and WGPU; doctests; conformance reports zero regressions. Atlas overlay required unlocked local Cargo runs; standalone lock resolution remains covered by PR CI.
 - Last-update: 2026-09-22.
 
 <a id="heph-cuda-elementwise-scalar-declarations"></a>

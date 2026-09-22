@@ -1,7 +1,8 @@
 //! Contract clauses for device-neutral axis prefix/suffix scans.
 //!
-//! Each clause is generic over the device and the seam, so every backend runs
-//! the same assertions. The fixture is the 3x4 matrix with identical
+//! Each clause is generic over the device and the seam, and the Leto
+//! differential is generic over scalar, so every backend runs the same
+//! assertions. The fixture is the 3x4 matrix with identical
 //! `[1,2,3,2]` rows: every running sum stays below 24 and every running
 //! product below `12 < 2^24`, so all partials are exact in `f32`, scan order
 //! is fully determined by the direction, and every oracle is an exact
@@ -205,32 +206,33 @@ where
     );
 }
 
-/// Integer cumsum differential against Leto (ADR 0039 §3, SUBSTRATE-003).
+/// Compare a long scan with Leto's cumulative-sum reference.
 ///
-/// The fixture is the 2×513 line the backends' hand-written
-/// `axis_scan_long_line_matches_leto_reference` copies used to own: the
-/// length crosses every backend's default block width, forcing the
-/// multi-chunk combine path, and every value is an integer — a prefix sum
-/// is exact under any evaluation order, so the oracle is equality against
-/// Leto rather than an epsilon, and matching the CPU substrate pins
-/// provider identity, not merely correctness. One clause replaces the
-/// per-backend copies; each backend runs it by instantiation.
-pub fn assert_scan_i32_leto_contract<D, S>(device: &D, ops: &S)
+/// The 2×513 signed fixture crosses each backend's default block width and
+/// gives every chunk a nonzero carry. Its repeated values are small integers,
+/// so every prefix is exact for the instantiated scalar types and equality
+/// with Leto is the oracle. Each backend runs this same clause for every
+/// admitted scalar.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend disagrees with Leto.
+pub fn assert_scan_leto_contract<D, S, T>(device: &D, ops: &S)
 where
     D: ComputeDevice,
-    S: ScanOps<D, i32>,
+    S: ScanOps<D, T>,
+    T: leto_ops::Scalar + From<i8>,
     CumSumOp: CombineExpr<S::Dialect>,
-    i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, S::Dialect>,
+    T: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, S::Dialect>,
 {
     let name = device.backend_name();
     let cols = 513usize;
-    let host: Vec<i32> = (0..2 * cols)
-        .map(|index| i32::try_from(index).expect("test index fits i32") - 300)
+    let values = [1_i8, 1, 1, -1, -1];
+    let host: Vec<T> = (0..2 * cols)
+        .map(|index| T::from(values[(index % cols) % values.len()]))
         .collect();
     let source = device.upload(&host).expect("line upload");
-    let out = device
-        .alloc_zeroed::<i32>(host.len())
-        .expect("output alloc");
+    let out = device.alloc_zeroed::<T>(host.len()).expect("output alloc");
     let dense = Layout::c_contiguous([2, cols]).expect("line layout");
     ops.scan_axis_into::<CumSumOp, 2>(
         device,
@@ -239,16 +241,16 @@ where
         ScanDirection::Forward,
         StridedView::new(&out, &dense),
     )
-    .expect("i32 cumsum dispatch");
+    .expect("cumulative-sum dispatch");
 
     let leto_line = leto::Array::from_shape_vec([2, cols], host).expect("leto line");
     let expected = leto_ops::cumsum(&leto_line.view(), 1)
         .expect("leto cumsum")
         .into_vec();
-    let mut got = vec![0i32; expected.len()];
+    let mut got = vec![T::from(0_i8); expected.len()];
     device.download(&out, &mut got).expect("download");
     assert_eq!(
         got, expected,
-        "{name}: i32 cumsum must match Leto's sequential reference exactly"
+        "{name}: cumulative sum must match Leto's reference exactly"
     );
 }

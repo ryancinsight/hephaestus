@@ -256,7 +256,8 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     crate::random_init::assert_random_init_contract(device, backend.random_init);
     crate::ray_integral::assert_ray_integral_contract(device, backend.ray_integral);
     crate::scan::assert_scan_contract(device, backend.scan);
-    crate::scan::assert_scan_i32_leto_contract(device, backend.scan);
+    crate::scan::assert_scan_leto_contract::<_, _, i32>(device, backend.scan);
+    crate::scan::assert_scan_leto_contract::<_, _, f32>(device, backend.scan);
     crate::sparse::assert_sparse_operator_contract(device, backend.sparse_operator);
     crate::sparse::assert_batch_submit_contract(device, backend.batch_submit);
     crate::staggered::assert_staggered_3d_contract(device, backend.staggered_3d);
