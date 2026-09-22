@@ -90,7 +90,7 @@ pub use full_reduction::assert_full_reduction_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
-pub use scan::{assert_scan_contract, assert_scan_i32_leto_contract};
+pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;
 pub use stateful_update::assert_stateful_update_contract;

@@ -3,7 +3,7 @@
 //! 2, the `CombineExpr<Host>::value` `None` path (ADR 0061), and integer
 //! wraparound.
 
-use hephaestus_conformance::{assert_scan_contract, assert_scan_i32_leto_contract};
+use hephaestus_conformance::{assert_scan_contract, assert_scan_leto_contract};
 use hephaestus_core::{
     CombineExpr, ComputeDevice, CumProdOp, CumSumOp, HephaestusError, Host, OpIdentity,
     ScanDirection, ScanOps, StridedView,
@@ -14,7 +14,8 @@ use leto::Layout;
 #[test]
 fn host_satisfies_the_scan_contract() {
     assert_scan_contract(&HostDevice::new(), &HostScanOps);
-    assert_scan_i32_leto_contract(&HostDevice::new(), &HostScanOps);
+    assert_scan_leto_contract::<_, _, i32>(&HostDevice::new(), &HostScanOps);
+    assert_scan_leto_contract::<_, _, f32>(&HostDevice::new(), &HostScanOps);
 }
 
 /// A combine marker that implements the source trait for `Host` directly,

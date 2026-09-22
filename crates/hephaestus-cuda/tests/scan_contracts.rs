@@ -5,7 +5,7 @@
 //! this file only supplies the device and the backend's seam value.
 
 #![cfg(feature = "cuda")]
-use hephaestus_conformance::{assert_scan_contract, assert_scan_i32_leto_contract};
+use hephaestus_conformance::{assert_scan_contract, assert_scan_leto_contract};
 use hephaestus_cuda::{CudaDevice, CudaScanOps};
 
 #[test]
@@ -19,5 +19,6 @@ fn cuda_satisfies_the_scan_contract() {
         Err(error) => panic!("CUDA scan conformance requires a physical device: {error}"),
     };
     assert_scan_contract(&device, &CudaScanOps::default());
-    assert_scan_i32_leto_contract(&device, &CudaScanOps::default());
+    assert_scan_leto_contract::<_, _, i32>(&device, &CudaScanOps::default());
+    assert_scan_leto_contract::<_, _, f32>(&device, &CudaScanOps::default());
 }
