@@ -1,8 +1,20 @@
 //! Identity elements of the combine markers, host-side and per dialect.
 
 use super::{CumProdOp, CumSumOp, MaxOp, MinOp, ProdOp, SumOp};
-use super::{IdentityToken, OpIdentity};
-use crate::domain::dialect::{CudaC, DialectScalar, HipC, Host, Wgsl};
+use crate::domain::dialect::{CudaC, DialectScalar, HipC, Host, KernelDialect, Wgsl};
+use eunomia::Pod;
+
+/// Host-side identity element of op `Op` for this scalar (dialect-free).
+pub trait OpIdentity<Op>: Pod {
+    /// The identity value (e.g. `0` for sum, `T::MAX` for min).
+    const IDENTITY: Self;
+}
+
+/// Shader literal token of op `Op`'s identity for this scalar in dialect `L`.
+pub trait IdentityToken<Op, L: KernelDialect>: DialectScalar<L> {
+    /// The dialect literal (e.g. `"0.0"` in WGSL, `"0.0f"` in CUDA C++).
+    const TOKEN: &'static str;
+}
 
 // ── Identities ───────────────────────────────────────────────────────────
 // Host values are dialect-free; literal tokens differ per dialect (WGSL has
