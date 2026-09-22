@@ -204,3 +204,51 @@ where
         "{name}: prepared scan must observe writes to its bound operands"
     );
 }
+
+/// Integer cumsum differential against Leto (ADR 0039 §3, SUBSTRATE-003).
+///
+/// The fixture is the 2×513 line the backends' hand-written
+/// `axis_scan_long_line_matches_leto_reference` copies used to own: the
+/// length crosses every backend's default block width, forcing the
+/// multi-chunk combine path, and every value is an integer — a prefix sum
+/// is exact under any evaluation order, so the oracle is equality against
+/// Leto rather than an epsilon, and matching the CPU substrate pins
+/// provider identity, not merely correctness. One clause replaces the
+/// per-backend copies; each backend runs it by instantiation.
+pub fn assert_scan_i32_leto_contract<D, S>(device: &D, ops: &S)
+where
+    D: ComputeDevice,
+    S: ScanOps<D, i32>,
+    CumSumOp: CombineExpr<S::Dialect>,
+    i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, S::Dialect>,
+{
+    let name = device.backend_name();
+    let cols = 513usize;
+    let host: Vec<i32> = (0..2 * cols)
+        .map(|index| i32::try_from(index).expect("test index fits i32") - 300)
+        .collect();
+    let source = device.upload(&host).expect("line upload");
+    let out = device
+        .alloc_zeroed::<i32>(host.len())
+        .expect("output alloc");
+    let dense = Layout::c_contiguous([2, cols]).expect("line layout");
+    ops.scan_axis_into::<CumSumOp, 2>(
+        device,
+        StridedView::new(&source, &dense),
+        1,
+        ScanDirection::Forward,
+        StridedView::new(&out, &dense),
+    )
+    .expect("i32 cumsum dispatch");
+
+    let leto_line = leto::Array::from_shape_vec([2, cols], host).expect("leto line");
+    let expected = leto_ops::cumsum(&leto_line.view(), 1)
+        .expect("leto cumsum")
+        .into_vec();
+    let mut got = vec![0i32; expected.len()];
+    device.download(&out, &mut got).expect("download");
+    assert_eq!(
+        got, expected,
+        "{name}: i32 cumsum must match Leto's sequential reference exactly"
+    );
+}

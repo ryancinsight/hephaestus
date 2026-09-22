@@ -5,7 +5,7 @@
 //! this file only supplies the device and the backend's seam value.
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
-use hephaestus_conformance::assert_scan_contract;
+use hephaestus_conformance::{assert_scan_contract, assert_scan_i32_leto_contract};
 use hephaestus_rocm::{RocmDevice, RocmScanOps};
 
 #[test]
@@ -19,4 +19,5 @@ fn rocm_satisfies_the_scan_contract() {
         Err(error) => panic!("ROCm scan conformance requires a physical device: {error}"),
     };
     assert_scan_contract(&device, &RocmScanOps::default());
+    assert_scan_i32_leto_contract(&device, &RocmScanOps::default());
 }
