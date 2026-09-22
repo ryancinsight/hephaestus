@@ -9,8 +9,9 @@ use crate::HostBuffer;
 use crate::operands::require_disjoint_output;
 
 /// A binary dispatch bound to its operand/output views and a resolved value
-/// function. Shared by [`ElementwiseOps::PreparedBinary`] and
-/// [`ElementwiseOps::PreparedTypedBinary`]: both prepare an identical shape
+/// function. Shared by [`hephaestus_core::ElementwiseOps::PreparedBinary`]
+/// and [`hephaestus_core::ElementwiseOps::PreparedTypedBinary`]: both prepare
+/// an identical shape
 /// (two broadcast operand layouts, one output, one resolved
 /// `fn(T, T) -> Option<T>`) and differ only in which source trait resolved
 /// that function.
