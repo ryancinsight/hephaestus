@@ -2,6 +2,7 @@
 //! a shared conformance clause, or pins a host-specific case, for one seam.
 
 mod attention;
+mod backend;
 mod convolution;
 mod cross_entropy;
 mod decomposition;
