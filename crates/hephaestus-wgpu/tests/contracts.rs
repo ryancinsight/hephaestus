@@ -379,13 +379,17 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 127;
+const EXPECTED_CONTRACT_CASES: usize = 126;
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 186;
+const EXPECTED_CONTRACT_CASES: usize = 185;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 139;
+const EXPECTED_CONTRACT_CASES: usize = 138;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 188;
+// One below the pre-fold counts: `axis_scan_long_line_matches_leto_reference`
+// was removed unconditionally when it became the shared
+// `assert_scan_i32_leto_contract` clause (instantiated from scan_contracts.rs),
+// so every feature combination loses exactly that one registration.
+const EXPECTED_CONTRACT_CASES: usize = 187;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {
