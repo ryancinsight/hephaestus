@@ -52,8 +52,13 @@ fi
 
 python_bin="${PYTHON:-}"
 if [ -z "$python_bin" ]; then
+  # Probe the candidate, not just its presence on PATH: the WindowsApps
+  # python3.exe Store stub passes `command -v` and then fails to execute
+  # (rc 127), which aborts every commit. Same repair as the stack root and
+  # the owned pre-push gate.
   for candidate in python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1; then
+    if command -v "$candidate" >/dev/null 2>&1 \
+       && "$candidate" -c 'import sys' >/dev/null 2>&1; then
       python_bin="$candidate"
       break
     fi
