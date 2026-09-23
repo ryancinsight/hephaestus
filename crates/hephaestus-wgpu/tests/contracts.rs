@@ -387,7 +387,7 @@ const EXPECTED_CONTRACT_CASES: usize = 138;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: `axis_scan_long_line_matches_leto_reference`
 // was removed unconditionally when it became the shared
-// `assert_scan_i32_leto_contract` clause (instantiated from scan_contracts.rs),
+// `assert_scan_int_leto_contract` clause (instantiated from scan_contracts.rs),
 // so every feature combination loses exactly that one registration.
 const EXPECTED_CONTRACT_CASES: usize = 187;
 

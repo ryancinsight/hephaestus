@@ -215,7 +215,7 @@ where
 /// Leto rather than an epsilon, and matching the CPU substrate pins
 /// provider identity, not merely correctness. One clause replaces the
 /// per-backend copies; each backend runs it by instantiation.
-pub fn assert_scan_i32_leto_contract<D, S>(device: &D, ops: &S)
+pub fn assert_scan_int_leto_contract<D, S>(device: &D, ops: &S)
 where
     D: ComputeDevice,
     S: ScanOps<D, i32>,
