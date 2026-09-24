@@ -37,6 +37,7 @@ pub struct StridedMeta {
 }
 
 /// Convert a [`leto::LetoError`] to a [`HephaestusError`] dispatch failure.
+#[must_use]
 #[inline]
 pub fn map_layout_err(e: leto::LetoError) -> HephaestusError {
     HephaestusError::DispatchFailed {
@@ -123,8 +124,8 @@ mod tests {
         let padded = pad_shape(shape).expect("valid shape");
         assert_eq!(padded[6], 3);
         assert_eq!(padded[7], 4);
-        for i in 0..6 {
-            assert_eq!(padded[i], 1);
+        for value in &padded[..6] {
+            assert_eq!(*value, 1);
         }
     }
 
@@ -134,8 +135,8 @@ mod tests {
         let padded = pad_strides(strides).expect("valid strides");
         assert_eq!(padded[6], 4);
         assert_eq!(padded[7], 1);
-        for i in 0..6 {
-            assert_eq!(padded[i], 0);
+        for value in &padded[..6] {
+            assert_eq!(*value, 0);
         }
     }
 

@@ -1,8 +1,8 @@
 //! Packed HIP metadata and checked layout conversion.
 
 use crate::application::strided::StridedOperand;
-use eunomia::{Pod, Zeroable};
-use hephaestus_core::{DeviceBuffer, HephaestusError, Result, MAX_STRIDED_RANK, to_u32};
+use eunomia::Pod;
+use hephaestus_core::{DeviceBuffer, HephaestusError, MAX_STRIDED_RANK, Result, to_u32};
 
 pub use hephaestus_core::StridedMeta;
 
@@ -15,9 +15,7 @@ pub(crate) fn strided_meta_new<const N: usize>(
     output: &leto::Layout<N>,
     len: usize,
 ) -> Result<StridedMeta> {
-    let offset = |value| {
-        to_u32(value, "layout offset")
-    };
+    let offset = |value| to_u32(value, "layout offset");
     Ok(StridedMeta {
         shape: pad_shape(output.shape())?,
         a_strides: pad_strides(first.strides())?,
@@ -196,8 +194,3 @@ where
 {
     unary_like_strided_meta(input, output)
 }
-
-
-
-
-

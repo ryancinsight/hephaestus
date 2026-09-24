@@ -14,8 +14,8 @@ use leto::Layout;
 pub(crate) mod kernel;
 pub(crate) mod metadata;
 
+pub use hephaestus_core::MAX_STRIDED_RANK;
 use kernel::{binary_shader, scalar_shader, unary_shader};
-pub use metadata::MAX_STRIDED_RANK;
 use metadata::{
     StridedMeta, binary_strided_meta, map_layout_err, scalar_strided_meta, unary_strided_meta,
 };

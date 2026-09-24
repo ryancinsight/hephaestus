@@ -11,9 +11,10 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::buffer::CudaBuffer;
 
-pub use hephaestus_core::{MAX_STRIDED_RANK, StridedMeta, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides, pad_usize_strides_dyn};
-
-
+pub use hephaestus_core::{
+    MAX_STRIDED_RANK, StridedMeta, map_layout_err, pad_shape, pad_shape_dyn, pad_strides,
+    pad_usize_strides_dyn, to_u32,
+};
 
 /// A device buffer paired with the leto layout describing its logical view.
 ///
@@ -46,7 +47,6 @@ pub struct StridedOperandDyn<'a, T> {
     /// The logical layout over that buffer.
     pub layout: StridedLayout<'a>,
 }
-
 
 pub(crate) const CUDA_META: &str = r#"
 struct Meta {
@@ -980,10 +980,3 @@ where
     )?;
     Ok(out)
 }
-
-
-
-
-
-
-

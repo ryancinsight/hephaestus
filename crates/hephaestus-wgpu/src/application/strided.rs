@@ -27,8 +27,9 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-pub use hephaestus_core::{MAX_STRIDED_RANK, StridedMeta, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides};
-
+pub use hephaestus_core::{
+    MAX_STRIDED_RANK, StridedMeta, map_layout_err, pad_shape, pad_shape_dyn, pad_strides, to_u32,
+};
 
 // MAX_STRIDED_RANK is re-exported from hephaestus_core
 
@@ -49,14 +50,7 @@ struct StridedBinaryKernel<Op>(PhantomData<Op>);
 struct StridedUnaryKernel<Op>(PhantomData<Op>);
 struct StridedScalarKernel<Op>(PhantomData<Op>);
 
-/// Packed layout metadata matching the WGSL `Meta` uniform: rank-8 padded
-/// shape, per-operand strides, and `[a_off, b_off, out_off, len]`. The unary
-/// family reuses the same struct with the `b` lanes zeroed so one packing
-/// path and one uniform layout serve every strided kernel.
-
 const _: () = assert!(core::mem::size_of::<StridedMeta>() == 144);
-
-/// WGSL `Meta` declaration shared by every strided kernel.
 
 #[inline]
 pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
@@ -65,6 +59,7 @@ pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
     })
 }
 
+/// WGSL `Meta` declaration shared by every strided kernel.
 pub(crate) const WGSL_META: &str = r"struct Meta {
     shape: array<vec4<u32>, 2>,
     a_strides: array<vec4<i32>, 2>,
@@ -92,11 +87,6 @@ pub(crate) const WGSL_DECODE: &str = r"    var rem = i;
         o_off = o_off + idx * lmeta.out_strides[group][lane];
     }
 ";
-
-
-
-
-
 
 /// Validate an output layout against its buffer and return the logical length.
 pub(crate) fn validate_out<T, const N: usize>(
@@ -648,9 +638,3 @@ where
     )?;
     Ok(out)
 }
-
-
-
-
-
-

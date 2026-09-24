@@ -122,8 +122,11 @@ pub use domain::stream::{
     Binding, CommandStream, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };
+pub use domain::strided::{
+    MAX_STRIDED_RANK, StridedMeta, map_layout_err, pad_shape, pad_shape_dyn, pad_strides,
+    pad_usize_strides_dyn, to_u32,
+};
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
-pub use domain::strided::{StridedMeta, MAX_STRIDED_RANK, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides, pad_usize_strides_dyn};
 pub use domain::view::{DynamicStridedView, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
 pub use domain::window::WindowPlan;
