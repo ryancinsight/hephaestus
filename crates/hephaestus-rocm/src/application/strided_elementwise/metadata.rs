@@ -164,6 +164,17 @@ pub(crate) fn unary_strided_meta<T, const N: usize>(
 where
     T: Pod,
 {
+    unary_like_strided_meta(input, output)
+}
+
+#[inline]
+fn unary_like_strided_meta<T, const N: usize>(
+    input: &StridedOperand<'_, T, N>,
+    output: &StridedOperand<'_, T, N>,
+) -> Result<Option<(StridedMeta, usize)>>
+where
+    T: Pod,
+{
     check_rank::<N>()?;
     let input_layout = input
         .layout
@@ -198,23 +209,5 @@ pub(crate) fn scalar_strided_meta<T, const N: usize>(
 where
     T: Pod,
 {
-    check_rank::<N>()?;
-    let input_layout = input
-        .layout
-        .broadcast(output.layout.shape())
-        .map_err(map_layout_err)?;
-    input_layout
-        .validate_storage_len(input.buffer.len())
-        .map_err(map_layout_err)?;
-    if input.buffer.aliases(output.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias input buffer".to_string(),
-        });
-    }
-    let len = validate_output(*output)?;
-    if len == 0 {
-        return Ok(None);
-    }
-    let meta = StridedMeta::new(&input_layout, None, output.layout, len)?;
-    Ok(Some((meta, len)))
+    unary_like_strided_meta(input, output)
 }
