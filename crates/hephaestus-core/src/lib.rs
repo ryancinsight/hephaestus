@@ -42,17 +42,18 @@ pub use domain::convolution::{
     plan_transposed_convolution_forward,
 };
 pub use domain::decomposition::{
-    BlockedDecompositionBackend, BlockedLuFactors, PanelRegion, TrailingGemm,
-    apply_packed_qr_panel_left, blocked_lu, factor_cholesky_panel, factor_lu_panel,
-    panel_cholesky_packed, panel_lu_packed, panel_qr_packed, require_dense_operand,
-    split_packed_lu, validate_square_operand,
+    BlockedCholeskyBackend, BlockedCholeskyFactors, BlockedDecompositionBackend, BlockedLuFactors,
+    BlockedQrBackend, BlockedQrFactors, PanelRegion, TrailingGemm, TrailingHh, TrailingSyrk,
+    apply_packed_qr_panel_left, blocked_cholesky, blocked_lu, blocked_qr, factor_cholesky_panel,
+    factor_lu_panel, panel_cholesky_packed, panel_lu_packed, panel_qr_packed,
+    require_dense_operand, split_packed_lu, validate_square_operand,
 };
 pub use domain::decomposition_seam::{
     BidiagonalHandle, BunchKaufmanHandle, CholeskyHandle, ColPivQrHandle, DecompositionOps,
     FullPivLuHandle, HessenbergHandle, LuHandle, QrHandle, SchurHandle, SvdHandle,
     SymmetricEigenHandle, UduHandle,
 };
-pub use domain::dense_product::DenseProductOps;
+pub use domain::dense_product::{DenseCompositionOps, DenseProductOps};
 pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
@@ -122,6 +123,7 @@ pub use domain::stream::{
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,
 };
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
+pub use domain::strided::{StridedMeta, MAX_STRIDED_RANK, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides, pad_usize_strides_dyn};
 pub use domain::view::{DynamicStridedView, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
 pub use domain::window::WindowPlan;

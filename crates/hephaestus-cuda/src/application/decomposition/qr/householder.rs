@@ -4,9 +4,15 @@ use super::*;
 use crate::application::linalg::to_u32;
 use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 
+/// One packed Householder reflector's kernel metadata.
+///
+/// Public because the CUDA [`BlockedQrBackend`](hephaestus_core::BlockedQrBackend)
+/// impl names it as its `Reflectors` buffer element, and a public trait impl
+/// cannot leak a restricted type. The fields are the kernel ABI: the element
+/// offset of the packed vector and the reflector's `β` coefficient.
 #[repr(C)]
 #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
-pub(super) struct HhReflectorMeta {
+pub struct HhReflectorMeta {
     pub(super) vector_offset: u32,
     pub(super) beta: f32,
 }

@@ -35,9 +35,9 @@ fn packed_layout<const N: usize>() {
     let len = output
         .checked_size()
         .expect("invariant: at most 256 logical elements");
-    let meta = StridedMeta::new(&first, Some(&second), &output, len)
+    let meta = strided_meta_new(&first, Some(&second), &output, len)
         .expect("invariant: bounded rank and layout values fit the metadata ABI");
-    let unary = StridedMeta::new(&first, None, &output, len)
+    let unary = strided_meta_new(&first, None, &output, len)
         .expect("invariant: bounded unary layout values fit the metadata ABI");
     assert_eq!(
         meta.offsets,
@@ -107,7 +107,7 @@ fn sparse_views_keep_unsigned_origins_and_wide_stride_products() {
         .expect("invariant: reversed sparse offsets range from one to u32::MAX");
     let output = Layout::try_new([3], [stride], 1 << 31)
         .expect("invariant: maximum sparse output offset is 6442450942");
-    let meta = StridedMeta::new(&first, Some(&second), &output, 3)
+    let meta = strided_meta_new(&first, Some(&second), &output, 3)
         .expect("invariant: rank-one extents, strides and origins fit their ABI fields");
     assert_eq!(meta.offsets, [u32::MAX, u32::MAX, 1 << 31, 3]);
     assert_eq!(
@@ -202,3 +202,4 @@ fn packed_abi_has_the_same_field_order_as_hip() {
     assert_eq!(core::mem::offset_of!(StridedMeta, out_strides), 96);
     assert_eq!(core::mem::offset_of!(StridedMeta, offsets), 128);
 }
+

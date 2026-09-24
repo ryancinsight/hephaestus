@@ -62,6 +62,8 @@ pub mod stateful_update;
 pub mod stencil;
 /// Authored-kernel dispatch seam: prepared pipelines, bindings, streams.
 pub mod stream;
+/// Device-agnostic strided kernel metadata and layout packing.
+pub mod strided;
 /// Dense vector-operation contracts.
 pub mod vector;
 /// Device-neutral strided views over backend buffers.

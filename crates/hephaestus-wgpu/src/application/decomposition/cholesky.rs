@@ -12,12 +12,12 @@
 use std::any::TypeId;
 use std::sync::OnceLock;
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result, factor_cholesky_panel};
+use hephaestus_core::{
+    BlockedCholeskyBackend, BlockedDecompositionBackend, ComputeDevice, HephaestusError, Result,
+    TrailingSyrk, blocked_cholesky,
+};
 use leto::Layout;
 
-use super::region::{
-    MatrixRegion, download_matrix_region_compact_into, write_matrix_region_compact_reusable,
-};
 use super::validate::{validate_dense_operand, validate_square};
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::StridedOperand;
@@ -1053,113 +1053,12 @@ pub fn cholesky_decompose_blocked(
         });
     }
 
-    // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
-    let lower_buf = device.alloc_uninitialized::<f32>(n * n)?;
-    let mut encoder = device
-        .inner()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("hephaestus-cholesky-copy"),
-        });
-    // Raw whole-matrix copy: sound only for dense C-contiguous
-    // zero-offset operands, enforced by `validate_dense_operand` at the
-    // entry point (a strided/offset/broadcast view would copy the wrong
-    // elements or exceed the operand's storage extent).
-    encoder.copy_buffer_to_buffer(
-        &matrix.buffer.buffer,
-        0,
-        &lower_buf.buffer,
-        0,
-        WgpuDevice::byte_size::<f32>(n * n)?,
-    );
-    device.queue().submit(Some(encoder.finish()));
+    // Copy the (dense, validated) operand into a fresh device working buffer;
+    // the shared blocked-Cholesky loop owns all host bookkeeping.
+    let lower_buf = device.clone_device(matrix.buffer, n * n)?;
 
     let block_size = BLOCK_SIZE.min(n);
-
-    // Pre-allocate a reusable compact buffer for the maximum panel region:
-    // panel_rows = n - k <= n, cols = b <= block_size  =>  max n * block_size elements.
-    let panel_compact_buf = device.alloc_uninitialized::<f32>(n * block_size)?;
-
-    // Only the factor's diagonal is retained. `det` reads nothing else, and
-    // `solve`/`inv` reconstruct the full factor from `lower_buf` on demand —
-    // so the superseded `n * n` host array, which this loop scattered every
-    // panel column into, is never allocated.
-    let mut diagonal = vec![0.0f32; n];
-
-    // Per-panel host scratch, allocated once and resized by the panel download
-    // each iteration instead of allocating a fresh `Vec` per panel.
-    let mut panel: Vec<f32> = Vec::with_capacity(n * block_size);
-
-    for k in (0..n).step_by(block_size) {
-        let b = block_size.min(n - k);
-        let panel_rows = n - k;
-
-        // ── Step 1: Download active panel region to host ──
-        let panel_region = MatrixRegion {
-            stride: n,
-            row_start: k,
-            col_start: k,
-            rows: panel_rows,
-            cols: b,
-        };
-        download_matrix_region_compact_into(
-            device,
-            &lower_buf,
-            &panel_compact_buf,
-            panel_region,
-            &mut panel,
-        )?;
-
-        let trail_rows = n - k - b;
-        // Factor this panel on the host (diagonal-block Cholesky + off-diagonal
-        // triangular solve) — the backend-neutral shared computation.
-        factor_cholesky_panel(&mut panel, b, trail_rows)?;
-
-        // Retain this panel's contribution to the factor diagonal. The panel
-        // is `panel_rows × b` compact, so global cell `(k + j, k + j)` sits at
-        // panel row `j`, column `j`.
-        for j in 0..b {
-            diagonal[k + j] = panel[j * b + j];
-        }
-
-        // Upload the entire updated active panel (diagonal + off-diagonal) back to device buffer
-        write_matrix_region_compact_reusable(
-            device,
-            &lower_buf,
-            &panel_compact_buf,
-            &panel,
-            panel_region,
-        )?;
-
-        if trail_rows == 0 {
-            continue;
-        }
-
-        // ── Step 3: trailing SYRK update on GPU ──
-        let trail_layout = leto::Layout::try_new(
-            [trail_rows, trail_rows],
-            [n as isize, 1],
-            (k + b) * n + (k + b),
-        )
-        .expect("invariant: submatrix layout derives from a validated parent");
-
-        let mut encoder = device
-            .inner()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("hephaestus-cholesky-syrk-update"),
-            });
-
-        syrk_trailing_update(
-            device,
-            &mut encoder,
-            &lower_buf,
-            &trail_layout,
-            b,
-            (k + b) * n + k,
-            n,
-        )?;
-
-        device.queue().submit(Some(encoder.finish()));
-    }
+    let result = blocked_cholesky(device, lower_buf, n, block_size)?;
 
     // Finish the factor on the device. The per-panel scatters already wrote
     // every cell with `row >= blockstart(col)`, and the panel factorisation
@@ -1169,15 +1068,50 @@ pub fn cholesky_decompose_blocked(
     // `write_buffer(&lower_buf, &host)` uploaded the whole `n^2` matrix to
     // achieve the same thing, re-sending the lower triangle the device had
     // already computed.
-    zero_strict_upper(device, &lower_buf, n)?;
+    zero_strict_upper(device, &result.lower, n)?;
 
     // `inner` stays empty: with the factor complete on the device and its
     // diagonal retained, only a host-side substitution needs the `n * n`
     // array, and `host_factor` downloads it then.
     Ok(GpuCholesky {
         inner: OnceLock::new(),
-        diagonal,
-        lower: lower_buf,
+        diagonal: result.diagonal,
+        lower: result.lower,
         n,
     })
+}
+
+/// The WGPU blocked-Cholesky operation the shared `blocked_cholesky` loop
+/// drives (ADR 0003).
+///
+/// Only the trailing SYRK kernel is WGPU-specific: the loop owns the panel
+/// iteration, the CPU panel factorisation, the diagonal retention, and the
+/// panel scatter. The SYRK reads both operands from the matrix buffer, and
+/// this impl submits its own encoder because the trait hands it no batch.
+impl BlockedCholeskyBackend for WgpuDevice {
+    fn syrk_trailing(&self, matrix: &Self::Buffer, spec: TrailingSyrk) -> Result<()> {
+        let trail_layout = Layout::try_new(
+            [spec.trail_extent, spec.trail_extent],
+            [spec.matrix_stride as isize, 1],
+            spec.trail_offset,
+        )
+        .expect("invariant: submatrix layout derives from a validated parent");
+
+        let mut encoder = self
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hephaestus-cholesky-syrk-update"),
+            });
+        syrk_trailing_update(
+            self,
+            &mut encoder,
+            matrix,
+            &trail_layout,
+            spec.panel_cols,
+            spec.panel_offset,
+            spec.panel_stride,
+        )?;
+        self.queue().submit(Some(encoder.finish()));
+        Ok(())
+    }
 }

@@ -1,6 +1,6 @@
 //! WGPU instantiation of the shared dense-product conformance clauses.
 
-use hephaestus_conformance::assert_dense_product_contract;
+use hephaestus_conformance::{assert_dense_composition_contract, assert_dense_product_contract};
 use hephaestus_wgpu::WgpuDenseProductOps;
 
 pub(super) fn wgpu_satisfies_the_dense_product_contract() {
@@ -8,4 +8,5 @@ pub(super) fn wgpu_satisfies_the_dense_product_contract() {
         return;
     };
     assert_dense_product_contract(&device, &WgpuDenseProductOps);
+    assert_dense_composition_contract(&device, &WgpuDenseProductOps);
 }

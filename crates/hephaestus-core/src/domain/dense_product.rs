@@ -1,10 +1,12 @@
 //! Device-neutral dense product operations (ADR 0044).
 //!
-//! Covers the kernel-product tier of the linalg family: dense matrix
-//! multiplication, batched matrix multiplication, and the Kronecker
-//! product, each a single device kernel over strided operands. The
-//! host-orchestrated compositions (`matexp`, `matpow`, `det`, `pinv`,
-//! `matrix_rank`) are staged behind this trio per the ADR.
+//! Covers two roles in the linalg family. [`DenseProductOps`] owns the
+//! single-kernel products: dense matrix multiplication, batched matrix
+//! multiplication, and the Kronecker product. [`DenseCompositionOps`] owns
+//! the matrix power, determinant, and numerical-rank entry points reached
+//! through the shared conformance boundary. The remaining host-delegated
+//! compositions (`matexp`, `pinv`) stay provider entry points until their
+//! incremental contract arrives.
 
 use eunomia::Pod;
 
@@ -70,4 +72,64 @@ pub trait DenseProductOps<D: ComputeDevice, T: Pod> {
         rhs: StridedView<'_, D::Buffer<T>, 2>,
         output: StridedView<'_, D::Buffer<T>, 2>,
     ) -> Result<()>;
+}
+
+/// Device-neutral matrix compositions built on provider linalg machinery.
+///
+/// This role is deliberately separate from [`DenseProductOps`]: kernel
+/// products are direct strided dispatches, while matrix power, determinant,
+/// and rank own provider scheduling and scalar policy. Keeping the roles
+/// separate prevents one backend's composition implementation from becoming a
+/// breaking requirement for providers that only implement the kernel tier.
+///
+/// Implementors are zero-sized backend markers. Calls monomorphize to the
+/// provider entry point and introduce no virtual dispatch or adapter state.
+pub trait DenseCompositionOps<D: ComputeDevice> {
+    /// Compute `matrix^exponent`, with `matrix^0` equal to the identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, layout, allocation, or backend dispatch error.
+    fn matpow(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+        exponent: u32,
+    ) -> Result<D::Buffer<f32>>;
+
+    /// Compute the determinant of a square matrix.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, layout, or backend dispatch error.
+    fn det(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<f32>>;
+
+    /// Estimate numerical rank using a relative pivot threshold.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout or backend dispatch error.
+    fn matrix_rank_with_tolerance(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+        relative_tolerance: f32,
+    ) -> Result<usize>;
+
+    /// Estimate numerical rank using Leto's default relative tolerance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout or backend dispatch error.
+    fn matrix_rank(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<usize> {
+        self.matrix_rank_with_tolerance(device, matrix, 1.0e-9)
+    }
 }

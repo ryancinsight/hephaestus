@@ -21,7 +21,9 @@
 pub mod blocked;
 
 pub use blocked::{
-    BlockedDecompositionBackend, BlockedLuFactors, PanelRegion, TrailingGemm, blocked_lu,
+    BlockedCholeskyBackend, BlockedCholeskyFactors, BlockedDecompositionBackend, BlockedLuFactors,
+    BlockedQrBackend, BlockedQrFactors, PanelRegion, TrailingGemm, TrailingHh, TrailingSyrk,
+    blocked_cholesky, blocked_lu, blocked_qr,
 };
 
 use crate::domain::error::{HephaestusError, Result};

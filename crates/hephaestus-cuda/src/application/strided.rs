@@ -1,4 +1,4 @@
-use eunomia::{Pod, Zeroable};
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
     Result, TypedBinaryExpr, UnaryExpr,
@@ -11,8 +11,9 @@ use crate::application::pipeline::{
 };
 use crate::infrastructure::buffer::CudaBuffer;
 
-/// Maximum rank the packed rank-eight metadata covers.
-pub const MAX_STRIDED_RANK: usize = 8;
+pub use hephaestus_core::{MAX_STRIDED_RANK, StridedMeta, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides, pad_usize_strides_dyn};
+
+
 
 /// A device buffer paired with the leto layout describing its logical view.
 ///
@@ -46,16 +47,6 @@ pub struct StridedOperandDyn<'a, T> {
     pub layout: StridedLayout<'a>,
 }
 
-/// Metadata passed to strided kernels.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct StridedMeta {
-    pub(crate) shape: [u32; 8],
-    pub(crate) a_strides: [i32; 8],
-    pub(crate) b_strides: [i32; 8],
-    pub(crate) out_strides: [i32; 8],
-    pub(crate) offsets: [u32; 4],
-}
 
 pub(crate) const CUDA_META: &str = r#"
 struct Meta {
@@ -81,61 +72,6 @@ pub(crate) const CUDA_DECODE: &str = r#"
         o_off += idx * lmeta.out_strides[d];
     }
 "#;
-
-#[inline]
-pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
-
-#[inline]
-pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
-#[inline]
-pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 8]> {
-    let mut out = [1u32; 8];
-    for (d, &dim) in shape.iter().enumerate() {
-        out[8 - N + d] = to_u32(dim, "dimension")?;
-    }
-    Ok(out)
-}
-
-#[inline]
-fn pad_shape_dyn(shape: &[usize]) -> Result<[u32; 8]> {
-    let mut out = [1u32; 8];
-    for (d, &dim) in shape.iter().enumerate() {
-        out[8 - shape.len() + d] = to_u32(dim, "dimension")?;
-    }
-    Ok(out)
-}
-
-#[inline]
-pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 8]> {
-    let mut out = [0i32; 8];
-    for (d, &stride) in strides.iter().enumerate() {
-        out[8 - N + d] = i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!("stride {stride} exceeds i32 range"),
-        })?;
-    }
-    Ok(out)
-}
-
-#[inline]
-fn pad_usize_strides_dyn(strides: &[usize]) -> Result<[i32; 8]> {
-    let mut out = [0i32; 8];
-    for (d, &stride) in strides.iter().enumerate() {
-        out[8 - strides.len() + d] =
-            i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("stride {stride} exceeds i32 range"),
-            })?;
-    }
-    Ok(out)
-}
 
 fn validate_out<T, const N: usize>(out: &CudaBuffer<T>, out_layout: &Layout<N>) -> Result<usize> {
     if out_layout.has_zero_stride_aliasing() {
@@ -1044,3 +980,10 @@ where
     )?;
     Ok(out)
 }
+
+
+
+
+
+
+

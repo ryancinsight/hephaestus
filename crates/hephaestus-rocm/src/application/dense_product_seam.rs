@@ -6,11 +6,15 @@
 //! `RocmDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
-use hephaestus_core::{DenseProductOps, DialectScalar, HipC, Result, StridedView};
+use hephaestus_core::{
+    DenseCompositionOps, DenseProductOps, DialectScalar, HipC, Result, StridedView,
+};
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
-use crate::application::linalg::{batched_matmul_into, kron_into, matmul_into};
+use crate::application::linalg::{
+    batched_matmul_into, det, kron_into, matmul_into, matpow, matrix_rank_with_tolerance,
+};
 use crate::application::strided::StridedOperand;
 
 /// Provider-owned implementation of [`DenseProductOps`] for ROCm.
@@ -49,6 +53,34 @@ where
         output: StridedView<'_, RocmBuffer<T>, 2>,
     ) -> Result<()> {
         kron_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+    }
+}
+
+impl DenseCompositionOps<RocmDevice> for RocmDenseProductOps {
+    fn matpow(
+        &self,
+        device: &RocmDevice,
+        matrix: StridedView<'_, RocmBuffer<f32>, 2>,
+        exponent: u32,
+    ) -> Result<RocmBuffer<f32>> {
+        matpow(device, operand(matrix), exponent)
+    }
+
+    fn det(
+        &self,
+        device: &RocmDevice,
+        matrix: StridedView<'_, RocmBuffer<f32>, 2>,
+    ) -> Result<RocmBuffer<f32>> {
+        det(device, operand(matrix))
+    }
+
+    fn matrix_rank_with_tolerance(
+        &self,
+        device: &RocmDevice,
+        matrix: StridedView<'_, RocmBuffer<f32>, 2>,
+        relative_tolerance: f32,
+    ) -> Result<usize> {
+        matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
     }
 }
 

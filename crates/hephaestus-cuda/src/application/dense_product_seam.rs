@@ -6,9 +6,13 @@
 //! `CudaDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
-use hephaestus_core::{CudaC, DenseProductOps, DialectScalar, Result, StridedView};
+use hephaestus_core::{
+    CudaC, DenseCompositionOps, DenseProductOps, DialectScalar, Result, StridedView,
+};
 
-use crate::application::linalg::{batched_matmul_into, kron_into, matmul_into};
+use crate::application::linalg::{
+    batched_matmul_into, det, kron_into, matmul_into, matpow, matrix_rank_with_tolerance,
+};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
@@ -49,6 +53,34 @@ where
         output: StridedView<'_, CudaBuffer<T>, 2>,
     ) -> Result<()> {
         kron_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+    }
+}
+
+impl DenseCompositionOps<CudaDevice> for CudaDenseProductOps {
+    fn matpow(
+        &self,
+        device: &CudaDevice,
+        matrix: StridedView<'_, CudaBuffer<f32>, 2>,
+        exponent: u32,
+    ) -> Result<CudaBuffer<f32>> {
+        matpow(device, operand(matrix), exponent)
+    }
+
+    fn det(
+        &self,
+        device: &CudaDevice,
+        matrix: StridedView<'_, CudaBuffer<f32>, 2>,
+    ) -> Result<CudaBuffer<f32>> {
+        det(device, operand(matrix))
+    }
+
+    fn matrix_rank_with_tolerance(
+        &self,
+        device: &CudaDevice,
+        matrix: StridedView<'_, CudaBuffer<f32>, 2>,
+        relative_tolerance: f32,
+    ) -> Result<usize> {
+        matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
     }
 }
 

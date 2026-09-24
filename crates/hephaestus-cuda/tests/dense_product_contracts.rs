@@ -3,7 +3,7 @@
 #![cfg(feature = "cuda")]
 
 use eunomia::NumericElement;
-use hephaestus_conformance::assert_dense_product_contract;
+use hephaestus_conformance::{assert_dense_composition_contract, assert_dense_product_contract};
 use hephaestus_core::{
     ComputeDevice, CudaC, DenseProductOps, DialectScalar, HephaestusError, Result, StridedView,
 };
@@ -169,4 +169,5 @@ fn cuda_satisfies_the_dense_product_contract() {
         Err(error) => panic!("CUDA dense-product conformance requires a physical device: {error}"),
     };
     assert_dense_product_contract(&device, &CudaDenseProductOps);
+    assert_dense_composition_contract(&device, &CudaDenseProductOps);
 }

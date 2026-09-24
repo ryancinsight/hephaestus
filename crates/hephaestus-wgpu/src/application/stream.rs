@@ -12,9 +12,10 @@ use std::marker::PhantomData;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    validate_bindings, validate_grouped_bindings, Access, Binding, BindingDecl, CommandStream,
-    DispatchGrid, GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
-    GroupedKernelSource, HephaestusError, KernelDevice, KernelSource, Result, Wgsl,
+    Access, Binding, BindingDecl, CommandStream, DispatchGrid, GroupedBinding,
+    GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource,
+    HephaestusError, KernelDevice, KernelSource, Result, Wgsl, validate_bindings,
+    validate_grouped_bindings,
 };
 
 use crate::application::bindings::{BindGroupEntries, BindGroups, UniformBuffers};
