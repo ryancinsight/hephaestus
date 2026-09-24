@@ -16,6 +16,7 @@ use crate::application::strided::{
 };
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
+use crate::infrastructure::pool::PooledBuffer;
 
 #[cfg(test)]
 mod identity_contract;
@@ -116,6 +117,78 @@ fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
         offset: to_u32(layout.offset(), "offset")?,
         _pad: [0; 3],
     })
+}
+
+#[inline]
+fn upload_binary_op_layouts(
+    device: &WgpuDevice,
+    lhs: &Layout<2>,
+    rhs: &Layout<2>,
+    out: &Layout<2>,
+) -> Result<[PooledBuffer; 3]> {
+    let lhs_meta = map_layout(lhs)?;
+    let rhs_meta = map_layout(rhs)?;
+    let out_meta = map_layout(out)?;
+    let layout_size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
+    let lhs_layout = device.get_uniform_buffer(layout_size)?;
+    let rhs_layout = device.get_uniform_buffer(layout_size)?;
+    let out_layout = device.get_uniform_buffer(layout_size)?;
+
+    device
+        .queue()
+        .write_buffer(&lhs_layout, 0, eunomia::layout::bytes_of(&lhs_meta));
+    device
+        .queue()
+        .write_buffer(&rhs_layout, 0, eunomia::layout::bytes_of(&rhs_meta));
+    device
+        .queue()
+        .write_buffer(&out_layout, 0, eunomia::layout::bytes_of(&out_meta));
+
+    Ok([lhs_layout, rhs_layout, out_layout])
+}
+
+#[inline]
+fn binary_op_bind_group(
+    device: &WgpuDevice,
+    pipeline: &wgpu::ComputePipeline,
+    label: &'static str,
+    lhs: &wgpu::Buffer,
+    rhs: &wgpu::Buffer,
+    out: &wgpu::Buffer,
+    layouts: &[PooledBuffer; 3],
+) -> wgpu::BindGroup {
+    device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: lhs.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: rhs.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: out.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: layouts[0].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: layouts[1].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: layouts[2].as_entire_binding(),
+                },
+            ],
+        })
 }
 
 fn matmul_shader_source<T: MatmulZero>() -> String {
@@ -472,60 +545,20 @@ where
         return Ok(());
     }
 
-    let a_meta = map_layout(lhs.layout)?;
-    let b_meta = map_layout(rhs.layout)?;
-    let out_meta = map_layout(out.layout)?;
-
-    let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let a_layout_buf = device.get_uniform_buffer(size)?;
-    let b_layout_buf = device.get_uniform_buffer(size)?;
-    let out_layout_buf = device.get_uniform_buffer(size)?;
-
-    device
-        .queue()
-        .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
-    device
-        .queue()
-        .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
-    device
-        .queue()
-        .write_buffer(&out_layout_buf, 0, eunomia::layout::bytes_of(&out_meta));
+    let layout_uniforms = upload_binary_op_layouts(device, lhs.layout, rhs.layout, out.layout)?;
 
     let key = (TypeId::of::<KronKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = cached_pipeline(device, key, "hephaestus-kron", || kron_shader_source::<T>());
 
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-kron"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: lhs.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: rhs.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: out.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: a_layout_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: b_layout_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: out_layout_buf.as_entire_binding(),
-                },
-            ],
-        });
+    let bind_group = binary_op_bind_group(
+        device,
+        &pipeline,
+        "hephaestus-kron",
+        &lhs.buffer.buffer,
+        &rhs.buffer.buffer,
+        &out.buffer.buffer,
+        &layout_uniforms,
+    );
 
     let mut encoder = device
         .inner()
@@ -646,62 +679,22 @@ where
         return Ok(());
     }
 
-    let a_meta = map_layout(lhs.layout)?;
-    let b_meta = map_layout(rhs.layout)?;
-    let c_meta = map_layout(out.layout)?;
-
-    let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
-    let a_layout_buf = device.get_uniform_buffer(size)?;
-    let b_layout_buf = device.get_uniform_buffer(size)?;
-    let c_layout_buf = device.get_uniform_buffer(size)?;
-
-    device
-        .queue()
-        .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
-    device
-        .queue()
-        .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
-    device
-        .queue()
-        .write_buffer(&c_layout_buf, 0, eunomia::layout::bytes_of(&c_meta));
+    let layout_uniforms = upload_binary_op_layouts(device, lhs.layout, rhs.layout, out.layout)?;
 
     let key = (TypeId::of::<MatmulKernel<T>>(), TypeId::of::<T>(), 16);
     let pipeline = cached_pipeline(device, key, "hephaestus-matmul", || {
         matmul_shader_source::<T>()
     });
 
-    let bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-matmul"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: lhs.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: rhs.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: out.buffer.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: a_layout_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: b_layout_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: c_layout_buf.as_entire_binding(),
-                },
-            ],
-        });
+    let bind_group = binary_op_bind_group(
+        device,
+        &pipeline,
+        "hephaestus-matmul",
+        &lhs.buffer.buffer,
+        &rhs.buffer.buffer,
+        &out.buffer.buffer,
+        &layout_uniforms,
+    );
 
     let mut encoder = device
         .inner()
@@ -840,7 +833,6 @@ where
             label: Some("hephaestus-batched-matmul"),
         });
 
-    let size = WgpuDevice::byte_size::<GpuMatrixLayout>(1)?;
     let mut uniform_guards = Vec::with_capacity(3 * batch);
 
     for b in 0..batch {
@@ -879,56 +871,18 @@ where
             });
         }
 
-        let a_meta = map_layout(&lhs_mat_layout)?;
-        let b_meta = map_layout(&rhs_mat_layout)?;
-        let c_meta = map_layout(&out_mat_layout)?;
+        let layout_uniforms =
+            upload_binary_op_layouts(device, &lhs_mat_layout, &rhs_mat_layout, &out_mat_layout)?;
 
-        let a_layout_buf = device.get_uniform_buffer(size)?;
-        let b_layout_buf = device.get_uniform_buffer(size)?;
-        let c_layout_buf = device.get_uniform_buffer(size)?;
-
-        device
-            .queue()
-            .write_buffer(&a_layout_buf, 0, eunomia::layout::bytes_of(&a_meta));
-        device
-            .queue()
-            .write_buffer(&b_layout_buf, 0, eunomia::layout::bytes_of(&b_meta));
-        device
-            .queue()
-            .write_buffer(&c_layout_buf, 0, eunomia::layout::bytes_of(&c_meta));
-
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("hephaestus-matmul-batched"),
-                layout: &pipeline.get_bind_group_layout(0),
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: lhs.buffer.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: rhs.buffer.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: out.buffer.buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: a_layout_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: b_layout_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 5,
-                        resource: c_layout_buf.as_entire_binding(),
-                    },
-                ],
-            });
+        let bind_group = binary_op_bind_group(
+            device,
+            &pipeline,
+            "hephaestus-matmul-batched",
+            &lhs.buffer.buffer,
+            &rhs.buffer.buffer,
+            &out.buffer.buffer,
+            &layout_uniforms,
+        );
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -942,9 +896,7 @@ where
             pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
-        uniform_guards.push(a_layout_buf);
-        uniform_guards.push(b_layout_buf);
-        uniform_guards.push(c_layout_buf);
+        uniform_guards.extend(layout_uniforms);
     }
 
     device.queue().submit(Some(encoder.finish()));
