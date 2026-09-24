@@ -5,6 +5,23 @@
 - Refs: atlas `backlog.md#atlas-arch-001` (001i); ADR 0041 (conformance
   crate); ADR 0042 (the decomposition seam this record's staging mirrors).
 
+## Revision 2026-09-24: Dense composition role
+
+The follow-up composition stage has landed. `DenseCompositionOps` is a
+separate role over the existing provider allocation wrappers for `f32`
+matrix power, determinant, and numerical rank. Keeping it separate from
+`DenseProductOps` means providers implementing only the kernel tier are not
+broken, while the three host-orchestrated entry points become reachable from
+one conformance clause without moving their public functions.
+
+`assert_dense_composition_contract` now owns dense and strided matrix power,
+zero and empty powers, regular/singular/strided determinants, rectangular
+rejection, default and explicit rank tolerances, deficient and rectangular
+rank, strided rank, and empty rejection. WGPU, CUDA, ROCm, and Metal all
+instantiate the clause. Provider tests retain only edges the role cannot
+observe: exact diagnostic text, alternate identity sentinels, and WGPU's
+near-singular determinant behavior.
+
 ## Revision 2026-09-08: CUDA scalar declarations and arithmetic
 
 Driven by [HEPH-CUDA-DENSE-PRODUCT-SCALARS](../../backlog.md#heph-cuda-dense-product-scalars).
@@ -83,12 +100,12 @@ The family splits on implementation structure:
 2. Conformance clauses assert exact integer-matrix oracles (products of
    small integer matrices are exact in `f32`), strided traversal, and
    shape rejection without mutation.
-3. The host-orchestrated compositions are **staged later**, exactly as
-   ADR 0042 staged SVD/eigen: they enter the seam when their increment
-   arrives, most naturally as provided methods over `DenseProductOps` +
-   `DecompositionOps` bounds rather than per-backend required methods,
-   since their logic is backend-invariant composition. Sequencing them
-   behind the kernel trio keeps this increment vertical and complete.
+3. The host-orchestrated compositions enter through a separate
+   `DenseCompositionOps<D>` role. Its methods preserve the providers' public
+   allocation wrappers while making matrix power, determinant, and rank
+   reachable through static dispatch and one conformance clause. `matexp`
+   and `pinv` remain staged until their contracts are ready; making them
+   required methods now would make that partial rollout look complete.
 4. Prepared forms are omitted: the ledger lists none for this family
    (`prepare_spmm` belongs to sparse), and no consumer requirement exists
    yet. If one appears it follows the established `Prepared<'op>` GAT
@@ -105,7 +122,7 @@ The family splits on implementation structure:
 
 ## Consequences
 
-The three kernel-product pairs become seam-reachable and clause-covered
-(six of the twelve entry points); the composition tail is recorded here
-and on the board as the follow-up. `hephaestus-conformance` gains a
-`dense_product` module instantiated by all four backends.
+Nine linalg entry points are now seam-reachable and clause-covered across
+all four backends. The kernel tier remains independently implementable; the
+composition role adds no runtime state, virtual dispatch, or public wrapper
+migration. `matexp` and `pinv` remain the explicit composition follow-up.

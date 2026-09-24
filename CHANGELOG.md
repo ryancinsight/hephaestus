@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Add the zero-cost `DenseCompositionOps` role for `f32` matrix power,
+  determinant, and numerical rank, with one shared conformance clause across
+  WGPU, CUDA, ROCm, and Metal. Dense/strided traversal, identity and empty
+  powers, regular/singular/strided determinants, relative rank thresholds,
+  deficient/rectangular rank, and rejection edges now have one SSOT; provider
+  tests retain only exact diagnostics, alternate identity sentinels, and
+  backend-specific near-singular behavior. Existing public entry points and
+  allocation behavior are unchanged. See ADR 0044.
+
 - [patch] Consolidate blocked LU, QR, and Cholesky host orchestration in
   `hephaestus-core`, with monomorphized backend extension traits and shared
   conformance clauses. WGPU and CUDA now share the same panel walks, scratch

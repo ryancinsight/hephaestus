@@ -1,4 +1,4 @@
-//! Provider-owned dense product seam for Metal.
+//! Provider-owned dense product and composition seams for Metal.
 //!
 //! Metal delegates wholly to the WGPU implementation, matching the crate's
 //! other seam adapters: buffers unwrap to their inner WGPU handles and every
@@ -14,7 +14,7 @@ use hephaestus_wgpu::{MatmulZero, WgpuDenseProductOps};
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
 
-/// Provider-owned implementation of [`DenseProductOps`] for Metal.
+/// Provider-owned dense product and composition implementation for Metal.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetalDenseProductOps {
     inner: WgpuDenseProductOps,

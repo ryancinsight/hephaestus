@@ -1,8 +1,8 @@
 //! Device-neutral dense product operations (ADR 0044).
 //!
-//! Covers two roles in the linalg family. [`DenseProductOps`] owns the
+//! Covers two roles in the linalg family. [`crate::DenseProductOps`] owns the
 //! single-kernel products: dense matrix multiplication, batched matrix
-//! multiplication, and the Kronecker product. [`DenseCompositionOps`] owns
+//! multiplication, and the Kronecker product. [`crate::DenseCompositionOps`] owns
 //! the matrix power, determinant, and numerical-rank entry points reached
 //! through the shared conformance boundary. The remaining host-delegated
 //! compositions (`matexp`, `pinv`) stay provider entry points until their
@@ -102,11 +102,8 @@ pub trait DenseCompositionOps<D: ComputeDevice> {
     /// # Errors
     ///
     /// Returns a shape, layout, or backend dispatch error.
-    fn det(
-        &self,
-        device: &D,
-        matrix: StridedView<'_, D::Buffer<f32>, 2>,
-    ) -> Result<D::Buffer<f32>>;
+    fn det(&self, device: &D, matrix: StridedView<'_, D::Buffer<f32>, 2>)
+    -> Result<D::Buffer<f32>>;
 
     /// Estimate numerical rank using a relative pivot threshold.
     ///
@@ -125,11 +122,7 @@ pub trait DenseCompositionOps<D: ComputeDevice> {
     /// # Errors
     ///
     /// Returns a layout or backend dispatch error.
-    fn matrix_rank(
-        &self,
-        device: &D,
-        matrix: StridedView<'_, D::Buffer<f32>, 2>,
-    ) -> Result<usize> {
+    fn matrix_rank(&self, device: &D, matrix: StridedView<'_, D::Buffer<f32>, 2>) -> Result<usize> {
         self.matrix_rank_with_tolerance(device, matrix, 1.0e-9)
     }
 }

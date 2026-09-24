@@ -1,7 +1,8 @@
-//! Provider-owned dense product seam for ROCm.
+//! Provider-owned dense product and composition seams for ROCm.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`] and
+//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `RocmDevice`, matching the crate's other seam adapters.
 
@@ -17,7 +18,7 @@ use crate::application::linalg::{
 };
 use crate::application::strided::StridedOperand;
 
-/// Provider-owned implementation of [`DenseProductOps`] for ROCm.
+/// Provider-owned dense product and composition implementation for ROCm.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmDenseProductOps;
 

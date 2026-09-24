@@ -1,7 +1,8 @@
-//! Provider-owned dense product seam for WGPU.
+//! Provider-owned dense product and composition seams for WGPU.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`] and
+//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `WgpuDevice`, matching the crate's other seam adapters.
 
@@ -18,7 +19,7 @@ use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Provider-owned implementation of [`DenseProductOps`] for WGPU.
+/// Provider-owned dense product and composition implementation for WGPU.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuDenseProductOps;
 

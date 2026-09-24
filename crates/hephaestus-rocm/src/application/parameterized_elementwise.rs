@@ -11,7 +11,7 @@ use crate::application::pipeline::{
 use crate::application::strided::StridedOperand;
 use crate::application::strided_elementwise::{
     kernel::{hip_decode, hip_meta},
-    metadata::{StridedMeta, check_rank, map_layout_err},
+    metadata::{StridedMeta, check_rank, map_layout_err, strided_meta_new},
 };
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
@@ -178,4 +178,3 @@ mod tests {
         assert!(source.contains("output[out_offset] = x >= 0.0f ? x : first * x"));
     }
 }
-

@@ -1967,62 +1967,28 @@ pub(super) fn linalg_allocating_kron_matches_the_into_path() {
     );
 }
 
-pub(super) fn linalg_matpow_matches_leto_reference() {
+pub(super) fn linalg_matpow_zero_exponent_overwrites_alternate_identity_storage() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::{StridedOperand, matpow};
     use leto::Layout;
 
-    let shear_host = vec![1.0f32, 1.0, 0.0, 1.0];
-    let shear = device.upload(&shear_host).unwrap();
-    let shear_layout = Layout::c_contiguous([2, 2]).unwrap();
-    let shear_pow = matpow(
-        &device,
-        StridedOperand {
-            buffer: &shear,
-            layout: &shear_layout,
-        },
-        5,
-    )
-    .unwrap();
-    let leto_shear = leto::Array::from_shape_vec([2, 2], shear_host).unwrap();
-    let expected_shear = leto_ops::matpow(&leto_shear.view(), 5).unwrap().into_vec();
-    let mut got_shear = vec![0.0f32; 4];
-    device.download(&shear_pow, &mut got_shear).unwrap();
-    assert_eq!(got_shear, expected_shear);
-
-    let diagonal_host = vec![2i32, 0, 0, 3];
-    let diagonal = device.upload(&diagonal_host).unwrap();
-    let diagonal_pow = matpow(
-        &device,
-        StridedOperand {
-            buffer: &diagonal,
-            layout: &shear_layout,
-        },
-        0,
-    )
-    .unwrap();
-    let mut got_diagonal = vec![0i32; 4];
-    device.download(&diagonal_pow, &mut got_diagonal).unwrap();
-    assert_eq!(got_diagonal, vec![1, 0, 0, 1]);
-
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
     let alternate = device.upload(&[AlternateIdentity(4); 4]).unwrap();
-    let alternate_power = matpow(
+    let identity = matpow(
         &device,
         StridedOperand {
             buffer: &alternate,
-            layout: &shear_layout,
+            layout: &layout,
         },
         0,
     )
     .unwrap();
-    let mut got_alternate = vec![AlternateIdentity(0); 4];
-    device
-        .download(&alternate_power, &mut got_alternate)
-        .unwrap();
+    let mut actual = vec![AlternateIdentity(0); 4];
+    device.download(&identity, &mut actual).unwrap();
     assert_eq!(
-        got_alternate,
+        actual,
         vec![
             AlternateIdentity(9),
             AlternateIdentity(-7),
@@ -2030,19 +1996,6 @@ pub(super) fn linalg_matpow_matches_leto_reference() {
             AlternateIdentity(9),
         ]
     );
-
-    let empty = device.upload::<i32>(&[]).unwrap();
-    let empty_layout = Layout::c_contiguous([0, 0]).unwrap();
-    let empty_power = matpow(
-        &device,
-        StridedOperand {
-            buffer: &empty,
-            layout: &empty_layout,
-        },
-        0,
-    )
-    .unwrap();
-    assert_eq!(empty_power.len(), 0);
 }
 
 pub(super) fn linalg_matpow_rejects_non_square() {
@@ -2171,69 +2124,16 @@ pub(super) fn linalg_trace_matches_cpu_reference() {
     assert_eq!(got[0], expected);
 }
 
-pub(super) fn linalg_matrix_rank_matches_leto_reference() {
+pub(super) fn linalg_matrix_rank_rejects_empty_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::StridedOperand;
     use leto::Layout;
 
-    let full_rank_host = vec![1.0f32, 2.0, 3.0, 4.0];
-    let deficient_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 6.0, 1.0, 0.0, 1.0];
-    let zero_host = vec![0.0f32; 6];
-    let tolerance = 1.0e-6f32;
-
-    let full_rank = device.upload(&full_rank_host).unwrap();
-    let deficient = device.upload(&deficient_host).unwrap();
-    let zero = device.upload(&zero_host).unwrap();
-    let full_rank_layout = Layout::c_contiguous([2, 2]).unwrap();
-    let deficient_layout = Layout::c_contiguous([3, 3]).unwrap();
-    let zero_layout = Layout::c_contiguous([2, 3]).unwrap();
-
-    let leto_full_rank = leto::Array::from_shape_vec([2, 2], full_rank_host).unwrap();
-    let leto_deficient = leto::Array::from_shape_vec([3, 3], deficient_host).unwrap();
-    let leto_zero = leto::Array::from_shape_vec([2, 3], zero_host).unwrap();
-
-    let expected_full_rank =
-        leto_ops::matrix_rank_with_tolerance(&leto_full_rank.view(), tolerance).unwrap();
-    let expected_deficient =
-        leto_ops::matrix_rank_with_tolerance(&leto_deficient.view(), tolerance).unwrap();
-    let expected_zero = leto_ops::matrix_rank_with_tolerance(&leto_zero.view(), tolerance).unwrap();
-
-    let got_full_rank = matrix_rank_with_tolerance(
-        &device,
-        StridedOperand {
-            buffer: &full_rank,
-            layout: &full_rank_layout,
-        },
-        tolerance,
-    )
-    .unwrap();
-    let got_deficient = matrix_rank_with_tolerance(
-        &device,
-        StridedOperand {
-            buffer: &deficient,
-            layout: &deficient_layout,
-        },
-        tolerance,
-    )
-    .unwrap();
-    let got_zero = matrix_rank(
-        &device,
-        StridedOperand {
-            buffer: &zero,
-            layout: &zero_layout,
-        },
-    )
-    .unwrap();
-
-    assert_eq!(got_full_rank, expected_full_rank);
-    assert_eq!(got_deficient, expected_deficient);
-    assert_eq!(got_zero, expected_zero);
-
     let empty = device.alloc_zeroed::<f32>(1).unwrap();
     let empty_layout = Layout::c_contiguous([0, 3]).unwrap();
-    let empty_rank = matrix_rank(
+    let result = matrix_rank(
         &device,
         StridedOperand {
             buffer: &empty,
@@ -2241,58 +2141,21 @@ pub(super) fn linalg_matrix_rank_matches_leto_reference() {
         },
     );
     assert!(matches!(
-        empty_rank,
+        result,
         Err(HephaestusError::DispatchFailed { message }) if message.contains("empty matrix")
     ));
 }
 
-pub(super) fn linalg_det_matches_leto_reference() {
+pub(super) fn linalg_det_rejects_rectangular_operands() {
     let Some(device) = device_or_skip() else {
         return;
     };
     use hephaestus_wgpu::{StridedOperand, det};
     use leto::Layout;
 
-    let nonsingular_host = vec![2.0f32, 1.0, 3.0, 4.0];
-    let singular_host = vec![1.0f32, 2.0, 2.0, 4.0];
-    let nonsingular = device.upload(&nonsingular_host).unwrap();
-    let singular = device.upload(&singular_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-
-    let leto_nonsingular = leto::Array::from_shape_vec([2, 2], nonsingular_host).unwrap();
-    let leto_singular = leto::Array::from_shape_vec([2, 2], singular_host).unwrap();
-    let expected_nonsingular = leto_ops::det(&leto_nonsingular.view()).unwrap();
-    let expected_singular = leto_ops::det(&leto_singular.view()).unwrap();
-
-    let nonsingular_det = det(
-        &device,
-        StridedOperand {
-            buffer: &nonsingular,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-    let singular_det = det(
-        &device,
-        StridedOperand {
-            buffer: &singular,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    let mut got_nonsingular = [0.0f32; 1];
-    let mut got_singular = [0.0f32; 1];
-    device
-        .download(&nonsingular_det, &mut got_nonsingular)
-        .unwrap();
-    device.download(&singular_det, &mut got_singular).unwrap();
-    assert_eq!(got_nonsingular[0], expected_nonsingular);
-    assert_eq!(got_singular[0], expected_singular);
-
     let rectangular = device.alloc_zeroed::<f32>(6).unwrap();
     let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
-    let rectangular_det = det(
+    let result = det(
         &device,
         StridedOperand {
             buffer: &rectangular,
@@ -2300,7 +2163,7 @@ pub(super) fn linalg_det_matches_leto_reference() {
         },
     );
     assert!(matches!(
-        rectangular_det,
+        result,
         Err(HephaestusError::DispatchFailed { message }) if message.contains("square matrix")
     ));
 }

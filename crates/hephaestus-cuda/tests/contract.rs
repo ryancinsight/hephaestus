@@ -20,12 +20,12 @@ use hephaestus_cuda::{
     AbsOp, AddOp, CudaDevice, CudaVectorOps, CumSumOp, EluGradOp, EluOp, ExpOp, GeluTanhGradOp,
     GeluTanhOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, ProdOp, RecipOp, SiluGradOp,
     SiluOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul,
-    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, det,
-    dot, kron, matexp, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
-    norm_l1, norm_l2, norm_max, pinv, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into,
-    prepare_min_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis, reduction, reduction_with_width,
-    scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, dot,
+    kron, matexp, matmul, matmul_into, matpow, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
+    prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis,
+    prod_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
+    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
     trace, unary_elementwise, unary_elementwise_into,
 };
@@ -2016,63 +2016,6 @@ fn scan_long_line_matches_integer_reference() {
         })
         .collect();
     assert_eq!(got, expected);
-}
-
-#[test]
-fn linalg_matrix_rank_matches_reference() {
-    let Some(dev) = device("linalg_matrix_rank_matches_reference") else {
-        return;
-    };
-
-    // Diagonal matrix with rank 2
-    let host_in = vec![3.0f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0];
-    let a = dev.upload(&host_in).unwrap();
-    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
-
-    let rank = matrix_rank(
-        &dev,
-        StridedOperand {
-            buffer: &a,
-            layout: &a_layout,
-        },
-    )
-    .unwrap();
-    assert_eq!(rank, 2);
-
-    let rank_tol = matrix_rank_with_tolerance(
-        &dev,
-        StridedOperand {
-            buffer: &a,
-            layout: &a_layout,
-        },
-        0.5,
-    )
-    .unwrap();
-    assert_eq!(rank_tol, 1);
-}
-
-#[test]
-fn linalg_det_matches_reference() {
-    let Some(dev) = device("linalg_det_matches_reference") else {
-        return;
-    };
-
-    // Diagonal matrix with determinant = 3.0 * 2.0 * -1.0 = -6.0
-    let host_in = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, -1.0];
-    let a = dev.upload(&host_in).unwrap();
-    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
-
-    let det_buffer = det(
-        &dev,
-        StridedOperand {
-            buffer: &a,
-            layout: &a_layout,
-        },
-    )
-    .unwrap();
-    let mut got = [0.0f32; 1];
-    dev.download(&det_buffer, &mut got).unwrap();
-    assert!((got[0] - (-6.0f32)).abs() < 1.0e-5);
 }
 
 /// The blocked-Cholesky differential is one shared clause (SUBSTRATE-003):

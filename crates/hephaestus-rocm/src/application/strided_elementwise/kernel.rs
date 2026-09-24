@@ -1,7 +1,6 @@
 //! Shared HIP metadata declaration and strided elementwise kernels.
 
-use super::metadata::MAX_STRIDED_RANK;
-use hephaestus_core::{BinaryExpr, DialectScalar, HipC, UnaryExpr};
+use hephaestus_core::{BinaryExpr, DialectScalar, HipC, MAX_STRIDED_RANK, UnaryExpr};
 
 #[cfg(test)]
 mod tests;

@@ -1,7 +1,8 @@
-//! Provider-owned dense product seam for CUDA.
+//! Provider-owned dense product and composition seams for CUDA.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`] and
+//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `CudaDevice`, matching the crate's other seam adapters.
 
@@ -17,7 +18,7 @@ use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
-/// Provider-owned implementation of [`DenseProductOps`] for CUDA.
+/// Provider-owned dense product and composition implementation for CUDA.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaDenseProductOps;
 

@@ -1,4 +1,4 @@
-use super::{StridedMeta, pad_shape, pad_strides};
+use super::{StridedMeta, pad_shape, pad_strides, strided_meta_new};
 use hephaestus_core::HephaestusError;
 use leto::Layout;
 
@@ -202,4 +202,3 @@ fn packed_abi_has_the_same_field_order_as_hip() {
     assert_eq!(core::mem::offset_of!(StridedMeta, out_strides), 96);
     assert_eq!(core::mem::offset_of!(StridedMeta, offsets), 128);
 }
-
