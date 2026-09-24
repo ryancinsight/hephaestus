@@ -953,49 +953,12 @@ impl WgpuDevice {
     ///
     /// [`HephaestusError::AdapterUnavailable`] when no Metal adapter can be acquired.
     pub fn try_metal(label: &str) -> Result<Self> {
-        let try_acquire = |instance: &wgpu::Instance| -> Option<Result<Self>> {
-            let try_device = |adapter: &wgpu::Adapter| -> std::result::Result<
-                (wgpu::Device, wgpu::Queue),
-                wgpu::RequestDeviceError,
-            > {
-                futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                    label: Some(label),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
-                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                    trace: wgpu::Trace::Off,
-                }))
-            };
-
-            if let Ok(adapter) = futures::executor::block_on(instance.request_adapter(
-                &wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::HighPerformance,
-                    compatible_surface: None,
-                    force_fallback_adapter: false,
-                    apply_limit_buckets: false,
-                },
-            )) {
-                let topology = Self::topology_from_adapter(&adapter);
-                if let Ok((device, queue)) = try_device(&adapter) {
-                    let mut acquired = Self::new(Arc::new(device), Arc::new(queue));
-                    acquired.topology = Some(Arc::new(topology));
-                    return Some(Ok(acquired));
-                }
-            }
-            None
-        };
-
-        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
-        desc.backends = wgpu::Backends::METAL;
-        let instance = wgpu::Instance::new(desc);
-        if let Some(device) = try_acquire(&instance) {
-            device
-        } else {
-            Err(HephaestusError::AdapterUnavailable {
-                message: "No compatible Metal GPU adapter or device could be acquired.".to_string(),
-            })
-        }
+        Self::try_metal_with_device_preference_and_optional_device_features_and_limits(
+            label,
+            DevicePreference::HighPerformance,
+            &[],
+            Self::downlevel_device_limits(),
+        )
     }
 
     /// Borrow the inner wgpu device for pipeline construction.
