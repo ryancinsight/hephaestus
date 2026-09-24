@@ -13,15 +13,15 @@ use std::sync::Arc;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    Binding, CommandStream, CudaC, DispatchGrid, GroupedBinding, GroupedCommandStream,
-    GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
-    KernelSource, Result, validate_bindings, validate_grouped_bindings,
+    validate_bindings, validate_grouped_bindings, Binding, CommandStream, CudaC, DispatchGrid,
+    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
+    GroupedKernelSource, HephaestusError, KernelDevice, KernelSource, Result,
 };
 
 #[cfg(not(feature = "cuda"))]
 use crate::application::pipeline::SafeCachedKernel;
 use crate::application::pipeline::{
-    LaunchConfig, PipelineKey, cached_kernel, launch_kernel, source_hash,
+    cached_kernel, launch_kernel, source_hash, LaunchConfig, PipelineKey,
 };
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]
@@ -49,45 +49,40 @@ pub struct CudaGroupedPrepared<K> {
     marker: PhantomData<K>,
 }
 
-impl<K> core::fmt::Debug for CudaGroupedPrepared<K> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("CudaGroupedPrepared")
-            .field("source_hash", &self.source_hash)
-            .field("label", &self.label)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<K> Clone for CudaGroupedPrepared<K> {
-    fn clone(&self) -> Self {
-        Self {
-            kernel: self.kernel.clone(),
-            source_hash: self.source_hash,
-            label: self.label,
-            marker: PhantomData,
+macro_rules! impl_prepared_traits {
+    (
+        $name:ident {
+            debug: [$($debug_field:ident),+ $(,)?],
+            clone: [$($clone_field:ident),+ $(,)?]
         }
-    }
-}
-
-impl<K> core::fmt::Debug for CudaPrepared<K> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("CudaPrepared")
-            .field("source_hash", &self.source_hash)
-            .field("label", &self.label)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<K> Clone for CudaPrepared<K> {
-    fn clone(&self) -> Self {
-        Self {
-            kernel: self.kernel.clone(),
-            source_hash: self.source_hash,
-            label: self.label,
-            marker: PhantomData,
+    ) => {
+        impl<K> core::fmt::Debug for $name<K> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let mut debug = f.debug_struct(stringify!($name));
+                $(debug.field(stringify!($debug_field), &self.$debug_field);)+
+                debug.finish_non_exhaustive()
+            }
         }
-    }
+
+        impl<K> Clone for $name<K> {
+            fn clone(&self) -> Self {
+                Self {
+                    $($clone_field: self.$clone_field.clone(),)+
+                    marker: PhantomData,
+                }
+            }
+        }
+    };
 }
+
+impl_prepared_traits!(CudaGroupedPrepared {
+    debug: [source_hash, label],
+    clone: [kernel, source_hash, label]
+});
+impl_prepared_traits!(CudaPrepared {
+    debug: [source_hash, label],
+    clone: [kernel, source_hash, label]
+});
 
 /// CUDA command stream for ordered authored-kernel dispatch, copies, and fills.
 ///

@@ -12,9 +12,9 @@ use std::marker::PhantomData;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    Binding, CommandStream, DispatchGrid, GroupedBinding, GroupedCommandStream,
-    GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
-    KernelSource, Result, Wgsl, validate_bindings, validate_grouped_bindings,
+    validate_bindings, validate_grouped_bindings, Access, Binding, BindingDecl, CommandStream,
+    DispatchGrid, GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
+    GroupedKernelSource, HephaestusError, KernelDevice, KernelSource, Result, Wgsl,
 };
 
 use crate::application::bindings::{BindGroupEntries, BindGroups, UniformBuffers};
@@ -47,54 +47,41 @@ pub struct WgpuGroupedPrepared<K> {
     marker: PhantomData<K>,
 }
 
-impl<K> core::fmt::Debug for WgpuGroupedPrepared<K> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("WgpuGroupedPrepared")
-            .field("pipeline", &self.pipeline)
-            .field("bind_group_layouts", &self.bind_group_layouts)
-            .field("parameter_group", &self.parameter_group)
-            .field("parameter_binding", &self.parameter_binding)
-            .field("label", &self.label)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<K> Clone for WgpuGroupedPrepared<K> {
-    fn clone(&self) -> Self {
-        Self {
-            pipeline: self.pipeline.clone(),
-            bind_group_layouts: self.bind_group_layouts.clone(),
-            parameter_group: self.parameter_group,
-            parameter_binding: self.parameter_binding,
-            owner: self.owner.clone(),
-            label: self.label,
-            marker: PhantomData,
+macro_rules! impl_prepared_traits {
+    ($name:ident { $($field:ident),+ $(,)? }) => {
+        impl<K> core::fmt::Debug for $name<K> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let mut debug = f.debug_struct(stringify!($name));
+                $(debug.field(stringify!($field), &self.$field);)+
+                debug.finish_non_exhaustive()
+            }
         }
-    }
-}
 
-impl<K> core::fmt::Debug for WgpuPrepared<K> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("WgpuPrepared")
-            .field("pipeline", &self.pipeline)
-            .field("bind_group_layout", &self.bind_group_layout)
-            .field("parameter_binding", &self.parameter_binding)
-            .field("label", &self.label)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<K> Clone for WgpuPrepared<K> {
-    fn clone(&self) -> Self {
-        Self {
-            pipeline: self.pipeline.clone(),
-            bind_group_layout: self.bind_group_layout.clone(),
-            parameter_binding: self.parameter_binding,
-            label: self.label,
-            marker: PhantomData,
+        impl<K> Clone for $name<K> {
+            fn clone(&self) -> Self {
+                Self {
+                    $($field: self.$field.clone(),)+
+                    marker: PhantomData,
+                }
+            }
         }
-    }
+    };
 }
+
+impl_prepared_traits!(WgpuGroupedPrepared {
+    pipeline,
+    bind_group_layouts,
+    parameter_group,
+    parameter_binding,
+    owner,
+    label
+});
+impl_prepared_traits!(WgpuPrepared {
+    pipeline,
+    bind_group_layout,
+    parameter_binding,
+    label
+});
 
 /// WGPU command stream for ordered kernel dispatch, copies, and fills.
 pub struct WgpuCommandStream<'d> {
@@ -201,21 +188,15 @@ impl WgpuDevice {
         self.queue()
             .write_buffer(&parameters, 0, eunomia::layout::bytes_of(params));
 
-        let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
-        for (binding, bound) in bindings.iter().enumerate() {
+        let bind_group = {
+            let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
+            push_storage_bind_group_entries(K::LABEL, &mut entries, bindings)?;
             entries.push(wgpu::BindGroupEntry {
-                binding: u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("{}: binding index exceeds u32::MAX", K::LABEL),
-                })?,
-                resource: bound.handle.as_entire_binding(),
+                binding: prepared.parameter_binding,
+                resource: parameters.as_entire_binding(),
             });
-        }
-        entries.push(wgpu::BindGroupEntry {
-            binding: prepared.parameter_binding,
-            resource: parameters.as_entire_binding(),
-        });
-        let bind_group = checked_bind_group(self, &prepared.pipeline, prepared.label, &entries)?;
-        drop(entries);
+            checked_bind_group(self, &prepared.pipeline, prepared.label, &entries)?
+        };
 
         Ok(WgpuBoundDispatch {
             pipeline: prepared.pipeline.clone(),
@@ -259,14 +240,7 @@ impl KernelDevice for WgpuDevice {
     }
 
     fn prepare<K: KernelSource<Wgsl>>(&self, kernel: &K) -> Result<Self::Prepared<K>> {
-        let parameter_binding =
-            u32::try_from(K::BINDINGS.len()).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!(
-                    "{}: binding count {} exceeds u32::MAX",
-                    K::LABEL,
-                    K::BINDINGS.len()
-                ),
-            })?;
+        let parameter_binding = binding_index(K::LABEL, K::BINDINGS.len())?;
 
         let source = kernel.source();
         let shader = self
@@ -276,33 +250,7 @@ impl KernelDevice for WgpuDevice {
                 source: wgpu::ShaderSource::Wgsl(source),
             });
 
-        let mut entries = Vec::with_capacity(K::BINDINGS.len() + 1);
-        for (binding, decl) in K::BINDINGS.iter().enumerate() {
-            entries.push(wgpu::BindGroupLayoutEntry {
-                binding: u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("{label}: binding index exceeds u32::MAX", label = K::LABEL),
-                })?,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage {
-                        read_only: matches!(decl.access, hephaestus_core::Access::ReadOnly),
-                    },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-        }
-        entries.push(wgpu::BindGroupLayoutEntry {
-            binding: parameter_binding,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        });
+        let entries = storage_layout_entries(K::LABEL, K::BINDINGS, parameter_binding)?;
 
         let bind_group_layout =
             self.inner()
@@ -427,29 +375,22 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
             .queue()
             .write_buffer(&raw_params, 0, eunomia::layout::bytes_of(params));
 
-        let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
-        for (binding, bound) in bindings.iter().enumerate() {
+        let bind_group = {
+            let mut entries = BindGroupEntries::with_capacity(bindings.len() + 1);
+            push_storage_bind_group_entries(K::LABEL, &mut entries, bindings)?;
             entries.push(wgpu::BindGroupEntry {
-                binding: u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("{}: binding index exceeds u32::MAX", K::LABEL),
-                })?,
-                resource: bound.handle.as_entire_binding(),
+                binding: prepared.parameter_binding,
+                resource: raw_params.as_entire_binding(),
             });
-        }
-        entries.push(wgpu::BindGroupEntry {
-            binding: prepared.parameter_binding,
-            resource: raw_params.as_entire_binding(),
-        });
 
-        let bind_group = self
-            .device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(prepared.label),
-                layout: &prepared.bind_group_layout,
-                entries: &entries,
-            });
-        drop(entries);
+            self.device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(prepared.label),
+                    layout: &prepared.bind_group_layout,
+                    entries: &entries,
+                })
+        };
         self.uniform_buffers.push(raw_params);
 
         {
@@ -513,6 +454,62 @@ impl<'d> CommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
     fn submit(self) -> Result<()> {
         self.submit_indexed().map(|_| ())
     }
+}
+
+fn binding_index(label: &str, binding: usize) -> Result<u32> {
+    u32::try_from(binding).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("{label}: binding index exceeds u32::MAX"),
+    })
+}
+
+fn push_storage_bind_group_entries<'a, 'b>(
+    label: &str,
+    entries: &mut BindGroupEntries<'a>,
+    bindings: &[Binding<'b, WgpuDevice>],
+) -> Result<()>
+where
+    'b: 'a,
+{
+    for (binding, bound) in bindings.iter().enumerate() {
+        entries.push(wgpu::BindGroupEntry {
+            binding: binding_index(label, binding)?,
+            resource: bound.handle.as_entire_binding(),
+        });
+    }
+    Ok(())
+}
+
+fn storage_layout_entries(
+    label: &'static str,
+    bindings: &[BindingDecl],
+    parameter_binding: u32,
+) -> Result<Vec<wgpu::BindGroupLayoutEntry>> {
+    let mut entries = Vec::with_capacity(bindings.len() + 1);
+    for (binding, decl) in bindings.iter().enumerate() {
+        entries.push(wgpu::BindGroupLayoutEntry {
+            binding: binding_index(label, binding)?,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage {
+                    read_only: matches!(decl.access, Access::ReadOnly),
+                },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        });
+    }
+    entries.push(wgpu::BindGroupLayoutEntry {
+        binding: parameter_binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    });
+    Ok(entries)
 }
 
 impl<'d> GroupedCommandStream<'d, WgpuDevice> for WgpuCommandStream<'d> {
