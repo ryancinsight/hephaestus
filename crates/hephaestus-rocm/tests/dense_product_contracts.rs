@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::assert_dense_product_contract;
+use hephaestus_conformance::{assert_dense_composition_contract, assert_dense_product_contract};
 use hephaestus_rocm::{RocmDenseProductOps, RocmDevice};
 
 #[test]
@@ -16,4 +16,5 @@ fn rocm_satisfies_the_dense_product_contract() {
         Err(error) => panic!("ROCm dense-product conformance requires a physical device: {error}"),
     };
     assert_dense_product_contract(&device, &RocmDenseProductOps);
+    assert_dense_composition_contract(&device, &RocmDenseProductOps);
 }

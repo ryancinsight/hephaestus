@@ -6,10 +6,14 @@
 //! `WgpuDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
-use hephaestus_core::{DenseProductOps, DialectScalar, Result, StridedView, Wgsl};
+use hephaestus_core::{
+    DenseCompositionOps, DenseProductOps, DialectScalar, Result, StridedView, Wgsl,
+};
 
 use crate::MatmulZero;
-use crate::application::linalg::{batched_matmul_into, kron_into, matmul_into};
+use crate::application::linalg::{
+    batched_matmul_into, det, kron_into, matmul_into, matpow, matrix_rank_with_tolerance,
+};
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -50,6 +54,34 @@ where
         output: StridedView<'_, WgpuBuffer<T>, 2>,
     ) -> Result<()> {
         kron_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+    }
+}
+
+impl DenseCompositionOps<WgpuDevice> for WgpuDenseProductOps {
+    fn matpow(
+        &self,
+        device: &WgpuDevice,
+        matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
+        exponent: u32,
+    ) -> Result<WgpuBuffer<f32>> {
+        matpow(device, operand(matrix), exponent)
+    }
+
+    fn det(
+        &self,
+        device: &WgpuDevice,
+        matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
+    ) -> Result<WgpuBuffer<f32>> {
+        det(device, operand(matrix))
+    }
+
+    fn matrix_rank_with_tolerance(
+        &self,
+        device: &WgpuDevice,
+        matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
+        relative_tolerance: f32,
+    ) -> Result<usize> {
+        matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
     }
 }
 

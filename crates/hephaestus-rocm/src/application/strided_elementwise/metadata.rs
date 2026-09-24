@@ -2,51 +2,36 @@
 
 use crate::application::strided::StridedOperand;
 use eunomia::{Pod, Zeroable};
-use hephaestus_core::{DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{DeviceBuffer, HephaestusError, Result, MAX_STRIDED_RANK, to_u32};
 
-/// Maximum rank represented by the packed strided metadata.
-pub const MAX_STRIDED_RANK: usize = 8;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct StridedMeta {
-    pub(crate) shape: [u32; MAX_STRIDED_RANK],
-    pub(crate) a_strides: [i32; MAX_STRIDED_RANK],
-    pub(crate) b_strides: [i32; MAX_STRIDED_RANK],
-    pub(crate) out_strides: [i32; MAX_STRIDED_RANK],
-    pub(crate) offsets: [u32; 4],
-}
+pub use hephaestus_core::StridedMeta;
 
 const _: () = assert!(core::mem::size_of::<StridedMeta>() == (4 * MAX_STRIDED_RANK + 4) * 4);
 const _: () = assert!(core::mem::align_of::<StridedMeta>() == 4);
 
-impl StridedMeta {
-    pub(crate) fn new<const N: usize>(
-        first: &leto::Layout<N>,
-        second: Option<&leto::Layout<N>>,
-        output: &leto::Layout<N>,
-        len: usize,
-    ) -> Result<Self> {
-        let offset = |value| {
-            u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("layout offset {value} exceeds u32 range"),
-            })
-        };
-        Ok(Self {
-            shape: pad_shape(output.shape())?,
-            a_strides: pad_strides(first.strides())?,
-            b_strides: second.map_or(Ok([0; MAX_STRIDED_RANK]), |layout| {
-                pad_strides(layout.strides())
-            })?,
-            out_strides: pad_strides(output.strides())?,
-            offsets: [
-                offset(first.offset())?,
-                second.map_or(Ok(0), |layout| offset(layout.offset()))?,
-                offset(output.offset())?,
-                dispatch_len(len)?,
-            ],
-        })
-    }
+pub(crate) fn strided_meta_new<const N: usize>(
+    first: &leto::Layout<N>,
+    second: Option<&leto::Layout<N>>,
+    output: &leto::Layout<N>,
+    len: usize,
+) -> Result<StridedMeta> {
+    let offset = |value| {
+        to_u32(value, "layout offset")
+    };
+    Ok(StridedMeta {
+        shape: pad_shape(output.shape())?,
+        a_strides: pad_strides(first.strides())?,
+        b_strides: second.map_or(Ok([0; MAX_STRIDED_RANK]), |layout| {
+            pad_strides(layout.strides())
+        })?,
+        out_strides: pad_strides(output.strides())?,
+        offsets: [
+            offset(first.offset())?,
+            second.map_or(Ok(0), |layout| offset(layout.offset()))?,
+            offset(output.offset())?,
+            dispatch_len(len)?,
+        ],
+    })
 }
 
 #[cfg(test)]
@@ -151,7 +136,7 @@ where
     if len == 0 {
         return Ok(None);
     }
-    let meta = StridedMeta::new(&lhs_layout, Some(&rhs_layout), output.layout, len)?;
+    let meta = strided_meta_new(&lhs_layout, Some(&rhs_layout), output.layout, len)?;
     Ok(Some((meta, len)))
 }
 
@@ -192,7 +177,7 @@ where
     if len == 0 {
         return Ok(None);
     }
-    let meta = StridedMeta::new(&input_layout, None, output.layout, len)?;
+    let meta = strided_meta_new(&input_layout, None, output.layout, len)?;
     Ok(Some((meta, len)))
 }
 
@@ -211,3 +196,8 @@ where
 {
     unary_like_strided_meta(input, output)
 }
+
+
+
+
+

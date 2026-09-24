@@ -116,7 +116,7 @@ where
     if len == 0 {
         return Ok(());
     }
-    let meta = StridedMeta::new(&input_layout, None, output.layout, len)?;
+    let meta = strided_meta_new(&input_layout, None, output.layout, len)?;
     launch_parameterized_unary::<Op>(
         device,
         input.buffer,
@@ -178,3 +178,4 @@ mod tests {
         assert!(source.contains("output[out_offset] = x >= 0.0f ? x : first * x"));
     }
 }
+

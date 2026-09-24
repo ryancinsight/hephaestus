@@ -9,13 +9,13 @@
 //!   factorization runs on the CPU but the O(n³) trailing SYRK update
 //!   (`A₂₂ -= L₂₁ L₂₁ᵀ`) runs on the GPU via a dedicated compute kernel.
 
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-use hephaestus_core::factor_cholesky_panel;
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
-use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
+use hephaestus_core::{
+    BlockedCholeskyBackend, BlockedDecompositionBackend, TrailingSyrk, blocked_cholesky,
+};
+
 #[cfg(feature = "cuda")]
 use super::validate::validate_dense_operand;
 use super::validate::validate_square;
@@ -194,86 +194,25 @@ pub fn cholesky_decompose_blocked(
             return Ok(GpuCholesky { inner, lower, n: 0 });
         }
 
-        // Allocate device-resident buffer and copy matrix.buffer into it on the GPU
-        let lower_buf = device.alloc_uninitialized::<f32>(n * n)?;
-        device.bind()?;
-        let bytes = n * n * std::mem::size_of::<f32>();
-
-        // SAFETY: this device's context is current (`bind` above). `lower_buf`
-        // is a live, freshly allocated `n * n`-element device allocation, and
-        // `matrix.buffer` holds at least `n * n` elements: the operand is
-        // enforced dense C-contiguous at offset 0 (`validate_dense_operand`
-        // above), so the layout's validated storage extent
-        // (`validate_square`) equals the `bytes` read here. The copy is
-        // asynchronous on the null stream; both allocations outlive it
-        // because frees route through synchronizing `cuMemFree`-family
-        // calls.
-        let res =
-            unsafe { (device.driver().memory.copy)(lower_buf.raw(), matrix.buffer.raw(), bytes) };
-        if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!("cholesky startup cuMemcpyDtoD_v2 failed: {res}"),
-            });
-        }
+        // Copy the (dense, validated) operand into a fresh device working
+        // buffer; the shared blocked-Cholesky loop owns all host bookkeeping.
+        let lower_buf = device.clone_device(matrix.buffer, n * n)?;
 
         const BLOCK_SIZE: usize = 64;
         let block_size = BLOCK_SIZE.min(n);
 
-        for k in (0..n).step_by(block_size) {
-            let b = block_size.min(n - k);
-            let panel_rows = n - k;
+        let result = blocked_cholesky(device, lower_buf, n, block_size)?;
 
-            // Download only the active panel column (diagonal block + off-diagonal panel)
-            let panel_region = MatrixRegion {
-                stride: n,
-                row_start: k,
-                col_start: k,
-                rows: panel_rows,
-                cols: b,
-            };
-            let mut panel = download_matrix_region_compact(device, &lower_buf, panel_region)?;
-
-            let trail_rows = n - k - b;
-            // Factor this panel on the host (diagonal-block Cholesky +
-            // off-diagonal triangular solve) — the shared computation.
-            factor_cholesky_panel(&mut panel, b, trail_rows)?;
-
-            if trail_rows == 0 {
-                // Write the final diagonal block back to the device buffer
-                write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
-                continue;
-            }
-
-            // Write the entire updated active panel back to device buffer
-            write_matrix_region_compact(device, &lower_buf, &panel, panel_region)?;
-
-            // ── Step 3: trailing SYRK update on GPU ──
-            let trail_layout = leto::Layout::try_new(
-                [trail_rows, trail_rows],
-                [n as isize, 1],
-                (k + b) * n + (k + b),
-            )
-            .expect("invariant: submatrix layout derives from a validated parent");
-            syrk_trailing_update(
-                device,
-                &lower_buf,
-                &trail_layout,
-                &lower_buf,
-                b,
-                (k + b) * n + k,
-                n,
-            )?;
-        }
-
-        // Download the final factored matrix back to host.
-        let mut host = device.download_owned(&lower_buf)?;
+        // Download the final factored matrix back to host, clear the stale
+        // strict upper triangle, and write the cleared copy back.
+        let mut host = device.download_owned(&result.lower)?;
 
         for row in 0..n {
             for col in (row + 1)..n {
                 host[row * n + col] = 0.0;
             }
         }
-        device.write_buffer(&lower_buf, &host)?;
+        device.write_buffer(&result.lower, &host)?;
 
         let inner = leto_ops::CholeskyDecomposition::from_raw_parts(
             leto::Array2::from_shape_vec([n, n], host).expect("valid square factor"),
@@ -281,7 +220,7 @@ pub fn cholesky_decompose_blocked(
 
         Ok(GpuCholesky {
             inner,
-            lower: lower_buf,
+            lower: result.lower,
             n,
         })
     }
@@ -437,3 +376,31 @@ mod syrk_impl {
 
 #[cfg(feature = "cuda")]
 use syrk_impl::syrk_trailing_update;
+
+/// The CUDA blocked-Cholesky operation the shared [`blocked_cholesky`] loop
+/// drives (ADR 0003).
+///
+/// Only the trailing SYRK kernel is CUDA-specific: the loop owns the panel
+/// iteration, the CPU panel factorisation, the diagonal retention, and the
+/// panel scatter. The operand submatrix layout is derived here from the
+/// loop's offsets and strides.
+#[cfg(feature = "cuda")]
+impl BlockedCholeskyBackend for CudaDevice {
+    fn syrk_trailing(&self, matrix: &Self::Buffer, spec: TrailingSyrk) -> Result<()> {
+        let trail_layout = leto::Layout::try_new(
+            [spec.trail_extent, spec.trail_extent],
+            [spec.matrix_stride as isize, 1],
+            spec.trail_offset,
+        )
+        .expect("invariant: submatrix layout derives from a validated parent");
+        syrk_trailing_update(
+            self,
+            matrix,
+            &trail_layout,
+            matrix,
+            spec.panel_cols,
+            spec.panel_offset,
+            spec.panel_stride,
+        )
+    }
+}

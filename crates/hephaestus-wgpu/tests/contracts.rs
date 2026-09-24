@@ -167,8 +167,6 @@ contract_cases!(
     contract::matrix_rank_relative_tolerance_is_the_discriminator,
     contract::det_of_near_singular_triangular_is_exact_pivot_product,
     #[cfg(feature = "decomposition")]
-    contract::blocked_cholesky_matches_leto_reference_across_block_boundary,
-    #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks,
     #[cfg(feature = "decomposition")]
     contract::symmetric_eigen_jacobi_rejects_non_symmetric_input,
@@ -223,15 +221,9 @@ contract_cases!(
     contract::prepared_l2_norm_reuses_output_and_observes_input_updates,
     contract::linalg_reductions_accept_strided_views,
     #[cfg(feature = "decomposition")]
-    contract::blocked_lu_matches_leto_reference,
+    contract::blocked_lu_contract,
     #[cfg(feature = "decomposition")]
-    contract::blocked_lu_identity_yields_identity_factors,
-    #[cfg(feature = "decomposition")]
-    contract::blocked_lu_solve_known_system_accurate,
-    #[cfg(feature = "decomposition")]
-    contract::blocked_lu_rejects_singular_matrix,
-    #[cfg(feature = "decomposition")]
-    contract::blocked_qr_matches_leto_reference,
+    contract::blocked_qr_least_squares_matches_leto_reference,
     #[cfg(feature = "decomposition")]
     contract::qr_r_buffer_is_upper_triangular_on_both_entry_points,
     #[cfg(feature = "decomposition")]
@@ -245,11 +237,9 @@ contract_cases!(
     #[cfg(feature = "decomposition")]
     contract::blocked_qr_rejects_underdetermined,
     #[cfg(feature = "decomposition")]
-    contract::blocked_cholesky_identity_yields_identity_lower,
+    contract::blocked_cholesky_contract,
     #[cfg(feature = "decomposition")]
-    contract::blocked_cholesky_retains_factor_diagonal_across_panels,
-    #[cfg(feature = "decomposition")]
-    contract::blocked_cholesky_spd_reconstruction_matches_original,
+    contract::blocked_qr_contract,
     #[cfg(feature = "decomposition")]
     contract::blocked_cholesky_solve_known_system_accurate,
     #[cfg(feature = "decomposition")]
@@ -380,15 +370,24 @@ contract_cases!(
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
 const EXPECTED_CONTRACT_CASES: usize = 126;
+// The four hand-rolled `blocked_lu_*` differential cases folded into the
+// shared `assert_blocked_lu_contract` clause: four registrations removed,
+// one added. The four `blocked_cholesky_*` differentials folded into
+// `assert_blocked_cholesky_contract` the same way, and the blocked-QR
+// differential became `assert_blocked_qr_contract`, so this combination is a
+// further net two below.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 185;
+const EXPECTED_CONTRACT_CASES: usize = 180;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
 const EXPECTED_CONTRACT_CASES: usize = 138;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
-// shared Leto clause instantiated for i32 and f32 from scan_contracts.rs, so
-// every feature combination loses exactly that one registration.
-const EXPECTED_CONTRACT_CASES: usize = 187;
+// shared Leto clause instantiated from scan_contracts.rs, so every feature
+// combination loses exactly that one registration (187). The four
+// `blocked_lu_*` differentials folded into `assert_blocked_lu_contract` are a
+// further net three below, and the four `blocked_cholesky_*` plus the
+// `blocked_qr_*` differentials another net two.
+const EXPECTED_CONTRACT_CASES: usize = 182;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

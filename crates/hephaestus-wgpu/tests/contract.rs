@@ -2403,58 +2403,32 @@ pub(super) fn det_of_near_singular_triangular_is_exact_pivot_product() {
 }
 
 #[cfg(feature = "decomposition")]
-pub(super) fn blocked_cholesky_matches_leto_reference_across_block_boundary() {
+/// The blocked-Cholesky differential is one shared clause (SUBSTRATE-003):
+/// the fixtures and assertions live in `hephaestus-conformance`, generic over
+/// the `BlockedCholeskyBackend` seam the shared `blocked_cholesky` loop drives.
+/// This instantiation supplies the device and the panel width the blocked
+/// entry point factors with.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
-    use leto::Layout;
+    const BLOCK_SIZE: usize = 64;
+    hephaestus_conformance::assert_blocked_cholesky_contract(&device, BLOCK_SIZE);
+}
 
-    let n = 66usize;
-    let mut matrix_host = vec![0.0f32; n * n];
-    for row in 0..n {
-        for col in 0..n {
-            matrix_host[row * n + col] = if row == col {
-                n as f32 + 4.0
-            } else {
-                0.01 / (1.0 + row.abs_diff(col) as f32)
-            };
-        }
-    }
-    let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([n, n]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
-    let leto_cholesky = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_cholesky = cholesky_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    let mut got_lower = vec![0.0f32; n * n];
-    device
-        .download(gpu_cholesky.lower(), &mut got_lower)
-        .unwrap();
-    let expected_lower = leto::Storage::as_slice(leto_cholesky.lower().storage());
-    for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
-        // Two backward-stable Choleskys of this strictly diagonally
-        // dominant fixture (κ∞ ≤ 1.01) differ elementwise by at most
-        // 2·c(n)·ε·κ∞·max(|L|, 1) with c(n) ≤ n (Higham, Accuracy and
-        // Stability, ch. 10); 4·n·ε keeps 2× slack over that bound.
-        let tolerance = 4.0 * n as f32 * f32::EPSILON * expected.abs().max(1.0);
-        assert!(
-            (got - expected).abs() <= tolerance,
-            "blocked Cholesky lower mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
-        );
-    }
-    // Bitwise det equality pins provider identity: both dets come from
-    // the same leto elimination on the host, so any divergence means the
-    // adapter re-derived it.
-    assert_eq!(gpu_cholesky.det(), leto_cholesky.det());
+/// The blocked-QR differential is one shared clause (SUBSTRATE-003): the
+/// fixtures and assertions live in `hephaestus-conformance`, generic over the
+/// `BlockedQrBackend` seam the shared `blocked_qr` loop drives. This
+/// instantiation supplies the device and the panel width the blocked entry
+/// point factors with.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    const BLOCK_SIZE: usize = 32;
+    hephaestus_conformance::assert_blocked_qr_contract(&device, BLOCK_SIZE);
 }
 
 #[cfg(feature = "decomposition")]
@@ -3583,177 +3557,22 @@ pub(super) fn linalg_reductions_accept_strided_views() {
 
 // ── Blocked decomposition differential tests ────────────────────────────
 
+/// The blocked-LU differential is one shared clause (SUBSTRATE-003): the
+/// fixtures and assertions live in `hephaestus-conformance`, generic over the
+/// `BlockedDecompositionBackend` seam the shared `blocked_lu` loop drives.
+/// This instantiation supplies the device and the panel width the blocked
+/// entry points factor with.
 #[cfg(feature = "decomposition")]
-pub(super) fn blocked_lu_matches_leto_reference() {
+pub(super) fn blocked_lu_contract() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
-    use leto::Layout;
-
-    // 66×66 matrix exercises the block boundary (LU_BLOCK_SIZE = 64).
-    let n = 66usize;
-    let mut matrix_host = vec![0.0f32; n * n];
-    for row in 0..n {
-        for col in 0..n {
-            matrix_host[row * n + col] = if row == col {
-                n as f32 + 4.0
-            } else {
-                0.1 / (1.0 + row.abs_diff(col) as f32)
-            };
-        }
-    }
-    // Force a pivot swap at the start (row 0) and across the block boundary (row 64)
-    matrix_host[0] = 0.0;
-    matrix_host[64 * n + 64] = 0.0;
-
-    let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([n, n]).unwrap();
-
-    let gpu_lu = lu_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    // Solve via host-side decomposition must match.
-    let rhs_host = vec![1.0f32; n];
-    let rhs = device.upload(&rhs_host).unwrap();
-    let solution = gpu_lu.solve(&device, &rhs).unwrap();
-    let mut got = vec![0.0f32; n];
-    device.download(&solution, &mut got).unwrap();
-
-    // Compute residual: ||A * x - b||_inf
-    let mut max_res = 0.0f32;
-    for i in 0..n {
-        let mut sum = 0.0f64;
-        for j in 0..n {
-            sum += matrix_host[i * n + j] as f64 * got[j] as f64;
-        }
-        let res = (sum - rhs_host[i] as f64).abs() as f32;
-        if res > max_res {
-            max_res = res;
-        }
-    }
-    // Backward stability bounds the residual independently of κ:
-    // ‖A·x̂ − b‖∞ ≤ c(n)·ε·‖A‖∞·‖x̂‖∞ with c(n) ≤ 3·n·ρ and growth
-    // ρ ≤ 4 on this near-diagonal fixture even with the two forced
-    // pivot swaps (Higham ch. 9), giving c(n) ≤ 12·n.
-    let a_inf = (0..n)
-        .map(|i| (0..n).map(|j| matrix_host[i * n + j].abs()).sum::<f32>())
-        .fold(0.0f32, f32::max);
-    let x_inf = got.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
-    let residual_bound = 12.0 * n as f32 * f32::EPSILON * a_inf * x_inf;
-    assert!(
-        max_res <= residual_bound,
-        "blocked LU solve is inaccurate, residual norm = {}",
-        max_res
-    );
+    const BLOCK_SIZE: usize = 64;
+    hephaestus_conformance::assert_blocked_lu_contract(&device, BLOCK_SIZE);
 }
 
 #[cfg(feature = "decomposition")]
-pub(super) fn blocked_lu_identity_yields_identity_factors() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
-    use leto::Layout;
-
-    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
-    let matrix = device.upload(&identity_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
-    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_lu = lu_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    assert_eq!(gpu_lu.n(), 2);
-    assert_eq!(gpu_lu.det(), leto_lu.det());
-    assert_eq!(gpu_lu.det(), 1.0);
-}
-
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_lu_solve_known_system_accurate() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
-    use leto::Layout;
-
-    // A = [[2, 1], [4, 3]], b = [5, 11]  =>  x = [2, 1]
-    let matrix_host = vec![2.0f32, 1.0, 4.0, 3.0];
-    let rhs_host = vec![5.0f32, 11.0];
-    let matrix = device.upload(&matrix_host).unwrap();
-    let rhs = device.upload(&rhs_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([2, 2], matrix_host).unwrap();
-    let leto_rhs = leto::Array::from_shape_vec([2], rhs_host).unwrap();
-    let leto_lu = leto_ops::lu_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_lu = lu_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    let solution = gpu_lu.solve(&device, &rhs).unwrap();
-    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
-    let mut got = vec![0.0f32; 2];
-    device.download(&solution, &mut got).unwrap();
-    let expected = leto::Storage::as_slice(expected_solution.storage());
-    for i in 0..2 {
-        // Every elimination and substitution step on this fixture is
-        // dyadic (pivot 4, multiplier 1/2, U₂₂ = −1/2), so both solves
-        // are exact; the bound admits one reciprocal-multiply rounding
-        // per step.
-        assert!(
-            (got[i] - expected[i]).abs() <= 4.0 * f32::EPSILON * expected[i].abs(),
-            "blocked LU solve x[{i}] = {} expected {}",
-            got[i],
-            expected[i]
-        );
-    }
-}
-
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_lu_rejects_singular_matrix() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, lu_decompose_blocked};
-    use leto::Layout;
-
-    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
-    let matrix = device.upload(&singular_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-    let result = lu_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    );
-    assert_rejects(
-        &result,
-        "kernel dispatch failed: LU panel factorisation failed: pivot column 0 is exactly zero",
-    );
-}
-
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_qr_matches_leto_reference() {
+pub(super) fn blocked_qr_least_squares_matches_leto_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
@@ -3776,7 +3595,6 @@ pub(super) fn blocked_qr_matches_leto_reference() {
     let layout = Layout::c_contiguous([m, n]).unwrap();
     let leto_matrix = leto::Array::from_shape_vec([m, n], matrix_host.clone()).unwrap();
     let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
-
     let gpu_qr = qr_decompose_blocked(
         &device,
         StridedOperand {
@@ -3786,42 +3604,9 @@ pub(super) fn blocked_qr_matches_leto_reference() {
     )
     .unwrap();
 
-    assert_eq!(gpu_qr.shape(), (m, n));
-
-    // R's lower triangle is written as zeros, never computed; ε admits
-    // at most one rounded store.
-    let mut got_r = vec![0.0f32; m * n];
-    device.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
-    for i in 1..m {
-        for j in 0..n.min(i) {
-            assert!(
-                got_r[i * n + j].abs() <= f32::EPSILON,
-                "blocked QR R[{i},{j}] = {} should be zero (lower triangle)",
-                got_r[i * n + j]
-            );
-        }
-    }
-
-    // Upper n×n block of R must match leto-ops.
-    let leto_r = leto_qr.r();
-    let expected_r = leto::Storage::as_slice(leto_r.storage());
-    for i in 0..n {
-        for j in 0..n {
-            let got = got_r[i * n + j];
-            let expected = expected_r[i * n + j];
-            // Householder QR is columnwise backward stable:
-            // ‖ΔR·eⱼ‖₂ ≤ c(m,n)·ε·‖aⱼ‖₂ (Higham ch. 19) with ‖aⱼ‖₂ ≤ 5.1
-            // here, so 4·m·ε·max(|R|, 1) dominates the elementwise
-            // difference of two stable runs on this fixture.
-            let tolerance = 4.0 * m as f32 * f32::EPSILON * expected.abs().max(1.0);
-            assert!(
-                (got - expected).abs() <= tolerance,
-                "blocked QR R[{i},{j}]: got {got}, expected {expected}"
-            );
-        }
-    }
-
-    // Least-squares solve must match leto-ops.
+    // The shared blocked-QR clause owns the R differential. This wrapper-level
+    // clause retains only the backend solve path, which the core loop does not
+    // expose.
     let rhs_host: Vec<f32> = (0..m).map(|i| (i + 1) as f32).collect();
     let rhs = device.upload(&rhs_host).unwrap();
     let leto_rhs = leto::Array::from_shape_vec([m], rhs_host).unwrap();
@@ -4281,160 +4066,6 @@ pub(super) fn blocked_qr_rejects_underdetermined() {
     ));
 }
 
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_cholesky_identity_yields_identity_lower() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
-    use leto::Layout;
-
-    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
-    let matrix = device.upload(&identity_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
-    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_chol = cholesky_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    assert_eq!(gpu_chol.n(), 2);
-    assert_eq!(gpu_chol.det(), leto_chol.det());
-    assert_eq!(gpu_chol.det(), 1.0);
-
-    let mut got_lower = vec![0.0f32; 4];
-    device.download(gpu_chol.lower(), &mut got_lower).unwrap();
-    assert_eq!(got_lower, vec![1.0f32, 0.0, 0.0, 1.0]);
-}
-
-/// The blocked path retains the factor diagonal instead of the whole `n × n`
-/// factor, and `det`/`solve` still agree with the host reference.
-///
-/// `det` reads only that retained diagonal, so this pins it bitwise against
-/// the device factor's own diagonal — the two are written from the same host
-/// panel values, and any divergence means the capture indexes the panel
-/// wrongly. `solve` then forces the deferred host factor to materialize from
-/// the device buffer.
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_cholesky_retains_factor_diagonal_across_panels() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
-    use leto::Layout;
-
-    // `cholesky_decompose_blocked` has no host-delegation threshold, but it
-    // does degenerate: `block_size = BLOCK_SIZE.min(n)`, so at `n <= 64` the
-    // loop runs one panel with `trail_rows == 0`, dispatches no SYRK, and
-    // captures the whole diagonal from a single panel. `n = 160` against
-    // `BLOCK_SIZE = 64` runs three panels (64, 64, 32) with a ragged tail, so
-    // the capture spans panel boundaries and two SYRK updates run.
-    const BLOCK_SIZE: usize = 64;
-    let n = 160usize;
-    assert!(
-        n > BLOCK_SIZE && !n.is_multiple_of(BLOCK_SIZE),
-        "fixture must land in the multi-panel regime with a ragged tail"
-    );
-    assert_eq!(n.div_ceil(BLOCK_SIZE), 3, "fixture must run three panels");
-
-    // Strictly diagonally dominant SPD: off-diagonal row mass is
-    // `0.2·(n−1)/n < 0.2` against a diagonal of `1.4`, so ‖A‖∞ ≤ 1.6 and
-    // (Varah) ‖A⁻¹‖∞ ≤ 1/(1.4 − 0.2), giving κ∞ ≤ 1.34. The small diagonal
-    // keeps det ≈ 1.4¹⁶⁰ ≈ 2.3e23 inside f32's range, which a
-    // dominance-by-magnitude fixture would overflow.
-    let mut matrix_host = vec![0.0f32; n * n];
-    for row in 0..n {
-        for col in 0..n {
-            matrix_host[row * n + col] = if row == col { 1.4 } else { 0.2 / n as f32 };
-        }
-    }
-    let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([n, n]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
-    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_chol = cholesky_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-    assert_eq!(gpu_chol.n(), n);
-
-    // ── Retained diagonal is bitwise the device factor's diagonal ──
-    // `det` folds `Π Lₖₖ²` from 1.0 in ascending k, the same order and
-    // operations as the host reference, so recomputing it from the downloaded
-    // factor must reproduce the same f32 exactly.
-    let mut device_factor = vec![0.0f32; n * n];
-    device
-        .download(gpu_chol.lower(), &mut device_factor)
-        .unwrap();
-    let det_from_device = (0..n).fold(1.0f32, |product, k| {
-        let diagonal = device_factor[k * n + k];
-        product * (diagonal * diagonal)
-    });
-    assert_eq!(
-        gpu_chol.det(),
-        det_from_device,
-        "retained diagonal diverged from the device factor's diagonal"
-    );
-
-    // ── Differential against the host reference ──
-    // Unit roundoff u = ε/2 = 2⁻²⁴. Each computed Lₖₖ carries forward relative
-    // error ≲ κ∞·γ_{n+1} ≈ κ∞(n+1)u (Higham, Accuracy and Stability of
-    // Numerical Algorithms, 2nd ed., Thm 10.3, transferred through κ∞). det is
-    // a product of 2n such factors, so one factorization's det carries
-    // ≲ 2n(n+1)κ∞·u; comparing two independent backward-stable factorizations
-    // doubles it to 4n(n+1)κ∞·u. With κ∞ ≤ 2 for this fixture that is
-    // 8n(n+1)u = 4n(n+1)ε ≈ 1.23e-2 relative at n = 160.
-    let det_rel_tolerance = 4.0 * n as f32 * (n + 1) as f32 * f32::EPSILON;
-    let leto_det = leto_chol.det();
-    assert!(
-        (gpu_chol.det() - leto_det).abs() <= det_rel_tolerance * leto_det.abs(),
-        "blocked det {} diverged from host det {leto_det} beyond {}",
-        gpu_chol.det(),
-        det_rel_tolerance * leto_det.abs()
-    );
-
-    // ── Deferred host factor materializes and solves ──
-    // `solve` is the first call needing the full factor, so it downloads and
-    // caches it. Same error model: factorization plus two triangular solves
-    // gives ‖x̂ − x‖∞/‖x‖∞ ≲ 2n(n+1)κ∞·u, bounded here by 4n(n+1)ε.
-    let rhs_host: Vec<f32> = (0..n).map(|i| 1.0 + (i % 7) as f32).collect();
-    let rhs = device.upload(&rhs_host).unwrap();
-    let solution = gpu_chol.solve(&device, &rhs).unwrap();
-    let mut got_x = vec![0.0f32; n];
-    device.download(&solution, &mut got_x).unwrap();
-
-    let rhs_view = leto::Array::from_shape_vec([n], rhs_host).unwrap();
-    let expected_x = leto_chol.solve(&rhs_view.view()).unwrap();
-    let expected_slice = leto::Storage::as_slice(expected_x.storage());
-    let scale = expected_slice
-        .iter()
-        .fold(0.0f32, |peak, value| peak.max(value.abs()));
-    let solve_tolerance = 4.0 * n as f32 * (n + 1) as f32 * f32::EPSILON * scale;
-    for (index, (&got, &expected)) in got_x.iter().zip(expected_slice.iter()).enumerate() {
-        assert!(
-            (got - expected).abs() <= solve_tolerance,
-            "deferred-factor solve mismatch at {index}: got {got}, expected {expected}, tolerance {solve_tolerance}"
-        );
-    }
-
-    // A second solve reuses the cached factor and must be unchanged.
-    let repeat = gpu_chol.solve(&device, &rhs).unwrap();
-    let mut repeat_x = vec![0.0f32; n];
-    device.download(&repeat, &mut repeat_x).unwrap();
-    assert_eq!(got_x, repeat_x, "cached host factor changed the solution");
-}
-
 /// The device factor's strictly-upper triangle is exactly zero, including the
 /// region outside the diagonal blocks.
 ///
@@ -4495,68 +4126,6 @@ pub(super) fn blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks() {
             diagonal > 0.0,
             "diagonal entry [{index}, {index}] must stay positive, got {diagonal}"
         );
-    }
-}
-
-#[cfg(feature = "decomposition")]
-pub(super) fn blocked_cholesky_spd_reconstruction_matches_original() {
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
-    use leto::Layout;
-
-    // 66×66 SPD matrix exercises the block boundary.
-    let n = 66usize;
-    let mut matrix_host = vec![0.0f32; n * n];
-    for row in 0..n {
-        for col in 0..n {
-            matrix_host[row * n + col] = if row == col {
-                n as f32 + 4.0
-            } else {
-                0.01 / (1.0 + row.abs_diff(col) as f32)
-            };
-        }
-    }
-    let matrix = device.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([n, n]).unwrap();
-    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host.clone()).unwrap();
-    let leto_chol = leto_ops::cholesky_decompose(&leto_matrix.view()).unwrap();
-
-    let gpu_chol = cholesky_decompose_blocked(
-        &device,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    // Reconstruct A' = L * L^T and verify against original.
-    let mut got_lower = vec![0.0f32; n * n];
-    device.download(gpu_chol.lower(), &mut got_lower).unwrap();
-    let expected_lower = leto::Storage::as_slice(leto_chol.lower().storage());
-    for (index, (&got, &expected)) in got_lower.iter().zip(expected_lower.iter()).enumerate() {
-        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
-        assert!(
-            (got - expected).abs() <= tolerance,
-            "blocked Cholesky L mismatch at {index}: got {got}, expected {expected}"
-        );
-    }
-
-    for row in 0..n {
-        for col in 0..n {
-            let mut sum = 0.0f32;
-            for k in 0..n {
-                sum += got_lower[row * n + k] * got_lower[col * n + k];
-            }
-            let expected = matrix_host[row * n + col];
-            let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
-            assert!(
-                (sum - expected).abs() <= tolerance,
-                "blocked Cholesky reconstruction [{row},{col}]: got {sum}, expected {expected}"
-            );
-        }
     }
 }
 

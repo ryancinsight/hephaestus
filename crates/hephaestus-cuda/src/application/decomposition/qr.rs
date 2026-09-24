@@ -24,10 +24,8 @@
 use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
 
 #[cfg(feature = "cuda")]
-use hephaestus_core::panel_qr_packed;
+use hephaestus_core::{BlockedDecompositionBackend, BlockedQrBackend, TrailingHh, blocked_qr};
 
-#[cfg(feature = "cuda")]
-use super::region::{MatrixRegion, download_matrix_region_compact, write_matrix_region_compact};
 #[cfg(feature = "cuda")]
 use super::validate::validate_dense_operand;
 
@@ -209,136 +207,21 @@ pub fn qr_decompose_blocked(
             });
         }
 
-        let work_buf = device.alloc_uninitialized::<f32>(m * n)?;
-        device.bind()?;
-        let bytes = m * n * std::mem::size_of::<f32>();
-
-        // SAFETY: this device's context is current (`bind` above). `work_buf`
-        // is a live, freshly allocated `m * n`-element device allocation, and
-        // `matrix.buffer` holds at least `m * n` elements: the operand is
-        // enforced dense C-contiguous at offset 0 (`validate_dense_operand`
-        // above), so the layout's validated storage extent
-        // (`validate_storage_len`) equals the `bytes` read here. The copy is
-        // asynchronous on the null stream; both allocations outlive it
-        // because frees route through synchronizing `cuMemFree`-family
-        // calls.
-        let res =
-            unsafe { (device.driver().memory.copy)(work_buf.raw(), matrix.buffer.raw(), bytes) };
-        if res != 0 {
-            return Err(HephaestusError::TransferFailed {
-                message: format!("QR startup cuMemcpyDtoD_v2 failed: {res}"),
-            });
-        }
-
+        let work_buf = device.clone_device(matrix.buffer, m * n)?;
         let block_size = QR_BLOCK_SIZE.min(n);
-
-        let mut packed = vec![0.0f32; m * n];
-        let mut cumulative_heads = Vec::with_capacity(n.min(m));
-        let mut cumulative_betas = Vec::with_capacity(n.min(m));
-
-        // Pre-allocate vectors buffer.
-        let vectors_dev = device.alloc_uninitialized::<f32>(m * block_size)?;
-
-        // Pre-allocate reflector buffer.
-        let reflector_dev =
-            device.alloc_uninitialized::<householder::HhReflectorMeta>(block_size)?;
-
-        for k in (0..n).step_by(block_size) {
-            let b = block_size.min(n - k);
-            let panel_rows = m - k;
-            let trail_cols = n - k - b;
-
-            // ── Step 1 & 2: Download active panel from work_buf directly to host panel ──
-            let panel_region = MatrixRegion {
-                stride: n,
-                row_start: k,
-                col_start: k,
-                rows: panel_rows,
-                cols: b,
-            };
-            let mut panel = download_matrix_region_compact(device, &work_buf, panel_region)?;
-
-            // ── Step 3: Factor active panel region on CPU ──
-            let (heads, betas) = panel_qr_packed(&mut panel, panel_rows, b)?;
-
-            cumulative_heads.extend_from_slice(&heads);
-            cumulative_betas.extend_from_slice(&betas);
-
-            for j in 0..b {
-                let col = k + j;
-                for r in (col + 1)..m {
-                    let panel_row = r - k;
-                    packed[r * n + col] = panel[panel_row * b + j];
-                }
-            }
-
-            // Zero out the strictly lower-triangular part of panel before writing back
-            let mut packed_vectors = Vec::with_capacity(panel_rows * b);
-            let mut vector_offsets = Vec::with_capacity(b);
-            for j in 0..b {
-                let vec_len = panel_rows - j;
-                vector_offsets.push(packed_vectors.len());
-                packed_vectors.push(heads[j]);
-                for i in 1..vec_len {
-                    packed_vectors.push(panel[(j + i) * b + j]);
-                }
-            }
-
-            for r in 0..panel_rows {
-                for c in 0..b {
-                    if c < r {
-                        panel[r * b + c] = 0.0;
-                    }
-                }
-            }
-
-            // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
-            write_matrix_region_compact(device, &work_buf, &panel, panel_region)?;
-
-            if trail_cols == 0 {
-                continue;
-            }
-
-            // ── Step 6: Apply b Householder reflectors on GPU in-place ──
-            device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
-
-            householder::hh_trailing_update(
-                device,
-                householder::HhTrailingUpdate {
-                    vectors: &vectors_dev,
-                    matrix: &work_buf,
-                    reflectors: &reflector_dev,
-                    panel_rows,
-                    trail_cols,
-                    matrix_cols: n,
-                    panel_start: k,
-                    vector_offsets: &vector_offsets,
-                    betas: &betas,
-                },
-            )?;
-        }
-
-        // Download final matrix to extract R.
-        let host = device.download_owned(&work_buf)?;
-
-        // Merge R (upper triangle of host) with the accumulated reflector tails.
-        for i in 0..m {
-            for j in i..n {
-                packed[i * n + j] = host[i * n + j];
-            }
-        }
+        let result = blocked_qr(device, work_buf, m, n, block_size)?;
 
         let inner = leto_ops::QrDecomposition::from_raw_parts(
-            packed,
-            cumulative_heads,
-            cumulative_betas,
+            result.packed,
+            result.heads,
+            result.betas,
             m,
             n,
         );
 
         Ok(GpuQrDecomposition {
             inner,
-            r: work_buf,
+            r: result.r,
             rows: m,
             cols: n,
         })
@@ -354,3 +237,45 @@ pub fn qr_decompose_blocked(
 }
 
 // Custom gather/scatter compute kernels removed in favor of generic MatrixRegion transfers.
+
+/// The CUDA blocked-QR operations the shared [`blocked_qr`] loop drives
+/// (ADR 0003).
+///
+/// Only the reflector-metadata buffer and the trailing Householder kernel are
+/// CUDA-specific: the loop owns the panel iteration, the CPU panel
+/// factorisation, the reflector packing, and the sub-diagonal zeroing.
+#[cfg(feature = "cuda")]
+impl BlockedQrBackend for CudaDevice {
+    type Reflectors = CudaBuffer<householder::HhReflectorMeta>;
+
+    fn alloc_reflectors(&self, len: usize) -> Result<Self::Reflectors> {
+        self.alloc_uninitialized::<householder::HhReflectorMeta>(len)
+    }
+
+    fn write_flat(&self, buf: &Self::Buffer, data: &[f32]) -> Result<()> {
+        self.write_sub_buffer(buf, 0, data)
+    }
+
+    fn householder_trailing(
+        &self,
+        vectors: &Self::Buffer,
+        matrix: &Self::Buffer,
+        reflectors: &Self::Reflectors,
+        spec: TrailingHh<'_>,
+    ) -> Result<()> {
+        householder::hh_trailing_update(
+            self,
+            householder::HhTrailingUpdate {
+                vectors,
+                matrix,
+                reflectors,
+                panel_rows: spec.panel_rows,
+                trail_cols: spec.trail_cols,
+                matrix_cols: spec.matrix_cols,
+                panel_start: spec.panel_start,
+                vector_offsets: spec.vector_offsets,
+                betas: spec.betas,
+            },
+        )
+    }
+}

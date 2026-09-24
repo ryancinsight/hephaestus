@@ -15,7 +15,7 @@
 use core::marker::PhantomData;
 use std::any::TypeId;
 
-use eunomia::{Pod, Zeroable};
+use eunomia::Pod;
 use hephaestus_core::{
     BinaryExpr, BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, TypedBinaryExpr,
     UnaryExpr, Wgsl,
@@ -27,10 +27,10 @@ use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Maximum rank the packed metadata covers. Lower-rank layouts are
-/// padded with leading size-1 / stride-0 dimensions, which contribute nothing
-/// to the offset computation.
-pub const MAX_STRIDED_RANK: usize = 8;
+pub use hephaestus_core::{MAX_STRIDED_RANK, StridedMeta, map_layout_err, to_u32, pad_shape, pad_shape_dyn, pad_strides};
+
+
+// MAX_STRIDED_RANK is re-exported from hephaestus_core
 
 /// A device buffer paired with the leto layout describing its logical view:
 /// the unit every strided operand is passed as. Plain `Copy` references —
@@ -53,19 +53,18 @@ struct StridedScalarKernel<Op>(PhantomData<Op>);
 /// shape, per-operand strides, and `[a_off, b_off, out_off, len]`. The unary
 /// family reuses the same struct with the `b` lanes zeroed so one packing
 /// path and one uniform layout serve every strided kernel.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct StridedMeta {
-    pub(crate) shape: [u32; 8],
-    pub(crate) a_strides: [i32; 8],
-    pub(crate) b_strides: [i32; 8],
-    pub(crate) out_strides: [i32; 8],
-    pub(crate) offsets: [u32; 4],
-}
 
 const _: () = assert!(core::mem::size_of::<StridedMeta>() == 144);
 
 /// WGSL `Meta` declaration shared by every strided kernel.
+
+#[inline]
+pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
+    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("{what} {value} exceeds i32 range"),
+    })
+}
+
 pub(crate) const WGSL_META: &str = r"struct Meta {
     shape: array<vec4<u32>, 2>,
     a_strides: array<vec4<i32>, 2>,
@@ -94,44 +93,10 @@ pub(crate) const WGSL_DECODE: &str = r"    var rem = i;
     }
 ";
 
-#[inline]
-pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
 
-#[inline]
-pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
 
-#[inline]
-pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
 
-#[inline]
-pub(crate) fn pad_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 8]> {
-    let mut out = [1u32; 8];
-    for (d, &dim) in shape.iter().enumerate() {
-        out[8 - N + d] = to_u32(dim, "dimension")?;
-    }
-    Ok(out)
-}
 
-#[inline]
-pub(crate) fn pad_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 8]> {
-    let mut out = [0i32; 8];
-    for (d, &stride) in strides.iter().enumerate() {
-        out[8 - N + d] = to_i32(stride, "stride")?;
-    }
-    Ok(out)
-}
 
 /// Validate an output layout against its buffer and return the logical length.
 pub(crate) fn validate_out<T, const N: usize>(
@@ -683,3 +648,9 @@ where
     )?;
     Ok(out)
 }
+
+
+
+
+
+

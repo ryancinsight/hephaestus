@@ -37,6 +37,15 @@ pub mod assert_backend;
 pub mod attention;
 /// Contract clauses for the [`AxisReductionOps`](hephaestus_core::AxisReductionOps) seam.
 pub mod axis_reduction;
+/// Contract clauses for the backend-abstracted blocked Cholesky loop
+/// ([`BlockedCholeskyBackend`](hephaestus_core::BlockedCholeskyBackend)).
+pub mod blocked_cholesky;
+/// Contract clause for the backend-abstracted blocked LU loop
+/// ([`BlockedDecompositionBackend`](hephaestus_core::BlockedDecompositionBackend)).
+pub mod blocked_lu;
+/// Contract clauses for the backend-abstracted blocked QR loop
+/// ([`BlockedQrBackend`](hephaestus_core::BlockedQrBackend)).
+pub mod blocked_qr;
 /// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
 pub mod convolution;
 /// Contract clauses for the [`CrossEntropyOps`](hephaestus_core::CrossEntropyOps) seam.
@@ -44,6 +53,9 @@ pub mod cross_entropy;
 /// Contract clauses for the
 /// [`DecompositionOps`](hephaestus_core::DecompositionOps) seam.
 pub mod decomposition;
+/// Contract clauses for the
+/// [`DenseCompositionOps`](hephaestus_core::DenseCompositionOps) seam.
+pub mod dense_composition;
 /// Contract clauses for the
 /// [`DenseVectorOps`](hephaestus_core::DenseVectorOps) seam.
 /// Dense matmul/batched-matmul/Kronecker product clauses.
@@ -80,9 +92,13 @@ pub mod typed_elementwise;
 pub use assert_backend::{BackendUnderTest, assert_backend_contract};
 pub use attention::assert_attention_contract;
 pub use axis_reduction::assert_axis_reduction_contract;
+pub use blocked_cholesky::assert_blocked_cholesky_contract;
+pub use blocked_lu::assert_blocked_lu_contract;
+pub use blocked_qr::assert_blocked_qr_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use cross_entropy::assert_cross_entropy_contract;
 pub use decomposition::assert_decomposition_contract;
+pub use dense_composition::assert_dense_composition_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;

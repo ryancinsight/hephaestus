@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Consolidate blocked LU, QR, and Cholesky host orchestration in
+  `hephaestus-core`, with monomorphized backend extension traits and shared
+  conformance clauses. WGPU and CUDA now share the same panel walks, scratch
+  reuse, reflector bookkeeping, and reconstruction oracles; provider-local
+  tests retain only wrapper behavior such as solves and invalid-input
+  rejection. The shared QR clause now owns the tall rectangular Leto
+  differential, while each provider keeps its least-squares solve check.
+
 - [major] WGPU transient pool acquisition/recycling and exported staging/uniform
   guard types are no longer public. Transfers and kernels retain pool ownership
   internally; custom WGPU interop owns its allocations outside provider pools.

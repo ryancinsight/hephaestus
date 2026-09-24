@@ -13,15 +13,15 @@ use std::sync::Arc;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    validate_bindings, validate_grouped_bindings, Binding, CommandStream, CudaC, DispatchGrid,
-    GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
-    GroupedKernelSource, HephaestusError, KernelDevice, KernelSource, Result,
+    Binding, CommandStream, CudaC, DispatchGrid, GroupedBinding, GroupedCommandStream,
+    GroupedKernelDevice, GroupedKernelSequence, GroupedKernelSource, HephaestusError, KernelDevice,
+    KernelSource, Result, validate_bindings, validate_grouped_bindings,
 };
 
 #[cfg(not(feature = "cuda"))]
 use crate::application::pipeline::SafeCachedKernel;
 use crate::application::pipeline::{
-    cached_kernel, launch_kernel, source_hash, LaunchConfig, PipelineKey,
+    LaunchConfig, PipelineKey, cached_kernel, launch_kernel, source_hash,
 };
 use crate::infrastructure::buffer::CudaBuffer;
 #[cfg(feature = "cuda")]

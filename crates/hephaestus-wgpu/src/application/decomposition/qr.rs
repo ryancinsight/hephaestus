@@ -46,21 +46,16 @@
 
 use std::any::TypeId;
 
-use hephaestus_core::{ComputeDevice, HephaestusError, Result};
-
-use super::region::{
-    MatrixRegion, MatrixRegionDownloadWorkspace, MatrixRegionUpload,
-    download_matrix_region_compact_into, download_matrix_region_workspace_pair_into,
-    matrix_region_len, write_matrix_region_compact_reusable,
-    write_matrix_region_pair_compact_reusable,
+use hephaestus_core::{
+    BlockedDecompositionBackend, BlockedQrBackend, ComputeDevice, HephaestusError, Result,
+    TrailingHh, blocked_qr,
 };
+
 use super::validate::validate_dense_operand;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
-
-use hephaestus_core::{apply_packed_qr_panel_left, panel_qr_packed};
 
 /// QR decomposition result: device-resident R factor with host-side
 /// decomposition for solve_least_squares.
@@ -281,13 +276,17 @@ struct HhMeta {
 }
 
 /// Per-reflector metadata consumed by the panel Householder kernel.
+///
+/// Public because the WGPU [`BlockedQrBackend`] impl names it as its
+/// `Reflectors` buffer element, and a public trait impl cannot leak a
+/// restricted type.
 #[repr(C)]
 #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
-struct HhReflectorMeta {
+pub struct HhReflectorMeta {
     /// Offset of this reflector in the packed vector buffer.
-    vector_offset: u32,
+    pub(super) vector_offset: u32,
     /// Householder scale factor β.
-    beta: f32,
+    pub(super) beta: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +374,99 @@ fn main(
 }
 
 struct HhKernel;
+
+/// Apply the packed panel Householder reflectors to a matrix's trailing columns.
+///
+/// The shader pipeline is cached; the bind group and the uniform buffer are
+/// built per call, because the trait method that reaches this takes no
+/// loop-scoped descriptors.
+fn householder_trailing_update(
+    device: &WgpuDevice,
+    vectors: &WgpuBuffer<f32>,
+    matrix: &WgpuBuffer<f32>,
+    reflectors: &WgpuBuffer<HhReflectorMeta>,
+    spec: TrailingHh<'_>,
+) -> Result<()> {
+    fn dimension(value: usize, name: &str) -> Result<u32> {
+        u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("{name} {value} exceeds u32"),
+        })
+    }
+
+    let reflector_host: Vec<HhReflectorMeta> = spec
+        .vector_offsets
+        .iter()
+        .copied()
+        .zip(spec.betas.iter().copied())
+        .map(|(offset, beta)| -> Result<HhReflectorMeta> {
+            Ok(HhReflectorMeta {
+                vector_offset: dimension(offset, "HH vector offset")?,
+                beta,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    device.write_sub_buffer(reflectors, 0, &reflector_host)?;
+
+    let hh_meta = HhMeta {
+        panel_rows: dimension(spec.panel_rows, "HH panel_rows")?,
+        reflector_count: dimension(spec.betas.len(), "HH reflector_count")?,
+        trail_cols: dimension(spec.trail_cols, "HH trail_cols")?,
+        matrix_cols: dimension(spec.matrix_cols, "HH matrix_cols")?,
+        k: dimension(spec.panel_start, "HH panel start")?,
+    };
+
+    let pipeline = cached_pipeline(
+        device,
+        (TypeId::of::<HhKernel>(), TypeId::of::<f32>(), 256),
+        "hephaestus-hh",
+        hh_shader_source,
+    );
+    let meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
+    let bind_group = device
+        .inner()
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hephaestus-hh-panel"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: vectors.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: matrix.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: reflectors.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: meta_buf.as_entire_binding(),
+                },
+            ],
+        });
+    device
+        .queue()
+        .write_buffer(&meta_buf, 0, eunomia::layout::bytes_of(&hh_meta));
+
+    let mut encoder = device
+        .inner()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("hephaestus-qr-hh-update"),
+        });
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("hephaestus-hh-panel"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(dimension(spec.trail_cols, "HH workgroup count")?, 1, 1);
+    }
+    device.queue().submit(Some(encoder.finish()));
+    Ok(())
+}
 
 // ---------------------------------------------------------------------------
 // Q accumulation uniform
@@ -635,350 +727,50 @@ pub fn qr_decompose_blocked(
         return qr_decompose(device, matrix);
     }
 
-    // Create a GPU working buffer for in-place updates. The full input copy is
-    // queued after the first panel is downloaded from the original input buffer
-    // so the first panel readback does not wait behind an avoidable full-matrix
-    // device copy. Queue ordering still guarantees the copy completes before
-    // the first write/update touches `work_buf`.
-    let work_buf = device.alloc_uninitialized::<f32>(m * n)?;
-    let mut work_copy_queued = false;
-
-    let mut packed = vec![0.0f32; m * n];
-    let mut cumulative_heads = Vec::with_capacity(n.min(m));
-    let mut cumulative_betas = Vec::with_capacity(n.min(m));
-
-    // Per-panel host scratch, allocated once and refilled each iteration: the
-    // panel download resizes `panel`, and the reflector-packing buffers are
-    // cleared (keeping capacity) before being repushed.
-    let mut panel: Vec<f32> = Vec::with_capacity(m * block_size);
-    let mut packed_vectors: Vec<f32> = Vec::with_capacity(m * block_size);
-    let mut vector_offsets: Vec<usize> = Vec::with_capacity(block_size);
-
-    // Pre-allocate vectors_dev of maximum needed size: m * block_size.
-    let vectors_dev = device.alloc_uninitialized::<f32>(m * block_size)?;
-
-    // Pre-allocate reflector_dev of size block_size.
-    let reflector_dev = device.alloc_uninitialized::<HhReflectorMeta>(block_size)?;
-
-    // Pre-allocate a single temp_compact_buf to avoid repeated allocations in the loop.
-    let temp_compact_buf = device.alloc_uninitialized::<f32>(m * block_size)?;
-    let mut panel_download_workspace = None;
-
-    let hh_pipeline = cached_pipeline(
-        device,
-        (TypeId::of::<HhKernel>(), TypeId::of::<f32>(), 256),
-        "hephaestus-hh",
-        hh_shader_source,
-    );
-    let hh_meta_buf = device.get_uniform_buffer(WgpuDevice::byte_size::<HhMeta>(1)?)?;
-
-    let hh_bind_group = device
-        .inner()
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("hephaestus-hh-panel"),
-            layout: &hh_pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: vectors_dev.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: work_buf.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: reflector_dev.buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: hh_meta_buf.as_entire_binding(),
-                },
-            ],
-        });
-    let mut reflector_host: Vec<HhReflectorMeta> = Vec::with_capacity(block_size);
-
-    for k in (0..n).step_by(block_size) {
-        let b = block_size.min(n - k);
-        let panel_rows = m - k;
-        let trail_cols = n - k - b;
-
-        // ── Step 1 & 2: Gather panel from work_buf directly to host panel ──
-        // We gather all m rows to preserve and download previous updates for upper rows.
-        let panel_region = MatrixRegion {
-            stride: n,
-            row_start: 0,
-            col_start: k,
-            rows: m,
-            cols: b,
-        };
-        let finish_tail_on_cpu = trail_cols > 0 && trail_cols <= block_size;
-        if work_copy_queued {
-            if panel_download_workspace.is_none() {
-                panel_download_workspace = Some(MatrixRegionDownloadWorkspace::new(
-                    device,
-                    &work_buf,
-                    &temp_compact_buf,
-                    m * block_size,
-                )?);
-            }
-            let panel_workspace = panel_download_workspace
-                .as_ref()
-                .expect("invariant: panel workspace was initialized");
-            if finish_tail_on_cpu {
-                let tail_region = MatrixRegion {
-                    stride: n,
-                    row_start: 0,
-                    col_start: k + b,
-                    rows: m,
-                    cols: trail_cols,
-                };
-                let tail_capacity = matrix_region_len(m, trail_cols)?;
-                let tail_workspace = MatrixRegionDownloadWorkspace::new(
-                    device,
-                    &work_buf,
-                    &vectors_dev,
-                    tail_capacity,
-                )?;
-                download_matrix_region_workspace_pair_into(
-                    panel_workspace,
-                    panel_region,
-                    &mut panel,
-                    &tail_workspace,
-                    tail_region,
-                    &mut packed_vectors,
-                )?;
-            } else {
-                panel_workspace.download_into(panel_region, &mut panel)?;
-            }
-        } else {
-            download_matrix_region_compact_into(
-                device,
-                matrix.buffer,
-                &temp_compact_buf,
-                panel_region,
-                &mut panel,
-            )?;
-        }
-        if !work_copy_queued {
-            let mut encoder =
-                device
-                    .inner()
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("hephaestus-qr-copy"),
-                    });
-            // Raw whole-matrix copy: sound only for dense C-contiguous
-            // zero-offset operands, enforced by `validate_dense_operand` at the
-            // entry point (a strided/offset/broadcast view would copy the wrong
-            // elements or exceed the operand's storage extent).
-            encoder.copy_buffer_to_buffer(
-                &matrix.buffer.buffer,
-                0,
-                &work_buf.buffer,
-                0,
-                WgpuDevice::byte_size::<f32>(m * n)?,
-            );
-            device.queue().submit(Some(encoder.finish()));
-            work_copy_queued = true;
-        }
-
-        // ── Step 3: Factor the active panel region on the CPU ──
-        // Only factor the sub-slice starting at row k.
-        let (heads, betas) = panel_qr_packed(&mut panel[k * b..], panel_rows, b)?;
-
-        cumulative_heads.extend_from_slice(&heads);
-        cumulative_betas.extend_from_slice(&betas);
-
-        // Copy the complete final values of these columns into the host-side packed matrix.
-        for j in 0..b {
-            let col = k + j;
-            for r in 0..m {
-                packed[r * n + col] = panel[r * b + j];
-            }
-        }
-
-        let factored_panel = &mut panel[k * b..];
-        let panel_write_region = MatrixRegion {
-            stride: n,
-            row_start: k,
-            col_start: k,
-            rows: panel_rows,
-            cols: b,
-        };
-
-        if finish_tail_on_cpu {
-            let tail_start = k + b;
-            let tail_rows = m - tail_start;
-            let (tail_heads, tail_betas) = {
-                let active_tail = &mut packed_vectors[k * trail_cols..];
-                apply_packed_qr_panel_left(
-                    factored_panel,
-                    panel_rows,
-                    b,
-                    &heads,
-                    &betas,
-                    active_tail,
-                    trail_cols,
-                )?;
-                panel_qr_packed(&mut active_tail[b * trail_cols..], tail_rows, trail_cols)?
-            };
-            cumulative_heads.extend_from_slice(&tail_heads);
-            cumulative_betas.extend_from_slice(&tail_betas);
-
-            for col in 0..trail_cols {
-                for row in 0..m {
-                    packed[row * n + tail_start + col] = packed_vectors[row * trail_cols + col];
-                }
-            }
-
-            for row in 0..panel_rows {
-                for col in 0..b {
-                    if col < row {
-                        factored_panel[row * b + col] = 0.0;
-                    }
-                }
-            }
-            {
-                let active_tail = &mut packed_vectors[k * trail_cols..];
-                let final_panel = &mut active_tail[b * trail_cols..];
-                for row in 0..tail_rows {
-                    for col in 0..trail_cols {
-                        if col < row {
-                            final_panel[row * trail_cols + col] = 0.0;
-                        }
-                    }
-                }
-
-                let tail_write_region = MatrixRegion {
-                    stride: n,
-                    row_start: k,
-                    col_start: tail_start,
-                    rows: panel_rows,
-                    cols: trail_cols,
-                };
-                write_matrix_region_pair_compact_reusable(
-                    device,
-                    &work_buf,
-                    MatrixRegionUpload {
-                        temp: &temp_compact_buf,
-                        host: factored_panel,
-                        region: panel_write_region,
-                    },
-                    MatrixRegionUpload {
-                        temp: &vectors_dev,
-                        host: active_tail,
-                        region: tail_write_region,
-                    },
-                )?;
-            }
-            break;
-        }
-
-        // Extract packed vectors for the GPU trailing update before zeroing
-        // sub-diagonal panel elements.
-        packed_vectors.clear();
-        vector_offsets.clear();
-        for j in 0..b {
-            let vec_len = panel_rows - j;
-            vector_offsets.push(packed_vectors.len());
-            packed_vectors.push(heads[j]);
-            for i in 1..vec_len {
-                packed_vectors.push(factored_panel[(j + i) * b + j]);
-            }
-        }
-
-        // Zero out the strictly lower-triangular part of panel before writing back
-        for r in 0..panel_rows {
-            for c in 0..b {
-                if c < r {
-                    factored_panel[r * b + c] = 0.0;
-                }
-            }
-        }
-
-        // ── Step 4 & 5: Write the factored panel with sub-diagonal zeroes back to the device ──
-        write_matrix_region_compact_reusable(
-            device,
-            &work_buf,
-            &temp_compact_buf,
-            factored_panel,
-            panel_write_region,
-        )?;
-
-        if trail_cols > 0 {
-            device.write_sub_buffer(&vectors_dev, 0, &packed_vectors)?;
-
-            reflector_host.clear();
-            for (offset, beta) in vector_offsets.iter().copied().zip(betas.iter().copied()) {
-                let vector_offset =
-                    u32::try_from(offset).map_err(|_| HephaestusError::DispatchFailed {
-                        message: format!("HH vector offset {offset} exceeds u32"),
-                    })?;
-                reflector_host.push(HhReflectorMeta {
-                    vector_offset,
-                    beta,
-                });
-            }
-            device.write_sub_buffer(&reflector_dev, 0, &reflector_host)?;
-
-            let hh_meta = HhMeta {
-                panel_rows: u32::try_from(panel_rows).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: format!("HH panel_rows {panel_rows} exceeds u32"),
-                    }
-                })?,
-                reflector_count: u32::try_from(b).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("HH reflector_count {b} exceeds u32"),
-                })?,
-                trail_cols: u32::try_from(trail_cols).map_err(|_| {
-                    HephaestusError::DispatchFailed {
-                        message: format!("HH trail_cols {trail_cols} exceeds u32"),
-                    }
-                })?,
-                matrix_cols: u32::try_from(n).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("HH matrix_cols {n} exceeds u32"),
-                })?,
-                k: u32::try_from(k).map_err(|_| HephaestusError::DispatchFailed {
-                    message: format!("HH k {k} exceeds u32"),
-                })?,
-            };
-
-            device
-                .queue()
-                .write_buffer(&hh_meta_buf, 0, eunomia::layout::bytes_of(&hh_meta));
-
-            let mut hh_encoder =
-                device
-                    .inner()
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("hephaestus-qr-hh-update"),
-                    });
-
-            {
-                let mut pass = hh_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("hephaestus-hh-panel"),
-                    timestamp_writes: None,
-                });
-                pass.set_pipeline(&hh_pipeline);
-                pass.set_bind_group(0, &hh_bind_group, &[]);
-                let wg_x =
-                    u32::try_from(trail_cols).map_err(|_| HephaestusError::DispatchFailed {
-                        message: format!("HH workgroup count {trail_cols} exceeds u32"),
-                    })?;
-                pass.dispatch_workgroups(wg_x, 1, 1);
-            }
-
-            device.queue().submit(Some(hh_encoder.finish()));
-        }
-    }
+    let work_buf = device.clone_device(matrix.buffer, m * n)?;
+    let result = blocked_qr(device, work_buf, m, n, block_size)?;
 
     let inner =
-        leto_ops::QrDecomposition::from_raw_parts(packed, cumulative_heads, cumulative_betas, m, n);
+        leto_ops::QrDecomposition::from_raw_parts(result.packed, result.heads, result.betas, m, n);
 
     Ok(GpuQrDecomposition {
         inner,
-        r: work_buf,
+        r: result.r,
         rows: m,
         cols: n,
     })
+}
+
+/// The WGPU blocked-QR operations the shared [`blocked_qr`] loop drives
+/// (ADR 0003).
+///
+/// Only the reflector-metadata buffer and the trailing Householder kernel are
+/// WGPU-specific: the loop owns the panel walk, the CPU panel factorisation,
+/// the reflector packing, the sub-diagonal zeroing, and the final gather. WGPU
+/// also selects the host tail-finish policy, because its trailing kernel has a
+/// fixed launch cost that the host path avoids for a final `≤ block_size` tail.
+impl BlockedQrBackend for WgpuDevice {
+    type Reflectors = WgpuBuffer<HhReflectorMeta>;
+
+    fn alloc_reflectors(&self, len: usize) -> Result<Self::Reflectors> {
+        self.alloc_uninitialized::<HhReflectorMeta>(len)
+    }
+
+    fn write_flat(&self, buf: &Self::Buffer, data: &[f32]) -> Result<()> {
+        self.write_sub_buffer(buf, 0, data)
+    }
+
+    fn householder_trailing(
+        &self,
+        vectors: &Self::Buffer,
+        matrix: &Self::Buffer,
+        reflectors: &Self::Reflectors,
+        spec: TrailingHh<'_>,
+    ) -> Result<()> {
+        householder_trailing_update(self, vectors, matrix, reflectors, spec)
+    }
+
+    fn finishes_tail_on_cpu(&self) -> bool {
+        true
+    }
 }
