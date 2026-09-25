@@ -1,12 +1,11 @@
 //! Device-neutral dense product operations (ADR 0044).
 //!
-//! Covers two roles in the linalg family. [`crate::DenseProductOps`] owns the
+//! Covers three roles in the linalg family. [`crate::DenseProductOps`] owns the
 //! single-kernel products: dense matrix multiplication, batched matrix
-//! multiplication, and the Kronecker product. [`crate::DenseCompositionOps`] owns
-//! the matrix power, determinant, and numerical-rank entry points reached
-//! through the shared conformance boundary. The remaining host-delegated
-//! compositions (`matexp`, `pinv`) stay provider entry points until their
-//! incremental contract arrives.
+//! multiplication, and the Kronecker product. [`crate::DenseCompositionOps`]
+//! owns matrix power, determinant, and numerical rank.
+//! [`crate::DenseMatrixFunctionOps`] owns the feature-gated host-delegated
+//! matrix exponential and pseudoinverse.
 
 use eunomia::Pod;
 
@@ -125,4 +124,38 @@ pub trait DenseCompositionOps<D: ComputeDevice> {
     fn matrix_rank(&self, device: &D, matrix: StridedView<'_, D::Buffer<f32>, 2>) -> Result<usize> {
         self.matrix_rank_with_tolerance(device, matrix, 1.0e-9)
     }
+}
+
+/// Device-neutral matrix functions delegated to Leto by the provider.
+///
+/// This role is separate from [`DenseCompositionOps`] because WGPU exposes
+/// these functions only when `decomposition` or `sparse` enables `leto-ops`.
+/// Keeping the feature-gated pair separate preserves the unconditional
+/// power/determinant/rank role without adding a default unsupported method or
+/// widening WGPU's minimal feature surface. Implementors remain zero-sized
+/// backend markers with static dispatch.
+pub trait DenseMatrixFunctionOps<D: ComputeDevice> {
+    /// Compute the matrix exponential `exp(matrix)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, layout, host-compute, allocation, or backend dispatch
+    /// error.
+    fn matexp(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<f32>>;
+
+    /// Compute the Moore-Penrose pseudoinverse of a rectangular or square
+    /// matrix.
+    ///
+    /// # Errors
+    ///
+    /// Returns a layout, host-compute, allocation, or backend dispatch error.
+    fn pinv(
+        &self,
+        device: &D,
+        matrix: StridedView<'_, D::Buffer<f32>, 2>,
+    ) -> Result<D::Buffer<f32>>;
 }

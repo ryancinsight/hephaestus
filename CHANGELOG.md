@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Add the zero-cost `DenseMatrixFunctionOps` role for host-delegated
+  `f32` matrix exponential and pseudoinverse, with one shared conformance clause
+  across WGPU, CUDA, ROCm, and Metal. Diagonal, nilpotent, rotation, general,
+  rank-deficient, rectangular, strided, empty, and rejection behavior now has
+  one SSOT; provider-local matrix-function differentials are removed while exact
+  WGPU diagnostics remain. The role is separate because WGPU's existing pair is
+  feature-gated; public entry points and allocation behavior are unchanged. See
+  ADR 0044.
+
 - [patch] Add the zero-cost `DenseCompositionOps` role for `f32` matrix power,
   determinant, and numerical rank, with one shared conformance clause across
   WGPU, CUDA, ROCm, and Metal. Dense/strided traversal, identity and empty

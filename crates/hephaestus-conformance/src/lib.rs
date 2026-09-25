@@ -57,6 +57,9 @@ pub mod decomposition;
 /// [`DenseCompositionOps`](hephaestus_core::DenseCompositionOps) seam.
 pub mod dense_composition;
 /// Contract clauses for the
+/// [`DenseMatrixFunctionOps`](hephaestus_core::DenseMatrixFunctionOps) seam.
+pub mod dense_matrix_function;
+/// Contract clauses for the
 /// [`DenseVectorOps`](hephaestus_core::DenseVectorOps) seam.
 /// Dense matmul/batched-matmul/Kronecker product clauses.
 pub mod dense_product;
@@ -99,6 +102,7 @@ pub use convolution::{assert_convolution_contract, assert_convolution_f64_contra
 pub use cross_entropy::assert_cross_entropy_contract;
 pub use decomposition::assert_decomposition_contract;
 pub use dense_composition::assert_dense_composition_contract;
+pub use dense_matrix_function::assert_dense_matrix_function_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;

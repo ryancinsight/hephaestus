@@ -21,7 +21,7 @@ use hephaestus_cuda::{
     GeluTanhOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NegOp, ProdOp, RecipOp, SiluGradOp,
     SiluOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, SumOp, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, cumprod, cumprod_into, dot,
-    kron, matexp, matmul, matmul_into, matpow, norm_l1, norm_l2, norm_max, pinv, prepare_dot,
+    kron, matmul, matmul_into, matpow, norm_l1, norm_l2, norm_max, prepare_dot,
     prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
     prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis,
     prod_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
@@ -1407,78 +1407,6 @@ fn linalg_matpow_matches_leto_and_strided_references() {
         ),
         "matpow requires a square matrix, got shape [2, 3]",
     );
-}
-
-#[test]
-fn linalg_pinv_matches_closed_form_diagonal() {
-    let Some(dev) = device("linalg_pinv_matches_closed_form_diagonal") else {
-        return;
-    };
-
-    let matrix_host = vec![2.0f32, 0.0, 0.0, 4.0];
-    let matrix = dev.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-
-    let out = pinv(
-        &dev,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    let mut got = vec![0.0f32; 4];
-    dev.download(&out, &mut got).unwrap();
-    assert_eq!(got, vec![0.5, 0.0, 0.0, 0.25]);
-}
-
-#[test]
-fn linalg_matexp_matches_closed_form_diagonal() {
-    let Some(dev) = device("linalg_matexp_matches_closed_form_diagonal") else {
-        return;
-    };
-
-    let matrix_host = vec![0.0f32, 0.0, 0.0, 1.0];
-    let matrix = dev.upload(&matrix_host).unwrap();
-    let layout = Layout::c_contiguous([2, 2]).unwrap();
-
-    let out = matexp(
-        &dev,
-        StridedOperand {
-            buffer: &matrix,
-            layout: &layout,
-        },
-    )
-    .unwrap();
-
-    let mut got = vec![0.0f32; 4];
-    dev.download(&out, &mut got).unwrap();
-    let expected = [1.0f32, 0.0, 0.0, 1.0f32.exp()];
-    for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
-        let tolerance = 64.0 * f32::EPSILON * expected.abs().max(1.0);
-        assert!(
-            (actual - expected).abs() <= tolerance,
-            "matrix exponential mismatch at {index}: got {actual}, expected {expected}, tolerance {tolerance}"
-        );
-    }
-}
-
-#[test]
-fn linalg_matrix_functions_preserve_empty_outputs() {
-    let Some(dev) = device("linalg_matrix_functions_preserve_empty_outputs") else {
-        return;
-    };
-
-    let matrix = dev.upload(&[] as &[f32]).unwrap();
-    let layout = Layout::c_contiguous([0, 0]).unwrap();
-    let operand = StridedOperand {
-        buffer: &matrix,
-        layout: &layout,
-    };
-
-    assert_eq!(pinv(&dev, operand).unwrap().len(), 0);
-    assert_eq!(matexp(&dev, operand).unwrap().len(), 0);
 }
 
 #[test]
