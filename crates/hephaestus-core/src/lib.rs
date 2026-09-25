@@ -53,7 +53,7 @@ pub use domain::decomposition_seam::{
     FullPivLuHandle, HessenbergHandle, LuHandle, QrHandle, SchurHandle, SvdHandle,
     SymmetricEigenHandle, UduHandle,
 };
-pub use domain::dense_product::{DenseCompositionOps, DenseProductOps};
+pub use domain::dense_product::{DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps};
 pub use domain::device::{
     ComputeDevice, ComputeDeviceAcquisition, ComputeDeviceCapabilities, DeviceFeature,
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,

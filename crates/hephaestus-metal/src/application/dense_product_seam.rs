@@ -1,4 +1,5 @@
-//! Provider-owned dense product and composition seams for Metal.
+//! Provider-owned dense product, composition, and matrix-function seams for
+//! Metal.
 //!
 //! Metal delegates wholly to the WGPU implementation, matching the crate's
 //! other seam adapters: buffers unwrap to their inner WGPU handles and every
@@ -7,14 +8,16 @@
 
 use eunomia::Pod;
 use hephaestus_core::{
-    DenseCompositionOps, DenseProductOps, DialectScalar, Result, StridedView, Wgsl,
+    DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DialectScalar, Result,
+    StridedView, Wgsl,
 };
 use hephaestus_wgpu::{MatmulZero, WgpuDenseProductOps};
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
 
-/// Provider-owned dense product and composition implementation for Metal.
+/// Provider-owned dense product, composition, and matrix-function implementation
+/// for Metal.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetalDenseProductOps {
     inner: WgpuDenseProductOps,
@@ -110,5 +113,33 @@ impl DenseCompositionOps<MetalDevice> for MetalDenseProductOps {
             StridedView::new(&matrix.buffer.inner, matrix.layout),
             relative_tolerance,
         )
+    }
+}
+
+impl DenseMatrixFunctionOps<MetalDevice> for MetalDenseProductOps {
+    fn matexp(
+        &self,
+        device: &MetalDevice,
+        matrix: StridedView<'_, MetalBuffer<f32>, 2>,
+    ) -> Result<MetalBuffer<f32>> {
+        self.inner
+            .matexp(
+                device.wgpu_device(),
+                StridedView::new(&matrix.buffer.inner, matrix.layout),
+            )
+            .map(|inner| MetalBuffer { inner })
+    }
+
+    fn pinv(
+        &self,
+        device: &MetalDevice,
+        matrix: StridedView<'_, MetalBuffer<f32>, 2>,
+    ) -> Result<MetalBuffer<f32>> {
+        self.inner
+            .pinv(
+                device.wgpu_device(),
+                StridedView::new(&matrix.buffer.inner, matrix.layout),
+            )
+            .map(|inner| MetalBuffer { inner })
     }
 }

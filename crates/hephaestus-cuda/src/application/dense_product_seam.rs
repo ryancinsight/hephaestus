@@ -1,14 +1,17 @@
-//! Provider-owned dense product and composition seams for CUDA.
+//! Provider-owned dense product, composition, and matrix-function seams for
+//! CUDA.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] and
-//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`],
+//! [`hephaestus_core::DenseCompositionOps`], and
+//! [`hephaestus_core::DenseMatrixFunctionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `CudaDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
 use hephaestus_core::{
-    CudaC, DenseCompositionOps, DenseProductOps, DialectScalar, Result, StridedView,
+    CudaC, DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DialectScalar, Result,
+    StridedView,
 };
 
 use crate::application::linalg::{
@@ -18,7 +21,8 @@ use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
-/// Provider-owned dense product and composition implementation for CUDA.
+/// Provider-owned dense product, composition, and matrix-function implementation
+/// for CUDA.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaDenseProductOps;
 
@@ -82,6 +86,24 @@ impl DenseCompositionOps<CudaDevice> for CudaDenseProductOps {
         relative_tolerance: f32,
     ) -> Result<usize> {
         matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
+    }
+}
+
+impl DenseMatrixFunctionOps<CudaDevice> for CudaDenseProductOps {
+    fn matexp(
+        &self,
+        device: &CudaDevice,
+        matrix: StridedView<'_, CudaBuffer<f32>, 2>,
+    ) -> Result<CudaBuffer<f32>> {
+        crate::application::linalg::matexp(device, operand(matrix))
+    }
+
+    fn pinv(
+        &self,
+        device: &CudaDevice,
+        matrix: StridedView<'_, CudaBuffer<f32>, 2>,
+    ) -> Result<CudaBuffer<f32>> {
+        crate::application::linalg::pinv(device, operand(matrix))
     }
 }
 

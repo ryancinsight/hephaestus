@@ -2,7 +2,10 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::{assert_dense_composition_contract, assert_dense_product_contract};
+use hephaestus_conformance::{
+    assert_dense_composition_contract, assert_dense_matrix_function_contract,
+    assert_dense_product_contract,
+};
 use hephaestus_rocm::{RocmDenseProductOps, RocmDevice};
 
 #[test]
@@ -17,4 +20,5 @@ fn rocm_satisfies_the_dense_product_contract() {
     };
     assert_dense_product_contract(&device, &RocmDenseProductOps);
     assert_dense_composition_contract(&device, &RocmDenseProductOps);
+    assert_dense_matrix_function_contract(&device, &RocmDenseProductOps);
 }

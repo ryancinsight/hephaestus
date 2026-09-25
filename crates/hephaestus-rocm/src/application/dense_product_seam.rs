@@ -1,14 +1,17 @@
-//! Provider-owned dense product and composition seams for ROCm.
+//! Provider-owned dense product, composition, and matrix-function seams for
+//! ROCm.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] and
-//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`],
+//! [`hephaestus_core::DenseCompositionOps`], and
+//! [`hephaestus_core::DenseMatrixFunctionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `RocmDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
 use hephaestus_core::{
-    DenseCompositionOps, DenseProductOps, DialectScalar, HipC, Result, StridedView,
+    DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DialectScalar, HipC, Result,
+    StridedView,
 };
 
 use crate::RocmBuffer;
@@ -18,7 +21,8 @@ use crate::application::linalg::{
 };
 use crate::application::strided::StridedOperand;
 
-/// Provider-owned dense product and composition implementation for ROCm.
+/// Provider-owned dense product, composition, and matrix-function implementation
+/// for ROCm.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmDenseProductOps;
 
@@ -82,6 +86,24 @@ impl DenseCompositionOps<RocmDevice> for RocmDenseProductOps {
         relative_tolerance: f32,
     ) -> Result<usize> {
         matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
+    }
+}
+
+impl DenseMatrixFunctionOps<RocmDevice> for RocmDenseProductOps {
+    fn matexp(
+        &self,
+        device: &RocmDevice,
+        matrix: StridedView<'_, RocmBuffer<f32>, 2>,
+    ) -> Result<RocmBuffer<f32>> {
+        crate::application::linalg::matexp(device, operand(matrix))
+    }
+
+    fn pinv(
+        &self,
+        device: &RocmDevice,
+        matrix: StridedView<'_, RocmBuffer<f32>, 2>,
+    ) -> Result<RocmBuffer<f32>> {
+        crate::application::linalg::pinv(device, operand(matrix))
     }
 }
 

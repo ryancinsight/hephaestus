@@ -5,6 +5,23 @@
 - Refs: atlas `backlog.md#atlas-arch-001` (001i); ADR 0041 (conformance
   crate); ADR 0042 (the decomposition seam this record's staging mirrors).
 
+## Revision 2026-09-24: Dense matrix-function role
+
+The final host-delegated pair now has its own `DenseMatrixFunctionOps` role.
+`matexp` and `pinv` remain allocation wrappers over the same Leto CPU
+operations, but all four providers reach them through static dispatch and one
+`assert_dense_matrix_function_contract` clause. The shared contract covers
+closed forms, Moore-Penrose identities, general Leto oracles, dense and strided
+traversal, rectangular and empty shapes, storage validation, and non-finite or
+non-square rejection.
+
+This role is separate from `DenseCompositionOps` because WGPU exposes the pair
+only when `decomposition` or `sparse` enables its `leto-ops` dependency.
+Making the unconditional power/determinant/rank role feature-dependent would
+couple unrelated contracts; making the pair required in WGPU's minimal build
+would add a new dependency and unsupported default method. Provider-local
+differentials are removed, except WGPU's stable exact diagnostic assertions.
+
 ## Revision 2026-09-24: Dense composition role
 
 The follow-up composition stage has landed. `DenseCompositionOps` is a
@@ -84,10 +101,11 @@ The family splits on implementation structure:
 - **Kernel products** — `matmul`, `batched_matmul`, `kron` and their
   `_into` forms are single device kernels over strided operands, the same
   shape as the elementwise and reduction seams.
-- **Host-orchestrated compositions** — `matexp`, `matpow`, `det`, `pinv`,
-  `matrix_rank` are algorithms built from the kernel products and the
-  decomposition machinery (`det` via LU, `pinv`/`matrix_rank` via SVD,
-  `matexp` via scaling-and-squaring over `matmul`).
+- **Provider-scheduled compositions** — `matpow`, `det`, and `matrix_rank`
+  orchestrate product and decomposition machinery inside each provider.
+- **Host-delegated matrix functions** — `matexp` and `pinv` download an
+  `f32` operand, run Leto's matrix exponential or SVD-based pseudoinverse on
+  the CPU, and upload the allocating result.
 
 ## Decision
 
@@ -100,13 +118,15 @@ The family splits on implementation structure:
 2. Conformance clauses assert exact integer-matrix oracles (products of
    small integer matrices are exact in `f32`), strided traversal, and
    shape rejection without mutation.
-3. The host-orchestrated compositions enter through a separate
+3. The provider-scheduled compositions enter through a separate
    `DenseCompositionOps<D>` role. Its methods preserve the providers' public
    allocation wrappers while making matrix power, determinant, and rank
-   reachable through static dispatch and one conformance clause. `matexp`
-   and `pinv` remain staged until their contracts are ready; making them
-   required methods now would make that partial rollout look complete.
-4. Prepared forms are omitted: the ledger lists none for this family
+   reachable through static dispatch and one conformance clause.
+4. The feature-gated host-delegated pair enters through
+   `DenseMatrixFunctionOps<D>`. It remains separate from the unconditional
+   composition role so WGPU's minimal feature set does not acquire `leto-ops`
+   or unsupported default methods.
+5. Prepared forms are omitted: the ledger lists none for this family
    (`prepare_spmm` belongs to sparse), and no consumer requirement exists
    yet. If one appears it follows the established `Prepared<'op>` GAT
    pattern.
@@ -122,7 +142,8 @@ The family splits on implementation structure:
 
 ## Consequences
 
-Nine linalg entry points are now seam-reachable and clause-covered across
+Eleven linalg entry points are now seam-reachable and clause-covered across
 all four backends. The kernel tier remains independently implementable; the
-composition role adds no runtime state, virtual dispatch, or public wrapper
-migration. `matexp` and `pinv` remain the explicit composition follow-up.
+composition and matrix-function roles add no runtime state, virtual dispatch,
+or public wrapper migration. Provider-local matrix-function differentials now
+retain only stable provider diagnostics.

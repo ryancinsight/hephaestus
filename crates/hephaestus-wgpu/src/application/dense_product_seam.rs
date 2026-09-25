@@ -1,12 +1,16 @@
-//! Provider-owned dense product and composition seams for WGPU.
+//! Provider-owned dense product, composition, and matrix-function seams for
+//! WGPU.
 //!
 //! The kernels live in [`crate::application::linalg`]; this module only
-//! adapts them to [`hephaestus_core::DenseProductOps`] and
-//! [`hephaestus_core::DenseCompositionOps`] so a consumer — or
+//! adapts them to [`hephaestus_core::DenseProductOps`],
+//! [`hephaestus_core::DenseCompositionOps`], and
+//! [`hephaestus_core::DenseMatrixFunctionOps`] so a consumer — or
 //! the conformance suite — can run dense products without naming
 //! `WgpuDevice`, matching the crate's other seam adapters.
 
 use eunomia::Pod;
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+use hephaestus_core::DenseMatrixFunctionOps;
 use hephaestus_core::{
     DenseCompositionOps, DenseProductOps, DialectScalar, Result, StridedView, Wgsl,
 };
@@ -19,7 +23,8 @@ use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// Provider-owned dense product and composition implementation for WGPU.
+/// Provider-owned dense product, composition, and matrix-function implementation
+/// for WGPU.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuDenseProductOps;
 
@@ -83,6 +88,25 @@ impl DenseCompositionOps<WgpuDevice> for WgpuDenseProductOps {
         relative_tolerance: f32,
     ) -> Result<usize> {
         matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
+    }
+}
+
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+impl DenseMatrixFunctionOps<WgpuDevice> for WgpuDenseProductOps {
+    fn matexp(
+        &self,
+        device: &WgpuDevice,
+        matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
+    ) -> Result<WgpuBuffer<f32>> {
+        crate::application::linalg::matexp(device, operand(matrix))
+    }
+
+    fn pinv(
+        &self,
+        device: &WgpuDevice,
+        matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
+    ) -> Result<WgpuBuffer<f32>> {
+        crate::application::linalg::pinv(device, operand(matrix))
     }
 }
 

@@ -251,21 +251,7 @@ contract_cases!(
     #[cfg(feature = "decomposition")]
     contract::bunch_kaufman_rejects_rectangular_and_nonsymmetric,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_pinv_matches_closed_form_diagonal,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_pinv_rank_deficient_satisfies_moore_penrose,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_pinv_handles_rectangular_full_rank_matrix,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_pinv_rejects_non_finite_input,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_matexp_matches_closed_form_diagonal,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_matexp_matches_nilpotent_and_rotation_closed_forms,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_matexp_matches_leto_general_matrix,
-    #[cfg(any(feature = "decomposition", feature = "sparse"))]
-    contract::linalg_matexp_rejects_invalid_contracts,
+    contract::linalg_matrix_function_diagnostics_are_stable,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
     contract::test_wgpu_uniform_and_normal_with_seed,
     #[cfg(feature = "sparse")]
@@ -376,18 +362,19 @@ const EXPECTED_CONTRACT_CASES: usize = 126;
 // `assert_blocked_cholesky_contract` the same way, and the blocked-QR
 // differential became `assert_blocked_qr_contract`, so this combination is a
 // further net two below.
+// The eight feature-gated matrix-function cases become one exact-diagnostic
+// edge now that their differentials live in `assert_dense_matrix_function_contract`.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 180;
+const EXPECTED_CONTRACT_CASES: usize = 173;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 138;
+const EXPECTED_CONTRACT_CASES: usize = 131;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
-// shared Leto clause instantiated from scan_contracts.rs, so every feature
-// combination loses exactly that one registration (187). The four
-// `blocked_lu_*` differentials folded into `assert_blocked_lu_contract` are a
-// further net three below, and the four `blocked_cholesky_*` plus the
-// `blocked_qr_*` differentials another net two.
-const EXPECTED_CONTRACT_CASES: usize = 182;
+// shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
+// four blocked-Cholesky, and one blocked-QR differential registrations also
+// moved into shared clauses. The feature-gated matrix-function fold removes
+// seven more registrations while retaining one exact-diagnostic edge.
+const EXPECTED_CONTRACT_CASES: usize = 175;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {
