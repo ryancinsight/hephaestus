@@ -191,6 +191,24 @@ fn binary_op_bind_group(
         })
 }
 
+#[inline(always)]
+fn encode_dispatch_2d(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    bind_group: &wgpu::BindGroup,
+    label: &'static str,
+    workgroups_x: u32,
+    workgroups_y: u32,
+) {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some(label),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, bind_group, &[]);
+    pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
+}
+
 fn matmul_shader_source<T: MatmulZero>() -> String {
     format!(
         r#"
@@ -577,19 +595,14 @@ where
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("hephaestus-kron"),
         });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-kron"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(
-            to_u32(expected_cols.div_ceil(16), "Kronecker workgroups x")?,
-            to_u32(expected_rows.div_ceil(16), "Kronecker workgroups y")?,
-            1,
-        );
-    }
+    encode_dispatch_2d(
+        &mut encoder,
+        &pipeline,
+        &bind_group,
+        "hephaestus-kron",
+        to_u32(expected_cols.div_ceil(16), "Kronecker workgroups x")?,
+        to_u32(expected_rows.div_ceil(16), "Kronecker workgroups y")?,
+    );
     device.queue().submit(Some(encoder.finish()));
 
     Ok(())
@@ -694,17 +707,14 @@ where
             label: Some("hephaestus-matmul"),
         });
 
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-matmul"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        let workgroups_x = to_u32(cols.div_ceil(16), "matmul workgroup_x")?;
-        let workgroups_y = to_u32(rows.div_ceil(16), "matmul workgroup_y")?;
-        pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
-    }
+    encode_dispatch_2d(
+        &mut encoder,
+        &pipeline,
+        &bind_group,
+        "hephaestus-matmul",
+        to_u32(cols.div_ceil(16), "matmul workgroup_x")?,
+        to_u32(rows.div_ceil(16), "matmul workgroup_y")?,
+    );
 
     device.queue().submit(Some(encoder.finish()));
 
@@ -876,17 +886,14 @@ where
             &layout_uniforms,
         );
 
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("hephaestus-matmul-batched"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups_x = to_u32(n.div_ceil(16), "batched_matmul workgroup_x")?;
-            let workgroups_y = to_u32(m.div_ceil(16), "batched_matmul workgroup_y")?;
-            pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
-        }
+        encode_dispatch_2d(
+            &mut encoder,
+            &pipeline,
+            &bind_group,
+            "hephaestus-matmul-batched",
+            to_u32(n.div_ceil(16), "batched_matmul workgroup_x")?,
+            to_u32(m.div_ceil(16), "batched_matmul workgroup_y")?,
+        );
 
         uniform_guards.extend(layout_uniforms);
     }
@@ -1044,19 +1051,14 @@ where
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("hephaestus-matrix-identity"),
         });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("hephaestus-matrix-identity"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(
-            to_u32(layout.shape()[1].div_ceil(16), "identity workgroups x")?,
-            to_u32(layout.shape()[0].div_ceil(16), "identity workgroups y")?,
-            1,
-        );
-    }
+    encode_dispatch_2d(
+        &mut encoder,
+        &pipeline,
+        &bind_group,
+        "hephaestus-matrix-identity",
+        to_u32(layout.shape()[1].div_ceil(16), "identity workgroups x")?,
+        to_u32(layout.shape()[0].div_ceil(16), "identity workgroups y")?,
+    );
     device.queue().submit(Some(encoder.finish()));
     drop(layout_buffer);
     drop(identity_buffer);
