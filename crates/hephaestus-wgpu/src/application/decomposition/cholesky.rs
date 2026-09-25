@@ -785,20 +785,21 @@ fn main(
     )
 }
 
-fn forward_block_solve_shader_source() -> String {
-    block_solve_shader_source(Substitution::Forward)
-}
-
-fn forward_trailing_update_shader_source() -> String {
-    trailing_update_shader_source(Substitution::Forward)
-}
-
-fn backward_block_solve_shader_source() -> String {
-    block_solve_shader_source(Substitution::Backward)
-}
-
-fn backward_trailing_update_shader_source() -> String {
-    trailing_update_shader_source(Substitution::Backward)
+/// Build and cache one blocked-solve kernel pipeline keyed by marker type.
+///
+/// The marker keeps each kernel in its own cache slot while this helper
+/// centralizes the shared cache-key shape.
+fn solve_pipeline<K: 'static>(
+    device: &WgpuDevice,
+    label: &'static str,
+    source: impl FnOnce() -> String,
+) -> wgpu::ComputePipeline {
+    cached_pipeline(
+        device,
+        (TypeId::of::<K>(), TypeId::of::<f32>(), SOLVE_BLOCK_WIDTH),
+        label,
+        source,
+    )
 }
 
 /// The four kernels of the blocked solve, in the order a solve issues them.
@@ -855,30 +856,25 @@ fn device_solve(
     };
     let n_u32 = to_u32(n, "dimension")?;
 
-    let pipeline_key = |kernel: TypeId| (kernel, TypeId::of::<f32>(), SOLVE_BLOCK_WIDTH);
-    let forward_block = cached_pipeline(
+    let forward_block = solve_pipeline::<ForwardBlockSolveKernel>(
         device,
-        pipeline_key(TypeId::of::<ForwardBlockSolveKernel>()),
         "hephaestus-cholesky-forward-block-solve",
-        forward_block_solve_shader_source,
+        || block_solve_shader_source(Substitution::Forward),
     );
-    let forward_update = cached_pipeline(
+    let forward_update = solve_pipeline::<ForwardTrailingUpdateKernel>(
         device,
-        pipeline_key(TypeId::of::<ForwardTrailingUpdateKernel>()),
         "hephaestus-cholesky-forward-trailing-update",
-        forward_trailing_update_shader_source,
+        || trailing_update_shader_source(Substitution::Forward),
     );
-    let backward_block = cached_pipeline(
+    let backward_block = solve_pipeline::<BackwardBlockSolveKernel>(
         device,
-        pipeline_key(TypeId::of::<BackwardBlockSolveKernel>()),
         "hephaestus-cholesky-backward-block-solve",
-        backward_block_solve_shader_source,
+        || block_solve_shader_source(Substitution::Backward),
     );
-    let backward_update = cached_pipeline(
+    let backward_update = solve_pipeline::<BackwardTrailingUpdateKernel>(
         device,
-        pipeline_key(TypeId::of::<BackwardTrailingUpdateKernel>()),
         "hephaestus-cholesky-backward-trailing-update",
-        backward_trailing_update_shader_source,
+        || trailing_update_shader_source(Substitution::Backward),
     );
 
     let block_count = n.div_ceil(SOLVE_BLOCK);
