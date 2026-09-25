@@ -1434,45 +1434,9 @@ impl ComputeDevice for WgpuDevice {
     }
 
     fn download_owned<T: Pod>(&self, buffer: &WgpuBuffer<T>) -> Result<Vec<T>> {
-        let len = buffer.len;
-        let mut out = Vec::new();
-        out.try_reserve_exact(len)
-            .map_err(|error| HephaestusError::AllocationFailed {
-                message: format!(
-                    "WGPU host download allocation for {len} elements failed: {error}"
-                ),
-            })?;
-        if core::mem::size_of::<T>() == 0 {
-            out.resize(len, eunomia::Zeroable::zeroed());
-            return Ok(out);
-        }
-        let byte_len = Self::byte_size::<T>(len)?;
-        if byte_len == 0 {
-            return Ok(out);
-        }
-        let padded = Self::padded_size::<T>(len)?;
-        let destination = out.spare_capacity_mut().as_mut_ptr().cast::<u8>();
-        self.stage_and_read(
-            &buffer.buffer,
-            ReadbackRegion {
-                byte_offset: 0,
-                padded,
-                byte_len,
-            },
-            device_wait_deadline(),
-            "hephaestus-download-owned",
-            |bytes| {
-                // SAFETY: `try_reserve_exact` established writable capacity for
-                // `len` elements and `byte_len` is exactly `len * size_of::<T>()`.
-                // The source is a disjoint mapped staging allocation.
-                unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), destination, bytes.len()) };
-            },
-        )?;
-        // SAFETY: `T: Pod` admits every initialized bit pattern, and the
-        // successful synchronous staging read above wrote every byte of all
-        // `len` elements before the vector length becomes observable.
-        unsafe { out.set_len(len) };
-        Ok(out)
+        hephaestus_core::download_owned_into_vec!(T, buffer.len, "WGPU host download", |out| {
+            self.download(buffer, out)
+        })
     }
 
     fn write_buffer<T: Pod>(&self, buffer: &WgpuBuffer<T>, host: &[T]) -> Result<()> {

@@ -75,6 +75,43 @@ pub struct DeviceLimits {
     pub max_immediate_size: u32,
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! download_owned_into_vec {
+    ($ty:ty, $len:expr, $allocation_context:expr, |$out:ident| $fill:expr) => {{
+        let len = $len;
+        let mut out = ::std::vec::Vec::<$ty>::new();
+        out.try_reserve_exact(len)
+            .map_err(|error| $crate::HephaestusError::AllocationFailed {
+                message: format!(
+                    "{} allocation for {len} elements failed: {error}",
+                    $allocation_context
+                ),
+            })?;
+        if ::core::mem::size_of::<$ty>() == 0 {
+            out.resize(len, ::eunomia::Zeroable::zeroed());
+            Ok(out)
+        } else if len == 0 {
+            Ok(out)
+        } else {
+            // SAFETY: `try_reserve_exact` established writable capacity for
+            // `len` elements, and `len > 0` keeps the spare-capacity pointer
+            // in-bounds for the full slice below. `$fill` must initialize
+            // every element before this macro publishes the vector length.
+            let $out = unsafe {
+                ::core::slice::from_raw_parts_mut(
+                    out.spare_capacity_mut().as_mut_ptr().cast::<$ty>(),
+                    len,
+                )
+            };
+            $fill?;
+            // SAFETY: a successful `$fill` initialized every element of `$out`.
+            unsafe { out.set_len(len) };
+            Ok(out)
+        }
+    }};
+}
+
 /// The compute-device seam every accelerator backend implements.
 ///
 /// This trait is a **deliberate extension seam** (atlas ADR 0001): the wgpu
