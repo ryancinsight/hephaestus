@@ -493,6 +493,38 @@ fn kron_output_shape(lhs: &Layout<2>, rhs: &Layout<2>) -> Result<[usize; 2]> {
     Ok([rows, cols])
 }
 
+#[inline]
+fn validate_binary_op_operands<T>(
+    lhs: &StridedOperand<'_, T, 2>,
+    rhs: &StridedOperand<'_, T, 2>,
+    out: &StridedOperand<'_, T, 2>,
+    op_name: &str,
+) -> Result<()> {
+    if lhs.buffer.aliases(out.buffer) || rhs.buffer.aliases(out.buffer) {
+        return Err(HephaestusError::DispatchFailed {
+            message: "output buffer must not alias either input buffer".to_string(),
+        });
+    }
+
+    lhs.layout
+        .validate_storage_len(lhs.buffer.len)
+        .map_err(map_layout_err)?;
+    rhs.layout
+        .validate_storage_len(rhs.buffer.len)
+        .map_err(map_layout_err)?;
+    out.layout
+        .validate_storage_len(out.buffer.len)
+        .map_err(map_layout_err)?;
+
+    if out.layout.has_zero_stride_aliasing() {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("{op_name} output layout must not contain zero-stride aliasing"),
+        });
+    }
+
+    Ok(())
+}
+
 /// Perform the Kronecker product `out = lhs ⊗ rhs` on the GPU.
 ///
 /// For `lhs` with shape `[m, n]` and `rhs` with shape `[p, q]`, the output
@@ -519,27 +551,7 @@ where
         });
     }
 
-    if lhs.buffer.aliases(out.buffer) || rhs.buffer.aliases(out.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias either input buffer".to_string(),
-        });
-    }
-
-    lhs.layout
-        .validate_storage_len(lhs.buffer.len)
-        .map_err(map_layout_err)?;
-    rhs.layout
-        .validate_storage_len(rhs.buffer.len)
-        .map_err(map_layout_err)?;
-    out.layout
-        .validate_storage_len(out.buffer.len)
-        .map_err(map_layout_err)?;
-
-    if out.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "Kronecker output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_binary_op_operands(&lhs, &rhs, &out, "Kronecker")?;
 
     if expected_rows == 0 || expected_cols == 0 {
         return Ok(());
@@ -653,27 +665,7 @@ where
         });
     }
 
-    if lhs.buffer.aliases(out.buffer) || rhs.buffer.aliases(out.buffer) {
-        return Err(HephaestusError::DispatchFailed {
-            message: "output buffer must not alias either input buffer".to_string(),
-        });
-    }
-
-    lhs.layout
-        .validate_storage_len(lhs.buffer.len)
-        .map_err(map_layout_err)?;
-    rhs.layout
-        .validate_storage_len(rhs.buffer.len)
-        .map_err(map_layout_err)?;
-    out.layout
-        .validate_storage_len(out.buffer.len)
-        .map_err(map_layout_err)?;
-
-    if out.layout.has_zero_stride_aliasing() {
-        return Err(HephaestusError::DispatchFailed {
-            message: "matmul output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_binary_op_operands(&lhs, &rhs, &out, "matmul")?;
 
     if rows == 0 || cols == 0 || lhs_shared == 0 {
         return Ok(());
