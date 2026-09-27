@@ -8,6 +8,9 @@
 //! performance path — consumers wanting fast CPU execution use leto
 //! directly.
 
+/// Direct-loop argmax/argmin seam implementor (the reference for tie-break
+/// semantics).
+pub mod arg_reduce;
 /// Leto-backed scaled dot-product attention seam implementor.
 pub mod attention;
 mod combine;
@@ -53,6 +56,7 @@ pub mod stencil;
 /// Volume ray line integrals over leto interpolation.
 pub mod volume;
 
+pub use arg_reduce::HostArgReduceOps;
 pub use attention::{HostAttentionBackward, HostAttentionForward, HostAttentionOps};
 pub use convolution::{
     HostConvolutionBackward, HostConvolutionForward, HostConvolutionOps,

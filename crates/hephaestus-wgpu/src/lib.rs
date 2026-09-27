@@ -21,6 +21,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod test_support;
 
+pub use application::arg_reduce_seam::WgpuArgReduceOps;
 pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::convolution::WgpuConvolutionOps;

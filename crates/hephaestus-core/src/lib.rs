@@ -29,6 +29,7 @@ pub use domain::accelerator::window::{
     CFamilyPoolingOps, CFamilySlidingWindowOps, WindowDialect, WindowKey, WindowOperation,
     c_family_window_source,
 };
+pub use domain::arg_reduce::{ArgReduceOps, validate_arg_reduce_shape};
 pub use domain::attention::{
     AttentionBackwardOperands, AttentionCausality, AttentionForwardOperands,
     AttentionGradientViews, AttentionMask, AttentionOps, AttentionPlan, AttentionScalar,

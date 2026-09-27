@@ -31,6 +31,8 @@
 //! order cannot change the result and no tolerance is applicable. A clause that
 //! needed an epsilon would state its derivation at the assertion site.
 
+/// Contract clauses for the [`ArgReduceOps`](hephaestus_core::ArgReduceOps) seam.
+pub mod arg_reduce;
 /// The aggregate entry point: every seam named as one bound.
 pub mod assert_backend;
 /// Contract clauses for the [`AttentionOps`](hephaestus_core::AttentionOps) seam.
@@ -96,6 +98,7 @@ pub mod transfer;
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
 
+pub use arg_reduce::{assert_arg_reduce_contract, assert_arg_reduce_transposed_view_contract};
 pub use assert_backend::{BackendUnderTest, assert_backend_contract};
 pub use attention::assert_attention_contract;
 pub use axis_reduction::assert_axis_reduction_contract;
