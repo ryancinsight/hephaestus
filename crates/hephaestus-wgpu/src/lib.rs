@@ -24,6 +24,7 @@ mod test_support;
 pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::convolution::WgpuConvolutionOps;
+pub use application::cross_product_seam::WgpuCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::WgpuDecompositionOps;
 pub use application::dense_product_seam::WgpuDenseProductOps;

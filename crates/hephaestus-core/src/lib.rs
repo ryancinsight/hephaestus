@@ -41,6 +41,7 @@ pub use domain::convolution::{
     plan_convolution_forward, plan_transposed_convolution_backward,
     plan_transposed_convolution_forward,
 };
+pub use domain::cross_product::{CrossProductOps, validate_cross_product_lengths};
 pub use domain::decomposition::{
     BlockedCholeskyBackend, BlockedCholeskyFactors, BlockedDecompositionBackend, BlockedLuFactors,
     BlockedQrBackend, BlockedQrFactors, PanelRegion, TrailingGemm, TrailingHh, TrailingSyrk,

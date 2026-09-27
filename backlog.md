@@ -75,15 +75,22 @@
 
 <a id="heph-device-dot-cross-provider-1"></a>
 
-## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident dot/cross reductions [patch] — todo
+## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident cross product; coeus dot-binding gap [patch] — todo
 - Priority: feature.
-- Outcome: `DenseVectorOps`-family dot and cross-product reductions execute
-  entirely on-device; coeus currently copies full operands to host for these.
-- Scope: extend the existing dense-vector seam (or add a sibling) on
-  wgpu/cuda/rocm/metal; no algorithm change, only closing the host fallback.
+- Status: audited (ADR 0064). `DenseVectorOps::dot`/`norm_l2`/`norm_l1`/
+  `norm_max` already dispatch entirely on-device on wgpu (only the reduced
+  scalar downloads) — the reported "coeus copies full operands to host"
+  symptom for `dot` is a coeus-side integration gap (not calling the
+  existing seam), not a hephaestus provider gap; report back to coeus rather
+  than duplicate. `CrossProductOps<D, T>` (host + wgpu) delivered for the
+  half that had no seam at all.
+- Outcome: cross-product batched over flat `(x, y, z)` triples, on-device.
+- Scope: `hephaestus-core`/`hephaestus-host`/`hephaestus-wgpu` delivered;
+  cuda/rocm/metal implementors remain, plus the `assert_backend_contract`
+  aggregate fold once all four backends implement it.
 - Driver: coeus consumer audit, 2026-09-26.
-- Verification: differential vs Leto per backend, allocation-free hot path
-  per performance_engineering, strict Clippy, independent review.
+- Verification: differential vs the standard basis identities (host +
+  real-device wgpu), strict Clippy, independent review.
 - Last-update: 2026-09-26.
 
 <a id="heph-fused-expr-rocm-metal-1"></a>

@@ -25,6 +25,8 @@ pub mod attention;
 pub mod axis_reduction_seam;
 /// Native WGSL regular and transposed convolution.
 pub mod convolution;
+/// Device-neutral batched cross-product seam implementation.
+pub mod cross_product_seam;
 /// Device-neutral decomposition seam implementation.
 #[cfg(feature = "decomposition")]
 pub mod decomposition_seam;
