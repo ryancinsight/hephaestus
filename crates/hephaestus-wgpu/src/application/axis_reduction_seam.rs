@@ -14,7 +14,6 @@ use crate::application::reduction::{
     PreparedAxisReduction, mean_axis_into, prepare_reduce_axis_into, prod_axis_into,
     reduce_axis_into,
 };
-use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -27,17 +26,9 @@ use crate::infrastructure::device::WgpuDevice;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuAxisReductionOps;
 
-/// Convert the device-neutral view into this backend's operand pair.
-///
-/// The two types are the same borrowed pair; only the buffer type is spelled
-/// differently, so this is a field move the optimizer erases.
-#[inline]
-fn operand<'a, T>(view: StridedView<'a, WgpuBuffer<T>, 2>) -> StridedOperand<'a, T, 2> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
-    }
-}
+// The device-neutral `StridedView` *is* this backend's `StridedOperand` (a
+// `hephaestus_core::StridedOperand` aliased over `WgpuBuffer<T>`), so the seam's
+// operands pass to the kernel entry points without a per-seam conversion.
 
 impl<T> AxisReductionOps<WgpuDevice, T> for WgpuAxisReductionOps
 where
@@ -61,13 +52,7 @@ where
         Op: CombineExpr<Wgsl>,
         T: OpIdentity<Op> + IdentityToken<Op, Wgsl>,
     {
-        reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -81,13 +66,7 @@ where
     where
         T: OpIdentity<ProdOp> + IdentityToken<ProdOp, Wgsl>,
     {
-        prod_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prod_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -101,13 +80,7 @@ where
     where
         T: OpIdentity<SumOp> + IdentityToken<SumOp, Wgsl>,
     {
-        mean_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        mean_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_reduce_axis_into<'op, Op>(
@@ -121,13 +94,7 @@ where
         Op: CombineExpr<Wgsl>,
         T: OpIdentity<Op> + IdentityToken<Op, Wgsl>,
     {
-        prepare_reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prepare_reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]

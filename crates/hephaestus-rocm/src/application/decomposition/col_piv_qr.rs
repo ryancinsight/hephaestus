@@ -9,7 +9,7 @@
 
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
-    BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp, Result,
+    BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp, Result, map_layout_err,
 };
 use leto::Layout;
 
@@ -34,12 +34,6 @@ struct ColPivQrMeta {
 }
 
 const _: () = assert!(core::mem::size_of::<ColPivQrMeta>() == 16);
-
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("column-pivoted QR layout error: {error}"),
-    }
-}
 
 /// Column-pivoted QR result with device-backed **Q**, **R**, and permutation.
 pub struct GpuColPivQrDecomposition {

@@ -17,7 +17,6 @@ use crate::application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_reduce_axis_into,
 };
 use crate::application::reduction::{mean_axis_into, prod_axis_into, reduce_axis_into};
-use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
@@ -27,17 +26,6 @@ use crate::infrastructure::device::CudaDevice;
 /// prepared resources of its own.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaAxisReductionOps;
-
-/// Convert the device-neutral view into this backend's operand pair.
-#[inline]
-fn operand<'a, T, const N: usize>(
-    view: StridedView<'a, CudaBuffer<T>, N>,
-) -> StridedOperand<'a, T, N> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
-    }
-}
 
 impl<T> AxisReductionOps<CudaDevice, T> for CudaAxisReductionOps
 where
@@ -61,13 +49,7 @@ where
         Op: CombineExpr<CudaC>,
         T: OpIdentity<Op> + IdentityToken<Op, CudaC>,
     {
-        reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -81,13 +63,7 @@ where
     where
         T: OpIdentity<ProdOp> + IdentityToken<ProdOp, CudaC>,
     {
-        prod_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prod_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -101,13 +77,7 @@ where
     where
         T: OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
     {
-        mean_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        mean_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_reduce_axis_into<'op, Op>(
@@ -121,13 +91,7 @@ where
         Op: CombineExpr<CudaC>,
         T: OpIdentity<Op> + IdentityToken<Op, CudaC>,
     {
-        prepare_reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prepare_reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]

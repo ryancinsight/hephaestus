@@ -5,13 +5,13 @@ use crate::application::linalg::AsGpuMatrixOperand;
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
-use crate::application::strided::map_layout_err;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 use core::marker::PhantomData;
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result,
+    map_layout_err,
 };
 
 #[repr(C)]

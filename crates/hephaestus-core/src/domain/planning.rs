@@ -6,12 +6,11 @@
 
 use crate::domain::error::{HephaestusError, Result};
 
-/// Map a leto layout error to a typed dispatch failure.
-pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
+// The canonical layout-error mapping lives in [`crate::domain::strided`], beside
+// the strided metadata it serves. Re-exported here so the per-family planners
+// keep importing it from their shared planning hub rather than each carrying a
+// byte-identical copy whose diagnostic text can drift.
+pub(crate) use crate::domain::strided::map_layout_err;
 
 /// Narrow a signed stride to `i32` with a typed error.
 pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {

@@ -10,7 +10,7 @@ use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, ElementwiseOps,
     FullReductionOps, HephaestusError, HipC, IdentityOp, IdentityToken, OpIdentity, Result,
-    StridedView,
+    StridedView, map_layout_err,
 };
 use leto::Layout;
 
@@ -18,12 +18,6 @@ use crate::RocmBuffer;
 use crate::RocmDevice;
 use crate::application::elementwise_seam::RocmElementwiseOps;
 use crate::application::prepared_reduction::PreparedReductionPlan;
-
-fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("{e}"),
-    }
-}
 
 /// Provider-owned implementation of [`FullReductionOps`] for ROCm/HIP.
 #[derive(Clone, Copy, Debug, Default)]

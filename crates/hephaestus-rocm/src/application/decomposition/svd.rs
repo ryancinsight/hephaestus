@@ -6,17 +6,11 @@
 //! device-resident without claiming a separate HIP SVD kernel that does not
 //! exist in this increment.
 
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result, map_layout_err};
 
 use crate::RocmDevice;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::RocmBuffer;
-
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("SVD layout error: {error}"),
-    }
-}
 
 /// SVD result with device-resident **U**, **V**, and singular values.
 pub struct GpuSvdDecomposition {

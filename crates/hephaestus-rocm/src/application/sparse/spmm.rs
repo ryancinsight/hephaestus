@@ -39,11 +39,7 @@ pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
     })
 }
 
-pub(crate) fn map_layout_error(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {error}"),
-    }
-}
+pub(crate) use hephaestus_core::map_layout_err;
 
 pub(crate) fn shader_source<T: DialectScalar<HipC>>() -> String {
     format!(
@@ -126,7 +122,7 @@ pub fn spmm_into<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     }
     b.layout
         .validate_storage_len(b.buffer.len())
-        .map_err(map_layout_error)?;
+        .map_err(map_layout_err)?;
     if b.buffer.aliases(c) || matrix.values().aliases(c) {
         return Err(HephaestusError::DispatchFailed {
             message: "SpMM output buffer must not alias an input buffer".to_string(),

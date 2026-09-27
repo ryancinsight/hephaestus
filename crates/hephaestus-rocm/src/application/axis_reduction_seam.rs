@@ -20,7 +20,6 @@ use crate::application::axis_reduction::{mean_axis_into, prod_axis_into, reduce_
 use crate::application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_reduce_axis_into,
 };
-use crate::application::strided::StridedOperand;
 
 /// Axis reductions for one ROCm device.
 ///
@@ -28,17 +27,6 @@ use crate::application::strided::StridedOperand;
 /// prepared resources of its own.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmAxisReductionOps;
-
-/// Convert the device-neutral view into this backend's operand pair.
-#[inline]
-fn operand<'a, T, const N: usize>(
-    view: StridedView<'a, RocmBuffer<T>, N>,
-) -> StridedOperand<'a, T, N> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
-    }
-}
 
 impl<T> AxisReductionOps<RocmDevice, T> for RocmAxisReductionOps
 where
@@ -62,13 +50,7 @@ where
         Op: CombineExpr<HipC>,
         T: OpIdentity<Op> + IdentityToken<Op, HipC>,
     {
-        reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -82,13 +64,7 @@ where
     where
         T: OpIdentity<ProdOp> + IdentityToken<ProdOp, HipC>,
     {
-        prod_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prod_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]
@@ -102,13 +78,7 @@ where
     where
         T: OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
     {
-        mean_axis_into::<T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        mean_axis_into::<T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_reduce_axis_into<'op, Op>(
@@ -122,13 +92,7 @@ where
         Op: CombineExpr<HipC>,
         T: OpIdentity<Op> + IdentityToken<Op, HipC>,
     {
-        prepare_reduce_axis_into::<Op, T>(
-            device,
-            operand(input),
-            axis,
-            operand(output),
-            BlockWidth::DEFAULT,
-        )
+        prepare_reduce_axis_into::<Op, T>(device, input, axis, output, BlockWidth::DEFAULT)
     }
 
     #[inline]

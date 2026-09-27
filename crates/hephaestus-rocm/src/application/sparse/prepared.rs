@@ -245,7 +245,7 @@ where
     }
     rhs.layout
         .validate_storage_len(rhs.buffer.len())
-        .map_err(super::spmm::map_layout_error)?;
+        .map_err(super::spmm::map_layout_err)?;
     let meta = SpmmMeta {
         rows: super::spmm::to_u32(nrows, "CSR row count")?,
         cols: super::spmm::to_u32(rhs_cols, "dense RHS column count")?,

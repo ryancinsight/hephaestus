@@ -8,7 +8,7 @@
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp,
-    KernelDevice, Result,
+    KernelDevice, Result, map_layout_err,
 };
 use leto::Layout;
 
@@ -32,12 +32,6 @@ struct QrMeta {
 }
 
 const _: () = assert!(core::mem::size_of::<QrMeta>() == 12);
-
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("QR layout error: {error}"),
-    }
-}
 
 /// QR decomposition result with packed factors resident on the device.
 pub struct GpuQrDecomposition {

@@ -204,12 +204,7 @@ pub struct AxisScanLaunch<D: DeviceApi> {
     geometry: LaunchGeometry,
 }
 
-#[inline]
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {error}"),
-    }
-}
+use crate::domain::strided::map_layout_err;
 
 /// Resolve the kernel and launch geometry for a rank-2 scan, or `None` when
 /// the scan is empty.

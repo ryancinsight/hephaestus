@@ -17,7 +17,6 @@ use hephaestus_core::{
 use crate::application::linalg::{
     batched_matmul_into, det, kron_into, matmul_into, matpow, matrix_rank_with_tolerance,
 };
-use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
@@ -25,6 +24,11 @@ use crate::infrastructure::device::CudaDevice;
 /// for CUDA.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CudaDenseProductOps;
+
+// This device's operand type is `hephaestus_core::StridedOperand` over
+// `CudaBuffer<T>` (see `crate::application::strided`), so the device-neutral
+// `StridedView` the seam hands in *is* the operand the kernel entry points take
+// — no per-seam conversion is needed.
 
 impl<T> DenseProductOps<CudaDevice, T> for CudaDenseProductOps
 where
@@ -37,7 +41,7 @@ where
         rhs: StridedView<'_, CudaBuffer<T>, 2>,
         output: StridedView<'_, CudaBuffer<T>, 2>,
     ) -> Result<()> {
-        matmul_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        matmul_into::<T>(device, lhs, rhs, output)
     }
 
     fn batched_matmul_into(
@@ -47,7 +51,7 @@ where
         rhs: StridedView<'_, CudaBuffer<T>, 3>,
         output: StridedView<'_, CudaBuffer<T>, 3>,
     ) -> Result<()> {
-        batched_matmul_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        batched_matmul_into::<T>(device, lhs, rhs, output)
     }
 
     fn kron_into(
@@ -57,7 +61,7 @@ where
         rhs: StridedView<'_, CudaBuffer<T>, 2>,
         output: StridedView<'_, CudaBuffer<T>, 2>,
     ) -> Result<()> {
-        kron_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        kron_into::<T>(device, lhs, rhs, output)
     }
 }
 
@@ -68,7 +72,7 @@ impl DenseCompositionOps<CudaDevice> for CudaDenseProductOps {
         matrix: StridedView<'_, CudaBuffer<f32>, 2>,
         exponent: u32,
     ) -> Result<CudaBuffer<f32>> {
-        matpow(device, operand(matrix), exponent)
+        matpow(device, matrix, exponent)
     }
 
     fn det(
@@ -76,7 +80,7 @@ impl DenseCompositionOps<CudaDevice> for CudaDenseProductOps {
         device: &CudaDevice,
         matrix: StridedView<'_, CudaBuffer<f32>, 2>,
     ) -> Result<CudaBuffer<f32>> {
-        det(device, operand(matrix))
+        det(device, matrix)
     }
 
     fn matrix_rank_with_tolerance(
@@ -85,7 +89,7 @@ impl DenseCompositionOps<CudaDevice> for CudaDenseProductOps {
         matrix: StridedView<'_, CudaBuffer<f32>, 2>,
         relative_tolerance: f32,
     ) -> Result<usize> {
-        matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
+        matrix_rank_with_tolerance(device, matrix, relative_tolerance)
     }
 }
 
@@ -95,7 +99,7 @@ impl DenseMatrixFunctionOps<CudaDevice> for CudaDenseProductOps {
         device: &CudaDevice,
         matrix: StridedView<'_, CudaBuffer<f32>, 2>,
     ) -> Result<CudaBuffer<f32>> {
-        crate::application::linalg::matexp(device, operand(matrix))
+        crate::application::linalg::matexp(device, matrix)
     }
 
     fn pinv(
@@ -103,17 +107,6 @@ impl DenseMatrixFunctionOps<CudaDevice> for CudaDenseProductOps {
         device: &CudaDevice,
         matrix: StridedView<'_, CudaBuffer<f32>, 2>,
     ) -> Result<CudaBuffer<f32>> {
-        crate::application::linalg::pinv(device, operand(matrix))
-    }
-}
-
-/// Convert the device-neutral view into this backend's operand pair.
-#[inline]
-fn operand<'a, T, const N: usize>(
-    view: StridedView<'a, CudaBuffer<T>, N>,
-) -> StridedOperand<'a, T, N> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
+        crate::application::linalg::pinv(device, matrix)
     }
 }

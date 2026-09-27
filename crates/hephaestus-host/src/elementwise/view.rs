@@ -15,12 +15,9 @@ use crate::combine::unsupported_operator;
 /// diagnostic names the violated constraint identically.
 ///
 /// `pub(crate)`: shared verbatim with [`crate::parameterized`], whose
-/// runtime-parameter unary seam broadcasts and iterates the same way.
-pub(crate) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
+/// runtime-parameter unary seam broadcasts and iterates the same way. Imported
+/// from [`hephaestus_core`] rather than re-declared so the wording has one home.
+pub(crate) use hephaestus_core::map_layout_err;
 
 /// Broadcast `layout` to `target_shape` and validate it against `storage_len`.
 /// Mirrors `hephaestus-wgpu`'s per-operand broadcast + `validate_storage_len`

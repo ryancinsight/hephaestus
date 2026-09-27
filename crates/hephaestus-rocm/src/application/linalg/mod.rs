@@ -65,12 +65,11 @@ pub(super) fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
     })
 }
 
-#[inline]
-pub(super) fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {error}"),
-    }
-}
+/// Map a leto layout-validation error into a dispatch failure.
+///
+/// Imported from [`hephaestus_core`] rather than re-declared so the diagnostic
+/// text has one home across the backends.
+pub(super) use hephaestus_core::map_layout_err;
 
 #[inline]
 fn to_u32(value: usize, what: &str) -> Result<u32> {
