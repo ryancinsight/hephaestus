@@ -11,6 +11,7 @@ mod decomposition;
 mod dense_product;
 mod dense_vector;
 mod elementwise;
+mod embedding;
 mod pad;
 mod parameterized;
 mod random;

@@ -28,6 +28,8 @@ pub mod dense_product;
 pub mod dense_vector;
 /// Host implementor of the unary/binary elementwise seams (ADR 0061).
 pub mod elementwise;
+/// Direct-loop embedding-table gather seam implementor.
+pub mod embedding;
 mod operands;
 /// Leto-backed padding seam implementor.
 pub mod pad;
@@ -70,6 +72,7 @@ pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
 pub use elementwise::{
     HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
 };
+pub use embedding::HostEmbeddingOps;
 pub use pad::HostPadOps;
 pub use parameterized::HostParameterizedUnaryOps;
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};

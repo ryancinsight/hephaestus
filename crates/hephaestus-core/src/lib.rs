@@ -62,6 +62,7 @@ pub use domain::device::{
 };
 pub use domain::dialect::{CudaC, DialectScalar, HipC, Host, KernelDialect, Wgsl};
 pub use domain::elementwise::ElementwiseOps;
+pub use domain::embedding::{EmbeddingOps, validate_embedding_gather_shape};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};

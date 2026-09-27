@@ -24,6 +24,8 @@ pub mod device;
 pub mod dialect;
 /// Backend-neutral elementwise operations over strided n-D views.
 pub mod elementwise;
+/// Device-neutral embedding-table gather seam.
+pub mod embedding;
 /// Error contracts shared by all backends.
 pub mod error;
 /// Backend-neutral volume ray-integral geometry and validation.
