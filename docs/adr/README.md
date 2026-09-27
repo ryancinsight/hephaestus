@@ -71,4 +71,5 @@
 | [0060](0060-pooled-buffer-ownership.md) | Keep pooled buffer ownership inside the provider | Accepted |
 | [0061](0061-operator-value-semantics.md) | Value semantics for kernel operators | Proposed |
 | [0062](0062-device-neutral-pad-seam.md) | Device-neutral padding seam | Accepted |
+| [0063](0063-device-neutral-arg-reduce-seam.md) | Device-neutral rank-2 argmax/argmin seam | Accepted |
 | [0064](0064-device-neutral-cross-product-seam.md) | Device-neutral batched cross-product seam | Accepted |

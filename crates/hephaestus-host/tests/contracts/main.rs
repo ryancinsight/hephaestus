@@ -1,6 +1,7 @@
 //! One integration-test binary for the host crate: each module instantiates
 //! a shared conformance clause, or pins a host-specific case, for one seam.
 
+mod arg_reduce;
 mod attention;
 mod backend;
 mod convolution;

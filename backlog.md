@@ -22,15 +22,22 @@
 
 <a id="heph-topk-argminmax-provider-1"></a>
 
-## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — Device-resident top-k/argmax/argmin [minor] — todo
+## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — Device-resident top-k [minor] — todo
 - Priority: feature.
-- Outcome: `TopKOps`/`ArgReduceOps` seam producing indices+values on-device
-  for topk, argmax, argmin along an axis, without a host copy.
-- Scope: core seam, wgpu/cuda/rocm/metal implementors, conformance vs Leto.
+- Status: `ArgReduceOps` (argmax/argmin, rank-2, host+wgpu) delivered per
+  ADR 0062 — see [`heph-shape-ops-provider-1`](#heph-shape-ops-provider-1)-
+  sibling item on the same branch shape. Narrowed to top-`k` selection, a
+  materially different algorithm (partial sort/selection network, not a
+  linear-scan reduction) — split out rather than blocking on the harder half.
+- Outcome: a `TopKOps` seam producing the `k` largest/smallest values and
+  their indices along an axis, on-device, without a host copy.
+- Scope: core seam, wgpu device implementor first (cuda/rocm/metal follow via
+  the same generic accelerator layer), conformance vs a Leto/sort-based
+  reference.
 - Driver: coeus consumer audit — no accelerator path exists; current coeus
   behavior downloads full operands to host for these reductions.
-- Verification: differential + boundary (ties, NaN policy per
-  numerical_discipline) tests per backend, strict Clippy, independent review.
+- Verification: differential + boundary (ties, k=0, k>=axis_len, NaN policy
+  per numerical_discipline) tests, strict Clippy, independent review.
 - Last-update: 2026-09-26.
 
 <a id="heph-embedding-gather-provider-1"></a>
