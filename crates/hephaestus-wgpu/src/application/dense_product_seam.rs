@@ -19,7 +19,6 @@ use crate::MatmulZero;
 use crate::application::linalg::{
     batched_matmul_into, det, kron_into, matmul_into, matpow, matrix_rank_with_tolerance,
 };
-use crate::application::strided::StridedOperand;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
@@ -27,6 +26,10 @@ use crate::infrastructure::device::WgpuDevice;
 /// for WGPU.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuDenseProductOps;
+
+// This device's operand type is `hephaestus_core::StridedOperand` over
+// `WgpuBuffer<T>`, so the device-neutral `StridedView` the seam hands in *is*
+// the operand the kernel entry points take — no per-seam conversion is needed.
 
 impl<T> DenseProductOps<WgpuDevice, T> for WgpuDenseProductOps
 where
@@ -39,7 +42,7 @@ where
         rhs: StridedView<'_, WgpuBuffer<T>, 2>,
         output: StridedView<'_, WgpuBuffer<T>, 2>,
     ) -> Result<()> {
-        matmul_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        matmul_into::<T>(device, lhs, rhs, output)
     }
 
     fn batched_matmul_into(
@@ -49,7 +52,7 @@ where
         rhs: StridedView<'_, WgpuBuffer<T>, 3>,
         output: StridedView<'_, WgpuBuffer<T>, 3>,
     ) -> Result<()> {
-        batched_matmul_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        batched_matmul_into::<T>(device, lhs, rhs, output)
     }
 
     fn kron_into(
@@ -59,7 +62,7 @@ where
         rhs: StridedView<'_, WgpuBuffer<T>, 2>,
         output: StridedView<'_, WgpuBuffer<T>, 2>,
     ) -> Result<()> {
-        kron_into::<T>(device, operand(lhs), operand(rhs), operand(output))
+        kron_into::<T>(device, lhs, rhs, output)
     }
 }
 
@@ -70,7 +73,7 @@ impl DenseCompositionOps<WgpuDevice> for WgpuDenseProductOps {
         matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
         exponent: u32,
     ) -> Result<WgpuBuffer<f32>> {
-        matpow(device, operand(matrix), exponent)
+        matpow(device, matrix, exponent)
     }
 
     fn det(
@@ -78,7 +81,7 @@ impl DenseCompositionOps<WgpuDevice> for WgpuDenseProductOps {
         device: &WgpuDevice,
         matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
     ) -> Result<WgpuBuffer<f32>> {
-        det(device, operand(matrix))
+        det(device, matrix)
     }
 
     fn matrix_rank_with_tolerance(
@@ -87,7 +90,7 @@ impl DenseCompositionOps<WgpuDevice> for WgpuDenseProductOps {
         matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
         relative_tolerance: f32,
     ) -> Result<usize> {
-        matrix_rank_with_tolerance(device, operand(matrix), relative_tolerance)
+        matrix_rank_with_tolerance(device, matrix, relative_tolerance)
     }
 }
 
@@ -98,7 +101,7 @@ impl DenseMatrixFunctionOps<WgpuDevice> for WgpuDenseProductOps {
         device: &WgpuDevice,
         matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
     ) -> Result<WgpuBuffer<f32>> {
-        crate::application::linalg::matexp(device, operand(matrix))
+        crate::application::linalg::matexp(device, matrix)
     }
 
     fn pinv(
@@ -106,17 +109,6 @@ impl DenseMatrixFunctionOps<WgpuDevice> for WgpuDenseProductOps {
         device: &WgpuDevice,
         matrix: StridedView<'_, WgpuBuffer<f32>, 2>,
     ) -> Result<WgpuBuffer<f32>> {
-        crate::application::linalg::pinv(device, operand(matrix))
-    }
-}
-
-/// Convert the device-neutral view into this backend's operand pair.
-#[inline]
-fn operand<'a, T, const N: usize>(
-    view: StridedView<'a, WgpuBuffer<T>, N>,
-) -> StridedOperand<'a, T, N> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
+        crate::application::linalg::pinv(device, matrix)
     }
 }

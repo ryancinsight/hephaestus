@@ -22,7 +22,6 @@ use crate::application::decomposition::{
     qr_decompose, schur, singular_values, svd_decompose, symmetric_eigen_jacobi,
     symmetric_eigenvalues_jacobi, udu_decompose,
 };
-use crate::application::strided::StridedOperand;
 
 /// Dense decompositions for one ROCm/HIP device.
 ///
@@ -222,15 +221,6 @@ impl BidiagonalHandle<RocmDevice> for GpuBidiagonalDecomposition {
     }
 }
 
-/// Convert the device-neutral view into this backend's operand pair.
-#[inline]
-fn operand<'a>(view: StridedView<'a, RocmBuffer<f32>, 2>) -> StridedOperand<'a, f32, 2> {
-    StridedOperand {
-        buffer: view.buffer,
-        layout: view.layout,
-    }
-}
-
 impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
     type Lu<'op> = GpuLuDecomposition;
     type Qr<'op> = GpuQrDecomposition;
@@ -241,7 +231,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Lu<'op>> {
-        lu_decompose(device, operand(input))
+        lu_decompose(device, input)
     }
 
     fn qr<'op>(
@@ -249,7 +239,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Qr<'op>> {
-        qr_decompose(device, operand(input))
+        qr_decompose(device, input)
     }
 
     type ColPivQr<'op> = GpuColPivQrDecomposition;
@@ -260,7 +250,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::ColPivQr<'op>> {
-        col_piv_qr(device, operand(input))
+        col_piv_qr(device, input)
     }
 
     fn full_piv_lu<'op>(
@@ -268,7 +258,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::FullPivLu<'op>> {
-        full_piv_lu(device, operand(input))
+        full_piv_lu(device, input)
     }
 
     type SymmetricEigen<'op> = GpuSymmetricEigenDecomposition;
@@ -278,7 +268,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::SymmetricEigen<'op>> {
-        symmetric_eigen_jacobi(device, operand(input))
+        symmetric_eigen_jacobi(device, input)
     }
 
     fn symmetric_eigenvalues(
@@ -286,7 +276,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'_, RocmBuffer<f32>, 2>,
     ) -> Result<RocmBuffer<f32>> {
-        symmetric_eigenvalues_jacobi(device, operand(input))
+        symmetric_eigenvalues_jacobi(device, input)
     }
 
     type Svd<'op> = GpuSvdDecomposition;
@@ -296,7 +286,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Svd<'op>> {
-        svd_decompose(device, operand(input))
+        svd_decompose(device, input)
     }
 
     fn singular_values(
@@ -304,7 +294,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'_, RocmBuffer<f32>, 2>,
     ) -> Result<RocmBuffer<f32>> {
-        singular_values(device, operand(input))
+        singular_values(device, input)
     }
 
     type BunchKaufman<'op> = GpuBunchKaufmanDecomposition;
@@ -315,7 +305,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::BunchKaufman<'op>> {
-        bunch_kaufman(device, operand(input))
+        bunch_kaufman(device, input)
     }
 
     fn udu<'op>(
@@ -323,7 +313,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Udu<'op>> {
-        udu_decompose(device, operand(input))
+        udu_decompose(device, input)
     }
 
     type Schur<'op> = GpuRealSchur;
@@ -335,7 +325,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'_, RocmBuffer<f32>, 2>,
     ) -> Result<RocmBuffer<eunomia::Complex<f32>>> {
-        eigenvalues(device, operand(input))
+        eigenvalues(device, input)
     }
 
     fn schur<'op>(
@@ -343,7 +333,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Schur<'op>> {
-        schur(device, operand(input))
+        schur(device, input)
     }
 
     fn hessenberg<'op>(
@@ -351,7 +341,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Hessenberg<'op>> {
-        hessenberg(device, operand(input))
+        hessenberg(device, input)
     }
 
     fn bidiagonalize<'op>(
@@ -359,7 +349,7 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Bidiagonal<'op>> {
-        bidiagonalize(device, operand(input))
+        bidiagonalize(device, input)
     }
 
     fn cholesky<'op>(
@@ -367,6 +357,6 @@ impl DecompositionOps<RocmDevice> for RocmDecompositionOps {
         device: &RocmDevice,
         input: StridedView<'op, RocmBuffer<f32>, 2>,
     ) -> Result<Self::Cholesky<'op>> {
-        cholesky_decompose(device, operand(input))
+        cholesky_decompose(device, input)
     }
 }

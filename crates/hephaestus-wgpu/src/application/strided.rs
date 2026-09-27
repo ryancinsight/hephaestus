@@ -34,15 +34,12 @@ pub use hephaestus_core::{
 // MAX_STRIDED_RANK is re-exported from hephaestus_core
 
 /// A device buffer paired with the leto layout describing its logical view:
-/// the unit every strided operand is passed as. Plain `Copy` references —
-/// bundling is purely to keep signatures at parameter-object altitude.
-#[derive(Clone, Copy)]
-pub struct StridedOperand<'a, T, const N: usize> {
-    /// The device buffer.
-    pub buffer: &'a WgpuBuffer<T>,
-    /// The logical layout over that buffer.
-    pub layout: &'a Layout<N>,
-}
+/// the unit every strided operand is passed as. The device-neutral
+/// [`hephaestus_core::StridedOperand`] alias over a `WgpuBuffer<T>` — the same
+/// two borrowed references — so a seam accepts the shared pair without a
+/// per-backend conversion (the field move the alias erases).
+pub type StridedOperand<'a, T, const N: usize> =
+    hephaestus_core::StridedOperand<'a, WgpuBuffer<T>, N>;
 
 /// Pipeline-cache discriminators so strided kernels never collide with the
 /// contiguous kernels of the same `Op` in the `(TypeId, TypeId)` cache key.

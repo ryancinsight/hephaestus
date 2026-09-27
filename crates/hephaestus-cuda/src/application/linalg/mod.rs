@@ -66,13 +66,9 @@ pub(super) fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
 ///
 /// Shared by both families: layout validation precedes every kernel launch and
 /// every composed reduction, and a rejected layout is a dispatch contract
-/// violation rather than a device error.
-#[inline]
-pub(super) fn map_layout_err(e: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {e}"),
-    }
-}
+/// violation rather than a device error. Imported from [`hephaestus_core`] so
+/// the diagnostic text has one home.
+pub(super) use hephaestus_core::map_layout_err;
 
 /// Convert a `usize` extent to the `u32` the device-side layout struct uses.
 #[inline]

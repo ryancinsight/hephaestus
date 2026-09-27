@@ -53,6 +53,23 @@ impl<B, const N: usize> Clone for StridedView<'_, B, N> {
 
 impl<B, const N: usize> Copy for StridedView<'_, B, N> {}
 
+/// The name a backend's dispatch functions use for a borrowed [`StridedView`].
+///
+/// Every accelerator seam converts a device-neutral [`StridedView`] into the
+/// operand pair its backend functions take, and that pair is always the same
+/// two borrowed fields. A backend whose buffer handle is exactly the view's `B`
+/// — CUDA, ROCm, and wgpu over their own buffer types — aliases this type rather
+/// than declaring a byte-identical struct and restating the same
+/// `buffer`/`layout` field move at each seam. A backend that additionally needs
+/// a distinct handle (Metal wrapping `wgpu`) declares its own operand type and
+/// converts from this view with a single `From` impl instead of a per-seam
+/// helper.
+///
+/// `N` is the rank and `B` the backend buffer handle, matching
+/// [`StridedView`]'s parameters, so `StridedOperand<'a, D::Buffer<T>, 2>` names
+/// the operand any seam accepts for device `D` and scalar `T`.
+pub type StridedOperand<'a, B, const N: usize> = StridedView<'a, B, N>;
+
 /// A device buffer of type `B` interpreted through a runtime-rank layout.
 ///
 /// This is the boundary carrier for expression graphs and other operations

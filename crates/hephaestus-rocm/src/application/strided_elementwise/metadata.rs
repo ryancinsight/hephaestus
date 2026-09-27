@@ -94,11 +94,11 @@ pub(crate) fn dispatch_len(len: usize) -> Result<u32> {
     })
 }
 
-pub(crate) fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("layout rejected: {error}"),
-    }
-}
+/// Map a leto layout-validation error into a dispatch failure.
+///
+/// Imported from [`hephaestus_core`] rather than re-declared so every backend's
+/// rejected-layout diagnostic names the violated constraint identically.
+pub(crate) use hephaestus_core::map_layout_err;
 
 /// Validate, broadcast, and alias-check a binary strided operand triple,
 /// producing the launch metadata; `None` when the dispatch is empty.

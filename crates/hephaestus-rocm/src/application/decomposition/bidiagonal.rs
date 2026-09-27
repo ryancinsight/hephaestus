@@ -5,17 +5,11 @@
 //! the resulting orthogonal and bidiagonal factors into typed HIP buffers. No
 //! backend-selection fallback is involved.
 
-use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, HephaestusError, Result, map_layout_err};
 
 use crate::RocmDevice;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::RocmBuffer;
-
-fn map_layout_err(error: leto::LetoError) -> HephaestusError {
-    HephaestusError::DispatchFailed {
-        message: format!("bidiagonalization layout error: {error}"),
-    }
-}
 
 /// Bidiagonal factorization with device-resident **U**, **B**, and **V**.
 pub struct GpuBidiagonalDecomposition {

@@ -127,6 +127,6 @@ pub use domain::strided::{
     pad_usize_strides_dyn, to_u32,
 };
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
-pub use domain::view::{DynamicStridedView, StridedView};
+pub use domain::view::{DynamicStridedView, StridedOperand, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
 pub use domain::window::WindowPlan;

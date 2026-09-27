@@ -191,7 +191,7 @@ fn binary_op_bind_group(
         })
 }
 
-#[inline(always)]
+#[inline]
 fn encode_dispatch_2d(
     encoder: &mut wgpu::CommandEncoder,
     pipeline: &wgpu::ComputePipeline,
