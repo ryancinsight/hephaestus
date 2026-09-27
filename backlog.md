@@ -22,22 +22,20 @@
 
 <a id="heph-topk-argminmax-provider-1"></a>
 
-## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — Device-resident top-k [minor] — todo
+## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm/Metal for topk/argmax/argmin [minor] — todo
 - Priority: feature.
-- Status: `ArgReduceOps` (argmax/argmin, rank-2, host+wgpu) delivered per
-  ADR 0062 — see [`heph-shape-ops-provider-1`](#heph-shape-ops-provider-1)-
-  sibling item on the same branch shape. Narrowed to top-`k` selection, a
-  materially different algorithm (partial sort/selection network, not a
-  linear-scan reduction) — split out rather than blocking on the harder half.
-- Outcome: a `TopKOps` seam producing the `k` largest/smallest values and
-  their indices along an axis, on-device, without a host copy.
-- Scope: core seam, wgpu device implementor first (cuda/rocm/metal follow via
-  the same generic accelerator layer), conformance vs a Leto/sort-based
-  reference.
-- Driver: coeus consumer audit — no accelerator path exists; current coeus
-  behavior downloads full operands to host for these reductions.
-- Verification: differential + boundary (ties, k=0, k>=axis_len, NaN policy
-  per numerical_discipline) tests, strict Clippy, independent review.
+- Status: `ArgReduceOps` (argmax/argmin, ADR 0063) and `TopKOps` (topk, ADR
+  0066) both delivered — host + wgpu, differential-tested including tie-break
+  cases. Narrowed to the remaining backends and the `assert_backend_contract`
+  aggregate fold (deferred until a seam has all four backend implementations).
+- Outcome: `ArgReduceOps`/`TopKOps` implemented for cuda/rocm/metal.
+- Scope: per-backend implementors following the existing wgpu kernels'
+  algorithms (host/wgpu already agree on tie-break by construction — matching
+  algorithm, not just contract); conformance already covers the shared
+  clauses, so this item is implementation-only.
+- Driver: coeus consumer audit, 2026-09-26.
+- Verification: existing differential + boundary (ties) tests per backend,
+  strict Clippy, independent review.
 - Last-update: 2026-09-26.
 
 <a id="heph-embedding-gather-provider-1"></a>

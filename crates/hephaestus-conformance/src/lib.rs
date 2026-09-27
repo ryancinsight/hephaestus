@@ -95,6 +95,8 @@ pub mod staggered;
 /// Contract clauses for provider-owned stateful parameter updates.
 pub mod stateful_update;
 pub mod stencil;
+/// Contract clauses for the [`TopKOps`](hephaestus_core::TopKOps) seam.
+pub mod topk;
 /// Device transfer and buffer-initialization clauses.
 pub mod transfer;
 /// Contract clauses for the typed paths of the
@@ -130,5 +132,6 @@ pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;
 pub use stateful_update::assert_stateful_update_contract;
 pub use stencil::assert_stencil_contract;
+pub use topk::assert_topk_contract;
 pub use transfer::assert_transfer_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
