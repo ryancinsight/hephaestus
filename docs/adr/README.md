@@ -76,3 +76,4 @@
 | [0065](0065-device-neutral-embedding-gather-seam.md) | Device-neutral embedding-table gather seam | Accepted |
 | [0066](0066-device-neutral-topk-seam.md) | Device-neutral rank-2 top-k selection seam | Accepted |
 | [0067](0067-device-neutral-interpolation-seam.md) | Device-neutral rank-2 axis-resampling seam | Accepted |
+| [0068](0068-device-neutral-adaptive-pooling-seam.md) | Device-neutral rank-2 adaptive pooling seam | Accepted |

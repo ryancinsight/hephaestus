@@ -8,6 +8,8 @@
 //! performance path — consumers wanting fast CPU execution use leto
 //! directly.
 
+/// Leto-backed rank-2 adaptive pooling (average / maximum) seam implementor.
+pub mod adaptive_pooling;
 /// Direct-loop argmax/argmin seam implementor (the reference for tie-break
 /// semantics).
 pub mod arg_reduce;
@@ -62,6 +64,7 @@ pub mod topk;
 /// Volume ray line integrals over leto interpolation.
 pub mod volume;
 
+pub use adaptive_pooling::HostAdaptivePoolingOps;
 pub use arg_reduce::HostArgReduceOps;
 pub use attention::{HostAttentionBackward, HostAttentionForward, HostAttentionOps};
 pub use convolution::{
