@@ -1,5 +1,122 @@
 # Backlog — hephaestus
 
+<a id="heph-shape-ops-provider-1"></a>
+
+## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
+- Priority: feature.
+- Outcome: a `ShapeOps<D, T>` (or split family) seam covering cat, split,
+  stack, gather, scatter, index_select, index_put, masked_fill, pad, roll,
+  tile, tril, triu, where, sort, and nonzero, implemented natively on every
+  accelerator backend (no host round-trip).
+- Scope: new core domain seam + wgpu/cuda/rocm/metal application modules;
+  conformance clauses differential-tested against Leto per op.
+- Driver: coeus's accelerator bridge has no path for this family today and
+  falls back to host execution for every one of these ops (relayed consumer
+  audit, 2026-09-26).
+- Dependencies: upstream ownership (standards: backend hierarchies) — lands
+  here first, generic accelerator layer plus per-vendor device impls only;
+  coeus binds afterward.
+- Verification: per-op conformance clause across backends, boundary/empty
+  cases, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-topk-argminmax-provider-1"></a>
+
+## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — Device-resident top-k/argmax/argmin [minor] — todo
+- Priority: feature.
+- Outcome: `TopKOps`/`ArgReduceOps` seam producing indices+values on-device
+  for topk, argmax, argmin along an axis, without a host copy.
+- Scope: core seam, wgpu/cuda/rocm/metal implementors, conformance vs Leto.
+- Driver: coeus consumer audit — no accelerator path exists; current coeus
+  behavior downloads full operands to host for these reductions.
+- Verification: differential + boundary (ties, NaN policy per
+  numerical_discipline) tests per backend, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-embedding-gather-provider-1"></a>
+
+## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Device-side embedding gather [minor] — todo
+- Priority: feature.
+- Outcome: an `EmbeddingOps<D, T>` seam gathering rows from a device-resident
+  table by an index buffer, with the gradient scatter-add counterpart.
+- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs Leto gather.
+- Driver: coeus consumer audit — no accelerator path; needed for the
+  embedding-lookup layer.
+- Verification: differential + out-of-range-index rejection tests per
+  backend, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-interpolation-provider-1"></a>
+
+## HEPH-INTERPOLATION-PROVIDER-1 — Device-resident interpolation [minor] — todo
+- Priority: feature.
+- Outcome: an `InterpolationOps<D, T>` seam for linear, nearest, and
+  bilinear resampling over device buffers.
+- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs an analytical/Leto
+  oracle per mode.
+- Driver: coeus consumer audit — no accelerator path for any interpolation
+  mode.
+- Verification: analytical boundary cases (endpoints, degenerate extents)
+  plus differential tests per backend, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-adaptive-pooling-provider-1"></a>
+
+## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — Device-resident adaptive pooling [minor] — todo
+- Priority: feature.
+- Outcome: an `AdaptivePoolingOps<D, T>` seam (avg/max) mapping an arbitrary
+  input extent to a target output extent on-device.
+- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs Leto/analytical
+  pooling oracle.
+- Driver: coeus consumer audit — no accelerator path exists today.
+- Verification: boundary (1x1 target, non-divisible extents) plus
+  differential tests per backend, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-device-dot-cross-provider-1"></a>
+
+## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident dot/cross reductions [patch] — todo
+- Priority: feature.
+- Outcome: `DenseVectorOps`-family dot and cross-product reductions execute
+  entirely on-device; coeus currently copies full operands to host for these.
+- Scope: extend the existing dense-vector seam (or add a sibling) on
+  wgpu/cuda/rocm/metal; no algorithm change, only closing the host fallback.
+- Driver: coeus consumer audit, 2026-09-26.
+- Verification: differential vs Leto per backend, allocation-free hot path
+  per performance_engineering, strict Clippy, independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-fused-expr-rocm-metal-1"></a>
+
+## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm/Metal [minor] [arch] — todo
+- Priority: feature.
+- Outcome: the fused-expression dispatch seam that wgpu and cuda already
+  implement gains ROCm and Metal implementors, so backend choice does not
+  change which expressions fuse.
+- Scope: port the existing wgpu/cuda fused-dispatch design to rocm/metal
+  through the generic accelerator layer; no per-vendor algorithm fork.
+- Driver: coeus consumer audit — coeus cannot rely on fusion outside
+  wgpu/cuda today.
+- Verification: conformance parity across all four backends, strict Clippy,
+  independent review.
+- Last-update: 2026-09-26.
+
+<a id="heph-rocm-conv-attention-portability-1"></a>
+
+## HEPH-ROCM-CONV-ATTENTION-PORTABILITY-1 — Audit ROCm conv/attention cfg gate [patch] — todo
+- Priority: verification.
+- Outcome: determine whether `cfg(target_os = "linux")` gating ROCm
+  convolution/attention reflects a genuine ROCm/HIP toolchain constraint
+  (Windows ROCm support is limited/unofficial) or an avoidable portability
+  gap, and record the finding.
+- Scope: read-only audit of the existing cfg gate and upstream ROCm/HIP
+  Windows support status; no code change unless the gate proves avoidable.
+- Driver: coeus consumer audit flagged this as a gap; verify before filing
+  further work.
+- Verification: cited ROCm/HIP platform-support evidence; if the gate is
+  spurious, a follow-up item narrows it.
+- Last-update: 2026-09-26.
+
 <a id="hephaestus-scan-leto-001"></a>
 
 ## HEPHAESTUS-SCAN-LETO-001 — Share the Leto scan clause across scalar types — review
