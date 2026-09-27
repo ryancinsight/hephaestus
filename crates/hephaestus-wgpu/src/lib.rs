@@ -58,6 +58,7 @@ pub use application::linalg::{matexp, pinv};
 pub use application::loss::{
     PreparedCrossEntropyBackward, PreparedCrossEntropyForward, WgpuCrossEntropyOps,
 };
+pub use application::pad_seam::{WgpuPadOps, pad_into};
 pub use application::parameterized_elementwise::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
     LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,

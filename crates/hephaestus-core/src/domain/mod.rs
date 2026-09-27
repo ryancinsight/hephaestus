@@ -39,6 +39,8 @@ pub mod launch;
 pub mod loss;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
+/// Device-neutral n-D padding seam.
+pub mod pad;
 /// Runtime-parameter unary expressions and their backend-neutral dispatch seam.
 pub mod parameterized;
 /// Shared narrowing/error helpers for dispatch planning.

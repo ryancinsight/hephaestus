@@ -36,6 +36,8 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Native WGSL mean cross-entropy.
 pub mod loss;
+/// Device-neutral n-D padding seam.
+pub mod pad_seam;
 /// Runtime-parameter unary elementwise dispatch.
 pub mod parameterized_elementwise;
 pub(crate) mod prepared;
