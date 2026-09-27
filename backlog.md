@@ -59,17 +59,25 @@
 
 <a id="heph-interpolation-provider-1"></a>
 
-## HEPH-INTERPOLATION-PROVIDER-1 — Device-resident interpolation [minor] — todo
+## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm/Metal for interpolation [minor] — todo
 - Priority: feature.
-- Outcome: an `InterpolationOps<D, T>` seam for linear, nearest, and
-  bilinear resampling over device buffers.
-- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs an analytical/Leto
-  oracle per mode.
-- Driver: coeus consumer audit — no accelerator path for any interpolation
-  mode.
-- Verification: analytical boundary cases (endpoints, degenerate extents)
-  plus differential tests per backend, strict Clippy, independent review.
-- Last-update: 2026-09-26.
+- Status: `InterpolationOps` (nearest/linear, ADR 0067) delivered — host +
+  wgpu, align-corners convention, differential-tested including the
+  `in_len == 1` and `out_len == 1` degenerate cases. Bilinear is not a
+  separate mode: on a regular grid it composes as two calls to
+  `interpolate_axis_into` (documented in the ADR), so it needs no distinct
+  binding. Narrowed to the remaining backends and the
+  `assert_backend_contract` aggregate fold (deferred until a seam has all
+  four backend implementations).
+- Outcome: `InterpolationOps` implemented for cuda/rocm/metal.
+- Scope: per-backend implementors following the existing wgpu kernel's
+  algorithm (host/wgpu already agree on the align-corners mapping and the
+  nearest-mode tie rule by construction); conformance already covers the
+  shared clause, so this item is implementation-only.
+- Driver: coeus consumer audit, 2026-09-26.
+- Verification: existing differential + boundary (degenerate extents) tests
+  per backend, strict Clippy, independent review.
+- Last-update: 2026-09-27.
 
 <a id="heph-adaptive-pooling-provider-1"></a>
 

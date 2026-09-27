@@ -37,6 +37,8 @@ pub mod fft;
 pub mod fusion;
 /// Backend-neutral kernel authoring: interface and source declarations.
 pub mod interface;
+/// Device-neutral rank-2 axis resampling (nearest / linear) seam.
+pub mod interpolation;
 /// Kernel-dispatch contracts shared by accelerator backends.
 pub mod kernel;
 /// Launch-shape vocabulary for occupancy-planned dispatch.

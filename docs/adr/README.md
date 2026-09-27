@@ -75,3 +75,4 @@
 | [0064](0064-device-neutral-cross-product-seam.md) | Device-neutral batched cross-product seam | Accepted |
 | [0065](0065-device-neutral-embedding-gather-seam.md) | Device-neutral embedding-table gather seam | Accepted |
 | [0066](0066-device-neutral-topk-seam.md) | Device-neutral rank-2 top-k selection seam | Accepted |
+| [0067](0067-device-neutral-interpolation-seam.md) | Device-neutral rank-2 axis-resampling seam | Accepted |

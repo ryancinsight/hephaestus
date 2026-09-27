@@ -807,7 +807,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "leto"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#85ee7deb9cee0e655e749d79dc899c10f590e388"
+source = "git+https://github.com/ryancinsight/leto.git#cce79aafa04821b472dc5187809c8097ff1df9a4"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -819,7 +819,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.43.0"
-source = "git+https://github.com/ryancinsight/leto.git#85ee7deb9cee0e655e749d79dc899c10f590e388"
+source = "git+https://github.com/ryancinsight/leto.git#cce79aafa04821b472dc5187809c8097ff1df9a4"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -1025,7 +1025,7 @@ dependencies = [
 [[package]]
 name = "moirai-core"
 version = "0.6.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#b3b37f7fae9de019939a53eaaaf5ada5ba5e806e"
+source = "git+https://github.com/ryancinsight/Moirai.git#d352be47a4fdcbf9cd8d27ae917d323db3f52e26"
 dependencies = [
  "bytemuck",
  "libc",
@@ -1037,7 +1037,7 @@ dependencies = [
 [[package]]
 name = "moirai-sync"
 version = "0.6.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#b3b37f7fae9de019939a53eaaaf5ada5ba5e806e"
+source = "git+https://github.com/ryancinsight/Moirai.git#d352be47a4fdcbf9cd8d27ae917d323db3f52e26"
 dependencies = [
  "libc",
  "moirai-core",
@@ -1047,7 +1047,7 @@ dependencies = [
 [[package]]
 name = "moirai-utils"
 version = "0.6.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#b3b37f7fae9de019939a53eaaaf5ada5ba5e806e"
+source = "git+https://github.com/ryancinsight/Moirai.git#d352be47a4fdcbf9cd8d27ae917d323db3f52e26"
 
 [[package]]
 name = "munge"

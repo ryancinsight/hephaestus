@@ -12,6 +12,7 @@ mod dense_product;
 mod dense_vector;
 mod elementwise;
 mod embedding;
+mod interpolation;
 mod pad;
 mod parameterized;
 mod random;

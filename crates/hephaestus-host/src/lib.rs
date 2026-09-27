@@ -30,6 +30,8 @@ pub mod dense_vector;
 pub mod elementwise;
 /// Direct-loop embedding-table gather seam implementor.
 pub mod embedding;
+/// Leto-backed rank-2 axis resampling (nearest / linear) seam implementor.
+pub mod interpolation;
 mod operands;
 /// Leto-backed padding seam implementor.
 pub mod pad;
@@ -75,6 +77,7 @@ pub use elementwise::{
     HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
 };
 pub use embedding::HostEmbeddingOps;
+pub use interpolation::HostInterpolationOps;
 pub use pad::HostPadOps;
 pub use parameterized::HostParameterizedUnaryOps;
 pub use pooling::{HostPoolingBackward, HostPoolingForward, HostPoolingOps};
