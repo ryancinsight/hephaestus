@@ -8,6 +8,8 @@ pub mod attention;
 pub mod buffer;
 /// Device-neutral convolution operands, planning, and dispatch seam.
 pub mod convolution;
+/// Device-neutral batched 3-vector cross product seam.
+pub mod cross_product;
 /// Shared CPU-side panel factorisation routines for blocked decomposition.
 pub mod decomposition;
 /// Device-neutral dense decomposition seam (ADR 0042).

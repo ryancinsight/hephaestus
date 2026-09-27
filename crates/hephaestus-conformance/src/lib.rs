@@ -50,6 +50,8 @@ pub mod blocked_qr;
 pub mod convolution;
 /// Contract clauses for the [`CrossEntropyOps`](hephaestus_core::CrossEntropyOps) seam.
 pub mod cross_entropy;
+/// Contract clauses for the [`CrossProductOps`](hephaestus_core::CrossProductOps) seam.
+pub mod cross_product;
 /// Contract clauses for the
 /// [`DecompositionOps`](hephaestus_core::DecompositionOps) seam.
 pub mod decomposition;
@@ -102,6 +104,7 @@ pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use cross_entropy::assert_cross_entropy_contract;
+pub use cross_product::assert_cross_product_contract;
 pub use decomposition::assert_decomposition_contract;
 pub use dense_composition::assert_dense_composition_contract;
 pub use dense_matrix_function::assert_dense_matrix_function_contract;

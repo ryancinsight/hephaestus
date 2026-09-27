@@ -5,6 +5,7 @@ mod attention;
 mod backend;
 mod convolution;
 mod cross_entropy;
+mod cross_product;
 mod decomposition;
 mod dense_product;
 mod dense_vector;

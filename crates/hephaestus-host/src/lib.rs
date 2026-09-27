@@ -15,6 +15,8 @@ mod combine;
 pub mod convolution;
 /// Leto-backed mean cross-entropy seam implementor.
 pub mod cross_entropy;
+/// Direct-loop batched cross-product seam implementor.
+pub mod cross_product;
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
 /// Leto-backed dense product, composition, and matrix-function implementors.
@@ -57,6 +59,7 @@ pub use convolution::{
     HostConvolutionTransposedBackward, HostConvolutionTransposedForward,
 };
 pub use cross_entropy::{HostCrossEntropyBackward, HostCrossEntropyForward, HostCrossEntropyOps};
+pub use cross_product::HostCrossProductOps;
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
