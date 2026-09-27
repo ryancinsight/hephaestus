@@ -20,5 +20,6 @@ mod scan;
 mod sparse;
 mod stateful;
 mod stencil;
+mod topk;
 mod transfer;
 mod volume;

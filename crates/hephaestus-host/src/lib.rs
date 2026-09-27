@@ -55,6 +55,8 @@ pub mod staggered;
 pub mod stateful_update;
 /// Leto-backed two-dimensional Laplacian stencil implementor.
 pub mod stencil;
+/// Direct-insertion top-k selection seam implementor.
+pub mod topk;
 /// Volume ray line integrals over leto interpolation.
 pub mod volume;
 
@@ -87,6 +89,7 @@ pub use sparse::{HostPreparedApply, HostSparseOps};
 pub use staggered::HostStaggeredOps;
 pub use stateful_update::HostStatefulUpdateOps;
 pub use stencil::HostStencilOps;
+pub use topk::HostTopKOps;
 pub use volume::HostRayIntegralOps;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};

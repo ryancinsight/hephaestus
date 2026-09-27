@@ -72,6 +72,8 @@ pub mod stencil;
 pub mod stream;
 /// Device-agnostic strided kernel metadata and layout packing.
 pub mod strided;
+/// Device-neutral rank-2 top-k selection seam.
+pub mod topk;
 /// Dense vector-operation contracts.
 pub mod vector;
 /// Device-neutral strided views over backend buffers.
