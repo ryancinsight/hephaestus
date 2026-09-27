@@ -1,17 +1,23 @@
-//! Host instantiation of the shared dense-product conformance clauses.
+//! Host instantiations of the shared dense-linalg conformance clauses.
 //!
-//! Leto joins the kernel-product family's role trait per ADR 0046 §5: the
-//! same clause suite the GPU backends run executes against the CPU
-//! reference pair.
+//! Leto joins the kernel-product, composition, and host-delegated matrix-
+//! function roles per ADR 0044/0046: the same clause suites the GPU backends
+//! run execute against the CPU reference pair.
 
-use hephaestus_conformance::assert_dense_product_contract;
+use hephaestus_conformance::{
+    assert_dense_composition_contract, assert_dense_matrix_function_contract,
+    assert_dense_product_contract,
+};
 use hephaestus_core::{ComputeDevice, DenseProductOps, StridedView};
 use hephaestus_host::{HostDenseProductOps, HostDevice};
 use leto::Layout;
 
 #[test]
-fn host_satisfies_the_dense_product_contract() {
-    assert_dense_product_contract(&HostDevice::new(), &HostDenseProductOps);
+fn host_satisfies_the_dense_linalg_contracts() {
+    let device = HostDevice::new();
+    assert_dense_product_contract(&device, &HostDenseProductOps);
+    assert_dense_composition_contract(&device, &HostDenseProductOps);
+    assert_dense_matrix_function_contract(&device, &HostDenseProductOps);
 }
 
 /// `[[1,2],[3,4]] · [[5,6],[7,8]] = [[19,22],[43,50]]`, exact in `f64` — the

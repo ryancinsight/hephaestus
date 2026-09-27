@@ -18,7 +18,7 @@
 //!   all.
 //!
 //! Each backend does carry a case-count guard (wgpu asserts
-//! `CONTRACT_CASES.len() == 127 / 186 / 139 / 188` by feature set), but a count
+//! `CONTRACT_CASES.len() == 126 / 173 / 131 / 175` by feature set), but a count
 //! cannot catch this class of gap: removing one seam's cases and adding
 //! unrelated ones leaves the total unchanged and the run green.
 //!
@@ -30,7 +30,7 @@
 //!
 //! One generic struct of borrowed seams, not a list of function parameters: the
 //! workspace denies `clippy::pedantic` and does not allow `too_many_arguments`,
-//! so a twenty-parameter function is not available here. A struct also survives
+//! so a twenty-two-parameter function is not available here. A struct also survives
 //! new seams without changing its own signature.
 //!
 //! The seams must stay as type parameters rather than `dyn`. Every clause needs
@@ -45,13 +45,14 @@ use hephaestus_core::{
     AbsOp, AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, AddOp,
     AttentionOps, AxisReductionOps, BatchSubmitOps, BinaryExpr, CeluGradOp, CeluOp, CombineExpr,
     ComputeDevice, ConvolutionOps, CrossEntropyOps, CumProdOp, CumSumOp, DecompositionOps,
-    DenseProductOps, DenseVectorOps, DialectScalar, DivOp, ElementwiseOps, EqOp, FullReductionOps,
-    GeOp, GtOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp, IdentityToken, LeOp,
-    LeakyReluGradOp, LeakyReluOp, LtOp, MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity,
-    ParameterizedUnaryExpr, ParameterizedUnaryOps, ProdOp, RandomInitOps, RayIntegralOps, RmsProp,
-    RmsPropParameters, ScanOps, Sgd, SgdParameters, SoftshrinkGradOp, SoftshrinkOp,
-    SparseOperatorOps, SqrtOp, Staggered3DOps, StatefulUpdateOps, StatefulUpdateRule, StencilOps,
-    SubOp, SumOp, ThresholdGradOp, ThresholdOp, TypedBinaryExpr, UnaryExpr,
+    DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DenseVectorOps, DialectScalar,
+    DivOp, ElementwiseOps, EqOp, FullReductionOps, GeOp, GtOp, HardshrinkGradOp, HardshrinkOp,
+    HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp, LtOp, MaxOp,
+    MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr, ParameterizedUnaryOps, ProdOp,
+    RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters, ScanOps, Sgd, SgdParameters,
+    SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp, Staggered3DOps, StatefulUpdateOps,
+    StatefulUpdateRule, StencilOps, SubOp, SumOp, ThresholdGradOp, ThresholdOp, TypedBinaryExpr,
+    UnaryExpr,
 };
 
 /// A backend's seam implementations, borrowed for one conformance run.
@@ -65,7 +66,7 @@ use hephaestus_core::{
 ///
 /// The type parameters are the seam types, in field order. They are unnamed in
 /// practice — construct the struct with a literal and let inference bind them.
-pub struct BackendUnderTest<'a, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z> {
+pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z> {
     /// The device every clause runs against.
     pub device: &'a D,
     /// `AttentionOps<D, f32>`.
@@ -78,6 +79,10 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, 
     pub cross_entropy: &'a X,
     /// `DecompositionOps<D>`.
     pub decomposition: &'a P,
+    /// `DenseCompositionOps<D>`.
+    pub dense_composition: &'a K,
+    /// `DenseMatrixFunctionOps<D>`.
+    pub dense_matrix_function: &'a M,
     /// `DenseProductOps<D, f32>`.
     pub dense_product: &'a U,
     /// `DenseVectorOps<D, f32>`.
@@ -121,10 +126,34 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, 
 /// not satisfy the contract.
 #[expect(
     clippy::type_complexity,
-    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
+    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-two parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
 )]
-pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>(
-    backend: &BackendUnderTest<'_, D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>,
+pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>(
+    backend: &BackendUnderTest<
+        '_,
+        D,
+        A,
+        R,
+        C,
+        X,
+        P,
+        K,
+        M,
+        U,
+        I,
+        E,
+        F,
+        N,
+        T,
+        O,
+        B,
+        S,
+        H,
+        L,
+        Y,
+        W,
+        Z,
+    >,
 ) where
     D: ComputeDevice,
     A: AttentionOps<D, f32>,
@@ -132,6 +161,8 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     C: ConvolutionOps<D, f32>,
     X: CrossEntropyOps<D, f32>,
     P: DecompositionOps<D>,
+    K: DenseCompositionOps<D>,
+    M: DenseMatrixFunctionOps<D>,
     U: DenseProductOps<D, f32>,
     I: DenseVectorOps<D, f32>,
     E: ElementwiseOps<D, f32>,
@@ -245,6 +276,11 @@ pub fn assert_backend_contract<D, A, R, C, X, P, U, I, E, F, N, T, O, B, S, H, L
     crate::convolution::assert_convolution_contract(device, backend.convolution);
     crate::cross_entropy::assert_cross_entropy_contract(device, backend.cross_entropy);
     crate::decomposition::assert_decomposition_contract(device, backend.decomposition);
+    crate::dense_composition::assert_dense_composition_contract(device, backend.dense_composition);
+    crate::dense_matrix_function::assert_dense_matrix_function_contract(
+        device,
+        backend.dense_matrix_function,
+    );
     crate::dense_product::assert_dense_product_contract(device, backend.dense_product);
     crate::dense_vector::assert_dense_vector_contract(device, backend.dense_vector);
     crate::elementwise::assert_elementwise_contract(device, backend.elementwise);

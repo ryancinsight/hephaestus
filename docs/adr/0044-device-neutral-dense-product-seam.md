@@ -5,6 +5,16 @@
 - Refs: atlas `backlog.md#atlas-arch-001` (001i); ADR 0041 (conformance
   crate); ADR 0042 (the decomposition seam this record's staging mirrors).
 
+## Revision 2026-09-24: Host reference and aggregate coverage
+
+`HostDenseProductOps` now implements all three roles over Leto, and
+`assert_backend_contract` names the composition and matrix-function seams
+alongside the kernel products. The host therefore runs the same dense-linalg
+clauses as every accelerator instead of leaving the two new roles opt-in at the
+aggregate boundary. Matrix-view construction and array upload are shared host
+operand helpers, so decomposition and dense-linalg adapters use one validated
+read path and one result-buffer path.
+
 ## Revision 2026-09-24: Dense matrix-function role
 
 The final host-delegated pair now has its own `DenseMatrixFunctionOps` role.
@@ -143,7 +153,9 @@ The family splits on implementation structure:
 ## Consequences
 
 Eleven linalg entry points are now seam-reachable and clause-covered across
-all four backends. The kernel tier remains independently implementable; the
-composition and matrix-function roles add no runtime state, virtual dispatch,
-or public wrapper migration. Provider-local matrix-function differentials now
+all four accelerator backends and the host reference. The kernel tier remains
+independently implementable; the composition and matrix-function roles add no
+runtime state, virtual dispatch, or public wrapper migration. The aggregate
+contract names both roles so a future host omission is a compile error rather
+than an opt-in coverage gap. Provider-local matrix-function differentials now
 retain only stable provider diagnostics.

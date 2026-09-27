@@ -6,9 +6,11 @@
 
 use std::sync::RwLockReadGuard;
 
-use hephaestus_core::{HephaestusError, Result};
+use eunomia::Pod;
+use hephaestus_core::{ComputeDevice, HephaestusError, Result, StridedView};
+use leto::{Array2, ArrayView};
 
-use crate::HostBuffer;
+use crate::{HostBuffer, HostDevice, map_leto_error};
 
 /// Reject an output buffer that is the same underlying allocation as either
 /// input.
@@ -84,4 +86,25 @@ pub(crate) fn with_operand_reads<T, R>(
         .map(|&owner| guards[owner].as_slice())
         .collect();
     body(&slices)
+}
+
+/// Run a Leto operation over one rank-2 `f32` matrix view.
+///
+/// The view is constructed under the buffer's read guard, so layout/storage
+/// validation and the operation observe the same stable host slice.
+pub(crate) fn with_matrix_view<R, E: core::fmt::Display>(
+    input: &StridedView<'_, HostBuffer<f32>, 2>,
+    operation: impl FnOnce(ArrayView<'_, f32, 2>) -> core::result::Result<R, E>,
+) -> Result<R> {
+    let cells = input.buffer.read();
+    let view = ArrayView::try_new(*input.layout, &cells).map_err(map_leto_error)?;
+    operation(view).map_err(map_leto_error)
+}
+
+/// Upload a Leto rank-2 result into a host buffer.
+pub(crate) fn upload_array<T: Pod>(
+    device: &HostDevice,
+    array: &Array2<T>,
+) -> Result<HostBuffer<T>> {
+    device.upload(leto::Storage::as_slice(array.storage()))
 }

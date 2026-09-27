@@ -1,6 +1,11 @@
 # ADR 0046: Host reference device and the Leto implementor
 
 - Status: Accepted
+- Revision 2026-09-24: `HostDenseProductOps` now implements the complete
+  ADR 0044 dense-linalg family — kernel products, provider-scheduled
+  compositions, and host-delegated matrix functions — and the aggregate
+  contract names all three seams. One Leto-backed CPU reference therefore
+  executes every dense-linalg clause without a second adapter bundle.
 - Revision 2026-08-26: ADR 0053 exempts FFT from a `HostDevice` implementor.
   Apollo already owns the CPU FFT over Leto and depends on Hephaestus for its
   accelerator surface, so a `hephaestus-host` adapter over Apollo would create
