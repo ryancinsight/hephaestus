@@ -17,7 +17,7 @@ pub mod convolution;
 pub mod cross_entropy;
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
-/// Leto-backed dense-product seam implementor.
+/// Leto-backed dense product, composition, and matrix-function implementors.
 pub mod dense_product;
 /// Leto-backed dense-vector seam implementor.
 pub mod dense_vector;

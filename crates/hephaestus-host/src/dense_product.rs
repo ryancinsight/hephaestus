@@ -1,23 +1,31 @@
 //! Leto as a dense-product-seam implementor (ADR 0046 / ADR 0044).
 //!
 //! [`HostDenseProductOps`] adapts leto-ops' `matmul`, `batched_matmul`, and
-//! `kron` kernels onto [`DenseProductOps<HostDevice, T>`](hephaestus_core::DenseProductOps),
-//! so the CPU substrate joins the kernel-product family's role trait per
-//! ADR 0046 §5 and the conformance suite's dense-product clauses run on the
-//! host pair.
+//! `kron` kernels onto [`DenseProductOps<HostDevice, T>`](hephaestus_core::DenseProductOps).
+//! The same zero-sized marker implements
+//! [`DenseCompositionOps`](hephaestus_core::DenseCompositionOps) for matrix
+//! power, determinant, and rank, and
+//! [`DenseMatrixFunctionOps`](hephaestus_core::DenseMatrixFunctionOps) for the
+//! host-delegated exponential and pseudoinverse. This lets one Leto-backed CPU
+//! reference run all three dense-linalg conformance families.
 //! Shape and output-aliasing are rejected before any output element is
 //! written, matching the validation convention the accelerator seams share.
 
 use eunomia::Pod;
-use hephaestus_core::{DenseProductOps, Result, StridedView};
+use hephaestus_core::{
+    ComputeDevice, DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, Result,
+    StridedView,
+};
 use leto::{Array2, ArrayView, ArrayViewMut};
 use leto_ops::Scalar;
 
-use crate::operands::{require_disjoint_output, with_operands};
+use crate::operands::{require_disjoint_output, upload_array, with_matrix_view, with_operands};
 use crate::{HostBuffer, HostDevice, map_leto_error};
 
-/// Dense products (matmul, batched matmul, Kronecker) for the host
-/// reference device.
+/// Dense linear-algebra operations for the host reference device.
+///
+/// This remains one zero-sized marker, matching the provider seam bundles and
+/// keeping all calls statically dispatched.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HostDenseProductOps;
 
@@ -90,5 +98,72 @@ where
         let mut out_view = ArrayViewMut::<T, 2>::try_new(*output.layout, &mut out_cells)
             .map_err(map_leto_error)?;
         out_view.try_assign(&product).map_err(map_leto_error)
+    }
+}
+
+impl DenseCompositionOps<HostDevice> for HostDenseProductOps {
+    fn matpow(
+        &self,
+        device: &HostDevice,
+        matrix: StridedView<'_, HostBuffer<f32>, 2>,
+        exponent: u32,
+    ) -> Result<HostBuffer<f32>> {
+        let output = with_matrix_view(&matrix, |view| leto_ops::matpow(&view, exponent))?;
+        upload_array(device, &output)
+    }
+
+    fn det(
+        &self,
+        device: &HostDevice,
+        matrix: StridedView<'_, HostBuffer<f32>, 2>,
+    ) -> Result<HostBuffer<f32>> {
+        let determinant = with_matrix_view(&matrix, |view| leto_ops::det(&view))?;
+        device.upload(&[determinant])
+    }
+
+    fn matrix_rank_with_tolerance(
+        &self,
+        _device: &HostDevice,
+        matrix: StridedView<'_, HostBuffer<f32>, 2>,
+        relative_tolerance: f32,
+    ) -> Result<usize> {
+        with_matrix_view(&matrix, |view| {
+            leto_ops::matrix_rank_with_tolerance(&view, relative_tolerance)
+        })
+    }
+}
+
+impl DenseMatrixFunctionOps<HostDevice> for HostDenseProductOps {
+    fn matexp(
+        &self,
+        device: &HostDevice,
+        matrix: StridedView<'_, HostBuffer<f32>, 2>,
+    ) -> Result<HostBuffer<f32>> {
+        let [rows, cols] = matrix.layout.shape();
+        if rows != cols {
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: format!(
+                    "matrix exponential requires square matrix, got shape [{rows}, {cols}]"
+                ),
+            });
+        }
+        if rows == 0 {
+            return device.alloc_zeroed(0);
+        }
+        let output = with_matrix_view(&matrix, |view| leto_ops::matexp(&view))?;
+        upload_array(device, &output)
+    }
+
+    fn pinv(
+        &self,
+        device: &HostDevice,
+        matrix: StridedView<'_, HostBuffer<f32>, 2>,
+    ) -> Result<HostBuffer<f32>> {
+        let [rows, cols] = matrix.layout.shape();
+        if rows == 0 || cols == 0 {
+            return device.alloc_zeroed(0);
+        }
+        let output = with_matrix_view(&matrix, |view| leto_ops::pinv(&view))?;
+        upload_array(device, &output)
     }
 }

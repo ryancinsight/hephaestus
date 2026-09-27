@@ -24,6 +24,8 @@ fn host_satisfies_the_backend_contract() {
         convolution: &HostConvolutionOps,
         cross_entropy: &HostCrossEntropyOps,
         decomposition: &HostDecompositionOps,
+        dense_composition: &HostDenseProductOps,
+        dense_matrix_function: &HostDenseProductOps,
         dense_product: &HostDenseProductOps,
         dense_vector: &HostDenseVectorOps,
         elementwise: &HostElementwiseOps,
