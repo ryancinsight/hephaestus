@@ -88,6 +88,7 @@ pub use domain::ops::{
     SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp,
     TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr, UnaryValue,
 };
+pub use domain::pad::{PadOps, PadWidth, validate_pad_shape};
 pub use domain::parameterized::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
     LeakyReluGradOp, LeakyReluOp, ParameterizedUnaryExpr, ParameterizedUnaryOps,

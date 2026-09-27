@@ -62,6 +62,9 @@ mod fft_contracts;
 #[path = "fusion_contracts.rs"]
 mod fusion_contracts;
 
+#[path = "pad_contracts.rs"]
+mod pad_contracts;
+
 #[path = "parameterized_unary_contracts.rs"]
 mod parameterized_unary_contracts;
 
@@ -292,6 +295,7 @@ contract_cases!(
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
+    pad_contracts::wgpu_satisfies_the_pad_contract,
     parameterized_unary_contracts::wgpu_satisfies_the_parameterized_unary_contract,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
     random_contracts::wgpu_satisfies_the_random_init_contract,
@@ -355,7 +359,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 126;
+const EXPECTED_CONTRACT_CASES: usize = 127;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -364,17 +368,21 @@ const EXPECTED_CONTRACT_CASES: usize = 126;
 // further net two below.
 // The eight feature-gated matrix-function cases become one exact-diagnostic
 // edge now that their differentials live in `assert_dense_matrix_function_contract`.
+// `pad_contracts::wgpu_satisfies_the_pad_contract` then adds one unconditional
+// registration on top of every combination (HEPH-SHAPE-OPS-PROVIDER-1's first
+// delivered clause).
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 173;
+const EXPECTED_CONTRACT_CASES: usize = 174;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 131;
+const EXPECTED_CONTRACT_CASES: usize = 132;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
 // four blocked-Cholesky, and one blocked-QR differential registrations also
 // moved into shared clauses. The feature-gated matrix-function fold removes
-// seven more registrations while retaining one exact-diagnostic edge.
-const EXPECTED_CONTRACT_CASES: usize = 175;
+// seven more registrations while retaining one exact-diagnostic edge, and
+// pad adds one more on top.
+const EXPECTED_CONTRACT_CASES: usize = 176;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

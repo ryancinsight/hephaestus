@@ -69,6 +69,8 @@ pub mod elementwise;
 /// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
+/// Contract clauses for the device-neutral padding seam.
+pub mod pad;
 /// Contract clauses for runtime-parameter unary dispatch.
 pub mod parameterized_unary;
 /// Seeded random initialization clauses.
@@ -107,6 +109,7 @@ pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;
 pub use full_reduction::assert_full_reduction_contract;
+pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
