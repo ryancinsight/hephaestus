@@ -71,6 +71,9 @@ pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
     KernelInterface, KernelSource,
 };
+pub use domain::interpolation::{
+    InterpolationMode, InterpolationOps, validate_interpolation_shape,
+};
 pub use domain::kernel::{
     BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, UnaryStorageKernel,
 };

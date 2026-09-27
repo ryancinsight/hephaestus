@@ -76,6 +76,9 @@ pub mod embedding;
 /// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
+/// Contract clauses for the
+/// [`InterpolationOps`](hephaestus_core::InterpolationOps) seam.
+pub mod interpolation;
 /// Contract clauses for the device-neutral padding seam.
 pub mod pad;
 /// Contract clauses for runtime-parameter unary dispatch.
@@ -123,6 +126,7 @@ pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
 };
 pub use full_reduction::assert_full_reduction_contract;
+pub use interpolation::assert_interpolation_contract;
 pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;

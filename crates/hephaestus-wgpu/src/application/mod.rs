@@ -40,6 +40,8 @@ pub mod elementwise_seam;
 pub mod embedding_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Device-neutral rank-2 axis resampling (nearest / linear) seam.
+pub mod interpolation_seam;
 /// Native WGSL mean cross-entropy.
 pub mod loss;
 /// Device-neutral n-D padding seam.

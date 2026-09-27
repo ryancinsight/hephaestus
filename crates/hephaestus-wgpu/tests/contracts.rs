@@ -71,6 +71,9 @@ mod fft_contracts;
 #[path = "fusion_contracts.rs"]
 mod fusion_contracts;
 
+#[path = "interpolation_contracts.rs"]
+mod interpolation_contracts;
+
 #[path = "pad_contracts.rs"]
 mod pad_contracts;
 
@@ -310,6 +313,7 @@ contract_cases!(
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
+    interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
     pad_contracts::wgpu_satisfies_the_pad_contract,
     parameterized_unary_contracts::wgpu_satisfies_the_parameterized_unary_contract,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
@@ -375,7 +379,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 131;
+const EXPECTED_CONTRACT_CASES: usize = 132;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -387,22 +391,23 @@ const EXPECTED_CONTRACT_CASES: usize = 131;
 // `pad_contracts::wgpu_satisfies_the_pad_contract`,
 // `cross_product_contracts::wgpu_satisfies_the_cross_product_contract`,
 // `arg_reduce_contracts::wgpu_satisfies_the_arg_reduce_contract`,
-// `embedding_contracts::wgpu_satisfies_the_embedding_gather_contract`, and
-// `topk_contracts::wgpu_satisfies_the_topk_contract` each add one
-// unconditional registration on top of every combination.
+// `embedding_contracts::wgpu_satisfies_the_embedding_gather_contract`,
+// `topk_contracts::wgpu_satisfies_the_topk_contract`, and
+// `interpolation_contracts::wgpu_satisfies_the_interpolation_contract` each
+// add one unconditional registration on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 178;
+const EXPECTED_CONTRACT_CASES: usize = 179;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 136;
+const EXPECTED_CONTRACT_CASES: usize = 137;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
 // four blocked-Cholesky, and one blocked-QR differential registrations also
 // moved into shared clauses. The feature-gated matrix-function fold removes
 // seven more registrations while retaining one exact-diagnostic edge, and
-// pad, cross-product, arg-reduce, embedding gather, and topk each add one
-// more on top.
-const EXPECTED_CONTRACT_CASES: usize = 180;
+// pad, cross-product, arg-reduce, embedding gather, topk, and interpolation
+// each add one more on top.
+const EXPECTED_CONTRACT_CASES: usize = 181;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {
