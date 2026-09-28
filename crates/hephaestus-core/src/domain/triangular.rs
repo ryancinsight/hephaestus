@@ -1,8 +1,7 @@
 //! Device-neutral rank-2 triangular masking (tril / triu).
 //!
-//! Part of the shape/indexing family (`HEPH-SHAPE-OPS-PROVIDER-1`), split
-//! out the way `RollOps` was (ADR 0069): one self-contained algorithm at a
-//! time. Unlike the family's other rank-2 seams, this one has no `axis`
+//! Part of the shape/indexing family (`HEPH-SHAPE-OPS-PROVIDER-1`), with one
+//! self-contained operation per seam. Unlike the family's other rank-2 seams, this one has no `axis`
 //! parameter — it masks the whole 2D view by each element's `(row, col)`
 //! position relative to a diagonal, not by scanning one axis.
 //!
@@ -58,12 +57,35 @@ pub trait TriangularOps<D: ComputeDevice, T: Pod> {
 /// `diagonal` offset.
 #[must_use]
 pub fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: i64) -> bool {
-    let row = i64::try_from(row).unwrap_or(i64::MAX);
-    let col = i64::try_from(col).unwrap_or(i64::MAX);
-    let boundary = row.saturating_add(diagonal);
+    let difference = if col >= row {
+        (
+            true,
+            u128::try_from(col - row).expect("invariant: usize fits u128"),
+        )
+    } else {
+        (
+            false,
+            u128::try_from(row - col).expect("invariant: usize fits u128"),
+        )
+    };
+    let diagonal_magnitude = u128::from(diagonal.unsigned_abs());
     match mode {
-        TriangularMode::Lower => col <= boundary,
-        TriangularMode::Upper => col >= boundary,
+        TriangularMode::Lower => match difference {
+            (true, magnitude) => {
+                diagonal >= 0
+                    && magnitude
+                        <= u128::try_from(diagonal).expect("invariant: nonnegative diagonal")
+            }
+            (false, magnitude) => diagonal >= 0 || magnitude >= diagonal_magnitude,
+        },
+        TriangularMode::Upper => match difference {
+            (true, magnitude) => {
+                diagonal < 0
+                    || magnitude
+                        >= u128::try_from(diagonal).expect("invariant: nonnegative diagonal")
+            }
+            (false, magnitude) => diagonal < 0 && magnitude <= diagonal_magnitude,
+        },
     }
 }
 
@@ -145,6 +167,34 @@ mod tests {
             i64::MIN + 1
         ));
         assert!(!triangular_keeps(TriangularMode::Upper, 1, 0, i64::MAX - 1));
+    }
+
+    #[test]
+    fn signed_difference_handles_usize_extremes_without_clamping() {
+        assert!(!triangular_keeps(
+            TriangularMode::Lower,
+            0,
+            usize::MAX,
+            i64::MAX
+        ));
+        assert!(triangular_keeps(
+            TriangularMode::Upper,
+            0,
+            usize::MAX,
+            i64::MAX
+        ));
+        assert!(triangular_keeps(
+            TriangularMode::Lower,
+            usize::MAX,
+            0,
+            i64::MIN
+        ));
+        assert!(!triangular_keeps(
+            TriangularMode::Upper,
+            usize::MAX,
+            0,
+            i64::MIN
+        ));
     }
 
     #[test]

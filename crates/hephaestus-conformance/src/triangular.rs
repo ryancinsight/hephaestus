@@ -19,6 +19,7 @@ pub fn assert_triangular_contract<D, M>(device: &D, ops: &M)
 where
     D: ComputeDevice,
     M: TriangularOps<D, i32>,
+    D::Buffer<i32>: Clone,
 {
     let name = device.backend_name();
     let layout = Layout::c_contiguous([3, 3]).expect("layout");
@@ -139,4 +140,26 @@ where
             .expect("extreme download");
         assert_eq!(got, expected, "{name}: {label} mismatch");
     }
+
+    let alias = input.clone();
+    let before = device
+        .download_owned(&input)
+        .expect("alias fixture download");
+    let error = ops
+        .triangular_into(
+            device,
+            StridedView::new(&input, &layout),
+            TriangularMode::Lower,
+            0,
+            StridedView::new(&alias, &layout),
+        )
+        .expect_err("triangular dispatch must reject aliased input/output");
+    assert!(
+        error.to_string().contains("must not alias"),
+        "{name}: unexpected alias error: {error}"
+    );
+    let after = device
+        .download_owned(&input)
+        .expect("alias fixture download");
+    assert_eq!(after, before, "{name}: alias rejection mutated input");
 }

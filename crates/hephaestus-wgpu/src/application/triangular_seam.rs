@@ -170,6 +170,11 @@ where
         let in_layout = input.layout;
         let out_layout = output.layout;
         validate_triangular_shape(in_layout.shape(), out_layout.shape())?;
+        if output.buffer.aliases(input.buffer) {
+            return Err(HephaestusError::DispatchFailed {
+                message: "output buffer must not alias input buffer".to_string(),
+            });
+        }
 
         in_layout
             .validate_storage_len(input.buffer.len)

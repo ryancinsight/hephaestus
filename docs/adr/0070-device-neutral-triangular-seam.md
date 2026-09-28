@@ -6,8 +6,8 @@
 
 ## Context
 
-Continuing `HEPH-SHAPE-OPS-PROVIDER-1`'s one-op-at-a-time split (ADR 0062,
-0069): this record splits out `tril`/`triu` (triangular masking).
+Continuing `HEPH-SHAPE-OPS-PROVIDER-1`'s one-op-at-a-time split (ADR 0062),
+this record splits out `tril`/`triu` (triangular masking).
 
 Unlike every other seam in this family, triangular masking has no `axis`
 parameter — the kept/zeroed region is a function of each element's

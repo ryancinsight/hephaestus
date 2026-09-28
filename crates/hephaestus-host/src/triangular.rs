@@ -6,7 +6,8 @@
 
 use eunomia::Pod;
 use hephaestus_core::{
-    Result, StridedView, TriangularMode, TriangularOps, triangular_keeps, validate_triangular_shape,
+    DeviceBuffer, Result, StridedView, TriangularMode, TriangularOps, triangular_keeps,
+    validate_triangular_shape,
 };
 use leto_ops::Scalar;
 
@@ -29,6 +30,24 @@ where
         output: StridedView<'_, HostBuffer<T>, 2>,
     ) -> Result<()> {
         validate_triangular_shape(input.layout.shape(), output.layout.shape())?;
+        if output.buffer.aliases(input.buffer) {
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "output buffer must not alias input buffer".to_string(),
+            });
+        }
+        input
+            .layout
+            .validate_storage_len(input.buffer.len())
+            .map_err(map_leto_error)?;
+        output
+            .layout
+            .validate_storage_len(output.buffer.len())
+            .map_err(map_leto_error)?;
+        if !output.layout.is_injective().map_err(map_leto_error)? {
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "triangular output layout must be non-overlapping".to_string(),
+            });
+        }
         let [rows, cols] = input.layout.shape();
 
         let in_cells = input.buffer.read();

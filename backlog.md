@@ -7,6 +7,9 @@
 - Status: split one op at a time (per ADR 0062's precedent), not one
   `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `TriangularOps`
   (ADR 0070, tril/triu) — both host + wgpu.
+- Triangular residual: CUDA, ROCm, and Metal implementors plus the
+  `assert_backend_contract` aggregate fold remain tracked scope; host + wgpu
+  delivery does not close those backend obligations.
 - Outcome: cat, split, stack, gather, scatter, index_select, index_put,
   masked_fill, roll, tile, where, sort, and nonzero remain, implemented
   natively on every accelerator backend (no host round-trip), split into
