@@ -28,6 +28,10 @@ Hephaestus integrates each crate at its owned layer:
   keeps the budget type identity paired with the planner when a downstream
   graph resolves Mnemosyne from a different source revision (Moirai ADR 0039).
 - WGPU and CUDA device acquisition expose `themis::GpuTopology` snapshots.
+- WGPU acquisition retains the selected adapter's metadata, available
+  features, and limits. `WgpuDevice::new` has no adapter metadata because it
+  wraps only a caller-supplied device and queue; the Metal facade preserves
+  metadata from its selected WGPU adapter.
 - Host-delegated dense linear-algebra wrappers call `leto-ops` with its `simd`
   feature enabled; Leto routes CPU hot loops through Hermes SIMD.
 - Device-resident WGPU/CUDA kernels do not call Hermes directly. Direct Hermes
@@ -47,3 +51,8 @@ ADR must be revised before Hephaestus consumes it.
 
 Evidence tier: implementation audit against current dependencies and
 value-semantic Hephaestus/Leto contract tests; no machine-checked proof.
+
+## Revision note — 2026-09-28
+
+PR #359 corrects the Metal contract to match acquired-adapter metadata; run
+36468718701 showed the old `None` assertions contradicted `try_metal`.
