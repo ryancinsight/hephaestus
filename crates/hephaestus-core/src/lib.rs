@@ -113,6 +113,7 @@ pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
     StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
+pub use domain::roll::{RollOps, roll_source_index, validate_roll_shape};
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
 pub use domain::sliding_window::{
     SlidingWindowFoldOperands, SlidingWindowOps, SlidingWindowPlan, SlidingWindowUnfoldOperands,
