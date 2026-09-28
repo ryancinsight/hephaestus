@@ -8,10 +8,12 @@
 //!
 //! `output[row, col] = input[row, col]` when the element is on the kept
 //! side of the diagonal offset by `diagonal`, else `T::ZERO`.
-//! [`TriangularMode::Lower`] keeps `col <= row + diagonal` (matching
+//! [`TriangularMode::Lower`](crate::domain::triangular::TriangularMode::Lower)
+//! keeps `col <= row + diagonal` (matching
 //! `numpy.tril`'s convention: `diagonal = 0` is the main diagonal,
 //! positive shifts it up-right, negative down-left);
-//! [`TriangularMode::Upper`] keeps `col >= row + diagonal`
+//! [`TriangularMode::Upper`](crate::domain::triangular::TriangularMode::Upper)
+//! keeps `col >= row + diagonal`
 //! (`numpy.triu`'s convention, the mirror condition).
 
 use eunomia::Pod;
