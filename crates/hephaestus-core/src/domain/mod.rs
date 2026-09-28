@@ -2,6 +2,8 @@
 
 /// One generic accelerator layer over the narrow device-API seam.
 pub mod accelerator;
+/// Device-neutral rank-2 adaptive pooling (average / maximum) seam.
+pub mod adaptive_pooling;
 /// Device-neutral rank-2 argmax/argmin seam.
 pub mod arg_reduce;
 /// Device-neutral scaled dot-product attention contracts and planning.

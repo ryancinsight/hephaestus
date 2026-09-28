@@ -19,6 +19,8 @@ pub mod fusion;
 /// Provider-owned finite-difference stencil operators.
 pub mod stencil;
 
+/// Device-neutral rank-2 adaptive pooling (average / maximum) seam.
+pub mod adaptive_pooling_seam;
 /// Device-neutral rank-2 argmax/argmin seam implementation.
 pub mod arg_reduce_seam;
 /// Native WGSL scaled dot-product attention.

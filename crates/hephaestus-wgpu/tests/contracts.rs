@@ -25,6 +25,9 @@ fn device_or_skip() -> Option<WgpuDevice> {
         .clone()
 }
 
+#[path = "adaptive_pooling_contracts.rs"]
+mod adaptive_pooling_contracts;
+
 #[path = "arg_reduce_contracts.rs"]
 mod arg_reduce_contracts;
 
@@ -288,6 +291,7 @@ contract_cases!(
     #[cfg(feature = "decomposition")]
     contract::empty_qr_preserves_shape_and_identity,
     contract::fdtd_3d_provider_matches_sequential_cpu_reference,
+    adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract,
     arg_reduce_contracts::wgpu_satisfies_the_arg_reduce_contract,
     attention_contracts::wgpu_satisfies_the_attention_contract,
     attention_contracts::prepared_dispatch_resets_semantic_status_after_failure,
@@ -400,6 +404,8 @@ const EXPECTED_CONTRACT_CASES: usize = 133;
 // `interpolation_contracts::wgpu_satisfies_the_interpolation_contract`, and
 // `triangular_contracts::wgpu_satisfies_the_triangular_contract` each add
 // one unconditional registration on top of every combination.
+// `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
+// each add one unconditional registration on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
 const EXPECTED_CONTRACT_CASES: usize = 180;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
@@ -412,6 +418,7 @@ const EXPECTED_CONTRACT_CASES: usize = 138;
 // seven more registrations while retaining one exact-diagnostic edge, and
 // pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
 // triangular masking each add one more on top.
+// adaptive pooling each add one more on top.
 const EXPECTED_CONTRACT_CASES: usize = 182;
 
 #[test]

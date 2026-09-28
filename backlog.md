@@ -84,16 +84,24 @@
 
 <a id="heph-adaptive-pooling-provider-1"></a>
 
-## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — Device-resident adaptive pooling [minor] — todo
+## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm/Metal for adaptive pooling [minor] — todo
 - Priority: feature.
-- Outcome: an `AdaptivePoolingOps<D, T>` seam (avg/max) mapping an arbitrary
-  input extent to a target output extent on-device.
-- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs Leto/analytical
-  pooling oracle.
-- Driver: coeus consumer audit — no accelerator path exists today.
-- Verification: boundary (1x1 target, non-divisible extents) plus
-  differential tests per backend, strict Clippy, independent review.
-- Last-update: 2026-09-26.
+- Status: `AdaptivePoolingOps` (avg/max, ADR 0068) delivered — host + wgpu,
+  differential-tested including the non-divisible-extent case (windows can
+  overlap, matching the reference algorithm) and the `out_len == 1`/
+  `out_len == in_len` degenerate cases. 2D pooling is not a separate mode:
+  it composes as two calls to `adaptive_pool_axis_into` (documented in the
+  ADR). Narrowed to the remaining backends and the `assert_backend_contract`
+  aggregate fold (deferred until a seam has all four backend
+  implementations).
+- Outcome: `AdaptivePoolingOps` implemented for cuda/rocm/metal.
+- Scope: per-backend implementors following the existing wgpu kernel's
+  window-derivation formula; conformance already covers the shared clause,
+  so this item is implementation-only.
+- Driver: coeus consumer audit, 2026-09-26.
+- Verification: existing differential + boundary (non-divisible extents)
+  tests per backend, strict Clippy, independent review.
+- Last-update: 2026-09-27.
 
 <a id="heph-device-dot-cross-provider-1"></a>
 

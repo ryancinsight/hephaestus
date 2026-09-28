@@ -21,6 +21,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod test_support;
 
+pub use application::adaptive_pooling_seam::WgpuAdaptivePoolingOps;
 pub use application::arg_reduce_seam::WgpuArgReduceOps;
 pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
