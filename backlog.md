@@ -4,12 +4,15 @@
 
 ## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
 - Priority: feature.
-- Outcome: a `ShapeOps<D, T>` (or split family) seam covering cat, split,
-  stack, gather, scatter, index_select, index_put, masked_fill, pad, roll,
-  tile, tril, triu, where, sort, and nonzero, implemented natively on every
-  accelerator backend (no host round-trip).
-- Scope: new core domain seam + wgpu/cuda/rocm/metal application modules;
-  conformance clauses differential-tested against Leto per op.
+- Status: split one op at a time (per ADR 0062's precedent), not one
+  `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `TriangularOps`
+  (ADR 0070, tril/triu) — both host + wgpu.
+- Outcome: cat, split, stack, gather, scatter, index_select, index_put,
+  masked_fill, roll, tile, where, sort, and nonzero remain, implemented
+  natively on every accelerator backend (no host round-trip), split into
+  their own items as each is taken up.
+- Scope: per-op core domain seam + wgpu/cuda/rocm/metal application
+  modules; conformance clauses differential-tested against Leto per op.
 - Driver: coeus's accelerator bridge has no path for this family today and
   falls back to host execution for every one of these ops (relayed consumer
   audit, 2026-09-26).

@@ -73,6 +73,8 @@ pub mod stream;
 pub mod strided;
 /// Device-neutral rank-2 top-k selection seam implementation.
 pub mod topk_seam;
+/// Device-neutral rank-2 triangular masking (tril / triu) seam.
+pub mod triangular_seam;
 /// Volume ray-integral kernels (CT/dose ray-trace primitive).
 /// Dense vector-operation seam implementation.
 pub mod vector;

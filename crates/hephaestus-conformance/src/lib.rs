@@ -102,6 +102,9 @@ pub mod stencil;
 pub mod topk;
 /// Device transfer and buffer-initialization clauses.
 pub mod transfer;
+/// Contract clauses for the
+/// [`TriangularOps`](hephaestus_core::TriangularOps) seam.
+pub mod triangular;
 /// Contract clauses for the typed paths of the
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
@@ -138,4 +141,5 @@ pub use stateful_update::assert_stateful_update_contract;
 pub use stencil::assert_stencil_contract;
 pub use topk::assert_topk_contract;
 pub use transfer::assert_transfer_contract;
+pub use triangular::assert_triangular_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
