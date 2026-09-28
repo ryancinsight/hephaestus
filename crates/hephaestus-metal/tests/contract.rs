@@ -211,9 +211,22 @@ fn metal_shared_acquisition_preserves_backend_features_and_limits() {
         DeviceFeature::MappablePrimaryBuffers,
         DeviceFeature::ImmediateData,
     ];
-    assert!(reference.wgpu_device().adapter_info().is_none());
-    assert!(reference.wgpu_device().adapter_features().is_none());
-    assert!(reference.wgpu_device().adapter_limits().is_none());
+    let reference_wgpu = reference.wgpu_device();
+    assert_eq!(
+        reference_wgpu
+            .adapter_info()
+            .expect("Metal acquisition retains adapter metadata")
+            .backend,
+        wgpu::Backend::Metal
+    );
+    let adapter_features = reference_wgpu
+        .adapter_features()
+        .expect("Metal acquisition retains adapter features");
+    assert!(adapter_features.contains(reference_wgpu.features()));
+    let adapter_limits = reference_wgpu
+        .adapter_limits()
+        .expect("Metal acquisition retains adapter limits");
+    assert!(adapter_limits.max_buffer_size >= reference_wgpu.limits().max_buffer_size);
     let required_limits = reference.device_limits();
     let acquired = MetalDevice::try_acquire_device(
         "hephaestus-metal-shared-acquisition",
