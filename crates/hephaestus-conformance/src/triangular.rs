@@ -97,4 +97,46 @@ where
         vec![0, 0, 0, 4, 0, 0, 7, 8, 0],
         "{name}: tril(diagonal=-1) mismatch"
     );
+
+    for (mode, diagonal, expected, label) in [
+        (
+            TriangularMode::Lower,
+            i32::MAX as i64,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "tril(i32::MAX)",
+        ),
+        (
+            TriangularMode::Upper,
+            i32::MIN as i64,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "triu(i32::MIN)",
+        ),
+        (
+            TriangularMode::Lower,
+            i32::MIN as i64,
+            vec![0; 9],
+            "tril(i32::MIN)",
+        ),
+        (
+            TriangularMode::Upper,
+            i32::MAX as i64,
+            vec![0; 9],
+            "triu(i32::MAX)",
+        ),
+    ] {
+        let output = device.alloc_zeroed::<i32>(9).expect("extreme alloc");
+        ops.triangular_into(
+            device,
+            StridedView::new(&input, &layout),
+            mode,
+            diagonal,
+            StridedView::new(&output, &layout),
+        )
+        .expect("extreme dispatch");
+        let mut got = vec![0i32; 9];
+        device
+            .download(&output, &mut got)
+            .expect("extreme download");
+        assert_eq!(got, expected, "{name}: {label} mismatch");
+    }
 }

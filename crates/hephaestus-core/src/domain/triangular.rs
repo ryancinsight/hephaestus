@@ -58,9 +58,10 @@ pub trait TriangularOps<D: ComputeDevice, T: Pod> {
 pub fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: i64) -> bool {
     let row = i64::try_from(row).unwrap_or(i64::MAX);
     let col = i64::try_from(col).unwrap_or(i64::MAX);
+    let boundary = row.saturating_add(diagonal);
     match mode {
-        TriangularMode::Lower => col <= row + diagonal,
-        TriangularMode::Upper => col >= row + diagonal,
+        TriangularMode::Lower => col <= boundary,
+        TriangularMode::Upper => col >= boundary,
     }
 }
 
@@ -127,6 +128,21 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn diagonal_extremes_keep_the_mathematical_boundary() {
+        assert!(triangular_keeps(TriangularMode::Lower, 0, 0, i64::MAX));
+        assert!(!triangular_keeps(TriangularMode::Upper, 0, 0, i64::MAX));
+        assert!(!triangular_keeps(TriangularMode::Lower, 0, 0, i64::MIN));
+        assert!(triangular_keeps(TriangularMode::Upper, 0, 0, i64::MIN));
+        assert!(triangular_keeps(
+            TriangularMode::Lower,
+            usize::MAX,
+            0,
+            i64::MIN + 1
+        ));
+        assert!(!triangular_keeps(TriangularMode::Upper, 1, 0, i64::MAX - 1));
     }
 
     #[test]

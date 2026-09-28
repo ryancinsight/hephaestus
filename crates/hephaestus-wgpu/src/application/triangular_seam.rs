@@ -1,7 +1,7 @@
 //! WGPU implementation of [`hephaestus_core::TriangularOps`].
 //!
 //! One thread per `(row, col)` pair (flat-dispatched over `rows * cols`)
-//! evaluates the same `col <=/>= row + diagonal` test
+//! evaluates the same diagonal-side test
 //! [`hephaestus_core::triangular_keeps`] uses, and copies or zeroes
 //! directly — no shared state between threads. `mode` bakes into the
 //! generated WGSL at pipeline-cache-key granularity (there is no `axis` to
@@ -15,6 +15,7 @@ use hephaestus_core::{
     BlockWidth, DialectScalar, HephaestusError, Result, StridedView, TriangularMode, TriangularOps,
     Wgsl, validate_triangular_shape,
 };
+use leto::Layout;
 
 use crate::application::bindings::BindGroupEntries;
 use crate::application::pipeline::{cached_pipeline, encode_compute_pass, workgroups};
@@ -51,10 +52,55 @@ const WGSL_TRIANGULAR_META: &str = r"struct TriangularMeta {
 
 struct TriangularKernel;
 
+fn validate_shader_addressing(layout: &Layout<2>, label: &str) -> Result<()> {
+    let mut minimum = layout.offset() as i128;
+    let mut maximum = minimum;
+    for axis in 0..2 {
+        let extent = layout.shape()[axis].saturating_sub(1) as i128;
+        let delta = (layout.strides()[axis] as i128)
+            .checked_mul(extent)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("{label} stride product overflows shader address arithmetic"),
+            })?;
+        if delta < i128::from(i32::MIN) || delta > i128::from(i32::MAX) {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!("{label} stride product exceeds signed shader address range"),
+            });
+        }
+        if delta < 0 {
+            minimum =
+                minimum
+                    .checked_add(delta)
+                    .ok_or_else(|| HephaestusError::DispatchFailed {
+                        message: format!("{label} minimum address overflows shader arithmetic"),
+                    })?;
+        } else {
+            maximum =
+                maximum
+                    .checked_add(delta)
+                    .ok_or_else(|| HephaestusError::DispatchFailed {
+                        message: format!("{label} maximum address overflows shader arithmetic"),
+                    })?;
+        }
+    }
+    if minimum < 0 || maximum > i128::from(i32::MAX) {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("{label} address exceeds signed shader range"),
+        });
+    }
+    Ok(())
+}
+
 fn triangular_shader<T: DialectScalar<Wgsl>>(width: BlockWidth, mode: TriangularMode) -> String {
     let keep = match mode {
-        TriangularMode::Lower => "col <= row + diagonal",
-        TriangularMode::Upper => "col >= row + diagonal",
+        // Differences are evaluated only after ordering makes them
+        // non-negative, so signed coordinate arithmetic cannot overflow.
+        TriangularMode::Lower => {
+            "(diagonal >= 0 && (col <= row || col - row <= diagonal)) || (diagonal < 0 && diagonal != (i32(-2147483647) - 1) && col < row && row - col >= -diagonal)"
+        }
+        TriangularMode::Upper => {
+            "(diagonal >= 0 && col >= row && col - row >= diagonal) || (diagonal < 0 && (diagonal == (i32(-2147483647) - 1) || col >= row || row - col <= -diagonal))"
+        }
     };
     format!(
         r#"{meta}
@@ -90,6 +136,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     )
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shader_predicates_avoid_signed_addition_overflow() {
+        let lower = triangular_shader::<f32>(BlockWidth::DEFAULT, TriangularMode::Lower);
+        let upper = triangular_shader::<f32>(BlockWidth::DEFAULT, TriangularMode::Upper);
+        assert!(!lower.contains("row + diagonal"));
+        assert!(!upper.contains("row + diagonal"));
+        assert!(lower.contains("col - row <= diagonal"));
+        assert!(upper.contains("row - col <= -diagonal"));
+    }
+}
+
 /// WGPU device marker implementing [`TriangularOps`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuTriangularOps;
@@ -122,6 +183,13 @@ where
             });
         }
         let [rows, cols] = in_layout.shape();
+        if rows > i32::MAX as usize || cols > i32::MAX as usize {
+            return Err(HephaestusError::InvalidConfiguration {
+                message: "triangular shape exceeds signed shader coordinate range".to_string(),
+            });
+        }
+        validate_shader_addressing(in_layout, "triangular input")?;
+        validate_shader_addressing(out_layout, "triangular output")?;
         if rows == 0 || cols == 0 {
             return Ok(());
         }
@@ -134,6 +202,17 @@ where
 
         let in_strides = in_layout.strides();
         let out_strides = out_layout.strides();
+        let total =
+            rows.checked_mul(cols)
+                .ok_or_else(|| HephaestusError::InvalidConfiguration {
+                    message: "triangular dispatch size overflows".to_string(),
+                })?;
+        if total > u32::MAX as usize {
+            return Err(HephaestusError::InvalidConfiguration {
+                message: "triangular dispatch size exceeds shader index range".to_string(),
+            });
+        }
+
         let meta = TriangularMeta {
             in_strides: [
                 to_i32(in_strides[0], "input stride")?,
@@ -177,11 +256,6 @@ where
             || triangular_shader::<T>(block_width, mode),
         );
 
-        let total =
-            rows.checked_mul(cols)
-                .ok_or_else(|| HephaestusError::InvalidConfiguration {
-                    message: "triangular dispatch size overflows".to_string(),
-                })?;
         let groups = workgroups(total, block_width)?;
         let mut entries = BindGroupEntries::with_capacity(3);
         entries.push(wgpu::BindGroupEntry {
