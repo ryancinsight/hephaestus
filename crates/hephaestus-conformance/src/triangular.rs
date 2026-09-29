@@ -27,7 +27,7 @@ where
         .upload(&[1, 2, 3, 4, 5, 6, 7, 8, 9])
         .expect("fixture upload");
 
-    let lower0 = device.alloc_zeroed::<i32>(9).expect("lower0 alloc");
+    let lower0 = device.upload(&[31; 9]).expect("lower0 alloc");
     ops.triangular_into(
         device,
         StridedView::new(&input, &layout),
@@ -44,7 +44,7 @@ where
         "{name}: tril(diagonal=0) mismatch"
     );
 
-    let upper0 = device.alloc_zeroed::<i32>(9).expect("upper0 alloc");
+    let upper0 = device.upload(&[32; 9]).expect("upper0 alloc");
     ops.triangular_into(
         device,
         StridedView::new(&input, &layout),
@@ -61,7 +61,7 @@ where
         "{name}: triu(diagonal=0) mismatch"
     );
 
-    let lower_pos1 = device.alloc_zeroed::<i32>(9).expect("lower_pos1 alloc");
+    let lower_pos1 = device.upload(&[33; 9]).expect("lower_pos1 alloc");
     ops.triangular_into(
         device,
         StridedView::new(&input, &layout),
@@ -80,7 +80,7 @@ where
         "{name}: tril(diagonal=1) mismatch"
     );
 
-    let lower_neg1 = device.alloc_zeroed::<i32>(9).expect("lower_neg1 alloc");
+    let lower_neg1 = device.upload(&[34; 9]).expect("lower_neg1 alloc");
     ops.triangular_into(
         device,
         StridedView::new(&input, &layout),
