@@ -184,13 +184,14 @@ architectural decision or a tracked future-work item:
 - Resolution: keep the source-level `themis` crate alias and bind it explicitly
   to `package = "themis-topology"`, version `0.10.1`. Refresh the generated
   stack overlay and Hephaestus lockfile against the renamed package.
-- Evidence: at exact head
-  [1c4ac16](https://github.com/ryancinsight/hephaestus/commit/1c4ac16b56be45931c4782f54ec6c1764fdc65b8),
+- Evidence: [PR #179](https://github.com/ryancinsight/hephaestus/pull/179)
+  records the provider-owned readback change. Its earlier hosted
   [CUDA](https://github.com/ryancinsight/hephaestus/actions/runs/30735731839),
   [ROCm](https://github.com/ryancinsight/hephaestus/actions/runs/30735732609),
   [WGPU](https://github.com/ryancinsight/hephaestus/actions/runs/30735730194), and
   [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30735730960)
-  pass. Earlier [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30733059974)
+  runs pass on the PR branch before merge. Earlier
+  [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30733059974)
   and [ROCm](https://github.com/ryancinsight/hephaestus/actions/runs/30733059964)
   runs fail during dependency resolution only.
 - Follow-up: Mnemosyne subsequently renamed packages `mnemosyne` and
