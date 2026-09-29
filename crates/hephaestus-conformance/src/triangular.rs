@@ -237,7 +237,7 @@ where
         device,
         StridedView::new(&empty_input, &empty),
         TriangularMode::Lower,
-        i64::MIN,
+        i64::MAX,
         StridedView::new(&empty_output, &empty),
     )
     .expect("empty dispatch");
@@ -275,7 +275,7 @@ where
             "triu(i32::MAX)",
         ),
     ] {
-        let output = device.alloc_zeroed::<i32>(9).expect("extreme alloc");
+        let output = device.upload(&[91; 9]).expect("extreme alloc");
         ops.triangular_into(
             device,
             StridedView::new(&input, &layout),
@@ -289,6 +289,56 @@ where
             .download(&output, &mut got)
             .expect("extreme download");
         assert_eq!(got, expected, "{name}: {label} mismatch");
+    }
+
+    for (mode, diagonal, expected, label) in [
+        (
+            TriangularMode::Lower,
+            i64::MAX,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "tril(i64::MAX)",
+        ),
+        (
+            TriangularMode::Lower,
+            i64::MIN,
+            vec![0; 9],
+            "tril(i64::MIN)",
+        ),
+    ] {
+        let output = device.upload(&[73; 9]).expect("i64 boundary output");
+        let before = device
+            .download_owned(&output)
+            .expect("i64 boundary output download");
+        let result = ops.triangular_into(
+            device,
+            StridedView::new(&input, &layout),
+            mode,
+            diagonal,
+            StridedView::new(&output, &layout),
+        );
+        if name == "wgpu" {
+            let error = result.expect_err("WGPU must reject an out-of-range diagonal");
+            assert!(
+                error.to_string().contains("i32"),
+                "{name}: unexpected diagonal error: {error}"
+            );
+            assert_eq!(
+                device
+                    .download_owned(&output)
+                    .expect("i64 boundary download"),
+                before,
+                "{name}: rejected diagonal mutated output"
+            );
+        } else {
+            result.expect("host accepts the full i64 diagonal contract");
+            assert_eq!(
+                device
+                    .download_owned(&output)
+                    .expect("i64 boundary download"),
+                expected,
+                "{name}: {label} mismatch"
+            );
+        }
     }
 
     let alias = input.clone();
