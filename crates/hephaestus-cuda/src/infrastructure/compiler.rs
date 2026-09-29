@@ -5,36 +5,33 @@ use crate::infrastructure::device::{CudaContext, CurrentContext};
 
 mod headers;
 
-#[allow(non_camel_case_types)]
-pub type nvrtcProgram = *mut std::ffi::c_void;
-#[allow(non_camel_case_types)]
-pub type nvrtcResult = i32;
+pub type NvrtcProgram = *mut std::ffi::c_void;
+pub type NvrtcResult = i32;
 
-#[allow(non_snake_case)]
 pub struct NvrtcDriver {
     _lib: Library,
-    pub nvrtcCreateProgram: unsafe extern "C" fn(
-        prog: *mut nvrtcProgram,
+    pub create_program: unsafe extern "C" fn(
+        prog: *mut NvrtcProgram,
         src: *const std::ffi::c_char,
         name: *const std::ffi::c_char,
-        numHeaders: std::ffi::c_int,
+        num_headers: std::ffi::c_int,
         headers: *const *const std::ffi::c_char,
-        includeNames: *const *const std::ffi::c_char,
-    ) -> nvrtcResult,
-    pub nvrtcCompileProgram: unsafe extern "C" fn(
-        prog: nvrtcProgram,
-        numOptions: std::ffi::c_int,
+        include_names: *const *const std::ffi::c_char,
+    ) -> NvrtcResult,
+    pub compile_program: unsafe extern "C" fn(
+        prog: NvrtcProgram,
+        num_options: std::ffi::c_int,
         options: *const *const std::ffi::c_char,
-    ) -> nvrtcResult,
-    pub nvrtcGetPTXSize:
-        unsafe extern "C" fn(prog: nvrtcProgram, ptxSize: *mut usize) -> nvrtcResult,
-    pub nvrtcGetPTX:
-        unsafe extern "C" fn(prog: nvrtcProgram, ptx: *mut std::ffi::c_char) -> nvrtcResult,
-    pub nvrtcGetProgramLogSize:
-        unsafe extern "C" fn(prog: nvrtcProgram, logSize: *mut usize) -> nvrtcResult,
-    pub nvrtcGetProgramLog:
-        unsafe extern "C" fn(prog: nvrtcProgram, log: *mut std::ffi::c_char) -> nvrtcResult,
-    pub nvrtcDestroyProgram: unsafe extern "C" fn(prog: *mut nvrtcProgram) -> nvrtcResult,
+    ) -> NvrtcResult,
+    pub get_ptx_size:
+        unsafe extern "C" fn(prog: NvrtcProgram, ptx_size: *mut usize) -> NvrtcResult,
+    pub get_ptx:
+        unsafe extern "C" fn(prog: NvrtcProgram, ptx: *mut std::ffi::c_char) -> NvrtcResult,
+    pub get_program_log_size:
+        unsafe extern "C" fn(prog: NvrtcProgram, log_size: *mut usize) -> NvrtcResult,
+    pub get_program_log:
+        unsafe extern "C" fn(prog: NvrtcProgram, log: *mut std::ffi::c_char) -> NvrtcResult,
+    pub destroy_program: unsafe extern "C" fn(prog: *mut NvrtcProgram) -> NvrtcResult,
 }
 
 /// A loaded CUDA module and one resolved kernel function handle.
@@ -113,7 +110,6 @@ impl Drop for SafeCachedKernel {
 static NVRTC_DRIVER: OnceLock<Option<NvrtcDriver>> = OnceLock::new();
 
 impl NvrtcDriver {
-    #[allow(non_snake_case)]
     pub fn get() -> Option<&'static Self> {
         NVRTC_DRIVER
             .get_or_init(|| {
@@ -125,23 +121,23 @@ impl NvrtcDriver {
                 // the `Symbol` guards remain valid because `_lib` keeps the
                 // library loaded for the driver's `'static` lifetime.
                 unsafe {
-                    let nvrtcCreateProgram = *lib.get(b"nvrtcCreateProgram\0").ok()?;
-                    let nvrtcCompileProgram = *lib.get(b"nvrtcCompileProgram\0").ok()?;
-                    let nvrtcGetPTXSize = *lib.get(b"nvrtcGetPTXSize\0").ok()?;
-                    let nvrtcGetPTX = *lib.get(b"nvrtcGetPTX\0").ok()?;
-                    let nvrtcGetProgramLogSize = *lib.get(b"nvrtcGetProgramLogSize\0").ok()?;
-                    let nvrtcGetProgramLog = *lib.get(b"nvrtcGetProgramLog\0").ok()?;
-                    let nvrtcDestroyProgram = *lib.get(b"nvrtcDestroyProgram\0").ok()?;
+                    let create_program = *lib.get(b"nvrtcCreateProgram\0").ok()?;
+                    let compile_program = *lib.get(b"nvrtcCompileProgram\0").ok()?;
+                    let get_ptx_size = *lib.get(b"nvrtcGetPTXSize\0").ok()?;
+                    let get_ptx = *lib.get(b"nvrtcGetPTX\0").ok()?;
+                    let get_program_log_size = *lib.get(b"nvrtcGetProgramLogSize\0").ok()?;
+                    let get_program_log = *lib.get(b"nvrtcGetProgramLog\0").ok()?;
+                    let destroy_program = *lib.get(b"nvrtcDestroyProgram\0").ok()?;
 
                     Some(Self {
                         _lib: lib,
-                        nvrtcCreateProgram,
-                        nvrtcCompileProgram,
-                        nvrtcGetPTXSize,
-                        nvrtcGetPTX,
-                        nvrtcGetProgramLogSize,
-                        nvrtcGetProgramLog,
-                        nvrtcDestroyProgram,
+                        create_program,
+                        compile_program,
+                        get_ptx_size,
+                        get_ptx,
+                        get_program_log_size,
+                        get_program_log,
+                        destroy_program,
                     })
                 }
             })
@@ -232,7 +228,7 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
     let src_c = std::ffi::CString::new(src).map_err(|e| e.to_string())?;
     let name_c = std::ffi::CString::new("kernel.cu").map_err(|e| e.to_string())?;
 
-    let mut prog: nvrtcProgram = std::ptr::null_mut();
+    let mut prog: NvrtcProgram = std::ptr::null_mut();
     // SAFETY: every call in this block goes through a function pointer
     // resolved from the live NVRTC library (`NvrtcDriver::get`), typed to
     // match the NVRTC C ABI. `src_c`/`name_c`/`options` are NUL-terminated
@@ -243,7 +239,7 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
     // allocations sized by the immediately preceding NVRTC size queries
     // before the driver writes into them.
     unsafe {
-        let res = (nvrtc.nvrtcCreateProgram)(
+        let res = (nvrtc.create_program)(
             &mut prog,
             src_c.as_ptr(),
             name_c.as_ptr(),
@@ -266,7 +262,7 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
                 .expect("invariant: decimal architecture contains no null bytes"),
             ];
             if let Some(directory) =
-                headers::include_directory(nvrtc.nvrtcCreateProgram as *const core::ffi::c_void)?
+                headers::include_directory(nvrtc.create_program as *const core::ffi::c_void)?
             {
                 options.push(
                     std::ffi::CString::new(format!("--include-path={}", directory.display()))
@@ -278,7 +274,7 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
             let options_ptr: Vec<*const std::ffi::c_char> =
                 options.iter().map(|o| o.as_ptr()).collect();
 
-            let compile_res = (nvrtc.nvrtcCompileProgram)(
+            let compile_res = (nvrtc.compile_program)(
                 prog,
                 options_ptr.len() as std::ffi::c_int,
                 options_ptr.as_ptr(),
@@ -289,9 +285,9 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
                 // empty log rather than reading uninitialized bytes.
                 let mut log_size: usize = 0;
                 let log_str =
-                    if (nvrtc.nvrtcGetProgramLogSize)(prog, &mut log_size) == 0 && log_size > 0 {
+                    if (nvrtc.get_program_log_size)(prog, &mut log_size) == 0 && log_size > 0 {
                         let mut log_bytes = vec![0u8; log_size];
-                        if (nvrtc.nvrtcGetProgramLog)(
+                        if (nvrtc.get_program_log)(
                             prog,
                             log_bytes.as_mut_ptr() as *mut std::ffi::c_char,
                         ) == 0
@@ -314,14 +310,14 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
             }
 
             let mut ptx_size: usize = 0;
-            let ptx_res = (nvrtc.nvrtcGetPTXSize)(prog, &mut ptx_size);
+            let ptx_res = (nvrtc.get_ptx_size)(prog, &mut ptx_size);
             if ptx_res != 0 {
                 return Err(format!("nvrtcGetPTXSize failed: {}", ptx_res));
             }
 
             let mut ptx_bytes = vec![0u8; ptx_size];
             let ptx_get_res =
-                (nvrtc.nvrtcGetPTX)(prog, ptx_bytes.as_mut_ptr() as *mut std::ffi::c_char);
+                (nvrtc.get_ptx)(prog, ptx_bytes.as_mut_ptr() as *mut std::ffi::c_char);
             if ptx_get_res != 0 {
                 return Err(format!("nvrtcGetPTX failed: {}", ptx_get_res));
             }
@@ -334,7 +330,7 @@ pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<Stri
                 .map_err(|e| format!("PTX is not valid UTF-8: {}", e))?;
             Ok(ptx_str)
         })();
-        let destroy_status = (nvrtc.nvrtcDestroyProgram)(&mut prog);
+        let destroy_status = (nvrtc.destroy_program)(&mut prog);
         if destroy_status != 0 {
             tracing::error!(
                 operation = "nvrtcDestroyProgram",

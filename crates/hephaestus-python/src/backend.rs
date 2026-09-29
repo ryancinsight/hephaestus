@@ -43,7 +43,7 @@ impl BackendDevice {
         }
     }
 
-    pub(crate) fn alloc_zeroed_f32(&self, len: usize) -> hephaestus_core::Result<BackendBuffer> {
+    pub(crate) fn alloc_zeroed(&self, len: usize) -> hephaestus_core::Result<BackendBuffer> {
         match self {
             Self::Wgpu(device) => device.alloc_zeroed::<f32>(len).map(BackendBuffer::Wgpu),
             Self::Cuda(device) => device
@@ -52,7 +52,7 @@ impl BackendDevice {
         }
     }
 
-    pub(crate) fn upload_f32(&self, data: &[f32]) -> hephaestus_core::Result<BackendBuffer> {
+    pub(crate) fn upload(&self, data: &[f32]) -> hephaestus_core::Result<BackendBuffer> {
         match self {
             Self::Wgpu(device) => device.upload(data).map(BackendBuffer::Wgpu),
             Self::Cuda(device) => device
@@ -64,7 +64,7 @@ impl BackendDevice {
     /// Download a buffer into newly allocated host storage via each
     /// backend's `download_owned` (no zero-fill of memory the transfer
     /// fully overwrites).
-    pub(crate) fn download_f32(&self, buffer: &BackendBuffer) -> hephaestus_core::Result<Vec<f32>> {
+    pub(crate) fn download(&self, buffer: &BackendBuffer) -> hephaestus_core::Result<Vec<f32>> {
         match (self, buffer) {
             (Self::Wgpu(device), BackendBuffer::Wgpu(buffer)) => device.download_owned(buffer),
             (Self::Cuda(device), BackendBuffer::Cuda(buffer)) => device.download_owned(buffer),
@@ -74,7 +74,7 @@ impl BackendDevice {
         }
     }
 
-    /// Complex counterpart of [`download_f32`](Self::download_f32).
+    /// Complex counterpart of [`download`](Self::download).
     pub(crate) fn download_complex(
         &self,
         buffer: &BackendComplexBuffer,

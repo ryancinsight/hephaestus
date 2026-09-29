@@ -25,7 +25,7 @@ fn cuda_qr_binding_returns_device_factors_that_reconstruct_input() {
             4.0, 1.0, 0.5, 0.25, 3.0, 0.75, 0.5, 0.75, 2.5, 1.0, -0.5, 0.25, 0.75, 0.5, 1.5,
         ];
         let array = PyArray {
-            buffer: device.inner.upload_f32(&input).expect("CUDA input upload"),
+            buffer: device.inner.upload(&input).expect("CUDA input upload"),
             device: device.inner.clone(),
             shape: vec![rows, cols],
         };
@@ -36,8 +36,8 @@ fn cuda_qr_binding_returns_device_factors_that_reconstruct_input() {
         assert!(matches!(&q.buffer, BackendBuffer::Cuda(_)));
         assert!(matches!(&r.buffer, BackendBuffer::Cuda(_)));
 
-        let q_values = q.device.download_f32(&q.buffer).expect("Q value download");
-        let r_values = r.device.download_f32(&r.buffer).expect("R value download");
+        let q_values = q.device.download(&q.buffer).expect("Q value download");
+        let r_values = r.device.download(&r.buffer).expect("R value download");
         let max_input = input.iter().copied().fold(0.0f32, |a, b| a.max(b.abs()));
         // Householder QR is backward stable with O(mn*epsilon) elementwise
         // error for this well-scaled fixture. Four times that bound covers

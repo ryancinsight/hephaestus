@@ -104,7 +104,7 @@ fn checked_wg_x(wg_x: usize) -> Result<u32> {
 }
 
 /// Convert a region field to `u32`, returning `TransferFailed` on overflow.
-fn region_u32(value: usize, name: &str) -> Result<u32> {
+fn region_field(value: usize, name: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::TransferFailed {
         message: format!("region {name} {value} exceeds u32"),
     })
@@ -113,11 +113,11 @@ fn region_u32(value: usize, name: &str) -> Result<u32> {
 /// Build a `RegionCopyMeta` from a `MatrixRegion`, checking all field widths.
 fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
     Ok(RegionCopyMeta {
-        stride: region_u32(region.stride, "stride")?,
-        row_start: region_u32(region.row_start, "row_start")?,
-        col_start: region_u32(region.col_start, "col_start")?,
-        rows: region_u32(region.rows, "rows")?,
-        cols: region_u32(region.cols, "cols")?,
+        stride: region_field(region.stride, "stride")?,
+        row_start: region_field(region.row_start, "row_start")?,
+        col_start: region_field(region.col_start, "col_start")?,
+        rows: region_field(region.rows, "rows")?,
+        cols: region_field(region.cols, "cols")?,
     })
 }
 
