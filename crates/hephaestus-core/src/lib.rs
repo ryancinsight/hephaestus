@@ -137,6 +137,9 @@ pub use domain::strided::{
     pad_usize_strides_dyn, to_u32,
 };
 pub use domain::topk::{TopKOps, validate_topk_shape};
+pub use domain::triangular::{
+    TriangularMode, TriangularOps, triangular_keeps, validate_triangular_shape,
+};
 pub use domain::vector::{DenseVectorOps, RetainedReductions};
 pub use domain::view::{DynamicStridedView, StridedOperand, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
