@@ -109,8 +109,8 @@ representable in binary32. Serial binary32 accumulation instead produces
 therefore derives the repeating-period sum; the input, timed operations and
 tolerance remain unchanged. A full-length contract checks both immediate and
 prepared norms against that independent analytical reference.
-That contract passes debug run `8aa84e12` and release run `da7a3e40` with
-exact equality. The full comparative smoke executes all operations in 0.6
+That contract passes its debug and release runs with exact equality; the
+evidence is recorded at `e51124a`. The full comparative smoke executes all operations in 0.6
 seconds under its unchanged 60-second supervisor; this is execution evidence,
 not a controlled CUDA performance comparison.
 

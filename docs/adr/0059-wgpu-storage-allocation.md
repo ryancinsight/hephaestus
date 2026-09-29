@@ -88,8 +88,9 @@ real-descriptor test overlaps two complete scope stacks and asserts each
 thread receives only its own diagnostic. Revisit this argument if WGPU changes
 error delivery or this closure becomes asynchronous.
 
-The public baseline run `c8ae1ee2` reproduces both the 264-byte staging request
-against an enabled 256-byte limit and a cross-device write panic. Regressions
+The public baseline run reproduces both the 264-byte staging request against
+an enabled 256-byte limit and a cross-device write panic; the evidence is
+recorded at `71f9b2d`. Regressions
 also exercise destroyed-buffer queue errors, valid transfers after rejection,
 and exact retained bytes around accepted and rejected subranges. No physical
 OOM, driver-fault injection, or performance guarantee is claimed.

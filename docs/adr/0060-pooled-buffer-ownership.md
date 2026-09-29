@@ -12,10 +12,10 @@ and pool role. Public getters return raw WGPU buffers, and public recycle
 methods accept any raw buffer. The pools select solely by physical size;
 WGPU resource identifiers are instance-local, so foreign handles can resolve
 to unrelated local allocations before native validation reports a failure.
-Required-device run `68d62fe9` reproduces two safe caller sequences: foreign
+The required-device run reproduces two safe caller sequences: foreign
 staging recycling makes typed readback panic on an aliased copy; foreign
 uniform recycling makes a scalar kernel bind the owner's storage input as a
-uniform and panic. No data-corruption claim is inferred from those panics.
+uniform and panic; the evidence is recorded at `c362fb4`. No data-corruption claim is inferred from those panics.
 
 A complete Rust source search across Atlas finds the acquisition/recycle and
 guard APIs only inside this WGPU crate. Public prepared-operation types hold

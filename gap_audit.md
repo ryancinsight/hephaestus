@@ -185,7 +185,7 @@ architectural decision or a tracked future-work item:
   to `package = "themis-topology"`, version `0.10.1`. Refresh the generated
   stack overlay and Hephaestus lockfile against the renamed package.
 - Evidence: fresh hosted resolution reaches and passes provider compilation and
-  contracts at exact head `1c4ac16`: CUDA run `30735731839`, ROCm run
+  contracts at exact head `473dcf7`: CUDA run `30735731839`, ROCm run
   `30735732609`, WGPU run `30735730194`, and native macOS Metal run
   `30735730960`. The earlier failed Metal run `30733059974` and ROCm run
   `30733059964` remain resolver evidence only, not backend evidence.
@@ -280,7 +280,7 @@ architectural decision or a tracked future-work item:
   open; the f32 provider and Coeus consumer paths are complete.
 - Evidence: provider docs head `df8a896` passed WGPU `90028947591`, CUDA
   `90028946846`, ROCm `90028946770`, and Metal `90028947450`. Coeus PR #228
-  merged at `aca9a5a8`; final docs head `08614299` passed run `30283857017`
+  parity landed at `08614299`; the final docs head passed run `30283857017`
   with CUDA `90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU
   `90036655846`. Required hardware jobs skipped because no physical device
   runner was selected.
@@ -288,7 +288,7 @@ architectural decision or a tracked future-work item:
   complete.
 - Evidence: provider docs head `df8a896` passed WGPU job `90028947591`, CUDA
   `90028946846`, ROCm `90028946770`, and Metal `90028947450`. Coeus PR #228
-  merged at `aca9a5a8`; final docs head `08614299` passed run `30283857017`
+  parity landed at `08614299`; the final docs head passed run `30283857017`
   with CUDA `90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU
   `90036655846`. Required hardware jobs skipped because no physical device
   runner was selected.

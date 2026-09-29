@@ -74,6 +74,6 @@ the host. Cached tail pipelines specialize only the three possible byte masks.
 Rounding a prefix transfer upward is rejected because it overwrites logical
 suffix values. The regression covers exact values over empty, odd, and aligned
 lengths and every prefix boundary, including length rejection with unchanged
-destinations. The initial required-device run `3f59030d` fails on copy size one
-against WGPU's `COPY_BUFFER_ALIGNMENT` rule. This is correctness evidence;
+destinations. The initial required-device run fails on copy size one against
+WGPU's `COPY_BUFFER_ALIGNMENT` rule; the evidence is recorded at `53f59a7`. This is correctness evidence;
 no transfer-performance claim is made.

@@ -52,9 +52,9 @@ near-singular determinant behavior.
 ## Revision 2026-09-08: CUDA scalar declarations and arithmetic
 
 Driven by [HEPH-CUDA-DENSE-PRODUCT-SCALARS](../../backlog.md#heph-cuda-dense-product-scalars).
-Required-device run `4df024af` reproduces undefined `__half` and
-`__nv_bfloat16` in matrix products; `097836c1` then isolates missing SDK
-header search paths. The existing four ordinary scalar instantiations pass
+Required-device runs reproduce undefined `__half` and `__nv_bfloat16` in
+matrix products and then isolate missing SDK header search paths; the
+evidence is recorded at `bdef45b`. The existing four ordinary scalar instantiations pass
 the same exact matrix, batched-matrix and Kronecker oracles.
 
 Scalar source declarations belong to `DialectScalar`, beside `TYPE_TOKEN`.

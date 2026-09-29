@@ -288,7 +288,7 @@
   WGPU arm calls it (`decomposition.rs:334`) with no `inner().q()` upload left
   on that route (the CUDA arm still uploads, as scoped); the contract case at
   `tests/contract.rs:3998` runs at both routing regimes. Lease released.
-- **Integrator**: Claude session 5050c72a; lease: none.
+- **Integrator**: Claude session, landed at `6a15a8b`; lease: none.
 
 - Superseded planning detail, retained for the audit trail:
 - Lease: `crates/hephaestus-wgpu/src/application/decomposition/qr.rs`, the
