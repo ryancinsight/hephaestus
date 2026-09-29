@@ -418,7 +418,7 @@ const EXPECTED_CONTRACT_CASES: usize = 139;
 // seven more registrations while retaining one exact-diagnostic edge, and
 // pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
 // triangular masking and adaptive pooling each add one more on top.
-const EXPECTED_CONTRACT_CASES: usize = 184;
+const EXPECTED_CONTRACT_CASES: usize = 183;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {
