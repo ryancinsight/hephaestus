@@ -193,6 +193,22 @@ where
         "{name}: offset output addressing or sentinels mismatch"
     );
 
+    let padded_output_layout = Layout::try_new([2, 3], [6, 2], 1).expect("padded output layout");
+    let padded_output = device.upload(&[-5; 12]).expect("padded output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&rectangular_input, &rectangular),
+        TriangularMode::Lower,
+        0,
+        StridedView::new(&padded_output, &padded_output_layout),
+    )
+    .expect("padded output dispatch");
+    assert_eq!(
+        device.download_owned(&padded_output).expect("download"),
+        vec![-5, 10, -5, 0, -5, 0, 13, -5, 14, -5, 0, -5],
+        "{name}: padded output addressing or backing sentinels mismatch"
+    );
+
     let short_input = device.upload(&[1, 2, 3, 4, 5, 6]).expect("short input");
     let short_output = device.upload(&[-8; 5]).expect("short output");
     let storage_error = ops
