@@ -18,7 +18,7 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::application::bindings::BindGroupEntries;
-use crate::application::pipeline::{cached_pipeline, encode_compute_pass, workgroups};
+use crate::application::pipeline::{encode_compute_pass, try_cached_pipeline, workgroups};
 use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -110,6 +110,31 @@ fn validate_workgroup_limit(groups: u32, limit: u32) -> Result<()> {
         return Err(HephaestusError::DispatchFailed {
             message: format!(
                 "triangular dispatch requires {groups} workgroups, device limit is {limit}"
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_workgroup_width(width: u32, limits: &wgpu::Limits) -> Result<()> {
+    if width > limits.max_compute_workgroup_size_x
+        || width > limits.max_compute_invocations_per_workgroup
+    {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "triangular workgroup width {width} exceeds device limits: size_x={}, invocations={}",
+                limits.max_compute_workgroup_size_x, limits.max_compute_invocations_per_workgroup
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_storage_binding(size: u64, limit: u64, label: &str) -> Result<()> {
+    if size > limit {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "triangular {label} binding requires {size} bytes, device limit is {limit}"
             ),
         });
     }
@@ -250,6 +275,18 @@ where
             return Ok(());
         }
         let block_width = BlockWidth::DEFAULT;
+        let limits = device.limits();
+        validate_workgroup_width(block_width.get(), &limits)?;
+        validate_storage_binding(
+            input.buffer.raw().size(),
+            limits.max_storage_buffer_binding_size,
+            "input",
+        )?;
+        validate_storage_binding(
+            output.buffer.raw().size(),
+            limits.max_storage_buffer_binding_size,
+            "output",
+        )?;
 
         // Coordinates are in [0, i32::MAX - 1], so every `col - row`
         // comparison lies in the i32 range. Clamping the threshold preserves
@@ -302,7 +339,7 @@ where
             .queue()
             .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
 
-        let pipeline = cached_pipeline(
+        let pipeline = try_cached_pipeline(
             device,
             (
                 TypeId::of::<TriangularKernel>(),
@@ -311,7 +348,7 @@ where
             ),
             "hephaestus-triangular",
             || triangular_shader::<T>(block_width, mode),
-        );
+        )?;
 
         let groups = workgroups(total, block_width)?;
         validate_workgroup_limit(groups, device.limits().max_compute_workgroups_per_dimension)?;
