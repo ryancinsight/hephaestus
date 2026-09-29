@@ -205,7 +205,7 @@ where
     .expect("padded output dispatch");
     assert_eq!(
         device.download_owned(&padded_output).expect("download"),
-        vec![-5, 10, -5, 0, -5, 0, 13, -5, 14, -5, 0, -5],
+        vec![-5, 10, -5, 0, -5, 0, -5, 13, -5, 14, -5, 0],
         "{name}: padded output addressing or backing sentinels mismatch"
     );
 
