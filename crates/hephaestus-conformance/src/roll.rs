@@ -1,106 +1,167 @@
-//! Contract clauses for the device-neutral [`hephaestus_core::RollOps`]
-//! seam.
-//!
-//! Fixture `[[1, 2, 3, 4, 5], [10, 20, 30, 40, 50]]` (2x5, axis 1 rolled)
-//! exercises a positive in-range shift, a negative shift, a shift exceeding
-//! the axis length (multiple wraps), and a zero shift (identity) — each
-//! checked against hand-derived values.
+//! Contract clauses for the device-neutral [`hephaestus_core::RollOps`] seam.
 
+use core::fmt::Debug;
+
+use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, RollOps, StridedView};
 use leto::Layout;
 
-/// Positive, negative, over-magnitude, and zero shifts along axis 1,
-/// checked against hand-derived values.
-///
-/// # Panics
-///
-/// Panics with the violated clause when the backend disagrees with the
-/// expected values.
+fn assert_case<D, R, T>(
+    device: &D,
+    ops: &R,
+    input: &[T],
+    input_layout: &Layout<2>,
+    axis: usize,
+    shift: i64,
+    output_layout: &Layout<2>,
+    expected: &[T],
+    label: &str,
+) where
+    D: ComputeDevice,
+    R: RollOps<D, T>,
+    T: Pod + Copy + Debug + PartialEq,
+{
+    let input_buffer = device.upload(input).expect("fixture upload");
+    let output_buffer = device
+        .alloc_zeroed::<T>(expected.len())
+        .expect("output allocation");
+    ops.roll_axis_into(
+        device,
+        StridedView::new(&input_buffer, input_layout),
+        axis,
+        shift,
+        StridedView::new(&output_buffer, output_layout),
+    )
+    .expect("roll dispatch");
+    let got = device
+        .download_owned(&output_buffer)
+        .expect("output download");
+    assert_eq!(got, expected, "{label}: roll output mismatch");
+}
+
+/// Runs the roll contract for one shipped scalar type on a backend.
+pub fn assert_roll_contract_for_scalar<D, R, T>(
+    device: &D,
+    ops: &R,
+    input: &[T],
+    shift_two: &[T],
+    shift_negative_one: &[T],
+    axis_zero: &[T],
+    non_contiguous_input: &[T],
+    non_contiguous_shift: &[T],
+) where
+    D: ComputeDevice,
+    R: RollOps<D, T>,
+    T: Pod + Copy + Debug + PartialEq,
+{
+    let contiguous = Layout::c_contiguous([2, 5]).expect("input layout");
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        2,
+        &contiguous,
+        shift_two,
+        "axis 1 shift 2",
+    );
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        -1,
+        &contiguous,
+        shift_negative_one,
+        "axis 1 shift -1",
+    );
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        7,
+        &contiguous,
+        shift_two,
+        "axis 1 shift 7",
+    );
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        0,
+        &contiguous,
+        input,
+        "axis 1 shift 0",
+    );
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        i64::MIN,
+        &contiguous,
+        shift_two,
+        "axis 1 shift i64::MIN",
+    );
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        1,
+        i64::MAX,
+        &contiguous,
+        shift_two,
+        "axis 1 shift i64::MAX",
+    );
+
+    assert_case(
+        device,
+        ops,
+        input,
+        &contiguous,
+        0,
+        1,
+        &contiguous,
+        axis_zero,
+        "axis 0 shift 1",
+    );
+
+    let non_contiguous = Layout::try_new([2, 3], [1, 3], 1).expect("non-contiguous layout");
+    assert_case(
+        device,
+        ops,
+        non_contiguous_input,
+        &non_contiguous,
+        1,
+        1,
+        &non_contiguous,
+        non_contiguous_shift,
+        "non-contiguous axis 1 shift 1",
+    );
+}
+
+/// Runs the shared roll contract with the canonical signed 32-bit fixture.
 pub fn assert_roll_contract<D, R>(device: &D, ops: &R)
 where
     D: ComputeDevice,
     R: RollOps<D, i32>,
 {
-    let name = device.backend_name();
-    let in_layout = Layout::c_contiguous([2, 5]).expect("input layout");
-    let input = device
-        .upload(&[1, 2, 3, 4, 5, 10, 20, 30, 40, 50])
-        .expect("fixture upload");
-    let out_layout = Layout::c_contiguous([2, 5]).expect("output layout");
-
-    // shift=2: dst reads src (dst-2).rem_euclid(5), i.e. the last two
-    // elements move to the front.
-    let shifted = device.alloc_zeroed::<i32>(10).expect("shifted alloc");
-    ops.roll_axis_into(
+    assert_roll_contract_for_scalar(
         device,
-        StridedView::new(&input, &in_layout),
-        1,
-        2,
-        StridedView::new(&shifted, &out_layout),
-    )
-    .expect("roll(+2) dispatch");
-    let mut got_shifted = vec![0i32; 10];
-    device
-        .download(&shifted, &mut got_shifted)
-        .expect("download");
-    assert_eq!(
-        got_shifted,
-        vec![4, 5, 1, 2, 3, 40, 50, 10, 20, 30],
-        "{name}: roll(axis=1, shift=2) mismatch"
-    );
-
-    // shift=-1: the first element moves to the back.
-    let neg = device.alloc_zeroed::<i32>(10).expect("neg alloc");
-    ops.roll_axis_into(
-        device,
-        StridedView::new(&input, &in_layout),
-        1,
-        -1,
-        StridedView::new(&neg, &out_layout),
-    )
-    .expect("roll(-1) dispatch");
-    let mut got_neg = vec![0i32; 10];
-    device.download(&neg, &mut got_neg).expect("download");
-    assert_eq!(
-        got_neg,
-        vec![2, 3, 4, 5, 1, 20, 30, 40, 50, 10],
-        "{name}: roll(axis=1, shift=-1) mismatch"
-    );
-
-    // shift=7 on axis_len=5 wraps to the same result as shift=2.
-    let over = device.alloc_zeroed::<i32>(10).expect("over alloc");
-    ops.roll_axis_into(
-        device,
-        StridedView::new(&input, &in_layout),
-        1,
-        7,
-        StridedView::new(&over, &out_layout),
-    )
-    .expect("roll(+7) dispatch");
-    let mut got_over = vec![0i32; 10];
-    device.download(&over, &mut got_over).expect("download");
-    assert_eq!(
-        got_over, got_shifted,
-        "{name}: roll(axis=1, shift=7) must match roll(shift=2) (5 == axis_len)"
-    );
-
-    // shift=0 is an identity pass.
-    let identity = device.alloc_zeroed::<i32>(10).expect("identity alloc");
-    ops.roll_axis_into(
-        device,
-        StridedView::new(&input, &in_layout),
-        1,
-        0,
-        StridedView::new(&identity, &out_layout),
-    )
-    .expect("roll(0) dispatch");
-    let mut got_identity = vec![0i32; 10];
-    device
-        .download(&identity, &mut got_identity)
-        .expect("download");
-    assert_eq!(
-        got_identity,
-        vec![1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
-        "{name}: roll(axis=1, shift=0) must be an identity pass"
+        ops,
+        &[1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
+        &[4, 5, 1, 2, 3, 40, 50, 10, 20, 30],
+        &[2, 3, 4, 5, 1, 20, 30, 40, 50, 10],
+        &[10, 20, 30, 40, 50, 1, 2, 3, 4, 5],
+        &[0, 10, 20, 0, 30, 40, 0, 50, 60],
+        &[0, 50, 60, 0, 10, 20, 0, 30, 40],
     );
 }

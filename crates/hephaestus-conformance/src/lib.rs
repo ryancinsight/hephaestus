@@ -140,7 +140,7 @@ pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
-pub use roll::assert_roll_contract;
+pub use roll::{assert_roll_contract, assert_roll_contract_for_scalar};
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;

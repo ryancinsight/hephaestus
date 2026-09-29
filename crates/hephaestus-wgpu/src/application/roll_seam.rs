@@ -100,6 +100,17 @@ fn validate_workgroup_limit(groups: u32, limit: u32) -> Result<()> {
     Ok(())
 }
 
+fn validate_shader_total(lanes: usize, axis_len: usize) -> Result<u32> {
+    let total = (lanes as u128)
+        .checked_mul(axis_len as u128)
+        .ok_or_else(|| HephaestusError::InvalidConfiguration {
+            message: "roll dispatch size overflows shader arithmetic".to_string(),
+        })?;
+    u32::try_from(total).map_err(|_| HephaestusError::InvalidConfiguration {
+        message: "roll dispatch size exceeds WGSL u32 range".to_string(),
+    })
+}
+
 fn roll_shader<T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
         r#"{meta}
@@ -184,13 +195,8 @@ where
             })?;
         let shift_rem = shift.rem_euclid(axis_len_i64);
 
-        let total =
-            lanes
-                .checked_mul(axis_len)
-                .ok_or_else(|| HephaestusError::InvalidConfiguration {
-                    message: "roll dispatch size overflows".to_string(),
-                })?;
-        let groups = workgroups(total, block_width)?;
+        let total = validate_shader_total(lanes, axis_len)?;
+        let groups = workgroups(total as usize, block_width)?;
         let limit = device.limits().max_compute_workgroups_per_dimension;
         validate_workgroup_limit(groups, limit)?;
 
@@ -293,6 +299,23 @@ mod tests {
     fn rejects_workgroups_above_device_limit() {
         let error = validate_workgroup_limit(9, 8).expect_err("dispatch limit");
         assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
+    }
+
+    #[test]
+    fn accepts_exact_shader_total_limit() {
+        assert_eq!(
+            validate_shader_total(1, u32::MAX as usize).expect("u32 maximum"),
+            u32::MAX
+        );
+    }
+
+    #[test]
+    fn rejects_shader_total_above_u32_limit() {
+        let error = validate_shader_total(u32::MAX as usize, 2).expect_err("u32 overflow");
+        assert!(matches!(
+            error,
+            HephaestusError::InvalidConfiguration { .. }
+        ));
     }
 
     #[test]
