@@ -24,4 +24,5 @@ mod stateful;
 mod stencil;
 mod topk;
 mod transfer;
+mod triangular;
 mod volume;
