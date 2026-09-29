@@ -34,18 +34,19 @@ have padding that Rust arrays do not. Both layouts must fit their buffers, the
 output layout must be injective, and input/output buffers must not alias.
 Element offsets and strides are signed `i32` shader addresses, and dispatch
 workgroups are checked against the acquired device's
-`max_compute_workgroups_per_dimension` before submission. The core API accepts
-an `i64` diagonal, while WGPU accepts only the `i32` diagonal range for
-non-empty views and returns a typed error outside it; empty views return before
-that conversion and accept any `i64` diagonal. Each thread
-[`hephaestus_core::triangular_keeps`] provides for the host reference, so
-the two backends agree by construction rather than by coincidence. The
-signed `diagonal` crosses the uniform boundary as its `u32` bit pattern
-(`diagonal as u32` host-side, `bitcast<i32>` in WGSL) since the uniform's
-other lanes are already `u32`-typed and WGSL has no signed/unsigned union
-type — bitcasting preserves the exact bit pattern, unlike a numeric
-narrowing cast, which would clamp or wrap the value instead of round-
-tripping it.
+`max_compute_workgroups_per_dimension` before submission. The core API and
+WGPU accept the full `i64` diagonal range. WGPU clamps the threshold to `i32`
+before uniform upload: validated row and column counts keep each coordinate in
+`[0, i32::MAX - 1]`, so `col - row` lies in `[-(i32::MAX - 1), i32::MAX - 1]`.
+Clamping the threshold to the `i32` interval preserves both `<=` and `>=`
+comparisons against that coordinate-difference interval. Empty views return
+before dispatch and also accept any `i64` diagonal. The host reference uses
+[`hephaestus_core::triangular_keeps`], and the shared contract checks both
+backends against the same full-range value oracle. The clamped `i32`
+threshold crosses the uniform boundary as its `u32` bit pattern
+(`diagonal_i32 as u32` host-side, `bitcast<i32>` in WGSL) because the
+uniform's other lanes are `u32`-typed and WGSL has no signed/unsigned union
+type.
 
 CUDA, ROCm, and Metal do not implement `TriangularOps` yet, and the seam is
 not folded into `assert_backend_contract`/`BackendUnderTest` this

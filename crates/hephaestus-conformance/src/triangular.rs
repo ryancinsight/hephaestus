@@ -209,25 +209,46 @@ where
         "{name}: padded output addressing or backing sentinels mismatch"
     );
 
-    let short_input = device.upload(&[1, 2, 3, 4, 5, 6]).expect("short input");
-    let short_output = device.upload(&[-8; 5]).expect("short output");
-    let storage_error = ops
+    let short_input = device.upload(&[1, 2, 3, 4, 5]).expect("short input");
+    let full_output = device.upload(&[-8; 6]).expect("full output");
+    let input_storage_error = ops
         .triangular_into(
             device,
             StridedView::new(&short_input, &rectangular),
             TriangularMode::Lower,
             0,
-            StridedView::new(&short_output, &rectangular),
+            StridedView::new(&full_output, &rectangular),
         )
         .expect_err("insufficient input storage must be rejected");
     assert!(
-        storage_error.to_string().contains("storage"),
-        "{name}: unexpected storage error: {storage_error}"
+        input_storage_error.to_string().contains("storage"),
+        "{name}: unexpected input storage error: {input_storage_error}"
+    );
+    assert_eq!(
+        device.download_owned(&full_output).expect("download"),
+        vec![-8; 6],
+        "{name}: input storage rejection mutated output"
+    );
+
+    let full_input = device.upload(&[1, 2, 3, 4, 5, 6]).expect("full input");
+    let short_output = device.upload(&[-9; 5]).expect("short output");
+    let output_storage_error = ops
+        .triangular_into(
+            device,
+            StridedView::new(&full_input, &rectangular),
+            TriangularMode::Lower,
+            0,
+            StridedView::new(&short_output, &rectangular),
+        )
+        .expect_err("insufficient output storage must be rejected");
+    assert!(
+        output_storage_error.to_string().contains("storage"),
+        "{name}: unexpected output storage error: {output_storage_error}"
     );
     assert_eq!(
         device.download_owned(&short_output).expect("download"),
-        vec![-8; 5],
-        "{name}: storage rejection mutated output"
+        vec![-9; 5],
+        "{name}: output storage rejection mutated output"
     );
 
     let empty = Layout::try_new([2, 0], [0, 1], 1).expect("empty layout");
@@ -299,46 +320,40 @@ where
             "tril(i64::MAX)",
         ),
         (
+            TriangularMode::Upper,
+            i64::MAX,
+            vec![0; 9],
+            "triu(i64::MAX)",
+        ),
+        (
             TriangularMode::Lower,
             i64::MIN,
             vec![0; 9],
             "tril(i64::MIN)",
         ),
+        (
+            TriangularMode::Upper,
+            i64::MIN,
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "triu(i64::MIN)",
+        ),
     ] {
         let output = device.upload(&[73; 9]).expect("i64 boundary output");
-        let before = device
-            .download_owned(&output)
-            .expect("i64 boundary output download");
-        let result = ops.triangular_into(
+        ops.triangular_into(
             device,
             StridedView::new(&input, &layout),
             mode,
             diagonal,
             StridedView::new(&output, &layout),
+        )
+        .expect("backend accepts the full i64 diagonal contract");
+        assert_eq!(
+            device
+                .download_owned(&output)
+                .expect("i64 boundary download"),
+            expected,
+            "{name}: {label} mismatch"
         );
-        if name == "wgpu" {
-            let error = result.expect_err("WGPU must reject an out-of-range diagonal");
-            assert!(
-                error.to_string().contains("i32"),
-                "{name}: unexpected diagonal error: {error}"
-            );
-            assert_eq!(
-                device
-                    .download_owned(&output)
-                    .expect("i64 boundary download"),
-                before,
-                "{name}: rejected diagonal mutated output"
-            );
-        } else {
-            result.expect("host accepts the full i64 diagonal contract");
-            assert_eq!(
-                device
-                    .download_owned(&output)
-                    .expect("i64 boundary download"),
-                expected,
-                "{name}: {label} mismatch"
-            );
-        }
     }
 
     let alias = input.clone();

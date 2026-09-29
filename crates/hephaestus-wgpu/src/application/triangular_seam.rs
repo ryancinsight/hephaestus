@@ -251,10 +251,11 @@ where
         }
         let block_width = BlockWidth::DEFAULT;
 
-        let diagonal_i32 =
-            i32::try_from(diagonal).map_err(|_| HephaestusError::InvalidConfiguration {
-                message: "triangular diagonal exceeds i32 range".to_string(),
-            })?;
+        // Coordinates are in [0, i32::MAX - 1], so every `col - row`
+        // comparison lies in the i32 range. Clamping the threshold preserves
+        // both comparisons for values beyond that interval.
+        let diagonal_i32 = i32::try_from(diagonal.clamp(i64::from(i32::MIN), i64::from(i32::MAX)))
+            .expect("invariant: clamped triangular diagonal fits i32");
 
         let in_strides = in_layout.strides();
         let out_strides = out_layout.strides();

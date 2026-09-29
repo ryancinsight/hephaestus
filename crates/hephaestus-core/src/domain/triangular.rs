@@ -42,12 +42,11 @@ pub trait TriangularOps<D: ComputeDevice, T: Pod> {
     /// Backends validate storage bounds, reject overlapping output views and
     /// reject input/output aliasing before dispatch. The core contract accepts
     /// the full signed `i64` diagonal range. WGPU carries element offsets and
-    /// strides and the diagonal as signed `i32` shader values for non-empty
-    /// views, so it rejects diagonals outside `i32` and addresses outside that
-    /// signed range; an empty view returns before those WGPU conversions and
-    /// therefore accepts every `i64` diagonal. WGPU accepts scalar storage
-    /// layouts whose element stride matches WGSL and performs no conversion
-    /// copy. These restrictions preserve value semantics.
+    /// strides as signed `i32` shader values and clamps the diagonal threshold
+    /// to that coordinate-difference range before upload. This preserves the
+    /// full `i64` comparison semantics while rejecting addresses outside the
+    /// signed shader range. WGPU accepts scalar storage layouts whose element
+    /// stride matches WGSL and performs no conversion copy.
     ///
     /// # Errors
     ///
@@ -205,6 +204,29 @@ mod tests {
             0,
             i64::MIN
         ));
+    }
+
+    #[test]
+    fn predicate_matches_widened_mathematical_comparison() {
+        for row in 0..=4 {
+            for col in 0..=4 {
+                for diagonal in [i64::MIN, -5, -1, 0, 1, 5, i64::MAX] {
+                    let boundary = i128::try_from(row).expect("invariant: usize fits i128")
+                        + i128::from(diagonal);
+                    let coordinate = i128::try_from(col).expect("invariant: usize fits i128");
+                    assert_eq!(
+                        triangular_keeps(TriangularMode::Lower, row, col, diagonal),
+                        coordinate <= boundary,
+                        "lower row={row} col={col} diagonal={diagonal}"
+                    );
+                    assert_eq!(
+                        triangular_keeps(TriangularMode::Upper, row, col, diagonal),
+                        coordinate >= boundary,
+                        "upper row={row} col={col} diagonal={diagonal}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
