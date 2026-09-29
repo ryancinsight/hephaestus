@@ -16,7 +16,7 @@ use hephaestus_core::{
 };
 
 use crate::application::bindings::BindGroupEntries;
-use crate::application::pipeline::{cached_pipeline, encode_compute_pass, workgroups};
+use crate::application::pipeline::{encode_compute_pass, try_cached_pipeline, workgroups};
 use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -51,6 +51,54 @@ const WGSL_ROLL_META: &str = r"struct RollMeta {
 ";
 
 struct RollKernel;
+
+fn validate_shader_addressing(layout: &leto::Layout<2>, label: &str) -> Result<()> {
+    let mut minimum = layout.offset() as i128;
+    let mut maximum = minimum;
+    for axis in 0..2 {
+        let extent = layout.shape()[axis].saturating_sub(1) as i128;
+        let delta = (layout.strides()[axis] as i128)
+            .checked_mul(extent)
+            .ok_or_else(|| HephaestusError::DispatchFailed {
+                message: format!("{label} stride product overflows shader address arithmetic"),
+            })?;
+        if delta < i128::from(i32::MIN) || delta > i128::from(i32::MAX) {
+            return Err(HephaestusError::DispatchFailed {
+                message: format!("{label} stride product exceeds signed shader address range"),
+            });
+        }
+        if delta < 0 {
+            minimum =
+                minimum
+                    .checked_add(delta)
+                    .ok_or_else(|| HephaestusError::DispatchFailed {
+                        message: format!("{label} minimum address overflows shader arithmetic"),
+                    })?;
+        } else {
+            maximum =
+                maximum
+                    .checked_add(delta)
+                    .ok_or_else(|| HephaestusError::DispatchFailed {
+                        message: format!("{label} maximum address overflows shader arithmetic"),
+                    })?;
+        }
+    }
+    if minimum < 0 || maximum > i128::from(i32::MAX) {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("{label} address exceeds signed shader range"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_workgroup_limit(groups: u32, limit: u32) -> Result<()> {
+    if groups > limit {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("roll dispatch requires {groups} workgroups, device limit is {limit}"),
+        });
+    }
+    Ok(())
+}
 
 fn roll_shader<T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
     format!(
@@ -112,9 +160,16 @@ where
         out_layout
             .validate_storage_len(output.buffer.len)
             .map_err(map_layout_err)?;
+        validate_shader_addressing(in_layout, "roll input")?;
+        validate_shader_addressing(out_layout, "roll output")?;
         if !out_layout.is_injective().map_err(map_layout_err)? {
             return Err(HephaestusError::DispatchFailed {
                 message: "roll output layout must be non-overlapping".to_string(),
+            });
+        }
+        if output.buffer.aliases(input.buffer) {
+            return Err(HephaestusError::DispatchFailed {
+                message: "roll output buffer must not alias input buffer".to_string(),
             });
         }
         if lanes == 0 {
@@ -128,6 +183,16 @@ where
                 message: "roll axis length exceeds i64 range".to_string(),
             })?;
         let shift_rem = shift.rem_euclid(axis_len_i64);
+
+        let total =
+            lanes
+                .checked_mul(axis_len)
+                .ok_or_else(|| HephaestusError::InvalidConfiguration {
+                    message: "roll dispatch size overflows".to_string(),
+                })?;
+        let groups = workgroups(total, block_width)?;
+        let limit = device.limits().max_compute_workgroups_per_dimension;
+        validate_workgroup_limit(groups, limit)?;
 
         let in_strides = in_layout.strides();
         let out_strides = out_layout.strides();
@@ -170,7 +235,7 @@ where
             .queue()
             .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&meta));
 
-        let pipeline = cached_pipeline(
+        let pipeline = try_cached_pipeline(
             device,
             (
                 TypeId::of::<RollKernel>(),
@@ -179,15 +244,8 @@ where
             ),
             "hephaestus-roll",
             || roll_shader::<T>(block_width),
-        );
+        )?;
 
-        let total =
-            lanes
-                .checked_mul(axis_len)
-                .ok_or_else(|| HephaestusError::InvalidConfiguration {
-                    message: "roll dispatch size overflows".to_string(),
-                })?;
-        let groups = workgroups(total, block_width)?;
         let mut entries = BindGroupEntries::with_capacity(3);
         entries.push(wgpu::BindGroupEntry {
             binding: 0,
@@ -223,5 +281,24 @@ where
         );
         device.queue().submit(Some(encoder.finish()));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use leto::Layout;
+
+    #[test]
+    fn rejects_workgroups_above_device_limit() {
+        let error = validate_workgroup_limit(9, 8).expect_err("dispatch limit");
+        assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
+    }
+
+    #[test]
+    fn rejects_shader_address_overflow() {
+        let layout = Layout::try_new([2, 2], [i32::MAX as isize, 1], 0).expect("layout");
+        let error = validate_shader_addressing(&layout, "input").expect_err("address range");
+        assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
     }
 }

@@ -34,6 +34,16 @@ matched to Rust's `rem_euclid` inside the shader. One thread per
 established dispatch shape) computes its own wrapped source index and
 copies independently.
 
+Both implementations validate the complete view before touching storage:
+the layout must fit its buffer and the output layout must be injective. The
+host implementation rejects aliased input and output buffers before acquiring
+either lock, preventing a read/write lock self-deadlock. The WGPU
+implementation additionally proves every generated signed shader address is
+representable and rejects a dispatch whose workgroup count exceeds the
+device's per-dimension limit. The source-index helper computes the shift
+remainder without subtracting signed extremes, so `i64::MIN` and `i64::MAX`
+remain defined inputs.
+
 CUDA, ROCm, and Metal do not implement `RollOps` yet, and the seam is not
 folded into `assert_backend_contract`/`BackendUnderTest` this increment,
 for the reason ADR 0062 gives for `PadOps`.

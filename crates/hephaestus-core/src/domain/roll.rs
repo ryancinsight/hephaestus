@@ -49,13 +49,19 @@ pub trait RollOps<D: ComputeDevice, T: Pod> {
 ///
 /// # Panics
 ///
-/// Never panics for `axis_len >= 1`; the caller (validation) guarantees
-/// this.
+/// Panics when `axis_len` is zero; callers validate that boundary before
+/// dispatching.
 #[must_use]
 pub fn roll_source_index(dst_idx: usize, shift: i64, axis_len: usize) -> usize {
-    let len = i64::try_from(axis_len).unwrap_or(i64::MAX);
-    let dst = i64::try_from(dst_idx).unwrap_or(i64::MAX);
-    (dst - shift).rem_euclid(len) as usize
+    assert!(axis_len != 0, "invariant: roll axis length is non-zero");
+    let modulus = axis_len as u128;
+    let destination = (dst_idx as u128) % modulus;
+    let magnitude = (shift.unsigned_abs() as u128) % modulus;
+    if shift.is_negative() {
+        ((destination + magnitude) % modulus) as usize
+    } else {
+        ((destination + modulus - magnitude) % modulus) as usize
+    }
 }
 
 /// Validate `axis` and that `input_shape`/`output_shape` match exactly for
@@ -114,6 +120,18 @@ mod tests {
         // shift=7 on axis_len=5 is equivalent to shift=2.
         assert_eq!(roll_source_index(0, 7, 5), roll_source_index(0, 2, 5));
         assert_eq!(roll_source_index(0, -7, 5), roll_source_index(0, -2, 5));
+    }
+
+    #[test]
+    fn signed_extreme_shifts_do_not_overflow() {
+        assert_eq!(
+            roll_source_index(1, i64::MIN, 5),
+            roll_source_index(1, i64::MIN.rem_euclid(5), 5)
+        );
+        assert_eq!(
+            roll_source_index(4, i64::MAX, 5),
+            roll_source_index(4, i64::MAX.rem_euclid(5), 5)
+        );
     }
 
     #[test]
