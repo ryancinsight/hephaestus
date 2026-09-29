@@ -184,11 +184,16 @@ architectural decision or a tracked future-work item:
 - Resolution: keep the source-level `themis` crate alias and bind it explicitly
   to `package = "themis-topology"`, version `0.10.1`. Refresh the generated
   stack overlay and Hephaestus lockfile against the renamed package.
-- Evidence: fresh hosted resolution reaches and passes provider compilation and
-  contracts at exact head `1c4ac16`: CUDA run `30735731839`, ROCm run
-  `30735732609`, WGPU run `30735730194`, and native macOS Metal run
-  `30735730960`. The earlier failed Metal run `30733059974` and ROCm run
-  `30733059964` remain resolver evidence only, not backend evidence.
+- Evidence: [PR #179](https://github.com/ryancinsight/hephaestus/pull/179)
+  records the provider-owned readback change. Its earlier hosted
+  [CUDA](https://github.com/ryancinsight/hephaestus/actions/runs/30735731839),
+  [ROCm](https://github.com/ryancinsight/hephaestus/actions/runs/30735732609),
+  [WGPU](https://github.com/ryancinsight/hephaestus/actions/runs/30735730194), and
+  [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30735730960)
+  runs pass on the PR branch before merge. Earlier
+  [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30733059974)
+  and [ROCm](https://github.com/ryancinsight/hephaestus/actions/runs/30733059964)
+  runs fail during dependency resolution only.
 - Follow-up: Mnemosyne subsequently renamed packages `mnemosyne` and
   `mnemosyne-core` to `mnemosyne-memory` and `mnemosyne-memory-core` at
   `be4aa64`. Direct consumers retain their Rust crate aliases, bind the new
@@ -278,20 +283,18 @@ architectural decision or a tracked future-work item:
   delegates through WGPU.
 - Residual: broader non-f32 contracts and unrelated expression families remain
   open; the f32 provider and Coeus consumer paths are complete.
-- Evidence: provider docs head `df8a896` passed WGPU `90028947591`, CUDA
-  `90028946846`, ROCm `90028946770`, and Metal `90028947450`. Coeus PR #228
-  merged at `aca9a5a8`; final docs head `08614299` passed run `30283857017`
-  with CUDA `90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU
-  `90036655846`. Required hardware jobs skipped because no physical device
-  runner was selected.
+- Evidence: provider commit
+  [df8a896](https://github.com/ryancinsight/hephaestus/commit/df8a8963c3e08b9db1a72f1f33924230827c71dd)
+  passed [WGPU](https://github.com/ryancinsight/hephaestus/actions/runs/30281562874/job/90028947591),
+  [CUDA](https://github.com/ryancinsight/hephaestus/actions/runs/30281562813/job/90028946846),
+  [ROCm](https://github.com/ryancinsight/hephaestus/actions/runs/30281562721/job/90028946770), and
+  [Metal](https://github.com/ryancinsight/hephaestus/actions/runs/30281562964/job/90028947450).
+  Coeus [PR #228](https://github.com/ryancinsight/Coeus/pull/228) merged;
+  its exact-head [backend run](https://github.com/ryancinsight/Coeus/actions/runs/30283843309)
+  passed the four provider contracts. Required-device ROCm skipped, so no
+  physical-device claim is made.
 - Status: resolved. Provider implementation and Coeus consumer routing are
   complete.
-- Evidence: provider docs head `df8a896` passed WGPU job `90028947591`, CUDA
-  `90028946846`, ROCm `90028946770`, and Metal `90028947450`. Coeus PR #228
-  merged at `aca9a5a8`; final docs head `08614299` passed run `30283857017`
-  with CUDA `90036655765`, ROCm `90036655656`, Metal `90036655618`, and WGPU
-  `90036655846`. Required hardware jobs skipped because no physical device
-  runner was selected.
 
 ## [HEPH-UNARY-MATH-EXPRESSION-PARITY-1] Unparameterized unary math vocabulary
 

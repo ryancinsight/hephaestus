@@ -109,10 +109,13 @@ representable in binary32. Serial binary32 accumulation instead produces
 therefore derives the repeating-period sum; the input, timed operations and
 tolerance remain unchanged. A full-length contract checks both immediate and
 prepared norms against that independent analytical reference.
-That contract passes debug run `8aa84e12` and release run `da7a3e40` with
-exact equality. The full comparative smoke executes all operations in 0.6
-seconds under its unchanged 60-second supervisor; this is execution evidence,
-not a controlled CUDA performance comparison.
+That contract passes local debug and release runs with exact equality, as
+recorded in [PR #277](https://github.com/ryancinsight/hephaestus/pull/277).
+The full comparative smoke executes all operations in 0.6 seconds under its
+unchanged 60-second supervisor; this is execution evidence, not a controlled
+CUDA performance comparison. The hosted CUDA feature-and-adapterless check
+failed and the NVIDIA hardware check skipped on that PR; those hosted results
+are separate from the local RTX 5080 runs ([failed contract](https://github.com/ryancinsight/hephaestus/actions/runs/34010100666/job/101424296873), [skipped hardware job](https://github.com/ryancinsight/hephaestus/actions/runs/34010100666/job/101424297403)).
 
 ## Revision
 

@@ -52,10 +52,13 @@ near-singular determinant behavior.
 ## Revision 2026-09-08: CUDA scalar declarations and arithmetic
 
 Driven by [HEPH-CUDA-DENSE-PRODUCT-SCALARS](../../backlog.md#heph-cuda-dense-product-scalars).
-Required-device run `4df024af` reproduces undefined `__half` and
-`__nv_bfloat16` in matrix products; `097836c1` then isolates missing SDK
-header search paths. The existing four ordinary scalar instantiations pass
-the same exact matrix, batched-matrix and Kronecker oracles.
+Required-device CUDA validation exposed missing `__half` and `__nv_bfloat16`
+declarations in matrix products, followed by missing SDK header search paths.
+The fix moves scalar source declarations to `DialectScalar` and resolves
+toolkit headers relative to NVRTC. [PR #293](https://github.com/ryancinsight/hephaestus/pull/293)
+records the local RTX 5080 results: CUDA Nextest 193/193, dense value/PTX 2/2,
+and host Nextest 121/121. Its hosted CUDA feature-and-adapterless contract
+passed while the NVIDIA hardware job skipped ([contract](https://github.com/ryancinsight/hephaestus/actions/runs/34380038497/job/102562353324), [hardware job](https://github.com/ryancinsight/hephaestus/actions/runs/34380038497/job/102562355179)). The existing four ordinary scalar instantiations pass the same exact matrix, batched-matrix and Kronecker oracles.
 
 Scalar source declarations belong to `DialectScalar`, beside `TYPE_TOKEN`.
 CUDA product generators and fusion consume its `PRELUDE`; the duplicate
