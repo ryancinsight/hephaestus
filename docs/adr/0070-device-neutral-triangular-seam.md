@@ -32,8 +32,12 @@ storage types whose Rust element stride matches the WGSL array stride; vector
 arrays such as Rust `[f32; 3]` are rejected because WGSL `vec3` array elements
 have padding that Rust arrays do not. Both layouts must fit their buffers, the
 output layout must be injective, and input/output buffers must not alias.
-Element offsets and strides are signed `i32` shader addresses, and dispatch
-workgroups are checked against the acquired device's
+The whole input and output allocations are bound, so each allocation is
+checked against `max_storage_buffer_binding_size` before bind-group creation.
+Element offsets and strides are signed `i32` shader addresses. The fixed
+workgroup width is checked against both `max_compute_workgroup_size_x` and
+`max_compute_invocations_per_workgroup` before fallible pipeline creation,
+and the dispatch count is checked against
 `max_compute_workgroups_per_dimension` before submission. The core API and
 WGPU accept the full `i64` diagonal range. WGPU clamps the threshold to `i32`
 before uniform upload: validated row and column counts keep each coordinate in
