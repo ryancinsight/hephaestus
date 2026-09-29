@@ -116,6 +116,7 @@ pub use application::strided::{
     unary_elementwise_strided_into,
 };
 pub use application::topk_seam::WgpuTopKOps;
+pub use application::triangular_seam::WgpuTriangularOps;
 pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, WgpuRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
