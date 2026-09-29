@@ -582,6 +582,39 @@ fn elementwise_scalar_matches_cpu_reference() {
 }
 
 #[test]
+fn elementwise_header_backed_scalars_match_cpu_reference() {
+    let Some(dev) = device("elementwise_header_backed_scalars_match_cpu_reference") else {
+        return;
+    };
+
+    let host_f16 = [
+        eunomia::F16::from_f32(1.0),
+        eunomia::F16::from_f32(2.0),
+        eunomia::F16::from_f32(4.0),
+    ];
+    let input_f16 = dev.upload(&host_f16).unwrap();
+    let output_f16 =
+        scalar_elementwise::<AddOp, eunomia::F16>(&dev, &input_f16, eunomia::F16::from_f32(3.0))
+            .unwrap();
+    let mut actual_f16 = [eunomia::F16::ZERO; 3];
+    dev.download(&output_f16, &mut actual_f16).unwrap();
+    assert_eq!(actual_f16.map(eunomia::F16::to_f32), [4.0, 5.0, 7.0]);
+
+    let host_bf16 = [
+        eunomia::Bf16::from_f32(1.0),
+        eunomia::Bf16::from_f32(2.0),
+        eunomia::Bf16::from_f32(4.0),
+    ];
+    let input_bf16 = dev.upload(&host_bf16).unwrap();
+    let output_bf16 =
+        scalar_elementwise::<AddOp, eunomia::Bf16>(&dev, &input_bf16, eunomia::Bf16::from_f32(3.0))
+            .unwrap();
+    let mut actual_bf16 = [eunomia::Bf16::ZERO; 3];
+    dev.download(&output_bf16, &mut actual_bf16).unwrap();
+    assert_eq!(actual_bf16.map(eunomia::Bf16::to_f32), [4.0, 5.0, 7.0]);
+}
+
+#[test]
 fn reduction_sum_matches_cpu_reference() {
     let Some(dev) = device("reduction_sum_matches_cpu_reference") else {
         return;

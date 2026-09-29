@@ -175,7 +175,7 @@
 - Scope: existing CUDA binary/unary/scalar generators and shared tests; enumerate dependent scalar-bound generators before changing declaration composition. No dense-product scope expansion or widened arithmetic.
 - Evidence: source-only review at `28769e1` plus product correction finds `elementwise/binary.rs::shader_source` and `elementwise/scalar.rs::shader_source` emit `T::TYPE_TOKEN` without its required declarations, although their bounds admit F16/Bf16. No elementwise device reproduction has run.
 - Acceptance: reproduce missing declarations with real required-device operations; migrate generators to the shared dialect declaration owner; exact/derived-bound value and PTX oracles cover admitted types and reject unsupported native arithmetic.
-- Dependencies: [scalar declaration owner](#heph-cuda-dense-product-scalars); priority P1; risk: dispatch failure. Authority: repository Change through merge; integrator assigned on claim.
+- Dependencies: [CUDA scalar dialect declarations](docs/adr/0044-device-neutral-dense-product-seam.md#revision-2026-09-08-cuda-scalar-declarations-and-arithmetic); priority P1; risk: dispatch failure. Authority: repository Change through merge; integrator assigned on claim.
 - Verification: strict affected Clippy, bounded required-device scalar matrix, generated instruction review, docs and independent review.
 - Last-update: 2026-09-08.
 
