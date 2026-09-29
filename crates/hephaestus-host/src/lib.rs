@@ -61,6 +61,8 @@ pub mod stateful_update;
 pub mod stencil;
 /// Direct-insertion top-k selection seam implementor.
 pub mod topk;
+/// Direct-loop rank-2 triangular masking (tril / triu) seam implementor.
+pub mod triangular;
 /// Volume ray line integrals over leto interpolation.
 pub mod volume;
 
@@ -96,6 +98,7 @@ pub use staggered::HostStaggeredOps;
 pub use stateful_update::HostStatefulUpdateOps;
 pub use stencil::HostStencilOps;
 pub use topk::HostTopKOps;
+pub use triangular::HostTriangularOps;
 pub use volume::HostRayIntegralOps;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
