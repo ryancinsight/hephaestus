@@ -88,9 +88,9 @@ real-descriptor test overlaps two complete scope stacks and asserts each
 thread receives only its own diagnostic. Revisit this argument if WGPU changes
 error delivery or this closure becomes asynchronous.
 
-The public baseline run reproduces both the 264-byte staging request against
-an enabled 256-byte limit and a cross-device write panic; the evidence is
-recorded at `71f9b2d`. Regressions
-also exercise destroyed-buffer queue errors, valid transfers after rejection,
-and exact retained bytes around accepted and rejected subranges. No physical
-OOM, driver-fault injection, or performance guarantee is claimed.
+The original required-device failures are recorded in
+[PR #289](https://github.com/ryancinsight/hephaestus/pull/289): a 264-byte
+staging request exceeds the enabled 256-byte limit, and a cross-device write
+panics. The final local RTX 5080/Vulkan run passed 44 tests with zero skips;
+the hosted WGPU software-adapter contract also passed
+([job](https://github.com/ryancinsight/hephaestus/actions/runs/34237903014/job/102100284679)). Regressions also exercise destroyed-buffer queue errors, valid transfers after rejection, and exact retained bytes around accepted and rejected subranges. No physical OOM, driver-fault injection, or performance guarantee is claimed.
