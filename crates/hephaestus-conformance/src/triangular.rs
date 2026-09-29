@@ -177,8 +177,24 @@ where
         "{name}: overlap rejection mutated output"
     );
 
-    let short_input = device.upload(&[1, 2, 3, 4, 5]).expect("short input");
-    let short_output = device.upload(&[-8; 6]).expect("short output");
+    let offset_output_layout = Layout::try_new([2, 3], [3, 1], 2).expect("offset output layout");
+    let offset_output = device.upload(&[-6; 8]).expect("offset output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&rectangular_input, &rectangular),
+        TriangularMode::Lower,
+        0,
+        StridedView::new(&offset_output, &offset_output_layout),
+    )
+    .expect("offset output dispatch");
+    assert_eq!(
+        device.download_owned(&offset_output).expect("download"),
+        vec![-6, -6, 10, 0, 0, 13, 14, 0],
+        "{name}: offset output addressing or sentinels mismatch"
+    );
+
+    let short_input = device.upload(&[1, 2, 3, 4, 5, 6]).expect("short input");
+    let short_output = device.upload(&[-8; 5]).expect("short output");
     let storage_error = ops
         .triangular_into(
             device,
@@ -198,9 +214,9 @@ where
         "{name}: storage rejection mutated output"
     );
 
-    let empty = Layout::c_contiguous([2, 0]).expect("empty layout");
+    let empty = Layout::try_new([2, 0], [0, 1], 1).expect("empty layout");
     let empty_input = device.upload::<i32>(&[]).expect("empty input");
-    let empty_output = device.upload::<i32>(&[]).expect("empty output");
+    let empty_output = device.upload(&[41, 42]).expect("empty output");
     ops.triangular_into(
         device,
         StridedView::new(&empty_input, &empty),
@@ -209,6 +225,13 @@ where
         StridedView::new(&empty_output, &empty),
     )
     .expect("empty dispatch");
+    assert_eq!(
+        device
+            .download_owned(&empty_output)
+            .expect("empty download"),
+        vec![41, 42],
+        "{name}: empty dispatch mutated sentinel output"
+    );
 
     for (mode, diagonal, expected, label) in [
         (

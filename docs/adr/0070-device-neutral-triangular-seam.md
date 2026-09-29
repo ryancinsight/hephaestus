@@ -34,7 +34,10 @@ have padding that Rust arrays do not. Both layouts must fit their buffers, the
 output layout must be injective, and input/output buffers must not alias.
 Element offsets and strides are signed `i32` shader addresses, and dispatch
 workgroups are checked against the acquired device's
-`max_compute_workgroups_per_dimension` before submission. Each thread
+`max_compute_workgroups_per_dimension` before submission. The core API accepts
+an `i64` diagonal, while WGPU accepts only the `i32` diagonal range for
+non-empty views and returns a typed error outside it; empty views return before
+that conversion and accept any `i64` diagonal. Each thread
 [`hephaestus_core::triangular_keeps`] provides for the host reference, so
 the two backends agree by construction rather than by coincidence. The
 signed `diagonal` crosses the uniform boundary as its `u32` bit pattern
