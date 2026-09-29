@@ -210,7 +210,7 @@ where
     );
     assert_eq!(
         device.download_owned(&short_output).expect("download"),
-        vec![-8; 6],
+        vec![-8; 5],
         "{name}: storage rejection mutated output"
     );
 
