@@ -8,7 +8,7 @@
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 use hephaestus_conformance::{assert_batch_submit_contract, assert_sparse_operator_contract};
 
-const SPARSE_STORAGE_SOURCE: &str = include_str!("../src/application/sparse/mod.rs");
+const SPARSE_STORAGE_SOURCE: &str = include_str!("../src/application/sparse.rs");
 
 #[test]
 fn csr_heap_readbacks_are_provider_owned() {
