@@ -39,6 +39,13 @@ pub trait TriangularOps<D: ComputeDevice, T: Pod> {
     /// Mask `input` by `mode` and `diagonal` into `output`, whose shape
     /// equals `input`'s exactly.
     ///
+    /// Backends validate storage bounds, reject overlapping output views and
+    /// reject input/output aliasing before dispatch. WGPU additionally carries
+    /// element offsets and strides as signed `i32` values; its implementation
+    /// accepts scalar storage layouts whose element stride matches WGSL and
+    /// rejects addresses outside that signed range. These restrictions preserve
+    /// value semantics without inserting a conversion copy.
+    ///
     /// # Errors
     ///
     /// Returns a typed dispatch error when `output`'s shape does not equal

@@ -52,6 +52,20 @@ const WGSL_TRIANGULAR_META: &str = r"struct TriangularMeta {
 
 struct TriangularKernel;
 
+/// Scalar storage whose Rust element stride matches WGSL storage-array stride.
+///
+/// Vector values are intentionally excluded: WGSL array elements may carry
+/// alignment padding (for example, `vec3<f32>` has a 16-byte array stride),
+/// while the corresponding Rust array has a 12-byte stride. The seam performs
+/// no conversion copy, so accepting such values would address later elements
+/// incorrectly.
+pub(crate) trait TriangularStorage: DialectScalar<Wgsl> + Pod {}
+
+impl TriangularStorage for f32 {}
+impl TriangularStorage for f64 {}
+impl TriangularStorage for i32 {}
+impl TriangularStorage for u32 {}
+
 fn validate_shader_addressing(layout: &Layout<2>, label: &str) -> Result<()> {
     let mut minimum = layout.offset() as i128;
     let mut maximum = minimum;
@@ -91,7 +105,18 @@ fn validate_shader_addressing(layout: &Layout<2>, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn triangular_shader<T: DialectScalar<Wgsl>>(width: BlockWidth, mode: TriangularMode) -> String {
+fn validate_workgroup_limit(groups: u32, limit: u32) -> Result<()> {
+    if groups > limit {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!(
+                "triangular dispatch requires {groups} workgroups, device limit is {limit}"
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn triangular_shader<T: TriangularStorage>(width: BlockWidth, mode: TriangularMode) -> String {
     let keep = match mode {
         // Differences are evaluated only after ordering makes them
         // non-negative, so signed coordinate arithmetic cannot overflow.
@@ -149,6 +174,32 @@ mod tests {
         assert!(lower.contains("col - row <= diagonal"));
         assert!(upper.contains("row - col <= -diagonal"));
     }
+
+    #[test]
+    fn rejects_shader_address_overflow_at_the_boundary() {
+        let layout = Layout::try_new([2, 2], [i32::MAX as isize, 1], 0).expect("layout");
+        let error = validate_shader_addressing(&layout, "test").expect_err("overflow");
+        assert!(error.to_string().contains("address"));
+    }
+
+    #[test]
+    fn accepts_shader_address_at_the_signed_boundary() {
+        let layout = Layout::try_new([1, 2], [i32::MAX as isize, 1], 0).expect("layout");
+        validate_shader_addressing(&layout, "test").expect("boundary is representable");
+    }
+
+    #[test]
+    fn rejects_dispatch_groups_above_the_device_limit() {
+        let groups = workgroups(4096 * 4096, BlockWidth::DEFAULT).expect("groups");
+        assert_eq!(groups, 65_536);
+        let error = validate_workgroup_limit(groups, 65_535).expect_err("limit");
+        assert!(error.to_string().contains("device limit"));
+    }
+
+    #[test]
+    fn accepts_dispatch_groups_at_the_device_limit() {
+        validate_workgroup_limit(65_535, 65_535).expect("limit boundary");
+    }
 }
 
 /// WGPU device marker implementing [`TriangularOps`].
@@ -157,7 +208,7 @@ pub struct WgpuTriangularOps;
 
 impl<T> TriangularOps<WgpuDevice, T> for WgpuTriangularOps
 where
-    T: DialectScalar<Wgsl> + Pod,
+    T: TriangularStorage,
 {
     fn triangular_into(
         &self,
@@ -262,6 +313,7 @@ where
         );
 
         let groups = workgroups(total, block_width)?;
+        validate_workgroup_limit(groups, device.limits().max_compute_workgroups_per_dimension)?;
         let mut entries = BindGroupEntries::with_capacity(3);
         entries.push(wgpu::BindGroupEntry {
             binding: 0,

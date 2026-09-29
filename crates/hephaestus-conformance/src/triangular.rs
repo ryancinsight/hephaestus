@@ -99,6 +99,117 @@ where
         "{name}: tril(diagonal=-1) mismatch"
     );
 
+    let rectangular = Layout::c_contiguous([2, 3]).expect("rectangular layout");
+    let rectangular_input = device
+        .upload(&[10, 11, 12, 13, 14, 15])
+        .expect("rectangular upload");
+    let rectangular_output = device.upload(&[-7; 6]).expect("rectangular output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&rectangular_input, &rectangular),
+        TriangularMode::Lower,
+        0,
+        StridedView::new(&rectangular_output, &rectangular),
+    )
+    .expect("rectangular dispatch");
+    assert_eq!(
+        device
+            .download_owned(&rectangular_output)
+            .expect("download"),
+        vec![10, 0, 0, 13, 14, 0],
+        "{name}: rectangular masked writes mismatch"
+    );
+
+    let reversed_columns = Layout::try_new([2, 3], [3, -1], 2).expect("negative-stride layout");
+    let negative_input = device
+        .upload(&[10, 11, 12, 13, 14, 15])
+        .expect("negative upload");
+    let negative_output = device.upload(&[-7; 6]).expect("negative output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&negative_input, &reversed_columns),
+        TriangularMode::Lower,
+        0,
+        StridedView::new(&negative_output, &rectangular),
+    )
+    .expect("negative-stride dispatch");
+    assert_eq!(
+        device.download_owned(&negative_output).expect("download"),
+        vec![12, 0, 0, 15, 14, 0],
+        "{name}: negative-stride addressing mismatch"
+    );
+
+    let broadcast = Layout::try_new([2, 3], [0, 1], 0).expect("broadcast layout");
+    let broadcast_input = device.upload(&[7, 8, 9]).expect("broadcast upload");
+    let broadcast_output = device.upload(&[-7; 6]).expect("broadcast output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&broadcast_input, &broadcast),
+        TriangularMode::Lower,
+        0,
+        StridedView::new(&broadcast_output, &rectangular),
+    )
+    .expect("broadcast dispatch");
+    assert_eq!(
+        device.download_owned(&broadcast_output).expect("download"),
+        vec![7, 0, 0, 7, 8, 0],
+        "{name}: broadcast addressing mismatch"
+    );
+
+    let overlap = Layout::try_new([2, 3], [1, 1], 0).expect("overlap layout");
+    let overlap_output = device.upload(&[-9; 6]).expect("overlap output");
+    let overlap_error = ops
+        .triangular_into(
+            device,
+            StridedView::new(&rectangular_input, &rectangular),
+            TriangularMode::Lower,
+            0,
+            StridedView::new(&overlap_output, &overlap),
+        )
+        .expect_err("overlapping output must be rejected");
+    assert!(
+        overlap_error.to_string().contains("non-overlapping"),
+        "{name}: unexpected overlap error: {overlap_error}"
+    );
+    assert_eq!(
+        device.download_owned(&overlap_output).expect("download"),
+        vec![-9; 6],
+        "{name}: overlap rejection mutated output"
+    );
+
+    let short_input = device.upload(&[1, 2, 3, 4, 5]).expect("short input");
+    let short_output = device.upload(&[-8; 6]).expect("short output");
+    let storage_error = ops
+        .triangular_into(
+            device,
+            StridedView::new(&short_input, &rectangular),
+            TriangularMode::Lower,
+            0,
+            StridedView::new(&short_output, &rectangular),
+        )
+        .expect_err("insufficient input storage must be rejected");
+    assert!(
+        storage_error.to_string().contains("storage"),
+        "{name}: unexpected storage error: {storage_error}"
+    );
+    assert_eq!(
+        device.download_owned(&short_output).expect("download"),
+        vec![-8; 6],
+        "{name}: storage rejection mutated output"
+    );
+
+    let empty = Layout::c_contiguous([2, 0]).expect("empty layout");
+    let empty_input = device.upload::<i32>(&[]).expect("empty input");
+    let empty_output = device.upload::<i32>(&[]).expect("empty output");
+    ops.triangular_into(
+        device,
+        StridedView::new(&empty_input, &empty),
+        TriangularMode::Lower,
+        i64::MIN,
+        StridedView::new(&empty_output, &empty),
+    )
+    .expect("empty dispatch");
+
     for (mode, diagonal, expected, label) in [
         (
             TriangularMode::Lower,

@@ -27,7 +27,14 @@ down-left, matching numpy's convention exactly (pinned per
 code needs no sign translation.
 
 `WgpuTriangularOps` dispatches one thread per `(row, col)` pair (flat over
-`rows * cols`): each thread evaluates the same keep/zero test
+`rows * cols`). Its zero-copy storage contract is limited to scalar WGSL
+storage types whose Rust element stride matches the WGSL array stride; vector
+arrays such as Rust `[f32; 3]` are rejected because WGSL `vec3` array elements
+have padding that Rust arrays do not. Both layouts must fit their buffers, the
+output layout must be injective, and input/output buffers must not alias.
+Element offsets and strides are signed `i32` shader addresses, and dispatch
+workgroups are checked against the acquired device's
+`max_compute_workgroups_per_dimension` before submission. Each thread
 [`hephaestus_core::triangular_keeps`] provides for the host reference, so
 the two backends agree by construction rather than by coincidence. The
 signed `diagonal` crosses the uniform boundary as its `u32` bit pattern
