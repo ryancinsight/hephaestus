@@ -141,21 +141,21 @@
   independent review.
 - Last-update: 2026-09-26.
 
-<a id="heph-rocm-conv-attention-portability-1"></a>
+<a id="heph-rocm-windows-hip-runtime-1"></a>
 
-## HEPH-ROCM-CONV-ATTENTION-PORTABILITY-1 — Audit ROCm conv/attention cfg gate [patch] — todo
-- Priority: verification.
-- Outcome: determine whether `cfg(target_os = "linux")` gating ROCm
-  convolution/attention reflects a genuine ROCm/HIP toolchain constraint
-  (Windows ROCm support is limited/unofficial) or an avoidable portability
-  gap, and record the finding.
-- Scope: read-only audit of the existing cfg gate and upstream ROCm/HIP
-  Windows support status; no code change unless the gate proves avoidable.
-- Driver: coeus consumer audit flagged this as a gap; verify before filing
-  further work.
-- Verification: cited ROCm/HIP platform-support evidence; if the gate is
-  spurious, a follow-up item narrows it.
-- Last-update: 2026-09-26.
+## HEPH-ROCM-WINDOWS-HIP-RUNTIME-1 — Support the validated Windows HIP substrate [minor] — todo
+- Priority: feature.
+- Outcome: split the current Linux-only ROCm runtime boundary so the Windows
+  HIP SDK path is enabled only after its runtime compiler, device discovery,
+  buffer, stream, and convolution/attention contracts pass on supported AMD
+  hardware.
+- Scope: `crates/hephaestus-rocm` infrastructure, pipeline, and device
+  contracts; retain the Linux path's semantics and typed unavailable-device
+  errors until the Windows path is verified.
+- Evidence: AMD documents Windows HIP SDK support but calls it a subset of
+  ROCm; this crate currently rejects every non-Linux `rocm` build in `lib.rs`.
+- Verification: supported Windows HIP device conformance for attention and
+  convolution, strict Clippy, source-generated-kernel review, and independent review.
 
 <a id="hephaestus-scan-leto-001"></a>
 

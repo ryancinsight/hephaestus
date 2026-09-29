@@ -5,8 +5,11 @@
 //!
 //! Native AMD ROCm/HIP device substrate for the Atlas accelerator stack.
 //!
-//! The `rocm` feature enables the Linux HIP runtime implementation. Without
-//! that feature, [`RocmDevice::try_default`] returns a typed unavailable-device
+//! The `rocm` feature enables the Linux HIP runtime implementation. Windows
+//! HIP SDK provides only a subset of ROCm, so this backend needs a separately
+//! validated substrate before it can support Windows.
+//! See <https://rocm.docs.amd.com/projects/install-on-windows/en/latest/conceptual/component-support.html>.
+//! Without that feature, [`RocmDevice::try_default`] returns a typed unavailable-device
 //! error and the crate remains buildable on hosts without ROCm. The backend
 //! implements the shared [`hephaestus_core::ComputeDevice`] seam for device
 //! acquisition, typed device buffers, host/device transfers, and
