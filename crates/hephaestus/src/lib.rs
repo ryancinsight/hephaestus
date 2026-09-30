@@ -2,8 +2,9 @@
 //!
 //! This crate is a facade. It owns no logic: it re-exports the device, buffer,
 //! transfer, and kernel contracts from `hephaestus-core`, and each backend
-//! implementation behind a feature. Depend on `hephaestus`; the sub-crates exist
-//! so a consumer *can* take a narrower dependency, not because it should.
+//! implementation behind a feature. Depend on `hephaestus-compute` (imported as
+//! `hephaestus`); the sub-crates exist so a consumer *can* take a narrower
+//! dependency, not because it should.
 //!
 //! # Layers
 //!
@@ -24,10 +25,10 @@
 //!
 //! ```toml
 //! # portable compute, no vendor toolkit needed
-//! hephaestus = { version = "0.19", features = ["wgpu"] }
+//! hephaestus-compute = { version = "0.19", features = ["wgpu"] }
 //!
 //! # NVIDIA; needs a CUDA toolkit at build time for headers
-//! hephaestus = { version = "0.19", features = ["cuda"] }
+//! hephaestus-compute = { version = "0.19", features = ["cuda"] }
 //! ```
 //!
 //! No backend is enabled by default. A default backend would make every

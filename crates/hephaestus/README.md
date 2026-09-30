@@ -1,11 +1,12 @@
-# hephaestus
+# hephaestus-compute
 
 The entry crate for the Atlas accelerator substrate. Depend on this one; the
 sub-crates exist so a consumer *can* take a narrower dependency, not because it
 should.
 
-`hephaestus` is a facade and owns no logic. It re-exports the device, buffer,
-transfer, and kernel contracts from `hephaestus-core` at facade paths
+`hephaestus-compute` is a facade and owns no logic. The package is named
+`hephaestus-compute` on crates.io and imported as `hephaestus`. It re-exports the
+device, buffer, transfer, and kernel contracts from `hephaestus-core` at facade paths
 (`hephaestus::DeviceBuffer`), and each backend behind a feature under a module
 named for its device API (`hephaestus::wgpu`, `hephaestus::cuda`,
 `hephaestus::rocm`).
@@ -32,13 +33,13 @@ fn total_elements<T, B: DeviceBuffer<T>>(buffers: &[B]) -> usize {
 
 ```toml
 # contracts only
-hephaestus = "0.19"
+hephaestus-compute = "0.19"
 
 # portable compute
-hephaestus = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
+hephaestus-compute = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; needs a CUDA toolkit at build time for headers
-hephaestus = { version = "0.19", features = ["cuda", "decomposition"] }
+hephaestus-compute = { version = "0.19", features = ["cuda", "decomposition"] }
 ```
 
 ## Feature flags select what is compiled
@@ -65,7 +66,7 @@ caller wanting a preference order writes that order itself.
 
 ## Documentation
 
-- API reference: [docs.rs/hephaestus](https://docs.rs/hephaestus)
+- API reference: [docs.rs/hephaestus-compute](https://docs.rs/hephaestus-compute)
 - Workspace overview, layer boundaries, and verification policy: the
   [repository README](https://github.com/ryancinsight/hephaestus#readme)
 

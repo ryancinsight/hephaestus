@@ -4,7 +4,8 @@ CUDA backend for the Atlas shared accelerator substrate (atlas ADR 0001). It is
 the GPU-side sibling of `hephaestus-wgpu`: it implements the same
 `hephaestus_core::ComputeDevice` seam, so consumers that bind generically
 (`<D: ComputeDevice>`) substitute CUDA for wgpu without source changes. Most
-consumers reach it through the `hephaestus` facade as `hephaestus::cuda`.
+consumers reach it through the `hephaestus-compute` facade as
+`hephaestus::cuda`.
 
 ## What it provides
 

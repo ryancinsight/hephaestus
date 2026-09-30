@@ -16,19 +16,19 @@ kernels are forged for accelerator hardware.
 
 ## Depend on the facade
 
-`hephaestus` is the entry crate. It re-exports the contract layer and each
-backend, so a consumer names one dependency rather than assembling sub-crates
+`hephaestus-compute` is the entry crate (library name `hephaestus`). It
+re-exports the contract layer and each backend, so a consumer names one dependency rather than assembling sub-crates
 (atlas ADR 0037):
 
 ```toml
 # contracts only — compiles on a machine with no accelerator
-hephaestus = "0.19"
+hephaestus-compute = "0.19"
 
 # portable compute
-hephaestus = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
+hephaestus-compute = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; execution needs a driver and runtime kernel compilation needs NVRTC
-hephaestus = { version = "0.19", features = ["cuda", "decomposition"] }
+hephaestus-compute = { version = "0.19", features = ["cuda", "decomposition"] }
 ```
 
 No backend is enabled by default: a default backend would make every consumer of
@@ -54,7 +54,7 @@ this file.
 
 | Crate | Role |
 | --- | --- |
-| `hephaestus` | Facade and entry point. Re-exports `hephaestus-core` flat and each backend behind a feature; forwards `parallel`, `mnemosyne-memory`, `decomposition`, and `sparse`. Contains no logic. |
+| `hephaestus-compute` | Facade and entry point, imported as `hephaestus`. Re-exports `hephaestus-core` flat and each backend behind a feature; forwards `parallel`, `mnemosyne-memory`, `decomposition`, and `sparse`. Contains no logic. |
 | `hephaestus-core` | GPU-dependency-free contracts: the `ComputeDevice` seam (GAT `Buffer<T: Pod>`), `DeviceBuffer<T>`, the shared volume-ray and 2D-Laplacian parameter vocabulary, and the error vocabulary including allocation rejection. `#![forbid(unsafe_code)]`. |
 | `hephaestus-host` | CPU **reference** device (ADR 0046). Implements the seams over plain host memory via leto so conformance can instantiate a CPU pair for every clause. Correctness first, never a performance path — consumers wanting fast CPU execution use leto directly. |
 | `hephaestus-conformance` | The shared clause suite. One set of contract clauses, generic over `ComputeDevice` and the operation seam, that every backend runs by instantiating rather than re-authoring (ADR 0041). |

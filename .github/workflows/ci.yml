@@ -96,7 +96,7 @@ jobs:
       # Only the packages no other workflow runs. The device packages' tests
       # belong to the runners that have the hardware.
       - name: Host-side tests
-        run: cargo nextest run --locked -p hephaestus-core -p hephaestus-host -p hephaestus
+        run: cargo nextest run --locked -p hephaestus-core -p hephaestus-host -p hephaestus-compute
 
       # `hephaestus-python` is excluded: PyO3's `extension-module` tells it not
       # to link libpython, because a loaded extension takes those symbols from
