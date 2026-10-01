@@ -77,4 +77,5 @@
 | [0066](0066-device-neutral-topk-seam.md) | Device-neutral rank-2 top-k selection seam | Accepted |
 | [0067](0067-device-neutral-interpolation-seam.md) | Device-neutral rank-2 axis-resampling seam | Accepted |
 | [0068](0068-device-neutral-adaptive-pooling-seam.md) | Device-neutral rank-2 adaptive pooling seam | Accepted |
+| [0069](0069-device-neutral-roll-seam.md) | Device-neutral rank-2 axis roll seam | Accepted |
 | [0070](0070-device-neutral-triangular-seam.md) | Device-neutral rank-2 triangular masking seam | Accepted |

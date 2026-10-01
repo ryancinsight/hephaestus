@@ -61,6 +61,8 @@ pub mod pooling;
 pub mod random;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
+/// Device-neutral rank-2 axis roll (circular shift) seam.
+pub mod roll;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
 /// Device-neutral spatial unfold/fold operands, planning, and dispatch seam.

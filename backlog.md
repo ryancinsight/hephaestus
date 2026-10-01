@@ -5,13 +5,13 @@
 ## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
 - Priority: feature.
 - Status: split one op at a time (per ADR 0062's precedent), not one
-  `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `TriangularOps`
-  (ADR 0070, tril/triu) — both host + wgpu.
+  `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `RollOps` (ADR 0069),
+  `TriangularOps` (ADR 0070, tril/triu) — all host + wgpu.
 - Triangular residual: CUDA, ROCm, and Metal implementors plus the
   `assert_backend_contract` aggregate fold remain tracked scope; host + wgpu
   delivery does not close those backend obligations.
 - Outcome: cat, split, stack, gather, scatter, index_select, index_put,
-  masked_fill, roll, tile, where, sort, and nonzero remain, implemented
+  masked_fill, tile, where, sort, and nonzero remain, implemented
   natively on every accelerator backend (no host round-trip), split into
   their own items as each is taken up.
 - Scope: per-op core domain seam + wgpu/cuda/rocm/metal application
@@ -24,7 +24,7 @@
   coeus binds afterward.
 - Verification: per-op conformance clause across backends, boundary/empty
   cases, strict Clippy, independent review.
-- Last-update: 2026-09-26.
+- Last-update: 2026-09-27.
 
 <a id="heph-topk-argminmax-provider-1"></a>
 

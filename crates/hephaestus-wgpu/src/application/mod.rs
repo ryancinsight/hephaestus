@@ -58,6 +58,8 @@ pub mod random;
 pub mod random_seam;
 /// Reduction compute operations.
 pub mod reduction;
+/// Device-neutral rank-2 axis roll (circular shift) seam.
+pub mod roll_seam;
 /// Prefix and suffix scan compute operations.
 pub mod scan;
 /// Device-neutral prefix/scan seam implementation.
