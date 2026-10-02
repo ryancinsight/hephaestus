@@ -82,7 +82,7 @@ of the WGPU backend, which is what `WgpuDevice::try_metal` already is.
    `tests/gpu_integration.rs:17`, both holding a hephaestus `WgpuDevice`
    directly) for no gain. Retiring the crate simply retires `"metal"` as
    a backend name, which is correct: it was never a backend.
-3. **Keep the `metal` feature on the `hephaestus` facade**, re-pointed:
+3. **Keep the `metal` feature on the `hephaestus-compute` facade**, re-pointed:
    it now means "acquire a Metal-preferring `WgpuDevice`" rather than
    "compile a second copy of the operation surface". The consumer-facing
    spelling of intent survives the crate that used to carry it.

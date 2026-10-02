@@ -1,5 +1,5 @@
 [package]
-name = "hephaestus"
+name = "hephaestus-compute"
 version.workspace = true
 rust-version.workspace = true
 edition.workspace = true
@@ -15,6 +15,12 @@ categories.workspace = true
 # published. `scripts/publish-order.py` in the Atlas meta-repo derives the wave
 # this crate belongs to; the flag is removed as the last step of that publish.
 publish = false
+
+[lib]
+# The registry package is `hephaestus-compute` because crates.io `hephaestus`
+# belongs to another publisher (ADR 0037 section 3); the library keeps the
+# stack name so `use hephaestus::...` paths are unchanged.
+name = "hephaestus"
 
 [dependencies]
 # Declared directly rather than inherited: `default-features = false` cannot
