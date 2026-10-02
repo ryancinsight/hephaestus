@@ -574,7 +574,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-compute"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "hephaestus-core",
  "hephaestus-cuda",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-conformance"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-core"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-cuda"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-host"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "eunomia",
  "hephaestus-conformance",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-metal"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-python"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-rocm"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "cubecl-hip-sys",
@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "aequitas",
  "criterion",
