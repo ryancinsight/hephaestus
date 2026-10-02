@@ -14,7 +14,7 @@
 //! for `in_len == 1` (every output sample reads the sole input element) and
 //! `out_len == 1` (the single output sample reads input index `0`). Weight
 //! arithmetic runs entirely in `T`'s native precision via
-//! `leto_ops::Scalar::from_usize` — no widen-compute-narrow cast (HARD per
+//! `eunomia::TryFromCount::try_from_count` — no widen-compute-narrow cast (HARD per
 //! `integrity`: fake generics).
 //!
 //! Bilinear (2D) resampling is not a separate mode: on a regular grid it is

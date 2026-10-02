@@ -196,6 +196,18 @@ pub(crate) fn map_leto_error<E: core::fmt::Display>(error: E) -> HephaestusError
     }
 }
 
+/// An element count (a length, a window size, a position along an axis) as
+/// the element type `T`, exactly or refused.
+///
+/// Float elements always accept the count; an integer element whose range does
+/// not contain it is a configuration the operation cannot carry out, reported
+/// as [`HephaestusError::InvalidConfiguration`] rather than a wrapped value.
+pub(crate) fn element_count<T: eunomia::TryFromCount>(count: usize) -> Result<T> {
+    T::try_from_count(count).map_err(|error| HephaestusError::InvalidConfiguration {
+        message: error.to_string(),
+    })
+}
+
 impl ComputeDevice for HostDevice {
     type Buffer<T: Pod> = HostBuffer<T>;
 
