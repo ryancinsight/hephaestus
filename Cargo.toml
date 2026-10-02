@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.19.0"
+version = "0.19.1"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -26,11 +26,11 @@ categories = ["science", "hardware-support"]
 [workspace.dependencies]
 # ── Local Workspace Crates ──
 hephaestus-conformance = { path = "crates/hephaestus-conformance" }
-hephaestus-core = { version = "0.19.0", path = "crates/hephaestus-core" }
-hephaestus-wgpu = { version = "0.19.0", path = "crates/hephaestus-wgpu" }
-hephaestus-cuda = { version = "0.19.0", path = "crates/hephaestus-cuda", default-features = false }
-hephaestus-rocm = { version = "0.19.0", path = "crates/hephaestus-rocm", default-features = false }
-hephaestus-metal = { version = "0.19.0", path = "crates/hephaestus-metal" }
+hephaestus-core = { version = "0.19.1", path = "crates/hephaestus-core" }
+hephaestus-wgpu = { version = "0.19.1", path = "crates/hephaestus-wgpu" }
+hephaestus-cuda = { version = "0.19.1", path = "crates/hephaestus-cuda", default-features = false }
+hephaestus-rocm = { version = "0.19.1", path = "crates/hephaestus-rocm", default-features = false }
+hephaestus-metal = { version = "0.19.1", path = "crates/hephaestus-metal" }
 
 # ── GPU ──
 # Hephaestus owns the Atlas WGPU ABI; consumers pin this exact major.
