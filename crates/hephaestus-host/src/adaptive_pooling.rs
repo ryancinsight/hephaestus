@@ -12,7 +12,7 @@ use hephaestus_core::{
 };
 use leto_ops::Scalar;
 
-use crate::{HostBuffer, HostDevice, map_leto_error};
+use crate::{HostBuffer, HostDevice, element_count, map_leto_error};
 
 /// Host-backed adaptive average/maximum pooling for the reference device.
 #[derive(Clone, Copy, Debug, Default)]
@@ -54,7 +54,7 @@ where
                                 input.layout.offset_of(in_coord).map_err(map_leto_error)?;
                             sum += in_cells[offset];
                         }
-                        sum / T::from_usize(end - start)
+                        sum / element_count::<T>(end - start)?
                     }
                     AdaptivePoolingMode::Maximum => {
                         in_coord[axis] = start;
