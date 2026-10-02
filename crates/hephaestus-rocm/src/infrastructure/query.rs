@@ -20,7 +20,7 @@ fn query_attribute(
     }
 }
 
-fn positive_u32(value: i32, name: &str) -> Result<u32> {
+fn positive_attribute(value: i32, name: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::DeviceUnavailable {
         message: format!("ROCm attribute {name} returned negative value {value}"),
     })
@@ -41,7 +41,7 @@ pub(super) fn query_device_limits(context: &RocmContext) -> Result<DeviceLimits>
                 message: format!("ROCm free memory {free_bytes} exceeds u64"),
             }
         })?,
-        max_compute_workgroup_size_x: positive_u32(
+        max_compute_workgroup_size_x: positive_attribute(
             query_attribute(
                 ordinal,
                 cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxBlockDimX,
@@ -49,7 +49,7 @@ pub(super) fn query_device_limits(context: &RocmContext) -> Result<DeviceLimits>
             )?,
             "max_block_dim_x",
         )?,
-        max_compute_workgroup_size_y: positive_u32(
+        max_compute_workgroup_size_y: positive_attribute(
             query_attribute(
                 ordinal,
                 cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxBlockDimY,
@@ -57,7 +57,7 @@ pub(super) fn query_device_limits(context: &RocmContext) -> Result<DeviceLimits>
             )?,
             "max_block_dim_y",
         )?,
-        max_compute_workgroup_size_z: positive_u32(
+        max_compute_workgroup_size_z: positive_attribute(
             query_attribute(
                 ordinal,
                 cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxBlockDimZ,
@@ -65,7 +65,7 @@ pub(super) fn query_device_limits(context: &RocmContext) -> Result<DeviceLimits>
             )?,
             "max_block_dim_z",
         )?,
-        max_compute_invocations_per_workgroup: positive_u32(
+        max_compute_invocations_per_workgroup: positive_attribute(
             query_attribute(
                 ordinal,
                 cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxThreadsPerBlock,
@@ -73,7 +73,7 @@ pub(super) fn query_device_limits(context: &RocmContext) -> Result<DeviceLimits>
             )?,
             "max_threads_per_block",
         )?,
-        max_compute_workgroup_storage_size: positive_u32(
+        max_compute_workgroup_storage_size: positive_attribute(
             query_attribute(
                 ordinal,
                 cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxSharedMemoryPerBlock,
@@ -104,7 +104,7 @@ pub(super) fn query_device_features() -> RocmDeviceFeatures {
 pub(super) fn query_topology(context: &RocmContext) -> Result<themis::GpuTopology> {
     context.set_current()?;
     let device = context.ordinal();
-    let compute_units = positive_u32(
+    let compute_units = positive_attribute(
         query_attribute(
             device,
             cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMultiprocessorCount,
@@ -112,7 +112,7 @@ pub(super) fn query_topology(context: &RocmContext) -> Result<themis::GpuTopolog
         )?,
         "multiprocessor_count",
     )?;
-    let warp_width = positive_u32(
+    let warp_width = positive_attribute(
         query_attribute(
             device,
             cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeWarpSize,
@@ -120,7 +120,7 @@ pub(super) fn query_topology(context: &RocmContext) -> Result<themis::GpuTopolog
         )?,
         "warp_size",
     )?;
-    let max_threads_per_unit = positive_u32(
+    let max_threads_per_unit = positive_attribute(
         query_attribute(
             device,
             cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxThreadsPerMultiProcessor,
@@ -128,7 +128,7 @@ pub(super) fn query_topology(context: &RocmContext) -> Result<themis::GpuTopolog
         )?,
         "max_threads_per_multiprocessor",
     )?;
-    let registers_per_unit = positive_u32(
+    let registers_per_unit = positive_attribute(
         query_attribute(
             device,
             cubecl_hip_sys::hipDeviceAttribute_t_hipDeviceAttributeMaxRegistersPerMultiprocessor,

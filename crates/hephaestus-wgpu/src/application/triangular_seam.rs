@@ -351,7 +351,7 @@ where
         )?;
 
         let groups = workgroups(total, block_width)?;
-        validate_workgroup_limit(groups, device.limits().max_compute_workgroups_per_dimension)?;
+        validate_workgroup_limit(groups, limits.max_compute_workgroups_per_dimension)?;
         let mut entries = BindGroupEntries::with_capacity(3);
         entries.push(wgpu::BindGroupEntry {
             binding: 0,

@@ -39,7 +39,7 @@ pub(super) fn current_memory_info(driver: &Driver) -> Result<(usize, usize)> {
     Ok((free_bytes, total_bytes))
 }
 
-fn nonnegative_u32(value: i32) -> u32 {
+fn nonnegative_attribute(value: i32) -> u32 {
     u32::try_from(value).expect("invariant: device_attribute rejects negative values")
 }
 
@@ -55,31 +55,31 @@ pub(super) fn query_device_limits(driver: &Driver, device: &i32) -> Result<Devic
         })?;
     Ok(DeviceLimits {
         max_buffer_size,
-        max_compute_workgroup_size_x: nonnegative_u32(device_attribute(
+        max_compute_workgroup_size_x: nonnegative_attribute(device_attribute(
             driver,
             *device,
             Attribute::MaxBlockDimX,
             "max_block_dim_x",
         )?),
-        max_compute_workgroup_size_y: nonnegative_u32(device_attribute(
+        max_compute_workgroup_size_y: nonnegative_attribute(device_attribute(
             driver,
             *device,
             Attribute::MaxBlockDimY,
             "max_block_dim_y",
         )?),
-        max_compute_workgroup_size_z: nonnegative_u32(device_attribute(
+        max_compute_workgroup_size_z: nonnegative_attribute(device_attribute(
             driver,
             *device,
             Attribute::MaxBlockDimZ,
             "max_block_dim_z",
         )?),
-        max_compute_invocations_per_workgroup: nonnegative_u32(device_attribute(
+        max_compute_invocations_per_workgroup: nonnegative_attribute(device_attribute(
             driver,
             *device,
             Attribute::MaxThreadsPerBlock,
             "max_threads_per_block",
         )?),
-        max_compute_workgroup_storage_size: nonnegative_u32(device_attribute(
+        max_compute_workgroup_storage_size: nonnegative_attribute(device_attribute(
             driver,
             *device,
             Attribute::MaxSharedMemoryPerBlock,
@@ -122,37 +122,37 @@ pub(super) fn query_device_features(driver: &Driver, device: &i32) -> Result<Cud
 /// that was just acquired and bound indicates a broken device, surfaced as
 /// [`HephaestusError::DeviceUnavailable`].
 pub(super) fn query_topology(driver: &Driver, device: &i32) -> Result<themis::GpuTopology> {
-    let compute_units = nonnegative_u32(device_attribute(
+    let compute_units = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::MultiprocessorCount,
         "multiprocessor_count",
     )?);
-    let warp_width = nonnegative_u32(device_attribute(
+    let warp_width = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::WarpSize,
         "warp_size",
     )?);
-    let max_threads_per_unit = nonnegative_u32(device_attribute(
+    let max_threads_per_unit = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::MaxThreadsPerMultiprocessor,
         "max_threads_per_multiprocessor",
     )?);
-    let registers_per_unit = nonnegative_u32(device_attribute(
+    let registers_per_unit = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::MaxRegistersPerMultiprocessor,
         "max_registers_per_multiprocessor",
     )?);
-    let shared_mem_per_unit_bytes = nonnegative_u32(device_attribute(
+    let shared_mem_per_unit_bytes = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::MaxSharedMemoryPerMultiprocessor,
         "max_shared_memory_per_multiprocessor",
     )?) as usize;
-    let l2_bytes = nonnegative_u32(device_attribute(
+    let l2_bytes = nonnegative_attribute(device_attribute(
         driver,
         *device,
         Attribute::L2CacheSize,
