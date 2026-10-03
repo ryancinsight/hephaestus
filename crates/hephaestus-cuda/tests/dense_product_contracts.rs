@@ -16,7 +16,10 @@ use leto::Layout;
 fn scalar_products<T: NumericElement + DialectScalar<CudaC>>(device: &CudaDevice) -> Result<()> {
     let _span =
         tracing::info_span!("scalar_products", scalar = core::any::type_name::<T>()).entered();
-    let value = |n: i32| <T as eunomia::CastFrom<i32>>::cast_from(n);
+    let value = |n: usize| {
+        T::try_from_count(n)
+            .expect("invariant: every fixture constant is at most 99, exact in every tested scalar")
+    };
     let lhs = device.upload(&[1, 2, 3, 4].map(value))?;
     let rhs = device.upload(&[5, 6, 7, 8].map(value))?;
     let output = device.upload(&[value(99); 4])?;
