@@ -63,7 +63,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 syn = { version = "2.0.119", features = ["full", "visit"] }
 # Aequitas PR #51 and Eunomia PR #87 are merged; the lockfile records their
 # reviewed default sources.
-aequitas = { version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+aequitas = { version = "0.2.1", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 eunomia = { version = "0.9.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
