@@ -42,15 +42,21 @@
 
 <a id="heph-embedding-gather-provider-1"></a>
 
-## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Device-side embedding gather [minor] — todo
+## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Embedding-gather gradient (scatter-add) [minor] — todo
 - Priority: feature.
-- Outcome: an `EmbeddingOps<D, T>` seam gathering rows from a device-resident
-  table by an index buffer, with the gradient scatter-add counterpart.
-- Scope: core seam, wgpu/cuda/rocm/metal, conformance vs Leto gather.
-- Driver: coeus consumer audit — no accelerator path; needed for the
-  embedding-lookup layer.
-- Verification: differential + out-of-range-index rejection tests per
-  backend, strict Clippy, independent review.
+- Status: `EmbeddingOps<D, T>::gather_into` (host + wgpu) delivered per ADR
+  0065, with an atomic-flag out-of-range rejection on the device path.
+  Narrowed to the gradient counterpart, which this increment does not cover.
+- Outcome: the backward pass for embedding gather — scatter-add gradients
+  into a table-shaped gradient buffer at the same indices `gather_into` read.
+- Scope: core seam addition, wgpu device implementor first (cuda/rocm/metal
+  follow), conformance vs a host-loop reference (accumulation order must be
+  documented since scatter-add is not commutative-associative in float
+  rounding across execution orders).
+- Driver: coeus consumer audit — needed for the embedding-lookup layer's
+  training path.
+- Verification: differential + repeated-index accumulation + out-of-range
+  rejection tests per backend, strict Clippy, independent review.
 - Last-update: 2026-09-26.
 
 <a id="heph-interpolation-provider-1"></a>

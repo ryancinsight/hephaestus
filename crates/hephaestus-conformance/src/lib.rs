@@ -71,6 +71,9 @@ pub mod dense_vector;
 /// Untyped unary/binary elementwise arithmetic clauses.
 pub mod elementwise;
 /// Contract clauses for the
+/// [`EmbeddingOps`](hephaestus_core::EmbeddingOps) seam.
+pub mod embedding;
+/// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
 /// Contract clauses for the device-neutral padding seam.
@@ -114,6 +117,9 @@ pub use dense_matrix_function::assert_dense_matrix_function_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::assert_elementwise_contract;
+pub use embedding::{
+    assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
+};
 pub use full_reduction::assert_full_reduction_contract;
 pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;

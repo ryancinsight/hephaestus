@@ -36,6 +36,8 @@ pub mod decomposition_seam;
 pub mod dense_product_seam;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Device-neutral embedding-table gather seam implementation.
+pub mod embedding_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
 /// Native WGSL mean cross-entropy.
