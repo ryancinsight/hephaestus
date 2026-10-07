@@ -19,9 +19,6 @@ pub(crate) fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>
 ) -> String {
     format!(
         r#"{prelude}
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#define min(a,b) ((a) < (b) ? (a) : (b))
-
 extern "C" __global__ void reduction_kernel(
     const {ty}* input,
     {ty}* output,
