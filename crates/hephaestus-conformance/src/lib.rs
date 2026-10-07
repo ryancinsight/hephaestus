@@ -91,6 +91,8 @@ pub mod random_init;
 /// Contract clauses for the
 /// [`RayIntegralOps`](hephaestus_core::RayIntegralOps) seam.
 pub mod ray_integral;
+/// Contract clauses for the [`RollOps`](hephaestus_core::RollOps) seam.
+pub mod roll;
 /// Contract clauses for the [`ScanOps`](hephaestus_core::ScanOps) seam.
 pub mod scan;
 /// Contract clauses for the
@@ -138,6 +140,7 @@ pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
+pub use roll::{RollContractFixtures, assert_roll_contract, assert_roll_contract_for_scalar};
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;

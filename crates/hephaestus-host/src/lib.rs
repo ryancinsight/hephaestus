@@ -47,6 +47,8 @@ pub mod random;
 /// Host implementor of the whole-operand and rank-2 axis reduction seams
 /// (ADR 0061).
 pub mod reduction;
+/// Direct-loop rank-2 axis roll (circular shift) seam implementor.
+pub mod roll;
 /// Host implementor of the rank-2 axis scan seam (ADR 0061).
 pub mod scan;
 /// Leto-backed unfold/fold seam implementor.
@@ -91,6 +93,7 @@ pub use reduction::{
     HostAxisReductionOps, HostFullReductionOps, HostPreparedAxisReduction,
     HostPreparedFullReduction,
 };
+pub use roll::HostRollOps;
 pub use scan::{HostPreparedScan, HostScanOps};
 pub use sliding_window::{HostSlidingWindowFold, HostSlidingWindowOps, HostSlidingWindowUnfold};
 pub use sparse::{HostPreparedApply, HostSparseOps};

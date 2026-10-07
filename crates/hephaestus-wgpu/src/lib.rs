@@ -82,6 +82,7 @@ pub use application::reduction::{
     submit_prepared_mixed_reduction_batch, submit_prepared_reduction_batch, sum_axis,
     sum_axis_into,
 };
+pub use application::roll_seam::WgpuRollOps;
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
