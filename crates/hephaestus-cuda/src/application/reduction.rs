@@ -18,7 +18,7 @@ pub(crate) fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>
     width: BlockWidth,
 ) -> String {
     format!(
-        r#"
+        r#"{prelude}
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #define min(a,b) ((a) < (b) ? (a) : (b))
 
@@ -54,6 +54,7 @@ extern "C" __global__ void reduction_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = T::TOKEN,
@@ -204,7 +205,7 @@ pub(crate) fn plan_axis_reduction_dispatch<T>(
 pub(crate) fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>()
 -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     unsigned int input_shape[2];
     int input_strides[2];
@@ -246,6 +247,7 @@ extern "C" __global__ void axis_reduction_kernel(
     output[out_off] = acc;
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         identity = T::TOKEN,
         expr = Op::EXPR,
@@ -254,7 +256,7 @@ extern "C" __global__ void axis_reduction_kernel(
 
 pub(crate) fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     unsigned int input_shape[2];
     int input_strides[2];
@@ -294,6 +296,7 @@ extern "C" __global__ void mean_axis_kernel(
     output[out_off] = acc / ({ty})axis_len;
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         identity = T::TOKEN,
     )
@@ -569,4 +572,22 @@ where
 {
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reduced_precision_sources_carry_the_scalar_prelude() {
+        let width = BlockWidth::DEFAULT;
+        let f16_prelude = <eunomia::F16 as DialectScalar<CudaC>>::PRELUDE;
+        let bf16_prelude = <eunomia::Bf16 as DialectScalar<CudaC>>::PRELUDE;
+        assert!(shader_source::<SumOp, eunomia::F16>(width).starts_with(f16_prelude));
+        assert!(shader_source::<SumOp, eunomia::Bf16>(width).starts_with(bf16_prelude));
+        assert!(axis_reduction_shader_source::<SumOp, eunomia::F16>().starts_with(f16_prelude));
+        assert!(axis_reduction_shader_source::<SumOp, eunomia::Bf16>().starts_with(bf16_prelude));
+        assert!(mean_axis_shader_source::<eunomia::F16>().starts_with(f16_prelude));
+        assert!(mean_axis_shader_source::<eunomia::Bf16>().starts_with(bf16_prelude));
+    }
 }
