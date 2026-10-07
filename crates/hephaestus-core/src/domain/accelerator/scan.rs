@@ -60,7 +60,7 @@ where
     T: IdentityToken<Op, L>,
 {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisScanMeta {{
     unsigned int input_shape[2];
     int input_strides[2];
@@ -146,6 +146,7 @@ extern "C" __global__ void {entry}(
     }}
 }}
 "#,
+        prelude = <T as DialectScalar<L>>::PRELUDE,
         ty = <T as DialectScalar<L>>::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<Op, L>>::TOKEN,
@@ -590,6 +591,15 @@ mod tests {
             <CudaC as AxisScanDialect>::axis_scan_source::<CumSumOp, f32>(width),
             <HipC as AxisScanDialect>::axis_scan_source::<CumSumOp, f32>(width)
         );
+    }
+
+    #[test]
+    fn reduced_precision_source_carries_the_scalar_prelude() {
+        let width = BlockWidth::new(32).expect("non-zero test width");
+        let f16 = c_family_axis_scan_source::<CudaC, CumSumOp, eunomia::F16>(width);
+        assert!(f16.starts_with(<eunomia::F16 as DialectScalar<CudaC>>::PRELUDE));
+        let bf16 = c_family_axis_scan_source::<CudaC, CumSumOp, eunomia::Bf16>(width);
+        assert!(bf16.starts_with(<eunomia::Bf16 as DialectScalar<CudaC>>::PRELUDE));
     }
 
     #[test]
