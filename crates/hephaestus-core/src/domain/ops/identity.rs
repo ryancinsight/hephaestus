@@ -33,6 +33,12 @@ impl OpIdentity<SumOp> for i32 {
 impl OpIdentity<SumOp> for f64 {
     const IDENTITY: Self = 0.0;
 }
+impl OpIdentity<SumOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::ZERO;
+}
+impl OpIdentity<SumOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::ZERO;
+}
 
 impl OpIdentity<ProdOp> for f32 {
     const IDENTITY: Self = 1.0;
@@ -45,6 +51,12 @@ impl OpIdentity<ProdOp> for i32 {
 }
 impl OpIdentity<ProdOp> for f64 {
     const IDENTITY: Self = 1.0;
+}
+impl OpIdentity<ProdOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::ONE;
+}
+impl OpIdentity<ProdOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::ONE;
 }
 
 impl OpIdentity<MinOp> for f32 {
@@ -59,6 +71,12 @@ impl OpIdentity<MinOp> for i32 {
 impl OpIdentity<MinOp> for f64 {
     const IDENTITY: Self = f64::MAX;
 }
+impl OpIdentity<MinOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::from_bits(0x7BFF);
+}
+impl OpIdentity<MinOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::from_bits(0x7F7F);
+}
 
 impl OpIdentity<MaxOp> for f32 {
     const IDENTITY: Self = f32::MIN;
@@ -71,6 +89,12 @@ impl OpIdentity<MaxOp> for i32 {
 }
 impl OpIdentity<MaxOp> for f64 {
     const IDENTITY: Self = f64::MIN;
+}
+impl OpIdentity<MaxOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::from_bits(0xFBFF);
+}
+impl OpIdentity<MaxOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::from_bits(0xFF7F);
 }
 
 impl OpIdentity<CumSumOp> for f32 {
@@ -85,6 +109,12 @@ impl OpIdentity<CumSumOp> for i32 {
 impl OpIdentity<CumSumOp> for f64 {
     const IDENTITY: Self = 0.0;
 }
+impl OpIdentity<CumSumOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::ZERO;
+}
+impl OpIdentity<CumSumOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::ZERO;
+}
 
 impl OpIdentity<CumProdOp> for f32 {
     const IDENTITY: Self = 1.0;
@@ -97,6 +127,12 @@ impl OpIdentity<CumProdOp> for i32 {
 }
 impl OpIdentity<CumProdOp> for f64 {
     const IDENTITY: Self = 1.0;
+}
+impl OpIdentity<CumProdOp> for eunomia::F16 {
+    const IDENTITY: Self = eunomia::F16::ONE;
+}
+impl OpIdentity<CumProdOp> for eunomia::Bf16 {
+    const IDENTITY: Self = eunomia::Bf16::ONE;
 }
 
 impl IdentityToken<SumOp, Wgsl> for f32 {
@@ -244,6 +280,12 @@ impl IdentityToken<CumSumOp, CudaC> for u32 {
 impl IdentityToken<CumSumOp, CudaC> for i32 {
     const TOKEN: &'static str = "0";
 }
+impl IdentityToken<CumSumOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(0.0f)";
+}
+impl IdentityToken<CumSumOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(0.0f)";
+}
 impl IdentityToken<CumSumOp, CudaC> for f64 {
     const TOKEN: &'static str = "0.0";
 }
@@ -268,6 +310,12 @@ impl IdentityToken<CumProdOp, CudaC> for u32 {
 }
 impl IdentityToken<CumProdOp, CudaC> for i32 {
     const TOKEN: &'static str = "1";
+}
+impl IdentityToken<CumProdOp, CudaC> for eunomia::F16 {
+    const TOKEN: &'static str = "__float2half(1.0f)";
+}
+impl IdentityToken<CumProdOp, CudaC> for eunomia::Bf16 {
+    const TOKEN: &'static str = "__float2bfloat16(1.0f)";
 }
 impl IdentityToken<CumProdOp, CudaC> for f64 {
     const TOKEN: &'static str = "1.0";
@@ -318,3 +366,57 @@ impl_hip_identity_tokens!(
     (CumSumOp, "0.0f", "0u", "0", "0.0"),
     (CumProdOp, "1.0f", "1u", "1", "1.0"),
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn halves_cum_tokens_match_half_constructors() {
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<CumSumOp, CudaC>>::TOKEN,
+            "__float2half(0.0f)"
+        );
+        assert_eq!(
+            <eunomia::Bf16 as IdentityToken<CumSumOp, CudaC>>::TOKEN,
+            "__float2bfloat16(0.0f)"
+        );
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<CumProdOp, CudaC>>::TOKEN,
+            "__float2half(1.0f)"
+        );
+        assert_eq!(
+            <eunomia::Bf16 as IdentityToken<CumProdOp, CudaC>>::TOKEN,
+            "__float2bfloat16(1.0f)"
+        );
+    }
+
+    #[test]
+    fn halves_host_identities_match_zero_one_max() {
+        assert_eq!(
+            <eunomia::F16 as OpIdentity<SumOp>>::IDENTITY,
+            eunomia::F16::ZERO
+        );
+        assert_eq!(
+            <eunomia::Bf16 as OpIdentity<ProdOp>>::IDENTITY,
+            eunomia::Bf16::ONE
+        );
+        assert_eq!(
+            <eunomia::F16 as OpIdentity<MinOp>>::IDENTITY,
+            eunomia::F16::from_bits(0x7BFF)
+        );
+        assert_eq!(
+            <eunomia::Bf16 as OpIdentity<MaxOp>>::IDENTITY,
+            eunomia::Bf16::from_bits(0xFF7F)
+        );
+    }
+
+    #[test]
+    fn existing_tokens_unchanged() {
+        assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
+        assert_eq!(
+            <f64 as IdentityToken<MinOp, CudaC>>::TOKEN,
+            "1.7976931348623157e+308"
+        );
+    }
+}
