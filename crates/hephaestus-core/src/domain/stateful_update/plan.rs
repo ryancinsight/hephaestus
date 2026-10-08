@@ -37,14 +37,17 @@ impl StatefulUpdatePlan {
 /// Returns an error when the rule's state count is unsupported or mismatched,
 /// shapes differ, a storage span is invalid, a writable layout overlaps
 /// itself, or any operand buffers alias.
-pub fn plan_stateful_update<B, const N: usize>(
+pub fn plan_stateful_update<B, T, const N: usize>(
     operands: StatefulUpdateOperands<'_, B, N>,
     state_count: usize,
     aliases: StatefulUpdateAliasing,
 ) -> Result<StatefulUpdatePlan>
 where
-    B: DeviceBuffer<f32>,
+    B: DeviceBuffer<T>,
 {
+    // NOTE: the planner inspects only lengths, layouts, and precomputed
+    // aliasing, never element values, so the element type stays fully
+    // generic here and is inferred from the operand buffers.
     if N > 8 {
         return Err(HephaestusError::InvalidConfiguration {
             message: format!("stateful update supports rank <= 8, got rank {N}"),
