@@ -121,10 +121,11 @@ pub use domain::sliding_window::{
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
 pub use domain::staggered::{Staggered3DOps, Staggered3DParams, StaggeredAxis};
 pub use domain::stateful_update::{
-    AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
-    RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,
+    AdaGrad, AdaGradParameters, AdaGradParametersF64, Adam, AdamParameters, AdamParametersF64,
+    AdamW, AdamWParameters, AdamWParametersF64, RmsProp, RmsPropParameters, RmsPropParametersF64,
+    Sgd, SgdParameters, SgdParametersF64, StatefulUpdateAliasing, StatefulUpdateMeta,
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
-    StatefulUpdateStep, plan_stateful_update,
+    StatefulUpdateStep, StatefulUpdateStepF64, plan_stateful_update,
 };
 pub use domain::stencil::StencilOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
