@@ -148,6 +148,45 @@ fn combine_and_identity_agree_per_dialect() {
         <J1Op as UnaryExpr<HipC>>::EXPR,
         "cuda and hip share one j1 spelling"
     );
+    // K0 pins the guard structure: `select` takes the false arm first, so
+    // the (x - x)/(x - x) NaN arm leads and the value select trails the
+    // domain check. One coefficient per branch, plus paren balance.
+    assert!(
+        <K0Op as UnaryExpr<Wgsl>>::EXPR.starts_with("select((((x) - (x)) / ((x) - (x))), select(")
+    );
+    assert!(<K0Op as UnaryExpr<Wgsl>>::EXPR.contains(", (x) <= 2.0), ((x) > 0.0)"));
+    assert!(<K0Op as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) <= 3.402823466e+38"));
+    assert!(<K0Op as UnaryExpr<Wgsl>>::EXPR.contains("3.5156229"));
+    assert!(<K0Op as UnaryExpr<Wgsl>>::EXPR.contains("1.25331414"));
+    assert!(<K0Op as UnaryExpr<Wgsl>>::EXPR.contains("(((x) - (x)) / ((x) - (x)))"));
+    assert_eq!(
+        <K0Op as UnaryExpr<Wgsl>>::EXPR
+            .chars()
+            .filter(|&c| c == '(')
+            .count(),
+        <K0Op as UnaryExpr<Wgsl>>::EXPR
+            .chars()
+            .filter(|&c| c == ')')
+            .count(),
+        "wgsl k0 parens balance"
+    );
+    for expr in [
+        <K0Op as UnaryExpr<CudaC>>::EXPR,
+        <K0Op as UnaryExpr<HipC>>::EXPR,
+    ] {
+        assert!(expr.contains("isfinite(x)"), "c k0 guards on isfinite");
+        assert!(expr.contains("(((x) - (x)) / ((x) - (x)))"), "c k0 nan arm");
+        assert_eq!(
+            expr.chars().filter(|&c| c == '(').count(),
+            expr.chars().filter(|&c| c == ')').count(),
+            "c k0 parens balance"
+        );
+    }
+    assert_eq!(
+        <K0Op as UnaryExpr<CudaC>>::EXPR,
+        <K0Op as UnaryExpr<HipC>>::EXPR,
+        "cuda and hip share one k0 spelling"
+    );
     assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
     assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
     assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
@@ -211,6 +250,9 @@ fn comparisons_use_scalar_correct_mask_literals() {
     const _: () = assert!(<J0Op as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<J1Op as UnaryExpr<CudaC>>::SUPPORTS_F64);
     const _: () = assert!(<J1Op as UnaryExpr<HipC>>::SUPPORTS_F64);
+    const _: () = assert!(!<K0Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(<K0Op as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<K0Op as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<ReluOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<Log10Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     assert_eq!(
@@ -498,6 +540,21 @@ where
         <J1Op as UnaryValue>::apply(T::from_f64(-2.0)),
         -<J1Op as UnaryValue>::apply(T::from_f64(2.0))
     );
+
+    // K0 matches the DLMF/A&S constants through both branches and yields
+    // NaN outside (0, +inf), as the scalar helper does.
+    assert!(
+        relative(<K0Op as UnaryValue>::apply(T::from_f64(1.0)), 0.4210244382) < 1e-6,
+        "k0(1) must match the classic constant"
+    );
+    assert!(
+        relative(<K0Op as UnaryValue>::apply(T::from_f64(5.0)), 0.0036910985) < 1e-6,
+        "k0(5) must match the classic constant"
+    );
+    assert!(<K0Op as UnaryValue>::apply(T::ZERO).is_nan());
+    assert!(<K0Op as UnaryValue>::apply(-T::from_f64(1.0)).is_nan());
+    assert!(<K0Op as UnaryValue>::apply(T::NAN).is_nan());
+    assert!(<K0Op as UnaryValue>::apply(T::from_f64(f64::INFINITY)).is_nan());
 }
 
 #[test]

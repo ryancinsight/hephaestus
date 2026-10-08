@@ -137,7 +137,9 @@ pub use dense_composition::assert_dense_composition_contract;
 pub use dense_matrix_function::assert_dense_matrix_function_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
-pub use elementwise::{assert_bessel_contract, assert_elementwise_contract, assert_sinc_contract};
+pub use elementwise::{
+    assert_bessel_contract, assert_elementwise_contract, assert_k0_contract, assert_sinc_contract,
+};
 pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
 };

@@ -7,7 +7,7 @@
 #![cfg(target_os = "macos")]
 
 use hephaestus_conformance::{
-    assert_bessel_contract, assert_elementwise_contract, assert_sinc_contract,
+    assert_bessel_contract, assert_elementwise_contract, assert_k0_contract, assert_sinc_contract,
 };
 use hephaestus_metal::{MetalDevice, MetalElementwiseOps};
 
@@ -18,4 +18,5 @@ fn metal_satisfies_the_elementwise_contract() {
     assert_elementwise_contract(&device, &MetalElementwiseOps::default());
     assert_sinc_contract(&device, &MetalElementwiseOps::default());
     assert_bessel_contract(&device, &MetalElementwiseOps::default());
+    assert_k0_contract(&device, &MetalElementwiseOps::default());
 }

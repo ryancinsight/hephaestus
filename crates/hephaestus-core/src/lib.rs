@@ -96,11 +96,11 @@ pub use domain::ops::{
     CeilOp, CombineExpr, CombineValue, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp,
     EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp,
     GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp,
-    HardswishOp, IdentityOp, IdentityToken, J0Op, J1Op, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op,
-    Log10Op, LtOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp,
-    RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp,
-    SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp,
-    SumOp, TanOp, TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr,
+    HardswishOp, IdentityOp, IdentityToken, J0Op, J1Op, K0Op, LeOp, LgammaOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, LtOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp,
+    ProdOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp,
+    SiluOp, SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp,
+    SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr,
     UnaryValue,
 };
 pub use domain::pad::{PadOps, PadWidth, validate_pad_shape};

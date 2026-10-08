@@ -14,7 +14,7 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, J0Op, J1Op,
-    MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
+    K0Op, MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
 };
 use leto::Layout;
 
@@ -100,6 +100,31 @@ where
 {
     bessel_branches_match_oracle(device, ops);
     bessel_zeros_are_exact(device, ops);
+}
+
+/// Run the K0 clauses against one backend.
+///
+/// Shares the [`BESSEL_BOUND`] derivation: the 9.8.5 branch rounds f32
+/// coefficients through two six-level Horners plus one `log`, and the 9.8.6
+/// branch rounds one `exp`/`sqrt` plus a six-level series, each landing
+/// within ~2e-6 absolute on O(1) values. Oracles are leto's scalar
+/// `bessel_k0` (the 1:1 reference). The domain guard is pinned exactly:
+/// non-positive and non-finite lanes must read back NaN.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_k0_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    K0Op: UnaryExpr<E::Dialect>,
+{
+    k0_branches_match_oracle(device, ops);
+    k0_guard_yields_nan(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -247,6 +272,55 @@ where
         [0.0, 0.0],
         "{name}: j1 resolves +-0 to 0"
     );
+}
+
+/// Each lane takes its own branch (`x <= 2` polynomial vs scaled
+/// exponential series), so one mixed dispatch proves per-lane branch
+/// selection plus both formulations.
+fn k0_branches_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    K0Op: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [0.1f32, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0];
+    let got = unary::<_, _, K0Op, 7>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = leto_ops::bessel_k0(f64::from(x)) as f32;
+        assert!(
+            (got - expected).abs() < BESSEL_BOUND,
+            "{name}: k0 lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// `K0` diverges at the origin and is undefined for `x <= 0`: the guard
+/// reads back NaN on every invalid lane, exactly as the scalar helper.
+fn k0_guard_yields_nan<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    K0Op: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        0.0f32,
+        -0.0,
+        -1.0,
+        f32::NAN,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    let got = unary::<_, _, K0Op, 6>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        assert!(
+            got.is_nan(),
+            "{name}: k0 guard lane {lane} (x = {x}): got {got}, expected NaN"
+        );
+    }
 }
 
 /// Dyadic binary arithmetic: every result is exactly representable.

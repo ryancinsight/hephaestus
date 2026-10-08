@@ -3,7 +3,7 @@
 use super::UnaryExpr;
 use super::{
     EluGradOp, EluOp, ErfOp, ErfcOp, GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp,
-    HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp, J0Op, J1Op, LgammaOp,
+    HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp, J0Op, J1Op, K0Op, LgammaOp,
     MishGradOp, MishOp, ReluGradOp, ReluOp, SigmoidGradOp, SigmoidOp, SiluGradOp, SiluOp,
     SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, TanhGradOp, TanhOp,
 };
@@ -452,4 +452,159 @@ impl UnaryExpr<CudaC> for J1Op {
 }
 impl UnaryExpr<HipC> for J1Op {
     const EXPR: &'static str = c_j1_expr!();
+}
+
+// K0 follows Abramowitz & Stegun 9.8.5 (`0 < x <= 2`: I0 polynomial plus a
+// log correction) and 9.8.6 (`x > 2`: scaled exponential series), with the
+// same coefficients and nesting as leto's scalar `bessel_k0`. The domain
+// guard (`x > 0` and finite, else NaN) needs a NaN literal, which no dialect
+// spells: both families use `(x - x) / (x - x)`, NaN for every lane value
+// (0/0 and NaN/NaN alike) yet never constant (the lane value is runtime).
+// WGSL tests finiteness as `abs(x) <= 3.402823466e+38`, the lgamma-spelling
+// magnitude guard: self-subtraction folds to zero under driver fast-math,
+// while the magnitude compare is unfoldable and rejects NaN through the
+// false comparison. C uses the `isfinite` builtin instead.
+macro_rules! k0_t1 {
+    () => {
+        "(((x) / 3.75) * ((x) / 3.75))"
+    };
+}
+
+macro_rules! k0_t2 {
+    () => {
+        "(((x) * 0.5) * ((x) * 0.5))"
+    };
+}
+
+macro_rules! k0_i0 {
+    () => {
+        concat!(
+            "1.0 + ",
+            k0_t1!(),
+            "*(3.5156229 + ",
+            k0_t1!(),
+            "*(3.0899424 + ",
+            k0_t1!(),
+            "*(1.2067492 + ",
+            k0_t1!(),
+            "*(0.2659732 + ",
+            k0_t1!(),
+            "*(0.0360768 + ",
+            k0_t1!(),
+            "*0.0045813)))))"
+        )
+    };
+}
+
+macro_rules! k0_correction {
+    () => {
+        concat!(
+            "-0.57721566 + ",
+            k0_t2!(),
+            "*(0.42278420 + ",
+            k0_t2!(),
+            "*(0.23069756 + ",
+            k0_t2!(),
+            "*(0.03488590 + ",
+            k0_t2!(),
+            "*(0.00262698 + ",
+            k0_t2!(),
+            "*(0.00010750 + ",
+            k0_t2!(),
+            "*7.4e-6)))))",
+        )
+    };
+}
+
+macro_rules! k0_small {
+    () => {
+        concat!(
+            "(log(((x) * 0.5)) * (-(",
+            k0_i0!(),
+            ")) + (",
+            k0_correction!(),
+            "))",
+        )
+    };
+}
+
+macro_rules! k0_t {
+    () => {
+        "(2.0 / (x))"
+    };
+}
+
+macro_rules! k0_series {
+    () => {
+        concat!(
+            "1.25331414 + ",
+            k0_t!(),
+            "*(-0.07832358 + ",
+            k0_t!(),
+            "*(0.02189568 + ",
+            k0_t!(),
+            "*(-0.01062446 + ",
+            k0_t!(),
+            "*(0.00587872 + ",
+            k0_t!(),
+            "*(-0.00251540 + ",
+            k0_t!(),
+            "*0.00053208)))))",
+        )
+    };
+}
+
+macro_rules! k0_large {
+    () => {
+        concat!("((exp(-(x)) / sqrt(x)) * (", k0_series!(), "))",)
+    };
+}
+
+macro_rules! k0_nan {
+    () => {
+        "(((x) - (x)) / ((x) - (x)))"
+    };
+}
+
+macro_rules! wgsl_k0_expr {
+    () => {
+        concat!(
+            "select(",
+            k0_nan!(),
+            ", select(",
+            k0_large!(),
+            ", ",
+            k0_small!(),
+            ", (x) <= 2.0), ((x) > 0.0) && (abs(x) <= 3.402823466e+38))",
+        )
+    };
+}
+
+macro_rules! c_k0_expr {
+    () => {
+        concat!(
+            "(((x) > 0.0 && isfinite(x)) ? (((x) <= 2.0) ? (",
+            k0_small!(),
+            ") : (",
+            k0_large!(),
+            ")) : (",
+            k0_nan!(),
+            "))",
+        )
+    };
+}
+
+// K0 stays out of the tables with J0/J1: the WGSL spelling nests `select`
+// and reports `SUPPORTS_F64 = false` per the select precedent, while the C
+// spelling converts implicitly and serves both precisions. CUDA and HIP
+// share one spelling through `c_k0_expr!`.
+impl UnaryExpr<Wgsl> for K0Op {
+    const EXPR: &'static str = wgsl_k0_expr!();
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for K0Op {
+    const EXPR: &'static str = c_k0_expr!();
+}
+impl UnaryExpr<HipC> for K0Op {
+    const EXPR: &'static str = c_k0_expr!();
 }

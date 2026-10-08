@@ -6,7 +6,7 @@
 
 use eunomia::F16;
 use hephaestus_conformance::{
-    assert_bessel_contract, assert_elementwise_contract, assert_sinc_contract,
+    assert_bessel_contract, assert_elementwise_contract, assert_k0_contract, assert_sinc_contract,
     assert_typed_elementwise_contract,
 };
 use hephaestus_core::{AddOp, ComputeDevice, ElementwiseOps, ExpOp, PowOp, StridedView};
@@ -26,6 +26,11 @@ fn host_satisfies_the_sinc_contract() {
 #[test]
 fn host_satisfies_the_bessel_contract() {
     assert_bessel_contract(&HostDevice::new(), &HostElementwiseOps);
+}
+
+#[test]
+fn host_satisfies_the_k0_contract() {
+    assert_k0_contract(&HostDevice::new(), &HostElementwiseOps);
 }
 
 #[test]
