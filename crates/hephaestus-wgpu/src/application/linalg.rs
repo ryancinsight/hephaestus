@@ -59,6 +59,10 @@ impl MatmulZero for i32 {
     const WGSL_ZERO: &'static str = "0";
 }
 
+impl MatmulZero for f64 {
+    const WGSL_ZERO: &'static str = "0.0";
+}
+
 impl MatrixIdentityScalar for i32 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
