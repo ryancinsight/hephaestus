@@ -27,6 +27,8 @@ pub mod arg_reduce_seam;
 pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
+/// Per-builtin driver capability canary for WGSL.
+pub mod canary;
 /// Native WGSL regular and transposed convolution.
 pub mod convolution;
 /// Device-neutral batched cross-product seam implementation.

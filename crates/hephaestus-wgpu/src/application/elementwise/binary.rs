@@ -5,6 +5,7 @@ use hephaestus_core::{
 };
 
 use super::reject_output_alias;
+use crate::application::canary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -51,6 +52,9 @@ fn binary_elementwise_into_expression<T>(
 where
     T: DialectScalar<Wgsl> + Pod,
 {
+    if let Some(width) = canary::width_of::<T>() {
+        canary::require_expr_safe(device, expr, width, "binary elementwise")?;
+    }
     if a.len != b.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: a.len,

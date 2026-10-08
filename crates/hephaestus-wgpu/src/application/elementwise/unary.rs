@@ -4,6 +4,7 @@ use hephaestus_core::{
 };
 
 use super::{reject_f64_unsupported_unary, reject_output_alias};
+use crate::application::canary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -66,6 +67,9 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     reject_f64_unsupported_unary::<Op, T>()?;
+    if let Some(width) = canary::width_of::<T>() {
+        canary::require_expr_safe(device, Op::EXPR, width, "unary elementwise")?;
+    }
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: out.len,
