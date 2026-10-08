@@ -174,6 +174,10 @@ impl DialectScalar<Wgsl> for f64 {
     const TYPE_TOKEN: &'static str = "f64";
 }
 
+impl DialectScalar<Wgsl> for eunomia::F16 {
+    const TYPE_TOKEN: &'static str = "f16";
+}
+
 impl DialectScalar<CudaC> for f64 {
     const TYPE_TOKEN: &'static str = "double";
 }
@@ -250,6 +254,7 @@ mod tests {
         assert_eq!(token_of::<f64, HipC>(), "double");
         assert_eq!(token_of::<eunomia::F16, CudaC>(), "__half");
         assert_eq!(token_of::<eunomia::Bf16, CudaC>(), "__nv_bfloat16");
+        assert_eq!(token_of::<eunomia::F16, Wgsl>(), "f16");
         // GPU vector types — f32
         assert_eq!(token_of::<[f32; 2], Wgsl>(), "vec2<f32>");
         assert_eq!(token_of::<[f32; 2], CudaC>(), "float2");

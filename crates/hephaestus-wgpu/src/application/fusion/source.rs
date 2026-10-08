@@ -117,6 +117,7 @@ macro_rules! impl_fusion_scalar {
 impl_fusion_scalar!(f32, "f32(axis_length)");
 impl_fusion_scalar!(i32, "i32(axis_length)");
 impl_fusion_scalar!(u32, "u32(axis_length)");
+impl_fusion_scalar!(eunomia::F16, "f16(axis_length)");
 
 pub(crate) fn validate_expression_source(source: &str) -> Result<()> {
     if source.trim().is_empty() {

@@ -147,6 +147,9 @@ impl IdentityToken<SumOp, Wgsl> for i32 {
 impl IdentityToken<SumOp, Wgsl> for f64 {
     const TOKEN: &'static str = "0.0";
 }
+impl IdentityToken<SumOp, Wgsl> for eunomia::F16 {
+    const TOKEN: &'static str = "0.0";
+}
 impl IdentityToken<SumOp, CudaC> for f32 {
     const TOKEN: &'static str = "0.0f";
 }
@@ -176,6 +179,9 @@ impl IdentityToken<ProdOp, Wgsl> for i32 {
     const TOKEN: &'static str = "1";
 }
 impl IdentityToken<ProdOp, Wgsl> for f64 {
+    const TOKEN: &'static str = "1.0";
+}
+impl IdentityToken<ProdOp, Wgsl> for eunomia::F16 {
     const TOKEN: &'static str = "1.0";
 }
 impl IdentityToken<ProdOp, CudaC> for f32 {
@@ -209,6 +215,9 @@ impl IdentityToken<MinOp, Wgsl> for i32 {
 impl IdentityToken<MinOp, Wgsl> for f64 {
     const TOKEN: &'static str = "1.7976931348623157e+308";
 }
+impl IdentityToken<MinOp, Wgsl> for eunomia::F16 {
+    const TOKEN: &'static str = "65504.0";
+}
 impl IdentityToken<MinOp, CudaC> for f32 {
     const TOKEN: &'static str = "3.402823466e+38f";
 }
@@ -239,6 +248,9 @@ impl IdentityToken<MaxOp, Wgsl> for i32 {
 }
 impl IdentityToken<MaxOp, Wgsl> for f64 {
     const TOKEN: &'static str = "-1.7976931348623157e+308";
+}
+impl IdentityToken<MaxOp, Wgsl> for eunomia::F16 {
+    const TOKEN: &'static str = "-65504.0";
 }
 impl IdentityToken<MaxOp, CudaC> for f32 {
     const TOKEN: &'static str = "-3.402823466e+38f";
@@ -271,6 +283,9 @@ impl IdentityToken<CumSumOp, Wgsl> for i32 {
 impl IdentityToken<CumSumOp, Wgsl> for f64 {
     const TOKEN: &'static str = "0.0";
 }
+impl IdentityToken<CumSumOp, Wgsl> for eunomia::F16 {
+    const TOKEN: &'static str = "0.0";
+}
 impl IdentityToken<CumSumOp, CudaC> for f32 {
     const TOKEN: &'static str = "0.0f";
 }
@@ -300,6 +315,9 @@ impl IdentityToken<CumProdOp, Wgsl> for i32 {
     const TOKEN: &'static str = "1";
 }
 impl IdentityToken<CumProdOp, Wgsl> for f64 {
+    const TOKEN: &'static str = "1.0";
+}
+impl IdentityToken<CumProdOp, Wgsl> for eunomia::F16 {
     const TOKEN: &'static str = "1.0";
 }
 impl IdentityToken<CumProdOp, CudaC> for f32 {
@@ -408,6 +426,30 @@ mod tests {
         assert_eq!(
             <eunomia::Bf16 as OpIdentity<MaxOp>>::IDENTITY,
             eunomia::Bf16::from_bits(0xFF7F)
+        );
+    }
+
+    #[test]
+    fn wgsl_f16_tokens_are_abstract_float_literals() {
+        // Identity tokens initialize or assign into `f16`-typed places, so
+        // AbstractFloat literals convert implicitly; no `h` suffix needed.
+        assert_eq!(<eunomia::F16 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
+        assert_eq!(<eunomia::F16 as IdentityToken<ProdOp, Wgsl>>::TOKEN, "1.0");
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<MinOp, Wgsl>>::TOKEN,
+            "65504.0"
+        );
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<MaxOp, Wgsl>>::TOKEN,
+            "-65504.0"
+        );
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<CumSumOp, Wgsl>>::TOKEN,
+            "0.0"
+        );
+        assert_eq!(
+            <eunomia::F16 as IdentityToken<CumProdOp, Wgsl>>::TOKEN,
+            "1.0"
         );
     }
 
