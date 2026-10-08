@@ -50,6 +50,8 @@ pub mod random_seam;
 pub mod reduction;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
+/// Three-dimensional staggered gradient/divergence kernels.
+pub mod staggered;
 /// Provider-owned stateful parameter updates.
 pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.
