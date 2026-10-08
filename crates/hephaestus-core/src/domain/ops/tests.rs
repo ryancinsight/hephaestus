@@ -79,6 +79,18 @@ fn combine_and_identity_agree_per_dialect() {
         <SignOp as UnaryExpr<Wgsl>>::EXPR,
         "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)"
     );
+    assert_eq!(
+        <SincOp as UnaryExpr<Wgsl>>::EXPR,
+        "select(sin(x) / x, 1.0, x == 0.0)"
+    );
+    assert_eq!(
+        <SincOp as UnaryExpr<CudaC>>::EXPR,
+        "((x) == 0.0f ? 1.0f : sin(x) / (x))"
+    );
+    assert_eq!(
+        <SincOp as UnaryExpr<HipC>>::EXPR,
+        "((x) == 0.0f ? 1.0f : sin(x) / (x))"
+    );
     assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
     assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
     assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
@@ -126,13 +138,16 @@ fn comparisons_use_scalar_correct_mask_literals() {
     assert!(<GtOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs > rhs"));
     assert!(<LeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs <= rhs"));
     assert!(<GeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs >= rhs"));
-    // The three literal-`select` unary spellings opt out of f64 while the
+    // The literal-`select` unary spellings opt out of f64 while the
     // typed-arm majority keeps the default. Const-evaluated: a wrong flag
     // fails the build, not the suite.
     const _: () = assert!(!<SignOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(!<ReluGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(!<HardsigmoidGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<SincOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<SignOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<SincOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<SincOp as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<ReluOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<Log10Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     assert_eq!(
@@ -379,6 +394,19 @@ where
     assert_eq!(<SignOp as UnaryValue>::apply(T::ZERO), T::ZERO);
     assert_eq!(<SignOp as UnaryValue>::apply(-T::ZERO), T::ZERO);
     assert_eq!(<SignOp as UnaryValue>::apply(T::NAN), T::ZERO);
+
+    // SincOp resolves the removable singularity to exactly 1 at +-0 and
+    // propagates NaN; elsewhere it is sin(x)/x to libm rounding.
+    assert_eq!(<SincOp as UnaryValue>::apply(T::ZERO), T::ONE);
+    assert_eq!(<SincOp as UnaryValue>::apply(-T::ZERO), T::ONE);
+    assert!(<SincOp as UnaryValue>::apply(T::NAN).is_nan());
+    assert!(
+        relative(
+            <SincOp as UnaryValue>::apply(T::from_f64(1.0)),
+            0.8414709848078965
+        ) < 1e-6,
+        "sinc(1) must match sin(1)/1 to libm rounding"
+    );
 }
 
 #[test]

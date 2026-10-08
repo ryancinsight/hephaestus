@@ -99,8 +99,8 @@ pub use domain::ops::{
     HardswishOp, IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
     MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
     ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp,
-    TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr, UnaryValue,
+    SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp,
+    TanOp, TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr, UnaryValue,
 };
 pub use domain::pad::{PadOps, PadWidth, validate_pad_shape};
 pub use domain::parameterized::{

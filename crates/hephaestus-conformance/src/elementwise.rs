@@ -14,7 +14,7 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, MulOp, NegOp,
-    SqrtOp, StridedView, SubOp, UnaryExpr,
+    SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
 };
 use leto::Layout;
 
@@ -46,6 +46,29 @@ where
     scalar_ops_compute_exact_values(device, ops);
     prepared_scalar_rebinds_bound_operands(device, ops);
     shape_mismatch_is_rejected_before_mutation(device, ops);
+}
+
+/// Run the `sinc` clause against one backend.
+///
+/// `sinc` resolves its removable singularity to exactly 1 at `+-0` on every
+/// backend. Nonzero lanes exercise each dialect's `sin`, whose rounding is
+/// the driver's declared capability (ADR 0043), so the device clause pins
+/// only the exact branch; value accuracy against `sin(x)/x` is covered by
+/// the core `UnaryValue` oracles.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_sinc_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    SincOp: UnaryExpr<E::Dialect>,
+{
+    sinc_zero_is_exactly_one(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -121,6 +144,23 @@ where
         unary::<_, _, SqrtOp, 4>(device, ops, &[4.0, 9.0, 0.25, 1.0]),
         [2.0, 3.0, 0.5, 1.0],
         "{name}: square root of perfect squares"
+    );
+}
+
+/// The removable singularity resolves to exactly 1 at `+-0`, exercising
+/// each dialect's branch spelling (`select` vs ternary) on device.
+fn sinc_zero_is_exactly_one<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    SincOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    assert_eq!(
+        unary::<_, _, SincOp, 2>(device, ops, &[0.0, -0.0]),
+        [1.0, 1.0],
+        "{name}: sinc resolves +-0 to exactly 1"
     );
 }
 

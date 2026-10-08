@@ -6,7 +6,7 @@
 
 #![cfg(target_os = "macos")]
 
-use hephaestus_conformance::assert_elementwise_contract;
+use hephaestus_conformance::{assert_elementwise_contract, assert_sinc_contract};
 use hephaestus_metal::{MetalDevice, MetalElementwiseOps};
 
 #[test]
@@ -14,4 +14,5 @@ fn metal_satisfies_the_elementwise_contract() {
     let device = MetalDevice::try_default()
         .expect("Metal elementwise conformance requires a physical device");
     assert_elementwise_contract(&device, &MetalElementwiseOps::default());
+    assert_sinc_contract(&device, &MetalElementwiseOps::default());
 }
