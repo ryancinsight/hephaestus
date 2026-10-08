@@ -93,5 +93,9 @@ path = "tests/contracts.rs"
 name = "cross_entropy_f64"
 path = "tests/cross_entropy_f64.rs"
 
+[[test]]
+name = "canary"
+path = "tests/canary.rs"
+
 [lints]
 workspace = true

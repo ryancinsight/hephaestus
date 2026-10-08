@@ -18,6 +18,7 @@ use super::shader::{
     BACKWARD_ACCUMULATE, BACKWARD_ARITHMETIC, BACKWARD_ROWS, FORWARD_MEAN, FORWARD_PREFLIGHT,
     FORWARD_ROWS, WgslCrossEntropyScalar, shader,
 };
+use crate::application::canary::{self, CanaryWidth, MathBuiltin};
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::application::prepared::checked_bind_group;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -240,6 +241,14 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
         operands: CrossEntropyForwardOperands<'a, WgpuBuffer<f64>, WgpuBuffer<u32>>,
     ) -> Result<Self::PreparedForward<'a>> {
         require_shader_f64(device)?;
+        // The forward shaders call f64 `log`, which aborts pipeline
+        // compilation on the recorded adapters; refuse with cause instead.
+        canary::require_builtin(
+            device,
+            MathBuiltin::Log,
+            CanaryWidth::F64,
+            "cross-entropy forward",
+        )?;
         prepare_forward(device, operands)
     }
 
