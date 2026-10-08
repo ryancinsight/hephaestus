@@ -14,6 +14,17 @@ pub trait UnaryExpr<L: KernelDialect>: Copy + Send + Sync + 'static {
     /// Expression mapping `x` (e.g. `"exp(-x)"`).
     const EXPR: &'static str;
 
+    /// Whether [`Self::EXPR`] is valid when the kernel scalar is `f64`.
+    ///
+    /// `true` unless the spelling pins a narrower type. The known WGSL trap
+    /// is `select` with literal-only arms: overload resolution concretizes
+    /// the arms to `f32`, and automatic conversions do not convert `f32` to
+    /// `f64` at the typed output assignment, so the shader fails validation
+    /// for `f64` buffers. Seams reject `(Op, f64)` pairs reporting `false`
+    /// here with an unsupported-operation error instead of emitting a
+    /// shader the driver cannot compile.
+    const SUPPORTS_F64: bool = true;
+
     /// The unary operator applied to a value, for a dialect that executes
     /// operators instead of rendering them (ADR 0061).
     ///

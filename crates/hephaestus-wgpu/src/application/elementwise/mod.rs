@@ -1,6 +1,6 @@
 //! Elementwise compute operations.
 
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl};
 
 use crate::application::pipeline::encode_compute_pass;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -36,6 +36,30 @@ fn reject_output_alias<T, U>(
     if input.aliases(out) {
         return Err(HephaestusError::DispatchFailed {
             message: format!("output buffer must not alias {input_label} input"),
+        });
+    }
+    Ok(())
+}
+
+/// Reject a unary dispatch whose WGSL template cannot target `f64` buffers.
+///
+/// Templates reporting [`UnaryExpr::SUPPORTS_F64`] `false` spell `select`
+/// with literal-only arms, which concretize to `f32` and fail shader
+/// validation against `array<f64>` outputs. Failing here keeps the error a
+/// typed unsupported-operation rejection instead of a driver compile
+/// failure. Every unary shader-build path (contiguous, strided, seam
+/// prepare) calls this before emitting WGSL.
+pub(crate) fn reject_f64_unsupported_unary<Op, T>() -> Result<()>
+where
+    Op: UnaryExpr<Wgsl>,
+    T: DialectScalar<Wgsl>,
+{
+    if !Op::SUPPORTS_F64 && core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
+        return Err(HephaestusError::Unsupported {
+            message: format!(
+                "{} does not support f64 in WGSL: literal-only `select` arms concretize f32",
+                core::any::type_name::<Op>()
+            ),
         });
     }
     Ok(())
