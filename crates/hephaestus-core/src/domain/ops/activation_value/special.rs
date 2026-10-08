@@ -1,7 +1,7 @@
 //! Value functions for the special-function markers: `erf`, `erfc`, `lgamma`,
-//! `sinc`, `j0`, `j1`.
+//! `sinc`, `j0`, `j1`, `k0`.
 
-use super::super::{ErfOp, ErfcOp, J0Op, J1Op, LgammaOp, SincOp, UnaryValue};
+use super::super::{ErfOp, ErfcOp, J0Op, J1Op, K0Op, LgammaOp, SincOp, UnaryValue};
 use eunomia::RealField;
 
 impl UnaryValue for ErfOp {
@@ -102,6 +102,48 @@ impl UnaryValue for J0Op {
 impl UnaryValue for J1Op {
     fn apply<T: RealField>(x: T) -> T {
         bessel_j1_value(x)
+    }
+}
+
+/// Modified Bessel function of the second kind K0 over any real scalar:
+/// Abramowitz & Stegun 9.8.5 for `0 < x <= 2` and 9.8.6 for `x > 2`, the
+/// same nested program as leto's scalar `bessel_k0` and elementwise `K0Op`.
+/// Non-positive and non-finite arguments yield `NaN`, as the scalar does.
+fn bessel_k0_value<T: RealField>(x: T) -> T {
+    if !(x.is_finite() && x > T::ZERO) {
+        return T::NAN;
+    }
+    if x <= T::from_f64(2.0) {
+        let t1 = (x / T::from_f64(3.75)) * (x / T::from_f64(3.75));
+        let i0 = T::ONE
+            + t1 * (T::from_f64(3.515_622_9)
+                + t1 * (T::from_f64(3.089_942_4)
+                    + t1 * (T::from_f64(1.206_749_2)
+                        + t1 * (T::from_f64(0.265_973_2)
+                            + t1 * (T::from_f64(0.036_076_8) + t1 * T::from_f64(0.004_581_3))))));
+        let t2 = (x * T::from_f64(0.5)) * (x * T::from_f64(0.5));
+        let correction = T::from_f64(-0.577_215_66)
+            + t2 * (T::from_f64(0.422_784_20)
+                + t2 * (T::from_f64(0.230_697_56)
+                    + t2 * (T::from_f64(0.034_885_90)
+                        + t2 * (T::from_f64(0.002_626_98)
+                            + t2 * (T::from_f64(0.000_107_50) + t2 * T::from_f64(7.4e-6))))));
+        (x * T::from_f64(0.5)).ln() * -i0 + correction
+    } else {
+        let t = T::from_f64(2.0) / x;
+        let series = T::from_f64(1.253_314_14)
+            + t * (T::from_f64(-0.078_323_58)
+                + t * (T::from_f64(0.021_895_68)
+                    + t * (T::from_f64(-0.010_624_46)
+                        + t * (T::from_f64(0.005_878_72)
+                            + t * (T::from_f64(-0.002_515_40) + t * T::from_f64(0.000_532_08))))));
+        (-x).exp() / x.sqrt() * series
+    }
+}
+
+impl UnaryValue for K0Op {
+    fn apply<T: RealField>(x: T) -> T {
+        bessel_k0_value(x)
     }
 }
 

@@ -146,6 +146,10 @@ pub struct J0Op;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct J1Op;
 
+/// Modified Bessel function of the second kind K0 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct K0Op;
+
 /// Exact Gaussian Error Linear Unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GeluOp;
