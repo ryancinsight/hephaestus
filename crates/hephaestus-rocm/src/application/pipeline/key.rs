@@ -132,6 +132,7 @@ pub(crate) enum PipelineKey {
     },
     CrossEntropy {
         entry: &'static str,
+        scalar: TypeId,
     },
     GroupedStream(u64),
 }

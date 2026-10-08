@@ -89,5 +89,9 @@ harness = false
 name = "contracts"
 path = "tests/contracts.rs"
 
+[[test]]
+name = "cross_entropy_f64"
+path = "tests/cross_entropy_f64.rs"
+
 [lints]
 workspace = true

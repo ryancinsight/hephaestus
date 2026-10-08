@@ -39,22 +39,92 @@ where
     assert_cross_entropy_contract_for::<D, O, f64>(device, operations);
 }
 
+/// Run the additive-backward clauses against one backend, without forward.
+///
+/// Backends whose forward path is driver-limited (WGSL f64 needs `log`, which
+/// aborts shader compilation on some Vulkan drivers) still prove their
+/// backward path against the Leto oracle through this entry point. The
+/// backward body is the same one the full contract runs; only the probability
+/// input differs (Leto oracle output instead of the device forward output).
+///
+/// # Panics
+///
+/// Panics with the backend and violated clause when provider results diverge
+/// from the Leto CPU contract.
+pub fn assert_cross_entropy_backward_contract<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, f32>,
+{
+    assert_cross_entropy_backward_contract_for::<D, O, f32>(device, operations);
+}
+
+/// Run the additive-backward clauses at f64 against one backend, without forward.
+///
+/// Mirrors [`assert_cross_entropy_backward_contract`] with the f64 Leto oracle.
+///
+/// # Panics
+///
+/// Panics with the backend and violated clause when provider results diverge
+/// from the Leto CPU contract.
+pub fn assert_cross_entropy_backward_contract_f64<D, O>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, f64>,
+{
+    assert_cross_entropy_backward_contract_for::<D, O, f64>(device, operations);
+}
+
 fn assert_cross_entropy_contract_for<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,
     T: CrossEntropyScalar + RealScalar + RealField,
 {
-    strided_forward_and_backward::<D, O, T>(device, operations);
+    let oracle = strided_oracle::<T>();
+    // The full contract chains device forward output into backward, so a
+    // forward-output-format mismatch fails here rather than in isolation.
+    let (probabilities, targets) = strided_forward::<D, O, T>(device, operations, &oracle);
+    strided_backward::<D, O, T>(device, operations, &oracle, &probabilities, &targets);
     target_element_uses_only_its_executed_candidate::<D, O, T>(device, operations);
     target_failure_precedes_nonfinite_upstream::<D, O, T>(device, operations);
     invalid_probability_precedes_later_arithmetic::<D, O, T>(device, operations);
 }
 
-fn strided_forward_and_backward<D, O, T>(device: &D, operations: &O)
+fn assert_cross_entropy_backward_contract_for<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
+{
+    let oracle = strided_oracle::<T>();
+    let probabilities = device
+        .upload(&oracle.expected_probabilities)
+        .expect("probability upload");
+    let targets = device.upload(&oracle.targets_host).expect("targets upload");
+    strided_backward::<D, O, T>(device, operations, &oracle, &probabilities, &targets);
+    target_element_uses_only_its_executed_candidate::<D, O, T>(device, operations);
+    target_failure_precedes_nonfinite_upstream::<D, O, T>(device, operations);
+    invalid_probability_precedes_later_arithmetic::<D, O, T>(device, operations);
+}
+
+/// Strided fixture layouts and host vectors with both Leto oracles applied.
+struct StridedOracle<T> {
+    logits_layout: Layout<2>,
+    targets_layout: Layout<1>,
+    loss_layout: Layout<1>,
+    probability_layout: Layout<2>,
+    logits_host: [T; 9],
+    targets_host: [u32; 4],
+    output_gradient_host: [T; 3],
+    initial_gradient: [T; 9],
+    expected_loss: [T; 3],
+    expected_probabilities: [T; 9],
+    expected_gradient: [T; 9],
+}
+
+fn strided_oracle<T>() -> StridedOracle<T>
+where
     T: CrossEntropyScalar + RealScalar + RealField,
 {
     let logits_host = [91.0, 0.0, 2.0, 1.0, 92.0, -1.0, 3.0, 0.0, 93.0].map(T::from_f32);
@@ -76,8 +146,44 @@ where
     )
     .expect("Leto cross-entropy forward oracle");
 
-    let logits = device.upload(&logits_host).expect("logits upload");
-    let targets = device.upload(&targets_host).expect("targets upload");
+    let output_gradient_host = [11.0, 0.75, 12.0].map(T::from_f32);
+    let initial_gradient = [13.0, 0.25, -0.5, 1.0, 14.0, -1.0, 0.5, 0.75, 15.0].map(T::from_f32);
+    let mut expected_gradient = initial_gradient;
+    cross_entropy_backward_accumulate(
+        &ArrayView::new(loss_layout, &output_gradient_host),
+        &ArrayView::new(probability_layout, &expected_probabilities),
+        &[2, 0],
+        &mut ArrayViewMut::new(probability_layout, &mut expected_gradient),
+    )
+    .expect("Leto cross-entropy backward oracle");
+
+    StridedOracle {
+        logits_layout,
+        targets_layout,
+        loss_layout,
+        probability_layout,
+        logits_host,
+        targets_host,
+        output_gradient_host,
+        initial_gradient,
+        expected_loss,
+        expected_probabilities,
+        expected_gradient,
+    }
+}
+
+fn strided_forward<D, O, T>(
+    device: &D,
+    operations: &O,
+    oracle: &StridedOracle<T>,
+) -> (D::Buffer<T>, D::Buffer<u32>)
+where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
+{
+    let logits = device.upload(&oracle.logits_host).expect("logits upload");
+    let targets = device.upload(&oracle.targets_host).expect("targets upload");
     let loss = device
         .upload(&[-7.0; 3].map(T::from_f32))
         .expect("loss upload");
@@ -88,54 +194,60 @@ where
         .cross_entropy_forward_into(
             device,
             CrossEntropyForwardOperands {
-                logits: StridedView::new(&logits, &logits_layout),
-                targets: StridedView::new(&targets, &targets_layout),
-                loss: StridedView::new(&loss, &loss_layout),
-                probabilities: StridedView::new(&probabilities, &probability_layout),
+                logits: StridedView::new(&logits, &oracle.logits_layout),
+                targets: StridedView::new(&targets, &oracle.targets_layout),
+                loss: StridedView::new(&loss, &oracle.loss_layout),
+                probabilities: StridedView::new(&probabilities, &oracle.probability_layout),
             },
         )
         .expect("cross-entropy forward dispatch");
-    assert_close(device, &loss, &expected_loss, "cross-entropy mean loss");
+    assert_close(
+        device,
+        &loss,
+        &oracle.expected_loss,
+        "cross-entropy mean loss",
+    );
     assert_close(
         device,
         &probabilities,
-        &expected_probabilities,
+        &oracle.expected_probabilities,
         "cross-entropy probabilities",
     );
+    (probabilities, targets)
+}
 
-    let output_gradient_host = [11.0, 0.75, 12.0].map(T::from_f32);
-    let output_gradient_layout = loss_layout;
-    let initial_gradient = [13.0, 0.25, -0.5, 1.0, 14.0, -1.0, 0.5, 0.75, 15.0].map(T::from_f32);
-    let mut expected_gradient = initial_gradient;
-    cross_entropy_backward_accumulate(
-        &ArrayView::new(output_gradient_layout, &output_gradient_host),
-        &ArrayView::new(probability_layout, &expected_probabilities),
-        &[2, 0],
-        &mut ArrayViewMut::new(probability_layout, &mut expected_gradient),
-    )
-    .expect("Leto cross-entropy backward oracle");
-
+fn strided_backward<D, O, T>(
+    device: &D,
+    operations: &O,
+    oracle: &StridedOracle<T>,
+    probabilities: &D::Buffer<T>,
+    targets: &D::Buffer<u32>,
+) where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
+{
     let output_gradient = device
-        .upload(&output_gradient_host)
+        .upload(&oracle.output_gradient_host)
         .expect("output-gradient upload");
     let logit_gradient = device
-        .upload(&initial_gradient)
+        .upload(&oracle.initial_gradient)
         .expect("logit-gradient upload");
     operations
         .cross_entropy_backward_accumulate(
             device,
             CrossEntropyBackwardOperands {
-                output_gradient: StridedView::new(&output_gradient, &output_gradient_layout),
-                probabilities: StridedView::new(&probabilities, &probability_layout),
-                targets: StridedView::new(&targets, &targets_layout),
-                logit_gradient: StridedView::new(&logit_gradient, &probability_layout),
+                output_gradient: StridedView::new(&output_gradient, &oracle.loss_layout),
+                probabilities: StridedView::new(probabilities, &oracle.probability_layout),
+                targets: StridedView::new(targets, &oracle.targets_layout),
+                logit_gradient: StridedView::new(&logit_gradient, &oracle.probability_layout),
             },
         )
         .expect("cross-entropy backward dispatch");
     assert_close(
         device,
         &logit_gradient,
-        &expected_gradient,
+        &oracle.expected_gradient,
         "additive cross-entropy gradient",
     );
 }
