@@ -167,7 +167,7 @@ where
     T: IdentityToken<Op, Wgsl>,
 {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisScanMeta {{
     input_shape: vec2<u32>,
     input_strides: vec2<i32>,
@@ -248,9 +248,28 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
         expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hephaestus_core::CumSumOp;
+
+    #[test]
+    fn f16_scan_shader_carries_the_enable_prelude() {
+        let width = BlockWidth::DEFAULT;
+        assert!(
+            scan_shader_source::<CumSumOp, eunomia::F16>(width).starts_with("enable f16;"),
+            "F16 scan shader must open with the enable directive"
+        );
+        assert!(
+            !scan_shader_source::<CumSumOp, f32>(width).starts_with("enable"),
+            "f32 scan shader must not gain a prelude"
+        );
+    }
 }

@@ -176,6 +176,7 @@ impl DialectScalar<Wgsl> for f64 {
 
 impl DialectScalar<Wgsl> for eunomia::F16 {
     const TYPE_TOKEN: &'static str = "f16";
+    const PRELUDE: &'static str = "enable f16;\n";
 }
 
 impl DialectScalar<CudaC> for f64 {
