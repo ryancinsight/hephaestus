@@ -2,9 +2,11 @@
 
 use core::marker::PhantomData;
 
+use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, StatefulUpdateAliasing, StatefulUpdateMeta, StatefulUpdateOperands,
-    StatefulUpdateOps, StatefulUpdateRule, Wgsl, plan_stateful_update,
+    BlockWidth, DeviceFeature, DialectScalar, HephaestusError, StatefulUpdateAliasing,
+    StatefulUpdateMeta, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, Wgsl,
+    plan_stateful_update,
 };
 
 use crate::application::elementwise::encode_elementwise;
@@ -14,25 +16,28 @@ use crate::{Result, WgpuBuffer, WgpuDevice};
 
 struct StatefulKernel<Rule>(PhantomData<Rule>);
 
-fn parameters_declaration<Rule>() -> String
+fn parameters_declaration<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<Wgsl>,
+    T: DialectScalar<Wgsl>,
 {
-    let fields = Rule::PARAMETER_FIELDS
+    let fields = Rule::parameter_fields_for::<T>()
         .iter()
-        .map(|field| format!("    {field}: f32,\n"))
+        .map(|field| format!("    {field}: {ty},\n", ty = T::TYPE_TOKEN))
         .collect::<String>();
     format!("struct Parameters {{\n{fields}}}\n")
 }
 
-fn shader_source<Rule>(width: BlockWidth) -> String
+fn shader_source<Rule, T>(width: BlockWidth) -> String
 where
     Rule: StatefulUpdateRule<Wgsl>,
+    T: DialectScalar<Wgsl>,
 {
+    let ty = T::TYPE_TOKEN;
     let state_one_binding = if Rule::STATE_COUNT == 2 {
-        "@group(0) @binding(5) var<storage, read_write> state_one: array<f32>;\n"
+        format!("@group(0) @binding(5) var<storage, read_write> state_one: array<{ty}>;\n")
     } else {
-        ""
+        String::new()
     };
     let state_one_decode = if Rule::STATE_COUNT == 2 {
         "    var state_one_offset = i32(lmeta.offsets.w);\n"
@@ -64,9 +69,9 @@ where
 {parameters}
 @group(0) @binding(0) var<uniform> lmeta: Meta;
 @group(0) @binding(1) var<uniform> parameters: Parameters;
-@group(0) @binding(2) var<storage, read_write> parameter: array<f32>;
-@group(0) @binding(3) var<storage, read> gradient: array<f32>;
-@group(0) @binding(4) var<storage, read_write> state_zero: array<f32>;
+@group(0) @binding(2) var<storage, read_write> parameter: array<{ty}>;
+@group(0) @binding(3) var<storage, read> gradient: array<{ty}>;
+@group(0) @binding(4) var<storage, read_write> state_zero: array<{ty}>;
 {state_one_binding}
 @compute @workgroup_size({width})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
@@ -96,14 +101,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     state_zero[u32(state_zero_offset)] = state_zero_next;
 {state_one_store}}}
 "#,
-        parameters = parameters_declaration::<Rule>(),
+        parameters = parameters_declaration::<Rule, T>(),
         width = width.get(),
-        body = Rule::BODY,
+        body = Rule::body_for::<T>(),
     )
 }
 
-fn aliasing<const N: usize>(
-    operands: &StatefulUpdateOperands<'_, WgpuBuffer<f32>, N>,
+fn aliasing<T, const N: usize>(
+    operands: &StatefulUpdateOperands<'_, WgpuBuffer<T>, N>,
 ) -> StatefulUpdateAliasing {
     let state_zero = operands.states.first();
     let state_one = operands.states.get(1);
@@ -123,6 +128,108 @@ fn aliasing<const N: usize>(
     }
 }
 
+/// Shared validate-plan-encode driver: both widths run the same pipeline
+/// with width-selected shader text, uniform bytes, and cache key.
+fn dispatch<Rule, T, P, const N: usize>(
+    device: &WgpuDevice,
+    operands: StatefulUpdateOperands<'_, WgpuBuffer<T>, N>,
+    parameters: &P,
+    validate: fn(&P) -> Result<()>,
+) -> Result<()>
+where
+    Rule: StatefulUpdateRule<Wgsl>,
+    T: DialectScalar<Wgsl>,
+    P: Pod,
+{
+    validate(parameters)?;
+    validate_buffer_owner(
+        operands.parameter.buffer,
+        device,
+        "stateful-update parameter",
+    )?;
+    validate_buffer_owner(operands.gradient.buffer, device, "stateful-update gradient")?;
+    for state in operands.states {
+        validate_buffer_owner(state.buffer, device, "stateful-update state")?;
+    }
+    let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
+    if plan.is_empty() {
+        return Ok(());
+    }
+    let width = BlockWidth::DEFAULT;
+    let key = (
+        core::any::TypeId::of::<StatefulKernel<Rule>>(),
+        core::any::TypeId::of::<T>(),
+        width.get(),
+    );
+    let pipeline = cached_pipeline(device, key, "hephaestus-stateful-update", || {
+        shader_source::<Rule, T>(width)
+    });
+    let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<StatefulUpdateMeta>(1)?)?;
+
+    let parameter_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<P>(1)?)?;
+
+    device
+        .queue()
+        .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&plan.metadata()));
+    device
+        .queue()
+        .write_buffer(&parameter_buffer, 0, eunomia::layout::bytes_of(parameters));
+    let state_zero = operands
+        .states
+        .first()
+        .expect("invariant: planner validated state zero");
+    let common = [
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: meta_buffer.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: parameter_buffer.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: operands.parameter.buffer.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 3,
+            resource: operands.gradient.buffer.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 4,
+            resource: state_zero.buffer.as_entire_binding(),
+        },
+    ];
+    if let Some(state_one) = operands.states.get(1) {
+        let entries = [
+            common[0].clone(),
+            common[1].clone(),
+            common[2].clone(),
+            common[3].clone(),
+            common[4].clone(),
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: state_one.buffer.as_entire_binding(),
+            },
+        ];
+        encode_elementwise(
+            device,
+            &pipeline,
+            "hephaestus-stateful-update",
+            &entries,
+            workgroups(plan.len(), width)?,
+        )
+    } else {
+        encode_elementwise(
+            device,
+            &pipeline,
+            "hephaestus-stateful-update",
+            &common,
+            workgroups(plan.len(), width)?,
+        )
+    }
+}
+
 /// Provider-owned WGPU implementation of stateful parameter updates.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuStatefulUpdateOps;
@@ -139,94 +246,58 @@ impl StatefulUpdateOps<WgpuDevice> for WgpuStatefulUpdateOps {
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        Rule::validate_parameters(&parameters)?;
-        validate_buffer_owner(
-            operands.parameter.buffer,
-            device,
-            "stateful-update parameter",
-        )?;
-        validate_buffer_owner(operands.gradient.buffer, device, "stateful-update gradient")?;
-        for state in operands.states {
-            validate_buffer_owner(state.buffer, device, "stateful-update state")?;
-        }
-        let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
-        if plan.is_empty() {
-            return Ok(());
-        }
-        let width = BlockWidth::DEFAULT;
-        let key = (
-            core::any::TypeId::of::<StatefulKernel<Rule>>(),
-            core::any::TypeId::of::<f32>(),
-            width.get(),
-        );
-        let pipeline = cached_pipeline(device, key, "hephaestus-stateful-update", || {
-            shader_source::<Rule>(width)
-        });
-        let meta_buffer =
-            device.get_uniform_buffer(WgpuDevice::byte_size::<StatefulUpdateMeta>(1)?)?;
+        dispatch::<Rule, f32, _, N>(device, operands, &parameters, Rule::validate_parameters)
+    }
 
-        let parameter_buffer =
-            device.get_uniform_buffer(WgpuDevice::byte_size::<Rule::Parameters>(1)?)?;
-
-        device
-            .queue()
-            .write_buffer(&meta_buffer, 0, eunomia::layout::bytes_of(&plan.metadata()));
-        device
-            .queue()
-            .write_buffer(&parameter_buffer, 0, eunomia::layout::bytes_of(&parameters));
-        let state_zero = operands
-            .states
-            .first()
-            .expect("invariant: planner validated state zero");
-        let common = [
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: meta_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: parameter_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: operands.parameter.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: operands.gradient.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: state_zero.buffer.as_entire_binding(),
-            },
-        ];
-        if let Some(state_one) = operands.states.get(1) {
-            let entries = [
-                common[0].clone(),
-                common[1].clone(),
-                common[2].clone(),
-                common[3].clone(),
-                common[4].clone(),
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: state_one.buffer.as_entire_binding(),
-                },
-            ];
-            encode_elementwise(
-                device,
-                &pipeline,
-                "hephaestus-stateful-update",
-                &entries,
-                workgroups(plan.len(), width)?,
-            )
-        } else {
-            encode_elementwise(
-                device,
-                &pipeline,
-                "hephaestus-stateful-update",
-                &common,
-                workgroups(plan.len(), width)?,
-            )
+    fn stateful_update_f64<Rule, const N: usize>(
+        &self,
+        device: &WgpuDevice,
+        operands: StatefulUpdateOperands<'_, WgpuBuffer<f64>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
+    ) -> Result<()>
+    where
+        Rule: StatefulUpdateRule<Self::Dialect>,
+    {
+        if !device.supports_device_feature(DeviceFeature::ShaderF64) {
+            return Err(HephaestusError::InvalidConfiguration {
+                message: "WGPU stateful update requires the ShaderF64 device feature for f64"
+                    .to_string(),
+            });
         }
+        dispatch::<Rule, f64, _, N>(device, operands, &parameters, Rule::validate_parameters_f64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hephaestus_core::{Adam, Sgd};
+
+    use super::*;
+
+    #[test]
+    fn f32_shader_keeps_the_padded_uniform_and_f32_storage() {
+        let source = shader_source::<Sgd, f32>(BlockWidth::DEFAULT);
+        assert!(source.contains("momentum: f32,"));
+        assert!(source.contains("padding_zero: f32,"));
+        assert!(source.contains("array<f32>"));
+        assert!(!source.contains("f64"));
+    }
+
+    #[test]
+    fn f64_shader_drops_padding_and_types_storage_f64() {
+        let source = shader_source::<Sgd, f64>(BlockWidth::DEFAULT);
+        assert!(source.contains("momentum: f64,"));
+        assert!(!source.contains("padding"));
+        assert!(source.contains("array<f64>"));
+        assert!(!source.contains("array<f32>"));
+    }
+
+    #[test]
+    fn f64_adam_selects_the_double_literal_body() {
+        let source = shader_source::<Adam, f64>(BlockWidth::DEFAULT);
+        assert!(source.contains("(1.0 - parameters.beta_one)"));
+        assert!(!source.contains("1.0f"));
+        let source_f32 = shader_source::<Adam, f32>(BlockWidth::DEFAULT);
+        assert!(source_f32.contains("(1.0f - parameters.beta_one)"));
     }
 }

@@ -1,9 +1,11 @@
 //! WGPU instantiation of the shared stateful-update contract.
 
-use hephaestus_conformance::assert_stateful_update_contract;
+use hephaestus_conformance::{
+    assert_stateful_update_contract, assert_stateful_update_contract_f64,
+};
 use hephaestus_core::{
-    ComputeDevice, HephaestusError, Sgd, SgdParameters, StatefulUpdateOperands, StatefulUpdateOps,
-    StridedView,
+    ComputeDevice, DeviceFeature, DevicePreference, HephaestusError, Sgd, SgdParameters,
+    StatefulUpdateOperands, StatefulUpdateOps, StridedView,
 };
 use hephaestus_wgpu::{WgpuDevice, WgpuStatefulUpdateOps};
 use leto::Layout;
@@ -19,11 +21,33 @@ fn device(label: &str) -> Option<WgpuDevice> {
     }
 }
 
+fn f64_device(label: &str) -> Option<WgpuDevice> {
+    match WgpuDevice::try_with_device_preference_and_required_device_features(
+        label,
+        DevicePreference::HighPerformance,
+        &[DeviceFeature::ShaderF64],
+    ) {
+        Ok(device) => Some(device),
+        Err(error) if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_none() => {
+            eprintln!("skip WGPU f64 stateful-update conformance: device unavailable ({error})");
+            None
+        }
+        Err(error) => panic!("WGPU f64 stateful-update conformance requires a device: {error}"),
+    }
+}
+
 pub(super) fn wgpu_satisfies_the_stateful_update_contract() {
     let Some(device) = device("hephaestus-stateful-update-test") else {
         return;
     };
     assert_stateful_update_contract(&device, &WgpuStatefulUpdateOps);
+}
+
+pub(super) fn wgpu_satisfies_the_f64_stateful_update_contract() {
+    let Some(device) = f64_device("hephaestus-stateful-update-f64-test") else {
+        return;
+    };
+    assert_stateful_update_contract_f64(&device, &WgpuStatefulUpdateOps);
 }
 
 pub(super) fn foreign_device_buffers_fail_before_mutation() {

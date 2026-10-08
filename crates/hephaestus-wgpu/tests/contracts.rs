@@ -339,6 +339,7 @@ contract_cases!(
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
+    stateful_update_contracts::wgpu_satisfies_the_f64_stateful_update_contract,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
     staggered_contracts::wgpu_satisfies_the_staggered_contract,
     staggered3d::staggered_gradient_matches_cpu_on_every_axis,
@@ -389,7 +390,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 136;
+const EXPECTED_CONTRACT_CASES: usize = 137;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -409,9 +410,9 @@ const EXPECTED_CONTRACT_CASES: usize = 136;
 // `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
 // each add one unconditional registration on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 183;
+const EXPECTED_CONTRACT_CASES: usize = 184;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 141;
+const EXPECTED_CONTRACT_CASES: usize = 142;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
@@ -421,7 +422,7 @@ const EXPECTED_CONTRACT_CASES: usize = 141;
 // pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
 // triangular masking, its two limit clauses, and adaptive pooling each add
 // their registrations on top.
-const EXPECTED_CONTRACT_CASES: usize = 185;
+const EXPECTED_CONTRACT_CASES: usize = 186;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {
