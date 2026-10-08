@@ -1,8 +1,8 @@
 //! Provider-owned stateful parameter updates for ROCm.
 
 use hephaestus_core::{
-    BlockWidth, HipC, Result, StatefulUpdateAliasing, StatefulUpdateMeta, StatefulUpdateOperands,
-    StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
+    BlockWidth, DialectScalar, HipC, Result, StatefulUpdateAliasing, StatefulUpdateMeta,
+    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
 };
 
 use crate::application::pipeline::{
@@ -13,25 +13,29 @@ use crate::{RocmBuffer, RocmDevice};
 
 const ENTRY_POINT: &str = "stateful_update_kernel";
 
-fn parameters_declaration<Rule>() -> String
+fn parameters_declaration<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<HipC>,
+    T: DialectScalar<HipC>,
 {
-    let fields = Rule::PARAMETER_FIELDS
+    let ty = T::TYPE_TOKEN;
+    let fields = Rule::parameter_fields_for::<T>()
         .iter()
-        .map(|field| format!("    float {field};\n"))
+        .map(|field| format!("    {ty} {field};\n"))
         .collect::<String>();
     format!("typedef struct {{\n{fields}}} StatefulUpdateParameters;\n")
 }
 
-fn kernel_source<Rule>() -> String
+fn kernel_source<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<HipC>,
+    T: DialectScalar<HipC>,
 {
+    let ty = T::TYPE_TOKEN;
     let state_one_argument = if Rule::STATE_COUNT == 2 {
-        ",\n    float* state_one"
+        format!(",\n    {ty}* state_one")
     } else {
-        ""
+        String::new()
     };
     let state_one_offset = if Rule::STATE_COUNT == 2 {
         "    long long state_one_offset = (long long)meta.offsets[3];\n"
@@ -44,9 +48,11 @@ where
         ""
     };
     let state_one_load = if Rule::STATE_COUNT == 2 {
-        "    float state_one_value = state_one[state_one_offset];\n    float state_one_next;\n"
+        format!(
+            "    {ty} state_one_value = state_one[state_one_offset];\n    {ty} state_one_next;\n"
+        )
     } else {
-        ""
+        String::new()
     };
     let state_one_store = if Rule::STATE_COUNT == 2 {
         "    state_one[state_one_offset] = state_one_next;\n"
@@ -68,9 +74,9 @@ typedef struct {{
 extern "C" __global__ void {entry_point}(
     StatefulUpdateMeta meta,
     StatefulUpdateParameters parameters,
-    float* parameter,
-    const float* gradient,
-    float* state_zero{state_one_argument}
+    {ty}* parameter,
+    const {ty}* gradient,
+    {ty}* state_zero{state_one_argument}
 ) {{
     unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index >= meta.dispatch[0]) {{
@@ -91,25 +97,26 @@ extern "C" __global__ void {entry_point}(
         state_zero_offset += (long long)coordinate * (long long)meta.strides[2][word][lane];
 {state_one_decode}    }}
 
-    float parameter_value = parameter[parameter_offset];
-    float gradient_value = gradient[gradient_offset];
-    float state_zero_value = state_zero[state_zero_offset];
-    float parameter_next = parameter_value;
-    float state_zero_next = state_zero_value;
+    {ty} parameter_value = parameter[parameter_offset];
+    {ty} gradient_value = gradient[gradient_offset];
+    {ty} state_zero_value = state_zero[state_zero_offset];
+    {ty} parameter_next = parameter_value;
+    {ty} state_zero_next = state_zero_value;
 {state_one_load}    {body}
 
     parameter[parameter_offset] = parameter_next;
     state_zero[state_zero_offset] = state_zero_next;
 {state_one_store}}}
 "#,
-        parameters = parameters_declaration::<Rule>(),
+        parameters = parameters_declaration::<Rule, T>(),
         entry_point = ENTRY_POINT,
-        body = Rule::BODY,
+        ty = T::TYPE_TOKEN,
+        body = Rule::body_for::<T>(),
     )
 }
 
-fn aliasing<const N: usize>(
-    operands: &StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
+fn aliasing<T, const N: usize>(
+    operands: &StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
 ) -> StatefulUpdateAliasing {
     let state_zero = operands.states.first();
     let state_one = operands.states.get(1);
@@ -129,26 +136,27 @@ fn aliasing<const N: usize>(
     }
 }
 
-fn launch<Rule, const N: usize>(
+fn launch<Rule, T, P, const N: usize>(
     device: &RocmDevice,
-    operands: StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
-    parameters: <Rule as StatefulUpdateRule<HipC>>::Parameters,
+    operands: StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
+    parameters: P,
     meta: StatefulUpdateMeta,
     len: usize,
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<HipC>,
+    T: DialectScalar<HipC>,
 {
     let width = BlockWidth::DEFAULT;
     let kernel = cached_kernel(
         device,
         PipelineKey::StatefulUpdate {
             rule: core::any::TypeId::of::<Rule>(),
-            scalar: core::any::TypeId::of::<f32>(),
+            scalar: core::any::TypeId::of::<T>(),
             width: width.get(),
         },
         ENTRY_POINT,
-        kernel_source::<Rule>,
+        kernel_source::<Rule, T>,
     )?;
     let mut meta = meta;
     let mut parameters = parameters;
@@ -171,7 +179,7 @@ where
             .raw();
         let mut args: [*mut core::ffi::c_void; 6] = [
             (&mut meta as *mut StatefulUpdateMeta).cast(),
-            (&mut parameters as *mut Rule::Parameters).cast(),
+            (&mut parameters as *mut P).cast(),
             (&mut parameter as *mut DevicePtr).cast(),
             (&mut gradient as *mut DevicePtr).cast(),
             (&mut state_zero as *mut DevicePtr).cast(),
@@ -181,7 +189,7 @@ where
     } else {
         let mut args: [*mut core::ffi::c_void; 5] = [
             (&mut meta as *mut StatefulUpdateMeta).cast(),
-            (&mut parameters as *mut Rule::Parameters).cast(),
+            (&mut parameters as *mut P).cast(),
             (&mut parameter as *mut DevicePtr).cast(),
             (&mut gradient as *mut DevicePtr).cast(),
             (&mut state_zero as *mut DevicePtr).cast(),
@@ -194,15 +202,15 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RocmStatefulUpdateOps;
 
-fn validate_device<const N: usize>(
+fn validate_device<T, const N: usize>(
     _device: &RocmDevice,
-    operands: &StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
+    operands: &StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
 ) -> Result<()> {
     #[cfg(all(feature = "rocm", target_os = "linux"))]
     let matches =
-        |buffer: &RocmBuffer<f32>| std::sync::Arc::ptr_eq(&buffer.context, &_device.context);
+        |buffer: &RocmBuffer<T>| std::sync::Arc::ptr_eq(&buffer.context, &_device.context);
     #[cfg(not(all(feature = "rocm", target_os = "linux")))]
-    let matches = |_buffer: &RocmBuffer<f32>| true;
+    let matches = |_buffer: &RocmBuffer<T>| true;
 
     if matches(operands.parameter.buffer)
         && matches(operands.gradient.buffer)
@@ -214,6 +222,28 @@ fn validate_device<const N: usize>(
             message: "ROCm stateful-update operands must belong to the dispatch device".to_string(),
         })
     }
+}
+
+/// Shared validate-plan-launch driver: both widths run the same pipeline
+/// with width-selected kernel text, parameter bytes, and cache key.
+fn dispatch<Rule, T, P, const N: usize>(
+    device: &RocmDevice,
+    operands: StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
+    parameters: P,
+    validate: fn(&P) -> Result<()>,
+) -> Result<()>
+where
+    Rule: StatefulUpdateRule<HipC>,
+    T: DialectScalar<HipC>,
+{
+    validate(&parameters)?;
+    validate_device(device, &operands)?;
+    let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
+    if plan.is_empty() {
+        return Ok(());
+    }
+
+    launch::<Rule, T, P, N>(device, operands, parameters, plan.metadata(), plan.len())
 }
 
 impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
@@ -228,14 +258,19 @@ impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        Rule::validate_parameters(&parameters)?;
-        validate_device(device, &operands)?;
-        let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
-        if plan.is_empty() {
-            return Ok(());
-        }
+        dispatch::<Rule, f32, _, N>(device, operands, parameters, Rule::validate_parameters)
+    }
 
-        launch::<Rule, N>(device, operands, parameters, plan.metadata(), plan.len())
+    fn stateful_update_f64<Rule, const N: usize>(
+        &self,
+        device: &RocmDevice,
+        operands: StatefulUpdateOperands<'_, RocmBuffer<f64>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
+    ) -> Result<()>
+    where
+        Rule: StatefulUpdateRule<Self::Dialect>,
+    {
+        dispatch::<Rule, f64, _, N>(device, operands, parameters, Rule::validate_parameters_f64)
     }
 }
 
@@ -247,14 +282,35 @@ mod tests {
 
     #[test]
     fn source_specializes_state_cardinality_and_parameters() {
-        let sgd = kernel_source::<Sgd>();
+        let sgd = kernel_source::<Sgd, f32>();
         assert!(sgd.contains("float momentum;"));
         assert!(!sgd.contains("float* state_one"));
         assert!(sgd.contains(<Sgd as StatefulUpdateRule<HipC>>::BODY));
 
-        let adam = kernel_source::<Adam>();
+        let adam = kernel_source::<Adam, f32>();
         assert!(adam.contains("float bias_correction_two;"));
         assert!(adam.contains("float* state_one"));
         assert!(adam.contains(<Adam as StatefulUpdateRule<HipC>>::BODY));
+    }
+
+    #[test]
+    fn f64_source_types_storage_and_parameters_double() {
+        let sgd = kernel_source::<Sgd, f64>();
+        assert!(sgd.contains("double momentum;"));
+        assert!(sgd.contains("double* parameter,"));
+        assert!(sgd.contains("const double* gradient,"));
+        assert!(!sgd.contains("float"));
+
+        let adam = kernel_source::<Adam, f64>();
+        assert!(adam.contains("double bias_correction_two;"));
+        assert!(adam.contains("double* state_one"));
+    }
+
+    #[test]
+    fn f64_adam_selects_the_double_literal_body() {
+        let adam = kernel_source::<Adam, f64>();
+        let body = <Adam as StatefulUpdateRule<HipC>>::body_for::<f64>();
+        assert!(adam.contains(body));
+        assert!(!body.contains("1.0f"));
     }
 }

@@ -141,7 +141,7 @@ pub use ray_integral::assert_ray_integral_contract;
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;
-pub use stateful_update::assert_stateful_update_contract;
+pub use stateful_update::{assert_stateful_update_contract, assert_stateful_update_contract_f64};
 pub use stencil::assert_stencil_contract;
 pub use topk::assert_topk_contract;
 pub use transfer::assert_transfer_contract;

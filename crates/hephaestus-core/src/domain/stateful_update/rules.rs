@@ -85,6 +85,31 @@ pub trait StatefulUpdateRule<L: KernelDialect>:
         states: [f64; 2],
         parameters: &Self::ParametersF64,
     ) -> StatefulUpdateStepF64;
+
+    /// Body spelling for launches over scalar `T`: the f64 spelling where
+    /// the f32 body pins `f32` literals, else [`Self::BODY`] verbatim.
+    /// Backends call this with `f32`/`f64` only; any other scalar resolves
+    /// to the f32 spelling, matching the f32-only [`Self::BODY`] contract.
+    #[must_use]
+    fn body_for<T: 'static>() -> &'static str {
+        if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
+            Self::BODY_F64.unwrap_or(Self::BODY)
+        } else {
+            Self::BODY
+        }
+    }
+
+    /// Parameter field names for launches over scalar `T`: the padding-free
+    /// list for f64, the padded uniform list otherwise (see
+    /// [`Self::body_for`] for the width contract).
+    #[must_use]
+    fn parameter_fields_for<T: 'static>() -> &'static [&'static str] {
+        if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
+            Self::PARAMETER_FIELDS_F64
+        } else {
+            Self::PARAMETER_FIELDS
+        }
+    }
 }
 
 /// Stochastic gradient descent with momentum.
@@ -613,6 +638,32 @@ mod tests {
         assert!(<AdaGrad as StatefulUpdateRule<Host>>::BODY_F64.is_none());
         assert!(!<Sgd as StatefulUpdateRule<Host>>::BODY.contains("1.0f"));
         assert!(!<AdaGrad as StatefulUpdateRule<Host>>::BODY.contains("1.0f"));
+    }
+
+    #[test]
+    fn width_selectors_resolve_both_spellings() {
+        // f32 resolves to the f32-only items for every rule.
+        assert_eq!(
+            <Adam as StatefulUpdateRule<Host>>::body_for::<f32>(),
+            <Adam as StatefulUpdateRule<Host>>::BODY
+        );
+        assert_eq!(
+            <Adam as StatefulUpdateRule<Host>>::parameter_fields_for::<f32>(),
+            <Adam as StatefulUpdateRule<Host>>::PARAMETER_FIELDS
+        );
+        // f64 resolves to the f64 spelling where one exists, else BODY.
+        assert_eq!(
+            <Adam as StatefulUpdateRule<Host>>::body_for::<f64>(),
+            <Adam as StatefulUpdateRule<Host>>::BODY_F64.expect("Adam ships BODY_F64")
+        );
+        assert_eq!(
+            <Sgd as StatefulUpdateRule<Host>>::body_for::<f64>(),
+            <Sgd as StatefulUpdateRule<Host>>::BODY
+        );
+        assert_eq!(
+            <Sgd as StatefulUpdateRule<Host>>::parameter_fields_for::<f64>(),
+            <Sgd as StatefulUpdateRule<Host>>::PARAMETER_FIELDS_F64
+        );
     }
 
     #[test]
