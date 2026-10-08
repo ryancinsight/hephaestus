@@ -138,6 +138,14 @@ pub struct LgammaOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SincOp;
 
+/// Bessel function of the first kind J0 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct J0Op;
+
+/// Bessel function of the first kind J1 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct J1Op;
+
 /// Exact Gaussian Error Linear Unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GeluOp;
