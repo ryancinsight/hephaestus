@@ -35,7 +35,7 @@ fn is_kept(batch: u32, query_index: u32, key_index: u32) -> bool {{
 }}
 
 fn score(batch: u32, query_index: u32, key_index: u32) -> {ty} {{
-    var dot = 0.0;
+    var dot: {ty} = 0.0;
     var feature = 0u;
     loop {{
         if (feature >= parameters.dimensions.w) {{ break; }}
@@ -52,7 +52,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     if (id.x >= rows) {{ return; }}
     let batch = id.x / parameters.dimensions.y;
     let query_index = id.x % parameters.dimensions.y;
-    var maximum = {neg_max};
+    var maximum: {ty} = {neg_max};
     var kept_count = 0u;
     var key_index = 0u;
     loop {{
@@ -63,7 +63,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         }}
         key_index += 1u;
     }}
-    var denominator = 0.0;
+    var denominator: {ty} = 0.0;
     key_index = 0u;
     loop {{
         if (key_index >= parameters.dimensions.z) {{ break; }}
@@ -109,8 +109,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     let row = id.x / parameters.value_and_flags.x;
     let query_index = row % parameters.dimensions.y;
     let batch = row / parameters.dimensions.y;
-    var accumulated = 0.0;
-    var total_weight = 0.0;
+    var accumulated: {ty} = 0.0;
+    var total_weight: {ty} = 0.0;
     var key_index = 0u;
     loop {{
         if (key_index >= parameters.dimensions.z) {{ break; }}
