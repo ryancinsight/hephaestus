@@ -71,8 +71,8 @@ impl LayoutMeta {
 
 /// Fixed-size uniform shared by forward and all backward kernels.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct AttentionMeta {
+#[derive(Clone, Copy, Debug)]
+pub(super) struct AttentionMeta<T: super::WgslAttentionScalar> {
     query: LayoutMeta,
     key: LayoutMeta,
     value: LayoutMeta,
@@ -82,10 +82,10 @@ pub(super) struct AttentionMeta {
     keep_mask: LayoutMeta,
     dimensions: [u32; 4],
     value_and_flags: [u32; 4],
-    scale_and_padding: [f32; 4],
+    scale_and_padding: T::ScaleRepr,
 }
 
-impl AttentionMeta {
+impl<T: super::WgslAttentionScalar> AttentionMeta<T> {
     #[expect(
         clippy::too_many_arguments,
         reason = "the constructor enumerates the complete attention kernel ABI"
@@ -101,7 +101,7 @@ impl AttentionMeta {
         keep_mask: Option<&Layout<2>>,
         heads_per_batch: usize,
         causal: bool,
-        scale: f32,
+        scale: T,
     ) -> Result<Self> {
         let dimensions = [
             narrow(plan.batch, "batch")?,
@@ -125,10 +125,20 @@ impl AttentionMeta {
             keep_mask: keep_mask.map_or_else(|| Ok(LayoutMeta::empty()), LayoutMeta::new)?,
             dimensions,
             value_and_flags,
-            scale_and_padding: [scale, 0.0, 0.0, 0.0],
+            scale_and_padding: T::scale_repr(scale),
         })
     }
 }
+
+// SAFETY: `repr(C)` over `Pod` fields with no padding. Seven 48-byte
+// `LayoutMeta`s plus two 16-byte `u32` arrays end at offset 368, which is a
+// multiple of 8, so both 16-byte scale tails (`[f32; 4]`, `[f64; 2]`) sit
+// naturally aligned; total size is 384 with no trailing padding. Every
+// field type admits all bit patterns, and all-zeroes is a valid value.
+unsafe impl<T: super::WgslAttentionScalar> Zeroable for AttentionMeta<T> {}
+// SAFETY: see the `Zeroable` impl; additionally `Copy + 'static`, and the
+// struct contains no interior mutability, pointers, or references.
+unsafe impl<T: super::WgslAttentionScalar> Pod for AttentionMeta<T> {}
 
 fn narrow(value: usize, name: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| invalid(format!("attention {name} {value} exceeds u32 range")))
@@ -136,4 +146,22 @@ fn narrow(value: usize, name: &str) -> Result<u32> {
 
 fn invalid(message: String) -> HephaestusError {
     HephaestusError::InvalidConfiguration { message }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::WgslAttentionScalar;
+    use super::*;
+
+    #[test]
+    fn uniform_tail_keeps_one_shape_for_both_scalars() {
+        // The manual `Pod` impl promises 384 padding-free bytes for both.
+        assert_eq!(core::mem::size_of::<AttentionMeta<f32>>(), 384);
+        assert_eq!(core::mem::size_of::<AttentionMeta<f64>>(), 384);
+        assert_eq!(
+            <f32 as WgslAttentionScalar>::scale_repr(0.5),
+            [0.5, 0.0, 0.0, 0.0]
+        );
+        assert_eq!(<f64 as WgslAttentionScalar>::scale_repr(0.5), [0.5, 0.0]);
+    }
 }

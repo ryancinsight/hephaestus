@@ -5,6 +5,7 @@ use hephaestus_core::{
     StridedView,
 };
 
+use super::super::WgslAttentionScalar;
 use super::super::prepared::PreparedAttentionKernel;
 use super::super::resources::binding;
 use super::super::seam::{WORKGROUP_WIDTH, backward_metadata, checked_product, prepare};
@@ -34,11 +35,11 @@ pub(in crate::application::attention) struct BackwardPreflight {
     pub(in crate::application::attention) status: WgpuBuffer<u32>,
 }
 
-pub(in crate::application::attention) fn prepare_backward(
+pub(in crate::application::attention) fn prepare_backward<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    score_workspace: Option<&WgpuBuffer<f32>>,
+    score_workspace: Option<&WgpuBuffer<T>>,
 ) -> Result<BackwardPreflight> {
     let status = device.alloc_zeroed::<u32>(1)?;
     let destination = operands
@@ -51,7 +52,7 @@ pub(in crate::application::attention) fn prepare_backward(
     let rows = checked_product(plan.batch, plan.query_sequence, "backward row count")?;
     let key_rows = checked_product(plan.batch, plan.key_sequence, "backward key row count")?;
     let mut kernels = smallvec::SmallVec::new();
-    kernels.push(prepare_finite::<GradOutputFinite>(
+    kernels.push(prepare_finite::<GradOutputFinite, T>(
         device,
         &metadata,
         checked_product(rows, plan.value_feature, "output-gradient element count")?,
@@ -61,7 +62,7 @@ pub(in crate::application::attention) fn prepare_backward(
         operands.grad_output.buffer,
         &status,
     )?);
-    kernels.push(prepare_finite::<QueryFinite>(
+    kernels.push(prepare_finite::<QueryFinite, T>(
         device,
         &metadata,
         checked_product(rows, plan.key_feature, "query element count")?,
@@ -71,7 +72,7 @@ pub(in crate::application::attention) fn prepare_backward(
         operands.query.buffer,
         &status,
     )?);
-    kernels.push(prepare_finite::<KeyFinite>(
+    kernels.push(prepare_finite::<KeyFinite, T>(
         device,
         &metadata,
         checked_product(key_rows, plan.key_feature, "key element count")?,
@@ -81,7 +82,7 @@ pub(in crate::application::attention) fn prepare_backward(
         operands.key.buffer,
         &status,
     )?);
-    kernels.push(prepare_finite::<ValueFinite>(
+    kernels.push(prepare_finite::<ValueFinite, T>(
         device,
         &metadata,
         checked_product(key_rows, plan.value_feature, "value element count")?,
@@ -91,7 +92,7 @@ pub(in crate::application::attention) fn prepare_backward(
         operands.value.buffer,
         &status,
     )?);
-    kernels.push(prepare_finite::<WeightsFinite>(
+    kernels.push(prepare_finite::<WeightsFinite, T>(
         device,
         &metadata,
         plan.score_elements,
@@ -101,26 +102,26 @@ pub(in crate::application::attention) fn prepare_backward(
         operands.weights.buffer,
         &status,
     )?);
-    kernels.push(prepare_status::<Probability>(
+    kernels.push(prepare_status::<Probability, T>(
         device,
         &metadata,
         rows,
         "hephaestus-attention-backward-probability-preflight",
         &[binding(0, operands.weights.buffer), binding(1, &status)],
-        || backward_probability_preflight_shader(WORKGROUP_WIDTH.get()),
+        || backward_probability_preflight_shader::<T>(WORKGROUP_WIDTH.get()),
     )?);
     if let Some(workspace) = score_workspace {
         kernels.push(prepare_score_workspace(
             device, operands, plan, workspace, &metadata,
         )?);
-        kernels.push(prepare_status::<ScoreFinite>(
+        kernels.push(prepare_status::<ScoreFinite, T>(
             device,
             &metadata,
             plan.score_elements,
             "hephaestus-attention-backward-score-finite-preflight",
             &[binding(0, workspace), binding(1, &status)],
             || {
-                linear_finite_preflight_shader(
+                linear_finite_preflight_shader::<T>(
                     AttentionSemanticStatus::NonFiniteWeightsArithmetic,
                     WORKGROUP_WIDTH.get(),
                 )
@@ -130,7 +131,7 @@ pub(in crate::application::attention) fn prepare_backward(
     if let Some(target) = operands.gradients.query {
         let workspace = score_workspace
             .expect("invariant: query gradient preparation allocated score workspace");
-        kernels.push(prepare_gradient::<QueryGradient>(
+        kernels.push(prepare_gradient::<QueryGradient, T>(
             device,
             operands,
             plan,
@@ -145,7 +146,7 @@ pub(in crate::application::attention) fn prepare_backward(
     if let Some(target) = operands.gradients.key {
         let workspace =
             score_workspace.expect("invariant: key gradient preparation allocated score workspace");
-        kernels.push(prepare_gradient::<KeyGradient>(
+        kernels.push(prepare_gradient::<KeyGradient, T>(
             device,
             operands,
             plan,
@@ -158,7 +159,7 @@ pub(in crate::application::attention) fn prepare_backward(
         )?);
     }
     if let Some(target) = operands.gradients.value {
-        kernels.push(prepare_gradient::<ValueGradient>(
+        kernels.push(prepare_gradient::<ValueGradient, T>(
             device,
             operands,
             plan,
@@ -173,12 +174,12 @@ pub(in crate::application::attention) fn prepare_backward(
     Ok(BackwardPreflight { kernels, status })
 }
 
-fn prepare_score_workspace(
+fn prepare_score_workspace<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    workspace: &WgpuBuffer<f32>,
-    metadata: &super::super::metadata::AttentionMeta,
+    workspace: &WgpuBuffer<T>,
+    metadata: &super::super::metadata::AttentionMeta<T>,
 ) -> Result<PreparedAttentionKernel> {
     prepare(
         device,
@@ -191,7 +192,7 @@ fn prepare_score_workspace(
             binding(2, operands.weights.buffer),
             binding(3, workspace),
         ],
-        || backward_shader(BackwardStage::Score, WORKGROUP_WIDTH.get()),
+        || backward_shader::<T>(BackwardStage::Score, WORKGROUP_WIDTH.get()),
         TypeId::of::<ScoreWorkspace>(),
     )
 }
@@ -200,13 +201,13 @@ fn prepare_score_workspace(
     clippy::too_many_arguments,
     reason = "gradient preflight preparation enumerates the complete read-only kernel ABI"
 )]
-fn prepare_gradient<K: 'static>(
+fn prepare_gradient<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    target: StridedView<'_, WgpuBuffer<f32>, 3>,
-    first: &WgpuBuffer<f32>,
-    second: &WgpuBuffer<f32>,
+    target: StridedView<'_, WgpuBuffer<T>, 3>,
+    first: &WgpuBuffer<T>,
+    second: &WgpuBuffer<T>,
     status: &WgpuBuffer<u32>,
     stage: GradientPreflightStage,
     label: &'static str,
@@ -215,7 +216,7 @@ fn prepare_gradient<K: 'static>(
     let elements = target.layout.checked_size().map_err(|error| {
         super::super::resources::invalid(format!("attention gradient layout rejected: {error}"))
     })?;
-    prepare_status::<K>(
+    prepare_status::<K, T>(
         device,
         &metadata,
         elements,
@@ -226,6 +227,6 @@ fn prepare_gradient<K: 'static>(
             binding(2, target.buffer),
             binding(3, status),
         ],
-        || backward_gradient_preflight_shader(stage, WORKGROUP_WIDTH.get()),
+        || backward_gradient_preflight_shader::<T>(stage, WORKGROUP_WIDTH.get()),
     )
 }

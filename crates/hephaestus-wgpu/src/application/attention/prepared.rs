@@ -77,14 +77,15 @@ impl PreparedAttentionKernel {
 }
 
 /// A forward pass whose weight and output stages were prepared atomically.
-pub struct PreparedAttentionForward {
+pub struct PreparedAttentionForward<T> {
     preflight: [PreparedAttentionKernel; 5],
     status: WgpuBuffer<u32>,
     weights: PreparedAttentionKernel,
     output: PreparedAttentionKernel,
+    scalar: core::marker::PhantomData<T>,
 }
 
-impl PreparedAttentionForward {
+impl<T> PreparedAttentionForward<T> {
     pub(super) fn new(
         preflight: [PreparedAttentionKernel; 5],
         status: WgpuBuffer<u32>,
@@ -96,6 +97,7 @@ impl PreparedAttentionForward {
             status,
             weights,
             output,
+            scalar: core::marker::PhantomData,
         }
     }
 
@@ -110,17 +112,17 @@ impl PreparedAttentionForward {
 }
 
 /// Every selected additive-gradient stage plus its device-resident score workspace.
-pub struct PreparedAttentionBackward {
+pub struct PreparedAttentionBackward<T> {
     preflight: smallvec::SmallVec<[PreparedAttentionKernel; 12]>,
     status: WgpuBuffer<u32>,
     score: Option<PreparedAttentionKernel>,
     query: Option<PreparedAttentionKernel>,
     key: Option<PreparedAttentionKernel>,
     value: Option<PreparedAttentionKernel>,
-    _score_workspace: Option<WgpuBuffer<f32>>,
+    _score_workspace: Option<WgpuBuffer<T>>,
 }
 
-impl PreparedAttentionBackward {
+impl<T> PreparedAttentionBackward<T> {
     pub(super) fn new(
         preflight: smallvec::SmallVec<[PreparedAttentionKernel; 12]>,
         status: WgpuBuffer<u32>,
@@ -128,7 +130,7 @@ impl PreparedAttentionBackward {
         query: Option<PreparedAttentionKernel>,
         key: Option<PreparedAttentionKernel>,
         value: Option<PreparedAttentionKernel>,
-        score_workspace: Option<WgpuBuffer<f32>>,
+        score_workspace: Option<WgpuBuffer<T>>,
     ) -> Self {
         Self {
             preflight,

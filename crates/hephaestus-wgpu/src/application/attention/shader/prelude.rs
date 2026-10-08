@@ -1,4 +1,4 @@
-pub(super) fn prelude(width: u32) -> String {
+pub(super) fn prelude<T: super::super::WgslAttentionScalar>(width: u32) -> String {
     format!(
         r#"
 struct LayoutMeta {{
@@ -17,7 +17,7 @@ struct AttentionMeta {{
     keep_mask: LayoutMeta,
     dimensions: vec4<u32>,
     value_and_flags: vec4<u32>,
-    scale_and_padding: vec4<f32>,
+    {scale_decl}
 }}
 
 fn physical(metadata: LayoutMeta, first: u32, second: u32, third: u32) -> u32 {{
@@ -30,6 +30,7 @@ fn physical(metadata: LayoutMeta, first: u32, second: u32, third: u32) -> u32 {{
 }}
 
 const WORKGROUP_WIDTH: u32 = {width}u;
-"#
+"#,
+        scale_decl = T::SCALE_DECL,
     )
 }

@@ -1,3 +1,4 @@
+use super::super::WgslAttentionScalar;
 use super::prelude::prelude;
 use hephaestus_core::AttentionSemanticStatus;
 
@@ -8,22 +9,22 @@ pub(in crate::application::attention) enum GradientPreflightStage {
     Value,
 }
 
-pub(in crate::application::attention) fn finite_preflight_shader(
+pub(in crate::application::attention) fn finite_preflight_shader<T: WgslAttentionScalar>(
     layout: &'static str,
     rank: u32,
     failure: AttentionSemanticStatus,
     width: u32,
 ) -> String {
-    let prelude = prelude(width);
+    let prelude = prelude::<T>(width);
     let third = if rank == 2 { "0u" } else { "third" };
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> source: array<f32>;
+@group(0) @binding(0) var<storage, read> source: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(2) var<uniform> parameters: AttentionMeta;
 
-fn finite(value: f32) -> bool {{
-    return value == value && abs(value) <= 3.402823466e+38;
+fn finite(value: {ty}) -> bool {{
+    return value == value && abs(value) <= {finite_max};
 }}
 
 @compute @workgroup_size({width})
@@ -41,23 +42,25 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     }}
 }}
 "#,
+        ty = T::TYPE_TOKEN,
+        finite_max = T::FINITE_MAX,
         failure = failure.code()
     )
 }
 
-pub(in crate::application::attention) fn linear_finite_preflight_shader(
+pub(in crate::application::attention) fn linear_finite_preflight_shader<T: WgslAttentionScalar>(
     failure: AttentionSemanticStatus,
     width: u32,
 ) -> String {
-    let prelude = prelude(width);
+    let prelude = prelude::<T>(width);
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> source: array<f32>;
+@group(0) @binding(0) var<storage, read> source: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(2) var<uniform> parameters: AttentionMeta;
 
-fn finite(value: f32) -> bool {{
-    return value == value && abs(value) <= 3.402823466e+38;
+fn finite(value: {ty}) -> bool {{
+    return value == value && abs(value) <= {finite_max};
 }}
 
 @compute @workgroup_size({width})
@@ -68,23 +71,29 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     }}
 }}
 "#,
+        ty = T::TYPE_TOKEN,
+        finite_max = T::FINITE_MAX,
         failure = failure.code()
     )
 }
 
-pub(in crate::application::attention) fn forward_arithmetic_preflight_shader(width: u32) -> String {
-    let prelude = prelude(width);
+pub(in crate::application::attention) fn forward_arithmetic_preflight_shader<
+    T: WgslAttentionScalar,
+>(
+    width: u32,
+) -> String {
+    let prelude = prelude::<T>(width);
     let weight_failure = AttentionSemanticStatus::NonFiniteWeightsArithmetic.code();
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> query: array<f32>;
-@group(0) @binding(1) var<storage, read> key: array<f32>;
-@group(0) @binding(2) var<storage, read> keep_mask: array<f32>;
+@group(0) @binding(0) var<storage, read> query: array<{ty}>;
+@group(0) @binding(1) var<storage, read> key: array<{ty}>;
+@group(0) @binding(2) var<storage, read> keep_mask: array<{ty}>;
 @group(0) @binding(3) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(4) var<uniform> parameters: AttentionMeta;
 
-fn finite(number: f32) -> bool {{
-    return number == number && abs(number) <= 3.402823466e+38;
+fn finite(number: {ty}) -> bool {{
+    return number == number && abs(number) <= {finite_max};
 }}
 
 fn kept(batch: u32, query_index: u32, key_index: u32) -> bool {{
@@ -94,7 +103,7 @@ fn kept(batch: u32, query_index: u32, key_index: u32) -> bool {{
     return keep_mask[physical(parameters.keep_mask, mask_batch, key_index, 0u)] != 0.0;
 }}
 
-fn attention_score(batch: u32, query_index: u32, key_index: u32) -> f32 {{
+fn attention_score(batch: u32, query_index: u32, key_index: u32) -> {ty} {{
     var dot = 0.0;
     var feature = 0u;
     loop {{
@@ -115,7 +124,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     if (id.x >= rows) {{ return; }}
     let batch = id.x / parameters.dimensions.y;
     let query_index = id.x % parameters.dimensions.y;
-    var maximum = -3.402823466e+38;
+    var maximum = {neg_max};
     var kept_count = 0u;
     var key_index = 0u;
     loop {{
@@ -138,23 +147,28 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         key_index += 1u;
     }}
 }}
-"#
+"#,
+        ty = T::TYPE_TOKEN,
+        finite_max = T::FINITE_MAX,
+        neg_max = T::NEG_MAX,
     )
 }
 
-pub(in crate::application::attention) fn backward_probability_preflight_shader(
+pub(in crate::application::attention) fn backward_probability_preflight_shader<
+    T: WgslAttentionScalar,
+>(
     width: u32,
 ) -> String {
-    let prelude = prelude(width);
+    let prelude = prelude::<T>(width);
     let failure = AttentionSemanticStatus::InvalidWeights.code();
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> weights: array<f32>;
+@group(0) @binding(0) var<storage, read> weights: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(2) var<uniform> parameters: AttentionMeta;
 
-fn finite(number: f32) -> bool {{
-    return number == number && abs(number) <= 3.402823466e+38;
+fn finite(number: {ty}) -> bool {{
+    return number == number && abs(number) <= {finite_max};
 }}
 
 @compute @workgroup_size({width})
@@ -172,29 +186,37 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         sum += weight;
         key_index += 1u;
     }}
-    let tolerance = 4.0 * 1.192092896e-7 * f32(parameters.dimensions.z);
+    let tolerance = 4.0 * {epsilon} * {ty}(parameters.dimensions.z);
     if (!finite(tolerance) || tolerance >= 0.5 ||
         (sum != 0.0 && abs(sum - 1.0) > tolerance)) {{
         atomicMin(&status, {failure}u);
     }}
 }}
-"#
+"#,
+        ty = T::TYPE_TOKEN,
+        finite_max = T::FINITE_MAX,
+        epsilon = T::EPSILON,
     )
 }
 
-pub(in crate::application::attention) fn backward_gradient_preflight_shader(
+pub(in crate::application::attention) fn backward_gradient_preflight_shader<
+    T: WgslAttentionScalar,
+>(
     stage: GradientPreflightStage,
     width: u32,
 ) -> String {
-    let prelude = prelude(width);
+    let prelude = prelude::<T>(width);
     let (bindings, elements, coordinates, increment, destination_failure, arithmetic_failure) =
         match stage {
             GradientPreflightStage::Query => (
-                r#"@group(0) @binding(0) var<storage, read> score_gradient: array<f32>;
-@group(0) @binding(1) var<storage, read> source: array<f32>;
-@group(0) @binding(2) var<storage, read> destination: array<f32>;
+                format!(
+                    r#"@group(0) @binding(0) var<storage, read> score_gradient: array<{ty}>;
+@group(0) @binding(1) var<storage, read> source: array<{ty}>;
+@group(0) @binding(2) var<storage, read> destination: array<{ty}>;
 @group(0) @binding(3) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(4) var<uniform> parameters: AttentionMeta;"#,
+                    ty = T::TYPE_TOKEN,
+                ),
                 "parameters.dimensions.x * parameters.dimensions.y * parameters.dimensions.w",
                 r#"let feature = id.x % parameters.dimensions.w;
     let row = id.x / parameters.dimensions.w;
@@ -215,11 +237,14 @@ pub(in crate::application::attention) fn backward_gradient_preflight_shader(
                 AttentionSemanticStatus::NonFiniteQueryGradientArithmetic.code(),
             ),
             GradientPreflightStage::Key => (
-                r#"@group(0) @binding(0) var<storage, read> score_gradient: array<f32>;
-@group(0) @binding(1) var<storage, read> source: array<f32>;
-@group(0) @binding(2) var<storage, read> destination: array<f32>;
+                format!(
+                    r#"@group(0) @binding(0) var<storage, read> score_gradient: array<{ty}>;
+@group(0) @binding(1) var<storage, read> source: array<{ty}>;
+@group(0) @binding(2) var<storage, read> destination: array<{ty}>;
 @group(0) @binding(3) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(4) var<uniform> parameters: AttentionMeta;"#,
+                    ty = T::TYPE_TOKEN,
+                ),
                 "parameters.dimensions.x * parameters.dimensions.z * parameters.dimensions.w",
                 r#"let feature = id.x % parameters.dimensions.w;
     let row = id.x / parameters.dimensions.w;
@@ -240,11 +265,14 @@ pub(in crate::application::attention) fn backward_gradient_preflight_shader(
                 AttentionSemanticStatus::NonFiniteKeyGradientArithmetic.code(),
             ),
             GradientPreflightStage::Value => (
-                r#"@group(0) @binding(0) var<storage, read> weights: array<f32>;
-@group(0) @binding(1) var<storage, read> grad_output: array<f32>;
-@group(0) @binding(2) var<storage, read> destination: array<f32>;
+                format!(
+                    r#"@group(0) @binding(0) var<storage, read> weights: array<{ty}>;
+@group(0) @binding(1) var<storage, read> grad_output: array<{ty}>;
+@group(0) @binding(2) var<storage, read> destination: array<{ty}>;
 @group(0) @binding(3) var<storage, read_write> status: atomic<u32>;
 @group(0) @binding(4) var<uniform> parameters: AttentionMeta;"#,
+                    ty = T::TYPE_TOKEN,
+                ),
                 "parameters.dimensions.x * parameters.dimensions.z * parameters.value_and_flags.x",
                 r#"let feature = id.x % parameters.value_and_flags.x;
     let row = id.x / parameters.value_and_flags.x;
@@ -266,8 +294,8 @@ pub(in crate::application::attention) fn backward_gradient_preflight_shader(
         r#"{prelude}
 {bindings}
 
-fn finite(number: f32) -> bool {{
-    return number == number && abs(number) <= 3.402823466e+38;
+fn finite(number: {ty}) -> bool {{
+    return number == number && abs(number) <= {finite_max};
 }}
 
 @compute @workgroup_size({width})
@@ -282,6 +310,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     if (!finite(current)) {{ atomicMin(&status, {destination_failure}u); }}
     if (!finite(current + increment)) {{ atomicMin(&status, {arithmetic_failure}u); }}
 }}
-"#
+"#,
+        ty = T::TYPE_TOKEN,
+        finite_max = T::FINITE_MAX,
     )
 }
