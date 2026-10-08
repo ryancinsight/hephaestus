@@ -187,6 +187,22 @@ impl FixedFd3DKernel {
             params,
         )
     }
+
+    /// Sweep the transpose of the scheme in `params` over Metal buffers.
+    pub fn adjoint(
+        &self,
+        device: &MetalDevice,
+        upstream: &MetalBuffer<f32>,
+        grad: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        self.inner.adjoint(
+            device.wgpu_device(),
+            upstream.wgpu_buffer(),
+            grad.wgpu_buffer(),
+            params,
+        )
+    }
 }
 
 /// Provider-owned implementation of [`hephaestus_core::FixedFd3DOps`] for
@@ -210,5 +226,16 @@ impl hephaestus_core::FixedFd3DOps<MetalDevice> for MetalFixedFd3DOps {
         params: &FixedFd3DParams,
     ) -> Result<()> {
         kernel.sweep(device, input, output, params)
+    }
+
+    fn fixed_fd_adjoint_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::FixedFd3D,
+        upstream: &MetalBuffer<f32>,
+        grad: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        kernel.adjoint(device, upstream, grad, params)
     }
 }

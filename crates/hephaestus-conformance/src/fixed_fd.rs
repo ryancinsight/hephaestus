@@ -1,6 +1,6 @@
 //! Contract clauses for the device-neutral fixed-scheme 3-D sweep seam.
 //!
-//! Three oracles, each catching what the others cannot:
+//! Four oracles, each catching what the others cannot:
 //!
 //! - **Provider.** The device dispatch runs lane-by-lane against
 //!   `leto_ops::FiniteDifference3D` on the same field — the CPU
@@ -16,6 +16,11 @@
 //! - **Structural.** A constant field differentiates to exactly zero
 //!   everywhere, which is what the one-sided wall closures mean; a wall
 //!   handled as zero-extension instead would show a step.
+//! - **Transpose.** The device adjoint runs lane-by-lane against the
+//!   provider's transpose sweep over the same scheme/axis/shape matrix, so
+//!   every predicated wall tap of the backward pass is exercised on the
+//!   device. The provider proves `⟨Af, u⟩ = ⟨f, Aᵀu⟩` itself; this clause
+//!   proves the device computes the same transpose.
 
 use hephaestus_core::{
     ComputeDevice, FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme, StaggeredAxis,
@@ -134,6 +139,68 @@ where
     got
 }
 
+fn adjoint_oracle(
+    scheme: FixedFd3DScheme,
+    axis: StaggeredAxis,
+    shape: [usize; 3],
+    upstream: &[f32],
+) -> Vec<f32> {
+    let operator = FiniteDifference3D::new(map_scheme(scheme), SPACING, SPACING, SPACING)
+        .expect("the provider accepts a positive spacing");
+    let [nx, ny, nz] = shape;
+    let mut out_shape = shape;
+    if !scheme.preserves_shape() {
+        out_shape[axis.index()] -= 1;
+    }
+    let input_layout = dense_layout(out_shape);
+    let output_layout = dense_layout([nx, ny, nz]);
+    let view =
+        ArrayView3::try_new(input_layout, upstream).expect("an upstream view over the lanes");
+    let mut expected = vec![0.0_f32; nx * ny * nz];
+    let mut target = ArrayViewMut3::try_new(output_layout, &mut expected)
+        .expect("a gradient view over the lanes");
+    match map_axis(axis) {
+        Axis::X => operator.adjoint_x_into(view, &mut target),
+        Axis::Y => operator.adjoint_y_into(view, &mut target),
+        Axis::Z => operator.adjoint_z_into(view, &mut target),
+    }
+    .expect("the provider transposes a valid grid");
+    expected
+}
+
+fn dispatch_adjoint<D, S>(
+    device: &D,
+    ops: &S,
+    kernel: &S::FixedFd3D,
+    params: &FixedFd3DParams,
+    upstream: &[f32],
+) -> Vec<f32>
+where
+    D: ComputeDevice,
+    S: FixedFd3DOps<D>,
+{
+    let out_cells = params
+        .output_cell_count()
+        .expect("a countable upstream grid");
+    let in_cells = params.cell_count().expect("a countable gradient grid");
+    assert_eq!(
+        upstream.len(),
+        out_cells,
+        "the upstream must have the forward output shape"
+    );
+    let input = device.upload(upstream).expect("upstream upload");
+    let output = device
+        .alloc_zeroed::<f32>(in_cells)
+        .expect("gradient alloc");
+    ops.fixed_fd_adjoint_into(device, kernel, &input, &output, params)
+        .expect("adjoint dispatch");
+    let mut got = vec![0.0_f32; in_cells];
+    device
+        .download(&output, &mut got)
+        .expect("adjoint readback");
+    got
+}
+
 /// Run every fixed-scheme clause against one backend.
 ///
 /// # Panics
@@ -218,6 +285,31 @@ where
                     assert!(
                         value.abs() <= f32::EPSILON,
                         "{tag}: a constant field has derivative {value:e} at lane {index}"
+                    );
+                }
+
+                // Transpose: the device adjoint matches the provider's
+                // transpose lane by lane over the same matrix.
+                let mut upstream_shape = shape;
+                if !scheme.preserves_shape() {
+                    upstream_shape[axis.index()] -= 1;
+                }
+                let upstream_count: usize = upstream_shape.iter().product();
+                let upstream: Vec<f32> = (0..upstream_count)
+                    .map(|index| {
+                        ((index * 5 % 11) as f32).mul_add(0.41, -((index * 2 % 5) as f32) * 0.23)
+                    })
+                    .collect();
+                let expected = adjoint_oracle(scheme, axis, shape, &upstream);
+                let got = dispatch_adjoint(device, ops, &kernel, &params, &upstream);
+                assert_eq!(got.len(), expected.len(), "{tag}: adjoint lane count");
+                for (index, (value, reference)) in got.iter().zip(&expected).enumerate() {
+                    let deviation = (value - reference).abs();
+                    let bound = 32.0 * f32::EPSILON * reference.abs().max(1.0);
+                    assert!(
+                        deviation <= bound,
+                        "{tag}: adjoint lane {index} is {value:e}, provider says \
+                         {reference:e} (bound {bound:e})"
                     );
                 }
             }

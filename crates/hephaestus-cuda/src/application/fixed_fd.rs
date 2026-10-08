@@ -159,16 +159,242 @@ extern "C" __global__ void fixed_fd_sweep(
     }
     result[out_flat] = value;
 }
+
+// Transpose sweeps: each lane accumulates the provider's predicated terms in
+// canonical order — wall taps, then second-, fourth-, then sixth-order row
+// taps, each (c*u)*inv. The grid covers the input domain; upstream reads use
+// the upstream strides, which shrink on the swept axis under the forward
+// scheme.
+
+__device__ __forceinline__ unsigned int upstream_stride(const FixedFd3DParams& p) {
+    unsigned int axis = p.dims_axis[3];
+    if (axis == 0u) {
+        return output_extent(p, 1u) * output_extent(p, 2u);
+    }
+    if (axis == 1u) {
+        return output_extent(p, 2u);
+    }
+    return 1u;
+}
+
+__device__ __forceinline__ bool is_central4_second(unsigned int n, unsigned int i) {
+    return i >= 1u && i + 2u <= n && (i < 2u || i + 2u >= n);
+}
+
+__device__ __forceinline__ bool is_central4_fourth(unsigned int n, unsigned int i) {
+    return i >= 2u && i + 3u <= n;
+}
+
+__device__ __forceinline__ float adjoint2(const float* field, const FixedFd3DParams& p, unsigned int base_up, unsigned int stride_up, unsigned int j, unsigned int n) {
+    float inv_h = p.scales[0];
+    float inv_2h = p.scales[1];
+    float v = 0.0f;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 3u <= n) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 2u) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    return v;
+}
+
+__device__ __forceinline__ float adjoint4(const float* field, const FixedFd3DParams& p, unsigned int base_up, unsigned int stride_up, unsigned int j, unsigned int n) {
+    if (n == 1u) {
+        return 0.0f;
+    }
+    float inv_h = p.scales[0];
+    float inv_2h = p.scales[1];
+    float inv_12h = p.scales[2];
+    float v = 0.0f;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 1u < n && is_central4_second(n, j + 1u)) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 1u && is_central4_second(n, j - 1u)) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    if (j + 2u < n && is_central4_fourth(n, j + 2u)) {
+        v = v + (field[base_up + (j + 2u) * stride_up] * inv_12h);
+    }
+    if (j + 1u < n && is_central4_fourth(n, j + 1u)) {
+        v = v + (((-8.0f) * field[base_up + (j + 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 1u && is_central4_fourth(n, j - 1u)) {
+        v = v + ((8.0f * field[base_up + (j - 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 2u && is_central4_fourth(n, j - 2u)) {
+        v = v + ((-field[base_up + (j - 2u) * stride_up]) * inv_12h);
+    }
+    return v;
+}
+
+__device__ __forceinline__ float adjoint6(const float* field, const FixedFd3DParams& p, unsigned int base_up, unsigned int stride_up, unsigned int j, unsigned int n) {
+    float inv_h = p.scales[0];
+    float inv_2h = p.scales[1];
+    float inv_12h = p.scales[2];
+    float inv_60h = p.scales[3];
+    float v = 0.0f;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 1u < n && (j + 1u == 1u || j + 1u + 2u == n)) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 1u && (j - 1u == 1u || j - 1u + 2u == n)) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    if (j + 2u < n && (j + 2u == 2u || j + 2u + 3u == n)) {
+        v = v + (field[base_up + (j + 2u) * stride_up] * inv_12h);
+    }
+    if (j + 1u < n && (j + 1u == 2u || j + 1u + 3u == n)) {
+        v = v + (((-8.0f) * field[base_up + (j + 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 1u && (j - 1u == 2u || j - 1u + 3u == n)) {
+        v = v + ((8.0f * field[base_up + (j - 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 2u && (j - 2u == 2u || j - 2u + 3u == n)) {
+        v = v + ((-field[base_up + (j - 2u) * stride_up]) * inv_12h);
+    }
+    if (j + 3u < n && j + 3u >= 3u && j + 3u + 4u <= n) {
+        v = v + ((-field[base_up + (j + 3u) * stride_up]) * inv_60h);
+    }
+    if (j + 2u < n && j + 2u >= 3u && j + 2u + 4u <= n) {
+        v = v + ((9.0f * field[base_up + (j + 2u) * stride_up]) * inv_60h);
+    }
+    if (j + 1u < n && j + 1u >= 3u && j + 1u + 4u <= n) {
+        v = v + (((-45.0f) * field[base_up + (j + 1u) * stride_up]) * inv_60h);
+    }
+    if (j >= 1u && j - 1u >= 3u && j - 1u + 4u <= n) {
+        v = v + ((45.0f * field[base_up + (j - 1u) * stride_up]) * inv_60h);
+    }
+    if (j >= 2u && j - 2u >= 3u && j - 2u + 4u <= n) {
+        v = v + (((-9.0f) * field[base_up + (j - 2u) * stride_up]) * inv_60h);
+    }
+    if (j >= 3u && j - 3u >= 3u && j - 3u + 4u <= n) {
+        v = v + (field[base_up + (j - 3u) * stride_up] * inv_60h);
+    }
+    return v;
+}
+
+__device__ __forceinline__ float adjoint_forward(const float* field, float inv_h, unsigned int base_up, unsigned int stride_up, unsigned int j, unsigned int n) {
+    float v = 0.0f;
+    if (j + 1u < n) {
+        v = v + ((-field[base_up + j * stride_up]) * inv_h);
+    }
+    if (j >= 1u) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_h);
+    }
+    return v;
+}
+
+__device__ __forceinline__ float adjoint_backward(const float* field, float inv_h, unsigned int base_up, unsigned int stride_up, unsigned int j, unsigned int n) {
+    float v = 0.0f;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u <= n) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_h);
+    }
+    if (j >= 1u) {
+        v = v + (field[base_up + j * stride_up] * inv_h);
+    }
+    return v;
+}
+
+extern "C" __global__ void fixed_fd_adjoint(
+    const float* field,
+    float* result,
+    FixedFd3DParams params
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int j = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int k = blockIdx.z * blockDim.z + threadIdx.z;
+    unsigned int axis = params.dims_axis[3];
+    unsigned int nx = params.dims_axis[0];
+    unsigned int ny = params.dims_axis[1];
+    unsigned int nz = params.dims_axis[2];
+    if (i >= nx || j >= ny || k >= nz) {
+        return;
+    }
+
+    unsigned int lane = k;
+    if (axis == 0u) {
+        lane = i;
+    } else if (axis == 1u) {
+        lane = j;
+    }
+    unsigned int n = params.dims_axis[axis];
+    unsigned int stride_up = upstream_stride(params);
+    // Upstream flat of this lane's coordinates under the upstream strides:
+    // arithmetic only, since lane n - 1 has no upstream lane under the
+    // forward scheme — subtracting lane * stride_up lands back in range.
+    unsigned int ony = output_extent(params, 1u);
+    unsigned int onz = output_extent(params, 2u);
+    unsigned int up_flat = (i * ony + j) * onz + k;
+    unsigned int base_up = up_flat - lane * stride_up;
+    unsigned int out_flat = (i * ny + j) * nz + k;
+
+    unsigned int id = params.scheme[0];
+    float value = 0.0f;
+    if (id == 0u) {
+        value = adjoint2(field, params, base_up, stride_up, lane, n);
+    } else if (id == 1u) {
+        value = adjoint4(field, params, base_up, stride_up, lane, n);
+    } else if (id == 2u) {
+        value = adjoint6(field, params, base_up, stride_up, lane, n);
+    } else if (id == 3u) {
+        value = adjoint_forward(field, params.scales[0], base_up, stride_up, lane, n);
+    } else {
+        value = adjoint_backward(field, params.scales[0], base_up, stride_up, lane, n);
+    }
+    result[out_flat] = value;
+}
 "#;
 
-/// Compiled CUDA fixed-scheme sweep kernel.
+/// Compiled CUDA fixed-scheme sweep kernel, with its transpose.
 #[derive(Debug)]
 pub struct FixedFd3DKernel {
     sweep: CudaMultiStorageKernel,
+    adjoint: CudaMultiStorageKernel,
 }
 
 impl FixedFd3DKernel {
-    /// Compile the sweep for a CUDA device.
+    /// Compile the sweep and its transpose for a CUDA device.
     ///
     /// # Errors
     ///
@@ -184,6 +410,14 @@ impl FixedFd3DKernel {
                 "hephaestus-fixed-fd-3d-sweep",
                 FIXED_FD_3D_KERNEL,
                 "fixed_fd_sweep",
+                &[0, 1],
+                block,
+                0,
+            )?,
+            adjoint: CudaMultiStorageKernel::new(
+                "hephaestus-fixed-fd-3d-adjoint",
+                FIXED_FD_3D_KERNEL,
+                "fixed_fd_adjoint",
                 &[0, 1],
                 block,
                 0,
@@ -224,6 +458,41 @@ impl FixedFd3DKernel {
             grid,
         )
     }
+
+    /// Sweep the transpose of the scheme in `params` along its axis,
+    /// `upstream` into `grad`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a storage-length mismatch against either grid, or the launch
+    /// failure.
+    pub fn adjoint(
+        &self,
+        device: &CudaDevice,
+        upstream: &CudaBuffer<f32>,
+        grad: &CudaBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        params.validate_adjoint_storage(upstream.len(), grad.len())?;
+        let mut dims = [0_usize; 3];
+        for (slot, extent) in dims.iter_mut().zip(params.dims()) {
+            *slot =
+                usize::try_from(extent).map_err(|error| HephaestusError::InvalidConfiguration {
+                    message: format!("fixed-fd grid extent does not fit usize: {error}"),
+                })?;
+        }
+        let grid = DispatchGrid::covering_domain(dims, WORKGROUP)?;
+        MultiStorageKernel::<CudaDevice, FixedFd3DParams, [CudaStorageBinding<'_>; 2]>::dispatch(
+            &self.adjoint,
+            device,
+            [
+                CudaStorageBinding::new(0, upstream),
+                CudaStorageBinding::new(1, grad),
+            ],
+            params,
+            grid,
+        )
+    }
 }
 
 /// Provider-owned implementation of [`hephaestus_core::FixedFd3DOps`] for
@@ -247,5 +516,16 @@ impl hephaestus_core::FixedFd3DOps<CudaDevice> for CudaFixedFd3DOps {
         params: &FixedFd3DParams,
     ) -> Result<()> {
         kernel.sweep(device, input, output, params)
+    }
+
+    fn fixed_fd_adjoint_into(
+        &self,
+        device: &CudaDevice,
+        kernel: &Self::FixedFd3D,
+        upstream: &CudaBuffer<f32>,
+        grad: &CudaBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        kernel.adjoint(device, upstream, grad, params)
     }
 }

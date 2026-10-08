@@ -94,4 +94,35 @@ impl FixedFd3DOps<HostDevice> for HostFixedFdOps {
         }
         .map_err(map_leto_error)
     }
+
+    fn fixed_fd_adjoint_into(
+        &self,
+        _device: &HostDevice,
+        _kernel: &Self::FixedFd3D,
+        upstream: &HostBuffer<f32>,
+        grad: &HostBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        require_disjoint_output(upstream, upstream, grad)?;
+        let upstream_cells = upstream.read();
+        let mut grad_cells = grad.write();
+        params.validate_adjoint_storage(upstream_cells.len(), grad_cells.len())?;
+        let h = 1.0 / params.scales[0];
+        let operator = FiniteDifference3D::new(map_scheme(params.scheme()), h, h, h)
+            .map_err(map_leto_error)?;
+        let [nx, ny, nz] = params.dims().map(|extent| extent as usize);
+        let [ux, uy, uz] = params.output_dims().map(|extent| extent as usize);
+        let upstream_layout = dense_layout([ux, uy, uz])?;
+        let grad_layout = dense_layout([nx, ny, nz])?;
+        let field =
+            ArrayView3::try_new(upstream_layout, &upstream_cells).map_err(map_leto_error)?;
+        let mut target =
+            ArrayViewMut3::try_new(grad_layout, &mut grad_cells).map_err(map_leto_error)?;
+        match map_axis(params.axis()) {
+            Axis::X => operator.adjoint_x_into(field, &mut target),
+            Axis::Y => operator.adjoint_y_into(field, &mut target),
+            Axis::Z => operator.adjoint_z_into(field, &mut target),
+        }
+        .map_err(map_leto_error)
+    }
 }

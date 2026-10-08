@@ -56,7 +56,7 @@ pub enum FixedFd3DScheme {
     /// `(−f[i+2] + 8f[i+1] − 8f[i−1] + f[i−2]) / 12Δ` interior, degrading to
     /// second then first order toward the walls, flat on a singleton axis.
     CentralFourthOrder = 1,
-    /// `(−f[i+3] + 9f[i+2] − 45f[i+1] + 45f[i−1] − 9f[i−2] + f[i−3]) / 60Δ`
+    /// `(−f[i−3] + 9f[i−2] − 45f[i−1] + 45f[i+1] − 9f[i+2] + f[i+3]) / 60Δ`
     /// interior, degrading through fourth, second, then first order.
     CentralSixthOrder = 2,
     /// `(f[i+1] − f[i]) / Δ`; the output is one cell shorter on the axis.
@@ -223,6 +223,38 @@ impl FixedFd3DParams {
         Ok(())
     }
 
+    /// Confirm the buffers hold the transpose sweep's grids: the upstream
+    /// has the forward sweep's output shape, the gradient the forward
+    /// sweep's input shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::LengthMismatch`] when either length
+    /// differs from its grid, and the overflow from [`Self::cell_count`].
+    pub fn validate_adjoint_storage(&self, upstream_len: usize, grad_len: usize) -> Result<()> {
+        let expected_upstream = self.output_cell_count()?;
+        if upstream_len != expected_upstream {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: upstream_len,
+                device_len: expected_upstream,
+            });
+        }
+        let expected_grad = self.cell_count()?;
+        if grad_len != expected_grad {
+            return Err(HephaestusError::LengthMismatch {
+                host_len: grad_len,
+                device_len: expected_grad,
+            });
+        }
+        Ok(())
+    }
+
+    /// Input grid extents `[nx, ny, nz]`.
+    #[must_use]
+    pub const fn dims(&self) -> [u32; 3] {
+        [self.dims_axis[0], self.dims_axis[1], self.dims_axis[2]]
+    }
+
     /// Output extents `[nx, ny, nz]`, shrunk on the axis for a forward sweep.
     #[must_use]
     pub fn output_dims(&self) -> [u32; 3] {
@@ -314,6 +346,28 @@ pub trait FixedFd3DOps<D: crate::ComputeDevice> {
         output: &D::Buffer<f32>,
         params: &FixedFd3DParams,
     ) -> Result<()>;
+
+    /// Sweep the transpose of the scheme in `params` along its axis,
+    /// `upstream` into `grad`.
+    ///
+    /// For a forward sweep `y = A f`, this maps the upstream shaped like `y`
+    /// to the gradient shaped like `f`: the pullback an autograd backward
+    /// pass needs. A forward sweep shrinks the grid, so its adjoint fans
+    /// back out; lanes accumulate the provider's predicated terms in
+    /// canonical order, so CPU and device agree bit for bit in `f32`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a storage-length mismatch against either grid, or the backend
+    /// dispatch failure.
+    fn fixed_fd_adjoint_into(
+        &self,
+        device: &D,
+        kernel: &Self::FixedFd3D,
+        upstream: &D::Buffer<f32>,
+        grad: &D::Buffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()>;
 }
 
 #[cfg(test)]
@@ -381,6 +435,48 @@ mod tests {
             assert!(params.validate_storage(8 * 6 * 10, cells).is_ok());
             assert!(params.validate_storage(8 * 6 * 10, 8 * 6 * 10).is_err());
         }
+    }
+
+    #[test]
+    fn adjoint_storage_swaps_the_forward_grids() {
+        let shrunk = FixedFd3DParams::new(
+            8,
+            6,
+            10,
+            StaggeredAxis::X,
+            FixedFd3DScheme::StaggeredForward,
+            [0.5; 3],
+        )
+        .expect("valid block");
+        // The upstream has the forward output shape (one plane short), the
+        // gradient the full input grid.
+        assert!(
+            shrunk
+                .validate_adjoint_storage(7 * 6 * 10, 8 * 6 * 10)
+                .is_ok()
+        );
+        assert!(
+            shrunk
+                .validate_adjoint_storage(8 * 6 * 10, 8 * 6 * 10)
+                .is_err()
+        );
+        assert!(
+            shrunk
+                .validate_adjoint_storage(7 * 6 * 10, 7 * 6 * 10)
+                .is_err()
+        );
+
+        let kept = FixedFd3DParams::new(
+            8,
+            8,
+            8,
+            StaggeredAxis::X,
+            FixedFd3DScheme::CentralSixthOrder,
+            [0.5; 3],
+        )
+        .expect("valid block");
+        assert!(kept.validate_adjoint_storage(512, 512).is_ok());
+        assert!(kept.validate_adjoint_storage(511, 512).is_err());
     }
 
     #[test]
