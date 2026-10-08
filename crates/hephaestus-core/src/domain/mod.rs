@@ -35,6 +35,8 @@ pub mod error;
 pub mod fdtd;
 /// Device-neutral dense complex Fourier-transform contracts.
 pub mod fft;
+/// Fixed-scheme three-dimensional first-derivative contracts.
+pub mod fixed_fd;
 /// Runtime-rank expression-fusion contracts.
 pub mod fusion;
 /// Backend-neutral kernel authoring: interface and source declarations.

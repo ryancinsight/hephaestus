@@ -104,6 +104,9 @@ pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 pub type CudaScanOps = hephaestus_core::AxisScanOps<CudaDevice>;
 /// A scan prepared against one operand pair on this device.
 pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaDevice, T>;
+pub use application::fixed_fd::{
+    CudaFixedFd3DOps, FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme,
+};
 pub use application::sparse::seam::CudaSparseOps;
 pub use application::staggered::{
     CudaStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,

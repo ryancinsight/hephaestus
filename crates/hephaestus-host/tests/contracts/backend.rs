@@ -10,8 +10,9 @@ use hephaestus_conformance::{BackendUnderTest, assert_backend_contract};
 use hephaestus_host::{
     HostAttentionOps, HostAxisReductionOps, HostConvolutionOps, HostCrossEntropyOps,
     HostDecompositionOps, HostDenseProductOps, HostDenseVectorOps, HostDevice, HostElementwiseOps,
-    HostFullReductionOps, HostParameterizedUnaryOps, HostRandomOps, HostRayIntegralOps,
-    HostScanOps, HostSparseOps, HostStaggeredOps, HostStatefulUpdateOps, HostStencilOps,
+    HostFixedFdOps, HostFullReductionOps, HostParameterizedUnaryOps, HostRandomOps,
+    HostRayIntegralOps, HostScanOps, HostSparseOps, HostStaggeredOps, HostStatefulUpdateOps,
+    HostStencilOps,
 };
 
 #[test]
@@ -29,6 +30,7 @@ fn host_satisfies_the_backend_contract() {
         dense_product: &HostDenseProductOps,
         dense_vector: &HostDenseVectorOps,
         elementwise: &HostElementwiseOps,
+        fixed_fd_3d: &HostFixedFdOps,
         full_reduction: &HostFullReductionOps,
         parameterized_unary: &HostParameterizedUnaryOps,
         random_init: &HostRandomOps,

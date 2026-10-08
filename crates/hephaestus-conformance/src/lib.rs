@@ -77,6 +77,9 @@ pub mod elementwise;
 /// [`EmbeddingOps`](hephaestus_core::EmbeddingOps) seam.
 pub mod embedding;
 /// Contract clauses for the
+/// [`FixedFd3DOps`](hephaestus_core::FixedFd3DOps) seam.
+pub mod fixed_fd;
+/// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
 /// Contract clauses for the
@@ -135,6 +138,7 @@ pub use elementwise::assert_elementwise_contract;
 pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
 };
+pub use fixed_fd::assert_fixed_fd_3d_contract;
 pub use full_reduction::assert_full_reduction_contract;
 pub use interpolation::assert_interpolation_contract;
 pub use pad::assert_pad_contract;
