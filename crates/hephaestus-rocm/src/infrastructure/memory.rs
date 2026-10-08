@@ -111,12 +111,12 @@ impl ComputeDevice for RocmDevice {
             return Ok(());
         }
         self.context.set_current()?;
-        // SAFETY: `buffer.ptr` is owned HIP device memory for the current
+        // SAFETY: `buffer.raw()` is owned HIP device memory for the current
         // device; `out` is a valid writable host slice of exactly `bytes`.
         let status = unsafe {
             cubecl_hip_sys::hipMemcpy(
                 out.as_mut_ptr().cast::<c_void>(),
-                buffer.ptr.cast_const(),
+                buffer.raw().cast_const(),
                 bytes,
                 cubecl_hip_sys::hipMemcpyKind_hipMemcpyDeviceToHost,
             )
@@ -148,11 +148,11 @@ impl ComputeDevice for RocmDevice {
             return Ok(());
         }
         self.context.set_current()?;
-        // SAFETY: `buffer.ptr` is owned HIP device memory for the current
+        // SAFETY: `buffer.raw()` is owned HIP device memory for the current
         // device; `host` is a valid readable host slice of exactly `bytes`.
         let status = unsafe {
             cubecl_hip_sys::hipMemcpy(
-                buffer.ptr,
+                buffer.raw(),
                 host.as_ptr().cast::<c_void>(),
                 bytes,
                 cubecl_hip_sys::hipMemcpyKind_hipMemcpyHostToDevice,
@@ -200,7 +200,7 @@ impl ComputeDevice for RocmDevice {
         self.context.set_current()?;
         // SAFETY: `end <= buffer.len` and the checked byte arithmetic prove
         // that the HIP allocation contains the complete destination range.
-        let destination = unsafe { buffer.ptr.cast::<u8>().add(offset_bytes).cast::<c_void>() };
+        let destination = unsafe { buffer.raw().cast::<u8>().add(offset_bytes).cast::<c_void>() };
         // SAFETY: `destination` is the in-bounds HIP device subrange above;
         // `host` is a valid readable host slice of exactly `bytes`.
         let status = unsafe {
