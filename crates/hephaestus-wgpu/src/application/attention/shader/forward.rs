@@ -1,3 +1,4 @@
+use super::super::WgslAttentionScalar;
 use super::prelude::prelude;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -6,21 +7,24 @@ pub(in crate::application::attention) enum ForwardStage {
     Output,
 }
 
-pub(in crate::application::attention) fn forward_shader(stage: ForwardStage, width: u32) -> String {
+pub(in crate::application::attention) fn forward_shader<T: WgslAttentionScalar>(
+    stage: ForwardStage,
+    width: u32,
+) -> String {
     match stage {
-        ForwardStage::Weights => weights_shader(width),
-        ForwardStage::Output => output_shader(width),
+        ForwardStage::Weights => weights_shader::<T>(width),
+        ForwardStage::Output => output_shader::<T>(width),
     }
 }
 
-fn weights_shader(width: u32) -> String {
-    let prelude = prelude(width);
+fn weights_shader<T: WgslAttentionScalar>(width: u32) -> String {
+    let prelude = prelude::<T>(width);
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> query: array<f32>;
-@group(0) @binding(1) var<storage, read> key: array<f32>;
-@group(0) @binding(2) var<storage, read> keep_mask: array<f32>;
-@group(0) @binding(3) var<storage, read_write> weights: array<f32>;
+@group(0) @binding(0) var<storage, read> query: array<{ty}>;
+@group(0) @binding(1) var<storage, read> key: array<{ty}>;
+@group(0) @binding(2) var<storage, read> keep_mask: array<{ty}>;
+@group(0) @binding(3) var<storage, read_write> weights: array<{ty}>;
 @group(0) @binding(4) var<uniform> parameters: AttentionMeta;
 
 fn is_kept(batch: u32, query_index: u32, key_index: u32) -> bool {{
@@ -30,7 +34,7 @@ fn is_kept(batch: u32, query_index: u32, key_index: u32) -> bool {{
     return keep_mask[physical(parameters.keep_mask, mask_batch, key_index, 0u)] != 0.0;
 }}
 
-fn score(batch: u32, query_index: u32, key_index: u32) -> f32 {{
+fn score(batch: u32, query_index: u32, key_index: u32) -> {ty} {{
     var dot = 0.0;
     var feature = 0u;
     loop {{
@@ -48,7 +52,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     if (id.x >= rows) {{ return; }}
     let batch = id.x / parameters.dimensions.y;
     let query_index = id.x % parameters.dimensions.y;
-    var maximum = -3.402823466e+38;
+    var maximum = {neg_max};
     var kept_count = 0u;
     var key_index = 0u;
     loop {{
@@ -82,17 +86,19 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
         key_index += 1u;
     }}
 }}
-"#
+"#,
+        ty = T::TYPE_TOKEN,
+        neg_max = T::NEG_MAX,
     )
 }
 
-fn output_shader(width: u32) -> String {
-    let prelude = prelude(width);
+fn output_shader<T: WgslAttentionScalar>(width: u32) -> String {
+    let prelude = prelude::<T>(width);
     format!(
         r#"{prelude}
-@group(0) @binding(0) var<storage, read> weights: array<f32>;
-@group(0) @binding(1) var<storage, read> value: array<f32>;
-@group(0) @binding(2) var<storage, read_write> output: array<f32>;
+@group(0) @binding(0) var<storage, read> weights: array<{ty}>;
+@group(0) @binding(1) var<storage, read> value: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> output: array<{ty}>;
 @group(0) @binding(3) var<uniform> parameters: AttentionMeta;
 
 @compute @workgroup_size({width})
@@ -128,6 +134,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     }}
     output[physical(parameters.destination, batch, query_index, feature)] = accumulated;
 }}
-"#
+"#,
+        ty = T::TYPE_TOKEN,
     )
 }

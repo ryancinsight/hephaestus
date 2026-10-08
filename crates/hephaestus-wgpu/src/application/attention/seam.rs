@@ -6,6 +6,7 @@ use hephaestus_core::{
     plan_attention_forward,
 };
 
+use super::WgslAttentionScalar;
 use super::metadata::AttentionMeta;
 use super::preflight::{
     prepare_backward as prepare_backward_preflight, prepare_forward as prepare_forward_preflight,
@@ -36,22 +37,22 @@ struct BackwardValue;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuAttentionOps;
 
-impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
+impl<T: WgslAttentionScalar> AttentionOps<WgpuDevice, T> for WgpuAttentionOps {
     type PreparedForward<'a>
-        = PreparedAttentionForward
+        = PreparedAttentionForward<T>
     where
         WgpuDevice: 'a,
-        f32: 'a;
+        T: 'a;
     type PreparedBackward<'a>
-        = PreparedAttentionBackward
+        = PreparedAttentionBackward<T>
     where
         WgpuDevice: 'a,
-        f32: 'a;
+        T: 'a;
 
     fn prepare_attention_forward<'a>(
         &self,
         device: &'a WgpuDevice,
-        operands: AttentionForwardOperands<'a, WgpuBuffer<f32>, f32>,
+        operands: AttentionForwardOperands<'a, WgpuBuffer<T>, T>,
     ) -> Result<Self::PreparedForward<'a>> {
         validate_forward_owners(device, &operands)?;
         let plan = plan_attention_forward(&operands, forward_aliases(&operands))?;
@@ -60,7 +61,7 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             operands.mask.grouped_keep().map_or((None, 1), |keep| {
                 (Some(keep.view().layout), keep.heads_per_batch().get())
             });
-        let metadata = AttentionMeta::new(
+        let metadata = AttentionMeta::<T>::new(
             plan,
             operands.query.layout,
             operands.key.layout,
@@ -80,7 +81,7 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
         let rows = checked_product(plan.batch, plan.query_sequence, "forward row count")?;
         let preflight =
             prepare_forward_preflight(device, &operands, plan, &metadata, mask_buffer, rows)?;
-        let weights = prepare_kernel::<ForwardWeights>(
+        let weights = prepare_kernel::<ForwardWeights, T>(
             device,
             ForwardStage::Weights,
             &metadata,
@@ -94,7 +95,7 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             ],
         )?;
         let output_elements = checked_product(rows, plan.value_feature, "forward output count")?;
-        let output = prepare_kernel::<ForwardOutput>(
+        let output = prepare_kernel::<ForwardOutput, T>(
             device,
             ForwardStage::Output,
             &metadata,
@@ -125,14 +126,14 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
     fn prepare_attention_backward<'a>(
         &self,
         device: &'a WgpuDevice,
-        operands: AttentionBackwardOperands<'a, WgpuBuffer<f32>, f32>,
+        operands: AttentionBackwardOperands<'a, WgpuBuffer<T>, T>,
     ) -> Result<Self::PreparedBackward<'a>> {
         validate_backward_owners(device, &operands)?;
         let plan = plan_attention_backward(&operands, backward_aliases(&operands))?;
         plan.validate_address_limit(address_limit())?;
         let needs_score = operands.gradients.query.is_some() || operands.gradients.key.is_some();
         let score_workspace = needs_score
-            .then(|| device.alloc_zeroed::<f32>(plan.score_elements))
+            .then(|| device.alloc_zeroed::<T>(plan.score_elements))
             .transpose()?;
         let preflight =
             prepare_backward_preflight(device, &operands, plan, score_workspace.as_ref())?;
@@ -140,7 +141,7 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             .gradients
             .query
             .map(|target| {
-                prepare_gradient::<BackwardQuery>(
+                prepare_gradient::<BackwardQuery, T>(
                     device,
                     &operands,
                     plan,
@@ -155,7 +156,7 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
             .gradients
             .key
             .map(|target| {
-                prepare_gradient::<BackwardKey>(
+                prepare_gradient::<BackwardKey, T>(
                     device,
                     &operands,
                     plan,
@@ -191,12 +192,12 @@ impl AttentionOps<WgpuDevice, f32> for WgpuAttentionOps {
     }
 }
 
-fn prepare_gradient<K: 'static>(
+fn prepare_gradient<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    target: StridedView<'_, WgpuBuffer<f32>, 3>,
-    workspace: Option<&WgpuBuffer<f32>>,
+    target: StridedView<'_, WgpuBuffer<T>, 3>,
+    workspace: Option<&WgpuBuffer<T>>,
     stage: BackwardStage,
     label: &'static str,
 ) -> Result<PreparedAttentionKernel> {
@@ -214,7 +215,7 @@ fn prepare_gradient<K: 'static>(
             ));
         }
     };
-    prepare_backward_kernel::<K>(
+    prepare_backward_kernel::<K, T>(
         device,
         stage,
         &metadata,
@@ -228,17 +229,17 @@ fn prepare_gradient<K: 'static>(
     )
 }
 
-fn prepare_value(
+fn prepare_value<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    target: StridedView<'_, WgpuBuffer<f32>, 3>,
+    target: StridedView<'_, WgpuBuffer<T>, 3>,
 ) -> Result<PreparedAttentionKernel> {
     let metadata = backward_metadata(operands, plan, target)?;
     let elements = target.layout.checked_size().map_err(|error| {
         super::resources::invalid(format!("attention value-gradient layout rejected: {error}"))
     })?;
-    prepare_backward_kernel::<BackwardValue>(
+    prepare_backward_kernel::<BackwardValue, T>(
         device,
         BackwardStage::Value,
         &metadata,
@@ -252,12 +253,12 @@ fn prepare_value(
     )
 }
 
-pub(super) fn backward_metadata(
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+pub(super) fn backward_metadata<T: WgslAttentionScalar>(
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    destination: StridedView<'_, WgpuBuffer<f32>, 3>,
-) -> Result<AttentionMeta> {
-    AttentionMeta::new(
+    destination: StridedView<'_, WgpuBuffer<T>, 3>,
+) -> Result<AttentionMeta<T>> {
+    AttentionMeta::<T>::new(
         plan,
         operands.query.layout,
         operands.key.layout,
@@ -272,10 +273,10 @@ pub(super) fn backward_metadata(
     )
 }
 
-fn prepare_kernel<K: 'static>(
+fn prepare_kernel<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
     stage: ForwardStage,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
     elements: usize,
     label: &'static str,
     storage_entries: &[wgpu::BindGroupEntry<'_>],
@@ -286,15 +287,15 @@ fn prepare_kernel<K: 'static>(
         elements,
         label,
         storage_entries,
-        || forward_shader(stage, WORKGROUP_WIDTH.get()),
+        || forward_shader::<T>(stage, WORKGROUP_WIDTH.get()),
         TypeId::of::<K>(),
     )
 }
 
-fn prepare_backward_kernel<K: 'static>(
+fn prepare_backward_kernel<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
     stage: BackwardStage,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
     elements: usize,
     label: &'static str,
     storage_entries: &[wgpu::BindGroupEntry<'_>],
@@ -305,14 +306,14 @@ fn prepare_backward_kernel<K: 'static>(
         elements,
         label,
         storage_entries,
-        || backward_shader(stage, WORKGROUP_WIDTH.get()),
+        || backward_shader::<T>(stage, WORKGROUP_WIDTH.get()),
         TypeId::of::<K>(),
     )
 }
 
-pub(super) fn prepare(
+pub(super) fn prepare<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
     elements: usize,
     label: &'static str,
     storage_entries: &[wgpu::BindGroupEntry<'_>],
@@ -324,7 +325,7 @@ pub(super) fn prepare(
     }
     let pipeline = try_cached_pipeline(
         device,
-        (kernel, TypeId::of::<f32>(), WORKGROUP_WIDTH.get()),
+        (kernel, TypeId::of::<T>(), WORKGROUP_WIDTH.get()),
         label,
         shader,
     )?;

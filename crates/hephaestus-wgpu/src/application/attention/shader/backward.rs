@@ -1,3 +1,4 @@
+use super::super::WgslAttentionScalar;
 use super::prelude::prelude;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -8,16 +9,16 @@ pub(in crate::application::attention) enum BackwardStage {
     Value,
 }
 
-pub(in crate::application::attention) fn backward_shader(
+pub(in crate::application::attention) fn backward_shader<T: WgslAttentionScalar>(
     stage: BackwardStage,
     width: u32,
 ) -> String {
-    let prelude = prelude(width);
+    let prelude = prelude::<T>(width);
     let (bindings, body) = match stage {
-        BackwardStage::Score => (score_bindings(), score_body()),
-        BackwardStage::Query => (query_bindings(), query_body()),
-        BackwardStage::Key => (key_bindings(), key_body()),
-        BackwardStage::Value => (value_bindings(), value_body()),
+        BackwardStage::Score => (score_bindings::<T>(), score_body()),
+        BackwardStage::Query => (query_bindings::<T>(), query_body()),
+        BackwardStage::Key => (key_bindings::<T>(), key_body()),
+        BackwardStage::Value => (value_bindings::<T>(), value_body()),
     };
     format!(
         r#"{prelude}
@@ -30,33 +31,45 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     )
 }
 
-fn score_bindings() -> &'static str {
-    r#"@group(0) @binding(0) var<storage, read> grad_output: array<f32>;
-@group(0) @binding(1) var<storage, read> value: array<f32>;
-@group(0) @binding(2) var<storage, read> weights: array<f32>;
-@group(0) @binding(3) var<storage, read_write> score_gradient: array<f32>;
-@group(0) @binding(4) var<uniform> parameters: AttentionMeta;"#
+fn score_bindings<T: WgslAttentionScalar>() -> String {
+    format!(
+        r#"@group(0) @binding(0) var<storage, read> grad_output: array<{ty}>;
+@group(0) @binding(1) var<storage, read> value: array<{ty}>;
+@group(0) @binding(2) var<storage, read> weights: array<{ty}>;
+@group(0) @binding(3) var<storage, read_write> score_gradient: array<{ty}>;
+@group(0) @binding(4) var<uniform> parameters: AttentionMeta;"#,
+        ty = T::TYPE_TOKEN,
+    )
 }
 
-fn query_bindings() -> &'static str {
-    r#"@group(0) @binding(0) var<storage, read> score_gradient: array<f32>;
-@group(0) @binding(1) var<storage, read> key: array<f32>;
-@group(0) @binding(2) var<storage, read_write> destination: array<f32>;
-@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#
+fn query_bindings<T: WgslAttentionScalar>() -> String {
+    format!(
+        r#"@group(0) @binding(0) var<storage, read> score_gradient: array<{ty}>;
+@group(0) @binding(1) var<storage, read> key: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> destination: array<{ty}>;
+@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#,
+        ty = T::TYPE_TOKEN,
+    )
 }
 
-fn key_bindings() -> &'static str {
-    r#"@group(0) @binding(0) var<storage, read> score_gradient: array<f32>;
-@group(0) @binding(1) var<storage, read> query: array<f32>;
-@group(0) @binding(2) var<storage, read_write> destination: array<f32>;
-@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#
+fn key_bindings<T: WgslAttentionScalar>() -> String {
+    format!(
+        r#"@group(0) @binding(0) var<storage, read> score_gradient: array<{ty}>;
+@group(0) @binding(1) var<storage, read> query: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> destination: array<{ty}>;
+@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#,
+        ty = T::TYPE_TOKEN,
+    )
 }
 
-fn value_bindings() -> &'static str {
-    r#"@group(0) @binding(0) var<storage, read> weights: array<f32>;
-@group(0) @binding(1) var<storage, read> grad_output: array<f32>;
-@group(0) @binding(2) var<storage, read_write> destination: array<f32>;
-@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#
+fn value_bindings<T: WgslAttentionScalar>() -> String {
+    format!(
+        r#"@group(0) @binding(0) var<storage, read> weights: array<{ty}>;
+@group(0) @binding(1) var<storage, read> grad_output: array<{ty}>;
+@group(0) @binding(2) var<storage, read_write> destination: array<{ty}>;
+@group(0) @binding(3) var<uniform> parameters: AttentionMeta;"#,
+        ty = T::TYPE_TOKEN,
+    )
 }
 
 fn score_body() -> &'static str {

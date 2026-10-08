@@ -2,6 +2,7 @@ use hephaestus_core::{
     AttentionForwardOperands, AttentionPlan, AttentionSemanticStatus, ComputeDevice, Result,
 };
 
+use super::super::WgslAttentionScalar;
 use super::super::metadata::AttentionMeta;
 use super::super::prepared::PreparedAttentionKernel;
 use super::super::resources::binding;
@@ -22,16 +23,16 @@ pub(in crate::application::attention) struct ForwardPreflight {
     pub(in crate::application::attention) status: WgpuBuffer<u32>,
 }
 
-pub(in crate::application::attention) fn prepare_forward(
+pub(in crate::application::attention) fn prepare_forward<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionForwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionForwardOperands<'_, WgpuBuffer<T>, T>,
     plan: AttentionPlan,
-    metadata: &AttentionMeta,
-    mask_buffer: &WgpuBuffer<f32>,
+    metadata: &AttentionMeta<T>,
+    mask_buffer: &WgpuBuffer<T>,
     rows: usize,
 ) -> Result<ForwardPreflight> {
     let status = device.alloc_zeroed::<u32>(1)?;
-    let query_finite = prepare_finite::<QueryFinite>(
+    let query_finite = prepare_finite::<QueryFinite, T>(
         device,
         metadata,
         checked_product(rows, plan.key_feature, "query element count")?,
@@ -42,7 +43,7 @@ pub(in crate::application::attention) fn prepare_forward(
         &status,
     )?;
     let key_rows = checked_product(plan.batch, plan.key_sequence, "key row count")?;
-    let key_finite = prepare_finite::<KeyFinite>(
+    let key_finite = prepare_finite::<KeyFinite, T>(
         device,
         metadata,
         checked_product(key_rows, plan.key_feature, "key element count")?,
@@ -52,7 +53,7 @@ pub(in crate::application::attention) fn prepare_forward(
         operands.key.buffer,
         &status,
     )?;
-    let value_finite = prepare_finite::<ValueFinite>(
+    let value_finite = prepare_finite::<ValueFinite, T>(
         device,
         metadata,
         checked_product(key_rows, plan.value_feature, "value element count")?,
@@ -71,7 +72,7 @@ pub(in crate::application::attention) fn prepare_forward(
             super::super::resources::invalid(format!("attention keep layout rejected: {error}"))
         })?
         .unwrap_or(0);
-    let keep_finite = prepare_finite::<KeepFinite>(
+    let keep_finite = prepare_finite::<KeepFinite, T>(
         device,
         metadata,
         keep_elements,
@@ -81,7 +82,7 @@ pub(in crate::application::attention) fn prepare_forward(
         mask_buffer,
         &status,
     )?;
-    let arithmetic = prepare_status::<WeightArithmetic>(
+    let arithmetic = prepare_status::<WeightArithmetic, T>(
         device,
         metadata,
         rows,
@@ -92,7 +93,7 @@ pub(in crate::application::attention) fn prepare_forward(
             binding(2, mask_buffer),
             binding(3, &status),
         ],
-        || forward_arithmetic_preflight_shader(WORKGROUP_WIDTH.get()),
+        || forward_arithmetic_preflight_shader::<T>(WORKGROUP_WIDTH.get()),
     )?;
     Ok(ForwardPreflight {
         kernels: [
