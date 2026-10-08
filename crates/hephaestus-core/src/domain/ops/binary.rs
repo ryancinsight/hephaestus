@@ -241,6 +241,12 @@ macro_rules! impl_typed_comparison_exprs {
             impl TypedBinaryExpr<Wgsl, f32> for $op {
                 const EXPR: &'static str = $wgsl_f32;
             }
+            // f64 reuses the f32 spelling: `select` with AbstractFloat
+            // literals converts implicitly at the typed assignment, and the
+            // comparison operators are generic over the operand type.
+            impl TypedBinaryExpr<Wgsl, f64> for $op {
+                const EXPR: &'static str = $wgsl_f32;
+            }
             impl TypedBinaryExpr<Wgsl, u32> for $op {
                 const EXPR: &'static str = $wgsl_u32;
             }

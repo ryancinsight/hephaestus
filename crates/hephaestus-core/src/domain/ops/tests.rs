@@ -113,6 +113,10 @@ fn comparisons_use_scalar_correct_mask_literals() {
         "select(0, 1, lhs == rhs)"
     );
     assert_eq!(
+        <EqOp as TypedBinaryExpr<Wgsl, f64>>::EXPR,
+        "select(0.0, 1.0, lhs == rhs)"
+    );
+    assert_eq!(
         <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
         "lhs >= rhs ? 1.0f : 0.0f"
     );
