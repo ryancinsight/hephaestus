@@ -7,7 +7,7 @@ use hephaestus_core::{
     TypedBinaryExpr, UnaryExpr, Wgsl,
 };
 
-use crate::application::elementwise::reject_f64_unsupported_unary;
+use crate::application::elementwise::reject_unsupported_double_unary;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::application::prepared::{
     checked_bind_group, checked_submit, device_owner, validate_device_owner,
@@ -112,7 +112,7 @@ where
     Op: UnaryExpr<Wgsl> + 'static,
     T: DialectScalar<Wgsl> + Pod + 'static,
 {
-    reject_f64_unsupported_unary::<Op, T>()?;
+    reject_unsupported_double_unary::<Op, T>()?;
     validate_rank::<N>()?;
 
     let out_layout = output.layout;

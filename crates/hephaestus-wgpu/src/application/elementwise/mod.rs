@@ -49,7 +49,7 @@ fn reject_output_alias<T, U>(
 /// typed unsupported-operation rejection instead of a driver compile
 /// failure. Every unary shader-build path (contiguous, strided, seam
 /// prepare) calls this before emitting WGSL.
-pub(crate) fn reject_f64_unsupported_unary<Op, T>() -> Result<()>
+pub(crate) fn reject_unsupported_double_unary<Op, T>() -> Result<()>
 where
     Op: UnaryExpr<Wgsl>,
     T: DialectScalar<Wgsl>,
