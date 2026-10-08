@@ -107,6 +107,32 @@ fn rejects_aliasing_and_noninjective_destinations() {
 }
 
 #[test]
+fn plan_carries_gamma_tolerances_for_both_widths() {
+    let values = Buffer { len: 12 };
+    let targets = Buffer { len: 2 };
+    let loss = Buffer { len: 2 };
+    let logits = Layout::c_contiguous([2, 3]).expect("logits layout");
+    let target_layout = Layout::c_contiguous([2]).expect("target layout");
+    let loss_layout = Layout::c_contiguous([1]).expect("loss layout");
+    let probabilities = Layout::c_contiguous([2, 3]).expect("probability layout");
+    let operands = CrossEntropyForwardOperands {
+        logits: StridedView::new(&values, &logits),
+        targets: StridedView::new(&targets, &target_layout),
+        loss: StridedView::new(&loss, &loss_layout),
+        probabilities: StridedView::new(&values, &probabilities),
+    };
+    let plan =
+        plan_cross_entropy_forward::<f32, _, _>(&operands, false).expect("valid forward plan");
+    assert!(plan.probability_tolerance > 0.0);
+    assert!(plan.probability_tolerance_f64 > 0.0);
+    // Same gamma formula in each width's epsilon: the f64 tolerance is the
+    // tighter of the two and both sit far below the 0.5 rejection bound.
+    assert!(plan.probability_tolerance_f64 < f64::from(plan.probability_tolerance));
+    assert!(plan.probability_tolerance < 0.5);
+    assert!(plan.probability_tolerance_f64 < 0.5);
+}
+
+#[test]
 fn plans_additive_backward_and_checks_address_limit() {
     let values = Buffer { len: 8 };
     let targets = Buffer { len: 2 };

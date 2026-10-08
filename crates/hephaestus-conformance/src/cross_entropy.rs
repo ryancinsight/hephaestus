@@ -1,11 +1,12 @@
 //! Contract clauses for provider-owned mean cross-entropy.
 
+use eunomia::{Pod, RealField};
 use hephaestus_core::{
     ComputeDevice, CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps,
-    StridedView,
+    CrossEntropyScalar, StridedView,
 };
 use leto::{ArrayView, ArrayViewMut, Layout};
-use leto_ops::{cross_entropy_backward_accumulate, cross_entropy_forward_into};
+use leto_ops::{RealScalar, cross_entropy_backward_accumulate, cross_entropy_forward_into};
 
 /// Run strided forward and additive-backward clauses against one backend.
 ///
@@ -18,18 +19,45 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    strided_forward_and_backward(device, operations);
-    target_element_uses_only_its_executed_candidate(device, operations);
-    target_failure_precedes_nonfinite_upstream(device, operations);
-    invalid_probability_precedes_later_arithmetic(device, operations);
+    assert_cross_entropy_contract_for::<D, O, f32>(device, operations);
 }
 
-fn strided_forward_and_backward<D, O>(device: &D, operations: &O)
+/// Run strided forward and additive-backward clauses at f64 against one backend.
+///
+/// Mirrors [`assert_cross_entropy_contract`] with the f64 Leto oracle; every
+/// clause body is shared through the width-generic driver below.
+///
+/// # Panics
+///
+/// Panics with the backend and violated clause when provider results diverge
+/// from the Leto CPU contract.
+pub fn assert_cross_entropy_contract_f64<D, O>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: CrossEntropyOps<D, f32>,
+    O: CrossEntropyOps<D, f64>,
 {
-    let logits_host = [91.0_f32, 0.0, 2.0, 1.0, 92.0, -1.0, 3.0, 0.0, 93.0];
+    assert_cross_entropy_contract_for::<D, O, f64>(device, operations);
+}
+
+fn assert_cross_entropy_contract_for<D, O, T>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
+{
+    strided_forward_and_backward::<D, O, T>(device, operations);
+    target_element_uses_only_its_executed_candidate::<D, O, T>(device, operations);
+    target_failure_precedes_nonfinite_upstream::<D, O, T>(device, operations);
+    invalid_probability_precedes_later_arithmetic::<D, O, T>(device, operations);
+}
+
+fn strided_forward_and_backward<D, O, T>(device: &D, operations: &O)
+where
+    D: ComputeDevice,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
+{
+    let logits_host = [91.0, 0.0, 2.0, 1.0, 92.0, -1.0, 3.0, 0.0, 93.0].map(T::from_f32);
     let targets_host = [7_u32, 2, 7, 0];
     let logits_layout =
         Layout::try_new([2, 3], [4, 1], 1).expect("valid conformance fixture layout");
@@ -38,8 +66,8 @@ where
     let probability_layout =
         Layout::try_new([2, 3], [4, 1], 1).expect("valid conformance fixture layout");
 
-    let mut expected_loss = [-7.0_f32; 3];
-    let mut expected_probabilities = [-8.0_f32; 9];
+    let mut expected_loss = [-7.0; 3].map(T::from_f32);
+    let mut expected_probabilities = [-8.0; 9].map(T::from_f32);
     cross_entropy_forward_into(
         &ArrayView::new(logits_layout, &logits_host),
         &[2, 0],
@@ -50,8 +78,12 @@ where
 
     let logits = device.upload(&logits_host).expect("logits upload");
     let targets = device.upload(&targets_host).expect("targets upload");
-    let loss = device.upload(&[-7.0_f32; 3]).expect("loss upload");
-    let probabilities = device.upload(&[-8.0_f32; 9]).expect("probability upload");
+    let loss = device
+        .upload(&[-7.0; 3].map(T::from_f32))
+        .expect("loss upload");
+    let probabilities = device
+        .upload(&[-8.0; 9].map(T::from_f32))
+        .expect("probability upload");
     operations
         .cross_entropy_forward_into(
             device,
@@ -71,9 +103,9 @@ where
         "cross-entropy probabilities",
     );
 
-    let output_gradient_host = [11.0_f32, 0.75, 12.0];
+    let output_gradient_host = [11.0, 0.75, 12.0].map(T::from_f32);
     let output_gradient_layout = loss_layout;
-    let initial_gradient = [13.0_f32, 0.25, -0.5, 1.0, 14.0, -1.0, 0.5, 0.75, 15.0];
+    let initial_gradient = [13.0, 0.25, -0.5, 1.0, 14.0, -1.0, 0.5, 0.75, 15.0].map(T::from_f32);
     let mut expected_gradient = initial_gradient;
     cross_entropy_backward_accumulate(
         &ArrayView::new(output_gradient_layout, &output_gradient_host),
@@ -108,17 +140,18 @@ where
     );
 }
 
-fn target_element_uses_only_its_executed_candidate<D, O>(device: &D, operations: &O)
+fn target_element_uses_only_its_executed_candidate<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: CrossEntropyOps<D, f32>,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
 {
     let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let matrix = Layout::try_new([1, 1], [1, 1], 0).expect("valid conformance fixture layout");
-    let upstream = device.upload(&[f32::MAX]).expect("upstream upload");
-    let probabilities = device.upload(&[1.0_f32]).expect("probability upload");
+    let upstream = device.upload(&[T::FINITE_MAX]).expect("upstream upload");
+    let probabilities = device.upload(&[T::ONE]).expect("probability upload");
     let targets = device.upload(&[0_u32]).expect("target upload");
-    let destination = device.upload(&[f32::MAX]).expect("destination upload");
+    let destination = device.upload(&[T::FINITE_MAX]).expect("destination upload");
     operations
         .cross_entropy_backward_accumulate(
             device,
@@ -133,22 +166,25 @@ where
     assert_close(
         device,
         &destination,
-        &[f32::MAX],
+        &[T::FINITE_MAX],
         "one-class zero increment",
     );
 }
 
-fn target_failure_precedes_nonfinite_upstream<D, O>(device: &D, operations: &O)
+fn target_failure_precedes_nonfinite_upstream<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: CrossEntropyOps<D, f32>,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
 {
     let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let matrix = Layout::try_new([1, 1], [1, 1], 0).expect("valid conformance fixture layout");
-    let upstream = device.upload(&[f32::NAN]).expect("upstream upload");
-    let probabilities = device.upload(&[1.0_f32]).expect("probability upload");
+    let upstream = device.upload(&[T::NAN]).expect("upstream upload");
+    let probabilities = device.upload(&[T::ONE]).expect("probability upload");
     let targets = device.upload(&[1_u32]).expect("target upload");
-    let destination = device.upload(&[17.0_f32]).expect("destination upload");
+    let destination = device
+        .upload(&[T::from_f32(17.0)])
+        .expect("destination upload");
     let error = operations
         .cross_entropy_backward_accumulate(
             device,
@@ -164,23 +200,29 @@ where
         error.to_string(),
         "invalid configuration: cross-entropy target is outside the class dimension"
     );
-    assert_close(device, &destination, &[17.0], "combined-failure atomicity");
+    assert_close(
+        device,
+        &destination,
+        &[T::from_f32(17.0)],
+        "combined-failure atomicity",
+    );
 }
 
-fn invalid_probability_precedes_later_arithmetic<D, O>(device: &D, operations: &O)
+fn invalid_probability_precedes_later_arithmetic<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: CrossEntropyOps<D, f32>,
+    O: CrossEntropyOps<D, T>,
+    T: CrossEntropyScalar + RealScalar + RealField,
 {
     let scalar = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let matrix = Layout::try_new([1, 2], [2, 1], 0).expect("valid conformance fixture layout");
-    let upstream = device.upload(&[f32::MAX]).expect("upstream upload");
+    let upstream = device.upload(&[T::FINITE_MAX]).expect("upstream upload");
     let probabilities = device
-        .upload(&[1.0_f32, f32::NAN])
+        .upload(&[T::ONE, T::NAN])
         .expect("probability upload");
     let targets = device.upload(&[1_u32]).expect("target upload");
     let destination = device
-        .upload(&[f32::MAX, 19.0])
+        .upload(&[T::FINITE_MAX, T::from_f32(19.0)])
         .expect("destination upload");
     let error = operations
         .cross_entropy_backward_accumulate(
@@ -200,14 +242,15 @@ where
     assert_close(
         device,
         &destination,
-        &[f32::MAX, 19.0],
+        &[T::FINITE_MAX, T::from_f32(19.0)],
         "row-failure atomicity",
     );
 }
 
-fn assert_close<D>(device: &D, buffer: &D::Buffer<f32>, expected: &[f32], clause: &str)
+fn assert_close<D, T>(device: &D, buffer: &D::Buffer<T>, expected: &[T], clause: &str)
 where
     D: ComputeDevice,
+    T: RealField + Pod,
 {
     let actual = device.download_owned(buffer).expect(clause);
     assert_eq!(actual.len(), expected.len(), "{clause}: length");
@@ -216,12 +259,18 @@ where
             continue;
         }
         // One exp/log evaluation and a class-width-three reduction are bounded
-        // by a small multiple of f32 epsilon; scaling by the value magnitude
-        // preserves the relative bound near the additive destination.
-        let tolerance = 16.0 * f32::EPSILON * expected.abs().max(1.0);
+        // by a small multiple of the width's epsilon; scaling by the value
+        // magnitude preserves the relative bound near the additive destination.
+        let magnitude = expected.abs();
+        let scale = if magnitude > T::ONE {
+            magnitude
+        } else {
+            T::ONE
+        };
+        let tolerance = T::from_f32(16.0) * T::EPSILON * scale;
         assert!(
             (actual - expected).abs() <= tolerance,
-            "{}: {clause}[{index}] expected {expected}, got {actual}, tolerance {tolerance}",
+            "{}: {clause}[{index}] expected {expected:?}, got {actual:?}, tolerance {tolerance:?}",
             device.backend_name()
         );
     }
