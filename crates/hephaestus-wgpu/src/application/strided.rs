@@ -23,7 +23,7 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::application::bindings::BindGroupEntries;
-use crate::application::elementwise::reject_f64_unsupported_unary;
+use crate::application::elementwise::reject_unsupported_double_unary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -446,7 +446,7 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
-    reject_f64_unsupported_unary::<Op, T>()?;
+    reject_unsupported_double_unary::<Op, T>()?;
 
     let out_layout = out.layout;
     let a_layout = a
