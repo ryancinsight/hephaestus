@@ -1,3 +1,4 @@
+use std::any::TypeId;
 use std::sync::Arc;
 
 use hephaestus_core::{BlockWidth, ComputeDevice, HephaestusError, Result};
@@ -12,31 +13,39 @@ use hephaestus_core::CrossEntropyStatus;
 
 const BLOCK_WIDTH: BlockWidth = BlockWidth::DEFAULT;
 
-pub(super) fn compile(
+pub(super) fn compile<T: 'static>(
     device: &RocmDevice,
     entry: &'static str,
     source: impl FnOnce() -> String,
 ) -> Result<Arc<RocmKernel>> {
-    cached_kernel(device, PipelineKey::CrossEntropy { entry }, entry, source)
+    cached_kernel(
+        device,
+        PipelineKey::CrossEntropy {
+            entry,
+            scalar: TypeId::of::<T>(),
+        },
+        entry,
+        source,
+    )
 }
 
 /// Prepared ROCm mean cross-entropy forward dispatch.
-pub struct PreparedRocmCrossEntropyForward<'a> {
+pub struct PreparedRocmCrossEntropyForward<'a, T> {
     device: &'a RocmDevice,
     preflight: Arc<RocmKernel>,
     forward: Arc<RocmKernel>,
     mean: Arc<RocmKernel>,
     status: RocmBuffer<u32>,
-    row_losses: RocmBuffer<f32>,
-    logits: &'a RocmBuffer<f32>,
+    row_losses: RocmBuffer<T>,
+    logits: &'a RocmBuffer<T>,
     targets: &'a RocmBuffer<u32>,
-    loss: &'a RocmBuffer<f32>,
-    probabilities: &'a RocmBuffer<f32>,
-    metadata: CrossEntropyMeta,
+    loss: &'a RocmBuffer<T>,
+    probabilities: &'a RocmBuffer<T>,
+    metadata: CrossEntropyMeta<T>,
     rows: usize,
 }
 
-impl<'a> PreparedRocmCrossEntropyForward<'a> {
+impl<'a, T> PreparedRocmCrossEntropyForward<'a, T> {
     #[expect(
         clippy::too_many_arguments,
         reason = "prepared dispatch retains compiled stages and every borrowed device operand"
@@ -47,12 +56,12 @@ impl<'a> PreparedRocmCrossEntropyForward<'a> {
         forward: Arc<RocmKernel>,
         mean: Arc<RocmKernel>,
         status: RocmBuffer<u32>,
-        row_losses: RocmBuffer<f32>,
-        logits: &'a RocmBuffer<f32>,
+        row_losses: RocmBuffer<T>,
+        logits: &'a RocmBuffer<T>,
         targets: &'a RocmBuffer<u32>,
-        loss: &'a RocmBuffer<f32>,
-        probabilities: &'a RocmBuffer<f32>,
-        metadata: CrossEntropyMeta,
+        loss: &'a RocmBuffer<T>,
+        probabilities: &'a RocmBuffer<T>,
+        metadata: CrossEntropyMeta<T>,
         rows: usize,
     ) -> Self {
         Self {
@@ -70,7 +79,9 @@ impl<'a> PreparedRocmCrossEntropyForward<'a> {
             rows,
         }
     }
+}
 
+impl<'a, T: Copy> PreparedRocmCrossEntropyForward<'a, T> {
     pub(super) fn dispatch(&self, device: &RocmDevice) -> Result<()> {
         validate_device(self.device, device)?;
         reset_status(device, &self.status)?;
@@ -127,21 +138,21 @@ impl<'a> PreparedRocmCrossEntropyForward<'a> {
 }
 
 /// Prepared ROCm additive mean cross-entropy backward dispatch.
-pub struct PreparedRocmCrossEntropyBackward<'a> {
+pub struct PreparedRocmCrossEntropyBackward<'a, T> {
     device: &'a RocmDevice,
     preflight: Arc<RocmKernel>,
     backward: Arc<RocmKernel>,
     status: RocmBuffer<u32>,
-    output_gradient: &'a RocmBuffer<f32>,
-    probabilities: &'a RocmBuffer<f32>,
+    output_gradient: &'a RocmBuffer<T>,
+    probabilities: &'a RocmBuffer<T>,
     targets: &'a RocmBuffer<u32>,
-    logit_gradient: &'a RocmBuffer<f32>,
-    metadata: CrossEntropyMeta,
+    logit_gradient: &'a RocmBuffer<T>,
+    metadata: CrossEntropyMeta<T>,
     rows: usize,
     elements: usize,
 }
 
-impl<'a> PreparedRocmCrossEntropyBackward<'a> {
+impl<'a, T> PreparedRocmCrossEntropyBackward<'a, T> {
     #[expect(
         clippy::too_many_arguments,
         reason = "prepared dispatch retains compiled stages and every borrowed device operand"
@@ -151,11 +162,11 @@ impl<'a> PreparedRocmCrossEntropyBackward<'a> {
         preflight: Arc<RocmKernel>,
         backward: Arc<RocmKernel>,
         status: RocmBuffer<u32>,
-        output_gradient: &'a RocmBuffer<f32>,
-        probabilities: &'a RocmBuffer<f32>,
+        output_gradient: &'a RocmBuffer<T>,
+        probabilities: &'a RocmBuffer<T>,
         targets: &'a RocmBuffer<u32>,
-        logit_gradient: &'a RocmBuffer<f32>,
-        metadata: CrossEntropyMeta,
+        logit_gradient: &'a RocmBuffer<T>,
+        metadata: CrossEntropyMeta<T>,
         rows: usize,
         elements: usize,
     ) -> Self {
@@ -173,7 +184,9 @@ impl<'a> PreparedRocmCrossEntropyBackward<'a> {
             elements,
         }
     }
+}
 
+impl<'a, T: Copy> PreparedRocmCrossEntropyBackward<'a, T> {
     pub(super) fn dispatch(&self, device: &RocmDevice) -> Result<()> {
         validate_device(self.device, device)?;
         reset_status(device, &self.status)?;

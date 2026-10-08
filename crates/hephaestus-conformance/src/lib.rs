@@ -121,7 +121,10 @@ pub use blocked_cholesky::assert_blocked_cholesky_contract;
 pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
-pub use cross_entropy::{assert_cross_entropy_contract, assert_cross_entropy_contract_f64};
+pub use cross_entropy::{
+    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_f64,
+    assert_cross_entropy_contract, assert_cross_entropy_contract_f64,
+};
 pub use cross_product::assert_cross_product_contract;
 pub use decomposition::assert_decomposition_contract;
 pub use dense_composition::assert_dense_composition_contract;

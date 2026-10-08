@@ -67,7 +67,7 @@ pub(super) struct CrossEntropyMeta {
 }
 
 impl CrossEntropyMeta {
-    pub(super) fn forward(
+    pub(super) fn forward<T: 'static>(
         plan: CrossEntropyPlan,
         logits: &Layout<2>,
         targets: &Layout<1>,
@@ -76,7 +76,7 @@ impl CrossEntropyMeta {
     ) -> Result<Self> {
         let empty_one = Layout::c_contiguous([1]).map_err(layout_error)?;
         let empty_two = Layout::c_contiguous([1, 1]).map_err(layout_error)?;
-        Self::new(
+        Self::new::<T>(
             plan,
             logits,
             targets,
@@ -87,7 +87,7 @@ impl CrossEntropyMeta {
         )
     }
 
-    pub(super) fn backward(
+    pub(super) fn backward<T: 'static>(
         plan: CrossEntropyPlan,
         output_gradient: &Layout<1>,
         probabilities: &Layout<2>,
@@ -96,7 +96,7 @@ impl CrossEntropyMeta {
     ) -> Result<Self> {
         let empty_two = Layout::c_contiguous([1, 1]).map_err(layout_error)?;
         let empty_one = Layout::c_contiguous([1]).map_err(layout_error)?;
-        Self::new(
+        Self::new::<T>(
             plan,
             &empty_two,
             targets,
@@ -107,7 +107,7 @@ impl CrossEntropyMeta {
         )
     }
 
-    fn new(
+    fn new<T: 'static>(
         plan: CrossEntropyPlan,
         logits: &Layout<2>,
         targets: &Layout<1>,
@@ -116,6 +116,15 @@ impl CrossEntropyMeta {
         output_gradient: &Layout<1>,
         logit_gradient: &Layout<2>,
     ) -> Result<Self> {
+        // The f32 tolerance occupies dimensions.z with dimensions.w padding.
+        // f64 derives the tolerance arithmetically in-shader (naga rejects
+        // f64 bitcasts), so both words stay zero and the layout is unchanged.
+        let (tolerance_lo, tolerance_hi) =
+            if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
+                (0, 0)
+            } else {
+                (plan.probability_tolerance.to_bits(), 0)
+            };
         Ok(Self {
             logits: LayoutMeta::new(logits)?,
             targets: LayoutMeta::new(targets)?,
@@ -126,8 +135,8 @@ impl CrossEntropyMeta {
             dimensions: [
                 narrow(plan.batch, "batch")?,
                 narrow(plan.classes, "classes")?,
-                plan.probability_tolerance.to_bits(),
-                0,
+                tolerance_lo,
+                tolerance_hi,
             ],
         })
     }
