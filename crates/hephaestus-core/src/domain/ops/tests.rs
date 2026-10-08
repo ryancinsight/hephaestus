@@ -91,6 +91,63 @@ fn combine_and_identity_agree_per_dialect() {
         <SincOp as UnaryExpr<HipC>>::EXPR,
         "((x) == 0.0f ? 1.0f : sin(x) / (x))"
     );
+    // J0/J1 spellings are ~2KB per dialect; pin the branch structure, one
+    // coefficient per branch, and the Hankel trig, plus mechanical paren
+    // balance (the strings are machine-built and driver-compiled).
+    for expr in [
+        <J0Op as UnaryExpr<Wgsl>>::EXPR,
+        <J1Op as UnaryExpr<Wgsl>>::EXPR,
+    ] {
+        assert!(
+            expr.starts_with("select("),
+            "wgsl bessel branches on select"
+        );
+        assert!(
+            expr.contains("abs(x) < 8.0"),
+            "wgsl bessel crossover at |x| = 8"
+        );
+        assert_eq!(
+            expr.chars().filter(|&c| c == '(').count(),
+            expr.chars().filter(|&c| c == ')').count(),
+            "wgsl bessel parens balance"
+        );
+    }
+    assert!(<J0Op as UnaryExpr<Wgsl>>::EXPR.contains("57568490574.0"));
+    assert!(<J0Op as UnaryExpr<Wgsl>>::EXPR.contains("0.7853981633974483"));
+    assert!(<J0Op as UnaryExpr<Wgsl>>::EXPR.contains(", 1.0, x == 0.0)"));
+    assert!(<J1Op as UnaryExpr<Wgsl>>::EXPR.contains("72362614232.0"));
+    assert!(<J1Op as UnaryExpr<Wgsl>>::EXPR.contains("2.356194490192345"));
+    assert!(<J1Op as UnaryExpr<Wgsl>>::EXPR.contains("* sign(x)"));
+    for expr in [
+        <J0Op as UnaryExpr<CudaC>>::EXPR,
+        <J1Op as UnaryExpr<CudaC>>::EXPR,
+        <J0Op as UnaryExpr<HipC>>::EXPR,
+        <J1Op as UnaryExpr<HipC>>::EXPR,
+    ] {
+        assert!(
+            expr.contains("fabs(x) < 8.0"),
+            "c bessel crossover at |x| = 8"
+        );
+        assert!(
+            !expr.contains("fabsf"),
+            "c bessel keeps fabs unsuffixed for f64"
+        );
+        assert_eq!(
+            expr.chars().filter(|&c| c == '(').count(),
+            expr.chars().filter(|&c| c == ')').count(),
+            "c bessel parens balance"
+        );
+    }
+    assert_eq!(
+        <J0Op as UnaryExpr<CudaC>>::EXPR,
+        <J0Op as UnaryExpr<HipC>>::EXPR,
+        "cuda and hip share one j0 spelling"
+    );
+    assert_eq!(
+        <J1Op as UnaryExpr<CudaC>>::EXPR,
+        <J1Op as UnaryExpr<HipC>>::EXPR,
+        "cuda and hip share one j1 spelling"
+    );
     assert_eq!(<f32 as IdentityToken<SumOp, Wgsl>>::TOKEN, "0.0");
     assert_eq!(<f32 as IdentityToken<SumOp, CudaC>>::TOKEN, "0.0f");
     assert_eq!(<f32 as IdentityToken<SumOp, HipC>>::TOKEN, "0.0f");
@@ -145,9 +202,15 @@ fn comparisons_use_scalar_correct_mask_literals() {
     const _: () = assert!(!<ReluGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(!<HardsigmoidGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(!<SincOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<J0Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<J1Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<SignOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
     const _: () = assert!(<SincOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
     const _: () = assert!(<SincOp as UnaryExpr<HipC>>::SUPPORTS_F64);
+    const _: () = assert!(<J0Op as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<J0Op as UnaryExpr<HipC>>::SUPPORTS_F64);
+    const _: () = assert!(<J1Op as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<J1Op as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<ReluOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<Log10Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     assert_eq!(
@@ -406,6 +469,34 @@ where
             0.8414709848078965
         ) < 1e-6,
         "sinc(1) must match sin(1)/1 to libm rounding"
+    );
+
+    // J0/J1 resolve their x = 0 values exactly, match the classic J(1)
+    // constants through the rational branch, and carry even/odd symmetry
+    // bit-exactly (negation is exact, and J0's branch sees only |x|).
+    assert_eq!(<J0Op as UnaryValue>::apply(T::ZERO), T::ONE);
+    assert_eq!(<J1Op as UnaryValue>::apply(T::ZERO), T::ZERO);
+    assert!(
+        relative(
+            <J0Op as UnaryValue>::apply(T::from_f64(1.0)),
+            0.7651976865579666
+        ) < 1e-6,
+        "j0(1) must match the classic constant"
+    );
+    assert!(
+        relative(
+            <J1Op as UnaryValue>::apply(T::from_f64(1.0)),
+            0.4400505857449335
+        ) < 1e-6,
+        "j1(1) must match the classic constant"
+    );
+    assert_eq!(
+        <J0Op as UnaryValue>::apply(T::from_f64(-2.0)),
+        <J0Op as UnaryValue>::apply(T::from_f64(2.0))
+    );
+    assert_eq!(
+        <J1Op as UnaryValue>::apply(T::from_f64(-2.0)),
+        -<J1Op as UnaryValue>::apply(T::from_f64(2.0))
     );
 }
 

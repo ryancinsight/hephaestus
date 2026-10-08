@@ -13,8 +13,8 @@
 
 use eunomia::Pod;
 use hephaestus_core::{
-    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, MulOp, NegOp,
-    SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
+    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, J0Op, J1Op,
+    MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
 };
 use leto::Layout;
 
@@ -69,6 +69,37 @@ where
     SincOp: UnaryExpr<E::Dialect>,
 {
     sinc_zero_is_exactly_one(device, ops);
+}
+
+/// Absolute tolerance for the Bessel clauses, derived below.
+const BESSEL_BOUND: f32 = 1e-5;
+
+/// Run the J0/J1 clauses against one backend.
+///
+/// Unlike the exact-oracle clauses above, Bessel values are transcendental:
+/// the rational branch rounds f32 coefficients (~1e-7) through a six-level
+/// Horner evaluation plus one division, and the Hankel branch rounds the
+/// device `sin`/`cos`/`sqrt` (~1-2 ULP each) through a dozen flops. Both
+/// branches land within ~2e-6 absolute on O(1) values; the assertions use
+/// 1e-5, headroom that still fails a wrong coefficient or branch by orders
+/// of magnitude. Oracles are leto's scalar `j0`/`j1` (the 1:1 reference);
+/// test points avoid Bessel zeros so absolute error is the honest metric.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_bessel_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    J0Op: UnaryExpr<E::Dialect>,
+    J1Op: UnaryExpr<E::Dialect>,
+{
+    bessel_branches_match_oracle(device, ops);
+    bessel_zeros_are_exact(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -161,6 +192,60 @@ where
         unary::<_, _, SincOp, 2>(device, ops, &[0.0, -0.0]),
         [1.0, 1.0],
         "{name}: sinc resolves +-0 to exactly 1"
+    );
+}
+
+/// Each lane takes its own branch (`|x| < 8` rational vs Hankel), so one
+/// mixed dispatch proves per-lane branch selection plus both formulations.
+fn bessel_branches_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    J0Op: UnaryExpr<E::Dialect>,
+    J1Op: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points_j0 = [0.5f32, 1.0, 4.0, 7.0, 9.0, 12.0];
+    let got_j0 = unary::<_, _, J0Op, 6>(device, ops, &points_j0);
+    for (lane, (&got, &x)) in got_j0.iter().zip(&points_j0).enumerate() {
+        let expected = leto_ops::j0(f64::from(x)) as f32;
+        assert!(
+            (got - expected).abs() < BESSEL_BOUND,
+            "{name}: j0 lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+    let points_j1 = [0.5f32, 2.0, 5.0, -3.0, 10.0, -9.0];
+    let got_j1 = unary::<_, _, J1Op, 6>(device, ops, &points_j1);
+    for (lane, (&got, &x)) in got_j1.iter().zip(&points_j1).enumerate() {
+        let expected = leto_ops::j1(f64::from(x)) as f32;
+        assert!(
+            (got - expected).abs() < BESSEL_BOUND,
+            "{name}: j1 lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// `j0(0)` is exactly 1 through the zero guard; `j1(0)` is exactly 0 through
+/// the rational form (`0 * finite / finite`).
+fn bessel_zeros_are_exact<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    J0Op: UnaryExpr<E::Dialect>,
+    J1Op: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    assert_eq!(
+        unary::<_, _, J0Op, 1>(device, ops, &[0.0]),
+        [1.0],
+        "{name}: j0 resolves 0 to exactly 1"
+    );
+    assert_eq!(
+        unary::<_, _, J1Op, 2>(device, ops, &[0.0, -0.0]),
+        [0.0, 0.0],
+        "{name}: j1 resolves +-0 to 0"
     );
 }
 
