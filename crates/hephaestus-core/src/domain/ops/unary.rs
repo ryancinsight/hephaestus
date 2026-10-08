@@ -134,6 +134,10 @@ pub struct ErfcOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LgammaOp;
 
+/// Unnormalized `sinc` operation marker: `sin(x)/x` with `sinc(0) = 1`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SincOp;
+
 /// Exact Gaussian Error Linear Unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GeluOp;
@@ -354,6 +358,22 @@ impl UnaryExpr<CudaC> for SignOp {
     const EXPR: &'static str = "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)";
 }
 
+// Sinc stays out of the macros: the removable singularity branches on exact
+// zero (including `-0.0`, which compares equal), so no per-precision epsilon
+// literal is needed. The WGSL spelling nests the branch in `select` with
+// literal arms, which concretize to `f32` exactly as `SignOp` documents, so
+// it reports `SUPPORTS_F64 = false` until a typed unary seam lands (both
+// arms evaluate, but the discarded `sin(0)/0` NaN never traps). The C
+// spellings convert implicitly and serve both precisions; `sin` stays
+// unsuffixed so overload resolution picks the lane width, as `SinOp` does.
+impl UnaryExpr<Wgsl> for SincOp {
+    const EXPR: &'static str = "select(sin(x) / x, 1.0, x == 0.0)";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for SincOp {
+    const EXPR: &'static str = "((x) == 0.0f ? 1.0f : sin(x) / (x))";
+}
+
 macro_rules! impl_hip_unary_exprs {
     ($(($op:ty, $expr:literal)),+ $(,)?) => {
         $(
@@ -397,6 +417,7 @@ impl_hip_unary_exprs!(
     (ErfOp, "erf(x)"),
     (ErfcOp, "erfc(x)"),
     (LgammaOp, "lgamma(x)"),
+    (SincOp, "((x) == 0.0f ? 1.0f : sin(x) / (x))"),
     (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
     (
         GeluGradOp,

@@ -6,7 +6,7 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::assert_elementwise_contract;
+use hephaestus_conformance::{assert_elementwise_contract, assert_sinc_contract};
 use hephaestus_rocm::{RocmDevice, RocmElementwiseOps};
 
 #[test]
@@ -20,4 +20,5 @@ fn rocm_satisfies_the_elementwise_contract() {
         Err(error) => panic!("ROCm elementwise conformance requires a physical device: {error}"),
     };
     assert_elementwise_contract(&device, &RocmElementwiseOps);
+    assert_sinc_contract(&device, &RocmElementwiseOps);
 }

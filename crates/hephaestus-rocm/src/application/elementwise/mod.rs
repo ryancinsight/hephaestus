@@ -22,8 +22,8 @@ pub use unary::{
     GeluTanhGradOp, GeluTanhOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp,
     IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp, MishOp, NegOp, RecipOp,
     ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, TanOp, TanhGradOp,
-    TanhOp, TruncOp, unary_elementwise, unary_elementwise_into,
+    SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, TanOp,
+    TanhGradOp, TanhOp, TruncOp, unary_elementwise, unary_elementwise_into,
 };
 
 fn reject_output_alias<T, U>(

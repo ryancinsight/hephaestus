@@ -13,7 +13,7 @@ pub use wgpu_backend::{
     GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp,
     HardswishGradOp, HardswishOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
     MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
+    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SincOp, SinhOp, SoftplusGradOp,
     SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 
