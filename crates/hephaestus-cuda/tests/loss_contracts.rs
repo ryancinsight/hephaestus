@@ -2,7 +2,7 @@
 
 #![cfg(feature = "cuda")]
 
-use hephaestus_conformance::assert_cross_entropy_contract;
+use hephaestus_conformance::{assert_cross_entropy_contract, assert_cross_entropy_contract_f64};
 use hephaestus_core::{
     ComputeDevice, CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps,
     StridedView,
@@ -27,6 +27,14 @@ fn cuda_satisfies_shared_cross_entropy_contract() {
         return;
     };
     assert_cross_entropy_contract(&device, &CudaCrossEntropyOps);
+}
+
+#[test]
+fn cuda_satisfies_shared_f64_cross_entropy_contract() {
+    let Some(device) = device("shared f64 contract") else {
+        return;
+    };
+    assert_cross_entropy_contract_f64(&device, &CudaCrossEntropyOps);
 }
 
 #[test]
