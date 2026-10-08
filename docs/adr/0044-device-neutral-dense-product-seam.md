@@ -51,7 +51,7 @@ near-singular determinant behavior.
 
 ## Revision 2026-09-08: CUDA scalar declarations and arithmetic
 
-Driven by [HEPH-CUDA-DENSE-PRODUCT-SCALARS](../../backlog.md#heph-cuda-dense-product-scalars).
+The shared [`DialectScalar::PRELUDE`](../../crates/hephaestus-core/src/domain/dialect.rs) declaration owner also governs CUDA elementwise source generation; elementwise generators prepend it before using `TYPE_TOKEN`.
 Required-device CUDA validation exposed missing `__half` and `__nv_bfloat16`
 declarations in matrix products, followed by missing SDK header search paths.
 The fix moves scalar source declarations to `DialectScalar` and resolves
