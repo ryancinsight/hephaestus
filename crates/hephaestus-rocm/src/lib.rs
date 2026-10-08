@@ -85,7 +85,8 @@ pub use application::linalg::{
 };
 pub use application::linalg::{matexp, pinv};
 pub use application::loss::{
-    PreparedRocmCrossEntropyBackward, PreparedRocmCrossEntropyForward, RocmCrossEntropyOps,
+    CtcKernel, PreparedRocmCrossEntropyBackward, PreparedRocmCrossEntropyForward,
+    RocmCrossEntropyOps, RocmCtcOps,
 };
 pub use application::parameterized_elementwise::RocmParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;

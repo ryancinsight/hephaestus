@@ -57,6 +57,8 @@ pub mod convolution;
 pub mod cross_entropy;
 /// Contract clauses for the [`CrossProductOps`](hephaestus_core::CrossProductOps) seam.
 pub mod cross_product;
+/// Contract clauses for the [`CtcOps`](hephaestus_core::CtcOps) seam.
+pub mod ctc;
 /// Contract clauses for the
 /// [`DecompositionOps`](hephaestus_core::DecompositionOps) seam.
 pub mod decomposition;
@@ -129,6 +131,7 @@ pub use cross_entropy::{
     assert_cross_entropy_contract, assert_cross_entropy_contract_f64,
 };
 pub use cross_product::assert_cross_product_contract;
+pub use ctc::assert_ctc_contract;
 pub use decomposition::assert_decomposition_contract;
 pub use dense_composition::assert_dense_composition_contract;
 pub use dense_matrix_function::assert_dense_matrix_function_contract;

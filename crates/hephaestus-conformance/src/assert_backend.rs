@@ -44,7 +44,7 @@ use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, AddOp,
     AttentionOps, AxisReductionOps, BatchSubmitOps, BinaryExpr, CeluGradOp, CeluOp, CombineExpr,
-    ComputeDevice, ConvolutionOps, CrossEntropyOps, CumProdOp, CumSumOp, DecompositionOps,
+    ComputeDevice, ConvolutionOps, CrossEntropyOps, CtcOps, CumProdOp, CumSumOp, DecompositionOps,
     DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DenseVectorOps, DialectScalar,
     DivOp, ElementwiseOps, EqOp, FixedFd3DOps, FullReductionOps, GeOp, GtOp, HardshrinkGradOp,
     HardshrinkOp, HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp,
@@ -66,8 +66,33 @@ use hephaestus_core::{
 ///
 /// The type parameters are the seam types, in field order. They are unnamed in
 /// practice — construct the struct with a literal and let inference bind them.
-pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, G, F, N, T, O, B, S, H, L, Y, W, Z>
-{
+pub struct BackendUnderTest<
+    'a,
+    D,
+    A,
+    R,
+    C,
+    X,
+    V,
+    P,
+    K,
+    M,
+    U,
+    I,
+    E,
+    G,
+    F,
+    N,
+    T,
+    O,
+    B,
+    S,
+    H,
+    L,
+    Y,
+    W,
+    Z,
+> {
     /// The device every clause runs against.
     pub device: &'a D,
     /// `AttentionOps<D, f32>`.
@@ -78,6 +103,8 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, G, F, N, T, O, 
     pub convolution: &'a C,
     /// `CrossEntropyOps<D, f32>`.
     pub cross_entropy: &'a X,
+    /// `CtcOps<D>`.
+    pub ctc: &'a V,
     /// `DecompositionOps<D>`.
     pub decomposition: &'a P,
     /// `DenseCompositionOps<D>`.
@@ -129,7 +156,7 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, G, F, N, T, O, 
 /// not satisfy the contract.
 #[expect(
     clippy::type_complexity,
-    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-three parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
+    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-four parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
 )]
 pub fn assert_backend_contract<
     D,
@@ -137,6 +164,7 @@ pub fn assert_backend_contract<
     R,
     C,
     X,
+    V,
     P,
     K,
     M,
@@ -163,6 +191,7 @@ pub fn assert_backend_contract<
         R,
         C,
         X,
+        V,
         P,
         K,
         M,
@@ -188,6 +217,7 @@ pub fn assert_backend_contract<
     R: AxisReductionOps<D, f32>,
     C: ConvolutionOps<D, f32>,
     X: CrossEntropyOps<D, f32>,
+    V: CtcOps<D>,
     P: DecompositionOps<D>,
     K: DenseCompositionOps<D>,
     M: DenseMatrixFunctionOps<D>,
@@ -304,6 +334,7 @@ pub fn assert_backend_contract<
     crate::axis_reduction::assert_axis_reduction_contract(device, backend.axis_reduction);
     crate::convolution::assert_convolution_contract(device, backend.convolution);
     crate::cross_entropy::assert_cross_entropy_contract(device, backend.cross_entropy);
+    crate::ctc::assert_ctc_contract(device, backend.ctc);
     crate::decomposition::assert_decomposition_contract(device, backend.decomposition);
     crate::dense_composition::assert_dense_composition_contract(device, backend.dense_composition);
     crate::dense_matrix_function::assert_dense_matrix_function_contract(
