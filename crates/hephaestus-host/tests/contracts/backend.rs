@@ -8,7 +8,7 @@
 
 use hephaestus_conformance::{BackendUnderTest, assert_backend_contract};
 use hephaestus_host::{
-    HostAttentionOps, HostAxisReductionOps, HostConvolutionOps, HostCrossEntropyOps,
+    HostAttentionOps, HostAxisReductionOps, HostConvolutionOps, HostCrossEntropyOps, HostCtcOps,
     HostDecompositionOps, HostDenseProductOps, HostDenseVectorOps, HostDevice, HostElementwiseOps,
     HostFixedFdOps, HostFullReductionOps, HostParameterizedUnaryOps, HostRandomOps,
     HostRayIntegralOps, HostScanOps, HostSparseOps, HostStaggeredOps, HostStatefulUpdateOps,
@@ -24,6 +24,7 @@ fn host_satisfies_the_backend_contract() {
         axis_reduction: &HostAxisReductionOps,
         convolution: &HostConvolutionOps,
         cross_entropy: &HostCrossEntropyOps,
+        ctc: &HostCtcOps,
         decomposition: &HostDecompositionOps,
         dense_composition: &HostDenseProductOps,
         dense_matrix_function: &HostDenseProductOps,
