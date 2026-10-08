@@ -60,7 +60,7 @@ fn combine_and_identity_agree_per_dialect() {
     );
     assert_eq!(
         <Log10Op as UnaryExpr<Wgsl>>::EXPR,
-        "log(x) * 0.43429448190325182f"
+        "log(x) * 0.43429448190325182"
     );
     assert_eq!(<Expm1Op as UnaryExpr<CudaC>>::EXPR, "(exp(x) - 1.0f)");
     assert_eq!(<RoundOp as UnaryExpr<HipC>>::EXPR, "rint(x)");
@@ -114,8 +114,27 @@ fn comparisons_use_scalar_correct_mask_literals() {
     );
     assert_eq!(
         <EqOp as TypedBinaryExpr<Wgsl, f64>>::EXPR,
-        "select(0.0, 1.0, lhs == rhs)"
+        "select(f64(0.0), f64(1.0), lhs == rhs)"
     );
+    // Every f64 mask spelling carries explicit `f64(...)` arms: `select`
+    // with AbstractFloat-only arms concretizes to `f32`, which naga rejects
+    // at a typed `array<f64>` assignment.
+    assert!(<NeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("f64(0.0)"));
+    assert!(<NeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs != rhs"));
+    assert!(<LtOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("f64(1.0)"));
+    assert!(<LtOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs < rhs"));
+    assert!(<GtOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs > rhs"));
+    assert!(<LeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs <= rhs"));
+    assert!(<GeOp as TypedBinaryExpr<Wgsl, f64>>::EXPR.contains("lhs >= rhs"));
+    // The three literal-`select` unary spellings opt out of f64 while the
+    // typed-arm majority keeps the default. Const-evaluated: a wrong flag
+    // fails the build, not the suite.
+    const _: () = assert!(!<SignOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<ReluGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<HardsigmoidGradOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(<SignOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<ReluOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(<Log10Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     assert_eq!(
         <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
         "lhs >= rhs ? 1.0f : 0.0f"

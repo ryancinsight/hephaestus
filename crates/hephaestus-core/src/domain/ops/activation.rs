@@ -123,11 +123,6 @@ macro_rules! impl_activation_unary_exprs {
 impl_activation_unary_exprs!(
     (ReluOp, "max(x, 0.0)", "max(x, 0.0f)"),
     (
-        ReluGradOp,
-        "select(0.0, 1.0, x > 0.0)",
-        "x > 0.0f ? 1.0f : 0.0f"
-    ),
-    (
         SigmoidOp,
         "1.0 / (1.0 + exp(-x))",
         "1.0f / (1.0f + exp(-x))"
@@ -183,11 +178,6 @@ impl_activation_unary_exprs!(
         "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"
     ),
     (
-        HardsigmoidGradOp,
-        "select(0.0, 1.0 / 6.0, (x > -3.0) && (x < 3.0))",
-        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
-    ),
-    (
         HardswishOp,
         "x * clamp(x + 3.0, 0.0, 6.0) / 6.0",
         "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"
@@ -204,3 +194,23 @@ impl_activation_unary_exprs!(
         "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
     ),
 );
+
+// The two gradient masks stay out of the macro: their WGSL spellings are
+// `select` with literal-only arms, which concretize to `f32` and reject
+// `f64` output buffers, so they report `SUPPORTS_F64 = false` until a
+// typed unary seam lands. The CUDA spellings convert implicitly and serve
+// both precisions.
+impl UnaryExpr<Wgsl> for ReluGradOp {
+    const EXPR: &'static str = "select(0.0, 1.0, x > 0.0)";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for ReluGradOp {
+    const EXPR: &'static str = "x > 0.0f ? 1.0f : 0.0f";
+}
+impl UnaryExpr<Wgsl> for HardsigmoidGradOp {
+    const EXPR: &'static str = "select(0.0, 1.0 / 6.0, (x > -3.0) && (x < 3.0))";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for HardsigmoidGradOp {
+    const EXPR: &'static str = "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f";
+}

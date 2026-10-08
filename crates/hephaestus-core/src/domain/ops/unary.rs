@@ -323,7 +323,11 @@ impl_math_unary_exprs!(
     (Log2Op, "log2(x)", "log2(x)"),
     (
         Log10Op,
-        "log(x) * 0.43429448190325182f",
+        // No `f` suffix: the AbstractFloat coefficient converts to the
+        // operand type, so one spelling serves `f32` (identical rounding to
+        // the suffixed literal) and `f64`. A suffixed `f32` literal would
+        // poison the `f64` multiply, which has no implicit conversion.
+        "log(x) * 0.43429448190325182",
         "log(x) * 0.43429448190325182f"
     ),
     (Exp2Op, "exp2(x)", "exp2(x)"),
@@ -332,16 +336,23 @@ impl_math_unary_exprs!(
     (AcoshOp, "acosh(x)", "acosh(x)"),
     (Expm1Op, "(exp(x) - 1.0)", "(exp(x) - 1.0f)"),
     (Log1pOp, "log(1.0 + (x))", "log(1.0f + (x))"),
-    (
-        SignOp,
-        "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)",
-        "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"
-    ),
     (FloorOp, "floor(x)", "floor(x)"),
     (CeilOp, "ceil(x)", "ceil(x)"),
     (RoundOp, "round(x)", "rint(x)"),
     (TruncOp, "trunc(x)", "trunc(x)"),
 );
+
+// Sign stays out of the macro: the WGSL spelling nests `select` with
+// literal-only arms, which concretize to `f32` and reject `f64` output
+// buffers, so it reports `SUPPORTS_F64 = false` until a typed unary seam
+// lands. The CUDA spelling converts implicitly and serves both precisions.
+impl UnaryExpr<Wgsl> for SignOp {
+    const EXPR: &'static str = "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for SignOp {
+    const EXPR: &'static str = "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)";
+}
 
 macro_rules! impl_hip_unary_exprs {
     ($(($op:ty, $expr:literal)),+ $(,)?) => {
