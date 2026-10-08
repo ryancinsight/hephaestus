@@ -37,10 +37,11 @@ const WORKGROUP: [usize; 3] = [4, 4, 4];
 #[derive(Debug)]
 pub struct FixedFd3DKernel {
     sweep: WgslMultiStorageKernel,
+    adjoint: WgslMultiStorageKernel,
 }
 
 impl FixedFd3DKernel {
-    /// Compile the sweep for a device.
+    /// Compile the sweep and its transpose for a device.
     ///
     /// # Errors
     ///
@@ -57,6 +58,14 @@ impl FixedFd3DKernel {
                 "hephaestus-fixed-fd-3d-sweep",
                 FIXED_FD_3D_SHADER,
                 "fixed_fd_sweep",
+                &bindings,
+                1,
+            )?,
+            adjoint: WgslMultiStorageKernel::new(
+                device,
+                "hephaestus-fixed-fd-3d-adjoint",
+                FIXED_FD_3D_SHADER,
+                "fixed_fd_adjoint",
                 &bindings,
                 1,
             )?,
@@ -90,6 +99,40 @@ impl FixedFd3DKernel {
             [
                 WgslStorageBinding::new(0, input),
                 WgslStorageBinding::new(2, output),
+            ],
+            params,
+            grid,
+        )
+    }
+
+    /// Sweep the transpose of the scheme in `params` along its axis,
+    /// `upstream` into `grad`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a storage-length mismatch against either grid, or the backend
+    /// dispatch failure.
+    pub fn adjoint(
+        &self,
+        device: &WgpuDevice,
+        upstream: &WgpuBuffer<f32>,
+        grad: &WgpuBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        params.validate_adjoint_storage(upstream.len, grad.len)?;
+        let mut dims = [0_usize; 3];
+        for (slot, extent) in dims.iter_mut().zip(params.dims()) {
+            *slot =
+                usize::try_from(extent).map_err(|error| HephaestusError::InvalidConfiguration {
+                    message: format!("fixed-fd grid extent does not fit usize: {error}"),
+                })?;
+        }
+        let grid = DispatchGrid::covering_domain(dims, WORKGROUP)?;
+        self.adjoint.dispatch(
+            device,
+            [
+                WgslStorageBinding::new(0, upstream),
+                WgslStorageBinding::new(2, grad),
             ],
             params,
             grid,
@@ -278,6 +321,221 @@ fn fixed_fd_sweep(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     result[out_flat] = value;
 }
+
+// ── Transpose sweeps ────────────────────────────────────────────────
+// Each lane accumulates the provider's predicated terms in canonical order:
+// wall taps, then second-, fourth-, then sixth-order row taps, each `(c*u)*inv`.
+// The grid covers the input domain; upstream reads use the upstream strides,
+// which shrink on the swept axis under the forward scheme.
+
+fn upstream_stride(axis: u32) -> u32 {
+    if (axis == 0u) {
+        return output_extent(1u) * output_extent(2u);
+    }
+    if (axis == 1u) {
+        return output_extent(2u);
+    }
+    return 1u;
+}
+
+fn is_central4_second(n: u32, i: u32) -> bool {
+    return i >= 1u && i + 2u <= n && (i < 2u || i + 2u >= n);
+}
+
+fn is_central4_fourth(n: u32, i: u32) -> bool {
+    return i >= 2u && i + 3u <= n;
+}
+
+fn adjoint2(base_up: u32, stride_up: u32, j: u32, n: u32) -> f32 {
+    let inv_h = uniforms.scales.x;
+    let inv_2h = uniforms.scales.y;
+    var v = 0.0;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 3u <= n) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 2u) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    return v;
+}
+
+fn adjoint4(base_up: u32, stride_up: u32, j: u32, n: u32) -> f32 {
+    if (n == 1u) {
+        return 0.0;
+    }
+    let inv_h = uniforms.scales.x;
+    let inv_2h = uniforms.scales.y;
+    let inv_12h = uniforms.scales.z;
+    var v = 0.0;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 1u < n && is_central4_second(n, j + 1u)) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 1u && is_central4_second(n, j - 1u)) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    if (j + 2u < n && is_central4_fourth(n, j + 2u)) {
+        v = v + (field[base_up + (j + 2u) * stride_up] * inv_12h);
+    }
+    if (j + 1u < n && is_central4_fourth(n, j + 1u)) {
+        v = v + (((-8.0) * field[base_up + (j + 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 1u && is_central4_fourth(n, j - 1u)) {
+        v = v + ((8.0 * field[base_up + (j - 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 2u && is_central4_fourth(n, j - 2u)) {
+        v = v + ((-field[base_up + (j - 2u) * stride_up]) * inv_12h);
+    }
+    return v;
+}
+
+fn adjoint6(base_up: u32, stride_up: u32, j: u32, n: u32) -> f32 {
+    let inv_h = uniforms.scales.x;
+    let inv_2h = uniforms.scales.y;
+    let inv_12h = uniforms.scales.z;
+    let inv_60h = uniforms.scales.w;
+    var v = 0.0;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u == n) {
+        v = v + ((-field[base_up + (n - 1u) * stride_up]) * inv_h);
+    }
+    if (j + 1u == n) {
+        v = v + (field[base_up + (n - 1u) * stride_up] * inv_h);
+    }
+    if (j + 1u < n && (j + 1u == 1u || j + 1u + 2u == n)) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_2h);
+    }
+    if (j >= 1u && (j - 1u == 1u || j - 1u + 2u == n)) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_2h);
+    }
+    if (j + 2u < n && (j + 2u == 2u || j + 2u + 3u == n)) {
+        v = v + (field[base_up + (j + 2u) * stride_up] * inv_12h);
+    }
+    if (j + 1u < n && (j + 1u == 2u || j + 1u + 3u == n)) {
+        v = v + (((-8.0) * field[base_up + (j + 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 1u && (j - 1u == 2u || j - 1u + 3u == n)) {
+        v = v + ((8.0 * field[base_up + (j - 1u) * stride_up]) * inv_12h);
+    }
+    if (j >= 2u && (j - 2u == 2u || j - 2u + 3u == n)) {
+        v = v + ((-field[base_up + (j - 2u) * stride_up]) * inv_12h);
+    }
+    if (j + 3u < n && j + 3u >= 3u && j + 3u + 4u <= n) {
+        v = v + ((-field[base_up + (j + 3u) * stride_up]) * inv_60h);
+    }
+    if (j + 2u < n && j + 2u >= 3u && j + 2u + 4u <= n) {
+        v = v + ((9.0 * field[base_up + (j + 2u) * stride_up]) * inv_60h);
+    }
+    if (j + 1u < n && j + 1u >= 3u && j + 1u + 4u <= n) {
+        v = v + (((-45.0) * field[base_up + (j + 1u) * stride_up]) * inv_60h);
+    }
+    if (j >= 1u && j - 1u >= 3u && j - 1u + 4u <= n) {
+        v = v + ((45.0 * field[base_up + (j - 1u) * stride_up]) * inv_60h);
+    }
+    if (j >= 2u && j - 2u >= 3u && j - 2u + 4u <= n) {
+        v = v + (((-9.0) * field[base_up + (j - 2u) * stride_up]) * inv_60h);
+    }
+    if (j >= 3u && j - 3u >= 3u && j - 3u + 4u <= n) {
+        v = v + (field[base_up + (j - 3u) * stride_up] * inv_60h);
+    }
+    return v;
+}
+
+fn adjoint_forward(base_up: u32, stride_up: u32, j: u32, n: u32) -> f32 {
+    let inv_h = uniforms.scales.x;
+    var v = 0.0;
+    if (j + 1u < n) {
+        v = v + ((-field[base_up + j * stride_up]) * inv_h);
+    }
+    if (j >= 1u) {
+        v = v + (field[base_up + (j - 1u) * stride_up] * inv_h);
+    }
+    return v;
+}
+
+fn adjoint_backward(base_up: u32, stride_up: u32, j: u32, n: u32) -> f32 {
+    let inv_h = uniforms.scales.x;
+    var v = 0.0;
+    if (j == 0u) {
+        v = v + ((-field[base_up]) * inv_h);
+    }
+    if (j == 1u) {
+        v = v + (field[base_up] * inv_h);
+    }
+    if (j + 2u <= n) {
+        v = v + ((-field[base_up + (j + 1u) * stride_up]) * inv_h);
+    }
+    if (j >= 1u) {
+        v = v + (field[base_up + j * stride_up] * inv_h);
+    }
+    return v;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn fixed_fd_adjoint(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let axis = uniforms.dims_axis.w;
+    let nx = uniforms.dims_axis.x;
+    let ny = uniforms.dims_axis.y;
+    let nz = uniforms.dims_axis.z;
+    if (global_id.x >= nx || global_id.y >= ny || global_id.z >= nz) {
+        return;
+    }
+
+    let j = coord_along(global_id, axis);
+    let n = input_extent(axis);
+    let stride_up = upstream_stride(axis);
+    // Upstream flat of this lane's coordinates under the upstream strides:
+    // arithmetic only, since lane n - 1 has no upstream lane under the
+    // forward scheme — subtracting j * stride_up lands back in range.
+    let ony = output_extent(1u);
+    let onz = output_extent(2u);
+    let up_flat = (global_id.x * ony + global_id.y) * onz + global_id.z;
+    let base_up = up_flat - j * stride_up;
+    let out_flat = (global_id.x * ny + global_id.y) * nz + global_id.z;
+
+    let scheme = uniforms.scheme.x;
+    var value = 0.0;
+    if (scheme == 0u) {
+        value = adjoint2(base_up, stride_up, j, n);
+    } else if (scheme == 1u) {
+        value = adjoint4(base_up, stride_up, j, n);
+    } else if (scheme == 2u) {
+        value = adjoint6(base_up, stride_up, j, n);
+    } else if (scheme == 3u) {
+        value = adjoint_forward(base_up, stride_up, j, n);
+    } else {
+        value = adjoint_backward(base_up, stride_up, j, n);
+    }
+    result[out_flat] = value;
+}
 ";
 
 /// Provider-owned implementation of [`hephaestus_core::FixedFd3DOps`] for
@@ -301,6 +559,17 @@ impl hephaestus_core::FixedFd3DOps<WgpuDevice> for WgpuFixedFd3DOps {
         params: &FixedFd3DParams,
     ) -> Result<()> {
         kernel.sweep(device, input, output, params)
+    }
+
+    fn fixed_fd_adjoint_into(
+        &self,
+        device: &WgpuDevice,
+        kernel: &Self::FixedFd3D,
+        upstream: &WgpuBuffer<f32>,
+        grad: &WgpuBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        kernel.adjoint(device, upstream, grad, params)
     }
 }
 
