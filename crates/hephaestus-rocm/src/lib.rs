@@ -116,6 +116,9 @@ pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 pub type RocmScanOps = hephaestus_core::AxisScanOps<RocmDevice>;
 /// A scan prepared against one operand pair on this device.
 pub type RocmPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, RocmDevice, T>;
+pub use application::fixed_fd::{
+    FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, RocmFixedFd3DOps,
+};
 pub use application::sparse::seam::RocmSparseOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,

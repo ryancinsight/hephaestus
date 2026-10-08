@@ -46,13 +46,13 @@ use hephaestus_core::{
     AttentionOps, AxisReductionOps, BatchSubmitOps, BinaryExpr, CeluGradOp, CeluOp, CombineExpr,
     ComputeDevice, ConvolutionOps, CrossEntropyOps, CumProdOp, CumSumOp, DecompositionOps,
     DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DenseVectorOps, DialectScalar,
-    DivOp, ElementwiseOps, EqOp, FullReductionOps, GeOp, GtOp, HardshrinkGradOp, HardshrinkOp,
-    HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp, LtOp, MaxOp,
-    MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr, ParameterizedUnaryOps, ProdOp,
-    RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters, ScanOps, Sgd, SgdParameters,
-    SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp, Staggered3DOps, StatefulUpdateOps,
-    StatefulUpdateRule, StencilOps, SubOp, SumOp, ThresholdGradOp, ThresholdOp, TypedBinaryExpr,
-    UnaryExpr,
+    DivOp, ElementwiseOps, EqOp, FixedFd3DOps, FullReductionOps, GeOp, GtOp, HardshrinkGradOp,
+    HardshrinkOp, HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp,
+    LtOp, MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr,
+    ParameterizedUnaryOps, ProdOp, RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters,
+    ScanOps, Sgd, SgdParameters, SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp,
+    Staggered3DOps, StatefulUpdateOps, StatefulUpdateRule, StencilOps, SubOp, SumOp,
+    ThresholdGradOp, ThresholdOp, TypedBinaryExpr, UnaryExpr,
 };
 
 /// A backend's seam implementations, borrowed for one conformance run.
@@ -66,7 +66,8 @@ use hephaestus_core::{
 ///
 /// The type parameters are the seam types, in field order. They are unnamed in
 /// practice — construct the struct with a literal and let inference bind them.
-pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z> {
+pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, G, F, N, T, O, B, S, H, L, Y, W, Z>
+{
     /// The device every clause runs against.
     pub device: &'a D,
     /// `AttentionOps<D, f32>`.
@@ -89,6 +90,8 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, 
     pub dense_vector: &'a I,
     /// `ElementwiseOps<D, f32>`.
     pub elementwise: &'a E,
+    /// `FixedFd3DOps<D>`.
+    pub fixed_fd_3d: &'a G,
     /// `FullReductionOps<D, f32>`.
     pub full_reduction: &'a F,
     /// `ParameterizedUnaryOps<D>`.
@@ -126,9 +129,33 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, 
 /// not satisfy the contract.
 #[expect(
     clippy::type_complexity,
-    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-two parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
+    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-three parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
 )]
-pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>(
+pub fn assert_backend_contract<
+    D,
+    A,
+    R,
+    C,
+    X,
+    P,
+    K,
+    M,
+    U,
+    I,
+    E,
+    G,
+    F,
+    N,
+    T,
+    O,
+    B,
+    S,
+    H,
+    L,
+    Y,
+    W,
+    Z,
+>(
     backend: &BackendUnderTest<
         '_,
         D,
@@ -142,6 +169,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
         U,
         I,
         E,
+        G,
         F,
         N,
         T,
@@ -166,6 +194,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
     U: DenseProductOps<D, f32>,
     I: DenseVectorOps<D, f32>,
     E: ElementwiseOps<D, f32>,
+    G: FixedFd3DOps<D>,
     F: FullReductionOps<D, f32>,
     N: ParameterizedUnaryOps<D>,
     T: RandomInitOps<D, f32>,
@@ -284,6 +313,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
     crate::dense_product::assert_dense_product_contract(device, backend.dense_product);
     crate::dense_vector::assert_dense_vector_contract(device, backend.dense_vector);
     crate::elementwise::assert_elementwise_contract(device, backend.elementwise);
+    crate::fixed_fd::assert_fixed_fd_3d_contract(device, backend.fixed_fd_3d);
     crate::full_reduction::assert_full_reduction_contract(device, backend.full_reduction);
     crate::parameterized_unary::assert_parameterized_unary_contract(
         device,

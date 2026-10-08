@@ -74,6 +74,9 @@ mod fft_contracts;
 #[path = "fusion_contracts.rs"]
 mod fusion_contracts;
 
+#[path = "fixed_fd_contracts.rs"]
+mod fixed_fd_contracts;
+
 #[path = "interpolation_contracts.rs"]
 mod interpolation_contracts;
 
@@ -319,6 +322,7 @@ contract_cases!(
     fusion_contracts::runtime_rank_reduction_matches_reference,
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
+    fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
     pad_contracts::wgpu_satisfies_the_pad_contract,
@@ -390,7 +394,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 137;
+const EXPECTED_CONTRACT_CASES: usize = 138;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -410,9 +414,9 @@ const EXPECTED_CONTRACT_CASES: usize = 137;
 // `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
 // each add one unconditional registration on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 184;
+const EXPECTED_CONTRACT_CASES: usize = 185;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 142;
+const EXPECTED_CONTRACT_CASES: usize = 143;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
@@ -421,8 +425,9 @@ const EXPECTED_CONTRACT_CASES: usize = 142;
 // seven more registrations while retaining one exact-diagnostic edge, and
 // pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
 // triangular masking, its two limit clauses, and adaptive pooling each add
-// their registrations on top.
-const EXPECTED_CONTRACT_CASES: usize = 186;
+// their registrations on top. The fixed-scheme 3-D sweep adds one
+// unconditional registration on top of every combination.
+const EXPECTED_CONTRACT_CASES: usize = 187;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

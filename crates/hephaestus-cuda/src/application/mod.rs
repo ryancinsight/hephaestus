@@ -17,6 +17,8 @@ pub mod device_api;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Three-dimensional fixed-scheme first-derivative sweep.
+pub mod fixed_fd;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
 /// Runtime-rank expression fusion implemented by the CUDA provider.

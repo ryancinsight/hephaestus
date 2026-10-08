@@ -22,6 +22,8 @@ pub mod device_api;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Three-dimensional fixed-scheme first-derivative sweep.
+pub mod fixed_fd;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
