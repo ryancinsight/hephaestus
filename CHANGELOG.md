@@ -4,6 +4,8 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Repair `cargo fmt` drift in the ROCm/Metal elementwise re-exports
+  so the host-side gate passes.
 - [patch] Add the zero-cost `DenseMatrixFunctionOps` role for host-delegated
   `f32` matrix exponential and pseudoinverse, with one shared conformance clause
   across WGPU, CUDA, ROCm, and Metal. Diagonal, nilpotent, rotation, general,
