@@ -1,29 +1,29 @@
-//! Device-neutral runtime-rank expression-fusion contracts.
-//!
-//! Static operation markers remain the right representation for a fixed
-//! operation family. Consumer expression graphs are different: their source,
-//! rank, and input count are runtime values. This module carries only that
-//! variation across the provider boundary; a backend still monomorphizes the
-//! dispatch contract over its device, scalar, dialect, and expression adapter.
+//! Device-neutral one-shot fusion seams over runtime-rank views.
 
-use std::borrow::Cow;
+use std::sync::Arc;
 
 use eunomia::Pod;
 
-use super::{
-    device::ComputeDevice, dialect::KernelDialect, error::Result, view::DynamicStridedView,
-};
+use crate::{ComputeDevice, DynamicStridedView, KernelDialect, Result};
+
+/// Maximum runtime rank represented by the provider fusion ABI.
+///
+/// This is a provider representation limit shared by every current backend;
+/// Leto itself remains arbitrary-rank.
+pub const MAX_FUSION_RANK: usize = 8;
+/// Threads per one-dimensional fusion launch block.
+pub const FUSION_WORKGROUP_WIDTH: u32 = 256;
 
 /// A consumer-owned expression fragment for a kernel dialect.
 ///
 /// The returned source is one expression, not a statement or a complete
 /// shader. Providers bind the canonical locals `input_0`, `input_1`, and so on
 /// before interpolating it into their owned kernel wrapper. Returning
-/// [`Cow`] lets static expressions avoid allocation while dynamic expression
-/// graphs hand over an owned string without a second copy.
+/// [`Cow`](std::borrow::Cow) lets static expressions avoid allocation while
+/// dynamic expression graphs hand over an owned string without a second copy.
 pub trait FusedExpression<L: KernelDialect>: Send + Sync {
     /// Return the dialect-specific expression fragment.
-    fn source(&self) -> Cow<'_, str>;
+    fn source(&self) -> std::borrow::Cow<'_, str>;
 }
 
 /// Closed reduction vocabulary for fused expression evaluation.
@@ -98,4 +98,48 @@ pub trait FusedReductionOps<D: ComputeDevice, T: Pod> {
     ) -> Result<()>
     where
         E: FusedExpression<Self::Dialect>;
+}
+
+/// Collision-safe identity for a runtime-generated fusion kernel.
+///
+/// The complete expression is retained in the key. A truncated digest would
+/// let two distinct expressions reuse the wrong compiled kernel.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FusionPipelineKey {
+    /// Kernel family marker: elementwise and reduction kernels share the
+    /// expression namespace but never the compiled artifact.
+    pub family: std::any::TypeId,
+    /// Host scalar the kernel was generated for.
+    pub scalar: std::any::TypeId,
+    /// Runtime rank the generated indexing code covers.
+    pub rank: u32,
+    /// Number of tensor inputs bound by the generated kernel.
+    pub input_count: u32,
+    /// Reduction the kernel applies, or [`None`] for elementwise kernels.
+    pub reduction: Option<FusedReduction>,
+    /// Complete validated expression source.
+    pub expression: Arc<str>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fusion_key_compares_complete_expression_source() {
+        let base = FusionPipelineKey {
+            family: std::any::TypeId::of::<()>(),
+            scalar: std::any::TypeId::of::<f32>(),
+            rank: 2,
+            input_count: 2,
+            reduction: None,
+            expression: Arc::from("input_0 + input_1"),
+        };
+        let changed = FusionPipelineKey {
+            expression: Arc::from("input_0 - input_1"),
+            ..base.clone()
+        };
+        assert_ne!(base, changed);
+        assert_eq!(base, base.clone());
+    }
 }

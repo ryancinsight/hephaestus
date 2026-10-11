@@ -1,6 +1,6 @@
 use super::context::CudaContext;
-use crate::application::pipeline::{FusionPipelineKey, PipelineKey};
-use hephaestus_core::DeviceLimits;
+use crate::application::pipeline::PipelineKey;
+use hephaestus_core::{DeviceLimits, FusionPipelineKey};
 use std::sync::Arc;
 
 /// An acquired CUDA device.

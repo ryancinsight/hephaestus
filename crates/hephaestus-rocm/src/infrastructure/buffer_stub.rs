@@ -4,6 +4,7 @@ use eunomia::Pod;
 use hephaestus_core::DeviceBuffer;
 
 use super::DevicePtr;
+use crate::RocmDevice;
 
 /// Typed unavailable-path handle used when the ROCm feature is disabled.
 #[derive(Debug)]
@@ -33,5 +34,11 @@ impl<T> RocmBuffer<T> {
 
     pub(crate) fn aliases<U>(&self, _other: &RocmBuffer<U>) -> bool {
         false
+    }
+
+    /// Vacuously true: the stub exposes no second device a buffer could
+    /// belong to, and dispatch still fails with `AdapterUnavailable`.
+    pub(crate) fn belongs_to(&self, _device: &RocmDevice) -> bool {
+        true
     }
 }

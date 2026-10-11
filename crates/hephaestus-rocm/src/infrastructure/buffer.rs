@@ -7,6 +7,7 @@ use super::{
     DevicePtr,
     device::{RocmContext, check_status},
 };
+use crate::RocmDevice;
 
 /// A typed, device-resident linear ROCm allocation.
 ///
@@ -50,6 +51,11 @@ impl<T> RocmBuffer<T> {
 
     pub(crate) fn aliases<U>(&self, other: &RocmBuffer<U>) -> bool {
         self.ptr != 0 && self.ptr == other.ptr
+    }
+
+    /// Report whether this buffer was allocated against `device`'s context.
+    pub(crate) fn belongs_to(&self, device: &RocmDevice) -> bool {
+        Arc::ptr_eq(&self.context, &device.context)
     }
 }
 

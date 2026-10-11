@@ -71,6 +71,7 @@ pub struct RocmDevice {
     pub(super) features: RocmDeviceFeatures,
     topology: Arc<themis::GpuTopology>,
     pub(crate) pipeline_cache: crate::application::pipeline::PipelineCache,
+    pub(crate) fusion_pipeline_cache: crate::application::pipeline::FusionPipelineCache,
 }
 
 impl core::fmt::Debug for RocmDevice {
@@ -136,6 +137,7 @@ impl RocmDevice {
             features,
             topology,
             pipeline_cache: crate::application::pipeline::new_cache(),
+            fusion_pipeline_cache: crate::application::pipeline::new_fusion_cache(),
         };
 
         let buffer =

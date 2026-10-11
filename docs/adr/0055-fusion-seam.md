@@ -40,6 +40,23 @@ second metadata ABI, source generator, cache, or launch path. Static and
 dynamic rank-eight elementwise dispatch, plus rank-eight L1 and max reduction,
 remain differentially verified against host layout references.
 
+## Revision — 2026-10-11 (ROCm/Metal implementors, core-owned C generator)
+
+ROCm and Metal now implement the same fusion seam. The second C-dialect
+consumer forced the shared home this record's first increment required:
+`hephaestus-core` owns the C kernel source generator, the C layout ABI, the
+broadcast-shape helper, the cache-key identity, and the scalar vocabulary as
+`FusionScalar<L>`, monomorphized per backend dialect. CUDA and HIP
+instantiations of one scalar compile byte-identical kernels, pinned by a core
+test over every shared scalar and reduction. The per-backend duplicates are
+deleted with no compatibility alias: `CudaFusionScalar`, `WgpuFusionScalar`,
+the CUDA source generator, and the CUDA pipeline-key struct. Coeus adapts its
+two scalar bounds to `FusionScalar<CudaC>`/`FusionScalar<Wgsl>` in its
+follow-on bump; backend choice no longer changes which expressions fuse.
+Evidence: core fusion suite 8/8, CUDA suite 189/189 device-required, WGPU
+aggregate device-required, ROCm/Metal stub-compile plus skip-path probes;
+AMD/Apple device runs remain hosted-CI oracles.
+
 ## Cross-repository driver
 
 Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02`; Coeus fused elementwise

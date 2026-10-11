@@ -81,6 +81,7 @@ mod native {
     use core::ffi::{c_char, c_void};
     use std::collections::HashMap;
     use std::ffi::{CStr, CString};
+    use std::hash::Hash;
     use std::ptr;
     use std::sync::{Arc, Mutex};
 
@@ -88,6 +89,16 @@ mod native {
     pub(crate) type PipelineCache = Arc<Mutex<HashMap<PipelineKey, Arc<RocmKernel>>>>;
 
     pub(crate) fn new_cache() -> PipelineCache {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    /// Synchronized cache of runtime-fused kernels, keyed by complete
+    /// expression source. Separate from [`PipelineCache`] because fusion keys
+    /// retain an owned expression string and are not `Copy`.
+    pub(crate) type FusionPipelineCache =
+        Arc<Mutex<HashMap<hephaestus_core::FusionPipelineKey, Arc<RocmKernel>>>>;
+
+    pub(crate) fn new_fusion_cache() -> FusionPipelineCache {
         Arc::new(Mutex::new(HashMap::new()))
     }
 
@@ -256,14 +267,14 @@ mod native {
         Ok(code)
     }
 
-    pub(crate) fn cached_kernel(
-        device: &RocmDevice,
-        key: PipelineKey,
+    fn cached_kernel_in<K: Eq + Hash>(
+        context: &Arc<RocmContext>,
+        cache: &Arc<Mutex<HashMap<K, Arc<RocmKernel>>>>,
+        key: K,
         func_name: &str,
         source: impl FnOnce() -> String,
     ) -> hephaestus_core::Result<Arc<RocmKernel>> {
-        if let Some(kernel) = device
-            .pipeline_cache
+        if let Some(kernel) = cache
             .lock()
             .expect("ROCm pipeline cache mutex is not poisoned")
             .get(&key)
@@ -271,7 +282,7 @@ mod native {
             return Ok(kernel.clone());
         }
 
-        device.context.set_current()?;
+        context.set_current()?;
         let code = compile_to_code(&source())?;
         let func_name = CString::new(func_name).map_err(|error| {
             hephaestus_core::HephaestusError::DispatchFailed {
@@ -310,14 +321,43 @@ mod native {
         let compiled = Arc::new(RocmKernel {
             module,
             function,
-            context: device.context.clone(),
+            context: context.clone(),
         });
-        let mut cache = device
-            .pipeline_cache
+        let mut cache = cache
             .lock()
             .expect("ROCm pipeline cache mutex is not poisoned");
         let kernel = cache.entry(key).or_insert_with(|| compiled.clone());
         Ok(kernel.clone())
+    }
+
+    pub(crate) fn cached_kernel(
+        device: &RocmDevice,
+        key: PipelineKey,
+        func_name: &str,
+        source: impl FnOnce() -> String,
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+        cached_kernel_in(
+            &device.context,
+            &device.pipeline_cache,
+            key,
+            func_name,
+            source,
+        )
+    }
+
+    pub(crate) fn cached_fusion_kernel(
+        device: &RocmDevice,
+        key: hephaestus_core::FusionPipelineKey,
+        func_name: &str,
+        source: impl FnOnce() -> String,
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+        cached_kernel_in(
+            &device.context,
+            &device.fusion_pipeline_cache,
+            key,
+            func_name,
+            source,
+        )
     }
 
     pub(crate) fn launch_kernel(
@@ -350,7 +390,10 @@ mod native {
 }
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-pub(crate) use native::{PipelineCache, RocmKernel, cached_kernel, launch_kernel, new_cache};
+pub(crate) use native::{
+    FusionPipelineCache, PipelineCache, RocmKernel, cached_fusion_kernel, cached_kernel,
+    launch_kernel, new_cache, new_fusion_cache,
+};
 
 #[cfg(not(all(feature = "rocm", target_os = "linux")))]
 mod unavailable {
@@ -361,6 +404,20 @@ mod unavailable {
     pub(crate) fn cached_kernel(
         _device: &RocmDevice,
         _key: PipelineKey,
+        _func_name: &str,
+        source: impl FnOnce() -> String,
+    ) -> hephaestus_core::Result<Arc<RocmKernel>> {
+        let _ = (source,);
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable {
+            message:
+                "ROCm backend unavailable: enable the `rocm` feature on Linux with ROCm installed"
+                    .to_string(),
+        })
+    }
+
+    pub(crate) fn cached_fusion_kernel(
+        _device: &RocmDevice,
+        _key: hephaestus_core::FusionPipelineKey,
         _func_name: &str,
         source: impl FnOnce() -> String,
     ) -> hephaestus_core::Result<Arc<RocmKernel>> {
@@ -390,4 +447,4 @@ mod unavailable {
 }
 
 #[cfg(not(all(feature = "rocm", target_os = "linux")))]
-pub(crate) use unavailable::{RocmKernel, cached_kernel, launch_kernel};
+pub(crate) use unavailable::{RocmKernel, cached_fusion_kernel, cached_kernel, launch_kernel};

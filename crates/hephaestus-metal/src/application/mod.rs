@@ -20,6 +20,8 @@ pub mod elementwise;
 pub mod elementwise_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Zero-copy fusion delegation to Metal-selected WGPU.
+pub mod fusion_seam;
 /// Linear algebra operations.
 pub mod linalg;
 /// Fluent dense-matrix traits.

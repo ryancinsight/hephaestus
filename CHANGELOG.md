@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] Implement fused-expression dispatch on ROCm and Metal behind the
+  existing seams: `RocmFusionOps` over native HIP kernels and `MetalFusionOps`
+  as zero-copy delegation to Metal-selected WGPU, with five-case fusion
+  contracts on every backend. The C-dialect source generator, layout ABI,
+  and scalar vocabulary move to `hephaestus-core` as dialect-generic
+  `FusionScalar<L>`; CUDA and HIP compile byte-identical kernels from the
+  one generator. Breaking: `CudaFusionScalar` and `WgpuFusionScalar` are
+  removed without alias; consumers bound `FusionScalar<CudaC>` and
+  `FusionScalar<Wgsl>`. See ADR 0055.
 - [patch] Repair `cargo fmt` drift in the ROCm/Metal elementwise re-exports
   so the host-side gate passes.
 - [patch] Add the zero-cost `DenseMatrixFunctionOps` role for host-delegated

@@ -74,7 +74,11 @@ pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};
 pub use domain::fixed_fd::{FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme};
-pub use domain::fusion::{FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps};
+pub use domain::fusion::{
+    FUSION_WORKGROUP_WIDTH, FusedElementwiseOps, FusedExpression, FusedReduction,
+    FusedReductionOps, FusionLayoutInfo, FusionPipelineKey, FusionScalar, MAX_FUSION_RANK,
+    elementwise_source, fusion_expression_shape, reduction_source, validate_c_expression_source,
+};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
     KernelInterface, KernelSource,

@@ -6,14 +6,14 @@ use std::sync::Arc;
 use eunomia::Pod;
 use hephaestus_core::{
     ComputeDevice, DeviceBuffer, DynamicStridedView, FusedElementwiseOps, FusedExpression,
-    FusedReduction, FusedReductionOps, HephaestusError, Result, Wgsl,
+    FusedReduction, FusedReductionOps, FusionScalar, HephaestusError, MAX_FUSION_RANK, Result,
+    Wgsl,
 };
 
 use crate::application::bindings::BindGroupEntries;
 use crate::application::canary;
 use crate::application::fusion::source::{
-    FusionLayoutInfo, MAX_FUSION_RANK, WgpuFusionScalar, elementwise_source, reduction_source,
-    validate_expression_source,
+    FusionLayoutInfo, elementwise_source, reduction_source, validate_expression_source,
 };
 use crate::application::pipeline::{try_cached_fusion_pipeline, workgroups};
 use crate::application::prepared::{checked_bind_group, checked_submit, validate_buffer_owner};
@@ -261,7 +261,7 @@ fn submit<T>(
     source: impl FnOnce() -> Result<String>,
 ) -> Result<()>
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
 {
     let output_len =
         output
@@ -343,7 +343,7 @@ pub(crate) fn fused_elementwise_into<T, E>(
     output: DynamicStridedView<'_, WgpuBuffer<T>>,
 ) -> Result<()>
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
     E: FusedExpression<Wgsl>,
 {
     let expression_source = expression.source();
@@ -379,7 +379,7 @@ pub(crate) fn fused_reduce_into<T, E>(
     output: DynamicStridedView<'_, WgpuBuffer<T>>,
 ) -> Result<()>
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
     E: FusedExpression<Wgsl>,
 {
     let expression_source = expression.source();
@@ -434,7 +434,7 @@ pub struct WgpuFusionOps;
 
 impl<T> FusedElementwiseOps<WgpuDevice, T> for WgpuFusionOps
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
 {
     type Dialect = Wgsl;
 
@@ -454,7 +454,7 @@ where
 
 impl<T> FusedReductionOps<WgpuDevice, T> for WgpuFusionOps
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
 {
     type Dialect = Wgsl;
 

@@ -51,7 +51,7 @@ pub use application::embedding_seam::WgpuEmbeddingOps;
 pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
 pub use application::fft::{WgpuFftOps, WgpuFftScalar, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
-pub use application::fusion::{WgpuFusionOps, WgpuFusionScalar};
+pub use application::fusion::WgpuFusionOps;
 pub use application::interpolation_seam::WgpuInterpolationOps;
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;

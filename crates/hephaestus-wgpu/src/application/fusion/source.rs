@@ -1,17 +1,13 @@
 //! WGSL source and metadata for runtime-rank fusion.
 
 use eunomia::{Pod, Zeroable};
-use hephaestus_core::{
-    DialectScalar, FusedReduction, IdentityToken, MaxOp, MinOp, ProdOp, SumOp, Wgsl,
-};
+use hephaestus_core::{DialectScalar, FusedReduction, Wgsl};
 use leto::LayoutDyn;
 
 use crate::application::strided::{to_i32, to_u32};
-use hephaestus_core::{HephaestusError, Result};
-
-/// Provider representation bound for runtime-rank WGSL layout metadata.
-pub(crate) const MAX_FUSION_RANK: usize = 8;
-pub(crate) const FUSION_WORKGROUP_WIDTH: u32 = 256;
+use hephaestus_core::{
+    FUSION_WORKGROUP_WIDTH, FusionScalar, HephaestusError, MAX_FUSION_RANK, Result,
+};
 
 /// Layout record consumed by both the elementwise and reduction shaders.
 #[repr(C)]
@@ -84,41 +80,8 @@ impl FusionLayoutInfo {
     }
 }
 
-/// Scalar capabilities needed by provider-owned WGSL fusion.
-///
-/// A type implements this seam only when its WGSL representation and all
-/// reduction identity tokens are available. This keeps unsupported dialect
-/// types out of runtime shader generation.
-pub trait WgpuFusionScalar: DialectScalar<Wgsl> + Pod + Send + Sync + 'static {
-    /// WGSL identity literal for addition.
-    const ZERO: &'static str;
-    /// WGSL identity literal for multiplication.
-    const ONE: &'static str;
-    /// WGSL lower-bound literal for maximum reduction.
-    const LOWEST: &'static str;
-    /// WGSL upper-bound literal for minimum reduction.
-    const HIGHEST: &'static str;
-    /// WGSL expression converting the runtime axis length for mean reduction.
-    const MEAN_DIVISOR: &'static str;
-}
-
-macro_rules! impl_fusion_scalar {
-    ($ty:ty, $divisor:literal) => {
-        impl WgpuFusionScalar for $ty {
-            const ZERO: &'static str = <Self as IdentityToken<SumOp, Wgsl>>::TOKEN;
-            const ONE: &'static str = <Self as IdentityToken<ProdOp, Wgsl>>::TOKEN;
-            const LOWEST: &'static str = <Self as IdentityToken<MaxOp, Wgsl>>::TOKEN;
-            const HIGHEST: &'static str = <Self as IdentityToken<MinOp, Wgsl>>::TOKEN;
-            const MEAN_DIVISOR: &'static str = $divisor;
-        }
-    };
-}
-
-impl_fusion_scalar!(f32, "f32(axis_length)");
-impl_fusion_scalar!(f64, "f64(axis_length)");
-impl_fusion_scalar!(i32, "i32(axis_length)");
-impl_fusion_scalar!(u32, "u32(axis_length)");
-impl_fusion_scalar!(eunomia::F16, "f16(axis_length)");
+// Scalar vocabulary for WGSL fusion lives in `hephaestus-core`: backends bind
+// `FusionScalar<Wgsl>`.
 
 pub(crate) fn validate_expression_source(source: &str) -> Result<()> {
     if source.trim().is_empty() {
@@ -232,7 +195,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {{
 /// Generate the provider-owned wrapper for an expression followed by an axis
 /// reduction. The reduced extent and axis travel in the output metadata, so
 /// the same pipeline serves every axis length and output view with this rank.
-pub(crate) fn reduction_source<T: WgpuFusionScalar>(
+pub(crate) fn reduction_source<T: FusionScalar<Wgsl>>(
     input_count: usize,
     expression: &str,
     reduction: FusedReduction,

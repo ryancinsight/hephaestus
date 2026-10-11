@@ -139,7 +139,15 @@
   wgpu/cuda today.
 - Verification: conformance parity across all four backends, strict Clippy,
   independent review.
-- Last-update: 2026-09-26.
+- Last-update: 2026-10-11 (in progress: core `fusion/` dir owns the
+  dialect-generic C generator + `FusionScalar<L>` with CUDA/HIP byte-identity
+  tests; `RocmFusionOps` over the HIP pipeline with a fusion cache;
+  `MetalFusionOps` delegating to WGPU; five-case fusion contracts on all four
+  backends; `CudaFusionScalar`/`WgpuFusionScalar` deleted without alias.
+  Local evidence: core 8/8 fusion, CUDA 189/189 device-required, WGPU
+  aggregate device-required, ROCm/Metal stub-compile + skip probes, strict
+  clippy + fmt clean. Remaining: hosted AMD/Apple device runs, independent
+  review, Coeus bound follow-up).
 
 <a id="heph-rocm-windows-hip-runtime-1"></a>
 
