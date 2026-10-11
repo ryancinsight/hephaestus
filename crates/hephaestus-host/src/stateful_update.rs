@@ -193,8 +193,9 @@ mod tests {
     use super::HostStatefulUpdateOps;
     use eunomia::Zeroable;
     use hephaestus_core::{
-        Adam, AdamParametersF64, ComputeDevice, Host, Sgd, SgdParameters, SgdParametersF64,
-        StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, StridedView,
+        Adam, AdamParametersF64, ComputeDevice, HephaestusError, Host, Sgd, SgdParameters,
+        SgdParametersF64, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
+        StridedView,
     };
     use leto::Layout;
 
@@ -350,7 +351,13 @@ mod tests {
             },
             parameters,
         );
-        assert!(result.is_err(), "zeroed Adam block must be rejected");
+        let Err(HephaestusError::InvalidConfiguration { message }) = result else {
+            panic!("zeroed Adam block was accepted");
+        };
+        assert_eq!(
+            message,
+            "Adam beta values must lie in [0, 1), epsilon and bias corrections must be positive"
+        );
 
         let mut actual_parameter = [0.0_f64; 2];
         device

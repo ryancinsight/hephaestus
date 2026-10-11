@@ -393,19 +393,22 @@ mod tests {
                 if minimum == 1 {
                     continue;
                 }
-                let rejected =
-                    FixedFd3DParams::new(dims[0], dims[1], dims[2], axis, scheme, [0.5, 0.5, 0.5]);
-                assert!(
-                    rejected.is_err(),
-                    "{scheme:?} on {axis:?} accepts below minimum"
+                let Err(HephaestusError::InvalidConfiguration { message }) =
+                    FixedFd3DParams::new(dims[0], dims[1], dims[2], axis, scheme, [0.5; 3])
+                else {
+                    panic!("{scheme:?} on {axis:?} accepts below minimum")
+                };
+                assert_eq!(
+                    message,
+                    format!(
+                        "fixed-fd {scheme:?} needs at least {minimum} points on the differentiated axis, got {}",
+                        minimum - 1
+                    )
                 );
                 dims[axis.index()] = minimum;
-                let accepted =
-                    FixedFd3DParams::new(dims[0], dims[1], dims[2], axis, scheme, [0.5, 0.5, 0.5]);
-                assert!(
-                    accepted.is_ok(),
-                    "{scheme:?} on {axis:?} rejects its minimum"
-                );
+                let grid = FixedFd3DParams::new(dims[0], dims[1], dims[2], axis, scheme, [0.5; 3])
+                    .expect("the provider minimum extent is accepted");
+                assert_eq!(grid.dims(), dims);
             }
         }
     }
