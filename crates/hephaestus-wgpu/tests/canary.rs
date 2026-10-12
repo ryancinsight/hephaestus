@@ -182,6 +182,34 @@ fn gates_refuse_undefined_lowerings_with_cause() {
             .expect_err("f64 softplus (exp/log-bearing) must refuse on Vulkan");
     assert_blocked(&error);
 
+    // Vector types are judged by their component: vec2<f64> refuses while
+    // vec2<f32> still computes.
+    let pairs = device.upload(&[[0.5_f64, 1.0]; 2]).expect("f64 pairs");
+    let pair_out = device
+        .alloc_uninitialized::<[f64; 2]>(2)
+        .expect("f64 pair output");
+    let error =
+        unary_elementwise_into::<ExpOp, [f64; 2]>(&device, &pairs, &pair_out, BlockWidth::DEFAULT)
+            .expect_err("vec2<f64> exp must refuse on Vulkan");
+    assert_blocked(&error);
+    let host = [[0.5_f32, 1.0], [-1.0, 2.0]];
+    let pairs = device.upload(&host).expect("f32 pairs");
+    let pair_out = device
+        .alloc_uninitialized::<[f32; 2]>(2)
+        .expect("f32 pair output");
+    unary_elementwise_into::<ExpOp, [f32; 2]>(&device, &pairs, &pair_out, BlockWidth::DEFAULT)
+        .expect("vec2<f32> exp dispatches on Vulkan");
+    let got = device.download_owned(&pair_out).expect("f32 pair readback");
+    for (lane, (gpu, x)) in got.iter().flatten().zip(host.iter().flatten()).enumerate() {
+        let truth = f64::from(*x).exp();
+        let relative = (f64::from(*gpu) - truth).abs() / truth;
+        // Same exact-f32 cut the canary grades with (PrecisionReport::grade).
+        assert!(
+            relative <= 2e-7,
+            "lane {lane}: exp({x}) = {gpu}, error {relative:e}"
+        );
+    }
+
     // Restricted builtins without a probe refuse under the same rule.
     let error = unary_elementwise_into::<SinOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
         .expect_err("f64 sin must refuse on Vulkan");

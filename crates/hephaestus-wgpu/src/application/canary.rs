@@ -62,7 +62,10 @@ pub enum CanaryWidth {
     F64,
 }
 
-/// Map a Rust scalar to its canary width; non-float scalars return `None`.
+/// Map a Rust scalar to its canary width; every other type returns `None`.
+///
+/// This names the probe width of a bare scalar. The seam gates read the WGSL
+/// type token instead, so vectors of f64 are refused as f64 is.
 #[must_use]
 pub fn width_of<T: 'static>() -> Option<CanaryWidth> {
     if TypeId::of::<T>() == TypeId::of::<f32>() {
@@ -250,20 +253,34 @@ pub fn require_expr_safe(
     Ok(())
 }
 
-/// Refuse dispatch when the WGSL template `expr`, instantiated at scalar
-/// `T`, uses a builtin blocked at that width.
+/// Canary width of the WGSL type a template is instantiated at, read from its
+/// token so vector and composite types count by their component:
+/// `vec2<f64>` is as undefined as `f64` under the GLSL.std.450 rule.
+fn token_width(token: &str) -> Option<CanaryWidth> {
+    if token.contains("f64") {
+        Some(CanaryWidth::F64)
+    } else if token.contains("f32") {
+        Some(CanaryWidth::F32)
+    } else {
+        None
+    }
+}
+
+/// Refuse dispatch when the WGSL template `expr`, instantiated at `T`, uses a
+/// builtin blocked at `T`'s component width.
 ///
-/// Non-float scalars have no canary width and pass through.
+/// Types without an f32 or f64 component have no canary width and pass
+/// through.
 ///
 /// # Errors
 ///
 /// Returns [`HephaestusError::Unsupported`] as [`require_expr_safe`] does.
-pub(crate) fn require_template_safe<T: 'static>(
+pub(crate) fn require_template_safe<T: DialectScalar<Wgsl>>(
     device: &WgpuDevice,
     expr: &str,
     operation: &'static str,
 ) -> Result<()> {
-    width_of::<T>().map_or(Ok(()), |width| {
+    token_width(T::TYPE_TOKEN).map_or(Ok(()), |width| {
         require_expr_safe(device, expr, width, operation)
     })
 }

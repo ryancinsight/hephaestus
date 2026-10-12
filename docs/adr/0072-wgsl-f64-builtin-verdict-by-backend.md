@@ -35,7 +35,8 @@ are judged too. Every seam that compiles WGSL from an op or combine
 template or composed source (contiguous, prepared, and strided elementwise;
 full and axis reductions; scans; fusion; cross-entropy forward; attention)
 checks it through one helper and returns a typed `Unsupported` instead of
-dispatching. Raw consumer-authored kernels (`storage_kernel`, `stream`)
+dispatching. The helper reads the width from the WGSL type token, so
+`vec2<f64>` and other f64-component types are refused like `f64`. Raw consumer-authored kernels (`storage_kernel`, `stream`)
 compile the consumer's own WGSL unchecked; `require_expr_safe` is public so
 the consumer can apply the same rule.
 Other backends and f32 stay supported; the live probe keeps measuring f64
