@@ -87,7 +87,9 @@ impl_hip_unary_exprs!(
         "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
     ),
     (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
-    (MishOp, "x * tanhf(logf(1.0f + expf(x)))"),
+    // Native `log1p` under the `tanh` (see activation.rs); the unsuffixed
+    // builtins keep f64 served.
+    (MishOp, "x * tanh(log1p(exp(x)))"),
     (
         MishGradOp,
         "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"

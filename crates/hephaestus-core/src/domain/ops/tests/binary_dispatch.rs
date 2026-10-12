@@ -23,7 +23,12 @@ fn combine_and_identity_agree_per_dialect() {
         <SoftplusOp as UnaryExpr<HipC>>::EXPR,
         "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
     );
-    assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("tanh(log(1.0 + exp(x)))"));
+    assert_eq!(
+        <MishOp as UnaryExpr<CudaC>>::EXPR,
+        "x * tanh(log1p(exp(x)))"
+    );
+    assert_eq!(<MishOp as UnaryExpr<HipC>>::EXPR, "x * tanh(log1p(exp(x)))");
+    assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x * tanh(max(x, 0.0) +"));
     assert!(<MishGradOp as UnaryExpr<CudaC>>::EXPR.contains("tanhf(logf(1.0f + expf(x)))"));
     assert_eq!(
         <EluOp as UnaryExpr<CudaC>>::EXPR,
