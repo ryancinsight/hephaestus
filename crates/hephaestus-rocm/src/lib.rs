@@ -75,6 +75,7 @@ pub use application::elementwise::{
 pub use application::elementwise_seam::RocmElementwiseOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
+pub use application::fusion::{RocmFusionOps, RocmFusionScalar};
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{

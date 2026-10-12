@@ -326,6 +326,8 @@ contract_cases!(
     fusion_contracts::runtime_rank_reduction_matches_reference,
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
+    fusion_contracts::wgpu_satisfies_the_fusion_contract,
+    fusion_contracts::wgpu_satisfies_the_f64_fusion_contract,
     fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
@@ -431,7 +433,7 @@ const EXPECTED_CONTRACT_CASES: usize = 144;
 // triangular masking, its two limit clauses, and adaptive pooling each add
 // their registrations on top. The fixed-scheme 3-D sweep adds one
 // unconditional registration on top of every combination, and so does CTC.
-const EXPECTED_CONTRACT_CASES: usize = 188;
+const EXPECTED_CONTRACT_CASES: usize = 190;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

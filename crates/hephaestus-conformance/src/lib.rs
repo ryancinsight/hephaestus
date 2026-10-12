@@ -85,6 +85,10 @@ pub mod fixed_fd;
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
 /// Contract clauses for the
+/// [`FusedElementwiseOps`](hephaestus_core::FusedElementwiseOps) and
+/// [`FusedReductionOps`](hephaestus_core::FusedReductionOps) seams.
+pub mod fusion;
+/// Contract clauses for the
 /// [`InterpolationOps`](hephaestus_core::InterpolationOps) seam.
 pub mod interpolation;
 /// Contract clauses for the device-neutral padding seam.
@@ -145,6 +149,7 @@ pub use embedding::{
 };
 pub use fixed_fd::assert_fixed_fd_3d_contract;
 pub use full_reduction::assert_full_reduction_contract;
+pub use fusion::assert_fusion_contract;
 pub use interpolation::assert_interpolation_contract;
 pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
