@@ -401,11 +401,24 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // softplus overflows. The WGSL spelling wraps the whole `softplus`
 // value fragment in `x * tanh(...)`, adding zero new coefficients, and
 // reports `SUPPORTS_F64 = false` per the `SoftplusOp` precedent
-// (nested selects, f32-graded arms). Accuracy is the slice-2 fragment
-// proof (`tanh` is well-conditioned near its own zero): the negative
-// tail holds a few ULP of `exp`, inside the clause's `1e-5`.
+// (nested selects, f32-graded arms). `tanh` of a tiny input is
+// unreliable across drivers (Metal returns exactly `0`; lavapipe
+// returned `2^-25` for `9.35e-14` on the unguarded spelling — the
+// suite's first tiny input to `tanh`, which has no tiny-value
+// coverage), so at `x <= -14.5` the spelling takes `x * exp(x)`
+// directly: there the fragment itself is on its bare-`exp` arm, so
+// this reuses its value while skipping the `tanh` (`tanh(S) = S` to
+// `1e-13` there; the arms agree to `2.5e-7` at the boundary). Both
+// `select` arms evaluate without trapping (the discarded `x * exp(x)`
+// overflows for large positive `x`, the `SincOp` precedent). Accuracy
+// is the slice-2 fragment proof plus `exp`'s own ULP, inside the
+// clause's `1e-5`.
 impl UnaryExpr<Wgsl> for MishOp {
-    const EXPR: &'static str = concat!("x * tanh(", wgsl_softplus_expr!(), ")");
+    const EXPR: &'static str = concat!(
+        "select(x * exp(x), x * tanh(",
+        wgsl_softplus_expr!(),
+        "), x > -14.5)"
+    );
     const SUPPORTS_F64: bool = false;
 }
 impl UnaryExpr<CudaC> for MishOp {
