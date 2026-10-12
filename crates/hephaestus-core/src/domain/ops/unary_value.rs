@@ -1,7 +1,7 @@
 //! Value functions for the elementary unary markers (ADR 0061).
 //!
-//! Covers the operators whose dialect expressions live in `unary.rs`'s own
-//! macro block: direct transcendental, rounding, and sign operations with no
+//! Covers the operators whose Wgsl and CUDA dialect expressions live in
+//! `unary_math.rs`: direct transcendental, rounding, and sign operations with no
 //! cancellation hazard beyond what eunomia's `FloatElement` already resolves.
 //! The activation family (sigmoid/tanh/softplus/gelu/silu/mish/elu and their
 //! gradients, plus erf/erfc/lgamma) lives in `activation_value.rs`, where the

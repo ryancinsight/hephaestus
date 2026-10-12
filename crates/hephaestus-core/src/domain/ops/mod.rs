@@ -20,6 +20,8 @@ mod combine;
 mod expr;
 mod identity;
 mod unary;
+mod unary_hip;
+mod unary_math;
 mod unary_value;
 
 #[cfg(test)]
