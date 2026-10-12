@@ -12,7 +12,15 @@ fn combine_and_identity_agree_per_dialect() {
     assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
     assert_eq!(
         <GeluTanhOp as UnaryExpr<Wgsl>>::EXPR,
-        "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))"
+        "x / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))"
+    );
+    assert_eq!(
+        <GeluTanhOp as UnaryExpr<CudaC>>::EXPR,
+        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
+    );
+    assert_eq!(
+        <GeluTanhOp as UnaryExpr<HipC>>::EXPR,
+        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
     );
     assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
     assert_eq!(
@@ -87,6 +95,17 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("676.5203681218851"));
     assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) > 3.402823466e+38"));
     assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("0.7071067811865476"));
+    assert_eq!(
+        <GeluOp as UnaryExpr<CudaC>>::EXPR,
+        "0.5f * x * erfc(-x * 0.7071067811865476f)"
+    );
+    assert_eq!(
+        <GeluOp as UnaryExpr<HipC>>::EXPR,
+        "0.5f * x * erfc(-x * 0.7071067811865476f)"
+    );
+    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.0)"));
+    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0406)"));
+    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("-1.0250950928e+3"));
     assert!(<GeluGradOp as UnaryExpr<CudaC>>::EXPR.contains("erff(x *"));
     assert!(<GeluGradOp as UnaryExpr<HipC>>::EXPR.contains("expf(-0.5f * x * x)"));
     assert_eq!(

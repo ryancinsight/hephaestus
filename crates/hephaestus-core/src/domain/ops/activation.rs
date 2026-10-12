@@ -91,11 +91,157 @@ macro_rules! wgsl_gelu_erf_expr {
     };
 }
 
+// Single-precision `erfc` rationals for the exact GELU's negative arm
+// (KERNEL-TAIL): the Sun/FreBSD `erff` `RA`/`SA` (`1.25 <= w < 1/0.35`)
+// and `RB`/`SB` (`w >= 1/0.35`) tables, transcribed verbatim — the
+// decimals round-trip to Sun's f32 bits; only the exponent leading
+// zeros are stripped (`e-03` to `e-3`) and `e+0` dropped, both
+// WGSL-canonical spellings of identical values. `s = 1/w^2` is formed
+// as `2/x^2` directly: routing through `w = -x/√2` first would amplify
+// its rounding by erfc's condition number `2w` (`2.2e-5` at `x = -12`,
+// over budget alone), while the `x`-route keeps every sensitivity
+// `O(1)` and the only large-magnitude rounding the `exp` argument's
+// own f32 quantum. Likewise `/w` is spelled `-√2/x`.
+macro_rules! wgsl_gelu_s {
+    () => {
+        "(2.0 / (x * x))"
+    };
+}
+macro_rules! wgsl_gelu_ra_r {
+    () => {
+        concat!(
+            "(-9.8649440333e-3) + ",
+            wgsl_gelu_s!(),
+            " * ((-6.9385856390e-1) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.0558626175e+1) + ",
+            wgsl_gelu_s!(),
+            " * ((-6.2375331879e+1) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.6239666748e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.8460508728e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((-8.1287437439e+1) + ",
+            wgsl_gelu_s!(),
+            " * (-9.8143291473)",
+            "))))))",
+        )
+    };
+}
+macro_rules! wgsl_gelu_ra_s {
+    () => {
+        concat!(
+            "(1.0) + ",
+            wgsl_gelu_s!(),
+            " * ((1.9651271820e+1) + ",
+            wgsl_gelu_s!(),
+            " * ((1.3765776062e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((4.3456588745e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((6.4538726807e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((4.2900814819e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((1.0863500214e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((6.5702495575) + ",
+            wgsl_gelu_s!(),
+            " * (-6.0424413532e-2)",
+            ")))))))",
+        )
+    };
+}
+macro_rules! wgsl_gelu_rb_r {
+    () => {
+        concat!(
+            "(-9.8649431020e-3) + ",
+            wgsl_gelu_s!(),
+            " * ((-7.9928326607e-1) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.7757955551e+1) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.6063638306e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((-6.3756646729e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((-1.0250950928e+3) + ",
+            wgsl_gelu_s!(),
+            " * (-4.8351919556e+2)",
+            ")))))",
+        )
+    };
+}
+macro_rules! wgsl_gelu_rb_s {
+    () => {
+        concat!(
+            "(1.0) + ",
+            wgsl_gelu_s!(),
+            " * ((3.0338060379e+1) + ",
+            wgsl_gelu_s!(),
+            " * ((3.2579251099e+2) + ",
+            wgsl_gelu_s!(),
+            " * ((1.5367296143e+3) + ",
+            wgsl_gelu_s!(),
+            " * ((3.1998581543e+3) + ",
+            wgsl_gelu_s!(),
+            " * ((2.5530502930e+3) + ",
+            wgsl_gelu_s!(),
+            " * ((4.7452853394e+2) + ",
+            wgsl_gelu_s!(),
+            " * (-2.2440952301e+1)",
+            "))))))",
+        )
+    };
+}
+macro_rules! wgsl_gelu_erfc {
+    (ra) => {
+        concat!(
+            "exp(((",
+            wgsl_gelu_ra_r!(),
+            ") / (",
+            wgsl_gelu_ra_s!(),
+            ") - 0.5625) - (x * x) * 0.5) * (-1.4142135623730951 / x)",
+        )
+    };
+    (rb) => {
+        concat!(
+            "exp(((",
+            wgsl_gelu_rb_r!(),
+            ") / (",
+            wgsl_gelu_rb_s!(),
+            ") - 0.5625) - (x * x) * 0.5) * (-1.4142135623730951 / x)",
+        )
+    };
+}
+
+// Exact GELU (KERNEL-TAIL): the naive `1 + erf(x/√2)` transcription
+// collapses to `0` below `x = -5` (`erf` rounds to `-1`, losing the
+// `erfc` value, a normal float down to `x = -12`). The C spelling calls
+// the native `erfc` builtin (unsuffixed, so lane promotion keeps f64
+// served). The WGSL spelling keeps the Abramowitz-Stegun `erf` above
+// `x = -2` (accurate to `3.3e-6` there) and takes the `erfc` rationals
+// below, with the `RA`/`RB` crossover at `x = -4.0406` (`-√2/0.35`):
+// `0.5·x·exp(R/S - 0.5625 - x²/2)·(-√2/x)`. The nested selects and
+// f32-transcribed coefficients report `SUPPORTS_F64 = false` per the
+// `Expm1Op` precedent. The deepest probe rides the `exp` argument's
+// own f32 quantum (deterministic `≈5.4e-6` at `x = -12`) plus the
+// driver's `exp` ULP — validated on-device, inside the clause's `1e-5`.
 impl UnaryExpr<Wgsl> for GeluOp {
-    const EXPR: &'static str = concat!("(0.5 * x * (1.0 + ", wgsl_gelu_erf_expr!(), "))");
+    const EXPR: &'static str = concat!(
+        "select(select(0.5 * x * ",
+        wgsl_gelu_erfc!(rb),
+        ", 0.5 * x * ",
+        wgsl_gelu_erfc!(ra),
+        ", x > -4.0406), (0.5 * x * (1.0 + ",
+        wgsl_gelu_erf_expr!(),
+        ")), x > -2.0)"
+    );
+    const SUPPORTS_F64: bool = false;
 }
 impl UnaryExpr<CudaC> for GeluOp {
-    const EXPR: &'static str = "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))";
+    const EXPR: &'static str = "0.5f * x * erfc(-x * 0.7071067811865476f)";
 }
 impl UnaryExpr<Wgsl> for GeluGradOp {
     const EXPR: &'static str = concat!(
@@ -131,10 +277,15 @@ impl_activation_unary_exprs!(
     (SigmoidGradOp, "x * (1.0 - x)", "x * (1.0f - x)"),
     (TanhOp, "tanh(x)", "tanh(x)"),
     (TanhGradOp, "1.0 - x * x", "1.0f - x * x"),
+    // GeluTanhOp uses the `1 + tanh(z) = 2·sigmoid(2z)` identity (ADR 0061
+    // Decision 6, the `SiluOp` shape): `x / (1 + exp(-2z))` never forms
+    // `1 + tanh(z)`, which collapses to `0` once `tanh(z)` rounds to
+    // `-1`. The `exp` overflows past `x ≈ -10.1`, where the true value
+    // is already f32-subnormal.
     (
         GeluTanhOp,
-        "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))",
-        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
+        "x / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))",
+        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
     ),
     (
         GeluTanhGradOp,
