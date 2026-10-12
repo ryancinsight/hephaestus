@@ -57,7 +57,8 @@ impl_hip_unary_exprs!(
     (ErfcOp, "erfc(x)"),
     (LgammaOp, "lgamma(x)"),
     (SincOp, "((x) == 0.0f ? 1.0f : sin(x) / (x))"),
-    (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
+    // Native `erfc` (see activation.rs); the unsuffixed builtin keeps f64 served.
+    (GeluOp, "0.5f * x * erfc(-x * 0.7071067811865476f)"),
     (
         GeluGradOp,
         "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f"
@@ -68,9 +69,10 @@ impl_hip_unary_exprs!(
     (SigmoidGradOp, "x * (1.0f - x)"),
     (TanhOp, "tanh(x)"),
     (TanhGradOp, "1.0f - x * x"),
+    // Sigmoid identity (see activation.rs); the unsuffixed `exp` keeps f64 served.
     (
         GeluTanhOp,
-        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
+        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
     ),
     (
         GeluTanhGradOp,

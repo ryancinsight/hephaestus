@@ -14,8 +14,8 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, EluOp, Expm1Op,
-    J0Op, J1Op, K0Op, Log1pOp, MishOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView,
-    SubOp, UnaryExpr, UnaryValue,
+    GeluOp, GeluTanhOp, J0Op, J1Op, K0Op, Log1pOp, MishOp, MulOp, NegOp, SincOp, SoftplusOp,
+    SqrtOp, StridedView, SubOp, UnaryExpr, UnaryValue,
 };
 use leto::Layout;
 
@@ -253,6 +253,36 @@ where
     MishOp: UnaryExpr<E::Dialect>,
 {
     mish_tails_match_oracle(device, ops);
+}
+
+/// Run the gelu/gelu-tanh tail clauses against one backend.
+///
+/// Shares the `TAIL_REL_BOUND` derivation. Both forms are defective on
+/// the negative tail, where `0.5·x·(1 + F)` collapses to exactly `0`
+/// once `F` rounds to `-1`: the exact form through the naive
+/// `1 + erf(x/√2)` transcription (the `erfc` value below `x = -5` is a
+/// normal float the subtraction cannot see), the tanh approximation
+/// through `1 + tanh(√(2/π)·(x + 0.044715·x³))` the same way. Oracles
+/// are the f64 [`UnaryValue`] forms `0.5·x·erfc(-x/√2)` and
+/// `x·sigmoid(2z)`. Probes stay where the truths are normal f32 (the
+/// exact form below `-12`, the tanh form below `-10`, are already
+/// f32-subnormal); controls pin the already-correct range.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_gelu_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    GeluOp: UnaryExpr<E::Dialect>,
+    GeluTanhOp: UnaryExpr<E::Dialect>,
+{
+    gelu_tails_match_oracle(device, ops);
+    gelu_tanh_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -561,6 +591,56 @@ where
         assert!(
             error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: mish lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-12`/`-10`/`-8`/`-6` collapse to exactly
+/// `0` under the naive transcription (`erf(x/√2)` rounds to `-1.0`,
+/// so `1 + erf` loses the `erfc` value, a normal float down to
+/// `x = -12`); the controls pin the already-correct range.
+fn gelu_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    GeluOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        -12.0f32, -10.0, -8.0, -6.0, -4.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0,
+    ];
+    let got = unary::<_, _, GeluOp, 12>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <GeluOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: gelu lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-10`/`-8`/`-6` collapse to exactly `0`
+/// under the naive transcription (`tanh` rounds to `-1.0`, so
+/// `1 + tanh` loses the true factor, normal down to `x = -10`); the
+/// controls pin the already-correct range.
+fn gelu_tanh_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    GeluTanhOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [-10.0f32, -8.0, -6.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0, 10.0];
+    let got = unary::<_, _, GeluTanhOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <GeluTanhOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: gelu-tanh lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }
