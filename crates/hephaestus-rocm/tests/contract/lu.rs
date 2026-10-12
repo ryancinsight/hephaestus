@@ -1,4 +1,7 @@
 #[cfg(feature = "decomposition")]
+use super::*;
+
+#[cfg(feature = "decomposition")]
 #[test]
 fn lu_factorization_and_host_contracts_match_values() {
     let Some(device) = device("lu_factorization_and_host_contracts_match_values") else {

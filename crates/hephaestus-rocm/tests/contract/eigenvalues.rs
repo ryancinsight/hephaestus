@@ -1,4 +1,7 @@
 #[cfg(feature = "decomposition")]
+use super::*;
+
+#[cfg(feature = "decomposition")]
 #[test]
 fn symmetric_eigen_surfaces_match_leto_and_reconstruct() {
     let Some(device) = device("symmetric_eigen_surfaces_match_leto_and_reconstruct") else {

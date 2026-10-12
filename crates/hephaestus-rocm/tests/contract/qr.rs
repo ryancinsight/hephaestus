@@ -1,4 +1,7 @@
 #[cfg(feature = "decomposition")]
+use super::*;
+
+#[cfg(feature = "decomposition")]
 #[test]
 fn qr_factorization_and_least_squares_match_values() {
     let Some(device) = device("qr_factorization_and_least_squares_match_values") else {

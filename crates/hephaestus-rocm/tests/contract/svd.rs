@@ -1,4 +1,7 @@
 #[cfg(feature = "decomposition")]
+use super::*;
+
+#[cfg(feature = "decomposition")]
 #[test]
 fn qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs() {
     let Some(device) = device("qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs")

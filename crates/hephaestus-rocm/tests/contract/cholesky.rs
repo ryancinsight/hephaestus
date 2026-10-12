@@ -1,4 +1,7 @@
 #[cfg(feature = "decomposition")]
+use super::*;
+
+#[cfg(feature = "decomposition")]
 #[test]
 fn cholesky_factorization_and_common_host_contracts_match_values() {
     let Some(device) = device("cholesky_factorization_and_common_host_contracts_match_values")
