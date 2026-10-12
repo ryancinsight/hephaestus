@@ -67,9 +67,7 @@ where
     T: DialectScalar<Wgsl> + Pod,
 {
     reject_unsupported_unary::<Op, T>()?;
-    if let Some(width) = canary::width_of::<T>() {
-        canary::require_expr_safe(device, Op::EXPR, width, "unary elementwise")?;
-    }
+    canary::require_template_safe::<T>(device, Op::EXPR, "unary elementwise")?;
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: out.len,

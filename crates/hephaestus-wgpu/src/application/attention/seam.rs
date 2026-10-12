@@ -327,9 +327,7 @@ pub(super) fn prepare<T: WgslAttentionScalar>(
     // The softmax stages call `exp`; the composed source is scanned so the
     // stages without it stay available where `exp` is blocked.
     let source = shader();
-    if let Some(width) = canary::width_of::<T>() {
-        canary::require_expr_safe(device, &source, width, label)?;
-    }
+    canary::require_template_safe::<T>(device, &source, label)?;
     let pipeline = try_cached_pipeline(
         device,
         (kernel, TypeId::of::<T>(), WORKGROUP_WIDTH.get()),
