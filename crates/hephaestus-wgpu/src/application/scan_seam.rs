@@ -7,7 +7,6 @@ use hephaestus_core::{
     OpIdentity, Result, ScanDirection, ScanOps, StridedView, Wgsl, plan_axis_scan,
 };
 
-use crate::application::canary;
 use crate::application::pipeline::try_cached_pipeline;
 use crate::application::prepared::{
     checked_bind_group, checked_submit, device_owner, validate_device_owner,
@@ -63,11 +62,6 @@ where
         let output_layout: &leto::Layout<2> =
             unsafe { &*(output.layout as *const leto::Layout<N> as *const leto::Layout<2>) };
         validate_out(output.buffer, output.layout)?;
-        canary::require_template_safe::<T>(
-            device,
-            <Op as CombineExpr<Wgsl>>::EXPR,
-            "prepared scan",
-        )?;
         let Some(dispatch) = plan_axis_scan(
             input_layout,
             input.buffer.len,

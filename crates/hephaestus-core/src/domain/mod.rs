@@ -10,6 +10,8 @@ pub mod arg_reduce;
 pub mod attention;
 /// Typed device-buffer contract.
 pub mod buffer;
+/// Device-neutral n-D concatenation seam.
+pub mod cat;
 /// Device-neutral convolution operands, planning, and dispatch seam.
 pub mod convolution;
 /// Device-neutral batched 3-vector cross product seam.
@@ -26,6 +28,8 @@ pub mod dense_product;
 pub mod device;
 /// Kernel-dialect markers and per-dialect scalar tokens.
 pub mod dialect;
+/// Device-neutral inner product over strided views.
+pub mod dot;
 /// Backend-neutral elementwise operations over strided n-D views.
 pub mod elementwise;
 /// Device-neutral embedding-table gather seam.
@@ -41,6 +45,12 @@ pub mod fft;
 pub mod fixed_fd;
 /// Runtime-rank expression-fusion contracts.
 pub mod fusion;
+/// Device-neutral n-D gather seam.
+pub mod gather;
+/// Device-neutral n-D scatter-assignment seam.
+pub mod index_put;
+/// Device-neutral n-D index-selection seam.
+pub mod index_select;
 /// Backend-neutral kernel authoring: interface and source declarations.
 pub mod interface;
 /// Device-neutral rank-2 axis resampling (nearest / linear) seam.
@@ -51,6 +61,10 @@ pub mod kernel;
 pub mod launch;
 /// Device-neutral classification-loss operands, planning, and dispatch seam.
 pub mod loss;
+/// Device-neutral n-D masked-fill seam.
+pub mod masked_fill;
+/// Device-neutral nonzero-coordinate extraction over strided views.
+pub mod nonzero;
 /// Zero-sized operation markers with per-dialect shader expressions.
 pub mod ops;
 /// Device-neutral n-D padding seam.
@@ -65,12 +79,22 @@ pub mod pooling;
 pub mod random;
 /// Backend-neutral axis-reduction validation and dispatch planning.
 pub mod reduction;
+/// Device-neutral n-D circular-shift seam.
+pub mod roll;
 /// Backend-neutral axis-scan validation and dispatch planning.
 pub mod scan;
+/// Device-neutral n-D scatter-add seam.
+pub mod scatter;
 /// Device-neutral spatial unfold/fold operands, planning, and dispatch seam.
 pub mod sliding_window;
+/// Device-neutral stable sort over strided views.
+pub mod sort;
 /// Device-neutral sparse operator contracts.
 pub mod sparse;
+/// Device-neutral n-D splitting seam.
+pub mod split;
+/// Device-neutral n-D stacking seam.
+pub mod stack;
 /// Backend-neutral two-dimensional Laplacian stencil parameters.
 pub mod staggered;
 /// Provider-owned stateful parameter-update rules and dispatch seam.
@@ -80,6 +104,8 @@ pub mod stencil;
 pub mod stream;
 /// Device-agnostic strided kernel metadata and layout packing.
 pub mod strided;
+/// Device-neutral n-D tiling seam.
+pub mod tile;
 /// Device-neutral rank-2 top-k selection seam.
 pub mod topk;
 /// Device-neutral rank-2 triangular masking (tril / triu) seam.
@@ -90,5 +116,7 @@ pub mod vector;
 pub mod view;
 /// Volume contracts.
 pub mod volume;
+/// Device-neutral n-D conditional-selection seam.
+pub mod where_cond;
 /// Shared spatial-window geometry and validation.
 pub mod window;

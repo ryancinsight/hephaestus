@@ -59,7 +59,10 @@ struct TriangularKernel;
 /// while the corresponding Rust array has a 12-byte stride. The seam performs
 /// no conversion copy, so accepting such values would address later elements
 /// incorrectly.
-pub(crate) trait TriangularStorage: DialectScalar<Wgsl> + Pod {}
+///
+/// Public so the Metal provider (which delegates to this seam) can name the
+/// same bound; the implementor set stays closed to the four scalars below.
+pub trait TriangularStorage: DialectScalar<Wgsl> + Pod {}
 
 impl TriangularStorage for f32 {}
 impl TriangularStorage for f64 {}

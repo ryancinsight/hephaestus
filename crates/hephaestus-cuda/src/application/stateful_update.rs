@@ -2,8 +2,7 @@
 
 use hephaestus_core::{
     BlockWidth, CudaC, DialectScalar, Result, StatefulUpdateAliasing, StatefulUpdateMeta,
-    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, UpdateWidth,
-    plan_stateful_update,
+    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
 };
 
 use crate::application::pipeline::{
@@ -13,11 +12,12 @@ use crate::{CudaBuffer, CudaDevice};
 
 const ENTRY: &str = "stateful_update_kernel";
 
-fn parameters_declaration<Rule, T>(ty: &'static str) -> String
+fn parameters_declaration<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<CudaC>,
-    T: 'static,
+    T: DialectScalar<CudaC>,
 {
+    let ty = T::TYPE_TOKEN;
     let fields = Rule::parameter_fields_for::<T>()
         .iter()
         .map(|field| format!("    {ty} {field};\n"))
@@ -25,11 +25,12 @@ where
     format!("struct Parameters {{\n{fields}}};\n")
 }
 
-fn kernel_source<Rule, T>(ty: &'static str) -> String
+fn kernel_source<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<CudaC>,
-    T: 'static,
+    T: DialectScalar<CudaC>,
 {
+    let ty = T::TYPE_TOKEN;
     let state_one_parameter = if Rule::STATE_COUNT == 2 {
         format!(",\n    {ty}* state_one")
     } else {
@@ -100,9 +101,9 @@ extern "C" __global__ void {entry}(
     state_zero[state_zero_offset] = state_zero_next;
 {state_one_store}}}
 "#,
-        parameters = parameters_declaration::<Rule, T>(ty),
+        parameters = parameters_declaration::<Rule, T>(),
         entry = ENTRY,
-        ty = ty,
+        ty = T::TYPE_TOKEN,
         body = Rule::body_for::<T>(),
     )
 }
@@ -135,18 +136,17 @@ fn launch_stateful_update<Rule, T, P, const N: usize>(
     meta: StatefulUpdateMeta,
     width: BlockWidth,
     len: usize,
-    ty: &'static str,
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<CudaC>,
-    T: 'static,
+    T: DialectScalar<CudaC>,
 {
     let key = PipelineKey::StatefulUpdate {
         rule: core::any::TypeId::of::<Rule>(),
         scalar: core::any::TypeId::of::<T>(),
         width: width.get(),
     };
-    let kernel = cached_kernel(device, key, ENTRY, || kernel_source::<Rule, T>(ty))?;
+    let kernel = cached_kernel(device, key, ENTRY, kernel_source::<Rule, T>)?;
     let state_zero = operands
         .states
         .first()
@@ -219,11 +219,10 @@ fn dispatch<Rule, T, P, const N: usize>(
     operands: StatefulUpdateOperands<'_, CudaBuffer<T>, N>,
     parameters: P,
     validate: fn(&P) -> Result<()>,
-    ty: &'static str,
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<CudaC>,
-    T: 'static,
+    T: DialectScalar<CudaC>,
 {
     validate(&parameters)?;
     validate_device(device, &operands)?;
@@ -238,50 +237,34 @@ where
         plan.metadata(),
         BlockWidth::DEFAULT,
         plan.len(),
-        ty,
     )
-}
-
-/// CUDA C type token for an update width, or a typed rejection.
-///
-/// The fused [`StatefulUpdateOps::stateful_update`] entry point is generic
-/// over [`UpdateWidth`], which cannot name the dialect spelling; the token
-/// crosses that bound gap as a value instead. Widths outside f32/f64 are
-/// rejected here rather than silently compiled against a fallback spelling.
-fn scalar_token<T: UpdateWidth>() -> Result<&'static str> {
-    if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
-        Ok(<f64 as DialectScalar<CudaC>>::TYPE_TOKEN)
-    } else if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f32>() {
-        Ok(<f32 as DialectScalar<CudaC>>::TYPE_TOKEN)
-    } else {
-        Err(hephaestus_core::HephaestusError::Unsupported {
-            message: format!(
-                "CUDA does not support stateful updates at {}",
-                core::any::type_name::<T>(),
-            ),
-        })
-    }
 }
 
 impl StatefulUpdateOps<CudaDevice> for CudaStatefulUpdateOps {
     type Dialect = CudaC;
 
-    fn stateful_update<Rule, T: UpdateWidth, const N: usize>(
+    fn stateful_update<Rule, const N: usize>(
         &self,
         device: &CudaDevice,
-        operands: StatefulUpdateOperands<'_, CudaBuffer<T>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
+        operands: StatefulUpdateOperands<'_, CudaBuffer<f32>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
     ) -> Result<()>
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        dispatch::<Rule, T, _, N>(
-            device,
-            operands,
-            parameters,
-            Rule::validate_parameters::<T>,
-            scalar_token::<T>()?,
-        )
+        dispatch::<Rule, f32, _, N>(device, operands, parameters, Rule::validate_parameters)
+    }
+
+    fn stateful_update_f64<Rule, const N: usize>(
+        &self,
+        device: &CudaDevice,
+        operands: StatefulUpdateOperands<'_, CudaBuffer<f64>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
+    ) -> Result<()>
+    where
+        Rule: StatefulUpdateRule<Self::Dialect>,
+    {
+        dispatch::<Rule, f64, _, N>(device, operands, parameters, Rule::validate_parameters_f64)
     }
 }
 
@@ -293,11 +276,11 @@ mod tests {
 
     #[test]
     fn source_specializes_state_cardinality_and_parameters() {
-        let sgd = kernel_source::<Sgd, f32>("float");
+        let sgd = kernel_source::<Sgd, f32>();
         assert!(sgd.contains("float momentum;"));
         assert!(!sgd.contains("float* state_one"));
 
-        let adam = kernel_source::<Adam, f32>("float");
+        let adam = kernel_source::<Adam, f32>();
         assert!(adam.contains("float bias_correction_two;"));
         assert!(adam.contains("float* state_one"));
         assert!(adam.contains(<Adam as StatefulUpdateRule<CudaC>>::BODY));
@@ -305,20 +288,20 @@ mod tests {
 
     #[test]
     fn f64_source_types_storage_and_parameters_double() {
-        let sgd = kernel_source::<Sgd, f64>("double");
+        let sgd = kernel_source::<Sgd, f64>();
         assert!(sgd.contains("double momentum;"));
         assert!(sgd.contains("double* parameter,"));
         assert!(sgd.contains("const double* gradient,"));
         assert!(!sgd.contains("float"));
 
-        let adam = kernel_source::<Adam, f64>("double");
+        let adam = kernel_source::<Adam, f64>();
         assert!(adam.contains("double bias_correction_two;"));
         assert!(adam.contains("double* state_one"));
     }
 
     #[test]
     fn f64_adam_selects_the_double_literal_body() {
-        let adam = kernel_source::<Adam, f64>("double");
+        let adam = kernel_source::<Adam, f64>();
         let body = <Adam as StatefulUpdateRule<CudaC>>::body_for::<f64>();
         assert!(adam.contains(body));
         assert!(!body.contains("1.0f"));

@@ -25,10 +25,10 @@
 //!
 //! ```toml
 //! # portable compute, no vendor toolkit needed
-//! hephaestus-compute = { version = "0.20", features = ["wgpu"] }
+//! hephaestus-compute = { version = "0.19", features = ["wgpu"] }
 //!
 //! # NVIDIA; needs a CUDA toolkit at build time for headers
-//! hephaestus-compute = { version = "0.20", features = ["cuda"] }
+//! hephaestus-compute = { version = "0.19", features = ["cuda"] }
 //! ```
 //!
 //! No backend is enabled by default. A default backend would make every

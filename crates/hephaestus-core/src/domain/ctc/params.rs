@@ -1,0 +1,53 @@
+use eunomia::{Pod, Zeroable};
+
+use super::invalid;
+use super::problem::CtcProblem;
+use crate::Result;
+
+/// Uniform block shared by the alpha, beta, and likelihood steps.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+pub struct CtcStepParams {
+    /// `(frame, batch, classes, 0)`.
+    pub dims: [u32; 4],
+}
+
+impl CtcStepParams {
+    /// Build the uniform block for one step at frame `t`.
+    #[must_use]
+    pub fn for_frame(problem: &CtcProblem, t: u32) -> Self {
+        Self {
+            dims: [t, problem.batch as u32, problem.classes as u32, 0],
+        }
+    }
+}
+
+/// Uniform block for the posterior sweep.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+pub struct CtcBackwardParams {
+    /// `(0, batch, classes, 0)`: the frame slot is zero, and batch and
+    /// classes sit where the step block keeps them, so every entry reads
+    /// `dims.y` as the batch and `dims.z` as the classes.
+    pub dims: [u32; 4],
+    /// `(upstream, 0, 0, 0)`.
+    pub scalars: [f32; 4],
+}
+
+impl CtcBackwardParams {
+    /// Build the uniform block for one backward pass.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HephaestusError::InvalidConfiguration`](crate::HephaestusError::InvalidConfiguration) when the seed is not
+    /// finite, which the provider equally rejects.
+    pub fn new(problem: &CtcProblem, upstream: f32) -> Result<Self> {
+        if !upstream.is_finite() {
+            return Err(invalid("ctc upstream seed is not finite".to_owned()));
+        }
+        Ok(Self {
+            dims: [0, problem.batch as u32, problem.classes as u32, 0],
+            scalars: [upstream, 0.0, 0.0, 0.0],
+        })
+    }
+}

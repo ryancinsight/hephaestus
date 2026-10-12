@@ -13,6 +13,10 @@
 //! - unary expressions read `x`;
 //! - binary and combine expressions read `lhs` and `rhs`.
 
+// `expr_macros` first: `#[macro_use]` scopes its `macro_rules!` textually to
+// every module below, which the nested core calls require.
+#[macro_use]
+mod expr_macros;
 mod activation;
 mod activation_value;
 mod binary;

@@ -10,9 +10,9 @@ use hephaestus_core::{
     Result,
 };
 
-fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+pub(crate) fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 extern "C" __global__ void scalar_kernel(
     const {ty}* input_ptr,
     {ty} scalar,
@@ -27,6 +27,7 @@ extern "C" __global__ void scalar_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         expr = Op::EXPR,
     )

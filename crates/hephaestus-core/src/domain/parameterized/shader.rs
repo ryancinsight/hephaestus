@@ -47,8 +47,11 @@ impl ParameterizedUnaryExpr<Wgsl> for SoftshrinkGradOp {
     const EXPR: &'static str = "select(0.0, 1.0, (x > first) || (x < -first))";
 }
 
+// The negative branch renders the `Expm1Op` form (Taylor core under
+// `|x / first| <= 0.3`, direct `exp(x / first) - 1` outside) at `x / first`,
+// scaled by `first`; the kink branch is exact.
 impl ParameterizedUnaryExpr<Wgsl> for CeluOp {
-    const EXPR: &'static str = "select(first * (exp(x / first) - 1.0), x, x >= 0.0)";
+    const EXPR: &'static str = "select(first * select((exp((x / first)) - 1.0), (x / first) * (1.0 + (x / first) * (0.5 + (x / first) * (0.16666666666666666 + (x / first) * (0.041666666666666664 + (x / first) * (0.008333333333333333 + (x / first) * 0.001388888888888889))))), abs((x / first)) <= 0.3), x, x >= 0.0)";
 }
 
 impl ParameterizedUnaryExpr<Wgsl> for CeluGradOp {
@@ -98,7 +101,7 @@ macro_rules! impl_c_family {
         }
 
         impl ParameterizedUnaryExpr<$dialect> for CeluOp {
-            const EXPR: &'static str = "x >= 0.0f ? x : first * (expf(x / first) - 1.0f)";
+            const EXPR: &'static str = "x >= 0.0f ? x : first * expm1(x / first)";
         }
 
         impl ParameterizedUnaryExpr<$dialect> for CeluGradOp {

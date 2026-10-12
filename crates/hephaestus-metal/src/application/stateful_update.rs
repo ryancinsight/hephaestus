@@ -1,8 +1,6 @@
 //! Stateful parameter updates through WGPU's native Metal path.
 
-use hephaestus_core::{
-    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, UpdateWidth, Wgsl,
-};
+use hephaestus_core::{StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, Wgsl};
 use hephaestus_wgpu::{WgpuDevice, WgpuStatefulUpdateOps};
 
 use crate::{MetalBuffer, MetalDevice, Result};
@@ -14,11 +12,11 @@ pub struct MetalStatefulUpdateOps;
 impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
     type Dialect = Wgsl;
 
-    fn stateful_update<Rule, T: UpdateWidth, const N: usize>(
+    fn stateful_update<Rule, const N: usize>(
         &self,
         device: &MetalDevice,
-        operands: StatefulUpdateOperands<'_, MetalBuffer<T>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
+        operands: StatefulUpdateOperands<'_, MetalBuffer<f32>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
     ) -> Result<()>
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
@@ -37,11 +35,7 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     &state_zero.buffer.inner,
                     state_zero.layout,
                 )];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<
-                    Rule,
-                    T,
-                    N,
-                >(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<Rule, N>(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {
@@ -57,11 +51,7 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     hephaestus_core::StridedView::new(&state_zero.buffer.inner, state_zero.layout),
                     hephaestus_core::StridedView::new(&state_one.buffer.inner, state_one.layout),
                 ];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<
-                    Rule,
-                    T,
-                    N,
-                >(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<Rule, N>(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {

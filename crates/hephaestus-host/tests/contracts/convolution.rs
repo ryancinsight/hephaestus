@@ -2,7 +2,7 @@
 //! since the host's scalar bound admits both), plus host-specific cases the
 //! clauses do not reach.
 
-use hephaestus_conformance::assert_convolution_contract;
+use hephaestus_conformance::{assert_convolution_contract, assert_convolution_f64_contract};
 use hephaestus_core::{
     ComputeDevice, ConvolutionBackwardOperands, ConvolutionForwardOperands,
     ConvolutionGradientViews, ConvolutionOps,
@@ -13,12 +13,12 @@ use leto::{ConvolutionParameters, Layout};
 
 #[test]
 fn host_satisfies_the_convolution_contract() {
-    assert_convolution_contract::<_, _, f32>(&HostDevice::new(), &HostConvolutionOps);
+    assert_convolution_contract(&HostDevice::new(), &HostConvolutionOps);
 }
 
 #[test]
 fn host_satisfies_the_convolution_f64_contract() {
-    assert_convolution_contract::<_, _, f64>(&HostDevice::new(), &HostConvolutionOps);
+    assert_convolution_f64_contract(&HostDevice::new(), &HostConvolutionOps);
 }
 
 /// `grad_weight` naming the same allocation as `grad_input` is illegal

@@ -2,18 +2,126 @@
 
 <a id="heph-shape-ops-provider-1"></a>
 
-## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
+## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — done 2026-10-10
 - Priority: feature.
 - Status: split one op at a time (per ADR 0062's precedent), not one
   `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `TriangularOps`
-  (ADR 0070, tril/triu) — both host + wgpu.
-- Triangular residual: CUDA, ROCm, and Metal implementors plus the
-  `assert_backend_contract` aggregate fold remain tracked scope; host + wgpu
-  delivery does not close those backend obligations.
-- Outcome: cat, split, stack, gather, scatter, index_select, index_put,
-  masked_fill, roll, tile, where, sort, and nonzero remain, implemented
-  natively on every accelerator backend (no host round-trip), split into
-  their own items as each is taken up.
+  (ADR 0070, tril/triu) — both on all five backends (CUDA verified on
+  RTX 5080 2026-10-10; ROCm/Metal compile-gated) and both folded into
+  `assert_backend_contract`.
+- Triangular residual: closed 2026-10-10. Pad residual: closed 2026-10-10.
+  Delivered: `CatOps` (ADR 0071) on host + WGPU + shared clause (oracle
+  differential, identity, empty segments, invalid geometry, alias
+  rejection); cat residual closed 2026-10-10: CUDA `CudaCatOps` green on
+  RTX 5080 (i32+f32, 5 clauses), ROCm/Metal compile-gated, `cat` folded
+  into `assert_backend_contract` (33 params) + WGPU consolidated counts
+  (144/191/149/193); host 76/76, wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `SplitOps` (ADR 0072) on host + WGPU + shared clause (oracle
+  differential, identity, empty segments, invalid geometry, input + peer
+  alias rejection); split residual closed 2026-10-10: CUDA `CudaSplitOps`
+  green on RTX 5080 (i32+f32, 5 clauses), ROCm/Metal compile-gated,
+  `split` folded into `assert_backend_contract` (34 params); host 77/77,
+  wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `StackOps` (ADR 0073, dual-rank with `InsertAxis` bound,
+  wrong rank ill-typed) on host + WGPU + shared clause (oracle
+  differential, identity, vacuous empties, invalid geometry, alias
+  rejection); stack residual closed 2026-10-10: CUDA `CudaStackOps`
+  green on RTX 5080 (i32+f32, 5 clauses), ROCm/Metal compile-gated,
+  `stack` folded into `assert_backend_contract` (35 params); host 78/78,
+  wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `GatherOps` (ADR 0074, u32 indices, atomic OOB flag per the
+  embedding contract) on host + WGPU + shared clause (hand-computed
+  fixtures, identity, vacuous empties, invalid geometry, alias + OOB
+  rejection); gather residual closed 2026-10-10: CUDA `CudaGatherOps`
+  green on RTX 5080 (i32+f32, 6 clauses), ROCm/Metal compile-gated,
+  `gather` folded into `assert_backend_contract` (36 params); host
+  79/79, wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `ScatterOps` (ADR 0075, scatter-add with ascending-order
+  accumulation, output-parallel scan, copy+scan split by the 4-buffer
+  limit) on host + WGPU + shared clause (fixtures, repeats, f32 order,
+  vacuous, invalid geometry, alias + OOB rejection); scatter residual
+  closed 2026-10-10: CUDA `CudaScatterOps` green on RTX 5080
+  (i32+f32+order, 7 clauses), ROCm/Metal compile-gated, `scatter`
+  folded into `assert_backend_contract` (37 params, i32+f32); host
+  80/80, wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `IndexSelectOps` (ADR 0076, rank-1 u32 index, atomic OOB
+  flag per the embedding contract) on host + WGPU + shared clause
+  (hand-computed fixtures, identity, vacuous empties, invalid geometry,
+  alias + OOB rejection), plus the residual: CUDA single-launch kernel
+  green on RTX 5080 (i32+f32), ROCm/Metal mirrors compile-gated,
+  folded into `assert_backend_contract` (38 params, i32); host 81/81,
+  wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `IndexPutOps` (ADR 0077, rank-1 u32 index, accumulate flag,
+  ascending-order accumulation, atomic OOB flag) on host + WGPU + shared
+  clause (hand-computed fixtures, replace + accumulate, vacuous empties,
+  invalid geometry, dual-alias + OOB rejection), plus the residual:
+  CUDA single-launch kernels green on RTX 5080 (i32+f32), ROCm/Metal
+  mirrors compile-gated, folded into `assert_backend_contract` (39
+  params, i32); host 82/82, wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `MaskedFillOps` (ADR 0078, same-T mask, IEEE != ZERO test,
+  Dialect assoc type per ADR 0043 with NaN-fills asserted only where
+  advertised, pad-style value uniform) on host + WGPU + shared clause
+  (hand-computed fixtures, degenerate masks, vacuous empties, invalid
+  geometry, dual-alias rejection), plus the residual: CUDA
+  single-launch kernel green on RTX 5080 (i32+f32 incl the NaN-fills
+  cell), ROCm/Metal mirrors compile-gated, folded into
+  `assert_backend_contract` (40 params, i32); host 83/83, wgpu 24/24
+  Vulkan, clippy/fmt clean.
+  Delivered: `RollOps` (ADR 0079, parallel shifts/dims slices, duplicate
+  dims compose by summation, host-side i128 fold + rem_euclid, vacuous
+  empties with no modulo by zero) on host + WGPU + shared clause
+  (hand-computed fixtures incl negative/oversize shifts, identity rolls,
+  invalid geometry, alias rejection), plus the residual: CUDA
+  single-launch kernel green on RTX 5080 (i32+f32), ROCm/Metal mirrors
+  compile-gated, folded into `assert_backend_contract` (41 params, i32);
+  host 84/84, wgpu 24/24 Vulkan, clippy/fmt clean.
+  Delivered: `TileOps` (ADR 0080, fixed-rank `TileReps<N>`, checked
+  products with overflow rejection, vacuous empties with no modulo by
+  zero) on host + WGPU + shared clause (hand-computed fixtures,
+  identity reps, invalid geometry incl overflow, alias rejection),
+  plus the residual: CUDA single-launch kernel green on RTX 5080
+  (i32+f32), ROCm/Metal mirrors compile-gated, folded into
+  `assert_backend_contract` (42 params, i32); host 85/85, wgpu 24/24
+  Vulkan, clippy/fmt clean.
+  Delivered: `WhereOps` (ADR 0081, same-shape ternary, IEEE cond test,
+  Dialect assoc type per ADR 0043 with NaN-selects-on_true asserted
+  only where advertised, single launch at the 4-buffer limit) on host +
+  WGPU + shared clause (hand-computed fixtures, degenerate conds,
+  vacuous empties, invalid geometry, triple-alias rejection), plus the
+  residual: CUDA single-launch kernel green on RTX 5080 (i32+f32 incl
+  the NaN cell), ROCm/Metal mirrors compile-gated, folded into
+  `assert_backend_contract` (43 params, i32); host 86/86, wgpu 24/24
+  Vulkan, clippy/fmt clean.
+  Delivered: `SortOps` increment-1 (ADR 0082, stable (value,pos) order,
+  u32 argsort, NaN-greatest asserted only where advertised with
+  wholesale WGSL skip, one thread per lane insertion sort in a single
+  launch) on core (6/6) + host + WGPU + shared clause
+  (hand-computed fixtures, bidirectional stability, special floats,
+  vacuous empties, invalid geometry, alias rejection); host 87/87,
+  wgpu 24/24 Vulkan (204-case suite), clippy/fmt clean; plus the
+  residual: CUDA single-launch kernel green on RTX 5080 (i32+f32 incl
+  the NaN-greatest cells via an `isnan((double)x)` test),
+  ROCm/Metal mirrors compile-gated, folded into
+  `assert_backend_contract` (44 params, i32); host 87/87,
+  clippy/fmt clean.
+  Delivered: `NonzeroOps` increment-1 (ADR 0083, u32 [numel,N] coords
+  + [1] count, row-major output-parallel scan, tail rows pinned
+  untouched by sentinel, triple-alias rejection at T=u32,
+  NaN-counts-as-nonzero asserted only where advertised with
+  wholesale WGSL skip, one thread per row in a single launch with
+  dummy substitution for empty bindings; `HostBuffer::aliases`
+  generalized cross-type) on core (6/6) + host + WGPU + shared
+  clause (hand-computed fixtures, all-zero, special floats,
+  vacuous empties, invalid geometry, triple-alias rejection);
+  host 88/88, wgpu 24/24 Vulkan (205-case suite), clippy/fmt
+  clean; plus the residual: CUDA single-launch kernel green on
+  RTX 5080 (i32+f32 incl the NaN-counts-as-nonzero cell, u32
+  triple-alias rejection), ROCm/Metal mirrors compile-gated,
+  folded into `assert_backend_contract` (45 params, i32); host
+  88/88, clippy/fmt clean.
+- Outcome: fully split and fully delivered — every op runs
+  natively on host + WGPU + CUDA with ROCm/Metal mirrors and the
+  aggregate fold; the item closes with this increment.
 - Scope: per-op core domain seam + wgpu/cuda/rocm/metal application
   modules; conformance clauses differential-tested against Leto per op.
 - Driver: coeus's accelerator bridge has no path for this family today and
@@ -24,107 +132,8 @@
   coeus binds afterward.
 - Verification: per-op conformance clause across backends, boundary/empty
   cases, strict Clippy, independent review.
-- Last-update: 2026-09-26.
-
-<a id="heph-topk-argminmax-provider-1"></a>
-
-## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm/Metal for topk/argmax/argmin [minor] — todo
-- Priority: feature.
-- Status: `ArgReduceOps` (argmax/argmin, ADR 0063) and `TopKOps` (topk, ADR
-  0066) both delivered — host + wgpu, differential-tested including tie-break
-  cases. Narrowed to the remaining backends and the `assert_backend_contract`
-  aggregate fold (deferred until a seam has all four backend implementations).
-- Outcome: `ArgReduceOps`/`TopKOps` implemented for cuda/rocm/metal.
-- Scope: per-backend implementors following the existing wgpu kernels'
-  algorithms (host/wgpu already agree on tie-break by construction — matching
-  algorithm, not just contract); conformance already covers the shared
-  clauses, so this item is implementation-only.
-- Driver: coeus consumer audit, 2026-09-26.
-- Verification: existing differential + boundary (ties) tests per backend,
-  strict Clippy, independent review.
-- Last-update: 2026-09-26.
-
-<a id="heph-embedding-gather-provider-1"></a>
-
-## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Embedding-gather gradient (scatter-add) [minor] — todo
-- Priority: feature.
-- Status: `EmbeddingOps<D, T>::gather_into` (host + wgpu) delivered per ADR
-  0065, with an atomic-flag out-of-range rejection on the device path.
-  Narrowed to the gradient counterpart, which this increment does not cover.
-- Outcome: the backward pass for embedding gather — scatter-add gradients
-  into a table-shaped gradient buffer at the same indices `gather_into` read.
-- Scope: core seam addition, wgpu device implementor first (cuda/rocm/metal
-  follow), conformance vs a host-loop reference (accumulation order must be
-  documented since scatter-add is not commutative-associative in float
-  rounding across execution orders).
-- Driver: coeus consumer audit — needed for the embedding-lookup layer's
-  training path.
-- Verification: differential + repeated-index accumulation + out-of-range
-  rejection tests per backend, strict Clippy, independent review.
-- Last-update: 2026-09-26.
-
-<a id="heph-interpolation-provider-1"></a>
-
-## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm/Metal for interpolation [minor] — todo
-- Priority: feature.
-- Status: `InterpolationOps` (nearest/linear, ADR 0067) delivered — host +
-  wgpu, align-corners convention, differential-tested including the
-  `in_len == 1` and `out_len == 1` degenerate cases. Bilinear is not a
-  separate mode: on a regular grid it composes as two calls to
-  `interpolate_axis_into` (documented in the ADR), so it needs no distinct
-  binding. Narrowed to the remaining backends and the
-  `assert_backend_contract` aggregate fold (deferred until a seam has all
-  four backend implementations).
-- Outcome: `InterpolationOps` implemented for cuda/rocm/metal.
-- Scope: per-backend implementors following the existing wgpu kernel's
-  algorithm (host/wgpu already agree on the align-corners mapping and the
-  nearest-mode tie rule by construction); conformance already covers the
-  shared clause, so this item is implementation-only.
-- Driver: coeus consumer audit, 2026-09-26.
-- Verification: existing differential + boundary (degenerate extents) tests
-  per backend, strict Clippy, independent review.
-- Last-update: 2026-09-27.
-
-<a id="heph-adaptive-pooling-provider-1"></a>
-
-## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm/Metal for adaptive pooling [minor] — todo
-- Priority: feature.
-- Status: `AdaptivePoolingOps` (avg/max, ADR 0068) delivered — host + wgpu,
-  differential-tested including the non-divisible-extent case (windows can
-  overlap, matching the reference algorithm) and the `out_len == 1`/
-  `out_len == in_len` degenerate cases. 2D pooling is not a separate mode:
-  it composes as two calls to `adaptive_pool_axis_into` (documented in the
-  ADR). Narrowed to the remaining backends and the `assert_backend_contract`
-  aggregate fold (deferred until a seam has all four backend
-  implementations).
-- Outcome: `AdaptivePoolingOps` implemented for cuda/rocm/metal.
-- Scope: per-backend implementors following the existing wgpu kernel's
-  window-derivation formula; conformance already covers the shared clause,
-  so this item is implementation-only.
-- Driver: coeus consumer audit, 2026-09-26.
-- Verification: existing differential + boundary (non-divisible extents)
-  tests per backend, strict Clippy, independent review.
-- Last-update: 2026-09-27.
-
-<a id="heph-device-dot-cross-provider-1"></a>
-
-## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident cross product; coeus dot-binding gap [patch] — todo
-- Priority: feature.
-- Status: audited (ADR 0064). `DenseVectorOps::dot`/`norm_l2`/`norm_l1`/
-  `norm_max` already dispatch entirely on-device on wgpu (only the reduced
-  scalar downloads) — the reported "coeus copies full operands to host"
-  symptom for `dot` is a coeus-side integration gap (not calling the
-  existing seam), not a hephaestus provider gap; report back to coeus rather
-  than duplicate. `CrossProductOps<D, T>` (host + wgpu) delivered for the
-  half that had no seam at all.
-- Outcome: cross-product batched over flat `(x, y, z)` triples, on-device.
-- Scope: `hephaestus-core`/`hephaestus-host`/`hephaestus-wgpu` delivered;
-  cuda/rocm/metal implementors remain, plus the `assert_backend_contract`
-  aggregate fold once all four backends implement it.
-- Driver: coeus consumer audit, 2026-09-26.
-- Verification: differential vs the standard basis identities (host +
-  real-device wgpu), strict Clippy, independent review.
-- Last-update: 2026-09-26.
+- Last-update: 2026-10-10 (ScatterOps increment-1 delivered: core 8/8,
+  host 80/80, wgpu 197-case Vulkan suite + 24/24 binary, clippy/fmt clean).
 
 <a id="heph-fused-expr-rocm-metal-1"></a>
 
@@ -168,39 +177,6 @@
 - Verification: fmt; host nextest 58/58; CUDA scan 1/1 on RTX 5080; WGPU contracts 8/8 with a required adapter; strict Clippy for conformance, host, CUDA, and WGPU; doctests; conformance reports zero regressions. Atlas overlay required unlocked local Cargo runs; standalone lock resolution remains covered by PR CI.
 - Last-update: 2026-09-22.
 
-<a id="heph-cuda-elementwise-scalar-declarations"></a>
-
-## HEPH-CUDA-ELEMENTWISE-SCALAR-DECLARATIONS — Compile admitted elementwise scalars [patch] — todo
-- Outcome: CUDA elementwise operations compile every scalar admitted by their bounds and preserve each operation's native scalar contract.
-- Scope: existing CUDA binary/unary/scalar generators and shared tests; enumerate dependent scalar-bound generators before changing declaration composition. No dense-product scope expansion or widened arithmetic.
-- Evidence: source-only review at `28769e1` plus product correction finds `elementwise/binary.rs::shader_source` and `elementwise/scalar.rs::shader_source` emit `T::TYPE_TOKEN` without its required declarations, although their bounds admit F16/Bf16. No elementwise device reproduction has run.
-- Acceptance: reproduce missing declarations with real required-device operations; migrate generators to the shared dialect declaration owner; exact/derived-bound value and PTX oracles cover admitted types and reject unsupported native arithmetic.
-- Dependencies: [scalar declaration owner](#heph-cuda-dense-product-scalars); priority P1; risk: dispatch failure. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: strict affected Clippy, bounded required-device scalar matrix, generated instruction review, docs and independent review.
-- Last-update: 2026-09-08.
-
-<a id="heph-cuda-product-address-range"></a>
-
-## HEPH-CUDA-PRODUCT-ADDRESS-RANGE — Preserve representable product addresses [patch] — todo
-- Outcome: rank-2 CUDA matrix and Kronecker products address validated layouts without signed 32-bit truncation or multiplication overflow.
-- Scope: product metadata conversion and address generation, shared product tests and [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md); no unrelated kernels.
-- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/mod.rs::map_layout` admits u32 origins and i32 strides, while `matmul.rs` and `kron.rs` cast origins and coordinate products to signed int. No large-address device reproduction has run.
-- Acceptance: reproduce with bounded metadata/source oracles at origins >= 2^31 and products beyond i32; derive checked signed address bounds, preserve negative strides, verify generated arithmetic and ordinary real-device strided products. Never execute a known invalid address natively.
-- Dependencies: scalar compiler correction; priority P1; risk: device addressing correctness. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: focused metadata/codegen and required-device product tests, strict affected Clippy, docs and independent review; retain explicit physical-memory coverage limits.
-- Last-update: 2026-09-08.
-
-<a id="heph-cuda-product-empty-sum"></a>
-
-## HEPH-CUDA-PRODUCT-EMPTY-SUM — Write zero for empty matrix sums [patch] — todo
-- Outcome: matrix products with zero shared extent write the additive identity to every logical output cell while preserving storage outside the output view.
-- Scope: CUDA matrix and batched products, allocating forms and shared product tests; no unrelated zero-size operations.
-- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/matmul.rs::matmul_into` and `batched_matmul_into` return success when the shared extent is zero even with nonempty output; allocating forms therefore leave their output unwritten. No device reproduction has run.
-- Acceptance: first reproduce `[m,0] * [0,n]` and batched equivalents with cloned nonzero sentinel outputs; assert exact zeros, untouched strided backing cells and unchanged inputs. Empty output remains a no-op; allocating forms return initialized zeros.
-- Dependencies: scalar compiler correction; priority P1; risk: incorrect numeric output. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: all admitted scalar instantiations, dense/strided outputs and batches under required-device nextest budgets, strict affected Clippy, [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md) contract update and independent review.
-- Last-update: 2026-09-08.
-
 <a id="heph-lockfile-queue-latency"></a>
 
 ## HEPH-LOCKFILE-QUEUE-LATENCY: Bound hosted guard queue latency [patch] - todo
@@ -214,14 +190,6 @@
 - Last-update: 2026-09-07; driver: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285).
 
 <a id="heph-nvrtc-loader-errors"></a>
-
-## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
-
-- **Outcome/scope:** preserve library, directory-enumeration and missing-export errors in `infrastructure/compiler.rs` runtime compiler acquisition; no driver ABI or mathematical kernel change.
-- **Evidence:** `NvrtcDriver::get` discards required-symbol errors with `.ok()?`; `find_nvrtc_library` suppresses library and directory errors, reporting every failure as unavailable.
-- **Acceptance:** real absent-library, present-invalid-library and missing-export cases retain their identities and error categories; existing real-device kernel compilation and dispatch contracts pass.
-- **Dependencies/authority:** the native driver boundary item; authorized provider change, separate compiler acquisition contract.
-- **Verification:** locked warning-denied checks, required-device bounded Nextest, native-loader failure tests and independent review; no fake compiler or weakened runtime budgets.
 
 ## HEPH-STAGGERED-3D-ROCM — ROCm kernels for the staggered pair [minor] — todo <a id="heph-staggered-3d-rocm"></a>
 
@@ -799,35 +767,32 @@ status ledger that stood here is program history; recover any entry with
 ## HEPH-KERNEL-TAIL-ACCURACY — Correct cancellation, overflow and tail underflow in operator renderings [patch] — todo
 - Outcome: every operator rendering listed in [ADR 0061](docs/adr/0061-operator-value-semantics.md) Decision 6 stays within a tolerance derived from its chosen form's published relative bound against the operator's value function, on Vulkan, DX12 and Metal (WGSL), CUDA C and HIP C.
 - Scope: `crates/hephaestus-core/src/domain/ops.rs` and `parameterized.rs` renderings of Expm1, Log1p, Elu, Celu, Softplus, Mish, MishGrad, Erfc (WGSL), Gelu, GeluGrad, GeluTanh, GeluTanhGrad, Silu, SiluGrad, and the tests pinning their strings; no value-function or seam change.
-- Evidence: ADR 0061 reviews two to five measured the defects and the rejected candidate forms in f32 against f64 (recorded in Decision 6); no device run yet.
+- Evidence: ADR 0061 reviews two to five measured the defects and the rejected candidate forms in f32 against f64 (recorded in Decision 6); device runs green on Vulkan+CUDA since slice 1 (see Last-update). WGSL `log` bound confirmed against the spec table 2026-10-09: absolute error < 2^-21 for x in [0.5, 2.0], 3 ULP outside ([gpuweb/gpuweb#3104](https://github.com/gpuweb/gpuweb/issues/3104) quoting the table; the range binds x, not log(x)). Renderings live at `domain/ops/{unary,activation}.rs` + `domain/parameterized/shader.rs` now, with value oracles in `ops/*_value.rs` and a live f32 probe harness (`wgpu::application::canary`).
 - Acceptance: a per-operator sweep over the failing ranges on each available backend; tolerances cite the chosen form's source; the WGSL `log` accuracy bound is confirmed against the specification's accuracy table before any form relies on it; Metal is measured wherever a macOS host is available, since its default math mode may fold the cancellation-free forms.
 - Dependencies: none for the renderings; the host clauses exercising these operators wait on it (ADR 0061 Consequences). Priority P1; risk: silent wrong values at tails.
 - Verification: strict Clippy, device sweeps on the RTX 5080 (Vulkan, DX12, CUDA), and on Metal where a macOS host is available (otherwise the Metal gap is recorded as residual risk), doc sync, independent review.
-- Last-update: 2026-09-18.
+- Last-update: 2026-10-09 (slice 3 Erfc/Gelu/GeluGrad green on CUDA+Vulkan: NR erfcc Chebyshev core in expr_macros (3-source digit verification), erfc identity + inf guards on all dialects, graded main/mid/far bands from 2z² conditioning analysis (CUDA 10/10, Vulkan 10/10); CUDA erfcf 4 ULP row confirmed (current docs), HIP rows carried unconfirmed; abs-floor root window for grad; slices 1-2 still green; DX12 not compiled in here, HIP/Metal need hardware CI; slice 4 GeluTanh/Silu/Mish+grads green on CUDA+Vulkan 16/16: shared sigmoid/softplus/sech2 composers in activation.rs (J0-pattern shared C/HIP assemblies), uniform-sigmoid gelu-tanh with no tanh, measured crossovers (2.63/2.47/1.55) + saturation early-outs ported from value fns; graded main/mid/far from subnormal-intermediate and z-amplification envelopes; WGSL floors follow intermediate- (not result-) normality (-87.0/-9.95); sweep-filter fix preserves inf/NaN specials). 2026-10-10 verification increment: full suite re-run on current tree — Vulkan 16/16 + CUDA 16/16 with device-required (no skips), adapter identity closed by single-GPU inventory (RTX 5080, driver 610.60) + exact Vulkan selection, canary 4/4; all 16 sweep bounds carry source derivations (Table 17 / HIP math API / WGSL accuracy table / Lagrange + measured exceedances); strict clippy clean on conformance-all-targets, wgpu contracts, cuda sweeps; DX12 re-proven not compiled in (`dx12 support not compiled in`); residual: DX12 build, HIP/Metal hardware CI, host clauses, independent review. 2026-10-10 mirror re-verification: `cargo check --offline -p hephaestus-rocm -p hephaestus-metal` exit 0 + strict clippy `--all-targets` clean on the current tree; lock reverted; hardware runs on AMD/Apple adapters remain external.
+- Independent review 2026-10-10 (source-only, uncommitted tree): PASS with 3 questions + 1 suggestion. Verified: NR erfcc digits/structure/parens (all 10 consts match NR 6.2, t*exp form exact); musl log1pf Lg1-Lg4 digits + k=0 structure; C softplus two-sided form incl specials; WGSL softplus arm correspondence + select double-eval safety (discarded-arm NaN at inf does not poison); erfc/gelu two-sided selects incl +-0/NaN/+-inf; HIP gelu/gelugrad inf guards necessary (inf*0=NaN) and correct. Q1: SincOp(+-inf) renders NaN (sin(inf)/inf) vs mathematical 0 -- confirm value oracle defines NaN there. Q2: if WGSL f64 dispatches erfc to the NR core, the f64 sweep bound must carry the 1.2e-7 NR bound, not an f64-tight one -- confirm. Q3: HIP unary table is f32-suffixed (erfcf/expf) -- where does f64 HIP dispatch (gate or separate table)? Suggestion: one-line comment on the WGSL softplus select noting discarded-arm NaN-at-inf is safe, since select evaluates both arms.
+
+<a id="heph-device-dot-seam"></a>
+
+## HEPH-DEVICE-DOT-SEAM — Device-neutral inner-product seam [minor] [arch] — done 2026-10-10
+- Outcome: a `DotOps<D, T>` seam in `hephaestus-core` computing the inner product of two strided inputs into a caller-owned scalar cell, implemented on host + WGPU + CUDA with ROCm/Metal mirrors, fusing `coeus-ops` `dot` into one kernel with no intermediate product tensor (re-open trigger for `COEUS-DOT-CROSS-HOST-COPY`, whose `cross` half already binds `CrossProductOps`).
+- Scope: core domain trait + checked-shape validation + unit tests; host implementor; WGPU/CUDA single-launch kernels with packed metadata; ROCm/Metal mirrors; shared conformance clauses (hand-computed fixtures incl. empty inputs, invalid geometry, alias rejection) folded into `assert_backend_contract`; ADR.
+- Evidence: no `Dot`/`InnerProduct` seam trait exists in `hephaestus-core` (source search 2026-10-10). Framing correction: `coeus-ops` `dot` already decomposes into on-device mul+sum seams (only the one-element result crosses `copy_to_host`), so this seam is a fusion (one launch, no intermediate), not a residency fix. Leto's `dot` methods live on fixed-size vector types, not strided views — no oracle; conformance uses hand-computed fixtures. `torch.dot` semantics: any equal-numel shapes, empty yields zero, native-`T` accumulation, numel mismatch rejected (typed in the seam, where coeus asserts).
+- Acceptance: exact-equality integer fixtures and analytically-derived float accumulation order pinned across backends; scalar-output reporting designed in the ADR (the nonzero count-cell precedent, not a host round-trip); empty inputs vacuous; alias rejection before mutation.
+- Dependencies: none. Priority P2; risk: accumulation-order divergence across parallel schedules (pin the order like the scatter seam).
+- Verification: strict Clippy, fmt, core/host suites, Vulkan + CUDA device runs on RTX 5080, ROCm/Metal compile gates, doc sync, independent review.
+- Last-update: 2026-10-10 (done: increment-1 core `DotOps` 6/6, host green, WGPU single-thread fold + ShaderF64 twin — Vulkan 24/24, 207-case gate, device-required; residual CUDA green on RTX 5080 incl. f64 + special-float, ROCm/Metal mirrors compile-gated, aggregate fold-in to 46 params, ADR 0084; clippy/fmt clean, lock reverted; hardware runs on AMD/Apple adapters remain external).
 
 <a id="heph-ray-integral-direction-contract"></a>
 
-## HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT — Integrate rays in world length for any direction [patch] — todo
+## HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT — Integrate rays in world length for any direction [patch] — done 2026-10-09
 - Outcome: `RayIntegralOps` states whether the integral covers the whole line or the ray from its origin, and returns `∫ field dl` in world units for a direction of any non-zero length.
 - Scope: `RayIntegralOps` docs in `crates/hephaestus-core/src/domain/volume.rs`, the wgpu, CUDA, HIP and Metal kernels, the host implementor, and the conformance clause.
 - Evidence: every kernel weights samples by the chord length in the ray parameter `t` (`acc * actual`), which is world length only when `|direction| = 1`; a direction `2·u` halves the result. `t_enter` may be negative, so a ray starting inside the volume also integrates behind its origin. The clause uses unit directions and outside origins only, so neither behaviour is pinned. Source reading at `origin/master` 2026-09-18; no device run.
 - Acceptance: the contract names the integration domain; a clause case with a non-unit direction and one with an origin inside the volume, both against analytical oracles, pass on every backend and the host.
 - Dependencies: none. Priority P2; risk: silently scaled integrals for callers passing unnormalized directions.
 - Verification: strict Clippy, device clause runs (RTX 5080: Vulkan, DX12, CUDA), host nextest, doc sync.
-- Last-update: 2026-09-18.
+- Last-update: 2026-10-09 (delivered uncommitted: world-unit ray domain on CUDA/HIP/WGSL/host + leto-ops parity; clause + suites green on RTX 5080; ADR 0013 revised).
 
-<a id="heph-wgsl-f64-transcendentals-1"></a>
-
-## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
-- Priority: feature.
-- Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
-  precision-restricted builtins compute on Vulkan through WGSL routines built
-  only from width-unrestricted f64 operations (add, multiply, `fma`,
-  `floor`, `ldexp`), lifting the ADR 0072 refusals op by op.
-- Scope: `crates/hephaestus-wgpu/src/application/canary.rs` and the WGSL
-  composition each gated seam uses; `docs/adr/0072-*`.
-- Acceptance: each routine documents its range reduction and a derived
-  relative-error bound; the canary probe grades it Exact (`<= 1e-12`) on
-  lavapipe and NVIDIA Vulkan, with special values (NaN, +-Inf, overflow and
-  underflow edges) asserted against CPU truth.
-- Needs: none. Next step: derive the `exp` reduction and its bound.

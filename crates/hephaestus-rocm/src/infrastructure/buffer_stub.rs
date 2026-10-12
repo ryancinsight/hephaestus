@@ -34,8 +34,4 @@ impl<T> RocmBuffer<T> {
     pub(crate) fn aliases<U>(&self, _other: &RocmBuffer<U>) -> bool {
         false
     }
-
-    pub(crate) fn belongs_to(&self, _device: &crate::RocmDevice) -> bool {
-        true
-    }
 }

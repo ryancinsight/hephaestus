@@ -9,5 +9,5 @@ use hephaestus_metal::{MetalDevice, MetalStatefulUpdateOps};
 fn metal_satisfies_the_stateful_update_contract() {
     let device = MetalDevice::try_default()
         .expect("Metal stateful-update conformance requires a physical device");
-    assert_stateful_update_contract::<_, _, f32>(&device, &MetalStatefulUpdateOps);
+    assert_stateful_update_contract(&device, &MetalStatefulUpdateOps);
 }

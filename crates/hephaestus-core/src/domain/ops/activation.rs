@@ -17,7 +17,29 @@ macro_rules! wgsl_erf_expr {
 
 macro_rules! wgsl_erfc_expr {
     () => {
-        concat!("(1.0 - ", wgsl_erf_expr!(), ")")
+        concat!(
+            "select((2.0 - ",
+            wgsl_erfc_nr_pos!("(abs(x))"),
+            "), ",
+            wgsl_erfc_nr_pos!("(abs(x))"),
+            ", (x) >= 0.0)"
+        )
+    };
+}
+
+// Shared by `GeluOp` and `GeluGradOp`: `erfc(-(x)·inv√2)` through the same
+// two-sided select. The comparison tests `x` directly (`x <= 0` holds
+// exactly when the negated argument is non-negative, NaN included), and
+// `|x|·inv√2` spells the modulus without negating first.
+macro_rules! wgsl_gelu_erfc_expr {
+    () => {
+        concat!(
+            "select((2.0 - ",
+            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            "), ",
+            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            ", (x) <= 0.0)"
+        )
     };
 }
 
@@ -27,6 +49,11 @@ impl UnaryExpr<Wgsl> for ErfOp {
 impl UnaryExpr<CudaC> for ErfOp {
     const EXPR: &'static str = "erf(x)";
 }
+// Erfc renders the Numerical Recipes `erfcc` Chebyshev form directly (see
+// `expr_macros`): the retired `1 - erf` spelling cancelled to `0` past
+// `x = 2.75` while the value stays a normal float down to `x ≈ 9`. The C
+// dialects call native `erfc` (4 ULP `erfcf` per the current Programming
+// Guide table).
 impl UnaryExpr<Wgsl> for ErfcOp {
     const EXPR: &'static str = wgsl_erfc_expr!();
 }
@@ -84,27 +111,39 @@ impl UnaryExpr<CudaC> for LgammaOp {
     const EXPR: &'static str = "lgamma(x)";
 }
 
-macro_rules! wgsl_gelu_erf_expr {
-    () => {
-        "(sign((x * 0.7071067811865476)) * (1.0 - (((((1.061405429 * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) - 1.453152027) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) + 1.421413741) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) - 0.284496736) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476)))) + 0.254829592) * (1.0 / (1.0 + 0.3275911 * abs((x * 0.7071067811865476))))) * exp(-(x * 0.7071067811865476) * (x * 0.7071067811865476))))"
-    };
-}
-
+// Gelu renders `0.5·x·erfc(-x/√2)` (the `1 + erf(z) = erfc(-z)` identity,
+// ADR 0061 Decision 6): the textbook `1 + erf` rounds to `0` for
+// `x <= -5.5` while the value stays a normal float. The C dialects call
+// native `erfcf` (4 ULP per the current Programming Guide table); the
+// float-suffixed builtins and constant keep their existing spelling, so the
+// change is the identity alone. `x = -∞` guards to `-0` (the unguarded
+// form makes `-∞·0`); the comparison doubles as an f64 lane guard, where
+// magnitudes past `FLT_MAX` share the `-0` limit.
 impl UnaryExpr<Wgsl> for GeluOp {
-    const EXPR: &'static str = concat!("(0.5 * x * (1.0 + ", wgsl_gelu_erf_expr!(), "))");
+    const EXPR: &'static str = concat!(
+        "select((0.5 * (x) * ",
+        wgsl_gelu_erfc_expr!(),
+        "), -0.0, (x) < -3.402823466e+38)"
+    );
 }
 impl UnaryExpr<CudaC> for GeluOp {
-    const EXPR: &'static str = "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))";
+    const EXPR: &'static str =
+        "(x) < -3.402823466e+38f ? -0.0f : 0.5f * x * erfcf(-(x * 0.7071067811865476f))";
 }
+// The gradient renders `0.5·erfc(-x/√2)` plus the untouched Gaussian term
+// (its decay is the true asymptotic, not a cancellation artifact), taking
+// the input per ADR 0061 Decision 7. Both infinities guard explicitly: the
+// Gaussian term makes `±∞·0` unguarded, while the analytic limits are `1`
+// at `+∞` and `0` at `-∞`.
 impl UnaryExpr<Wgsl> for GeluGradOp {
     const EXPR: &'static str = concat!(
-        "(0.5 * (1.0 + ",
-        wgsl_gelu_erf_expr!(),
-        ") + x * exp(-0.5 * x * x) * 0.3989422804014327)"
+        "select(select((0.5 * ",
+        wgsl_gelu_erfc_expr!(),
+        " + (x) * exp(-0.5 * (x) * (x)) * 0.3989422804014327), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
 }
 impl UnaryExpr<CudaC> for GeluGradOp {
-    const EXPR: &'static str = "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f";
+    const EXPR: &'static str = "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : 0.5f * erfcf(-(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f)";
 }
 
 macro_rules! impl_activation_unary_exprs {
@@ -122,51 +161,9 @@ macro_rules! impl_activation_unary_exprs {
 
 impl_activation_unary_exprs!(
     (ReluOp, "max(x, 0.0)", "max(x, 0.0f)"),
-    (
-        SigmoidOp,
-        "1.0 / (1.0 + exp(-x))",
-        "1.0f / (1.0f + exp(-x))"
-    ),
     (SigmoidGradOp, "x * (1.0 - x)", "x * (1.0f - x)"),
     (TanhOp, "tanh(x)", "tanh(x)"),
     (TanhGradOp, "1.0 - x * x", "1.0f - x * x"),
-    (
-        GeluTanhOp,
-        "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))",
-        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
-    ),
-    (
-        GeluTanhGradOp,
-        "0.5 * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x))) + 0.5 * x * (1.0 - tanh(0.7978845608 * (x + 0.044715 * x * x * x)) * tanh(0.7978845608 * (x + 0.044715 * x * x * x))) * 0.7978845608 * (1.0 + 0.134145 * x * x)",
-        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
-    ),
-    (SiluOp, "x / (1.0 + exp(-x))", "x / (1.0f + exp(-x))"),
-    (
-        SiluGradOp,
-        "(1.0 / (1.0 + exp(-x))) * (1.0 + x * (1.0 - (1.0 / (1.0 + exp(-x)))))",
-        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
-    ),
-    (SoftplusOp, "log(1.0 + exp(x))", "log(1.0f + exp(x))"),
-    (
-        SoftplusGradOp,
-        "1.0 / (1.0 + exp(-x))",
-        "1.0f / (1.0f + exp(-x))"
-    ),
-    (
-        MishOp,
-        "x * tanh(log(1.0 + exp(x)))",
-        "x * tanhf(logf(1.0f + expf(x)))"
-    ),
-    (
-        MishGradOp,
-        "tanh(log(1.0 + exp(x))) + x * (1.0 - tanh(log(1.0 + exp(x))) * tanh(log(1.0 + exp(x)))) * (1.0 / (1.0 + exp(-x)))",
-        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
-    ),
-    (
-        EluOp,
-        "select(exp(x) - 1.0, x, x >= 0.0)",
-        "x >= 0.0f ? x : expf(x) - 1.0f"
-    ),
     (
         EluGradOp,
         "select(exp(x), 1.0, x >= 0.0)",
@@ -194,6 +191,517 @@ impl_activation_unary_exprs!(
         "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
     ),
 );
+
+// Sigmoid, softplus, and the softplus gradient stay out of the macro: each
+// renders the two-sided stabilized form, and the WGSL softplus splices the
+// shared `log1p` core, which the literal-only table rows cannot spell. The
+// one-sided spellings overflow `exp` past `|x| = ln(FLT_MAX)`: softplus
+// returned `inf` for finite values above `x = 88.73` and `0` for normal
+// floats below `x = -16.6` (`1 + exp(x)` rounding to `1`), while the
+// sigmoid quotient collapsed to `0` below `x = -88.73`. The C dialects
+// branch on the sign and call native `log1p`/`exp` (unsuffixed so overload
+// resolution picks the lane width, as `SinOp` does); the maxima shift is
+// exact by Sterbenz. The WGSL sigmoid branches the same way over `select`
+// (expression arms, so `SUPPORTS_F64` keeps its default). The WGSL softplus
+// evaluates `log1p(exp(-|x|))` through two bands of the shared core — the
+// core band plus the exact upper shift — since `exp` of a non-positive
+// argument never leaves `(0, 1]` and the outer `log` bands of
+// `wgsl_log1p_expr` are unreachable there; the band edge and shift below
+// repeat that macro's definitions. The form is `log`-free, so the canary
+// `log` gate no longer refuses its `f64` dispatch (the gate test now pins
+// `LnOp` instead); every special input takes an exact arm (`±0` through
+// the negative half, infinities through the shift, NaN through `x`).
+macro_rules! wgsl_softplus_expr {
+    () => {
+        concat!(
+            "select((x) + ",
+            "select(",
+            wgsl_l1p_core!("(exp(-(x)))"),
+            ", (0.6931471805599453 + ",
+            wgsl_l1p_core!("(((exp(-(x))) - 1.0) * 0.5)"),
+            "), (exp(-(x))) > 0.4142135623730951)",
+            ", ",
+            "select(",
+            wgsl_l1p_core!("(exp((x)))"),
+            ", (0.6931471805599453 + ",
+            wgsl_l1p_core!("(((exp((x))) - 1.0) * 0.5)"),
+            "), (exp((x))) > 0.4142135623730951)",
+            ", (x) <= 0.0)"
+        )
+    };
+}
+
+impl UnaryExpr<Wgsl> for SigmoidOp {
+    const EXPR: &'static str =
+        "select((1.0 / (1.0 + exp(-x))), (exp(x) / (1.0 + exp(x))), x <= 0.0)";
+}
+impl UnaryExpr<CudaC> for SigmoidOp {
+    const EXPR: &'static str = "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))";
+}
+impl UnaryExpr<Wgsl> for SoftplusGradOp {
+    const EXPR: &'static str =
+        "select((1.0 / (1.0 + exp(-x))), (exp(x) / (1.0 + exp(x))), x <= 0.0)";
+}
+impl UnaryExpr<CudaC> for SoftplusGradOp {
+    const EXPR: &'static str = "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))";
+}
+impl UnaryExpr<Wgsl> for SoftplusOp {
+    const EXPR: &'static str = wgsl_softplus_expr!();
+}
+impl UnaryExpr<CudaC> for SoftplusOp {
+    const EXPR: &'static str = "x <= 0.0f ? log1p(exp(x)) : x + log1p(exp(-x))";
+}
+
+// Elu stays out of the macro: its negative branch renders the `Expm1Op`
+// form (Taylor core under `|x| <= 0.3`, direct `exp(x) - 1` outside),
+// while the C dialect calls native `expm1` (1 ULP per the CUDA Table 17 /
+// HIP math API rows; unsuffixed so overload resolution picks the lane
+// width). The positive branch and the kink select are exact.
+impl UnaryExpr<Wgsl> for EluOp {
+    const EXPR: &'static str = "select(select((exp(x) - 1.0), (x) * (1.0 + (x) * (0.5 + (x) * (0.16666666666666666 + (x) * (0.041666666666666664 + (x) * (0.008333333333333333 + (x) * 0.001388888888888889))))), abs(x) <= 0.3), x, x >= 0.0)";
+}
+impl UnaryExpr<CudaC> for EluOp {
+    const EXPR: &'static str = "x >= 0.0f ? x : expm1(x)";
+}
+
+// The self-gated family (SiLU, Mish, tanh-GELU, forward and gradient)
+// composes three shared kernels, mirroring `activation_value::stable`:
+// the branch-selected sigmoid, the two-sided softplus, and the gelu-tanh
+// inner argument doubled. Each composer parents its output, so assemblies
+// splice it under `*`, `/`, comparisons, and ternary conditions alike.
+// Macro arguments are fully parenthesized literals, as the Bessel macros
+// require. The C assemblies serve both C dialects (as `c_j0_expr` does):
+// CUDA verifies them on-device, and the pins below record the shared
+// spelling until HIP hardware says otherwise.
+macro_rules! wgsl_stable_sigmoid {
+    ($w:literal) => {
+        concat!(
+            "(select((1.0 / (1.0 + exp(-(",
+            $w,
+            ")))), ((exp((",
+            $w,
+            "))) / (1.0 + (exp((",
+            $w,
+            "))))), (",
+            $w,
+            ") <= 0.0))"
+        )
+    };
+}
+
+macro_rules! c_stable_sigmoid {
+    ($w:literal) => {
+        concat!(
+            "((",
+            $w,
+            ") <= 0.0f ? exp((",
+            $w,
+            ")) / (1.0f + exp((",
+            $w,
+            "))) : 1.0f / (1.0f + exp(-(",
+            $w,
+            "))))"
+        )
+    };
+}
+
+// The `SoftplusOp` C spelling, parenthesized so the mish assemblies splice
+// it under `tanh`, `*`, and the `sp` crossover comparison.
+macro_rules! c_softplus {
+    () => {
+        "((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))"
+    };
+}
+
+// `w = 2z`, `z = c0·(x + c1·x³)`, spelled twice from one source: both halves
+// evaluate identically, and doubling is exact short of overflow, matching
+// the value function (`z + z`) bit for bit including the overflow to `±∞`.
+macro_rules! wgsl_gelu_tanh_w {
+    () => {
+        "((0.7978845608 * (x + 0.044715 * x * x * x)) + (0.7978845608 * (x + 0.044715 * x * x * x)))"
+    };
+}
+
+macro_rules! c_gelu_tanh_w {
+    () => {
+        "((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))"
+    };
+}
+
+// Fixed-`w` twins of the sigmoid composers: `macro_rules!` `:literal`
+// cannot carry a macro expansion, so `w` splices through `concat!`.
+macro_rules! wgsl_gelu_tanh_s {
+    () => {
+        concat!(
+            "(select((1.0 / (1.0 + exp(-(",
+            wgsl_gelu_tanh_w!(),
+            ")))), ((exp((",
+            wgsl_gelu_tanh_w!(),
+            "))) / (1.0 + (exp((",
+            wgsl_gelu_tanh_w!(),
+            "))))), (",
+            wgsl_gelu_tanh_w!(),
+            ") <= 0.0))"
+        )
+    };
+}
+
+macro_rules! c_gelu_tanh_s {
+    () => {
+        concat!(
+            "((",
+            c_gelu_tanh_w!(),
+            ") <= 0.0f ? exp((",
+            c_gelu_tanh_w!(),
+            ")) / (1.0f + exp((",
+            c_gelu_tanh_w!(),
+            "))) : 1.0f / (1.0f + exp(-(",
+            c_gelu_tanh_w!(),
+            "))))"
+        )
+    };
+}
+
+// The independent saturation `s·σ(−w)`, pre-grouped like the value
+// function. `σ(−w)` spells its negative half directly: this composer only
+// splices past the `w > 2.47` crossover, where `−w < 0` always, so the
+// positive half is unreachable and the direct half is exactly what the
+// branch-selected sigmoid computes there (NaN included: both spellings
+// propagate it through a failed comparison).
+macro_rules! wgsl_gelu_tanh_sat_indep {
+    () => {
+        concat!(
+            "(",
+            wgsl_gelu_tanh_s!(),
+            " * (exp(-(",
+            wgsl_gelu_tanh_w!(),
+            ")) / (1.0 + exp(-(",
+            wgsl_gelu_tanh_w!(),
+            ")))))"
+        )
+    };
+}
+
+macro_rules! c_gelu_tanh_sat_indep {
+    () => {
+        concat!(
+            "(",
+            c_gelu_tanh_s!(),
+            " * (exp(-(",
+            c_gelu_tanh_w!(),
+            ")) / (1.0f + exp(-(",
+            c_gelu_tanh_w!(),
+            ")))))"
+        )
+    };
+}
+
+// `sech²(sp) = 4u/(1+u)²`, `u = exp(−2·sp)`, for the mish-grad crossover.
+macro_rules! wgsl_mish_sech2 {
+    () => {
+        concat!(
+            "((4.0 * exp(-2.0 * ",
+            wgsl_softplus_expr!(),
+            ")) / ((1.0 + exp(-2.0 * ",
+            wgsl_softplus_expr!(),
+            ")) * (1.0 + exp(-2.0 * ",
+            wgsl_softplus_expr!(),
+            "))))"
+        )
+    };
+}
+
+macro_rules! c_mish_sech2 {
+    () => {
+        concat!(
+            "((4.0f * exp(-2.0f * ",
+            c_softplus!(),
+            ")) / ((1.0f + exp(-2.0f * ",
+            c_softplus!(),
+            ")) * (1.0f + exp(-2.0f * ",
+            c_softplus!(),
+            "))))"
+        )
+    };
+}
+
+macro_rules! wgsl_silu_expr {
+    () => {
+        concat!(
+            "select((x) * ",
+            wgsl_stable_sigmoid!("(x)"),
+            ", -0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_silu_expr {
+    () => {
+        concat!(
+            "(x) < -3.402823466e+38f ? -0.0f : (x) * ",
+            c_stable_sigmoid!("(x)")
+        )
+    };
+}
+
+macro_rules! wgsl_silu_grad_expr {
+    () => {
+        concat!(
+            "select(select(",
+            wgsl_stable_sigmoid!("(x)"),
+            " * (1.0 + (x) * select(",
+            wgsl_stable_sigmoid!("(-(x))"),
+            ", (1.0 - ",
+            wgsl_stable_sigmoid!("(x)"),
+            "), (x) <= 2.63)), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_silu_grad_expr {
+    () => {
+        concat!(
+            "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : ",
+            c_stable_sigmoid!("(x)"),
+            " * (1.0f + (x) * ((x) <= 2.63f ? 1.0f - ",
+            c_stable_sigmoid!("(x)"),
+            " : ",
+            c_stable_sigmoid!("(-(x))"),
+            ")))"
+        )
+    };
+}
+
+macro_rules! wgsl_mish_expr {
+    () => {
+        concat!(
+            "select((x) * tanh(",
+            wgsl_softplus_expr!(),
+            "), -0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_mish_expr {
+    () => {
+        concat!(
+            "(x) < -3.402823466e+38f ? -0.0f : (x) * tanh(",
+            c_softplus!(),
+            ")"
+        )
+    };
+}
+
+macro_rules! wgsl_mish_grad_expr {
+    () => {
+        concat!(
+            "select(select(tanh(",
+            wgsl_softplus_expr!(),
+            ") + (x) * select(",
+            wgsl_mish_sech2!(),
+            ", (1.0 - tanh(",
+            wgsl_softplus_expr!(),
+            ") * tanh(",
+            wgsl_softplus_expr!(),
+            ")), (",
+            wgsl_softplus_expr!(),
+            ") <= 1.55) * ",
+            wgsl_stable_sigmoid!("(x)"),
+            ", 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_mish_grad_expr {
+    () => {
+        concat!(
+            "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : tanh(",
+            c_softplus!(),
+            ") + (x) * ((",
+            c_softplus!(),
+            ") <= 1.55f ? 1.0f - tanh(",
+            c_softplus!(),
+            ") * tanh(",
+            c_softplus!(),
+            ") : ",
+            c_mish_sech2!(),
+            ") * ",
+            c_stable_sigmoid!("(x)"),
+            ")"
+        )
+    };
+}
+
+macro_rules! wgsl_gelu_tanh_expr {
+    () => {
+        concat!(
+            "select((x) * ",
+            wgsl_gelu_tanh_s!(),
+            ", -0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_gelu_tanh_expr {
+    () => {
+        concat!("(x) < -3.402823466e+38f ? -0.0f : (x) * ", c_gelu_tanh_s!())
+    };
+}
+
+macro_rules! wgsl_gelu_tanh_grad_expr {
+    () => {
+        concat!(
+            "select(select(select(select(",
+            wgsl_gelu_tanh_s!(),
+            " + 2.0 * (x) * ",
+            wgsl_gelu_tanh_sat_indep!(),
+            " * 0.7978845608 * (1.0 + 3.0 * 0.044715 * (x) * (x)), ",
+            wgsl_gelu_tanh_s!(),
+            ", ",
+            wgsl_gelu_tanh_sat_indep!(),
+            " == 0.0), select(",
+            wgsl_gelu_tanh_s!(),
+            " + 2.0 * (x) * ",
+            wgsl_gelu_tanh_s!(),
+            " * (1.0 - ",
+            wgsl_gelu_tanh_s!(),
+            ") * 0.7978845608 * (1.0 + 3.0 * 0.044715 * (x) * (x)), ",
+            wgsl_gelu_tanh_s!(),
+            ", ",
+            wgsl_gelu_tanh_s!(),
+            " * (1.0 - ",
+            wgsl_gelu_tanh_s!(),
+            ") == 0.0), (",
+            wgsl_gelu_tanh_w!(),
+            ") <= 2.47), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
+        )
+    };
+}
+
+macro_rules! c_gelu_tanh_grad_expr {
+    () => {
+        concat!(
+            "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : ((",
+            c_gelu_tanh_w!(),
+            ") <= 2.47f ? (",
+            c_gelu_tanh_s!(),
+            " * (1.0f - ",
+            c_gelu_tanh_s!(),
+            ") == 0.0f ? ",
+            c_gelu_tanh_s!(),
+            " : ",
+            c_gelu_tanh_s!(),
+            " + 2.0f * (x) * ",
+            c_gelu_tanh_s!(),
+            " * (1.0f - ",
+            c_gelu_tanh_s!(),
+            ") * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x))) : (",
+            c_gelu_tanh_sat_indep!(),
+            " == 0.0f ? ",
+            c_gelu_tanh_s!(),
+            " : ",
+            c_gelu_tanh_s!(),
+            " + 2.0f * (x) * ",
+            c_gelu_tanh_sat_indep!(),
+            " * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x)))))"
+        )
+    };
+}
+
+// `x·sigmoid(x)` through the branch-selected sigmoid (ADR 0061 Decision 6):
+// the retired `x / (1 + exp(-x))` overflowed `exp` past `x = -88.73` and made
+// `-∞/∞` at `x = -∞`. The guard catches only `-∞` (finite inputs stay past
+// `-FLT_MAX`); `+∞` needs none (`∞·1`), and NaN propagates through the
+// failed comparisons.
+impl UnaryExpr<Wgsl> for SiluOp {
+    const EXPR: &'static str = wgsl_silu_expr!();
+}
+impl UnaryExpr<CudaC> for SiluOp {
+    const EXPR: &'static str = c_silu_expr!();
+}
+impl UnaryExpr<HipC> for SiluOp {
+    const EXPR: &'static str = c_silu_expr!();
+}
+
+// `s·(1 + x·(1−s))`, taking the input per ADR 0061 Decision 7. `1 − s` goes
+// direct below `x = 2.63` and independent above (`SILU_GRAD_CROSSOVER`);
+// the `f` suffix matches `T::from_f64` in the f32 lane, and in the f64 lane
+// it converts (like every literal here), moving the switch by half an f32
+// ULP inside the measured alternation band, where both forms hold ~2 ULP.
+// Both infinities guard explicitly (`±∞·0` unguarded); NaN propagates.
+impl UnaryExpr<Wgsl> for SiluGradOp {
+    const EXPR: &'static str = wgsl_silu_grad_expr!();
+}
+impl UnaryExpr<CudaC> for SiluGradOp {
+    const EXPR: &'static str = c_silu_grad_expr!();
+}
+impl UnaryExpr<HipC> for SiluGradOp {
+    const EXPR: &'static str = c_silu_grad_expr!();
+}
+
+// `x·tanh(softplus(x))`, composing the two-sided softplus (ADR 0061
+// Decision 6): the retired `log(1 + exp(x))` overflowed `exp` past
+// `x = 88.73` and rounded `1 + exp(x)` to `1` below `x = -16.6`, zeroing the
+// whole negative tail. Same `-∞` guard as SiLU; `tanh` keeps the canary's
+// f64 refusal on tanh-crash adapters, as `TanhOp` itself does.
+impl UnaryExpr<Wgsl> for MishOp {
+    const EXPR: &'static str = wgsl_mish_expr!();
+}
+impl UnaryExpr<CudaC> for MishOp {
+    const EXPR: &'static str = c_mish_expr!();
+}
+impl UnaryExpr<HipC> for MishOp {
+    const EXPR: &'static str = c_mish_expr!();
+}
+
+// `t + x·(1−t²)·σ(x)` with `t = tanh(sp)`, taking the input per ADR 0061
+// Decision 7. `1 − t²` goes direct below `sp = 1.55` and `sech²` above
+// (`MISH_GRAD_CROSSOVER`, compared on `sp`, not `t`); both infinities guard
+// explicitly. The softplus splices seven times (value, crossover, and the
+// three `sech²` exponentials); WGSL evaluates both `select` arms, so the
+// dead arm's overflow is discarded, never trapped.
+impl UnaryExpr<Wgsl> for MishGradOp {
+    const EXPR: &'static str = wgsl_mish_grad_expr!();
+}
+impl UnaryExpr<CudaC> for MishGradOp {
+    const EXPR: &'static str = c_mish_grad_expr!();
+}
+impl UnaryExpr<HipC> for MishGradOp {
+    const EXPR: &'static str = c_mish_grad_expr!();
+}
+
+// `x·σ(2z)` via `0.5·(1 + tanh(z)) = σ(2z)` (ADR 0061 Decision 6): the
+// retired `1 + tanh(z)` cancelled past `z = -4.4`, and the new form calls no
+// `tanh` at all, so f64 dispatches where the retired spelling refused on
+// tanh-crash adapters. Same `-∞` guard as SiLU.
+impl UnaryExpr<Wgsl> for GeluTanhOp {
+    const EXPR: &'static str = wgsl_gelu_tanh_expr!();
+}
+impl UnaryExpr<CudaC> for GeluTanhOp {
+    const EXPR: &'static str = c_gelu_tanh_expr!();
+}
+impl UnaryExpr<HipC> for GeluTanhOp {
+    const EXPR: &'static str = c_gelu_tanh_expr!();
+}
+
+// `s + 2x·s(1−s)·c0·(1 + 3c1·x²)` in sigmoid form, taking the input per ADR
+// 0061 Decision 7. `1 − s` goes direct below `w = 2.47` and independent
+// above (`GELU_TANH_GRAD_CROSSOVER`); each branch keeps the value function's
+// measured multiplication order (direct multiplies `s` and `1 − s`
+// separately, independent pre-groups the saturation). Either saturation at
+// exactly zero returns `s`: past `|x| ≈ 5e19` the `x²` factor overflows, and
+// forming the product would make `0·∞` (the value function's early-out,
+// mirrored here; the C ternary short-circuits, the WGSL `select` discards
+// the dead arm). Both infinities guard explicitly.
+impl UnaryExpr<Wgsl> for GeluTanhGradOp {
+    const EXPR: &'static str = wgsl_gelu_tanh_grad_expr!();
+}
+impl UnaryExpr<CudaC> for GeluTanhGradOp {
+    const EXPR: &'static str = c_gelu_tanh_grad_expr!();
+}
+impl UnaryExpr<HipC> for GeluTanhGradOp {
+    const EXPR: &'static str = c_gelu_tanh_grad_expr!();
+}
 
 // The two gradient masks stay out of the macro: their WGSL spellings are
 // `select` with literal-only arms, which concretize to `f32` and reject

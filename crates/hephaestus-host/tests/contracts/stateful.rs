@@ -6,5 +6,5 @@ use hephaestus_host::{HostDevice, HostStatefulUpdateOps};
 
 #[test]
 fn host_satisfies_the_stateful_update_contract() {
-    assert_stateful_update_contract::<_, _, f32>(&HostDevice::new(), &HostStatefulUpdateOps);
+    assert_stateful_update_contract(&HostDevice::new(), &HostStatefulUpdateOps);
 }

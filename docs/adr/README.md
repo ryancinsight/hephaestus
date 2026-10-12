@@ -78,5 +78,17 @@
 | [0067](0067-device-neutral-interpolation-seam.md) | Device-neutral rank-2 axis-resampling seam | Accepted |
 | [0068](0068-device-neutral-adaptive-pooling-seam.md) | Device-neutral rank-2 adaptive pooling seam | Accepted |
 | [0070](0070-device-neutral-triangular-seam.md) | Device-neutral rank-2 triangular masking seam | Accepted |
-| [0071](0071-precision-generic-stateful-update-seam.md) | Precision-generic stateful-update seam | Accepted |
-| [0072](0072-wgsl-f64-builtin-verdict-by-backend.md) | WGSL f64 builtin verdicts keyed by backend, not adapter | Accepted |
+| [0071](0071-device-neutral-cat-seam.md) | Device-neutral n-D concatenation seam | Accepted |
+| [0072](0072-device-neutral-split-seam.md) | Device-neutral n-D splitting seam | Accepted |
+| [0073](0073-device-neutral-stack-seam.md) | Device-neutral n-D stacking seam | Accepted |
+| [0074](0074-device-neutral-gather-seam.md) | Device-neutral n-D gather seam | Accepted |
+| [0075](0075-device-neutral-scatter-seam.md) | Device-neutral n-D scatter-add seam | Accepted |
+| [0076](0076-device-neutral-index-select-seam.md) | Device-neutral n-D index-selection seam | Accepted |
+| [0077](0077-device-neutral-index-put-seam.md) | Device-neutral n-D scatter-assignment seam | Accepted |
+| [0078](0078-device-neutral-masked-fill-seam.md) | Device-neutral n-D masked-fill seam | Accepted |
+| [0079](0079-device-neutral-roll-seam.md) | Device-neutral n-D circular-shift seam | Accepted |
+| [0080](0080-device-neutral-tile-seam.md) | Device-neutral n-D tiling seam | Accepted |
+| [0081](0081-device-neutral-where-seam.md) | Device-neutral n-D conditional-selection seam | Accepted |
+| [0082](0082-device-neutral-sort-seam.md) | Device-neutral n-D stable-sort seam | Accepted |
+| [0083](0083-device-neutral-nonzero-seam.md) | Device-neutral n-D nonzero-coordinate seam | Accepted |
+| [0084](0084-device-neutral-dot-seam.md) | Device-neutral inner-product seam | Accepted |

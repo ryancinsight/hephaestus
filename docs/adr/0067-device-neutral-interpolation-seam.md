@@ -66,3 +66,11 @@ pair) today for 1D resize, closing the `backlog.md#heph-interpolation-
 provider-1` item's linear/nearest scope; bilinear composes two calls at the
 call site (documented above), so no separate binding is needed for it.
 CUDA/ROCm/Metal implementations and the aggregate fold are follow-up items.
+
+2026-10-10: CUDA/ROCm/Metal now implement `InterpolationOps` following
+the WGSL kernel's align-corners mapping and nearest-mode tie rule (CUDA
+verified on RTX 5080 hardware; ROCm/Metal compile-gated to their
+platforms), and the seam is folded into
+`assert_backend_contract`/`BackendUnderTest`
+(HEPH-BACKEND-CONTRACT-FOLD-1): the interpolation clause runs in the host
+aggregate instantiation.

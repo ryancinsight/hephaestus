@@ -31,6 +31,8 @@
 //! order cannot change the result and no tolerance is applicable. A clause that
 //! needed an epsilon would state its derivation at the assertion site.
 
+/// Per-operator accuracy sweeps over the failing ranges (ADR 0061 Decision 6).
+pub mod accuracy;
 /// Contract clauses for the
 /// [`AdaptivePoolingOps`](hephaestus_core::AdaptivePoolingOps) seam.
 pub mod adaptive_pooling;
@@ -51,6 +53,8 @@ pub mod blocked_lu;
 /// Contract clauses for the backend-abstracted blocked QR loop
 /// ([`BlockedQrBackend`](hephaestus_core::BlockedQrBackend)).
 pub mod blocked_qr;
+/// Contract clauses for the device-neutral concatenation seam.
+pub mod cat;
 /// Contract clauses for the [`ConvolutionOps`](hephaestus_core::ConvolutionOps) seam.
 pub mod convolution;
 /// Contract clauses for the [`CrossEntropyOps`](hephaestus_core::CrossEntropyOps) seam.
@@ -73,6 +77,8 @@ pub mod dense_matrix_function;
 /// Dense matmul/batched-matmul/Kronecker product clauses.
 pub mod dense_product;
 pub mod dense_vector;
+/// Contract clauses for the device-neutral inner-product seam.
+pub mod dot;
 /// Untyped unary/binary elementwise arithmetic clauses.
 pub mod elementwise;
 /// Contract clauses for the
@@ -84,13 +90,19 @@ pub mod fixed_fd;
 /// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
-/// Contract clauses for the
-/// [`FusedElementwiseOps`](hephaestus_core::FusedElementwiseOps) and
-/// [`FusedReductionOps`](hephaestus_core::FusedReductionOps) seams.
-pub mod fusion;
+/// Contract clauses for the device-neutral gather seam.
+pub mod gather;
+/// Contract clauses for the device-neutral scatter-assignment seam.
+pub mod index_put;
+/// Contract clauses for the device-neutral index-selection seam.
+pub mod index_select;
 /// Contract clauses for the
 /// [`InterpolationOps`](hephaestus_core::InterpolationOps) seam.
 pub mod interpolation;
+/// Contract clauses for the device-neutral masked-fill seam.
+pub mod masked_fill;
+/// Contract clauses for the device-neutral nonzero-coordinate seam.
+pub mod nonzero;
 /// Contract clauses for the device-neutral padding seam.
 pub mod pad;
 /// Contract clauses for runtime-parameter unary dispatch.
@@ -100,16 +112,30 @@ pub mod random_init;
 /// Contract clauses for the
 /// [`RayIntegralOps`](hephaestus_core::RayIntegralOps) seam.
 pub mod ray_integral;
+/// Contract clauses for the owned dense-reduction seam.
+pub mod retained_reduction;
+/// Contract clauses for the device-neutral circular-shift seam.
+pub mod roll;
 /// Contract clauses for the [`ScanOps`](hephaestus_core::ScanOps) seam.
 pub mod scan;
+/// Contract clauses for the device-neutral scatter-add seam.
+pub mod scatter;
+/// Contract clauses for the device-neutral stable-sort seam.
+pub mod sort;
 /// Contract clauses for the
 /// [`SparseOperatorOps`](hephaestus_core::SparseOperatorOps) seam.
 pub mod sparse;
+/// Contract clauses for the device-neutral splitting seam.
+pub mod split;
+/// Contract clauses for the device-neutral stacking seam.
+pub mod stack;
 /// 2D stencil clauses with an analytical quadratic oracle.
 pub mod staggered;
 /// Contract clauses for provider-owned stateful parameter updates.
 pub mod stateful_update;
 pub mod stencil;
+/// Contract clauses for the device-neutral tiling seam.
+pub mod tile;
 /// Contract clauses for the [`TopKOps`](hephaestus_core::TopKOps) seam.
 pub mod topk;
 /// Device transfer and buffer-initialization clauses.
@@ -120,7 +146,15 @@ pub mod triangular;
 /// Contract clauses for the typed paths of the
 /// [`ElementwiseOps`](hephaestus_core::ElementwiseOps) seam.
 pub mod typed_elementwise;
+/// Contract clauses for the device-neutral conditional-selection seam.
+pub mod where_cond;
 
+pub use accuracy::{
+    SweepDialect, assert_celu_sweep, assert_elu_sweep, assert_erfc_sweep, assert_expm1_sweep,
+    assert_gelu_grad_sweep, assert_gelu_sweep, assert_gelu_tanh_grad_sweep, assert_gelu_tanh_sweep,
+    assert_log1p_sweep, assert_mish_grad_sweep, assert_mish_sweep, assert_sigmoid_sweep,
+    assert_silu_grad_sweep, assert_silu_sweep, assert_softplus_grad_sweep, assert_softplus_sweep,
+};
 pub use adaptive_pooling::assert_adaptive_pooling_contract;
 pub use arg_reduce::{assert_arg_reduce_contract, assert_arg_reduce_transposed_view_contract};
 pub use assert_backend::{BackendUnderTest, assert_backend_contract};
@@ -129,10 +163,11 @@ pub use axis_reduction::assert_axis_reduction_contract;
 pub use blocked_cholesky::assert_blocked_cholesky_contract;
 pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
-pub use convolution::{ContractScalar, assert_convolution_contract};
+pub use cat::assert_cat_contract;
+pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use cross_entropy::{
-    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_for,
-    assert_cross_entropy_contract, assert_cross_entropy_contract_for,
+    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_f64,
+    assert_cross_entropy_contract, assert_cross_entropy_contract_f64,
 };
 pub use cross_product::assert_cross_product_contract;
 pub use ctc::assert_ctc_contract;
@@ -141,26 +176,43 @@ pub use dense_composition::assert_dense_composition_contract;
 pub use dense_matrix_function::assert_dense_matrix_function_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
+pub use dot::{assert_dot_contract, assert_dot_special_float_values};
 pub use elementwise::{
     assert_bessel_contract, assert_elementwise_contract, assert_k0_contract, assert_sinc_contract,
 };
 pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
+    assert_embedding_scatter_add_contract, assert_embedding_scatter_add_rejects_out_of_range_index,
 };
 pub use fixed_fd::assert_fixed_fd_3d_contract;
 pub use full_reduction::assert_full_reduction_contract;
-pub use fusion::assert_fusion_contract;
+pub use gather::assert_gather_contract;
+pub use index_put::assert_index_put_contract;
+pub use index_select::assert_index_select_contract;
 pub use interpolation::assert_interpolation_contract;
+pub use masked_fill::{assert_masked_fill_contract, assert_masked_fill_special_mask_values};
+pub use nonzero::{
+    assert_nonzero_contract, assert_nonzero_rejects_aliased_output,
+    assert_nonzero_special_float_values,
+};
 pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
+pub use retained_reduction::assert_retained_reduction_contract;
+pub use roll::assert_roll_contract;
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
+pub use scatter::{assert_scatter_contract, assert_scatter_order_contract};
+pub use sort::{assert_sort_contract, assert_sort_special_float_values};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
+pub use split::assert_split_contract;
+pub use stack::assert_stack_contract;
 pub use staggered::assert_staggered_3d_contract;
-pub use stateful_update::{StatefulUpdateWidth, assert_stateful_update_contract};
+pub use stateful_update::{assert_stateful_update_contract, assert_stateful_update_contract_f64};
 pub use stencil::assert_stencil_contract;
-pub use topk::assert_topk_contract;
+pub use tile::assert_tile_contract;
+pub use topk::{assert_topk_contract, assert_topk_strided_output_contract};
 pub use transfer::assert_transfer_contract;
 pub use triangular::assert_triangular_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;
+pub use where_cond::{assert_where_contract, assert_where_special_cond_values};

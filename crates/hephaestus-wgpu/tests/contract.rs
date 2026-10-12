@@ -37,6 +37,10 @@ use hephaestus_wgpu::{
     unary_elementwise_into,
 };
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
+struct AlternateIdentity(i32);
+
 impl hephaestus_core::DialectScalar<hephaestus_core::Wgsl> for AlternateIdentity {
     const TYPE_TOKEN: &'static str = "i32";
 }
@@ -50,61 +54,4694 @@ impl hephaestus_wgpu::MatrixIdentityScalar for AlternateIdentity {
     const ONE: Self = Self(9);
 }
 
-#[path = "contract/axis.rs"]
-mod axis;
-#[path = "contract/axis_tiling.rs"]
-mod axis_tiling;
-#[path = "contract/buffer.rs"]
-mod buffer;
-#[path = "contract/cholesky.rs"]
-mod cholesky;
-#[path = "contract/device.rs"]
-mod device;
-#[path = "contract/eigenvalues.rs"]
-mod eigenvalues;
-#[path = "contract/elementwise.rs"]
-mod elementwise;
-#[path = "contract/fixtures.rs"]
-mod fixtures;
-#[path = "contract/linalg_norms.rs"]
-mod linalg_norms;
-#[path = "contract/linalg_products.rs"]
-mod linalg_products;
-#[path = "contract/lu.rs"]
-mod lu;
-#[path = "contract/qr.rs"]
-mod qr;
-#[path = "contract/reduction.rs"]
-mod reduction;
-#[path = "contract/reduction_prepared.rs"]
-mod reduction_prepared;
-#[path = "contract/scan.rs"]
-mod scan;
-#[path = "contract/sparse.rs"]
-mod sparse;
-#[path = "contract/svd.rs"]
-mod svd;
-pub(crate) use fixtures::*;
+fn device_or_skip() -> Option<WgpuDevice> {
+    super::device_or_skip()
+}
+fn assert_elementwise_alias_rejected(result: hephaestus_wgpu::Result<()>) {
+    match result {
+        Err(HephaestusError::DispatchFailed { message }) => {
+            assert!(
+                message.starts_with("output buffer must not alias "),
+                "unexpected alias rejection message: {message}"
+            );
+        }
+        other => panic!("expected elementwise alias rejection, got {other:?}"),
+    }
+}
+fn assert_length_mismatch<T>(
+    result: hephaestus_wgpu::Result<T>,
+    host_len: usize,
+    device_len: usize,
+) {
+    match result {
+        Err(HephaestusError::LengthMismatch {
+            host_len: got_host,
+            device_len: got_device,
+        }) => {
+            assert_eq!(got_host, host_len);
+            assert_eq!(got_device, device_len);
+        }
+        Err(error) => panic!("expected length mismatch {host_len}->{device_len}, got {error:?}"),
+        Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
+    }
+}
 
-pub(crate) use axis::*;
-pub(crate) use axis_tiling::*;
-pub(crate) use buffer::*;
-pub(crate) use cholesky::*;
-pub(crate) use device::*;
-pub(crate) use eigenvalues::*;
-pub(crate) use elementwise::*;
-pub(crate) use linalg_norms::*;
-pub(crate) use linalg_products::*;
-pub(crate) use lu::*;
-pub(crate) use qr::*;
-pub(crate) use reduction::*;
-pub(crate) use reduction_prepared::*;
-pub(crate) use scan::*;
-pub(crate) use sparse::*;
-pub(crate) use svd::*;
+fn assert_dispatch_message<T>(result: hephaestus_wgpu::Result<T>, expected: &str) {
+    match result {
+        Err(HephaestusError::DispatchFailed { message }) => assert_eq!(message, expected),
+        Err(error) => panic!("expected dispatch failure {expected:?}, got {error:?}"),
+        Ok(_) => panic!("expected dispatch failure {expected:?}, got success"),
+    }
+}
+
+fn assert_close(actual: f32, expected: f32, tolerance: f32) {
+    assert!(
+        (actual - expected).abs() <= tolerance,
+        "got {actual}, expected {expected}, tolerance {tolerance}"
+    );
+}
+
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+fn assert_close_slice(got: &[f32], expected: &[f32], abs_tol: f32, rel_tol: f32) {
+    assert_eq!(got.len(), expected.len());
+    for (index, (&got, &expected)) in got.iter().zip(expected.iter()).enumerate() {
+        let tolerance = abs_tol.max(rel_tol * expected.abs().max(1.0));
+        assert!(
+            (got - expected).abs() <= tolerance,
+            "slice mismatch at {index}: got {got}, expected {expected}, tolerance {tolerance}"
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_complex_spectra_close(
+    got: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
+    abs_tol: f32,
+    rel_tol: f32,
+) {
+    assert_eq!(got.len(), expected.len());
+    let mut used = vec![false; got.len()];
+    for (expected_index, expected) in expected.iter().enumerate() {
+        let match_index = got.iter().enumerate().position(|(got_index, actual)| {
+            if used[got_index] {
+                return false;
+            }
+            let re_tolerance = abs_tol.max(rel_tol * expected.re.abs().max(1.0));
+            let im_tolerance = abs_tol.max(rel_tol * expected.im.abs().max(1.0));
+            (actual.re - expected.re).abs() <= re_tolerance
+                && (actual.im - expected.im).abs() <= im_tolerance
+        });
+        match match_index {
+            Some(index) => used[index] = true,
+            None => {
+                panic!("no eigenvalue matches oracle[{expected_index}] = {expected:?}; got {got:?}")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn reconstruct_svd(
+    u: &[f32],
+    singular_values: &[f32],
+    v: &[f32],
+    rows: usize,
+    cols: usize,
+) -> Vec<f32> {
+    let rank = singular_values.len();
+    let mut reconstructed = vec![0.0f32; rows * cols];
+    for row in 0..rows {
+        for col in 0..cols {
+            let mut value = 0.0f32;
+            for component in 0..rank {
+                value += u[row * rank + component]
+                    * singular_values[component]
+                    * v[col * rank + component];
+            }
+            reconstructed[row * cols + col] = value;
+        }
+    }
+    reconstructed
+}
+
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+fn matmul_host(
+    lhs: &[f32],
+    lhs_rows: usize,
+    shared: usize,
+    rhs: &[f32],
+    rhs_cols: usize,
+) -> Vec<f32> {
+    let mut out = vec![0.0f32; lhs_rows * rhs_cols];
+    for row in 0..lhs_rows {
+        for col in 0..rhs_cols {
+            let mut value = 0.0f32;
+            for k in 0..shared {
+                value += lhs[row * shared + k] * rhs[k * rhs_cols + col];
+            }
+            out[row * rhs_cols + col] = value;
+        }
+    }
+    out
+}
+
+#[cfg(feature = "decomposition")]
+fn transpose_host(matrix: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; rows * cols];
+    for row in 0..rows {
+        for col in 0..cols {
+            out[col * rows + row] = matrix[row * cols + col];
+        }
+    }
+    out
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_orthogonal_host(matrix: &[f32], n: usize, tolerance: f32) {
+    let transposed = transpose_host(matrix, n, n);
+    let gram = matmul_host(&transposed, n, n, matrix, n);
+    for row in 0..n {
+        for col in 0..n {
+            assert_close(
+                gram[row * n + col],
+                if row == col { 1.0 } else { 0.0 },
+                tolerance,
+            );
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn sort_complex(values: &mut [eunomia::Complex<f32>]) {
+    values.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_complex_spectrum_close(
+    actual: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
+    tolerance: f32,
+) {
+    assert_eq!(actual.len(), expected.len());
+    let mut actual = actual.to_vec();
+    let mut expected = expected.to_vec();
+    sort_complex(&mut actual);
+    sort_complex(&mut expected);
+    for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+        assert_close(actual.re, expected.re, tolerance);
+        assert_close(actual.im, expected.im, tolerance);
+        assert!(
+            ((actual.re - expected.re).powi(2) + (actual.im - expected.im).powi(2)).sqrt()
+                <= tolerance,
+            "complex spectrum mismatch at {index}: got {actual:?}, expected {expected:?}, tolerance {tolerance}"
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn packed_lu_product(packed: &[f32], n: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; n * n];
+    for row in 0..n {
+        for col in 0..n {
+            let mut value = 0.0f32;
+            for k in 0..n {
+                let l = if row > k {
+                    packed[row * n + k]
+                } else if row == k {
+                    1.0
+                } else {
+                    0.0
+                };
+                let u = if k <= col { packed[k * n + col] } else { 0.0 };
+                value += l * u;
+            }
+            out[row * n + col] = value;
+        }
+    }
+    out
+}
+
+pub(super) fn upload_download_round_trips_values() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|i| i as f32 * 0.5 - 100.0).collect();
+    let buffer = device.upload(&host).unwrap();
+    assert_eq!(buffer.len(), host.len());
+
+    let mut out = vec![0.0f32; host.len()];
+    device.download(&buffer, &mut out).unwrap();
+    assert_eq!(out, host);
+}
+
+pub(super) fn device_local_copy_preserves_values_and_rejects_mismatch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|index| index as f32 * 0.25 - 17.0).collect();
+    let source = device.upload(&host).unwrap();
+    let destination = device.alloc_zeroed::<f32>(host.len()).unwrap();
+
+    device.copy_buffer(&source, &destination).unwrap();
+    let mut copied = vec![0.0_f32; host.len()];
+    device.download(&destination, &mut copied).unwrap();
+    assert_eq!(copied, host);
+
+    let short = device.alloc_zeroed::<f32>(host.len() - 1).unwrap();
+    assert_length_mismatch(
+        device.copy_buffer(&source, &short),
+        source.len(),
+        short.len(),
+    );
+}
+
+pub(super) fn uninitialized_allocation_is_fully_overwritten_before_read() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let expected = [1.0_f32, -2.5, 3.25, 8.0];
+    let buffer = device.alloc_uninitialized::<f32>(expected.len()).unwrap();
+    device.write_buffer(&buffer, &expected).unwrap();
+    let mut actual = [0.0_f32; 4];
+    device.download(&buffer, &mut actual).unwrap();
+    assert_eq!(actual, expected);
+}
+
+pub(super) fn odd_u16_storage_preserves_logical_values_when_device_exists() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let uploaded: Vec<u16> = (0..27).map(|index| index * 257 + 1).collect();
+    let upload_buffer = device.upload(&uploaded).expect("odd u16 upload");
+    assert_eq!(upload_buffer.len(), uploaded.len());
+    let mut uploaded_readback = vec![0_u16; uploaded.len()];
+    device
+        .download(&upload_buffer, &mut uploaded_readback)
+        .expect("odd u16 upload readback");
+    assert_eq!(uploaded_readback, uploaded);
+
+    let written: Vec<u16> = uploaded.iter().map(|value| value ^ 0x55AA).collect();
+    let allocated = device
+        .alloc_zeroed::<u16>(written.len())
+        .expect("odd u16 allocation");
+    device
+        .write_buffer(&allocated, &written)
+        .expect("odd u16 full-buffer write");
+    let mut written_readback = vec![0_u16; written.len()];
+    device
+        .download(&allocated, &mut written_readback)
+        .expect("odd u16 full-buffer readback");
+    assert_eq!(written_readback, written);
+}
+
+pub(super) fn test_placement_aware_allocation() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use themis::{MemoryTier, PlacementHint};
+
+    let host: Vec<f32> = (0..128).map(|i| i as f32 * 0.25 - 7.0).collect();
+
+    // WGPU exposes device buffers and transient mapped transfer buffers, but
+    // does not guarantee host-pinned or host-DRAM placement. Unsupported tier
+    // requests fail at the boundary instead of recording a false tier.
+    for tier in [MemoryTier::HostPinned, MemoryTier::Dram] {
+        let hint = PlacementHint::Tier(tier);
+        let expected =
+            format!("WGPU cannot guarantee requested memory tier {tier:?}; use Device placement");
+        for error in [
+            device
+                .upload_with_hint(&host, hint)
+                .expect_err("unsupported upload placement must fail"),
+            device
+                .alloc_zeroed_with_hint::<f32>(128, hint)
+                .expect_err("unsupported allocation placement must fail"),
+        ] {
+            match error {
+                HephaestusError::AllocationFailed { message } => {
+                    assert_eq!(message, expected)
+                }
+                other => panic!("expected allocation failure, got {other:?}"),
+            }
+        }
+    }
+
+    // Default (non-hinted) allocation lands on Device and round-trips data.
+    let buf_default = device.upload(&host).unwrap();
+    assert_eq!(buf_default.tier(), MemoryTier::Device);
+    let mut default_out = vec![0.0f32; 128];
+    device.download(&buf_default, &mut default_out).unwrap();
+    assert_eq!(default_out, host, "Device upload must preserve data");
+}
+
+pub(super) fn download_rejects_length_mismatch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let buffer = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    let mut out = vec![0.0f32; 2];
+    assert_length_mismatch(device.download(&buffer, &mut out), 2, 3);
+}
+
+pub(super) fn elementwise_add_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // 1027 elements: exercises a partial trailing workgroup (1027 = 4*256 + 3).
+    let a_host: Vec<f32> = (0..1027).map(|i| i as f32 * 1.25).collect();
+    let b_host: Vec<f32> = (0..1027).map(|i| 1000.0 - i as f32).collect();
+    let expected: Vec<f32> = a_host.iter().zip(&b_host).map(|(x, y)| x + y).collect();
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = binary_elementwise::<AddOp, f32>(&device, &a, &b).unwrap();
+
+    let mut got = vec![0.0f32; a_host.len()];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+pub(super) fn elementwise_mul_matches_cpu_reference_integral() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let a_host: Vec<u32> = (0..513).collect();
+    let b_host: Vec<u32> = (0..513).map(|i| i + 7).collect();
+    let expected: Vec<u32> = a_host.iter().zip(&b_host).map(|(x, y)| x * y).collect();
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = binary_elementwise::<MulOp, u32>(&device, &a, &b).unwrap();
+
+    let mut got = vec![0u32; a_host.len()];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+}
+
+pub(super) fn elementwise_rejects_input_length_mismatch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let a = device.upload(&[1.0f32, 2.0]).unwrap();
+    let b = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(binary_elementwise::<AddOp, f32>(&device, &a, &b), 2, 3);
+}
+
+pub(super) fn elementwise_into_reuses_caller_output_buffers() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let width = BlockWidth::new(128).unwrap();
+    let a_host: Vec<f32> = (0..513).map(|i| i as f32 * 0.25).collect();
+    let b_host: Vec<f32> = (0..513).map(|i| 50.0 - i as f32).collect();
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(a_host.len()).unwrap();
+
+    binary_elementwise_into::<SubOp, f32>(&device, &a, &b, &out, width).unwrap();
+    let mut got = vec![0.0f32; a_host.len()];
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().zip(&b_host).map(|(x, y)| x - y).collect();
+    assert_eq!(got, expected);
+
+    unary_elementwise_into::<NegOp, f32>(&device, &a, &out, width).unwrap();
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().map(|x| -x).collect();
+    assert_eq!(got, expected);
+
+    scalar_elementwise_into::<AddOp, f32>(&device, &a, 7.5, &out, width).unwrap();
+    device.download(&out, &mut got).unwrap();
+    let expected: Vec<f32> = a_host.iter().map(|x| x + 7.5).collect();
+    assert_eq!(got, expected);
+
+    let short = device.alloc_zeroed::<f32>(a_host.len() - 1).unwrap();
+    assert_length_mismatch(
+        binary_elementwise_into::<AddOp, f32>(&device, &a, &b, &short, width),
+        short.len(),
+        a.len(),
+    );
+    assert_length_mismatch(
+        unary_elementwise_into::<NegOp, f32>(&device, &a, &short, width),
+        short.len(),
+        a.len(),
+    );
+    assert_length_mismatch(
+        scalar_elementwise_into::<AddOp, f32>(&device, &a, 1.0, &short, width),
+        short.len(),
+        a.len(),
+    );
+}
+
+pub(super) fn elementwise_into_rejects_output_input_aliasing() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let width = BlockWidth::new(128).unwrap();
+    let a = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    let b = device.upload(&[4.0f32, 5.0, 6.0]).unwrap();
+
+    assert_elementwise_alias_rejected(binary_elementwise_into::<AddOp, f32>(
+        &device, &a, &b, &a, width,
+    ));
+    assert_elementwise_alias_rejected(binary_elementwise_into::<AddOp, f32>(
+        &device, &a, &b, &b, width,
+    ));
+    assert_elementwise_alias_rejected(unary_elementwise_into::<NegOp, f32>(&device, &a, &a, width));
+    assert_elementwise_alias_rejected(scalar_elementwise_into::<AddOp, f32>(
+        &device, &a, 1.0, &a, width,
+    ));
+}
+
+pub(super) fn elementwise_unary_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = vec![-4.0f32, -1.0, 0.0, 2.0, 16.0];
+    let a = device.upload(&host).unwrap();
+
+    // SqrtOp (note: sqrt(-4.0) and sqrt(-1.0) on f32 produce NaN, we compare matching values manually)
+    let out_sqrt = unary_elementwise::<SqrtOp, f32>(&device, &a).unwrap();
+    let mut got_sqrt = vec![0.0f32; host.len()];
+    device.download(&out_sqrt, &mut got_sqrt).unwrap();
+    assert!(got_sqrt[0].is_nan());
+    assert!(got_sqrt[1].is_nan());
+    assert_eq!(got_sqrt[2], 0.0f32);
+    assert_eq!(got_sqrt[3], std::f32::consts::SQRT_2);
+    assert_eq!(got_sqrt[4], 4.0f32);
+
+    // AbsOp
+    let out_abs = unary_elementwise::<AbsOp, f32>(&device, &a).unwrap();
+    let mut got_abs = vec![0.0f32; host.len()];
+    device.download(&out_abs, &mut got_abs).unwrap();
+    assert_eq!(got_abs, vec![4.0f32, 1.0, 0.0, 2.0, 16.0]);
+
+    // NegOp
+    let out_neg = unary_elementwise::<NegOp, f32>(&device, &a).unwrap();
+    let mut got_neg = vec![0.0f32; host.len()];
+    device.download(&out_neg, &mut got_neg).unwrap();
+    assert_eq!(got_neg, vec![4.0f32, 1.0, 0.0, -2.0, -16.0]);
+
+    // ExpOp
+    let out_exp = unary_elementwise::<ExpOp, f32>(&device, &a).unwrap();
+    let mut got_exp = vec![0.0f32; host.len()];
+    device.download(&out_exp, &mut got_exp).unwrap();
+    for (i, &x) in host.iter().enumerate() {
+        let expected = x.exp();
+        let diff = (got_exp[i] - expected).abs();
+        let tolerance = 1e-5 * expected.abs().max(1.0);
+        assert!(
+            diff < tolerance,
+            "Exp mismatch at index {}: got {}, expected {}, diff {}, tol {}",
+            i,
+            got_exp[i],
+            expected,
+            diff,
+            tolerance
+        );
+    }
+
+    // ExpNegOp — fused exp(−x); must equal the NegOp → ExpOp chain (differential
+    // oracle) and the CPU (-x).exp() reference.
+    let out_expneg = unary_elementwise::<ExpNegOp, f32>(&device, &a).unwrap();
+    let mut got_expneg = vec![0.0f32; host.len()];
+    device.download(&out_expneg, &mut got_expneg).unwrap();
+    for (i, &x) in host.iter().enumerate() {
+        let expected = (-x).exp();
+        let diff = (got_expneg[i] - expected).abs();
+        let tolerance = 1e-5 * expected.abs().max(1.0);
+        assert!(
+            diff < tolerance,
+            "ExpNeg mismatch at index {}: got {}, expected {}, diff {}, tol {}",
+            i,
+            got_expneg[i],
+            expected,
+            diff,
+            tolerance
+        );
+    }
+
+    // RecipOp
+    let host_recip = vec![1.0f32, 2.0, 4.0, 8.0];
+    let b = device.upload(&host_recip).unwrap();
+    let out_recip = unary_elementwise::<RecipOp, f32>(&device, &b).unwrap();
+    let mut got_recip = vec![0.0f32; host_recip.len()];
+    device.download(&out_recip, &mut got_recip).unwrap();
+    assert_eq!(got_recip, vec![1.0f32, 0.5, 0.25, 0.125]);
+}
+
+pub(super) fn elementwise_lgamma_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = [0.5_f32, 1.0, 4.0, 0.0, -1.0];
+    let input = device.upload(&host).unwrap();
+    let output = unary_elementwise::<LgammaOp, f32>(&device, &input).unwrap();
+    let mut got = [0.0_f32; 5];
+    device.download(&output, &mut got).unwrap();
+
+    let expected = [
+        0.572_364_9_f32,
+        0.0,
+        6.0_f32.ln(),
+        f32::INFINITY,
+        f32::INFINITY,
+    ];
+    for (index, (&actual, &reference)) in got.iter().zip(expected.iter()).enumerate() {
+        if reference.is_infinite() {
+            assert!(
+                actual.is_infinite() && actual.is_sign_positive(),
+                "lgamma[{index}] expected positive infinity, got {actual}"
+            );
+            continue;
+        }
+        let tolerance = f32::EPSILON * 2048.0 * reference.abs().max(1.0);
+        assert!(
+            (actual - reference).abs() <= tolerance,
+            "lgamma[{index}] expected {reference}, got {actual}, tolerance {tolerance}"
+        );
+    }
+}
+
+pub(super) fn elementwise_activation_markers_match_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
+    let input = device.upload(&host).unwrap();
+    let gelu_scale = 0.797_884_6_f32;
+    let gelu_cubic = 0.044715_f32;
+
+    macro_rules! check {
+        ($label:literal, $operation:ty, $expected:expr) => {{
+            let expected = $expected;
+            let output = unary_elementwise::<$operation, f32>(&device, &input).unwrap();
+            let mut actual = [0.0_f32; 5];
+            device.download(&output, &mut actual).unwrap();
+            for (index, (&got, &reference)) in actual.iter().zip(expected.iter()).enumerate() {
+                let tolerance = f32::EPSILON * 512.0 * reference.abs().max(1.0);
+                assert!(
+                    (got - reference).abs() <= tolerance,
+                    "{}[{index}] got {got}, expected {reference}, tolerance {tolerance}",
+                    $label
+                );
+            }
+        }};
+    }
+
+    check!(
+        "gelu_tanh",
+        GeluTanhOp,
+        host.iter()
+            .map(|&x| 0.5 * x * (1.0 + (gelu_scale * (x + gelu_cubic * x * x * x)).tanh()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "gelu_tanh_grad",
+        GeluTanhGradOp,
+        host.iter()
+            .map(|&x| {
+                let tanh = (gelu_scale * (x + gelu_cubic * x * x * x)).tanh();
+                0.5 * (1.0 + tanh)
+                    + 0.5 * x * (1.0 - tanh * tanh) * gelu_scale * (1.0 + 3.0 * gelu_cubic * x * x)
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu",
+        SiluOp,
+        host.iter()
+            .map(|&x| x / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu_grad",
+        SiluGradOp,
+        host.iter()
+            .map(|&x| {
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                sigmoid * (1.0 + x * (1.0 - sigmoid))
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus",
+        SoftplusOp,
+        host.iter()
+            .map(|&x| (1.0 + x.exp()).ln())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus_grad",
+        SoftplusGradOp,
+        host.iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish",
+        MishOp,
+        host.iter()
+            .map(|&x| x * (1.0 + x.exp()).ln().tanh())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish_grad",
+        MishGradOp,
+        host.iter()
+            .map(|&x| {
+                let softplus = (1.0 + x.exp()).ln();
+                softplus.tanh() + x * (1.0 - softplus.tanh().powi(2)) / (1.0 + (-x).exp())
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu",
+        EluOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { x } else { x.exp() - 1.0 })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu_grad",
+        EluGradOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { 1.0 } else { x.exp() })
+            .collect::<Vec<_>>()
+    );
+}
+
+pub(super) fn elementwise_scalar_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0];
+    let a = device.upload(&host).unwrap();
+
+    // scalar add
+    let out_add = scalar_elementwise::<AddOp, f32>(&device, &a, 10.0).unwrap();
+    let mut got_add = vec![0.0f32; host.len()];
+    device.download(&out_add, &mut got_add).unwrap();
+    assert_eq!(got_add, vec![11.0f32, 12.0, 13.0, 14.0, 15.0]);
+
+    // scalar mul
+    let out_mul = scalar_elementwise::<MulOp, f32>(&device, &a, 3.0).unwrap();
+    let mut got_mul = vec![0.0f32; host.len()];
+    device.download(&out_mul, &mut got_mul).unwrap();
+    assert_eq!(got_mul, vec![3.0f32, 6.0, 9.0, 12.0, 15.0]);
+}
+
+pub(super) fn reduction_sum_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let test_sizes = [0, 1, 255, 256, 257, 1027];
+
+    for &size in &test_sizes {
+        // f32
+        let host_f32: Vec<f32> = (0..size).map(|i| i as f32 * 0.5).collect();
+        let expected_f32: f32 = host_f32.iter().sum();
+        let buf_f32 = device.upload(&host_f32).unwrap();
+        let out_f32 = reduction::<SumOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_f32 = vec![0.0f32; 1];
+        device.download(&out_f32, &mut got_f32).unwrap();
+        assert_eq!(
+            got_f32[0], expected_f32,
+            "f32 sum mismatch at size {}",
+            size
+        );
+        let prepared_f32 = prepare_reduction::<SumOp, f32>(&device, &buf_f32).unwrap();
+        prepared_f32.dispatch(&device).unwrap();
+        let mut got_prepared_f32 = vec![0.0f32; 1];
+        device
+            .download(prepared_f32.output(), &mut got_prepared_f32)
+            .unwrap();
+        assert_eq!(
+            got_prepared_f32[0], expected_f32,
+            "prepared f32 sum mismatch at size {}",
+            size
+        );
+
+        // u32
+        let host_u32: Vec<u32> = (0..size).map(|i| i as u32).collect();
+        let expected_u32: u32 = host_u32.iter().sum();
+        let buf_u32 = device.upload(&host_u32).unwrap();
+        let out_u32 = reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+        let mut got_u32 = vec![0u32; 1];
+        device.download(&out_u32, &mut got_u32).unwrap();
+        assert_eq!(
+            got_u32[0], expected_u32,
+            "u32 sum mismatch at size {}",
+            size
+        );
+        let prepared_u32 = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+        prepared_u32.dispatch(&device).unwrap();
+        let mut got_prepared_u32 = vec![0u32; 1];
+        device
+            .download(prepared_u32.output(), &mut got_prepared_u32)
+            .unwrap();
+        assert_eq!(
+            got_prepared_u32[0], expected_u32,
+            "prepared u32 sum mismatch at size {}",
+            size
+        );
+        if size == 0 {
+            submit_prepared_reduction_batch::<u32>(&device, &[]).unwrap();
+            submit_prepared_reduction_batch(&device, &[&prepared_u32]).unwrap();
+            device
+                .download(prepared_u32.output(), &mut got_prepared_u32)
+                .unwrap();
+            assert_eq!(got_prepared_u32, [0]);
+        }
+        if size == 1027 {
+            let batch_a = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+            let singleton_input = device.upload(&[99u32]).unwrap();
+            let singleton = prepare_reduction::<SumOp, u32>(&device, &singleton_input).unwrap();
+            let batch_b = prepare_reduction::<SumOp, u32>(&device, &buf_u32).unwrap();
+            submit_prepared_reduction_batch(&device, &[&batch_a, &singleton, &batch_b]).unwrap();
+            let mut got_batch_a = vec![0u32; 1];
+            let mut got_singleton = vec![0u32; 1];
+            let mut got_batch_b = vec![0u32; 1];
+            device.download(batch_a.output(), &mut got_batch_a).unwrap();
+            device
+                .download(singleton.output(), &mut got_singleton)
+                .unwrap();
+            device.download(batch_b.output(), &mut got_batch_b).unwrap();
+            assert_eq!(got_batch_a[0], expected_u32);
+            assert_eq!(got_singleton[0], 99);
+            assert_eq!(got_batch_b[0], expected_u32);
+        }
+
+        // i32
+        let host_i32: Vec<i32> = (0..size).map(|i| if i % 2 == 0 { i } else { -i }).collect();
+        let expected_i32: i32 = host_i32.iter().sum();
+        let buf_i32 = device.upload(&host_i32).unwrap();
+        let out_i32 = reduction::<SumOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_i32 = vec![0i32; 1];
+        device.download(&out_i32, &mut got_i32).unwrap();
+        assert_eq!(
+            got_i32[0], expected_i32,
+            "i32 sum mismatch at size {}",
+            size
+        );
+    }
+}
+
+pub(super) fn reduction_min_max_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let test_sizes = [0, 1, 255, 256, 257, 1027];
+
+    for &size in &test_sizes {
+        // f32 Min/Max
+        let host_f32: Vec<f32> = (0..size)
+            .map(|i| (i as f32 * 12.34 - 100.0).sin())
+            .collect();
+        let expected_min_f32 = if size == 0 {
+            f32::MAX
+        } else {
+            host_f32.iter().copied().fold(f32::NAN, f32::min)
+        };
+        let expected_max_f32 = if size == 0 {
+            f32::MIN
+        } else {
+            host_f32.iter().copied().fold(f32::NAN, f32::max)
+        };
+
+        let buf_f32 = device.upload(&host_f32).unwrap();
+
+        let out_min_f32 = reduction::<MinOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_min_f32 = vec![0.0f32; 1];
+        device.download(&out_min_f32, &mut got_min_f32).unwrap();
+        assert_eq!(
+            got_min_f32[0], expected_min_f32,
+            "f32 min mismatch at size {}",
+            size
+        );
+
+        let out_max_f32 = reduction::<MaxOp, f32>(&device, &buf_f32).unwrap();
+        let mut got_max_f32 = vec![0.0f32; 1];
+        device.download(&out_max_f32, &mut got_max_f32).unwrap();
+        assert_eq!(
+            got_max_f32[0], expected_max_f32,
+            "f32 max mismatch at size {}",
+            size
+        );
+
+        // i32 Min/Max
+        let host_i32: Vec<i32> = (0..size)
+            .map(|i| if i % 3 == 0 { i * 7 } else { -(i * 5) })
+            .collect();
+        let expected_min_i32 = if size == 0 {
+            i32::MAX
+        } else {
+            *host_i32.iter().min().unwrap()
+        };
+        let expected_max_i32 = if size == 0 {
+            i32::MIN
+        } else {
+            *host_i32.iter().max().unwrap()
+        };
+
+        let buf_i32 = device.upload(&host_i32).unwrap();
+
+        let out_min_i32 = reduction::<MinOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_min_i32 = vec![0i32; 1];
+        device.download(&out_min_i32, &mut got_min_i32).unwrap();
+        assert_eq!(
+            got_min_i32[0], expected_min_i32,
+            "i32 min mismatch at size {}",
+            size
+        );
+
+        let out_max_i32 = reduction::<MaxOp, i32>(&device, &buf_i32).unwrap();
+        let mut got_max_i32 = vec![0i32; 1];
+        device.download(&out_max_i32, &mut got_max_i32).unwrap();
+        assert_eq!(
+            got_max_i32[0], expected_max_i32,
+            "i32 max mismatch at size {}",
+            size
+        );
+    }
+}
+
+pub(super) fn reduction_width_is_part_of_dispatch_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let host: Vec<u32> = (0..1027).collect();
+    let expected: u32 = host.iter().sum();
+    let input = device.upload(&host).unwrap();
+
+    let narrow = BlockWidth::new(128).unwrap();
+    let out_narrow = reduction_with_width::<SumOp, u32>(&device, &input, narrow).unwrap();
+    let mut got_narrow = vec![0u32; 1];
+    device.download(&out_narrow, &mut got_narrow).unwrap();
+    assert_eq!(got_narrow[0], expected);
+
+    let non_power = BlockWidth::new(192).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &input, non_power),
+        "reduction block width 192 must be a power of two",
+    );
+
+    let empty = device.upload::<u32>(&[]).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &empty, non_power),
+        "reduction block width 192 must be a power of two",
+    );
+
+    let singleton = device.upload(&[13u32]).unwrap();
+    assert_dispatch_message(
+        reduction_with_width::<SumOp, u32>(&device, &singleton, non_power),
+        "reduction block width 192 must be a power of two",
+    );
+}
+
+pub(super) fn axis_reductions_match_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let input = device.upload(&host).unwrap();
+    let input_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+    let leto_input = leto::Array::from_shape_vec([2, 3], host).unwrap();
+
+    let out_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    let out_axis0_layout = Layout::c_contiguous([1, 3]).unwrap();
+    sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &out_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_axis0 = leto_ops::sum_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_axis0 = vec![0.0f32; 3];
+    device.download(&out_axis0, &mut got_axis0).unwrap();
+    assert_eq!(got_axis0, expected_axis0);
+
+    let allocated_axis0 = sum_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_axis0, &mut got_allocated_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_axis0, expected_axis0);
+
+    let product_axis0 =
+        reduce_axis::<ProdOp, f32>(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let expected_product_axis0 = [4.0, 10.0, 18.0];
+    let mut got_product_axis0 = vec![0.0f32; 3];
+    device
+        .download(&product_axis0, &mut got_product_axis0)
+        .unwrap();
+    assert_eq!(got_product_axis0, expected_product_axis0);
+
+    let out_axis1 = device.alloc_zeroed::<f32>(2).unwrap();
+    let out_axis1_layout = Layout::c_contiguous([2, 1]).unwrap();
+    sum_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &out_axis1,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_axis1 = leto_ops::sum_axis(&leto_input.view(), 1)
+        .unwrap()
+        .into_vec();
+    let mut got_axis1 = vec![0.0f32; 2];
+    device.download(&out_axis1, &mut got_axis1).unwrap();
+    assert_eq!(got_axis1, expected_axis1);
+
+    let product_axis1 = prod_axis(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_product_axis1 = vec![0.0f32; 2];
+    device
+        .download(&product_axis1, &mut got_product_axis1)
+        .unwrap();
+    assert_eq!(got_product_axis1, [6.0, 120.0]);
+
+    let product_axis1_out = device.alloc_zeroed::<f32>(2).unwrap();
+    let product_axis1_out_layout = Layout::c_contiguous([2, 1]).unwrap();
+    prod_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &product_axis1_out,
+            layout: &product_axis1_out_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_product_axis1_into = [0.0f32; 2];
+    device
+        .download(&product_axis1_out, &mut got_product_axis1_into)
+        .unwrap();
+    assert_eq!(got_product_axis1_into, [6.0, 120.0]);
+
+    let transposed_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
+    let transposed = StridedOperand {
+        buffer: &input,
+        layout: &transposed_layout,
+    };
+    let expected_transposed_product = [4.0, 10.0, 18.0];
+    let transposed_product = prod_axis(&device, transposed, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_transposed_product = vec![0.0f32; 3];
+    device
+        .download(&transposed_product, &mut got_transposed_product)
+        .unwrap();
+    assert_eq!(got_transposed_product, expected_transposed_product);
+
+    let wrong_product_output = device.alloc_zeroed::<f32>(6).unwrap();
+    let wrong_product_layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert!(matches!(
+        prod_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_product_output,
+                layout: &wrong_product_layout,
+            },
+            BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    let narrow_axis1 = sum_axis(&device, input_operand, 1, BlockWidth::new(2).unwrap()).unwrap();
+    let mut got_narrow_axis1 = vec![0.0f32; 2];
+    device
+        .download(&narrow_axis1, &mut got_narrow_axis1)
+        .unwrap();
+    assert_eq!(got_narrow_axis1, expected_axis1);
+
+    let min_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    min_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &min_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_min_axis0 = leto_ops::min_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_min_axis0 = vec![0.0f32; 3];
+    device.download(&min_axis0, &mut got_min_axis0).unwrap();
+    assert_eq!(got_min_axis0, expected_min_axis0);
+
+    let allocated_min_axis0 = min_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_min_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_min_axis0, &mut got_allocated_min_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_min_axis0, expected_min_axis0);
+
+    let max_axis1 = device.alloc_zeroed::<f32>(2).unwrap();
+    max_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &max_axis1,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_max_axis1 = leto_ops::max_axis(&leto_input.view(), 1)
+        .unwrap()
+        .into_vec();
+    let mut got_max_axis1 = vec![0.0f32; 2];
+    device.download(&max_axis1, &mut got_max_axis1).unwrap();
+    assert_eq!(got_max_axis1, expected_max_axis1);
+
+    let allocated_max_axis1 = max_axis(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_max_axis1 = vec![0.0f32; 2];
+    device
+        .download(&allocated_max_axis1, &mut got_allocated_max_axis1)
+        .unwrap();
+    assert_eq!(got_allocated_max_axis1, expected_max_axis1);
+
+    let mean_axis0 = device.alloc_zeroed::<f32>(3).unwrap();
+    mean_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &mean_axis0,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_mean_axis0 = leto_ops::mean_axis(&leto_input.view(), 0)
+        .unwrap()
+        .into_vec();
+    let mut got_mean_axis0 = vec![0.0f32; 3];
+    device.download(&mean_axis0, &mut got_mean_axis0).unwrap();
+    assert_eq!(got_mean_axis0, expected_mean_axis0);
+
+    let allocated_mean_axis0 = mean_axis(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_allocated_mean_axis0 = vec![0.0f32; 3];
+    device
+        .download(&allocated_mean_axis0, &mut got_allocated_mean_axis0)
+        .unwrap();
+    assert_eq!(got_allocated_mean_axis0, expected_mean_axis0);
+
+    let prepared_sum_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_sum_axis0 = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_sum_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_sum_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_sum_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_sum_axis0_out, &mut got_prepared_sum_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_sum_axis0, expected_axis0);
+
+    let batch_sum_axis0_out_a = device.alloc_zeroed::<f32>(3).unwrap();
+    let batch_min_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let batch_sum_axis0_a = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &batch_sum_axis0_out_a,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let batch_min_axis0 = prepare_min_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &batch_min_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    submit_prepared_axis_reduction_batch(&device, &[&batch_sum_axis0_a, &batch_min_axis0]).unwrap();
+    let mut got_batch_sum_axis0_a = vec![0.0f32; 3];
+    let mut got_batch_min_axis0 = vec![0.0f32; 3];
+    device
+        .download(&batch_sum_axis0_out_a, &mut got_batch_sum_axis0_a)
+        .unwrap();
+    device
+        .download(&batch_min_axis0_out, &mut got_batch_min_axis0)
+        .unwrap();
+    assert_eq!(got_batch_sum_axis0_a, expected_axis0);
+    assert_eq!(got_batch_min_axis0, expected_min_axis0);
+
+    let prepared_min_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_min_axis0 = prepare_min_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_min_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_min_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_min_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_min_axis0_out, &mut got_prepared_min_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_min_axis0, expected_min_axis0);
+
+    let prepared_max_axis1_out = device.alloc_zeroed::<f32>(2).unwrap();
+    let prepared_max_axis1 = prepare_max_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &prepared_max_axis1_out,
+            layout: &out_axis1_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_max_axis1.dispatch(&device).unwrap();
+    let mut got_prepared_max_axis1 = vec![0.0f32; 2];
+    device
+        .download(&prepared_max_axis1_out, &mut got_prepared_max_axis1)
+        .unwrap();
+    assert_eq!(got_prepared_max_axis1, expected_max_axis1);
+
+    let prepared_mean_axis0_out = device.alloc_zeroed::<f32>(3).unwrap();
+    let prepared_mean_axis0 = prepare_mean_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &prepared_mean_axis0_out,
+            layout: &out_axis0_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_mean_axis0.dispatch(&device).unwrap();
+    let mut got_prepared_mean_axis0 = vec![0.0f32; 3];
+    device
+        .download(&prepared_mean_axis0_out, &mut got_prepared_mean_axis0)
+        .unwrap();
+    assert_eq!(got_prepared_mean_axis0, expected_mean_axis0);
+
+    let empty_input = device.upload::<f32>(&[]).unwrap();
+    let empty_input_layout = Layout::c_contiguous([2, 0]).unwrap();
+    let empty_output = device.upload(&[7.0f32; 2]).unwrap();
+    let empty_output_layout = Layout::c_contiguous([2, 1]).unwrap();
+    sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty = [7.0f32; 2];
+    device.download(&empty_output, &mut got_empty).unwrap();
+    assert_eq!(got_empty, [0.0, 0.0]);
+
+    let empty_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty_product = [0.0f32; 2];
+    device
+        .download(&empty_product, &mut got_empty_product)
+        .unwrap();
+    assert_eq!(got_empty_product, [1.0, 1.0]);
+
+    let empty_axis0_input_layout = Layout::c_contiguous([0, 2]).unwrap();
+    let empty_axis0_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_axis0_input_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_empty_axis0_product = [0.0f32; 2];
+    device
+        .download(&empty_axis0_product, &mut got_empty_axis0_product)
+        .unwrap();
+    assert_eq!(got_empty_axis0_product, [1.0, 1.0]);
+
+    let prepared_empty_sum = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    prepared_empty_sum.dispatch(&device).unwrap();
+    device.download(&empty_output, &mut got_empty).unwrap();
+    assert_eq!(got_empty, [0.0, 0.0]);
+
+    let no_output_layout = Layout::c_contiguous([0, 1]).unwrap();
+    let no_output = device.alloc_zeroed::<f32>(0).unwrap();
+    let no_output_prepared = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &Layout::c_contiguous([0, 3]).unwrap(),
+        },
+        1,
+        StridedOperand {
+            buffer: &no_output,
+            layout: &no_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    submit_prepared_axis_reduction_batch::<f32>(&device, &[]).unwrap();
+    submit_prepared_axis_reduction_batch(&device, &[&no_output_prepared]).unwrap();
+    assert_eq!(no_output.len(), 0);
+}
+
+pub(super) fn mixed_prepared_reduction_batch_preserves_scalar_and_axis_results() {
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let scalar_host: Vec<u32> = (0..1_024).map(|index| index % 11).collect();
+    let scalar_expected: u32 = scalar_host.iter().sum();
+    let scalar_input = device.upload(&scalar_host).unwrap();
+    let scalar = prepare_reduction::<SumOp, u32>(&device, &scalar_input).unwrap();
+
+    let singleton_input = device.upload(&[37u32]).unwrap();
+    let singleton = prepare_reduction::<SumOp, u32>(&device, &singleton_input).unwrap();
+
+    let empty_scalar_input = device.upload::<u32>(&[]).unwrap();
+    let empty_scalar = prepare_reduction::<SumOp, u32>(&device, &empty_scalar_input).unwrap();
+
+    let axis_host = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let axis_input = device.upload(&axis_host).unwrap();
+    let axis_output = device.alloc_zeroed::<f32>(3).unwrap();
+    let axis_input_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let axis_output_layout = Layout::c_contiguous([1, 3]).unwrap();
+    let axis = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &axis_input,
+            layout: &axis_input_layout,
+        },
+        0,
+        StridedOperand {
+            buffer: &axis_output,
+            layout: &axis_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+
+    submit_prepared_mixed_reduction_batch(&device, &[&scalar, &singleton, &empty_scalar], &[&axis])
+        .unwrap();
+
+    let mut scalar_actual = [0u32; 1];
+    device
+        .download(scalar.output(), &mut scalar_actual)
+        .unwrap();
+    assert_eq!(scalar_actual, [scalar_expected]);
+    device
+        .download(singleton.output(), &mut scalar_actual)
+        .unwrap();
+    assert_eq!(scalar_actual, [37]);
+    device
+        .download(empty_scalar.output(), &mut scalar_actual)
+        .unwrap();
+    assert_eq!(scalar_actual, [0]);
+
+    let mut axis_actual = [0.0f32; 3];
+    device.download(&axis_output, &mut axis_actual).unwrap();
+    assert_eq!(axis_actual, [5.0, 7.0, 9.0]);
+
+    let empty_axis_input = device.upload::<f32>(&[]).unwrap();
+    let empty_axis_output = device.alloc_zeroed::<f32>(0).unwrap();
+    let empty_axis_input_layout = Layout::c_contiguous([0, 3]).unwrap();
+    let empty_axis_output_layout = Layout::c_contiguous([0, 1]).unwrap();
+    let empty_axis = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_axis_input,
+            layout: &empty_axis_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_axis_output,
+            layout: &empty_axis_output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    submit_prepared_mixed_reduction_batch(&device, &[&empty_scalar], &[&empty_axis]).unwrap();
+    assert_eq!(empty_axis_output.len(), 0);
+
+    submit_prepared_mixed_reduction_batch::<u32, f32>(&device, &[], &[]).unwrap();
+}
+
+/// Pins the WG-P5 grid-stride fix at the scale it targets: an axis longer
+/// than `BlockWidth::DEFAULT` (256), which previously fell to a genuinely
+/// serial one-thread-per-row kernel and now runs through the grid-strided
+/// workgroup-parallel kernel for every lane. The per-lane stride
+/// accumulation reassociates the float sum relative to Leto's sequential
+/// CPU reference (elements interleave across lanes before the tree
+/// reduction), so this asserts a derived epsilon bound rather than exact
+/// equality — the naive-summation error model is O(n*eps*sum(|x_i|)); the
+/// bound below is that model with headroom for the extra tree-reduction
+/// level, not a widened-to-pass tolerance.
+pub(super) fn axis_reduction_grid_stride_matches_leto_reference_beyond_block_width() {
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let axis_len = 500usize; // > BlockWidth::DEFAULT (256): forces the
+    // previously-serial path onto the grid-strided kernel.
+    let rows = 3usize;
+    let host: Vec<f32> = (0..rows * axis_len)
+        .map(|i| ((i % 97) as f32) * 0.1 + 0.01)
+        .collect();
+    let input = device.upload(&host).unwrap();
+    let input_layout = Layout::c_contiguous([rows, axis_len]).unwrap();
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+    let leto_input = leto::Array::from_shape_vec([rows, axis_len], host).unwrap();
+
+    let got = sum_axis(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_host = vec![0.0f32; rows];
+    device.download(&got, &mut got_host).unwrap();
+
+    let expected = leto_ops::sum_axis(&leto_input.view(), 1)
+        .unwrap()
+        .into_vec();
+
+    for row in 0..rows {
+        let view = leto_input.view();
+        let abs_sum: f32 = (0..axis_len).map(|col| view[[row, col]].abs()).sum();
+        let tol = abs_sum * axis_len as f32 * f32::EPSILON * 4.0;
+        assert!(
+            (got_host[row] - expected[row]).abs() <= tol,
+            "row {row}: grid-strided sum {} must match Leto's sequential sum {} within {tol} \
+             (derived from O(n*eps*sum|x|) with tree-reduction headroom)",
+            got_host[row],
+            expected[row]
+        );
+    }
+}
+
+pub(super) fn axis_zero_tiling_matches_exact_multi_tile_oracles() {
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    const EXTENT: usize = 256;
+    let host: Vec<f32> = (0..EXTENT)
+        .flat_map(|row| (0..EXTENT).map(move |col| (row + col) as f32))
+        .collect();
+    let input = device.upload(&host).unwrap();
+    let input_layout = Layout::c_contiguous([EXTENT, EXTENT]).unwrap();
+    let operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+
+    let expected_sum: Vec<f32> = (0..EXTENT)
+        .map(|col| 32_640.0 + 256.0 * col as f32)
+        .collect();
+    let expected_min: Vec<f32> = (0..EXTENT).map(|col| col as f32).collect();
+    let expected_max: Vec<f32> = (0..EXTENT).map(|col| 255.0 + col as f32).collect();
+    let expected_mean: Vec<f32> = (0..EXTENT).map(|col| 127.5 + col as f32).collect();
+
+    for (result, expected) in [
+        (
+            sum_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_sum,
+        ),
+        (
+            min_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_min,
+        ),
+        (
+            max_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_max,
+        ),
+        (
+            mean_axis(&device, operand, 0, BlockWidth::DEFAULT),
+            &expected_mean,
+        ),
+    ] {
+        let output = result.unwrap();
+        let mut actual = vec![0.0; EXTENT];
+        device.download(&output, &mut actual).unwrap();
+        assert_eq!(&actual, expected);
+    }
+
+    let narrow = sum_axis(
+        &device,
+        operand,
+        0,
+        BlockWidth::new(32).expect("non-zero width"),
+    )
+    .unwrap();
+    let mut narrow_actual = vec![0.0; EXTENT];
+    device.download(&narrow, &mut narrow_actual).unwrap();
+    assert_eq!(narrow_actual, expected_sum);
+}
+
+pub(super) fn axis_scans_match_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{
+        StridedOperand, cumsum, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
+    };
+    use leto::Layout;
+
+    let host = vec![1i32, 2, 3, 4, 5, 6];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &layout,
+    };
+    let leto_input = leto::Array::from_shape_vec([2, 3], host).unwrap();
+
+    let cumsum_axis1 = device.alloc_zeroed::<i32>(6).unwrap();
+    cumsum_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &cumsum_axis1,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_cumsum_axis1 = leto_ops::cumsum(&leto_input.view(), 1).unwrap().into_vec();
+    let mut got_cumsum_axis1 = vec![0i32; 6];
+    device
+        .download(&cumsum_axis1, &mut got_cumsum_axis1)
+        .unwrap();
+    assert_eq!(got_cumsum_axis1, expected_cumsum_axis1);
+
+    let cumsum_allocated = cumsum(&device, input_operand, 1, BlockWidth::DEFAULT).unwrap();
+    let mut got_cumsum_allocated = vec![0i32; 6];
+    device
+        .download(&cumsum_allocated, &mut got_cumsum_allocated)
+        .unwrap();
+    assert_eq!(got_cumsum_allocated, expected_cumsum_axis1);
+
+    let suffix_sum_axis1 = device.alloc_zeroed::<i32>(6).unwrap();
+    suffix_sum_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &suffix_sum_axis1,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_suffix_sum_axis1 = leto_ops::scan_axis::<leto_ops::CumSumOp, _, 2>(
+        &leto_input.view(),
+        1,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    let mut got_suffix_sum_axis1 = vec![0i32; 6];
+    device
+        .download(&suffix_sum_axis1, &mut got_suffix_sum_axis1)
+        .unwrap();
+    assert_eq!(got_suffix_sum_axis1, expected_suffix_sum_axis1);
+
+    let suffix_sum_allocated = suffix_sum(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_suffix_sum_allocated = vec![0i32; 6];
+    device
+        .download(&suffix_sum_allocated, &mut got_suffix_sum_allocated)
+        .unwrap();
+    let expected_suffix_sum_axis0 = leto_ops::scan_axis::<leto_ops::CumSumOp, _, 2>(
+        &leto_input.view(),
+        0,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    assert_eq!(got_suffix_sum_allocated, expected_suffix_sum_axis0);
+
+    let suffix_prod_reverse = device.alloc_zeroed::<i32>(6).unwrap();
+    suffix_prod_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &suffix_prod_reverse,
+            layout: &layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let expected_suffix_prod_reverse = leto_ops::scan_axis::<leto_ops::CumProdOp, _, 2>(
+        &leto_input.view(),
+        0,
+        leto_ops::ScanDirection::Reverse,
+    )
+    .unwrap()
+    .into_vec();
+    let mut got_suffix_prod_reverse = vec![0i32; 6];
+    device
+        .download(&suffix_prod_reverse, &mut got_suffix_prod_reverse)
+        .unwrap();
+    assert_eq!(got_suffix_prod_reverse, expected_suffix_prod_reverse);
+
+    let suffix_prod_reverse_allocated =
+        suffix_prod(&device, input_operand, 0, BlockWidth::DEFAULT).unwrap();
+    let mut got_suffix_prod_reverse_allocated = vec![0i32; 6];
+    device
+        .download(
+            &suffix_prod_reverse_allocated,
+            &mut got_suffix_prod_reverse_allocated,
+        )
+        .unwrap();
+    assert_eq!(
+        got_suffix_prod_reverse_allocated,
+        expected_suffix_prod_reverse
+    );
+}
+
+pub(super) fn cumprod_convenience_preserves_strided_and_empty_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    use hephaestus_wgpu::{StridedOperand, cumprod, cumprod_into};
+    use leto::Layout;
+
+    let physical = vec![1_i32, 2, 3, 4, 5, 6];
+    let input = device.upload(&physical).unwrap();
+    let transposed_layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
+    let output_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let output = device.alloc_zeroed::<i32>(6).unwrap();
+    cumprod_into(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &output,
+            layout: &output_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got = [0_i32; 6];
+    device.download(&output, &mut got).unwrap();
+    assert_eq!(got, [1, 3, 15, 2, 8, 48]);
+
+    let allocated = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &transposed_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_allocated = [0_i32; 6];
+    device.download(&allocated, &mut got_allocated).unwrap();
+    assert_eq!(got_allocated, [1, 3, 5, 2, 12, 30]);
+
+    let empty = device.alloc_zeroed::<i32>(0).unwrap();
+    let empty_layout = Layout::c_contiguous([2, 0]).unwrap();
+    let empty_output = cumprod(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(empty_output.len(), 0);
+
+    let invalid_layout = Layout::try_new([2, 3], [1, 2], 1).expect("valid test layout");
+    assert!(matches!(
+        cumprod(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &invalid_layout,
+            },
+            1,
+            BlockWidth::DEFAULT,
+        ),
+        Err(hephaestus_core::HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
+}
+
+pub(super) fn acquisition_reports_themis_topology_from_adapter() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let topology = device
+        .topology()
+        .expect("acquisition path must capture a topology snapshot");
+
+    // A reported warp width is a real power-of-two lane count.
+    assert!(
+        topology
+            .warp_width()
+            .is_none_or(|width| width.get().is_power_of_two())
+    );
+
+    // Capacities WebGPU cannot introspect are None by type, never
+    // fabricated (formerly a pinned zero-sentinel convention).
+    assert_eq!(topology.compute_units(), None);
+    assert_eq!(topology.registers_per_unit(), None);
+    assert_eq!(topology.shared_mem_per_unit_bytes(), None);
+
+    // The Arc-wrapping constructor has no adapter and reports none.
+    let wrapped = WgpuDevice::new(device.device().clone(), device.queue().clone());
+    assert_eq!(
+        wrapped.topology().map(|topology| topology.compute_units()),
+        None
+    );
+}
+
+pub(super) fn linalg_matmul_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, matmul, matmul_into};
+    use leto::Layout;
+
+    // Multiply two f32 matrices: shape [3, 2] x [2, 4] -> [3, 4]
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_host = vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0];
+    let expected = vec![
+        29.0f32, 32.0, 35.0, 38.0, 65.0, 72.0, 79.0, 86.0, 101.0, 112.0, 123.0, 134.0,
+    ];
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(12).unwrap();
+
+    let a_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 4]).unwrap();
+    let out_layout = Layout::c_contiguous([3, 4]).unwrap();
+
+    matmul_into(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 12];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+
+    let allocated = matmul(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let mut allocated_got = vec![0.0f32; 12];
+    device.download(&allocated, &mut allocated_got).unwrap();
+    assert_eq!(allocated_got, expected);
+}
+
+pub(super) fn linalg_batched_matmul_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, batched_matmul, batched_matmul_into};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let b_host = vec![2.0f32, 0.5, 1.0, 3.0];
+    let expected = vec![4.0f32, 6.5, 10.0, 13.5, 16.0, 20.5, 22.0, 27.5];
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let out = device.alloc_zeroed::<f32>(expected.len()).unwrap();
+    let a_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+    let b_layout = Layout::c_contiguous([1, 2, 2]).unwrap();
+    let out_layout = Layout::c_contiguous([2, 2, 2]).unwrap();
+
+    batched_matmul_into(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; expected.len()];
+    device.download(&out, &mut got).unwrap();
+    assert_eq!(got, expected);
+
+    let allocated = batched_matmul(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let mut allocated_got = vec![0.0f32; expected.len()];
+    device.download(&allocated, &mut allocated_got).unwrap();
+    assert_eq!(allocated_got, expected);
+}
+
+pub(super) fn linalg_allocating_kron_matches_the_into_path() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, kron, kron_into};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_host = vec![7.0f32, 8.0, 9.0, 10.0];
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let a_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let b_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let out_layout = Layout::c_contiguous([4, 6]).unwrap();
+
+    // The seam (`kron_into`) owns the correctness contract — the shared
+    // conformance clause pins it exactly, on every backend. What is
+    // backend-specific here is the allocating wrapper: it must agree with
+    // the seam element-for-element rather than re-deriving anything.
+    let out = device.alloc_zeroed::<f32>(24).unwrap();
+    kron_into(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+        StridedOperand {
+            buffer: &out,
+            layout: &out_layout,
+        },
+    )
+    .unwrap();
+    let mut into_got = vec![0.0f32; 24];
+    device.download(&out, &mut into_got).unwrap();
+
+    let allocated = kron(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let mut alloc_got = vec![0.0f32; 24];
+    device.download(&allocated, &mut alloc_got).unwrap();
+    assert_eq!(
+        alloc_got, into_got,
+        "the allocating kron wrapper must match kron_into element-for-element"
+    );
+}
+
+pub(super) fn linalg_matpow_zero_exponent_overwrites_alternate_identity_storage() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, matpow};
+    use leto::Layout;
+
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let alternate = device.upload(&[AlternateIdentity(4); 4]).unwrap();
+    let identity = matpow(
+        &device,
+        StridedOperand {
+            buffer: &alternate,
+            layout: &layout,
+        },
+        0,
+    )
+    .unwrap();
+    let mut actual = vec![AlternateIdentity(0); 4];
+    device.download(&identity, &mut actual).unwrap();
+    assert_eq!(
+        actual,
+        vec![
+            AlternateIdentity(9),
+            AlternateIdentity(-7),
+            AlternateIdentity(-7),
+            AlternateIdentity(9),
+        ]
+    );
+}
+
+pub(super) fn linalg_matpow_rejects_non_square() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, matpow};
+    use leto::Layout;
+
+    let host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    assert_dispatch_message(
+        matpow(
+            &device,
+            StridedOperand {
+                buffer: &input,
+                layout: &layout,
+            },
+            2,
+        ),
+        "matpow requires a square matrix, got shape [2, 3]",
+    );
+}
+
+pub(super) fn linalg_dot_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, dot};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![5.0f32, 6.0, 7.0, 8.0];
+    let expected = 1.0 * 5.0 + 2.0 * 6.0 + 3.0 * 7.0 + 4.0 * 8.0; // 70.0
+
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+
+    let a_layout = Layout::c_contiguous([4]).unwrap();
+    let b_layout = Layout::c_contiguous([4]).unwrap();
+
+    let out_buf = dot(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+        StridedOperand {
+            buffer: &b,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = [0.0f32; 1];
+    device.download(&out_buf, &mut got).unwrap();
+    assert_eq!(got[0], expected);
+}
+
+pub(super) fn prepared_dot_reuses_output_and_observes_input_updates() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, prepare_dot};
+    use leto::Layout;
+
+    const LEN: usize = 1_025;
+    let mut lhs_host = vec![1.0f32; LEN];
+    let rhs_host = vec![1.0f32; LEN];
+    let lhs = device.upload(&lhs_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([LEN]).unwrap();
+    let prepared = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &lhs,
+            layout: &layout,
+        },
+        StridedOperand {
+            buffer: &rhs,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let output_handle = prepared.output().raw().clone();
+
+    prepared.dispatch(&device).unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [LEN as f32]);
+    assert_eq!(&output_handle, prepared.output().raw());
+
+    lhs_host.fill(2.0);
+    device.write_buffer(&lhs, &lhs_host).unwrap();
+    prepared.dispatch(&device).unwrap();
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [2.0 * LEN as f32]);
+    assert_eq!(&output_handle, prepared.output().raw());
+}
+
+pub(super) fn linalg_trace_matches_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, trace};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+    let expected = 1.0 + 5.0 + 9.0; // 15.0
+
+    let a = device.upload(&a_host).unwrap();
+    let a_layout = Layout::c_contiguous([3, 3]).unwrap();
+
+    let out_buf = trace(
+        &device,
+        StridedOperand {
+            buffer: &a,
+            layout: &a_layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = [0.0f32; 1];
+    device.download(&out_buf, &mut got).unwrap();
+    assert_eq!(got[0], expected);
+}
+
+pub(super) fn linalg_matrix_rank_rejects_empty_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    let empty = device.alloc_zeroed::<f32>(1).unwrap();
+    let empty_layout = Layout::c_contiguous([0, 3]).unwrap();
+    let result = matrix_rank(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("empty matrix")
+    ));
+}
+
+pub(super) fn linalg_det_rejects_rectangular_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, det};
+    use leto::Layout;
+
+    let rectangular = device.alloc_zeroed::<f32>(6).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = det(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("square matrix")
+    ));
+}
+
+/// Pins the GPU `matrix_rank` relative-threshold contract at the boundary that
+/// the residual register flagged as the ill-conditioned divergence risk: a pivot
+/// counts toward the rank iff its magnitude exceeds
+/// `relative_tolerance * max(abs(matrix))`. For `diag(1, 1, δ)` the max element
+/// is `1` and the singular values equal the diagonal magnitudes, so the
+/// threshold alone decides the rank and the GPU row-reduction result must agree
+/// with Leto's SVD-spectrum result for both tolerances.
+pub(super) fn matrix_rank_relative_tolerance_is_the_discriminator() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::StridedOperand;
+    use leto::Layout;
+
+    // diag(1, 1, 1e-4): max abs = 1, smallest singular value = 1e-4.
+    let host = vec![1.0f32, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0e-4];
+    let buffer = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], host).unwrap();
+
+    let tol_keep = 1.0e-6f32; // 1e-4 > 1e-6 * 1 -> small pivot retained
+    let tol_drop = 1.0e-2f32; // 1e-4 < 1e-2 * 1 -> small pivot dropped
+
+    let operand = |buffer| StridedOperand {
+        buffer,
+        layout: &layout,
+    };
+    let rank_keep = matrix_rank_with_tolerance(&device, operand(&buffer), tol_keep).unwrap();
+    let rank_drop = matrix_rank_with_tolerance(&device, operand(&buffer), tol_drop).unwrap();
+
+    assert_eq!(
+        rank_keep, 3,
+        "1e-4 > 1e-6 * max_abs must count the small pivot"
+    );
+    assert_eq!(
+        rank_drop, 2,
+        "1e-4 < 1e-2 * max_abs must drop the small pivot"
+    );
+
+    // The diagonal case has singular values == pivot magnitudes, so Leto's
+    // SVD-spectrum criterion agrees with the GPU row-reduction threshold.
+    let leto_keep = leto_ops::matrix_rank_with_tolerance(&leto_matrix.view(), tol_keep).unwrap();
+    let leto_drop = leto_ops::matrix_rank_with_tolerance(&leto_matrix.view(), tol_drop).unwrap();
+    assert_eq!(rank_keep, leto_keep);
+    assert_eq!(rank_drop, leto_drop);
+}
+
+/// Pins the GPU `det` contract on an ill-conditioned (tiny-pivot) matrix: the
+/// kernel returns the row-reduction pivot product with no determinant-tolerance
+/// zeroing (`det` passes `tolerance == 0`, so only exactly-zero pivots drop), so
+/// a near-singular matrix yields its small, nonzero determinant. The input is
+/// upper-triangular, so elimination performs no row operations and the result is
+/// the analytical pivot product `2 * 3 * δ`.
+pub(super) fn det_of_near_singular_triangular_is_exact_pivot_product() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, det};
+    use leto::Layout;
+
+    let delta = 1.0e-5f32;
+    let host = vec![2.0f32, 1.0, 5.0, 0.0, 3.0, 7.0, 0.0, 0.0, delta];
+    let buffer = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([3, 3], host).unwrap();
+
+    let det_buf = det(
+        &device,
+        StridedOperand {
+            buffer: &buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(&det_buf, &mut got).unwrap();
+
+    // Triangular elimination performs no row operations, so the only error is
+    // the f32 rounding of `delta` and the pivot product; a few ulps bound it.
+    let analytical = 6.0f32 * delta;
+    let tol = analytical.abs() * 8.0 * f32::EPSILON;
+    assert!(
+        (got[0] - analytical).abs() <= tol,
+        "GPU det {} must match analytical pivot product {analytical} within {tol}",
+        got[0]
+    );
+    // The determinant must NOT be zeroed despite being tiny (no det tolerance).
+    assert!(
+        got[0] > 0.0,
+        "near-singular det must stay strictly positive, got {}",
+        got[0]
+    );
+    // Differential: Leto's determinant agrees on this triangular input.
+    let leto_det = leto_ops::det(&leto_matrix.view()).unwrap();
+    assert!((got[0] - leto_det).abs() <= tol);
+}
+
+#[cfg(feature = "decomposition")]
+/// The blocked-Cholesky differential is one shared clause (SUBSTRATE-003):
+/// the fixtures and assertions live in `hephaestus-conformance`, generic over
+/// the `BlockedCholeskyBackend` seam the shared `blocked_cholesky` loop drives.
+/// This instantiation supplies the device and the panel width the blocked
+/// entry point factors with.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    const BLOCK_SIZE: usize = 64;
+    hephaestus_conformance::assert_blocked_cholesky_contract(&device, BLOCK_SIZE);
+}
+
+/// The blocked-QR differential is one shared clause (SUBSTRATE-003): the
+/// fixtures and assertions live in `hephaestus-conformance`, generic over the
+/// `BlockedQrBackend` seam the shared `blocked_qr` loop drives. This
+/// instantiation supplies the device and the panel width the blocked entry
+/// point factors with.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    const BLOCK_SIZE: usize = 32;
+    hephaestus_conformance::assert_blocked_qr_contract(&device, BLOCK_SIZE);
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn symmetric_eigen_jacobi_rejects_non_symmetric_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, symmetric_eigen_jacobi};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 0.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("not symmetric")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn eigenvalues_match_closed_form_diagonal() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
+    use leto::Layout;
+
+    let matrix_host = vec![2.0f32, 0.0, 0.0, 3.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let eigen = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![eunomia::Complex::new(0.0f32, 0.0); 2];
+    device.download(&eigen, &mut got).unwrap();
+    got.sort_by(|lhs, rhs| lhs.re.total_cmp(&rhs.re));
+
+    let expected = [
+        eunomia::Complex::new(2.0f32, 0.0),
+        eunomia::Complex::new(3.0f32, 0.0),
+    ];
+    for (index, (&actual, &expected)) in got.iter().zip(expected.iter()).enumerate() {
+        assert_eq!(
+            actual, expected,
+            "general eigenvalue mismatch at {index}: got {actual:?}, expected {expected:?}"
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn eigenvalues_match_exact_complex_pair_blocks() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use eunomia::Complex;
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
+    use leto::Layout;
+
+    let cases: [(usize, Vec<f32>, Vec<Complex<f32>>); 2] = [
+        (
+            2,
+            vec![1.0, -1.0, 1.0, 1.0],
+            vec![Complex::new(1.0, -1.0), Complex::new(1.0, 1.0)],
+        ),
+        (
+            3,
+            vec![0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 2.0],
+            vec![
+                Complex::new(0.0, -1.0),
+                Complex::new(0.0, 1.0),
+                Complex::new(2.0, 0.0),
+            ],
+        ),
+    ];
+
+    for (n, matrix_host, expected) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn eigenvalues_match_structured_and_dense_leto_oracles() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use eunomia::Complex;
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
+    use leto::Layout;
+
+    let cases: [(usize, Vec<f32>, f32); 4] = [
+        (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0], 1.0e-5),
+        (3, vec![2.0, 1.0, 1.0, 0.0, 3.0, 1.0, 0.0, 1.0, 3.0], 1.0e-5),
+        (
+            4,
+            vec![
+                0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, -2.0, 0.0, 0.0, 2.0, 1.0,
+            ],
+            1.0e-5,
+        ),
+        (
+            5,
+            (0..25)
+                .map(|index| ((index * 7 + 3) % 11) as f32 - 5.0)
+                .collect(),
+            1.0e-3,
+        ),
+    ];
+
+    for (n, matrix_host, abs_tol) in cases {
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([n, n]).unwrap();
+        let eigen = eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+
+        let mut got = vec![Complex::new(0.0f32, 0.0); n];
+        device.download(&eigen, &mut got).unwrap();
+        let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+        let expected: Vec<Complex<f32>> = leto_ops::eigenvalues(&leto_matrix.view())
+            .unwrap()
+            .iter()
+            .map(|c| Complex::new(c.re, c.im))
+            .collect();
+        assert_complex_spectra_close(&got, &expected, abs_tol, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn eigenvalues_symmetric_input_is_real_and_matches_leto() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use eunomia::Complex;
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
+    use leto::Layout;
+
+    let n = 3usize;
+    let matrix_host = vec![6.0f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let eigen = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![Complex::new(0.0f32, 0.0); n];
+    device.download(&eigen, &mut got).unwrap();
+    for value in &got {
+        assert!(
+            value.im.abs() <= 1.0e-5,
+            "symmetric input produced complex eigenvalue {value:?}"
+        );
+    }
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let expected: Vec<Complex<f32>> = leto_ops::eigenvalues(&leto_matrix.view())
+        .unwrap()
+        .iter()
+        .map(|c| Complex::new(c.re, c.im))
+        .collect();
+    assert_complex_spectra_close(&got, &expected, 1.0e-5, 1.0e-5);
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn eigenvalues_rejects_non_square_input() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, eigenvalues};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn singular_values_match_closed_form_diagonal() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, singular_values};
+    use leto::Layout;
+
+    let matrix_host = vec![3.0f32, 0.0, 0.0, 0.0, 2.0, 0.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let values = singular_values(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got = vec![0.0f32; 2];
+    device.download(&values, &mut got).unwrap();
+    assert_eq!(got.len(), 2);
+    assert_close(got[0], 3.0, 1.0e-5);
+    assert_close(got[1], 2.0, 1.0e-5);
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn svd_decompose_reconstructs_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, svd_decompose};
+    use leto::Layout;
+
+    let rows = 4usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_svd = svd_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_svd.shape(), (rows, cols));
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host.clone()).unwrap();
+    let leto_svd = leto_ops::svd_decompose(&leto_matrix.view()).unwrap();
+
+    let rank = leto_svd.singular_values.len();
+    let mut got_singular = vec![0.0f32; rank];
+    let mut got_u = vec![0.0f32; rows * rank];
+    let mut got_v = vec![0.0f32; cols * rank];
+    device
+        .download(gpu_svd.singular_values(), &mut got_singular)
+        .unwrap();
+    device.download(gpu_svd.u(), &mut got_u).unwrap();
+    device.download(gpu_svd.v(), &mut got_v).unwrap();
+
+    for (actual, expected) in got_singular.iter().zip(leto_svd.singular_values.iter()) {
+        assert_close(*actual, *expected, 1.0e-5);
+    }
+
+    let reconstructed = reconstruct_svd(&got_u, &got_singular, &got_v, rows, cols);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn svd_rank_revealing_accepts_rank_deficient_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, svd_rank_revealing};
+    use leto::Layout;
+
+    let rows = 3usize;
+    let cols = 2usize;
+    let matrix_host = vec![1.0f32, 2.0, 2.0, 4.0, 3.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_svd = svd_rank_revealing(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host).unwrap();
+    let leto_svd = leto_ops::svd_decompose(&leto_matrix.view()).unwrap();
+    let rank = leto_svd.singular_values.len();
+    let mut got_singular = vec![0.0f32; rank];
+    device
+        .download(gpu_svd.singular_values(), &mut got_singular)
+        .unwrap();
+
+    assert_eq!(rank, 2);
+    assert!(got_singular[0] >= got_singular[1]);
+    assert_close(got_singular[1], 0.0, 1.0e-5);
+    for (actual, expected) in got_singular.iter().zip(leto_svd.singular_values.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn bidiagonalize_reconstructs_and_preserves_singular_values() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, bidiagonalize, singular_values};
+    use leto::Layout;
+
+    let rows = 4usize;
+    let cols = 3usize;
+    let matrix_host = vec![
+        4.0f32, 1.0, -2.0, 2.0, 3.0, 0.0, 1.0, -1.0, 2.0, 0.0, 5.0, -3.0,
+    ];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let gpu_bd = bidiagonalize(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_bd.shape(), (rows, cols));
+    let mut u = vec![0.0f32; rows * rows];
+    let mut b = vec![0.0f32; rows * cols];
+    let mut v = vec![0.0f32; cols * cols];
+    device.download(gpu_bd.u_buffer(), &mut u).unwrap();
+    device.download(gpu_bd.b_buffer(), &mut b).unwrap();
+    device.download(gpu_bd.v_buffer(), &mut v).unwrap();
+
+    assert_orthogonal_host(&u, rows, 1.0e-4);
+    assert_orthogonal_host(&v, cols, 1.0e-4);
+    for row in 0..rows {
+        for col in 0..cols {
+            if col < row || col > row + 1 {
+                assert_close(b[row * cols + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+
+    let ub = matmul_host(&u, rows, rows, &b, cols);
+    let vt = transpose_host(&v, cols, cols);
+    let reconstructed = matmul_host(&ub, rows, cols, &vt, cols);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let b_buffer = device.upload(&b).unwrap();
+    let b_layout = Layout::c_contiguous([rows, cols]).unwrap();
+    let sv_b = singular_values(
+        &device,
+        StridedOperand {
+            buffer: &b_buffer,
+            layout: &b_layout,
+        },
+    )
+    .unwrap();
+    let sv_a = singular_values(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_b = vec![0.0f32; cols];
+    let mut got_a = vec![0.0f32; cols];
+    device.download(&sv_b, &mut got_b).unwrap();
+    device.download(&sv_a, &mut got_a).unwrap();
+    for (actual, expected) in got_b.iter().zip(got_a.iter()) {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn bidiagonalize_rejects_wide_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, bidiagonalize};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = bidiagonalize(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Bidiagonalization requires")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn schur_reconstructs_quasi_triangular_and_preserves_spectrum() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, eigenvalues, schur};
+    use leto::Layout;
+
+    let n = 3usize;
+    let matrix_host = vec![
+        1.0f32, -3.0, 0.0, //
+        2.0, 1.0, 0.0, //
+        0.0, 0.0, 5.0,
+    ];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_schur = schur(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_schur.n(), n);
+    let mut q = vec![0.0f32; n * n];
+    let mut t = vec![0.0f32; n * n];
+    device.download(gpu_schur.q_buffer(), &mut q).unwrap();
+    device.download(gpu_schur.t_buffer(), &mut t).unwrap();
+
+    assert_orthogonal_host(&q, n, 1.0e-4);
+    for row in 0..n {
+        for col in 0..n {
+            if row > col + 1 {
+                assert_close(t[row * n + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+    for block in 0..(n - 1) {
+        if t[(block + 1) * n + block].abs() > 1.0e-4 {
+            let aa = t[block * n + block];
+            let bb = t[block * n + block + 1];
+            let cc = t[(block + 1) * n + block];
+            let dd = t[(block + 1) * n + block + 1];
+            let discriminant = (aa - dd) * (aa - dd) + 4.0 * bb * cc;
+            assert!(
+                discriminant <= 1.0e-4,
+                "real Schur 2x2 block must encode a complex pair, discriminant {discriminant}"
+            );
+        }
+    }
+
+    let qt = matmul_host(&q, n, n, &t, n);
+    let q_transposed = transpose_host(&q, n, n);
+    let reconstructed = matmul_host(&qt, n, n, &q_transposed, n);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let t_buffer = device.upload(&t).unwrap();
+    let t_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &t_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_t = vec![eunomia::Complex::new(0.0f32, 0.0); n];
+    let mut got_a = vec![eunomia::Complex::new(0.0f32, 0.0); n];
+    device.download(&t_values, &mut got_t).unwrap();
+    device.download(&a_values, &mut got_a).unwrap();
+    assert_complex_spectrum_close(&got_t, &got_a, 1.0e-4);
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn schur_rejects_rectangular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, schur};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = schur(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+    device
+        .device()
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn hessenberg_reconstructs_and_preserves_similarity_invariants() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, hessenberg, norm_l2, trace};
+    use leto::Layout;
+
+    let n = 4usize;
+    let matrix_host = vec![
+        4.0f32, 5.0, -2.0, 2.0, //
+        1.0, 2.0, 0.0, 1.0, //
+        -2.0, 0.0, 3.0, -2.0, //
+        2.0, 1.0, -2.0, -1.0,
+    ];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_hessenberg = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_hessenberg.n(), n);
+    let mut q = vec![0.0f32; n * n];
+    let mut h = vec![0.0f32; n * n];
+    device.download(gpu_hessenberg.q_buffer(), &mut q).unwrap();
+    device.download(gpu_hessenberg.h_buffer(), &mut h).unwrap();
+
+    assert_orthogonal_host(&q, n, 1.0e-4);
+    for row in 0..n {
+        for col in 0..n {
+            if row > col + 1 {
+                assert_close(h[row * n + col], 0.0, 1.0e-4);
+            }
+        }
+    }
+
+    let qh = matmul_host(&q, n, n, &h, n);
+    let q_transposed = transpose_host(&q, n, n);
+    let reconstructed = matmul_host(&qh, n, n, &q_transposed, n);
+    for (actual, expected) in reconstructed.iter().zip(matrix_host.iter()) {
+        assert_close(*actual, *expected, 1.0e-3);
+    }
+
+    let h_buffer = device.upload(&h).unwrap();
+    let h_trace = trace(
+        &device,
+        StridedOperand {
+            buffer: &h_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_trace = trace(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_h_trace = vec![0.0f32; 1];
+    let mut got_a_trace = vec![0.0f32; 1];
+    device.download(&h_trace, &mut got_h_trace).unwrap();
+    device.download(&a_trace, &mut got_a_trace).unwrap();
+    assert_close(got_h_trace[0], got_a_trace[0], 1.0e-4);
+
+    let h_norm = norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &h_buffer,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let a_norm = norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let mut got_h_norm = vec![0.0f32; 1];
+    let mut got_a_norm = vec![0.0f32; 1];
+    device.download(&h_norm, &mut got_h_norm).unwrap();
+    device.download(&a_norm, &mut got_a_norm).unwrap();
+    assert_close(got_h_norm[0], got_a_norm[0], 1.0e-3);
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn hessenberg_rejects_rectangular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, hessenberg};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn full_piv_lu_reconstructs_and_matches_leto_oracles() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
+    use leto::Layout;
+
+    let n = 4usize;
+    let matrix_host = vec![
+        2.0f32, 5.0, -2.0, 2.0, //
+        1.0, 2.0, 3.0, 1.0, //
+        -2.0, 4.0, 3.0, -2.0, //
+        2.0, 1.0, -1.0, -1.0,
+    ];
+    let rhs_host = vec![3.0f32, -1.0, 2.0, 5.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_lu = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_lu.n(), n);
+    assert_eq!(gpu_lu.rank(), n);
+    let mut packed = vec![0.0f32; n * n];
+    device.download(gpu_lu.lu_buffer(), &mut packed).unwrap();
+    let lu = packed_lu_product(&packed, n);
+    for row in 0..n {
+        for col in 0..n {
+            let expected =
+                matrix_host[gpu_lu.row_permutation()[row] * n + gpu_lu.col_permutation()[col]];
+            assert_close(lu[row * n + col], expected, 1.0e-4);
+        }
+    }
+
+    let leto_matrix = leto::Array::from_shape_vec([n, n], matrix_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([n], rhs_host).unwrap();
+    let leto_lu = leto_ops::full_piv_lu(&leto_matrix.view()).unwrap();
+    assert_close(gpu_lu.det(), leto_lu.det(), 1.0e-4);
+
+    let solution = gpu_lu.solve(&device, &rhs).unwrap();
+    let expected_solution = leto_lu.solve(&leto_rhs.view()).unwrap();
+    let mut got_solution = vec![0.0f32; n];
+    device.download(&solution, &mut got_solution).unwrap();
+    for (actual, expected) in got_solution
+        .iter()
+        .zip(leto::Storage::as_slice(expected_solution.storage()))
+    {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+
+    let inverse = gpu_lu.inv(&device).unwrap();
+    let expected_inverse = leto_lu.inv().unwrap();
+    let mut got_inverse = vec![0.0f32; n * n];
+    device.download(&inverse, &mut got_inverse).unwrap();
+    for (actual, expected) in got_inverse
+        .iter()
+        .zip(leto::Storage::as_slice(expected_inverse.storage()))
+    {
+        assert_close(*actual, *expected, 1.0e-4);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn full_piv_lu_reveals_rank_deficiency_and_rejects_inverse() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
+    use leto::Layout;
+
+    let n = 3usize;
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 6.0, 1.0, 1.0, 1.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_lu = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_lu.rank(), 2);
+    assert_close(gpu_lu.det(), 0.0, 1.0e-5);
+    assert!(matches!(
+        gpu_lu.inv(&device),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("FullPivLU inverse failed")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn full_piv_lu_rejects_rectangular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, full_piv_lu};
+    use leto::Layout;
+
+    let matrix_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_pivoted_decompositions_match_ordinary_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{
+        StridedOperand, col_piv_qr, col_piv_qr_blocked, full_piv_lu, full_piv_lu_blocked,
+    };
+    use leto::Layout;
+
+    let square_host = [2.0f32, 5.0, -2.0, 1.0, 2.0, 3.0, -2.0, 4.0, 3.0];
+    let square = device.upload(&square_host).unwrap();
+    let square_layout = Layout::c_contiguous([3, 3]).unwrap();
+    let square_operand = StridedOperand {
+        buffer: &square,
+        layout: &square_layout,
+    };
+    let ordinary_lu = full_piv_lu(&device, square_operand).unwrap();
+    let blocked_lu = full_piv_lu_blocked(&device, square_operand).unwrap();
+    assert_eq!(blocked_lu.rank(), ordinary_lu.rank());
+    assert_eq!(blocked_lu.row_permutation(), ordinary_lu.row_permutation());
+    assert_eq!(blocked_lu.col_permutation(), ordinary_lu.col_permutation());
+    assert_close(blocked_lu.det(), ordinary_lu.det(), 1.0e-5);
+    let mut ordinary_factors = vec![0.0f32; 9];
+    let mut blocked_factors = vec![0.0f32; 9];
+    device
+        .download(ordinary_lu.lu_buffer(), &mut ordinary_factors)
+        .unwrap();
+    device
+        .download(blocked_lu.lu_buffer(), &mut blocked_factors)
+        .unwrap();
+    assert_close_slice(&blocked_factors, &ordinary_factors, 1.0e-5, 0.0);
+
+    let tall_host = [1.0f32, 0.0, 0.0, 2.0, 0.0, 0.0];
+    let tall = device.upload(&tall_host).unwrap();
+    let tall_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let tall_operand = StridedOperand {
+        buffer: &tall,
+        layout: &tall_layout,
+    };
+    let ordinary_qr = col_piv_qr(&device, tall_operand).unwrap();
+    let blocked_qr = col_piv_qr_blocked(&device, tall_operand).unwrap();
+    assert_eq!(blocked_qr.rank(), ordinary_qr.rank());
+    assert_eq!(blocked_qr.permutation(), ordinary_qr.permutation());
+    let mut ordinary_q = vec![0.0f32; 9];
+    let mut blocked_q = vec![0.0f32; 9];
+    let mut ordinary_r = vec![0.0f32; 6];
+    let mut blocked_r = vec![0.0f32; 6];
+    device.download(ordinary_qr.q(), &mut ordinary_q).unwrap();
+    device.download(blocked_qr.q(), &mut blocked_q).unwrap();
+    device.download(ordinary_qr.r(), &mut ordinary_r).unwrap();
+    device.download(blocked_qr.r(), &mut blocked_r).unwrap();
+    assert_close_slice(&blocked_q, &ordinary_q, 1.0e-5, 0.0);
+    assert_close_slice(&blocked_r, &ordinary_r, 1.0e-5, 0.0);
+}
 
 // ── write_buffer tests ────────────────────────────────────────────────
 
+pub(super) fn write_buffer_overwrites_existing_data() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    // Upload initial data.
+    let initial = vec![1.0f32, 2.0, 3.0, 4.0];
+    let buf = device.upload(&initial).unwrap();
+
+    // Overwrite with new data via write_buffer.
+    let updated = vec![10.0f32, 20.0, 30.0, 40.0];
+    device.write_buffer(&buf, &updated).unwrap();
+
+    // Download and verify the overwritten data.
+    let mut got = vec![0.0f32; 4];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, updated);
+}
+
+pub(super) fn write_buffer_rejects_length_mismatch() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    let wrong_len = vec![1.0f32, 2.0]; // len 2, buffer len 3
+    let result: hephaestus_wgpu::Result<()> = device.write_buffer(&buf, &wrong_len);
+    assert_length_mismatch(result, 2, 3);
+}
+
+pub(super) fn write_buffer_empty_is_noop() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload::<f32>(&[]).unwrap();
+    device.write_buffer(&buf, &[] as &[f32]).unwrap();
+    assert_eq!(buf.len(), 0);
+}
+
+pub(super) fn write_buffer_integer_types() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[0i32, 0, 0]).unwrap();
+    let data = vec![42i32, -7, 100];
+    device.write_buffer(&buf, &data).unwrap();
+
+    let mut got = vec![0i32; 3];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, data);
+}
+
+pub(super) fn write_sub_buffer_overwrites_only_requested_range() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    device.write_sub_buffer(&buf, 1, &[20.0f32, 30.0]).unwrap();
+
+    let mut got = [0.0f32; 4];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [1.0, 20.0, 30.0, 4.0]);
+}
+
+pub(super) fn write_sub_buffer_rejects_out_of_range_write() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[1.0f32, 2.0, 3.0]).unwrap();
+    assert_length_mismatch(device.write_sub_buffer(&buf, 2, &[4.0f32, 5.0]), 4, 3);
+}
+
+pub(super) fn write_sub_buffer_empty_tail_write_is_noop() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+
+    let buf = device.upload(&[9i32, 8, 7]).unwrap();
+    device.write_sub_buffer(&buf, 3, &[] as &[i32]).unwrap();
+
+    let mut got = [0i32; 3];
+    device.download(&buf, &mut got).unwrap();
+    assert_eq!(got, [9, 8, 7]);
+}
+
 // ── Extended differential decomposition tests ─────────────────────────────
 
+#[cfg(feature = "decomposition")]
+pub(super) fn cholesky_rejects_singular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky decomposition failed: Storage error: Cholesky pivot 0 is non-positive: matrix is not positive-definite",
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn lu_rejects_singular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, lu_decompose};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: LU decomposition failed: Storage error: LU pivot column 0 is exactly zero: matrix is singular",
+    );
+}
+
+pub(super) fn linalg_norms_match_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, norm_l1, norm_l2, norm_max};
+    use leto::Layout;
+
+    let a_host = vec![-1.0f32, 2.0, -3.0, 4.0];
+    let a = device.upload(&a_host).unwrap();
+    let a_layout = Layout::c_contiguous([4]).unwrap();
+    let operand = StridedOperand {
+        buffer: &a,
+        layout: &a_layout,
+    };
+
+    // L1 norm: 1 + 2 + 3 + 4 = 10
+    let l1_buf = norm_l1(&device, operand).unwrap();
+    let mut got_l1 = [0.0f32; 1];
+    device.download(&l1_buf, &mut got_l1).unwrap();
+    assert_eq!(got_l1[0], 10.0);
+
+    // L2 norm: sqrt(1 + 4 + 9 + 16) = sqrt(30)
+    let l2_buf = norm_l2(&device, operand).unwrap();
+    let mut got_l2 = [0.0f32; 1];
+    device.download(&l2_buf, &mut got_l2).unwrap();
+    let expected_l2 = 30.0f32.sqrt();
+    let l2_tolerance = 2.0 * f32::EPSILON * expected_l2.max(1.0);
+    assert!(
+        (got_l2[0] - expected_l2).abs() <= l2_tolerance,
+        "l2 norm mismatch: got {}, expected {}, tolerance {}",
+        got_l2[0],
+        expected_l2,
+        l2_tolerance
+    );
+
+    // Max norm: max(1, 2, 3, 4) = 4
+    let max_buf = norm_max(&device, operand).unwrap();
+    let mut got_max = [0.0f32; 1];
+    device.download(&max_buf, &mut got_max).unwrap();
+    assert_eq!(got_max[0], 4.0);
+}
+
+pub(super) fn prepared_l2_norm_reuses_output_and_observes_input_updates() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, prepare_norm_l2};
+    use leto::Layout;
+
+    const LEN: usize = 1_024;
+    let mut host = vec![3.0f32; LEN];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([LEN]).unwrap();
+    let prepared = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    let output_handle = prepared.output().raw().clone();
+
+    prepared.dispatch(&device).unwrap();
+    let mut got = [0.0f32; 1];
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [96.0]);
+    assert_eq!(&output_handle, prepared.output().raw());
+
+    host.fill(4.0);
+    device.write_buffer(&input, &host).unwrap();
+    prepared.dispatch(&device).unwrap();
+    device.download(prepared.output(), &mut got).unwrap();
+    assert_eq!(got, [128.0]);
+    assert_eq!(&output_handle, prepared.output().raw());
+}
+
+pub(super) fn linalg_reductions_accept_strided_views() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, dot, norm_l1, norm_l2, norm_max};
+    use leto::Layout;
+
+    let a_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_host = vec![10.0f32, 20.0, 30.0, 40.0];
+    let a = device.upload(&a_host).unwrap();
+    let b = device.upload(&b_host).unwrap();
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
+    let contiguous = Layout::c_contiguous([4]).unwrap();
+    let reversed_a = StridedOperand {
+        buffer: &a,
+        layout: &reversed,
+    };
+    let contiguous_b = StridedOperand {
+        buffer: &b,
+        layout: &contiguous,
+    };
+
+    let dot_buf = dot(&device, reversed_a, contiguous_b).unwrap();
+    let mut got_dot = [0.0f32; 1];
+    device.download(&dot_buf, &mut got_dot).unwrap();
+    assert_eq!(
+        got_dot[0],
+        4.0 * 10.0 + 3.0 * 20.0 + 2.0 * 30.0 + 1.0 * 40.0
+    );
+
+    let l1_buf = norm_l1(&device, reversed_a).unwrap();
+    let mut got_l1 = [0.0f32; 1];
+    device.download(&l1_buf, &mut got_l1).unwrap();
+    assert_eq!(got_l1[0], 10.0);
+
+    let l2_buf = norm_l2(&device, reversed_a).unwrap();
+    let mut got_l2 = [0.0f32; 1];
+    device.download(&l2_buf, &mut got_l2).unwrap();
+    let expected_l2 = 30.0f32.sqrt();
+    let l2_tolerance = 2.0 * f32::EPSILON * expected_l2.max(1.0);
+    assert!(
+        (got_l2[0] - expected_l2).abs() <= l2_tolerance,
+        "l2 norm mismatch: got {}, expected {}, tolerance {}",
+        got_l2[0],
+        expected_l2,
+        l2_tolerance
+    );
+
+    let max_buf = norm_max(&device, reversed_a).unwrap();
+    let mut got_max = [0.0f32; 1];
+    device.download(&max_buf, &mut got_max).unwrap();
+    assert_eq!(got_max[0], 4.0);
+}
+
 // ── Blocked decomposition differential tests ────────────────────────────
+
+/// The blocked-LU differential is one shared clause (SUBSTRATE-003): the
+/// fixtures and assertions live in `hephaestus-conformance`, generic over the
+/// `BlockedDecompositionBackend` seam the shared `blocked_lu` loop drives.
+/// This instantiation supplies the device and the panel width the blocked
+/// entry points factor with.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_lu_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    const BLOCK_SIZE: usize = 64;
+    hephaestus_conformance::assert_blocked_lu_contract(&device, BLOCK_SIZE);
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_least_squares_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    // 70×35 matrix exercises two QR blocks (QR_BLOCK_SIZE = 32).
+    let (m, n) = (70, 35);
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([m, n], matrix_host.clone()).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+    let gpu_qr = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    // The shared blocked-QR clause owns the R differential. This wrapper-level
+    // clause retains only the backend solve path, which the core loop does not
+    // expose.
+    let rhs_host: Vec<f32> = (0..m).map(|i| (i + 1) as f32).collect();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let leto_rhs = leto::Array::from_shape_vec([m], rhs_host).unwrap();
+    let solution = gpu_qr.solve_least_squares(&device, &rhs).unwrap();
+    let expected_solution = leto_qr.solve_least_squares(&leto_rhs.view()).unwrap();
+    let mut got = vec![0.0f32; n];
+    device.download(&solution, &mut got).unwrap();
+    let expected = leto::Storage::as_slice(expected_solution.storage());
+    // For this near-consistent, well-conditioned system (κ₂ ≈ 1, so the
+    // κ²·residual term of least-squares sensitivity is negligible) two
+    // backward-stable solves differ by ≤ 2·c(m)·ε·‖x‖∞ with c(m) ≤ 4·m;
+    // 8·m·ε·‖x‖∞ doubles that.
+    let x_inf = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    let solve_bound = 8.0 * m as f32 * f32::EPSILON * x_inf;
+    for i in 0..n {
+        assert!(
+            (got[i] - expected[i]).abs() <= solve_bound,
+            "blocked QR solve x[{i}] = {} expected {}",
+            got[i],
+            expected[i]
+        );
+    }
+}
+
+/// `r_buffer()` denotes the same mathematical object on both QR entry points,
+/// in both of the blocked entry's routing regimes.
+///
+/// `qr_decompose` uploads the host factor's **R**. `qr_decompose_blocked`
+/// delegates to it at or below `QR_DIRECT_PANEL_LIMIT` (4) panels of
+/// `QR_BLOCK_SIZE` (32) columns, and only past that runs the device schedule
+/// whose panel write-back zeroes every `col < row` entry before the buffer
+/// reaches the caller. Both regimes are exercised here: a shape at `n = 35`
+/// (2 panels, delegating) and one at `n = 129` (5 panels, device path). A
+/// shape inside the delegating regime alone would assert nothing about the
+/// device write-back — the two handles would be the same uploaded buffer.
+#[cfg(feature = "decomposition")]
+pub(super) fn qr_r_buffer_is_upper_triangular_on_both_entry_points() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // (m, n, exercises the device schedule)
+    for (m, n, blocked_route) in [(70usize, 35usize, false), (138usize, 129usize, true)] {
+        qr_r_buffer_contract_at_shape(&device, m, n, blocked_route);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn qr_r_buffer_contract_at_shape(
+    device: &hephaestus_wgpu::WgpuDevice,
+    m: usize,
+    n: usize,
+    blocked_route: bool,
+) {
+    use hephaestus_wgpu::{StridedOperand, qr_decompose, qr_decompose_blocked};
+    use leto::Layout;
+
+    assert_eq!(
+        n.div_ceil(32) > 4,
+        blocked_route,
+        "fixture [{m}, {n}] must land in the intended routing regime"
+    );
+
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let operand = || StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+
+    let direct = qr_decompose(device, operand()).unwrap();
+    let blocked = qr_decompose_blocked(device, operand()).unwrap();
+    assert_eq!(direct.shape(), (m, n));
+    assert_eq!(blocked.shape(), (m, n));
+
+    let mut direct_r = vec![0.0f32; m * n];
+    let mut blocked_r = vec![0.0f32; m * n];
+    device.download(direct.r_buffer(), &mut direct_r).unwrap();
+    device.download(blocked.r_buffer(), &mut blocked_r).unwrap();
+
+    for row in 1..m {
+        for col in 0..n.min(row) {
+            for (label, values) in [("direct", &direct_r), ("blocked", &blocked_r)] {
+                let value = values[row * n + col];
+                assert!(
+                    value.abs() <= f32::EPSILON,
+                    "{label} R[{row}, {col}] = {value} must be zero at [{m}, {n}]: r_buffer()                      is the upper-triangular factor on both entry points"
+                );
+            }
+        }
+    }
+
+    // The device buffer and the host factor's R are the same object written to
+    // two places: each R row is produced once — by leto on the delegating
+    // route, by the panel factorisation on the device route — and stored to
+    // both `packed` and the buffer. Callers that return `r_buffer()` instead
+    // of uploading `inner().r()`, as the Python binding does, depend on that
+    // identity, so it is asserted exactly rather than within a tolerance.
+    let blocked_inner_r = blocked.inner().r();
+    let blocked_inner_values = leto::Storage::as_slice(blocked_inner_r.storage());
+    assert_eq!(blocked_inner_r.shape(), [m, n]);
+    assert_eq!(
+        blocked_r, blocked_inner_values,
+        "the device R buffer must equal the host factor's R exactly at [{m}, {n}]"
+    );
+
+    // Both factor the same matrix by the same Householder scheme, so their R
+    // entries differ only by the order of the arithmetic. Householder QR is
+    // columnwise backward stable — ‖ΔR·eⱼ‖₂ ≤ c(m, n)·ε·‖aⱼ‖₂ (Higham,
+    // *Accuracy and Stability*, ch. 19) — and this fixture's column norms are
+    // bounded by 5.1, so 2·c(m, n)·ε·5.1 with c(m, n) ≤ m·n covers both
+    // factorisations' error against the exact R and hence their difference.
+    let tolerance = 2.0 * (m * n) as f32 * f32::EPSILON * 5.1;
+    for row in 0..n {
+        for col in 0..n {
+            let index = row * n + col;
+            let delta = (direct_r[index] - blocked_r[index]).abs();
+            assert!(
+                delta <= tolerance,
+                "entry points disagree at R[{row}, {col}] for [{m}, {n}]: direct {},                  blocked {}, delta {delta} exceeds {tolerance}",
+                direct_r[index],
+                blocked_r[index]
+            );
+        }
+    }
+}
+
+/// The device-accumulated **Q** must match leto's host accumulation at both
+/// QR routing regimes, and must be orthogonal.
+#[cfg(feature = "decomposition")]
+pub(super) fn qr_accumulated_q_matches_host_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    // (m, n, exercises the device schedule, checks orthogonality)
+    for (m, n, blocked_route, check_orthogonality) in [
+        (70usize, 35usize, false, false),
+        (138usize, 129usize, true, true),
+    ] {
+        qr_accumulated_q_contract_at_shape(&device, m, n, blocked_route, check_orthogonality);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+fn qr_accumulated_q_contract_at_shape(
+    device: &hephaestus_wgpu::WgpuDevice,
+    m: usize,
+    n: usize,
+    blocked_route: bool,
+    check_orthogonality: bool,
+) {
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    assert_eq!(
+        n.div_ceil(32) > 4,
+        blocked_route,
+        "fixture [{m}, {n}] must land in the intended routing regime"
+    );
+
+    let mut matrix_host = vec![0.0f32; m * n];
+    for row in 0..m {
+        for col in 0..n {
+            matrix_host[row * n + col] = if row == col {
+                5.0
+            } else {
+                0.01 / (1.0 + row.abs_diff(col) as f32)
+            };
+        }
+    }
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([m, n]).unwrap();
+    let decomp = qr_decompose_blocked(
+        device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let q_buffer = decomp.accumulate_q(device).unwrap();
+    let mut q_gpu = vec![0.0f32; m * m];
+    device.download(&q_buffer, &mut q_gpu).unwrap();
+
+    let q_host_array = decomp.inner().q();
+    assert_eq!(q_host_array.shape(), [m, m]);
+    let q_host = leto::Storage::as_slice(q_host_array.storage());
+
+    // Both apply the same min(m, n) reflectors to the same identity and differ
+    // only in how each dot product vᵀ·q is summed — the host sequentially, the
+    // device as a 256-way tree. Accumulating a product of computed Householder
+    // reflectors is backward stable with ‖Q̂ − Q‖ ≤ c(m, n)·ε, c(m, n) ≤
+    // m·min(m, n) (Higham, *Accuracy and Stability*, ch. 19): each reflector is
+    // orthogonal, so earlier rounding is transported rather than amplified, and
+    // Q's columns are unit-norm, so the ‖v‖₂‖q‖₂ factors are O(1). The tree
+    // reduction's own bound is the smaller of the two (depth log₂256 + m/256
+    // against the host's m), so the sum of both bounds covers their difference.
+    let tolerance = 2.0 * (m * n.min(m)) as f32 * f32::EPSILON;
+    for row in 0..m {
+        for col in 0..m {
+            let index = row * m + col;
+            let delta = (q_gpu[index] - q_host[index]).abs();
+            assert!(
+                delta <= tolerance,
+                "device Q disagrees with the host reference at Q[{row}, {col}] for [{m}, {n}]: device {}, host {}, delta {delta} exceeds {tolerance}",
+                q_gpu[index],
+                q_host[index]
+            );
+        }
+    }
+
+    if !check_orthogonality {
+        return;
+    }
+
+    // Elementwise agreement with a same-order reference cannot detect a wrong
+    // reflector order if both orders were wrong alike, so QᵀQ is checked
+    // against I independently. The same backward-stability constant bounds the
+    // departure from orthogonality; the f64 accumulation below contributes at
+    // most m·ε_f64, negligible against it.
+    let mut max_residual = 0.0f64;
+    for i in 0..m {
+        for j in 0..m {
+            let mut dot = 0.0f64;
+            for r in 0..m {
+                dot += f64::from(q_gpu[r * m + i]) * f64::from(q_gpu[r * m + j]);
+            }
+            let expected = if i == j { 1.0 } else { 0.0 };
+            max_residual = max_residual.max((dot - expected).abs());
+        }
+    }
+    assert!(
+        max_residual <= f64::from(tolerance),
+        "device Q is not orthogonal at [{m}, {n}]: max |QᵀQ − I| = {max_residual} exceeds {tolerance}"
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_preserves_panel_boundary_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    for cols in [32usize, 33, 35, 64, 65, 128, 129] {
+        let rows = cols + 9;
+        let mut matrix_host = vec![0.0f32; rows * cols];
+        for row in 0..rows {
+            for col in 0..cols {
+                matrix_host[row * cols + col] = if row == col {
+                    6.0
+                } else {
+                    0.02 / (1.0 + row.abs_diff(col) as f32)
+                };
+            }
+        }
+        let matrix = device.upload(&matrix_host).unwrap();
+        let layout = Layout::c_contiguous([rows, cols]).unwrap();
+        let leto_matrix = leto::Array::from_shape_vec([rows, cols], matrix_host.clone()).unwrap();
+        let expected_decomposition = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+        let expected = expected_decomposition.r();
+        let expected = leto::Storage::as_slice(expected.storage());
+
+        let qr = qr_decompose_blocked(
+            &device,
+            StridedOperand {
+                buffer: &matrix,
+                layout: &layout,
+            },
+        )
+        .unwrap();
+        let mut actual = vec![0.0f32; rows * cols];
+        device.download(qr.r_buffer(), &mut actual).unwrap();
+
+        // Each output accumulates at most `cols` reflector-rounding stages.
+        // The factor 8 covers one multiply-add pair plus norm/scale rounding per
+        // stage, giving the standard O(n·ε) backward-error envelope.
+        for (index, (&actual, &expected)) in actual.iter().zip(expected).enumerate() {
+            let tolerance = 8.0 * cols as f32 * f32::EPSILON * expected.abs().max(1.0);
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "{rows}x{cols} blocked QR R[{index}] = {actual}, expected {expected}, \
+                tolerance {tolerance}"
+            );
+        }
+
+        let expected_solution: Vec<f32> = (0..cols)
+            .map(|col| 0.5 + col as f32 / cols as f32)
+            .collect();
+        let rhs_host: Vec<f32> = matrix_host
+            .chunks_exact(cols)
+            .map(|row| {
+                row.iter()
+                    .zip(&expected_solution)
+                    .map(|(&coefficient, &value)| coefficient * value)
+                    .sum()
+            })
+            .collect();
+        let rhs = device.upload(&rhs_host).unwrap();
+        let solution = qr.solve_least_squares(&device, &rhs).unwrap();
+        let mut actual_solution = vec![0.0f32; cols];
+        device.download(&solution, &mut actual_solution).unwrap();
+
+        // Strict diagonal dominance bounds the infinity-norm condition number
+        // near one for this matrix family. The factor 64 covers QR and
+        // triangular-solve rounding over `cols` stages.
+        let solve_tolerance = 64.0 * cols as f32 * f32::EPSILON;
+        for (col, (&actual, &expected)) in
+            actual_solution.iter().zip(&expected_solution).enumerate()
+        {
+            assert!(
+                (actual - expected).abs() <= solve_tolerance,
+                "{rows}x{cols} blocked QR solve x[{col}] = {actual}, expected {expected}, \
+                 tolerance {solve_tolerance}"
+            );
+        }
+        for (row, coefficients) in matrix_host.chunks_exact(cols).enumerate() {
+            let reconstructed: f32 = coefficients
+                .iter()
+                .zip(&actual_solution)
+                .map(|(&coefficient, &value)| coefficient * value)
+                .sum();
+            let tolerance = 64.0 * cols as f32 * f32::EPSILON * rhs_host[row].abs().max(1.0);
+            assert!(
+                (reconstructed - rhs_host[row]).abs() <= tolerance,
+                "{rows}x{cols} blocked QR reconstructed rhs[{row}] = {reconstructed}, \
+                 expected {}, tolerance {tolerance}",
+                rhs_host[row]
+            );
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_identity_yields_identity_r() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    let identity_host = vec![1.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&identity_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let leto_matrix = leto::Array::from_shape_vec([2, 2], identity_host).unwrap();
+    let leto_qr = leto_ops::qr_decompose(&leto_matrix.view()).unwrap();
+
+    let gpu_qr = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(gpu_qr.shape(), (2, 2));
+
+    let mut got_r = vec![0.0f32; 4];
+    device.download(gpu_qr.r_buffer(), &mut got_r).unwrap();
+    let r_ref = leto_qr.r();
+    let expected_r = leto::Storage::as_slice(r_ref.storage());
+    for i in 0..4 {
+        // Identity input reaches R through at most one Householder
+        // reflection over exact dyadic values: ≤ 4 roundings per entry.
+        let tolerance = 8.0 * f32::EPSILON * expected_r[i].abs().max(1.0);
+        assert!(
+            (got_r[i] - expected_r[i]).abs() <= tolerance,
+            "blocked QR R[{i}] = {} expected {}",
+            got_r[i],
+            expected_r[i]
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_solve_known_system_accurate() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    // A = [[1, 0], [0, 1], [1, 1]], b = [1, 2, 3]  =>  x = [1, 2]
+    let matrix_host = vec![1.0f32, 0.0, 0.0, 1.0, 1.0, 1.0];
+    let rhs_host = vec![1.0f32, 2.0, 3.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([3, 2]).unwrap();
+
+    let gpu_qr = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_qr.solve_least_squares(&device, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    device.download(&solution, &mut got).unwrap();
+
+    // The system is consistent with exact solution [1, 2]; Householder
+    // QR at m = 3 spends tens of flops per entry, so the residual is
+    // bounded by c·ε·‖b‖∞ with c ≲ 32.
+    let residual_bound = 32.0 * f32::EPSILON * 3.0;
+    let residual_0 = 1.0 * got[0] + 0.0 * got[1] - 1.0;
+    let residual_1 = 0.0 * got[0] + 1.0 * got[1] - 2.0;
+    let residual_2 = 1.0 * got[0] + 1.0 * got[1] - 3.0;
+    assert!(
+        residual_0.abs() <= residual_bound,
+        "blocked QR residual[0] = {residual_0}"
+    );
+    assert!(
+        residual_1.abs() <= residual_bound,
+        "blocked QR residual[1] = {residual_1}"
+    );
+    assert!(
+        residual_2.abs() <= residual_bound,
+        "blocked QR residual[2] = {residual_2}"
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_rejects_underdetermined() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
+    use leto::Layout;
+
+    let host = vec![0.0f32; 6];
+    let input = device.upload(&host).unwrap();
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let result = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &input,
+            layout: &layout,
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("m ≥ n")
+    ));
+}
+
+/// The device factor's strictly-upper triangle is exactly zero, including the
+/// region outside the diagonal blocks.
+///
+/// The blocked path's per-panel scatters cover only `row >= blockstart(col)`,
+/// and the panel factorisation zeroes just the diagonal blocks' own upper
+/// triangle, so cells strictly above the diagonal *outside* those blocks hold
+/// the input's values until the closing triangular-zero pass clears them.
+/// This fixture therefore carries a large, distinctive off-diagonal value: a
+/// regression in that pass leaves `0.5` in the factor rather than something
+/// that could be mistaken for rounding noise. `n` exceeds the 64-element
+/// block size so at least one such region exists.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_zeroes_strict_upper_outside_diagonal_blocks() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    let n = 96usize;
+    // A = (n - 0.5)·I + 0.5·J is symmetric positive-definite (eigenvalues
+    // n - 0.5 and 1.5·n - 0.5) and strongly diagonally dominant.
+    let mut matrix_host = vec![0.5f32; n * n];
+    for index in 0..n {
+        matrix_host[index * n + index] = n as f32;
+    }
+
+    let matrix = device.upload(&matrix_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_cholesky = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let mut got_lower = vec![0.0f32; n * n];
+    device
+        .download(gpu_cholesky.lower(), &mut got_lower)
+        .unwrap();
+
+    for row in 0..n {
+        for col in (row + 1)..n {
+            let value = got_lower[row * n + col];
+            assert_eq!(
+                value, 0.0,
+                "strict upper entry [{row}, {col}] must be zero, got {value}"
+            );
+        }
+    }
+    // A wholly zeroed buffer would satisfy the loop above; the diagonal pins
+    // that the factor itself survived the pass.
+    for index in 0..n {
+        let diagonal = got_lower[index * n + index];
+        assert!(
+            diagonal > 0.0,
+            "diagonal entry [{index}, {index}] must stay positive, got {diagonal}"
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_solve_known_system_accurate() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    // A = [[4, 2], [2, 3]], b = [8, 7]  =>  x = [1.25, 1.5]
+    let matrix_host = vec![4.0f32, 2.0, 2.0, 3.0];
+    let rhs_host = vec![8.0f32, 7.0];
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+
+    let gpu_chol = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+
+    let solution = gpu_chol.solve(&device, &rhs).unwrap();
+    let mut got = vec![0.0f32; 2];
+    device.download(&solution, &mut got).unwrap();
+    assert!(
+        (got[0] - 1.25f32).abs() <= 1e-5,
+        "x[0] = {} expected 1.25",
+        got[0]
+    );
+    assert!(
+        (got[1] - 1.5f32).abs() <= 1e-5,
+        "x[1] = {} expected 1.5",
+        got[1]
+    );
+
+    // Verify residual A*x ≈ b.
+    let ax0 = 4.0 * got[0] + 2.0 * got[1];
+    let ax1 = 2.0 * got[0] + 3.0 * got[1];
+    assert!((ax0 - 8.0).abs() <= 1e-4, "residual[0] = {ax0}");
+    assert!((ax1 - 7.0).abs() <= 1e-4, "residual[1] = {ax1}");
+}
+
+/// Device forward/backward substitution across two solve blocks (`n = 300`:
+/// one full 256-row block plus a ragged 44-row tail) matches leto's host
+/// substitution against the same downloaded factor, and never materializes
+/// the host factor.
+///
+/// Fixture: `A = L·Lᵀ` with `L = I − P`, `P ≥ 0` strictly lower and every row
+/// and column sum of `P` at most `1/2` (`|P[i,j]| ≤ 1/(2n)`). Then
+/// `‖L‖∞, ‖L‖₁ ≤ 3/2` and, by the Neumann series, `‖L⁻¹‖∞, ‖L⁻¹‖₁ ≤ 2`, so
+/// the recurrence is well conditioned: `L⁻¹ ≥ 0`, hence for `b > 0` every
+/// `y = L⁻¹b > 0` and no cancellation hides a dropped coupling.
+///
+/// Bound: each computed triangular solve satisfies `(L + ΔL)ŷ = b` with
+/// `|ΔL| ≤ γₙ|L|` (Higham, *Accuracy and Stability of Numerical Algorithms*,
+/// 2nd ed., Thm 8.5), so its relative forward error is at most
+/// `γₙ · ‖|L⁻¹||L||y|‖∞ / ‖y‖∞ ≤ γₙ · ‖L⁻¹‖∞ · ‖L‖∞ = 3γₙ`. Backward
+/// substitution inherits the forward pass's error through `‖L⁻ᵀ‖∞ ‖Lᵀ‖∞ ≤ 3`
+/// and adds its own `3γₙ`, giving `12γₙ` per implementation; the device and
+/// host results, each within `12γₙ` of the exact solution of the shared
+/// factor, differ by at most `24γₙ` with `γₙ = n·u / (1 − n·u)`, `u = 2⁻²⁴`.
+/// Dropping one trailing update moves rows past the first block by
+/// `Σ_c P[r,c]·y[c] ≳ 0.2·min y` — three orders above the bound.
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_solve_multi_panel_matches_leto_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    let n = 300usize;
+    // Deterministic LCG (Numerical Recipes constants) mapped to [0, 1).
+    let mut state = 0x2545_F491_4F6C_DD1Du64;
+    let mut unit = move || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (state >> 40) as f64 / (1u64 << 24) as f64
+    };
+    let mut lower = vec![0.0f64; n * n];
+    for row in 0..n {
+        lower[row * n + row] = 1.0;
+        for col in 0..row {
+            lower[row * n + col] = -unit() / (2.0 * n as f64);
+        }
+    }
+    let matrix_host = (0..n * n)
+        .map(|index| {
+            let (row, col) = (index / n, index % n);
+            (0..=row.min(col))
+                .map(|k| lower[row * n + k] * lower[col * n + k])
+                .sum::<f64>() as f32
+        })
+        .collect::<Vec<_>>();
+    let rhs_host = (0..n).map(|_| 1.0 + unit() as f32).collect::<Vec<_>>();
+
+    let matrix = device.upload(&matrix_host).unwrap();
+    let rhs = device.upload(&rhs_host).unwrap();
+    let layout = Layout::c_contiguous([n, n]).unwrap();
+    let gpu_cholesky = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .unwrap();
+    assert!(
+        !gpu_cholesky.host_factor_materialized(),
+        "the blocked factorization must not download its factor"
+    );
+
+    let solution = gpu_cholesky.solve(&device, &rhs).unwrap();
+    assert!(
+        !gpu_cholesky.host_factor_materialized(),
+        "a device solve must not materialize the host factor"
+    );
+    let mut got = vec![0.0f32; n];
+    device.download(&solution, &mut got).unwrap();
+    let mut rhs_after = vec![0.0f32; n];
+    device.download(&rhs, &mut rhs_after).unwrap();
+    assert_eq!(
+        rhs_after, rhs_host,
+        "the caller's right-hand side is read-only"
+    );
+
+    let mut factor = vec![0.0f32; n * n];
+    device.download(gpu_cholesky.lower(), &mut factor).unwrap();
+    let host_factor = leto_ops::CholeskyDecomposition::from_raw_parts(
+        leto::Array2::from_shape_vec([n, n], factor).unwrap(),
+    );
+    let rhs_view = leto::ArrayView::<f32, 1>::new(Layout::c_contiguous([n]).unwrap(), &rhs_host);
+    let expected = host_factor.solve(&rhs_view).unwrap();
+    let expected = leto::Storage::as_slice(expected.storage());
+
+    let n_u = n as f32 * f32::EPSILON / 2.0;
+    let gamma_n = n_u / (1.0 - n_u);
+    let bound = 24.0 * gamma_n;
+    let scale = expected.iter().fold(0.0f32, |acc, x| acc.max(x.abs()));
+    for (row, (&device_x, &host_x)) in got.iter().zip(expected).enumerate() {
+        assert!(
+            (device_x - host_x).abs() <= bound * scale,
+            "x[{row}]: device {device_x} vs leto {host_x}, bound {} (relative {bound})",
+            bound * scale
+        );
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_rejects_singular_matrix() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, cholesky_decompose_blocked};
+    use leto::Layout;
+
+    let singular_host = vec![0.0f32, 0.0, 0.0, 1.0];
+    let matrix = device.upload(&singular_host).unwrap();
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let result = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    );
+    assert_rejects(
+        &result,
+        "kernel dispatch failed: Cholesky panel factorisation failed: pivot 0 is not positive (0); matrix is not positive-definite",
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn udu_decompose_rejects_invalid_contracts() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, udu_decompose};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 2.0, 4.0, 5.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+
+    let nonsymmetric_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let nonsymmetric = device.upload(&nonsymmetric_host).unwrap();
+    let nonsymmetric_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let nonsymmetric_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &nonsymmetric,
+            layout: &nonsymmetric_layout,
+        },
+    );
+    assert!(matches!(
+        nonsymmetric_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("UDU decomposition failed")
+    ));
+
+    let zero_pivot_host = vec![1.0f32, 1.0, 1.0, 0.0];
+    let zero_pivot = device.upload(&zero_pivot_host).unwrap();
+    let zero_pivot_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let zero_pivot_result = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &zero_pivot,
+            layout: &zero_pivot_layout,
+        },
+    );
+    assert!(matches!(
+        zero_pivot_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("UDU decomposition failed")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn bunch_kaufman_rejects_rectangular_and_nonsymmetric() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, bunch_kaufman};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = bunch_kaufman(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square matrix")
+    ));
+
+    let nonsymmetric_host = vec![1.0f32, 2.0, 3.0, 4.0];
+    let nonsymmetric = device.upload(&nonsymmetric_host).unwrap();
+    let nonsymmetric_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let nonsymmetric_result = bunch_kaufman(
+        &device,
+        StridedOperand {
+            buffer: &nonsymmetric,
+            layout: &nonsymmetric_layout,
+        },
+    );
+    assert!(matches!(
+        nonsymmetric_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Bunch-Kaufman decomposition failed")
+    ));
+}
+
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+pub(super) fn linalg_matrix_function_diagnostics_are_stable() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{StridedOperand, matexp};
+    use leto::Layout;
+
+    let rectangular_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let rectangular = device.upload(&rectangular_host).unwrap();
+    let rectangular_layout = Layout::c_contiguous([2, 3]).unwrap();
+    let rectangular_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &rectangular,
+            layout: &rectangular_layout,
+        },
+    );
+    assert!(matches!(
+        rectangular_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential requires square matrix")
+    ));
+
+    let non_finite_host = vec![1.0f32, f32::NAN, 0.0, 1.0];
+    let non_finite = device.upload(&non_finite_host).unwrap();
+    let non_finite_layout = Layout::c_contiguous([2, 2]).unwrap();
+    let non_finite_result = matexp(
+        &device,
+        StridedOperand {
+            buffer: &non_finite,
+            layout: &non_finite_layout,
+        },
+    );
+    assert!(matches!(
+        non_finite_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("Matrix exponential failed")
+    ));
+}
+
+#[cfg(any(feature = "decomposition", feature = "sparse"))]
+pub(super) fn test_wgpu_uniform_and_normal_with_seed() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{normal_with_seed, uniform_with_seed};
+
+    let shape = [1000];
+    let low = -2.0f32;
+    let high = 5.0f32;
+    let u_buf = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u = vec![0.0f32; 1000];
+    device.download(&u_buf, &mut got_u).unwrap();
+
+    // Verify determinism & range
+    let u_buf_2 = uniform_with_seed(&device, shape, low, high, 42).unwrap();
+    let mut got_u_2 = vec![0.0f32; 1000];
+    device.download(&u_buf_2, &mut got_u_2).unwrap();
+    assert_eq!(got_u, got_u_2);
+
+    for &val in &got_u {
+        assert!(val >= low && val < high, "value out of bounds: {val}");
+    }
+
+    let n_buf = normal_with_seed(&device, shape, 0.0f32, 1.0f32, 42).unwrap();
+    let mut got_n = vec![0.0f32; 1000];
+    device.download(&n_buf, &mut got_n).unwrap();
+    assert!(got_n.iter().any(|&val| val != 0.0));
+}
+
+#[cfg(feature = "sparse")]
+pub(super) fn test_wgpu_sparse_matrix_spmv_spmm() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    use hephaestus_wgpu::{
+        GpuCsrMatrix, PreparedSparseDispatch, StridedOperand, prepare_spmm, prepare_spmv,
+        prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
+        submit_prepared_sparse_batch,
+    };
+    use leto::Layout;
+
+    // Create a 3x3 diagonal-ish matrix:
+    // [ 2.0  0.0 -1.0 ]
+    // [ 0.0  3.0  0.0 ]
+    // [ 0.0  0.0  4.0 ]
+    let dense_host = vec![2.0f32, 0.0, -1.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0];
+    let layout = Layout::c_contiguous([3, 3]).unwrap();
+    let cpu_csr = leto_ops::CsrMatrix::from_dense(&leto::ArrayView2::new(layout, &dense_host));
+
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).unwrap();
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+
+    // Round-trip back to CPU
+    let cpu_csr_2 = gpu_csr.to_cpu(&device).unwrap();
+    assert_eq!(cpu_csr, cpu_csr_2);
+
+    // SpMV: y = A * x, x = [1.0, 2.0, 3.0]
+    // Expected y = [ 2*1 - 3, 3*2, 4*3 ] = [ -1.0, 6.0, 12.0 ]
+    let x_host = vec![1.0f32, 2.0, 3.0];
+    let x_buf = device.upload(&x_host).unwrap();
+    let y_buf = spmv(&device, &gpu_csr, &x_buf).unwrap();
+    let mut got_y = vec![0.0f32; 3];
+    device.download(&y_buf, &mut got_y).unwrap();
+    assert_close_slice(&got_y, &[-1.0, 6.0, 12.0], 1.0e-4, 1.0e-4);
+
+    let mut y_reused = device.upload(&[99.0f32, 99.0, 99.0]).unwrap();
+    spmv_into(&device, &gpu_csr, &x_buf, &mut y_reused).unwrap();
+    let mut got_y_reused = vec![0.0f32; 3];
+    device.download(&y_reused, &mut got_y_reused).unwrap();
+    assert_close_slice(&got_y_reused, &got_y, 1.0e-4, 1.0e-4);
+
+    let y_prepared = device.upload(&[77.0f32, 77.0, 77.0]).unwrap();
+    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &y_prepared).unwrap();
+    prepared_spmv.dispatch();
+    let mut got_y_prepared = vec![0.0f32; 3];
+    device.download(&y_prepared, &mut got_y_prepared).unwrap();
+    assert_close_slice(&got_y_prepared, &got_y, 1.0e-4, 1.0e-4);
+
+    let y_batched = device.upload(&[55.0f32, 55.0, 55.0]).unwrap();
+    let batched_spmv = prepare_spmv(&device, &gpu_csr, &x_buf, &y_batched).unwrap();
+
+    // SpMM: C = A * B, B = [ 1.0  2.0 ]
+    //                      [ 3.0  4.0 ]
+    //                      [ 5.0  6.0 ]
+    // Expected C = [ 2*1 - 5, 2*2 - 6 ] = [ -3.0, -2.0 ]
+    //              [ 3*3,     3*4     ]   [  9.0, 12.0 ]
+    //              [ 4*5,     4*6     ]   [ 20.0, 24.0 ]
+    let b_host = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b_buf = device.upload(&b_host).unwrap();
+    let b_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let b_op = StridedOperand {
+        buffer: &b_buf,
+        layout: &b_layout,
+    };
+    let c_buf = spmm(&device, &gpu_csr, &b_op).unwrap();
+    let mut got_c = vec![0.0f32; 6];
+    device.download(&c_buf, &mut got_c).unwrap();
+    assert_close_slice(&got_c, &[-3.0, -2.0, 9.0, 12.0, 20.0, 24.0], 1.0e-4, 1.0e-4);
+
+    let many_c_buf = spmv_many(&device, &gpu_csr, &b_op).unwrap();
+    let mut got_many_c = vec![0.0f32; 6];
+    device.download(&many_c_buf, &mut got_many_c).unwrap();
+    assert_close_slice(&got_many_c, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_reused = device.upload(&[99.0f32; 6]).unwrap();
+    spmm_into(&device, &gpu_csr, &b_op, &mut c_reused).unwrap();
+    let mut got_c_reused = vec![0.0f32; 6];
+    device.download(&c_reused, &mut got_c_reused).unwrap();
+    assert_close_slice(&got_c_reused, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut many_c_reused = device.upload(&[88.0f32; 6]).unwrap();
+    spmv_many_into(&device, &gpu_csr, &b_op, &mut many_c_reused).unwrap();
+    let mut got_many_c_reused = vec![0.0f32; 6];
+    device
+        .download(&many_c_reused, &mut got_many_c_reused)
+        .unwrap();
+    assert_close_slice(&got_many_c_reused, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_prepared = device.upload(&[77.0f32; 6]).unwrap();
+    let prepared_spmm = prepare_spmm(&device, &gpu_csr, &b_op, &mut c_prepared).unwrap();
+    prepared_spmm.dispatch();
+    let mut got_c_prepared = vec![0.0f32; 6];
+    device.download(&c_prepared, &mut got_c_prepared).unwrap();
+    assert_close_slice(&got_c_prepared, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut many_c_prepared = device.upload(&[66.0f32; 6]).unwrap();
+    let prepared_many = prepare_spmv_many(&device, &gpu_csr, &b_op, &mut many_c_prepared).unwrap();
+    prepared_many.dispatch();
+    let mut got_many_c_prepared = vec![0.0f32; 6];
+    device
+        .download(&many_c_prepared, &mut got_many_c_prepared)
+        .unwrap();
+    assert_close_slice(&got_many_c_prepared, &got_c, 1.0e-4, 1.0e-4);
+
+    let mut c_batched = device.upload(&[55.0f32; 6]).unwrap();
+    let batched_spmm = prepare_spmm(&device, &gpu_csr, &b_op, &mut c_batched).unwrap();
+    submit_prepared_sparse_batch(&[
+        PreparedSparseDispatch::Spmv(&batched_spmv),
+        PreparedSparseDispatch::Spmm(&batched_spmm),
+    ])
+    .unwrap();
+    let mut got_y_batched = vec![0.0f32; 3];
+    device.download(&y_batched, &mut got_y_batched).unwrap();
+    assert_close_slice(&got_y_batched, &got_y, 1.0e-4, 1.0e-4);
+    let mut got_c_batched = vec![0.0f32; 6];
+    device.download(&c_batched, &mut got_c_batched).unwrap();
+    assert_close_slice(&got_c_batched, &got_c, 1.0e-4, 1.0e-4);
+
+    let empty_row_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 4.0],
+        vec![0, 2, 2],
+        vec![0, 2, 2, 3],
+        3,
+        3,
+    )
+    .unwrap();
+    let empty_row_gpu = GpuCsrMatrix::from_cpu(&device, &empty_row_csr).unwrap();
+    let empty_row_y = spmv(&device, &empty_row_gpu, &x_buf).unwrap();
+    let mut got_empty_row_y = [0.0_f32; 3];
+    device.download(&empty_row_y, &mut got_empty_row_y).unwrap();
+    assert_eq!(got_empty_row_y, [-1.0, 0.0, 12.0]);
+
+    let empty_row_c = spmm(&device, &empty_row_gpu, &b_op).unwrap();
+    let mut got_empty_row_c = [0.0_f32; 6];
+    device.download(&empty_row_c, &mut got_empty_row_c).unwrap();
+    assert_eq!(got_empty_row_c, [-3.0, -2.0, 0.0, 0.0, 20.0, 24.0]);
+}
+
+/// Shared adversarial-layout driver: every non-dense view (transposed,
+/// offset, broadcast/zero-stride) must be rejected by the blocked entry
+/// points with the typed dense-operand error BEFORE any raw device copy.
+/// The broadcast case is the wrong-extent case: its validated storage
+/// extent (4 elements here) is smaller than rows*cols, so the former raw
+/// whole-matrix copy exceeded the operand's storage.
+#[cfg(feature = "decomposition")]
+fn assert_blocked_rejects_non_dense<F, O>(device: &WgpuDevice, entry: F, label: &str)
+where
+    F: Fn(&WgpuDevice, hephaestus_wgpu::StridedOperand<'_, f32, 2>) -> hephaestus_core::Result<O>,
+{
+    use leto::Layout;
+
+    let dense_host: Vec<f32> = (0..16).map(|i| 1.0 + i as f32).collect();
+    let dense_buf = device.upload(&dense_host).unwrap();
+    let small_host = [1.0f32, 2.0, 3.0, 4.0];
+    let small_buf = device.upload(&small_host).unwrap();
+
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let offset = Layout::try_new([3, 3], [4, 1], 5).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
+
+    for (name, layout, buffer) in [
+        ("transposed", &transposed, &dense_buf),
+        ("offset", &offset, &dense_buf),
+        ("broadcast", &broadcast, &small_buf),
+    ] {
+        let result = entry(device, hephaestus_wgpu::StridedOperand { buffer, layout });
+        match result {
+            Err(HephaestusError::DispatchFailed { message }) => {
+                assert!(
+                    message.contains("dense C-contiguous"),
+                    "{label}/{name}: rejection must name the dense-operand                      contract, got: {message}"
+                );
+            }
+            Err(other) => {
+                panic!("{label}/{name}: expected DispatchFailed dense-operand error, got {other:?}")
+            }
+            Ok(_) => panic!("{label}/{name}: non-dense operand must be rejected"),
+        }
+    }
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_cholesky_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(
+        &device,
+        hephaestus_wgpu::cholesky_decompose_blocked,
+        "cholesky",
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_lu_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::lu_decompose_blocked, "LU");
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_qr_rejects_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(&device, hephaestus_wgpu::qr_decompose_blocked, "QR");
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_blocked_rejects_non_dense(
+        &device,
+        hephaestus_wgpu::full_piv_lu_blocked,
+        "complete-pivoted LU",
+    );
+    assert_blocked_rejects_non_dense(
+        &device,
+        hephaestus_wgpu::col_piv_qr_blocked,
+        "column-pivoted QR",
+    );
+}
+
+#[cfg(feature = "decomposition")]
+pub(super) fn empty_qr_preserves_shape_and_identity() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let empty = device.alloc_zeroed::<f32>(0).unwrap();
+    let layout = leto::Layout::c_contiguous([3, 0]).unwrap();
+    let operand = hephaestus_wgpu::StridedOperand {
+        buffer: &empty,
+        layout: &layout,
+    };
+    let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+
+    for qr in [
+        hephaestus_wgpu::qr_decompose(&device, operand).unwrap(),
+        hephaestus_wgpu::qr_decompose_blocked(&device, operand).unwrap(),
+    ] {
+        assert_eq!(qr.shape(), (3, 0));
+        assert_eq!(qr.r_buffer().len(), 0);
+        assert_eq!(qr.inner().shape(), (3, 0));
+        assert_eq!(leto::Storage::as_slice(qr.inner().q().storage()), identity);
+        assert_eq!(qr.inner().r().shape(), [3, 0]);
+    }
+}
+
+pub(super) fn fdtd_3d_provider_matches_sequential_cpu_reference() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let params = Fdtd3dParams::new(5, 5, 5, 1.0, 1.0, 1.0, 0.01).expect("valid FDTD grid");
+    let len = params.storage_len().expect("valid FDTD storage");
+    let mut pressure = vec![0.0_f32; len];
+    let velocity = vec![FdtdVelocity::zeroed(); len];
+    let medium = vec![FdtdMedium::new(2.0, 3.0).expect("valid medium"); len];
+    for z in 0..5 {
+        for y in 0..5 {
+            for x in 0..5 {
+                pressure[x + y * 5 + z * 25] = (x * 3 + y * 2 + z) as f32;
+            }
+        }
+    }
+
+    let mut expected_velocity = velocity.clone();
+    let mut expected_pressure = pressure.clone();
+    for _ in 0..2 {
+        let previous_pressure = expected_pressure.clone();
+        for z in 0..5 {
+            for y in 0..5 {
+                for x in 0..5 {
+                    let index = x + y * 5 + z * 25;
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        expected_velocity[index] = FdtdVelocity::zeroed();
+                        continue;
+                    }
+                    let gradient = [
+                        (previous_pressure[index + 1] - previous_pressure[index - 1]) * 0.5,
+                        (previous_pressure[index + 5] - previous_pressure[index - 5]) * 0.5,
+                        (previous_pressure[index + 25] - previous_pressure[index - 25]) * 0.5,
+                    ];
+                    let previous = expected_velocity[index];
+                    expected_velocity[index] = FdtdVelocity {
+                        components: [
+                            previous.components[0] - 0.01 * gradient[0] / 2.0,
+                            previous.components[1] - 0.01 * gradient[1] / 2.0,
+                            previous.components[2] - 0.01 * gradient[2] / 2.0,
+                        ],
+                        padding: 0.0,
+                    };
+                }
+            }
+        }
+        for z in 0..5 {
+            for y in 0..5 {
+                for x in 0..5 {
+                    let index = x + y * 5 + z * 25;
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        expected_pressure[index] = 0.0;
+                        continue;
+                    }
+                    let divergence = (expected_velocity[index + 1].components[0]
+                        - expected_velocity[index - 1].components[0])
+                        * 0.5
+                        + (expected_velocity[index + 5].components[1]
+                            - expected_velocity[index - 5].components[1])
+                            * 0.5
+                        + (expected_velocity[index + 25].components[2]
+                            - expected_velocity[index - 25].components[2])
+                            * 0.5;
+                    expected_pressure[index] =
+                        previous_pressure[index] - 0.01 * 2.0 * 9.0 * divergence;
+                }
+            }
+        }
+    }
+
+    let pressure_buffer = device.upload(&pressure).expect("upload pressure");
+    let velocity_buffer = device.upload(&velocity).expect("upload velocity");
+    let medium_buffer = device.upload(&medium).expect("upload medium");
+    let kernel = WgpuFdtd3dOps
+        .prepare_fdtd_3d(&device)
+        .expect("compile FDTD provider kernels");
+    for _ in 0..2 {
+        WgpuFdtd3dOps
+            .step_fdtd_3d(
+                &device,
+                &kernel,
+                &pressure_buffer,
+                &velocity_buffer,
+                &medium_buffer,
+                &params,
+            )
+            .expect("dispatch FDTD provider step");
+    }
+    device.synchronize().expect("synchronize FDTD step");
+
+    let mut actual_pressure = vec![0.0_f32; len];
+    let mut actual_velocity = vec![FdtdVelocity::zeroed(); len];
+    device
+        .download(&pressure_buffer, &mut actual_pressure)
+        .expect("download pressure");
+    device
+        .download(&velocity_buffer, &mut actual_velocity)
+        .expect("download velocity");
+    let tolerance = 32.0 * f32::EPSILON;
+    for (actual, expected) in actual_pressure.iter().zip(&expected_pressure) {
+        assert_close(*actual, *expected, tolerance);
+    }
+    for (actual, expected) in actual_velocity.iter().zip(&expected_velocity) {
+        for (actual, expected) in actual.components.iter().zip(expected.components) {
+            assert_close(*actual, expected, tolerance);
+        }
+    }
+}
+
+/// Every default wait path now carries a deadline; none of them may become
+/// observable on the success path.
+///
+/// The bound itself is exercised where the deadline can be driven below a real
+/// submission's duration (`infrastructure::device::tests`). What this case
+/// holds is the other half of that contract, over the public surface: with the
+/// production bound in force, `download`, `download_owned`,
+/// `download_sub_buffer`, `copy_buffer`, and `synchronize` return exactly what
+/// they returned unbounded. It fails if a deadline is ever mis-plumbed into a
+/// path — a zero or near-zero bound turns each of these into a timeout rather
+/// than a value.
+pub(crate) fn bounded_default_waits_leave_the_success_path_unchanged() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    let expected: Vec<u32> = (0..1024).collect();
+    let source = device.upload(&expected).unwrap();
+
+    let owned = device.download_owned(&source).unwrap();
+    assert_eq!(owned, expected);
+
+    let mut into = vec![0_u32; expected.len()];
+    device.download(&source, &mut into).unwrap();
+    assert_eq!(into, expected);
+
+    let mut tail = vec![0_u32; 16];
+    device
+        .download_sub_buffer(&source, 1000, &mut tail)
+        .unwrap();
+    assert_eq!(tail, expected[1000..1016]);
+
+    let destination = device.alloc_uninitialized::<u32>(expected.len()).unwrap();
+    device.copy_buffer(&source, &destination).unwrap();
+    device.synchronize().unwrap();
+    assert_eq!(device.download_owned(&destination).unwrap(), expected);
+
+    // The explicit opt-out still routes to the same values when its own bound
+    // is generous, so callers that need a different deadline are not on a
+    // second code path.
+    let mut explicit = vec![0_u32; expected.len()];
+    device
+        .download_with_timeout(&source, &mut explicit, std::time::Duration::from_secs(30))
+        .unwrap();
+    assert_eq!(explicit, expected);
+}

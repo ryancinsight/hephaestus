@@ -1,11 +1,11 @@
 //! ROCm elementwise operations over typed device buffers.
 
-use guard::{checked_work_items, reject_output_alias};
+use hephaestus_core::{HephaestusError, Result};
+
+use crate::RocmBuffer;
 
 /// Binary elementwise operations.
 pub mod binary;
-/// Output-alias and work-item bound checks shared by every dispatch.
-mod guard;
 /// Scalar elementwise operations.
 pub mod scalar;
 /// Unary elementwise operations.
@@ -25,3 +25,22 @@ pub use unary::{
     SiluOp, SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp,
     TanOp, TanhGradOp, TanhOp, TruncOp, unary_elementwise, unary_elementwise_into,
 };
+
+fn reject_output_alias<T, U>(
+    input_label: &'static str,
+    input: &RocmBuffer<T>,
+    out: &RocmBuffer<U>,
+) -> Result<()> {
+    if input.aliases(out) {
+        return Err(HephaestusError::DispatchFailed {
+            message: format!("output buffer must not alias {input_label} input"),
+        });
+    }
+    Ok(())
+}
+
+fn checked_work_items(len: usize) -> Result<u32> {
+    u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
+        message: format!("ROCm elementwise length {len} exceeds the HIP kernel argument range"),
+    })
+}

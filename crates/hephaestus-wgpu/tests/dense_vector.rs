@@ -42,7 +42,7 @@ pub(super) fn axpy_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     for len in LENGTHS {
         let target_host = ascending(len);
@@ -67,7 +67,7 @@ pub(super) fn xpay_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     for len in LENGTHS {
         let target_host = ascending(len);
@@ -92,7 +92,7 @@ pub(super) fn scale_and_copy_match_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     for len in LENGTHS {
         let host = ascending(len);
@@ -115,7 +115,7 @@ pub(super) fn subtract_matches_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     for len in LENGTHS {
         let left_host = ascending(len);
@@ -174,7 +174,7 @@ pub(super) fn reductions_match_the_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     for len in [1_usize, 255, 256, 1000] {
         let left_host = ascending(len);
@@ -215,7 +215,7 @@ pub(super) fn prepared_reductions_reuse_their_bound_allocation() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     let host = ascending(512);
     let vector = device.upload(&host).expect("invariant: upload");
@@ -244,7 +244,7 @@ pub(super) fn mismatched_lengths_are_rejected() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = WgpuVectorOps::new(&device).expect("invariant: kernels compile");
+    let ops = WgpuVectorOps::<f32>::new(&device).expect("invariant: kernels compile");
 
     let short = device.upload(&ascending(8)).expect("invariant: upload");
     let long = device.upload(&ascending(16)).expect("invariant: upload");

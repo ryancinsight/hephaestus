@@ -350,13 +350,60 @@ impl_math_unary_exprs!(
     (AtanhOp, "atanh(x)", "atanh(x)"),
     (AsinhOp, "asinh(x)", "asinh(x)"),
     (AcoshOp, "acosh(x)", "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0)", "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0 + (x))", "log(1.0f + (x))"),
     (FloorOp, "floor(x)", "floor(x)"),
     (CeilOp, "ceil(x)", "ceil(x)"),
     (RoundOp, "round(x)", "rint(x)"),
     (TruncOp, "trunc(x)", "trunc(x)"),
 );
+
+// Expm1 and Log1p stay out of the macro: WGSL has neither builtin, so near
+// zero they evaluate a polynomial core (no `log` call, whose spec floor is
+// absolute near 1) while the C dialects call the native 1-ULP
+// `expm1`/`log1p` (CUDA Programming Guide Table 17; HIP math API). The C
+// spellings stay unsuffixed so overload resolution picks the lane width, as
+// `SinOp` does.
+//
+// The WGSL `expm1` core is the degree-6 Taylor polynomial in Horner form on
+// `|x| <= 0.3` (Lagrange remainder below 0.06 ULP there; coefficients are
+// exact rationals spelled to 17 digits); outside, `exp(x) - 1` no longer
+// cancels. The form is division-free, so only correctly-rounded `+ - *`
+// feed the rounding count, and every special input takes an exact arm
+// (`±0` through the polynomial, infinities and NaN through `exp`). The
+// regrouped `(u - 1) * (x / log(u))` identity was measured first and
+// rejected: the Vulkan driver uses the `log` spec floor near 1, failing the
+// sweep at 1e7 ULP.
+//
+// The WGSL `log1p` bands shift into the shared `wgsl_l1p_core` exactly:
+// `log(1 + x) = ln 2 + P((x - 1) / 2)` above (Sterbenz-exact argument) and
+// `-(ln 2 + P(1 / (2(1 + x)) - 1))` below, so the only `log` calls left
+// (`u > 2`, `u < 0.5`) sit under the relative part of the spec table. The
+// pole needs no guard (`log(0)` is `-inf`, `log` of a negative is NaN).
+macro_rules! wgsl_log1p_expr {
+    () => {
+        concat!(
+            "select(select(select(select(log(1.0 + (x)), (0.0 - (0.6931471805599453 + ",
+            wgsl_l1p_core!("((1.0 / (2.0 * (1.0 + (x)))) - 1.0)"),
+            ")), (x) >= -0.5), ",
+            wgsl_l1p_core!("(x)"),
+            ", (x) >= -0.2928932188134525), (0.6931471805599453 + ",
+            wgsl_l1p_core!("(((x) - 1.0) * 0.5)"),
+            "), (x) > 0.4142135623730951), log(1.0 + (x)), (x) > 1.0)"
+        )
+    };
+}
+
+impl UnaryExpr<Wgsl> for Expm1Op {
+    const EXPR: &'static str = "select((exp(x) - 1.0), (x) * (1.0 + (x) * (0.5 + (x) * (0.16666666666666666 + (x) * (0.041666666666666664 + (x) * (0.008333333333333333 + (x) * 0.001388888888888889))))), abs(x) <= 0.3)";
+}
+impl UnaryExpr<CudaC> for Expm1Op {
+    const EXPR: &'static str = "expm1(x)";
+}
+impl UnaryExpr<Wgsl> for Log1pOp {
+    const EXPR: &'static str = wgsl_log1p_expr!();
+}
+impl UnaryExpr<CudaC> for Log1pOp {
+    const EXPR: &'static str = "log1p(x)";
+}
 
 // Sign stays out of the macro: the WGSL spelling nests `select` with
 // literal-only arms, which concretize to `f32` and reject `f64` output
@@ -419,8 +466,8 @@ impl_hip_unary_exprs!(
     (AtanhOp, "atanh(x)"),
     (AsinhOp, "asinh(x)"),
     (AcoshOp, "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0f + (x))"),
+    (Expm1Op, "expm1(x)"),
+    (Log1pOp, "log1p(x)"),
     (SignOp, "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"),
     (FloorOp, "floor(x)"),
     (CeilOp, "ceil(x)"),
@@ -430,38 +477,29 @@ impl_hip_unary_exprs!(
     (ErfcOp, "erfc(x)"),
     (LgammaOp, "lgamma(x)"),
     (SincOp, "((x) == 0.0f ? 1.0f : sin(x) / (x))"),
-    (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
+    (
+        GeluOp,
+        "(x) < -3.402823466e+38f ? -0.0f : 0.5f * x * erfcf(-(x * 0.7071067811865476f))"
+    ),
     (
         GeluGradOp,
-        "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : 0.5f * erfcf(-(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f)"
     ),
     (ReluOp, "max(x, 0.0f)"),
     (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
-    (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
+    (
+        SigmoidOp,
+        "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))"
+    ),
     (SigmoidGradOp, "x * (1.0f - x)"),
     (TanhOp, "tanh(x)"),
     (TanhGradOp, "1.0f - x * x"),
+    (SoftplusOp, "x <= 0.0f ? log1p(exp(x)) : x + log1p(exp(-x))"),
     (
-        GeluTanhOp,
-        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
+        SoftplusGradOp,
+        "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))"
     ),
-    (
-        GeluTanhGradOp,
-        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
-    ),
-    (SiluOp, "x / (1.0f + exp(-x))"),
-    (
-        SiluGradOp,
-        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
-    ),
-    (SoftplusOp, "log(1.0f + exp(x))"),
-    (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
-    (MishOp, "x * tanhf(logf(1.0f + expf(x)))"),
-    (
-        MishGradOp,
-        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
-    ),
-    (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
+    (EluOp, "x >= 0.0f ? x : expm1(x)"),
     (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
     (HardsigmoidOp, "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"),
     (

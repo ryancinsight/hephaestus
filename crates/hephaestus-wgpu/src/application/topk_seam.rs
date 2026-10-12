@@ -23,8 +23,11 @@ use crate::application::strided::{map_layout_err, to_i32, to_u32};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 
-/// WGSL `TopKMeta` uniform: input shape/strides, output strides, and
-/// `[in_offset, out_offset, lane_count, k]`.
+/// WGSL `TopKMeta` uniform: input shape/strides, per-output strides, and
+/// `[in_offset, val_offset, lane_count, k]`.
+/// `values` and `indices` share a shape but keep independent strides and
+/// offsets — either may be a non-dense view — so the indices side gets its
+/// own `idx_strides` and `idx_offsets` (`[idx_offset, 0, 0, 0]`).
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct TopKMeta {
@@ -32,15 +35,19 @@ struct TopKMeta {
     in_strides: [i32; 4],
     out_strides: [i32; 4],
     offsets: [u32; 4],
+    idx_strides: [i32; 4],
+    idx_offsets: [u32; 4],
 }
 
-const _: () = assert!(core::mem::size_of::<TopKMeta>() == 64);
+const _: () = assert!(core::mem::size_of::<TopKMeta>() == 96);
 
 const WGSL_TOPK_META: &str = r"struct TopKMeta {
     in_shape: vec4<u32>,
     in_strides: vec4<i32>,
     out_strides: vec4<i32>,
     offsets: vec4<u32>,
+    idx_strides: vec4<i32>,
+    idx_offsets: vec4<u32>,
 }
 ";
 
@@ -64,38 +71,49 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     let k = tmeta.offsets.w;
     let axis_len = tmeta.in_shape[{axis}];
     let lane_base = i32(tmeta.offsets.x) + i32(lane) * tmeta.in_strides[{other}];
-    let out_base = lane * k;
+    let val_base = i32(tmeta.offsets.y) + i32(lane) * tmeta.out_strides[{other}];
+    let idx_base = i32(tmeta.idx_offsets.x) + i32(lane) * tmeta.idx_strides[{other}];
+    let v_stride = tmeta.out_strides[{axis}];
+    let i_stride = tmeta.idx_strides[{axis}];
 
     for (var a: u32 = 0u; a < axis_len; a = a + 1u) {{
         let val = input[u32(lane_base + i32(a) * tmeta.in_strides[{axis}])];
         if (a < k) {{
             var pos = a;
-            out_vals[out_base + pos] = val;
-            out_idx[out_base + pos] = a;
+            out_vals[u32(val_base + i32(pos) * v_stride)] = val;
+            out_idx[u32(idx_base + i32(pos) * i_stride)] = a;
             loop {{
                 if (pos == 0u) {{ break; }}
-                if (out_vals[out_base + pos - 1u] >= out_vals[out_base + pos]) {{ break; }}
-                let tv = out_vals[out_base + pos - 1u];
-                let ti = out_idx[out_base + pos - 1u];
-                out_vals[out_base + pos - 1u] = out_vals[out_base + pos];
-                out_idx[out_base + pos - 1u] = out_idx[out_base + pos];
-                out_vals[out_base + pos] = tv;
-                out_idx[out_base + pos] = ti;
+                let vp = u32(val_base + i32(pos) * v_stride);
+                let vq = u32(val_base + i32(pos - 1u) * v_stride);
+                if (out_vals[vq] >= out_vals[vp]) {{ break; }}
+                let ip = u32(idx_base + i32(pos) * i_stride);
+                let iq = u32(idx_base + i32(pos - 1u) * i_stride);
+                let tv = out_vals[vq];
+                let ti = out_idx[iq];
+                out_vals[vq] = out_vals[vp];
+                out_idx[iq] = out_idx[ip];
+                out_vals[vp] = tv;
+                out_idx[ip] = ti;
                 pos = pos - 1u;
             }}
-        }} else if (val > out_vals[out_base + k - 1u]) {{
+        }} else if (val > out_vals[u32(val_base + i32(k - 1u) * v_stride)]) {{
             var pos = k - 1u;
-            out_vals[out_base + pos] = val;
-            out_idx[out_base + pos] = a;
+            out_vals[u32(val_base + i32(pos) * v_stride)] = val;
+            out_idx[u32(idx_base + i32(pos) * i_stride)] = a;
             loop {{
                 if (pos == 0u) {{ break; }}
-                if (out_vals[out_base + pos - 1u] >= out_vals[out_base + pos]) {{ break; }}
-                let tv = out_vals[out_base + pos - 1u];
-                let ti = out_idx[out_base + pos - 1u];
-                out_vals[out_base + pos - 1u] = out_vals[out_base + pos];
-                out_idx[out_base + pos - 1u] = out_idx[out_base + pos];
-                out_vals[out_base + pos] = tv;
-                out_idx[out_base + pos] = ti;
+                let vp = u32(val_base + i32(pos) * v_stride);
+                let vq = u32(val_base + i32(pos - 1u) * v_stride);
+                if (out_vals[vq] >= out_vals[vp]) {{ break; }}
+                let ip = u32(idx_base + i32(pos) * i_stride);
+                let iq = u32(idx_base + i32(pos - 1u) * i_stride);
+                let tv = out_vals[vq];
+                let ti = out_idx[iq];
+                out_vals[vq] = out_vals[vp];
+                out_idx[iq] = out_idx[ip];
+                out_vals[vp] = tv;
+                out_idx[ip] = ti;
                 pos = pos - 1u;
             }}
         }}
@@ -161,12 +179,8 @@ where
 
         let in_shape = in_layout.shape();
         let in_strides = in_layout.strides();
-        // `values` and `indices` share the same shape (validated above); a
-        // dense output requires them to share strides too for this single
-        // `out_strides` field to describe both, which holds for the
-        // conformance suite's dense fixtures and is documented as the
-        // contract here rather than re-derived per call.
-        let out_strides = val_layout.strides();
+        let val_strides = val_layout.strides();
+        let idx_strides = idx_layout.strides();
         let meta = TopKMeta {
             in_shape: [
                 to_u32(in_shape[0], "input dimension")?,
@@ -181,8 +195,8 @@ where
                 0,
             ],
             out_strides: [
-                to_i32(out_strides[0], "output stride")?,
-                to_i32(out_strides[1], "output stride")?,
+                to_i32(val_strides[0], "output stride")?,
+                to_i32(val_strides[1], "output stride")?,
                 0,
                 0,
             ],
@@ -192,6 +206,13 @@ where
                 to_u32(lanes, "dispatch size")?,
                 to_u32(k, "k")?,
             ],
+            idx_strides: [
+                to_i32(idx_strides[0], "output stride")?,
+                to_i32(idx_strides[1], "output stride")?,
+                0,
+                0,
+            ],
+            idx_offsets: [to_u32(idx_layout.offset(), "output offset")?, 0, 0, 0],
         };
 
         let meta_buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<TopKMeta>(1)?)?;

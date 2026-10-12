@@ -1,12 +1,11 @@
 //! WGSL f64 cross-entropy backward contract.
 //!
-//! Forward stays out of this binary: the f64 forward shaders need `exp` and
-//! `log`, whose f64 SPIR-V lowering is undefined, so the backend refuses them
-//! on Vulkan (ADR 0072) and only the backward path (pure IEEE-double
-//! arithmetic) executes here. CUDA proves
+//! Forward stays out of this binary: the f64 forward shaders need `log`,
+//! which aborts shader compilation on some Vulkan drivers, so only the
+//! backward path (pure IEEE-double arithmetic) executes here. CUDA proves
 //! the f64 forward path on hardware.
 
-use hephaestus_conformance::assert_cross_entropy_backward_contract_for;
+use hephaestus_conformance::assert_cross_entropy_backward_contract_f64;
 use hephaestus_core::{DeviceFeature, DevicePreference};
 use hephaestus_wgpu::{WgpuCrossEntropyOps, WgpuDevice};
 
@@ -43,5 +42,5 @@ fn f64_device() -> Option<WgpuDevice> {
 #[test]
 fn f64_backward_matches_the_leto_oracle() {
     let Some(device) = f64_device() else { return };
-    assert_cross_entropy_backward_contract_for::<_, _, f64>(&device, &WgpuCrossEntropyOps);
+    assert_cross_entropy_backward_contract_f64(&device, &WgpuCrossEntropyOps);
 }

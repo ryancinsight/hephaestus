@@ -33,7 +33,8 @@ pub use matrix::{
 };
 pub use matrix_rank::{MatrixRankScalar, det, matrix_rank, matrix_rank_with_tolerance};
 pub(crate) use norms::{
-    DotMap, PreparedMapReduction, SquareMap, prepare_map_reduction_with_layouts,
+    DotMap, PreparedMapReduction, RetainedMapReduction, SquareMap,
+    prepare_map_reduction_with_layouts,
 };
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 pub use pinv_matexp::{matexp, pinv};
@@ -72,14 +73,14 @@ pub(super) fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
 pub(super) use hephaestus_core::map_layout_err;
 
 #[inline]
-fn to_u32(value: usize, what: &str) -> Result<u32> {
+pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds u32 range"),
     })
 }
 
 #[inline]
-fn to_i32(value: isize, what: &str) -> Result<i32> {
+pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
     i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("{what} {value} exceeds i32 range"),
     })

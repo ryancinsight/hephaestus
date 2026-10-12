@@ -10,14 +10,19 @@ pub mod application;
 /// Metal device and buffer infrastructure.
 pub mod infrastructure;
 
+pub use application::adaptive_pooling_seam::MetalAdaptivePoolingOps;
+pub use application::arg_reduce_seam::MetalArgReduceOps;
 pub use application::attention::MetalAttentionOps;
 pub use application::axis_reduction_seam::MetalAxisReductionOps;
+pub use application::cat_seam::MetalCatOps;
 pub use application::convolution::MetalConvolutionOps;
+pub use application::cross_product_seam::MetalCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::{
     MetalCholeskyDecomposition, MetalDecompositionOps, MetalLuDecomposition, MetalQrDecomposition,
 };
 pub use application::dense_product_seam::MetalDenseProductOps;
+pub use application::dot_seam::MetalDotOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -31,8 +36,12 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::MetalElementwiseOps;
+pub use application::embedding_seam::MetalEmbeddingOps;
 pub use application::full_reduction_seam::MetalFullReductionOps;
-pub use application::fusion::MetalFusionOps;
+pub use application::gather_seam::MetalGatherOps;
+pub use application::index_put_seam::MetalIndexPutOps;
+pub use application::index_select_seam::MetalIndexSelectOps;
+pub use application::interpolation_seam::MetalInterpolationOps;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
@@ -43,6 +52,9 @@ pub use application::linalg_traits::{
     AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
 };
 pub use application::loss::{CtcKernel, MetalCrossEntropyOps, MetalCtcOps};
+pub use application::masked_fill_seam::MetalMaskedFillOps;
+pub use application::nonzero_seam::MetalNonzeroOps;
+pub use application::pad_seam::MetalPadOps;
 pub use application::parameterized_elementwise::{
     MetalParameterizedUnaryOps, parameterized_unary_strided_into,
 };
@@ -59,17 +71,22 @@ pub use application::reduction::{
     reduce_axis_into, reduction, reduction_with_width, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, sum_axis, sum_axis_into,
 };
+pub use application::roll_seam::MetalRollOps;
 pub use application::scan::{
     CumProdOp, CumSumOp, ScanDirection, cumprod, cumprod_into, cumsum, cumsum_into, scan_axis,
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
 pub use application::scan_seam::MetalScanOps;
+pub use application::scatter_seam::MetalScatterOps;
+pub use application::sort_seam::MetalSortOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
 pub use application::sparse_seam::MetalSparseOps;
+pub use application::split_seam::MetalSplitOps;
+pub use application::stack_seam::MetalStackOps;
 pub use application::stateful_update::MetalStatefulUpdateOps;
 pub use application::stencil::MetalFixedFd3DOps;
 pub use application::stencil::MetalStaggered3DOps;
@@ -90,10 +107,14 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::tile_seam::MetalTileOps;
+pub use application::topk_seam::MetalTopKOps;
+pub use application::triangular_seam::MetalTriangularOps;
 pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOps};
 pub use application::volume::{
     FieldGeometry, MetalRayIntegralOps, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::where_seam::MetalWhereOps;
 pub use application::window::{MetalPoolingOps, MetalSlidingWindowOps};
 pub use hephaestus_core::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,

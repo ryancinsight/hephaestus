@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::assert_convolution_contract;
+use hephaestus_conformance::{assert_convolution_contract, assert_convolution_f64_contract};
 use hephaestus_rocm::{RocmConvolutionOps, RocmDevice};
 
 #[test]
@@ -15,6 +15,6 @@ fn rocm_satisfies_the_convolution_contract() {
         }
         Err(error) => panic!("ROCm convolution conformance requires a physical device: {error}"),
     };
-    assert_convolution_contract::<_, _, f32>(&device, &RocmConvolutionOps);
-    assert_convolution_contract::<_, _, f64>(&device, &RocmConvolutionOps);
+    assert_convolution_contract(&device, &RocmConvolutionOps);
+    assert_convolution_f64_contract(&device, &RocmConvolutionOps);
 }

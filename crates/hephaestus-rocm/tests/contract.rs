@@ -47,6 +47,10 @@ use hephaestus_rocm::{
 };
 use leto::Layout;
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, eunomia::Pod, eunomia::Zeroable)]
+struct AlternateIdentity(i32);
+
 impl hephaestus_core::DialectScalar<HipC> for AlternateIdentity {
     const TYPE_TOKEN: &'static str = "int";
 }
@@ -56,6 +60,8 @@ impl hephaestus_rocm::MatrixIdentityScalar for AlternateIdentity {
     const ONE: Self = Self(9);
 }
 use std::borrow::Cow;
+
+struct StreamAddKernel;
 
 impl KernelInterface for StreamAddKernel {
     type Params = u32;
@@ -88,6 +94,8 @@ extern "C" __global__ void rocm_contract_stream_add(
         )
     }
 }
+
+struct GroupedStreamAddKernel;
 
 impl GroupedKernelInterface for GroupedStreamAddKernel {
     type Params = u32;
@@ -123,36 +131,4416 @@ extern "C" __global__ void rocm_contract_grouped_stream_add(
     }
 }
 
-#[path = "contract/axis.rs"]
-mod axis;
-#[path = "contract/buffer.rs"]
-mod buffer;
-#[path = "contract/cholesky.rs"]
-mod cholesky;
-#[path = "contract/device.rs"]
-mod device;
-#[path = "contract/eigenvalues.rs"]
-mod eigenvalues;
-#[path = "contract/elementwise.rs"]
-mod elementwise;
-#[path = "contract/fixtures.rs"]
-mod fixtures;
-#[path = "contract/linalg_products.rs"]
-mod linalg_products;
-#[path = "contract/lu.rs"]
-mod lu;
-#[path = "contract/qr.rs"]
-mod qr;
-#[path = "contract/reduction.rs"]
-mod reduction;
-#[path = "contract/reduction_map.rs"]
-mod reduction_map;
-#[path = "contract/reduction_prepared.rs"]
-mod reduction_prepared;
-#[path = "contract/scan.rs"]
-mod scan;
-#[path = "contract/sparse.rs"]
-mod sparse;
-#[path = "contract/svd.rs"]
-mod svd;
-pub(crate) use fixtures::*;
+fn device(test: &str) -> Option<RocmDevice> {
+    match RocmDevice::try_default() {
+        Ok(device) => Some(device),
+        Err(error) => {
+            if std::env::var_os("HEPHAESTUS_ROCM_REQUIRE_DEVICE").is_some() {
+                panic!("ROCm device required for {test}, but acquisition failed: {error}");
+            }
+            eprintln!("skip {test}: ROCm device unavailable ({error})");
+            None
+        }
+    }
+}
+
+fn assert_length_mismatch<T>(result: Result<T>, host_len: usize, device_len: usize) {
+    match result {
+        Err(HephaestusError::LengthMismatch {
+            host_len: actual_host_len,
+            device_len: actual_device_len,
+        }) => {
+            assert_eq!(actual_host_len, host_len);
+            assert_eq!(actual_device_len, device_len);
+        }
+        Err(error) => panic!("expected length mismatch, got {error:?}"),
+        Ok(_) => panic!("expected length mismatch {host_len}->{device_len}, got success"),
+    }
+}
+
+#[test]
+fn elementwise_marker_types_are_exported_from_rocm_root() {
+    let markers = [
+        std::any::TypeId::of::<AbsOp>(),
+        std::any::TypeId::of::<AddOp>(),
+        std::any::TypeId::of::<CosOp>(),
+        std::any::TypeId::of::<DivOp>(),
+        std::any::TypeId::of::<ExpNegOp>(),
+        std::any::TypeId::of::<ExpOp>(),
+        std::any::TypeId::of::<IdentityOp>(),
+        std::any::TypeId::of::<LnOp>(),
+        std::any::TypeId::of::<MulOp>(),
+        std::any::TypeId::of::<NegOp>(),
+        std::any::TypeId::of::<PowOp>(),
+        std::any::TypeId::of::<RecipOp>(),
+        std::any::TypeId::of::<SinOp>(),
+        std::any::TypeId::of::<SqrtOp>(),
+        std::any::TypeId::of::<SubOp>(),
+    ];
+    let unique_markers = markers.iter().collect::<std::collections::HashSet<_>>();
+    assert_eq!(unique_markers.len(), markers.len());
+}
+
+fn assert_near(actual: f32, expected: f32, ulps: f32) {
+    let tolerance = ulps * f32::EPSILON * expected.abs().max(1.0);
+    assert!(
+        (actual - expected).abs() <= tolerance,
+        "got {actual}, expected {expected}, tolerance {tolerance}"
+    );
+}
+
+#[cfg(feature = "decomposition")]
+fn reconstruct_svd(
+    u: &[f32],
+    v: &[f32],
+    singular_values: &[f32],
+    rows: usize,
+    cols: usize,
+) -> Vec<f32> {
+    let rank = singular_values.len();
+    (0..rows)
+        .flat_map(|row| {
+            (0..cols).map(move |col| {
+                (0..rank)
+                    .map(|k| u[row * rank + k] * singular_values[k] * v[col * rank + k])
+                    .sum()
+            })
+        })
+        .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn matmul_square(lhs: &[f32], rhs: &[f32], n: usize) -> Vec<f32> {
+    (0..n)
+        .flat_map(|row| {
+            (0..n).map(move |col| {
+                (0..n)
+                    .map(|index| lhs[row * n + index] * rhs[index * n + col])
+                    .sum()
+            })
+        })
+        .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn transpose_square(matrix: &[f32], n: usize) -> Vec<f32> {
+    (0..n)
+        .flat_map(|row| (0..n).map(move |col| matrix[col * n + row]))
+        .collect()
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_orthogonal(matrix: &[f32], n: usize) {
+    let transpose = transpose_square(matrix, n);
+    let product = matmul_square(&transpose, matrix, n);
+    for row in 0..n {
+        for col in 0..n {
+            assert_near(
+                product[row * n + col],
+                if row == col { 1.0 } else { 0.0 },
+                8192.0,
+            );
+        }
+    }
+}
+
+#[test]
+fn backend_name_is_stable() {
+    #[cfg(not(feature = "rocm"))]
+    assert_eq!(
+        RocmDevice::try_default().unwrap_err().to_string(),
+        "no compatible accelerator adapter available: ROCm backend unavailable: enable the `rocm` feature on Linux with ROCm installed"
+    );
+
+    #[cfg(feature = "rocm")]
+    if let Some(device) = device("backend_name_is_stable") {
+        assert_eq!(device.backend_name(), "rocm");
+    }
+}
+
+#[test]
+fn device_capabilities_and_topology_are_driver_backed() {
+    let Some(device) = device("device_capabilities_and_topology_are_driver_backed") else {
+        return;
+    };
+
+    let limits = device.device_limits();
+    assert!(limits.max_buffer_size > 0);
+    assert!(limits.max_compute_workgroup_size_x > 0);
+    assert!(limits.max_compute_workgroup_size_y > 0);
+    assert!(limits.max_compute_workgroup_size_z > 0);
+    assert!(limits.max_compute_invocations_per_workgroup > 0);
+    assert!(limits.max_compute_workgroup_storage_size > 0);
+    assert_eq!(limits.max_storage_buffers_per_shader_stage, None);
+    assert_eq!(
+        limits.max_buffers_and_acceleration_structures_per_shader_stage,
+        None
+    );
+    assert_eq!(limits.max_immediate_size, 0);
+
+    assert!(!device.supports_device_feature(DeviceFeature::TimestampQuery));
+    assert!(!device.supports_device_feature(DeviceFeature::ShaderF64));
+    assert!(!device.supports_device_feature(DeviceFeature::ShaderF16));
+    assert!(!device.supports_device_feature(DeviceFeature::ImmediateData));
+
+    let topology = device
+        .topology()
+        .expect("an acquired ROCm device must have a topology snapshot");
+    assert!(topology.compute_units().is_some());
+    assert!(topology.warp_width().is_some());
+    assert!(topology.max_threads_per_unit().is_some());
+    assert!(topology.registers_per_unit().is_some());
+    assert!(topology.shared_mem_per_unit_bytes().is_some());
+    assert!(topology.memory_bytes().is_some());
+    assert_eq!(topology.memory_tier(), themis::MemoryTier::Device);
+    assert!(topology.max_resident_warps().is_some_and(|warps| warps > 0));
+}
+
+#[test]
+fn upload_download_roundtrip_preserves_values() {
+    let Some(device) = device("upload_download_roundtrip_preserves_values") else {
+        return;
+    };
+
+    let host = [1.0_f32, 2.0, -3.5, 4.25, 0.0, 1024.5];
+    let buffer = device.upload(&host).expect("HIP upload");
+    assert_eq!(buffer.len(), host.len());
+    assert_eq!(buffer.tier(), themis::MemoryTier::Device);
+
+    let mut output = [0.0_f32; 6];
+    device.download(&buffer, &mut output).expect("HIP download");
+    device.synchronize().expect("HIP synchronization");
+    assert_eq!(output, host);
+}
+
+#[test]
+fn device_local_copy_preserves_values_and_rejects_mismatch() {
+    let Some(device) = device("device_local_copy_preserves_values_and_rejects_mismatch") else {
+        return;
+    };
+    let host: Vec<f32> = (0..1027).map(|index| index as f32 * 0.25 - 17.0).collect();
+    let source = device.upload(&host).expect("HIP source upload");
+    let destination = device
+        .alloc_zeroed::<f32>(host.len())
+        .expect("HIP destination allocation");
+
+    device
+        .copy_buffer(&source, &destination)
+        .expect("HIP device-local copy");
+    let mut copied = vec![0.0_f32; host.len()];
+    device
+        .download(&destination, &mut copied)
+        .expect("HIP copied-value download");
+    assert_eq!(copied, host);
+
+    let empty_source = device.upload(&[] as &[f32]).expect("empty HIP source");
+    let empty_destination = device
+        .alloc_zeroed::<f32>(0)
+        .expect("empty HIP destination");
+    device
+        .copy_buffer(&empty_source, &empty_destination)
+        .expect("empty HIP device-local copy");
+    assert_eq!(empty_destination.len(), 0);
+
+    let short = device
+        .alloc_zeroed::<f32>(host.len() - 1)
+        .expect("HIP short destination allocation");
+    assert_length_mismatch(
+        device.copy_buffer(&source, &short),
+        source.len(),
+        short.len(),
+    );
+}
+
+#[test]
+fn uninitialized_allocation_is_fully_overwritten_before_read() {
+    let Some(device) = device("uninitialized_allocation_is_fully_overwritten_before_read") else {
+        return;
+    };
+    let expected = [1.0_f32, -2.5, 3.25, 8.0];
+    let buffer = device
+        .alloc_uninitialized::<f32>(expected.len())
+        .expect("uninitialized allocation");
+    device
+        .write_buffer(&buffer, &expected)
+        .expect("full-buffer initialization");
+    let mut actual = [0.0_f32; 4];
+    device.download(&buffer, &mut actual).expect("download");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn alloc_zeroed_produces_zero_values() {
+    let Some(device) = device("alloc_zeroed_produces_zero_values") else {
+        return;
+    };
+
+    let buffer = device.alloc_zeroed::<u32>(17).expect("HIP allocation");
+    let mut output = [9_u32; 17];
+    device.download(&buffer, &mut output).expect("HIP download");
+    assert_eq!(output, [0_u32; 17]);
+}
+
+#[test]
+fn placement_hints_match_hip_allocation_contract() {
+    let Some(device) = device("placement_hints_match_hip_allocation_contract") else {
+        return;
+    };
+
+    let host_visible = device
+        .alloc_zeroed_with_hint::<u32>(
+            4,
+            themis::PlacementHint::Tier(themis::MemoryTier::HostPinned),
+        )
+        .expect("host-visible hints normalize to HIP device memory");
+    assert_eq!(host_visible.tier(), themis::MemoryTier::Device);
+
+    let registers = device.alloc_zeroed_with_hint::<u32>(
+        4,
+        themis::PlacementHint::Tier(themis::MemoryTier::Registers),
+    );
+    assert!(matches!(
+        registers,
+        Err(HephaestusError::AllocationFailed { message })
+            if message == "ROCm primary buffers cannot be allocated from budget-only tier Registers"
+    ));
+}
+
+#[test]
+fn subrange_write_preserves_unwritten_values() {
+    let Some(device) = device("subrange_write_preserves_unwritten_values") else {
+        return;
+    };
+
+    let buffer = device.upload(&[1_u32, 2, 3, 4, 5]).expect("HIP upload");
+    device
+        .write_sub_buffer(&buffer, 2, &[9_u32, 8])
+        .expect("HIP subrange write");
+    let mut output = [0_u32; 5];
+    device.download(&buffer, &mut output).expect("HIP download");
+    assert_eq!(output, [1, 2, 9, 8, 5]);
+}
+
+#[test]
+fn length_mismatches_are_rejected_before_transfer() {
+    let Some(device) = device("length_mismatches_are_rejected_before_transfer") else {
+        return;
+    };
+
+    let buffer = device.upload(&[1.0_f32, 2.0]).expect("HIP upload");
+    let mut output = [0.0_f32; 3];
+    assert_length_mismatch(device.download(&buffer, &mut output), 3, 2);
+    assert_length_mismatch(device.write_buffer(&buffer, &[1.0_f32]), 1, 2);
+}
+
+#[test]
+fn empty_buffers_roundtrip_without_hip_allocation() {
+    let Some(device) = device("empty_buffers_roundtrip_without_hip_allocation") else {
+        return;
+    };
+
+    let buffer = device.upload::<u16>(&[]).expect("empty HIP upload");
+    assert!(buffer.is_empty());
+    let mut output = [];
+    device
+        .download(&buffer, &mut output)
+        .expect("empty HIP download");
+}
+
+#[test]
+fn elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts() {
+    let Some(device) =
+        device("elementwise_kernels_match_cpu_values_and_reject_invalid_output_contracts")
+    else {
+        return;
+    };
+
+    let lhs: Vec<f32> = (0..513).map(|index| index as f32).collect();
+    let rhs: Vec<f32> = (0..513).map(|index| (index % 7) as f32).collect();
+    let lhs_buffer = device.upload(&lhs).expect("HIP lhs upload");
+    let rhs_buffer = device.upload(&rhs).expect("HIP rhs upload");
+
+    let sum = binary_elementwise::<AddOp, _>(&device, &lhs_buffer, &rhs_buffer)
+        .expect("HIP binary elementwise add");
+    let mut sum_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&sum, &mut sum_output)
+        .expect("HIP sum download");
+    let expected_sum: Vec<f32> = lhs.iter().zip(&rhs).map(|(lhs, rhs)| lhs + rhs).collect();
+    assert_eq!(sum_output, expected_sum);
+
+    let negated = unary_elementwise::<NegOp, _>(&device, &lhs_buffer).expect("HIP unary negate");
+    let mut negated_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&negated, &mut negated_output)
+        .expect("HIP negation download");
+    let expected_negated: Vec<f32> = lhs.iter().map(|value| -value).collect();
+    assert_eq!(negated_output, expected_negated);
+
+    let doubled = scalar_elementwise::<MulOp, _>(&device, &lhs_buffer, 2.0)
+        .expect("HIP scalar elementwise multiply");
+    let mut doubled_output = vec![0.0_f32; lhs.len()];
+    device
+        .download(&doubled, &mut doubled_output)
+        .expect("HIP scalar multiply download");
+    let expected_doubled: Vec<f32> = lhs.iter().map(|value| value * 2.0).collect();
+    assert_eq!(doubled_output, expected_doubled);
+
+    let mismatch = device
+        .alloc_zeroed::<f32>(lhs.len() - 1)
+        .expect("HIP mismatch buffer");
+    assert!(matches!(
+        binary_elementwise_into::<AddOp, _>(
+            &device,
+            &lhs_buffer,
+            &rhs_buffer,
+            &mismatch,
+            hephaestus_core::BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::LengthMismatch {
+            host_len,
+            device_len,
+        }) if host_len == lhs.len() - 1 && device_len == lhs.len()
+    ));
+
+    assert!(matches!(
+        binary_elementwise_into::<AddOp, _>(
+            &device,
+            &lhs_buffer,
+            &rhs_buffer,
+            &lhs_buffer,
+            hephaestus_core::BlockWidth::DEFAULT,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias binary left input"
+    ));
+}
+
+#[test]
+fn elementwise_activation_markers_match_cpu_reference() {
+    let Some(device) = device("elementwise_activation_markers_match_cpu_reference") else {
+        return;
+    };
+    let host = [-2.0_f32, -0.5, 0.0, 0.5, 2.0];
+    let input = device.upload(&host).unwrap();
+    let gelu_scale = 0.797_884_6_f32;
+    let gelu_cubic = 0.044715_f32;
+
+    macro_rules! check {
+        ($label:literal, $operation:ty, $expected:expr) => {{
+            let expected = $expected;
+            let output = unary_elementwise::<$operation, f32>(&device, &input).unwrap();
+            let mut actual = [0.0_f32; 5];
+            device.download(&output, &mut actual).unwrap();
+            for (index, (&got, &reference)) in actual.iter().zip(expected.iter()).enumerate() {
+                let tolerance = f32::EPSILON * 512.0 * reference.abs().max(1.0);
+                assert!(
+                    (got - reference).abs() <= tolerance,
+                    "{}[{index}] got {got}, expected {reference}, tolerance {tolerance}",
+                    $label
+                );
+            }
+        }};
+    }
+
+    check!(
+        "gelu_tanh",
+        GeluTanhOp,
+        host.iter()
+            .map(|&x| 0.5 * x * (1.0 + (gelu_scale * (x + gelu_cubic * x * x * x)).tanh()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "gelu_tanh_grad",
+        GeluTanhGradOp,
+        host.iter()
+            .map(|&x| {
+                let tanh = (gelu_scale * (x + gelu_cubic * x * x * x)).tanh();
+                0.5 * (1.0 + tanh)
+                    + 0.5 * x * (1.0 - tanh * tanh) * gelu_scale * (1.0 + 3.0 * gelu_cubic * x * x)
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu",
+        SiluOp,
+        host.iter()
+            .map(|&x| x / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "silu_grad",
+        SiluGradOp,
+        host.iter()
+            .map(|&x| {
+                let sigmoid = 1.0 / (1.0 + (-x).exp());
+                sigmoid * (1.0 + x * (1.0 - sigmoid))
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus",
+        SoftplusOp,
+        host.iter()
+            .map(|&x| (1.0 + x.exp()).ln())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "softplus_grad",
+        SoftplusGradOp,
+        host.iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish",
+        MishOp,
+        host.iter()
+            .map(|&x| x * (1.0 + x.exp()).ln().tanh())
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "mish_grad",
+        MishGradOp,
+        host.iter()
+            .map(|&x| {
+                let softplus = (1.0 + x.exp()).ln();
+                softplus.tanh() + x * (1.0 - softplus.tanh().powi(2)) / (1.0 + (-x).exp())
+            })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu",
+        EluOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { x } else { x.exp() - 1.0 })
+            .collect::<Vec<_>>()
+    );
+    check!(
+        "elu_grad",
+        EluGradOp,
+        host.iter()
+            .map(|&x| if x >= 0.0 { 1.0 } else { x.exp() })
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts() {
+    let Some(device) =
+        device("strided_elementwise_kernels_match_cpu_values_and_reject_invalid_layouts")
+    else {
+        return;
+    };
+
+    let width = BlockWidth::DEFAULT;
+    let lhs_values = [99_i32, 1, 2, 3, 4];
+    let rhs_values = [10_i32, 20];
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP strided lhs upload");
+    let rhs_buffer = device
+        .upload(&rhs_values)
+        .expect("HIP broadcast rhs upload");
+    let lhs_layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
+    let rhs_layout = Layout::c_contiguous([1, 2]).expect("broadcast rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let sum = binary_elementwise_strided::<AddOp, _, 2>(&device, lhs, rhs, [2, 2], width)
+        .expect("HIP strided add");
+    let mut sum_values = [0_i32; 4];
+    device
+        .download(&sum, &mut sum_values)
+        .expect("HIP strided add download");
+    assert_eq!(sum_values, [11, 23, 12, 24]);
+
+    let identity = unary_elementwise_strided::<IdentityOp, _, 2>(&device, lhs, [2, 2], width)
+        .expect("HIP strided identity");
+    let mut identity_values = [0_i32; 4];
+    device
+        .download(&identity, &mut identity_values)
+        .expect("HIP strided identity download");
+    assert_eq!(identity_values, [1, 3, 2, 4]);
+
+    let probe_buffer = device
+        .upload(&[1_i32, 9, 2, 0])
+        .expect("HIP comparison probe upload");
+    let probe_layout = Layout::c_contiguous([2, 2]).expect("comparison probe layout");
+    let comparison = binary_elementwise_strided_typed::<EqOp, _, 2>(
+        &device,
+        lhs,
+        StridedOperand {
+            buffer: &probe_buffer,
+            layout: &probe_layout,
+        },
+        [2, 2],
+        width,
+    )
+    .expect("HIP allocated typed strided comparison");
+    let mut comparison_values = [0_i32; 4];
+    device
+        .download(&comparison, &mut comparison_values)
+        .expect("HIP typed strided comparison download");
+    assert_eq!(comparison_values, [1, 0, 1, 0]);
+
+    let allocated_scalar =
+        scalar_elementwise_strided::<MulOp, _, 2>(&device, lhs, 2, [2, 2], width)
+            .expect("HIP allocated strided scalar");
+    let mut allocated_scalar_values = [0_i32; 4];
+    device
+        .download(&allocated_scalar, &mut allocated_scalar_values)
+        .expect("HIP allocated strided scalar download");
+    assert_eq!(allocated_scalar_values, [2, 6, 4, 8]);
+
+    let scalar_output_layout = Layout::c_contiguous([2, 2]).expect("strided scalar layout");
+    let scalar_output = device
+        .alloc_zeroed::<i32>(4)
+        .expect("strided scalar output");
+    scalar_elementwise_strided_into::<MulOp, _, 2>(
+        &device,
+        lhs,
+        2,
+        StridedOperand {
+            buffer: &scalar_output,
+            layout: &scalar_output_layout,
+        },
+        width,
+    )
+    .expect("HIP strided scalar");
+    let mut scalar_values = [0_i32; 4];
+    device
+        .download(&scalar_output, &mut scalar_values)
+        .expect("HIP strided scalar download");
+    assert_eq!(scalar_values, [2, 6, 4, 8]);
+
+    let output_into = device
+        .alloc_zeroed::<i32>(4)
+        .expect("strided caller-owned output");
+    binary_elementwise_strided_into::<AddOp, _, 2>(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &scalar_output_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned strided add");
+    let mut output_into_values = [0_i32; 4];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned strided add download");
+    assert_eq!(output_into_values, [11, 23, 12, 24]);
+
+    let empty_buffer = device.upload::<i32>(&[]).expect("empty strided upload");
+    let empty_layout = Layout::c_contiguous([0, 2]).expect("empty strided layout");
+    let empty = unary_elementwise_strided::<IdentityOp, _, 2>(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+        [0, 2],
+        width,
+    )
+    .expect("empty strided identity");
+    assert_eq!(empty.len(), 0);
+
+    let bad_rhs_values = [1_i32; 6];
+    let bad_rhs_buffer = device
+        .upload(&bad_rhs_values)
+        .expect("bad broadcast upload");
+    let bad_rhs_layout = Layout::c_contiguous([3, 2]).expect("bad broadcast layout");
+    assert!(matches!(
+        binary_elementwise_strided_into::<AddOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &bad_rhs_buffer,
+                layout: &bad_rhs_layout,
+            },
+            StridedOperand {
+                buffer: &output_into,
+                layout: &scalar_output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
+
+    assert!(matches!(
+        unary_elementwise_strided_into::<IdentityOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias input buffer"
+    ));
+
+    let aliased_layout = Layout::try_new([2, 2], [0, 1], 0).expect("valid test layout");
+    let aliased_output = device.alloc_zeroed::<i32>(2).expect("zero-stride output");
+    assert!(matches!(
+        unary_elementwise_strided_into::<IdentityOp, _, 2>(
+            &device,
+            lhs,
+            StridedOperand {
+                buffer: &aliased_output,
+                layout: &aliased_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output layout must not contain zero-stride aliasing"
+    ));
+}
+
+#[test]
+fn reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries() {
+    let Some(device) =
+        device("reduction_kernels_match_cpu_values_across_tree_passes_and_boundaries")
+    else {
+        return;
+    };
+
+    let input: Vec<u32> = (0..513).map(|index| (index % 17) as u32).collect();
+    let input_buffer = device.upload(&input).expect("HIP reduction input upload");
+    let width = BlockWidth::new(128).expect("test reduction width is non-zero");
+
+    let sum =
+        reduction_with_width::<SumOp, _>(&device, &input_buffer, width).expect("HIP sum reduction");
+    let min =
+        reduction_with_width::<MinOp, _>(&device, &input_buffer, width).expect("HIP min reduction");
+    let max =
+        reduction_with_width::<MaxOp, _>(&device, &input_buffer, width).expect("HIP max reduction");
+
+    let expected_sum: u32 = input.iter().copied().sum();
+    let expected_min = input.iter().copied().min().expect("non-empty input");
+    let expected_max = input.iter().copied().max().expect("non-empty input");
+    let mut sum_output = [0_u32];
+    let mut min_output = [0_u32];
+    let mut max_output = [0_u32];
+    device
+        .download(&sum, &mut sum_output)
+        .expect("HIP sum download");
+    device
+        .download(&min, &mut min_output)
+        .expect("HIP min download");
+    device
+        .download(&max, &mut max_output)
+        .expect("HIP max download");
+    assert_eq!(sum_output, [expected_sum]);
+    assert_eq!(min_output, [expected_min]);
+    assert_eq!(max_output, [expected_max]);
+
+    let empty = device
+        .upload::<u32>(&[])
+        .expect("HIP empty reduction upload");
+    let empty_sum =
+        reduction_with_width::<SumOp, _>(&device, &empty, width).expect("HIP empty sum reduction");
+    let mut empty_output = [u32::MAX];
+    device
+        .download(&empty_sum, &mut empty_output)
+        .expect("HIP empty sum download");
+    assert_eq!(empty_output, [0]);
+
+    let invalid_width = BlockWidth::new(192).expect("test invalid width is non-zero");
+    assert!(matches!(
+        reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 192 must be a power of two"
+    ));
+}
+
+#[test]
+fn prepared_reduction_reuses_device_outputs_and_batches() {
+    let Some(device) = device("prepared_reduction_reuses_device_outputs_and_batches") else {
+        return;
+    };
+
+    let input: Vec<u32> = (0..1027).map(|index| (index % 17) as u32).collect();
+    let expected_sum: u32 = input.iter().sum();
+    let expected_min = input.iter().copied().min().expect("non-empty input");
+    let expected_max = input.iter().copied().max().expect("non-empty input");
+    let input_buffer = device.upload(&input).expect("HIP prepared input upload");
+    let width = BlockWidth::new(128).expect("prepared reduction width");
+
+    let sum = prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, width)
+        .expect("HIP prepared sum");
+    let mut got_sum = [u32::MAX];
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP initialized prepared sum download");
+    assert_eq!(got_sum, [0]);
+    sum.dispatch().expect("HIP prepared sum dispatch");
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP prepared sum download");
+    assert_eq!(got_sum, [expected_sum]);
+    sum.dispatch().expect("HIP prepared sum repeat dispatch");
+    device
+        .download(sum.output(), &mut got_sum)
+        .expect("HIP prepared repeated sum download");
+    assert_eq!(got_sum, [expected_sum]);
+
+    let min = prepare_reduction::<MinOp, _>(&device, &input_buffer).expect("HIP prepared min");
+    let max = prepare_reduction::<MaxOp, _>(&device, &input_buffer).expect("HIP prepared max");
+    submit_prepared_reduction_batch(&[&min, &max]).expect("HIP prepared reduction batch");
+    let mut got_min = [0_u32];
+    let mut got_max = [0_u32];
+    device
+        .download(min.output(), &mut got_min)
+        .expect("HIP prepared min download");
+    device
+        .download(max.output(), &mut got_max)
+        .expect("HIP prepared max download");
+    assert_eq!(got_min, [expected_min]);
+    assert_eq!(got_max, [expected_max]);
+
+    let empty = device
+        .upload::<u32>(&[])
+        .expect("HIP prepared empty input upload");
+    let prepared_empty =
+        prepare_reduction::<SumOp, _>(&device, &empty).expect("HIP prepared empty sum");
+    prepared_empty
+        .dispatch()
+        .expect("HIP prepared empty dispatch");
+    let mut got_empty = [u32::MAX];
+    device
+        .download(prepared_empty.output(), &mut got_empty)
+        .expect("HIP prepared empty download");
+    assert_eq!(got_empty, [0]);
+
+    let invalid_width = BlockWidth::new(192).expect("prepared invalid width");
+    assert!(matches!(
+        prepare_reduction_with_width::<SumOp, _>(&device, &input_buffer, invalid_width),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 192 must be a power of two"
+    ));
+}
+
+#[test]
+fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
+    let Some(device) = device("prepared_map_reductions_reuse_resources_and_validate_layouts")
+    else {
+        return;
+    };
+
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP dot lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("HIP dot rhs upload");
+    let contiguous = Layout::c_contiguous([4]).expect("HIP dot layout");
+    let prepared_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+        StridedOperand {
+            buffer: &rhs,
+            layout: &contiguous,
+        },
+    )
+    .expect("HIP prepared dot");
+    let dot_output = prepared_dot.output() as *const _;
+    prepared_dot.dispatch().expect("HIP prepared dot dispatch");
+    let mut got = [0.0_f32];
+    device
+        .download(prepared_dot.output(), &mut got)
+        .expect("HIP prepared dot download");
+    assert_eq!(got, [70.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    device
+        .write_buffer(&lhs, &[2.0_f32, 2.0, 2.0, 2.0])
+        .expect("HIP prepared dot input update");
+    prepared_dot
+        .dispatch()
+        .expect("HIP repeated prepared dot dispatch");
+    device
+        .download(prepared_dot.output(), &mut got)
+        .expect("HIP repeated prepared dot download");
+    assert_eq!(got, [52.0]);
+    assert_eq!(dot_output, prepared_dot.output() as *const _);
+
+    let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
+    let reversed_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &rhs,
+            layout: &reversed,
+        },
+        StridedOperand {
+            buffer: &lhs,
+            layout: &contiguous,
+        },
+    )
+    .expect("HIP prepared reversed dot");
+    reversed_dot
+        .dispatch()
+        .expect("HIP prepared reversed dot dispatch");
+    device
+        .download(reversed_dot.output(), &mut got)
+        .expect("HIP prepared reversed dot download");
+    assert_eq!(got, [52.0]);
+
+    let norm_input = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP norm input upload");
+    let transposed = Layout::try_new([2, 2], [1, 2], 0).expect("valid test layout");
+    let prepared_norm = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &norm_input,
+            layout: &transposed,
+        },
+    )
+    .expect("HIP prepared L2 norm");
+    let norm_output = prepared_norm.output() as *const _;
+    device
+        .write_buffer(prepared_norm.output(), &[f32::NAN])
+        .expect("HIP prepared L2 output poison");
+    prepared_norm
+        .dispatch()
+        .expect("HIP prepared L2 norm dispatch");
+    device
+        .download(prepared_norm.output(), &mut got)
+        .expect("HIP prepared L2 norm download");
+    let expected = 30.0_f32.sqrt();
+    assert!((got[0] - expected).abs() <= 2.0 * f32::EPSILON * expected.max(1.0));
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    device
+        .write_buffer(&norm_input, &[4.0_f32; 4])
+        .expect("HIP prepared L2 input update");
+    device
+        .write_buffer(prepared_norm.output(), &[f32::NAN])
+        .expect("HIP repeated prepared L2 output poison");
+    prepared_norm
+        .dispatch()
+        .expect("HIP repeated prepared L2 norm dispatch");
+    device
+        .download(prepared_norm.output(), &mut got)
+        .expect("HIP repeated prepared L2 norm download");
+    assert_eq!(got, [8.0]);
+    assert_eq!(norm_output, prepared_norm.output() as *const _);
+
+    let empty = device.upload::<f32>(&[]).expect("HIP empty map input");
+    let empty_layout = Layout::c_contiguous([0]).expect("HIP empty map layout");
+    let empty_dot = prepare_dot(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("HIP prepared empty dot");
+    empty_dot
+        .dispatch()
+        .expect("HIP prepared empty dot dispatch");
+    device
+        .download(empty_dot.output(), &mut got)
+        .expect("HIP prepared empty dot download");
+    assert_eq!(got, [0.0]);
+
+    let empty_norm = prepare_norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("HIP prepared empty norm");
+    empty_norm
+        .dispatch()
+        .expect("HIP prepared empty norm dispatch");
+    device
+        .download(empty_norm.output(), &mut got)
+        .expect("HIP prepared empty norm download");
+    assert_eq!(got, [0.0]);
+
+    let wrong_shape = Layout::c_contiguous([3]).expect("HIP wrong dot shape");
+    assert!(matches!(
+        prepare_dot(
+            &device,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &contiguous,
+            },
+            StridedOperand {
+                buffer: &rhs,
+                layout: &wrong_shape,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("dot product shape mismatch:")
+    ));
+
+    let invalid_layout = Layout::try_new([3], [1], 2).expect("valid test layout");
+    assert!(matches!(
+        prepare_norm_l2(
+            &device,
+            StridedOperand {
+                buffer: &lhs,
+                layout: &invalid_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("layout rejected:")
+    ));
+}
+
+#[test]
+fn axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts() {
+    let Some(device) = device("axis_reduction_kernels_match_cpu_values_and_reject_invalid_layouts")
+    else {
+        return;
+    };
+
+    let width = BlockWidth::new(2).expect("test reduction width is non-zero");
+    let input: Vec<u32> = vec![1, 2, 3, 4, 10, 20, 30, 40, 5, 7, 9, 11];
+    let input_buffer = device.upload(&input).expect("HIP axis input upload");
+    let input_layout = Layout::c_contiguous([3, 4]).expect("axis input layout");
+    let input_operand = StridedOperand {
+        buffer: &input_buffer,
+        layout: &input_layout,
+    };
+
+    let sum_rows = sum_axis(&device, input_operand, 1, width).expect("HIP axis row sum");
+    let sum_columns = sum_axis(&device, input_operand, 0, width).expect("HIP axis column sum");
+    let min_rows = min_axis(&device, input_operand, 1, width).expect("HIP axis row min");
+    let max_rows = max_axis(&device, input_operand, 1, width).expect("HIP axis row max");
+    let mut sum_rows_output = [0_u32; 3];
+    let mut sum_columns_output = [0_u32; 4];
+    let mut min_rows_output = [0_u32; 3];
+    let mut max_rows_output = [0_u32; 3];
+    device
+        .download(&sum_rows, &mut sum_rows_output)
+        .expect("HIP row sum download");
+    device
+        .download(&sum_columns, &mut sum_columns_output)
+        .expect("HIP column sum download");
+    device
+        .download(&min_rows, &mut min_rows_output)
+        .expect("HIP row min download");
+    device
+        .download(&max_rows, &mut max_rows_output)
+        .expect("HIP row max download");
+    assert_eq!(sum_rows_output, [10, 100, 32]);
+    assert_eq!(sum_columns_output, [16, 29, 42, 55]);
+    assert_eq!(min_rows_output, [1, 10, 5]);
+    assert_eq!(max_rows_output, [4, 40, 11]);
+
+    let product_rows = prod_axis(&device, input_operand, 1, width).expect("HIP axis row product");
+    let mut product_rows_output = [0_u32; 3];
+    device
+        .download(&product_rows, &mut product_rows_output)
+        .expect("HIP row product download");
+    assert_eq!(product_rows_output, [24, 240_000, 3465]);
+
+    let product_columns = reduce_axis::<ProdOp, u32>(&device, input_operand, 0, width)
+        .expect("HIP axis column product");
+    let mut product_columns_output = [0_u32; 4];
+    device
+        .download(&product_columns, &mut product_columns_output)
+        .expect("HIP column product download");
+    assert_eq!(product_columns_output, [50, 280, 810, 17_600]);
+
+    let product_rows_into = device
+        .alloc_zeroed::<u32>(3)
+        .expect("HIP caller-owned product output");
+    let product_rows_into_layout =
+        Layout::c_contiguous([3, 1]).expect("HIP caller-owned product layout");
+    prod_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &product_rows_into,
+            layout: &product_rows_into_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned row product");
+    let mut product_rows_into_output = [0_u32; 3];
+    device
+        .download(&product_rows_into, &mut product_rows_into_output)
+        .expect("HIP caller-owned product download");
+    assert_eq!(product_rows_into_output, [24, 240_000, 3465]);
+
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
+    let transposed_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &input_buffer,
+            layout: &transposed_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP strided product");
+    let mut transposed_product_output = [0_u32; 4];
+    device
+        .download(&transposed_product, &mut transposed_product_output)
+        .expect("HIP strided product download");
+    assert_eq!(transposed_product_output, [50, 280, 810, 17_600]);
+
+    let mean_input: Vec<f32> = (1..=12).map(|value| value as f32).collect();
+    let mean_buffer = device.upload(&mean_input).expect("HIP mean input upload");
+    let mean_layout = Layout::c_contiguous([3, 4]).expect("mean input layout");
+    let mean = mean_axis(
+        &device,
+        StridedOperand {
+            buffer: &mean_buffer,
+            layout: &mean_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP row mean");
+    let mut mean_output = [0.0_f32; 3];
+    device
+        .download(&mean, &mut mean_output)
+        .expect("HIP mean download");
+    assert_eq!(mean_output, [2.5, 6.5, 10.5]);
+
+    let wrong_layout = Layout::c_contiguous([3, 2]).expect("wrong output layout");
+    let wrong_buffer = device.alloc_zeroed::<u32>(6).expect("wrong output buffer");
+    assert!(matches!(
+        hephaestus_rocm::sum_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_buffer,
+                layout: &wrong_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    assert!(matches!(
+        prod_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &wrong_buffer,
+                layout: &wrong_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("axis reduction output shape mismatch")
+    ));
+
+    let output_layout = Layout::c_contiguous([3, 1]).expect("alias output layout");
+    assert!(matches!(
+        hephaestus_rocm::sum_axis_into(
+            &device,
+            input_operand,
+            1,
+            StridedOperand {
+                buffer: &input_buffer,
+                layout: &output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "axis reduction output buffer must not alias input buffer"
+    ));
+
+    let empty_buffer = device.upload::<u32>(&[]).expect("empty axis input upload");
+    let empty_input_layout = Layout::c_contiguous([3, 0]).expect("empty input layout");
+    let empty_output_layout = Layout::c_contiguous([3, 1]).expect("empty output layout");
+    let empty_output = device.alloc_zeroed::<u32>(3).expect("empty output buffer");
+    assert!(matches!(
+        mean_axis_into(
+            &device,
+            StridedOperand {
+                buffer: &empty_buffer,
+                layout: &empty_input_layout,
+            },
+            1,
+            StridedOperand {
+                buffer: &empty_output,
+                layout: &empty_output_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "mean_axis is undefined for empty axis 1"
+    ));
+
+    let empty_axis0_input_layout = Layout::c_contiguous([0, 3]).expect("empty axis-0 layout");
+    let empty_axis0_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_axis0_input_layout,
+        },
+        0,
+        width,
+    )
+    .expect("HIP empty axis-0 product");
+    let mut got_empty_axis0_product = [0_u32; 3];
+    device
+        .download(&empty_axis0_product, &mut got_empty_axis0_product)
+        .expect("HIP empty axis-0 product download");
+    assert_eq!(got_empty_axis0_product, [1, 1, 1]);
+}
+
+#[test]
+fn prepared_axis_reductions_reuse_plans_and_validate_contracts() {
+    let Some(device) = device("prepared_axis_reductions_reuse_plans_and_validate_contracts") else {
+        return;
+    };
+
+    let host: Vec<f32> = (1..=12).map(|value| value as f32).collect();
+    let input = device
+        .upload(&host)
+        .expect("HIP prepared axis input upload");
+    let input_layout = Layout::c_contiguous([3, 4]).expect("prepared axis input layout");
+    let input_operand = StridedOperand {
+        buffer: &input,
+        layout: &input_layout,
+    };
+    let width = BlockWidth::new(2).expect("prepared axis width");
+
+    let axis0_out = device
+        .alloc_zeroed::<f32>(4)
+        .expect("HIP prepared axis output");
+    let axis0_layout = Layout::c_contiguous([1, 4]).expect("prepared axis output layout");
+    let prepared_sum_axis0 = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &axis0_out,
+            layout: &axis0_layout,
+        },
+        width,
+    )
+    .expect("HIP prepared column sum");
+    prepared_sum_axis0
+        .dispatch(&device)
+        .expect("HIP prepared column sum dispatch");
+    let mut got_axis0 = [0.0f32; 4];
+    device
+        .download(&axis0_out, &mut got_axis0)
+        .expect("HIP prepared column sum download");
+    assert_eq!(got_axis0, [15.0, 18.0, 21.0, 24.0]);
+    prepared_sum_axis0
+        .dispatch(&device)
+        .expect("HIP repeated column sum dispatch");
+    device
+        .download(&axis0_out, &mut got_axis0)
+        .expect("HIP repeated column sum download");
+    assert_eq!(got_axis0, [15.0, 18.0, 21.0, 24.0]);
+
+    let transposed_layout = Layout::try_new([4, 3], [1, 4], 0).expect("valid test layout");
+    let transposed_input = StridedOperand {
+        buffer: &input,
+        layout: &transposed_layout,
+    };
+    let axis1_out = device
+        .alloc_zeroed::<f32>(4)
+        .expect("HIP prepared transposed output");
+    let axis1_layout = Layout::c_contiguous([4, 1]).expect("prepared transposed output layout");
+    let prepared_sum_axis1 = prepare_sum_axis_into(
+        &device,
+        transposed_input,
+        1,
+        StridedOperand {
+            buffer: &axis1_out,
+            layout: &axis1_layout,
+        },
+        width,
+    )
+    .expect("HIP prepared transposed sum");
+    let max_axis0_out = device
+        .alloc_zeroed::<f32>(3)
+        .expect("HIP prepared transposed max output");
+    let max_axis0_layout = Layout::c_contiguous([1, 3]).expect("prepared transposed max layout");
+    let prepared_max_axis0 = prepare_max_axis_into(
+        &device,
+        transposed_input,
+        0,
+        StridedOperand {
+            buffer: &max_axis0_out,
+            layout: &max_axis0_layout,
+        },
+        width,
+    )
+    .expect("HIP prepared transposed max");
+    submit_prepared_axis_reduction_batch(&device, &[&prepared_sum_axis1, &prepared_max_axis0])
+        .expect("HIP prepared axis batch");
+    let mut got_axis1 = [0.0f32; 4];
+    let mut got_max_axis0 = [0.0f32; 3];
+    device
+        .download(&axis1_out, &mut got_axis1)
+        .expect("HIP prepared transposed sum download");
+    device
+        .download(&max_axis0_out, &mut got_max_axis0)
+        .expect("HIP prepared transposed max download");
+    assert_eq!(got_axis1, [15.0, 18.0, 21.0, 24.0]);
+    assert_eq!(got_max_axis0, [4.0, 8.0, 12.0]);
+
+    let mean_axis1_out = device
+        .alloc_zeroed::<f32>(4)
+        .expect("HIP prepared mean output");
+    let prepared_mean_axis1 = prepare_mean_axis_into(
+        &device,
+        transposed_input,
+        1,
+        StridedOperand {
+            buffer: &mean_axis1_out,
+            layout: &axis1_layout,
+        },
+        width,
+    )
+    .expect("HIP prepared mean");
+    prepared_mean_axis1
+        .dispatch(&device)
+        .expect("HIP prepared mean dispatch");
+    let mut got_mean_axis1 = [0.0f32; 4];
+    device
+        .download(&mean_axis1_out, &mut got_mean_axis1)
+        .expect("HIP prepared mean download");
+    assert_eq!(got_mean_axis1, [5.0, 6.0, 7.0, 8.0]);
+
+    let empty_input = device.upload::<f32>(&[]).expect("HIP prepared empty input");
+    let empty_input_layout = Layout::c_contiguous([3, 0]).expect("prepared empty input layout");
+    let empty_output = device
+        .upload(&[7.0f32; 3])
+        .expect("HIP prepared empty output");
+    let empty_output_layout = Layout::c_contiguous([3, 1]).expect("prepared empty output layout");
+    let prepared_empty_sum = prepare_sum_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        width,
+    )
+    .expect("HIP prepared empty sum");
+    prepared_empty_sum
+        .dispatch(&device)
+        .expect("HIP prepared empty sum dispatch");
+    let mut got_empty = [7.0f32; 3];
+    device
+        .download(&empty_output, &mut got_empty)
+        .expect("HIP prepared empty sum download");
+    assert_eq!(got_empty, [0.0, 0.0, 0.0]);
+
+    let empty_product = prod_axis(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        width,
+    )
+    .expect("HIP empty product");
+    let mut got_empty_product = [0.0f32; 3];
+    device
+        .download(&empty_product, &mut got_empty_product)
+        .expect("HIP empty product download");
+    assert_eq!(got_empty_product, [1.0, 1.0, 1.0]);
+
+    let empty_mean = prepare_mean_axis_into(
+        &device,
+        StridedOperand {
+            buffer: &empty_input,
+            layout: &empty_input_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &empty_output,
+            layout: &empty_output_layout,
+        },
+        width,
+    );
+    assert!(matches!(
+        empty_mean,
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "mean_axis is undefined for empty axis 1"
+    ));
+
+    let alias_layout = Layout::c_contiguous([3, 1]).expect("prepared alias layout");
+    let alias = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        1,
+        StridedOperand {
+            buffer: &input,
+            layout: &alias_layout,
+        },
+        width,
+    );
+    assert!(matches!(
+        alias,
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "axis reduction output buffer must not alias input buffer"
+    ));
+
+    let invalid_width = BlockWidth::new(3).expect("prepared invalid width");
+    let invalid = prepare_sum_axis_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &axis0_out,
+            layout: &axis0_layout,
+        },
+        invalid_width,
+    );
+    assert!(matches!(
+        invalid,
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "reduction block width 3 must be a power of two"
+    ));
+}
+
+#[test]
+fn scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries() {
+    let Some(device) =
+        device("scan_kernels_match_cpu_values_across_axes_directions_and_chunk_boundaries")
+    else {
+        return;
+    };
+
+    let width = BlockWidth::new(2).expect("test scan width is non-zero");
+    let input: Vec<i32> = (1..=8).collect();
+    let input_buffer = device.upload(&input).expect("HIP scan input upload");
+    let input_layout = Layout::c_contiguous([2, 4]).expect("scan input layout");
+    let input_operand = StridedOperand {
+        buffer: &input_buffer,
+        layout: &input_layout,
+    };
+
+    let forward = cumsum(&device, input_operand, 1, width).expect("HIP forward cumulative sum");
+    let mut forward_output = [0_i32; 8];
+    device
+        .download(&forward, &mut forward_output)
+        .expect("HIP forward scan download");
+    assert_eq!(forward_output, [1, 3, 6, 10, 5, 11, 18, 26]);
+
+    let reverse =
+        scan_axis::<_, CumSumOp, _>(&device, input_operand, 1, ScanDirection::Reverse, width)
+            .expect("HIP reverse cumulative sum");
+    let mut reverse_output = [0_i32; 8];
+    device
+        .download(&reverse, &mut reverse_output)
+        .expect("HIP reverse scan download");
+    assert_eq!(reverse_output, [10, 9, 7, 4, 26, 21, 15, 8]);
+
+    let suffix = suffix_sum(&device, input_operand, 1, width).expect("HIP suffix sum");
+    let mut suffix_output = [0_i32; 8];
+    device
+        .download(&suffix, &mut suffix_output)
+        .expect("HIP suffix sum download");
+    assert_eq!(suffix_output, reverse_output);
+
+    let suffix_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned suffix output");
+    suffix_sum_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &suffix_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned suffix sum");
+    let mut suffix_into_output = [0_i32; 8];
+    device
+        .download(&suffix_into, &mut suffix_into_output)
+        .expect("HIP caller-owned suffix download");
+    assert_eq!(suffix_into_output, [6, 8, 10, 12, 5, 6, 7, 8]);
+
+    let column_scan = cumsum(&device, input_operand, 0, width).expect("HIP column scan");
+    let mut column_output = [0_i32; 8];
+    device
+        .download(&column_scan, &mut column_output)
+        .expect("HIP column scan download");
+    assert_eq!(column_output, [1, 2, 3, 4, 6, 8, 10, 12]);
+
+    let forward_product =
+        cumprod(&device, input_operand, 1, width).expect("HIP forward cumulative product");
+    let mut product_output = [0_i32; 8];
+    device
+        .download(&forward_product, &mut product_output)
+        .expect("HIP product scan download");
+    assert_eq!(product_output, [1, 2, 6, 24, 5, 30, 210, 1680]);
+
+    let product_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned product output");
+    cumprod_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &product_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned forward product scan");
+    let mut product_into_output = [0_i32; 8];
+    device
+        .download(&product_into, &mut product_into_output)
+        .expect("HIP caller-owned product download");
+    assert_eq!(product_into_output, [1, 2, 3, 4, 5, 12, 21, 32]);
+
+    let reverse_product =
+        suffix_prod(&device, input_operand, 1, width).expect("HIP reverse cumulative product");
+    let mut reverse_product_output = [0_i32; 8];
+    device
+        .download(&reverse_product, &mut reverse_product_output)
+        .expect("HIP reverse product download");
+    assert_eq!(reverse_product_output, [24, 24, 12, 4, 1680, 336, 56, 8]);
+
+    let reverse_product_into = device
+        .alloc_zeroed::<i32>(8)
+        .expect("HIP caller-owned reverse product output");
+    suffix_prod_into(
+        &device,
+        input_operand,
+        0,
+        StridedOperand {
+            buffer: &reverse_product_into,
+            layout: &input_layout,
+        },
+        width,
+    )
+    .expect("HIP caller-owned reverse product scan");
+    let mut reverse_product_into_output = [0_i32; 8];
+    device
+        .download(&reverse_product_into, &mut reverse_product_into_output)
+        .expect("HIP caller-owned reverse product download");
+    assert_eq!(reverse_product_into_output, [5, 12, 21, 32, 5, 6, 7, 8]);
+
+    let long_input: Vec<i32> = (0..1_025).map(|index| index % 7 - 3).collect();
+    let long_buffer = device.upload(&long_input).expect("HIP long scan upload");
+    let long_layout = Layout::c_contiguous([1, 1_025]).expect("long scan layout");
+    let long_output = scan_axis::<_, CumSumOp, _>(
+        &device,
+        StridedOperand {
+            buffer: &long_buffer,
+            layout: &long_layout,
+        },
+        1,
+        ScanDirection::Forward,
+        width,
+    )
+    .expect("HIP long scan");
+    let mut got_long = vec![0_i32; long_input.len()];
+    device
+        .download(&long_output, &mut got_long)
+        .expect("HIP long scan download");
+    let expected_long: Vec<i32> = long_input
+        .iter()
+        .scan(0_i32, |acc, value| {
+            *acc += *value;
+            Some(*acc)
+        })
+        .collect();
+    assert_eq!(got_long, expected_long);
+
+    let wrong_layout = Layout::c_contiguous([4, 2]).expect("wrong scan output layout");
+    let wrong_buffer = device
+        .alloc_zeroed::<i32>(8)
+        .expect("wrong scan output buffer");
+    assert!(matches!(
+        scan_axis_into::<_, CumSumOp, _>(
+            &device,
+            input_operand,
+            1,
+            ScanDirection::Forward,
+            StridedOperand {
+                buffer: &wrong_buffer,
+                layout: &wrong_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("scan output shape mismatch")
+    ));
+
+    assert!(matches!(
+        scan_axis_into::<_, CumSumOp, _>(
+            &device,
+            input_operand,
+            1,
+            ScanDirection::Forward,
+            StridedOperand {
+                buffer: &input_buffer,
+                layout: &input_layout,
+            },
+            width,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "scan output buffer must not alias input buffer"
+    ));
+}
+
+#[test]
+fn matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_contracts() {
+    let Some(device) = device(
+        "matmul_kernel_matches_cpu_values_across_tile_boundaries_and_rejects_invalid_contracts",
+    ) else {
+        return;
+    };
+
+    let lhs_values: Vec<i32> = (0..17 * 19).map(|index| (index % 7) - 3).collect();
+    let rhs_values: Vec<i32> = (0..19 * 5).map(|index| (index % 5) - 2).collect();
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP matmul lhs upload");
+    let rhs_buffer = device.upload(&rhs_values).expect("HIP matmul rhs upload");
+    let lhs_layout = Layout::c_contiguous([17, 19]).expect("matmul lhs layout");
+    let rhs_layout = Layout::c_contiguous([19, 5]).expect("matmul rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let output = matmul(&device, lhs, rhs).expect("HIP tiled matmul");
+    let mut output_values = vec![0_i32; 17 * 5];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP matmul download");
+    let mut expected: Vec<i32> = Vec::with_capacity(17 * 5);
+    for row in 0..17 {
+        for col in 0..5 {
+            expected.push(
+                (0..19)
+                    .map(|shared| lhs_values[row * 19 + shared] * rhs_values[shared * 5 + col])
+                    .sum(),
+            );
+        }
+    }
+    assert_eq!(output_values, expected);
+
+    let output_layout = Layout::c_contiguous([17, 5]).expect("matmul output layout");
+    let output_into = device
+        .alloc_zeroed::<i32>(17 * 5)
+        .expect("HIP caller-owned matmul output");
+    matmul_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &output_layout,
+        },
+    )
+    .expect("HIP caller-owned tiled matmul");
+    let mut output_into_values = vec![0_i32; 17 * 5];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned matmul download");
+    assert_eq!(output_into_values, expected);
+
+    let wrong_layout = Layout::c_contiguous([17, 4]).expect("wrong matmul output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(17 * 4)
+        .expect("wrong matmul output buffer");
+    assert!(matches!(
+        matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("matmul dimension mismatch")
+    ));
+
+    assert!(matches!(
+        matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
+    ));
+}
+
+#[test]
+fn batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_contracts() {
+    let Some(device) = device(
+        "batched_matmul_kernel_matches_cpu_values_with_broadcast_and_rejects_invalid_contracts",
+    ) else {
+        return;
+    };
+
+    let lhs_values: Vec<i32> = (0..3 * 17 * 19).map(|index| (index % 7) - 3).collect();
+    let rhs_values: Vec<i32> = (0..19 * 5).map(|index| (index % 5) - 2).collect();
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP batched lhs upload");
+    let rhs_buffer = device
+        .upload(&rhs_values)
+        .expect("HIP broadcast rhs upload");
+    let lhs_layout = Layout::c_contiguous([3, 17, 19]).expect("batched lhs layout");
+    let rhs_layout = Layout::c_contiguous([1, 19, 5]).expect("broadcast rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+
+    let output = batched_matmul(&device, lhs, rhs).expect("HIP batched matmul");
+    let mut output_values = vec![0_i32; 3 * 17 * 5];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP batched matmul download");
+    let mut expected: Vec<i32> = Vec::with_capacity(3 * 17 * 5);
+    for batch in 0..3 {
+        for row in 0..17 {
+            for col in 0..5 {
+                expected.push(
+                    (0..19)
+                        .map(|shared| {
+                            lhs_values[(batch * 17 + row) * 19 + shared]
+                                * rhs_values[shared * 5 + col]
+                        })
+                        .sum(),
+                );
+            }
+        }
+    }
+    assert_eq!(output_values, expected);
+
+    let output_layout = Layout::c_contiguous([3, 17, 5]).expect("batched output layout");
+    let output_into = device
+        .alloc_zeroed::<i32>(3 * 17 * 5)
+        .expect("HIP caller-owned batched output");
+    batched_matmul_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &output_into,
+            layout: &output_layout,
+        },
+    )
+    .expect("HIP caller-owned batched matmul");
+    let mut output_into_values = vec![0_i32; 3 * 17 * 5];
+    device
+        .download(&output_into, &mut output_into_values)
+        .expect("HIP caller-owned batched download");
+    assert_eq!(output_into_values, expected);
+
+    let wrong_layout = Layout::c_contiguous([2, 17, 5]).expect("wrong batched output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(2 * 17 * 5)
+        .expect("wrong batched output buffer");
+    assert!(matches!(
+        batched_matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("batched matmul shape mismatch")
+    ));
+
+    assert!(matches!(
+        batched_matmul_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
+    ));
+}
+
+#[test]
+fn kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contracts() {
+    let Some(device) =
+        device("kron_kernel_matches_cpu_values_for_strided_operands_and_rejects_invalid_contracts")
+    else {
+        return;
+    };
+
+    let lhs_values = [99_i32, 1, 2, 3, 4];
+    let rhs_values = [5_i32, 6, 7, 8];
+    let lhs_buffer = device.upload(&lhs_values).expect("HIP kron lhs upload");
+    let rhs_buffer = device.upload(&rhs_values).expect("HIP kron rhs upload");
+    let lhs_layout = Layout::try_new([2, 2], [2, 1], 1).expect("valid test layout");
+    let rhs_layout = Layout::c_contiguous([2, 2]).expect("kron rhs layout");
+    let lhs = StridedOperand {
+        buffer: &lhs_buffer,
+        layout: &lhs_layout,
+    };
+    let rhs = StridedOperand {
+        buffer: &rhs_buffer,
+        layout: &rhs_layout,
+    };
+    let expected = vec![
+        5_i32, 6, 10, 12, 7, 8, 14, 16, 15, 18, 20, 24, 21, 24, 28, 32,
+    ];
+
+    let output = kron(&device, lhs, rhs).expect("HIP kron");
+    let mut output_values = vec![0_i32; 16];
+    device
+        .download(&output, &mut output_values)
+        .expect("HIP kron download");
+    assert_eq!(output_values, expected);
+
+    let strided_output_layout = Layout::try_new([4, 4], [8, 2], 0).expect("valid test layout");
+    let strided_output = device
+        .alloc_zeroed::<i32>(31)
+        .expect("HIP strided kron output");
+    kron_into(
+        &device,
+        lhs,
+        rhs,
+        StridedOperand {
+            buffer: &strided_output,
+            layout: &strided_output_layout,
+        },
+    )
+    .expect("HIP caller-owned strided kron");
+    let mut strided_values = vec![0_i32; 31];
+    device
+        .download(&strided_output, &mut strided_values)
+        .expect("HIP strided kron download");
+    let gathered: Vec<_> = strided_values
+        .chunks_exact(8)
+        .take(4)
+        .flat_map(|row| row.iter().step_by(2).take(4).copied())
+        .collect();
+    assert_eq!(gathered, expected);
+
+    let empty_lhs_buffer = device.upload(&[]).expect("HIP empty kron lhs upload");
+    let empty_lhs_layout = Layout::c_contiguous([0, 2]).expect("empty kron lhs layout");
+    let empty_output = kron(
+        &device,
+        StridedOperand {
+            buffer: &empty_lhs_buffer,
+            layout: &empty_lhs_layout,
+        },
+        rhs,
+    )
+    .expect("HIP empty kron");
+    assert_eq!(empty_output.len(), 0);
+
+    let wrong_layout = Layout::c_contiguous([3, 4]).expect("wrong kron output layout");
+    let wrong_output = device
+        .alloc_zeroed::<i32>(12)
+        .expect("wrong kron output buffer");
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &wrong_output,
+                layout: &wrong_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("Kronecker output shape mismatch")
+    ));
+
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &lhs_buffer,
+                layout: &lhs_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "output buffer must not alias either input buffer"
+    ));
+
+    let aliased_output_layout = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
+    let aliased_output = device
+        .alloc_zeroed::<i32>(4)
+        .expect("zero-stride kron output buffer");
+    assert!(matches!(
+        kron_into(
+            &device,
+            lhs,
+            rhs,
+            StridedOperand {
+                buffer: &aliased_output,
+                layout: &aliased_output_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "Kronecker output layout must not contain zero-stride aliasing"
+    ));
+}
+
+#[test]
+fn matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square() {
+    let Some(device) =
+        device("matpow_matches_cpu_values_for_strided_inputs_and_rejects_non_square")
+    else {
+        return;
+    };
+
+    let shear_values = [1_i32, 1, 0, 1];
+    let shear_buffer = device
+        .upload(&shear_values)
+        .expect("HIP matpow shear upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("matpow square layout");
+    let shear = matpow(
+        &device,
+        StridedOperand {
+            buffer: &shear_buffer,
+            layout: &square_layout,
+        },
+        5,
+    )
+    .expect("HIP matpow shear");
+    let mut shear_output = [0_i32; 4];
+    device
+        .download(&shear, &mut shear_output)
+        .expect("HIP matpow shear download");
+    assert_eq!(shear_output, [1, 5, 0, 1]);
+
+    let strided_values = [99_i32, 1, 2, 3, 4];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided matpow upload");
+    let strided_layout = Layout::try_new([2, 2], [1, 2], 1).expect("valid test layout");
+    let strided_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+        2,
+    )
+    .expect("HIP strided matpow");
+    let mut strided_output = [0_i32; 4];
+    device
+        .download(&strided_power, &mut strided_output)
+        .expect("HIP strided matpow download");
+    assert_eq!(strided_output, [7, 15, 10, 22]);
+
+    let identity_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+        0,
+    )
+    .expect("HIP matpow identity");
+    let mut identity_output = [0_i32; 4];
+    device
+        .download(&identity_power, &mut identity_output)
+        .expect("HIP matpow identity download");
+    assert_eq!(identity_output, [1, 0, 0, 1]);
+
+    let alternate_buffer = device
+        .upload(&[AlternateIdentity(4); 4])
+        .expect("HIP alternate identity upload");
+    let alternate_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &alternate_buffer,
+            layout: &square_layout,
+        },
+        0,
+    )
+    .expect("HIP alternate identity matpow");
+    let mut alternate_output = [AlternateIdentity(0); 4];
+    device
+        .download(&alternate_power, &mut alternate_output)
+        .expect("HIP alternate identity download");
+    assert_eq!(
+        alternate_output,
+        [
+            AlternateIdentity(9),
+            AlternateIdentity(-7),
+            AlternateIdentity(-7),
+            AlternateIdentity(9),
+        ]
+    );
+
+    let empty_buffer = device.upload::<i32>(&[]).expect("HIP empty matpow upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty matpow layout");
+    let empty_power = matpow(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+        0,
+    )
+    .expect("HIP empty matpow");
+    assert_eq!(empty_power.len(), 0);
+
+    let nonsquare_values = [1_i32, 2, 3, 4, 5, 6];
+    let nonsquare_buffer = device
+        .upload(&nonsquare_values)
+        .expect("HIP nonsquare matpow upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare matpow layout");
+    assert!(matches!(
+        matpow(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare_buffer,
+                layout: &nonsquare_layout,
+            },
+            2,
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message == "matpow requires a square matrix, got shape [2, 3]"
+    ));
+}
+
+#[test]
+fn seeded_random_initializers_match_determinism_and_distribution_contracts() {
+    let Some(device) =
+        device("seeded_random_initializers_match_determinism_and_distribution_contracts")
+    else {
+        return;
+    };
+
+    let shape = [1000];
+    let uniform =
+        uniform_with_seed(&device, shape, -2.0_f32, 5.0, 42).expect("HIP uniform initializer");
+    let mut uniform_values = vec![0.0_f32; 1000];
+    device
+        .download(&uniform, &mut uniform_values)
+        .expect("HIP uniform download");
+    let uniform_again = uniform_with_seed(&device, shape, -2.0_f32, 5.0, 42)
+        .expect("HIP repeated uniform initializer");
+    let mut uniform_again_values = vec![0.0_f32; 1000];
+    device
+        .download(&uniform_again, &mut uniform_again_values)
+        .expect("HIP repeated uniform download");
+    assert_eq!(uniform_values, uniform_again_values);
+    assert!(
+        uniform_values
+            .iter()
+            .all(|&value| (-2.0..5.0).contains(&value))
+    );
+
+    let normal =
+        normal_with_seed(&device, shape, 0.0_f32, 1.0, 42).expect("HIP normal initializer");
+    let mut normal_values = vec![0.0_f32; 1000];
+    device
+        .download(&normal, &mut normal_values)
+        .expect("HIP normal download");
+    assert!(normal_values.iter().any(|&value| value != 0.0));
+}
+
+#[test]
+fn sparse_csr_products_match_cpu_values_and_reject_wrong_shapes() {
+    let Some(device) = device("sparse_csr_products_match_cpu_values_and_reject_wrong_shapes")
+    else {
+        return;
+    };
+
+    let cpu_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .expect("valid CSR contract fixture");
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).expect("HIP CSR upload");
+    assert_eq!(gpu_csr.shape(), (3, 3));
+    assert_eq!(gpu_csr.nnz(), 4);
+    assert_eq!(gpu_csr.to_cpu(&device).expect("HIP CSR download"), cpu_csr);
+
+    let zero_nnz_csr =
+        leto_ops::CsrMatrix::from_parts(Vec::<f32>::new(), Vec::new(), vec![0, 0, 0], 2, 3)
+            .expect("valid zero-nnz CSR fixture");
+    let zero_nnz_gpu =
+        GpuCsrMatrix::from_cpu(&device, &zero_nnz_csr).expect("zero-nnz HIP CSR upload");
+    assert_eq!(
+        zero_nnz_gpu
+            .to_cpu(&device)
+            .expect("zero-nnz HIP CSR download"),
+        zero_nnz_csr
+    );
+
+    let x = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("SpMV input upload");
+    let y = spmv(&device, &gpu_csr, &x).expect("HIP SpMV");
+    let mut y_values = [0.0_f32; 3];
+    device.download(&y, &mut y_values).expect("SpMV download");
+    assert_eq!(y_values, [-1.0, 6.0, 12.0]);
+
+    let b = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("SpMM input upload");
+    let b_layout = Layout::c_contiguous([3, 2]).expect("SpMM input layout");
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &b_layout,
+    };
+    let c = spmm(&device, &gpu_csr, b_operand).expect("HIP SpMM");
+    let mut c_values = [0.0_f32; 6];
+    device.download(&c, &mut c_values).expect("SpMM download");
+    assert_eq!(c_values, [-3.0, -2.0, 9.0, 12.0, 20.0, 24.0]);
+
+    let many = spmv_many(&device, &gpu_csr, b_operand).expect("HIP batched SpMV");
+    let mut many_values = [0.0_f32; 6];
+    device
+        .download(&many, &mut many_values)
+        .expect("batched SpMV download");
+    assert_eq!(many_values, c_values);
+
+    let mut c_reused = device.upload(&[99.0_f32; 6]).expect("SpMM output upload");
+    spmm_into(&device, &gpu_csr, b_operand, &mut c_reused).expect("HIP SpMM into");
+    let mut reused_values = [0.0_f32; 6];
+    device
+        .download(&c_reused, &mut reused_values)
+        .expect("reused SpMM download");
+    assert_eq!(reused_values, c_values);
+
+    let mut many_reused = device
+        .upload(&[88.0_f32; 6])
+        .expect("batched output upload");
+    spmv_many_into(&device, &gpu_csr, b_operand, &mut many_reused).expect("HIP batched SpMV into");
+    let mut many_reused_values = [0.0_f32; 6];
+    device
+        .download(&many_reused, &mut many_reused_values)
+        .expect("reused batched SpMV download");
+    assert_eq!(many_reused_values, c_values);
+
+    let empty_row_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 4.0],
+        vec![0, 2, 2],
+        vec![0, 2, 2, 3],
+        3,
+        3,
+    )
+    .expect("valid empty-row CSR fixture");
+    let empty_row_gpu =
+        GpuCsrMatrix::from_cpu(&device, &empty_row_csr).expect("empty-row HIP CSR upload");
+    let empty_row_y = spmv(&device, &empty_row_gpu, &x).expect("empty-row HIP SpMV");
+    let mut empty_row_y_values = [0.0_f32; 3];
+    device
+        .download(&empty_row_y, &mut empty_row_y_values)
+        .expect("empty-row SpMV download");
+    assert_eq!(empty_row_y_values, [-1.0, 0.0, 12.0]);
+
+    let empty_row_c = spmm(&device, &empty_row_gpu, b_operand).expect("empty-row HIP SpMM");
+    let mut empty_row_c_values = [0.0_f32; 6];
+    device
+        .download(&empty_row_c, &mut empty_row_c_values)
+        .expect("empty-row SpMM download");
+    assert_eq!(empty_row_c_values, [-3.0, -2.0, 0.0, 0.0, 20.0, 24.0]);
+
+    let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
+    assert_length_mismatch(spmv(&device, &gpu_csr, &wrong_x), 3, 2);
+}
+
+#[test]
+fn prepared_sparse_dispatch_matches_reference() {
+    let Some(device) = device("prepared_sparse_dispatch_matches_reference") else {
+        return;
+    };
+    use hephaestus_rocm::{
+        PreparedSparseDispatch, prepare_spmm, prepare_spmv, prepare_spmv_many,
+        submit_prepared_sparse_batch,
+    };
+
+    let cpu_csr = leto_ops::CsrMatrix::from_parts(
+        vec![2.0_f32, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .expect("valid CSR contract fixture");
+    let gpu_csr = GpuCsrMatrix::from_cpu(&device, &cpu_csr).expect("HIP CSR upload");
+    let x = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("SpMV input upload");
+    let y = device.upload(&[77.0_f32; 3]).expect("SpMV output upload");
+    let prepared_spmv = prepare_spmv(&device, &gpu_csr, &x, &y).expect("prepare HIP SpMV");
+    prepared_spmv.dispatch().expect("dispatch HIP SpMV");
+    prepared_spmv.dispatch().expect("repeat HIP SpMV");
+
+    let b = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("SpMM input upload");
+    let b_layout = Layout::try_new([3, 2], [1, 3], 0).expect("valid test layout");
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &b_layout,
+    };
+    let mut c = device.upload(&[88.0_f32; 6]).expect("SpMM output upload");
+    let prepared_spmm =
+        prepare_spmm(&device, &gpu_csr, &b_operand, &mut c).expect("prepare HIP SpMM");
+    let mut many = device
+        .upload(&[99.0_f32; 6])
+        .expect("batched output upload");
+    let prepared_many = prepare_spmv_many(&device, &gpu_csr, &b_operand, &mut many)
+        .expect("prepare HIP batched SpMV");
+    submit_prepared_sparse_batch(&[
+        PreparedSparseDispatch::Spmv(&prepared_spmv),
+        PreparedSparseDispatch::Spmm(&prepared_spmm),
+        PreparedSparseDispatch::Spmm(&prepared_many),
+    ])
+    .expect("submit HIP sparse batch");
+
+    let mut got_y = [0.0_f32; 3];
+    device.download(&y, &mut got_y).expect("SpMV download");
+    assert_eq!(got_y, [-1.0, 6.0, 12.0]);
+    let mut got_c = [0.0_f32; 6];
+    device.download(&c, &mut got_c).expect("SpMM download");
+    assert_eq!(got_c, [-1.0, 2.0, 6.0, 15.0, 12.0, 24.0]);
+    let mut got_many = [0.0_f32; 6];
+    device
+        .download(&many, &mut got_many)
+        .expect("batched SpMV download");
+    assert_eq!(got_many, got_c);
+
+    let wrong_x = device.upload(&[1.0_f32, 2.0]).expect("wrong SpMV upload");
+    let wrong_output = device
+        .upload(&[0.0_f32; 3])
+        .expect("wrong SpMV output upload");
+    match prepare_spmv(&device, &gpu_csr, &wrong_x, &wrong_output) {
+        Err(HephaestusError::LengthMismatch {
+            host_len: 3,
+            device_len: 2,
+        }) => {}
+        Err(error) => panic!("expected SpMV length rejection, got {error:?}"),
+        Ok(_) => panic!("expected SpMV length rejection, got success"),
+    }
+    let bad_layout = Layout::try_new([3, 2], [2, 1], 5).expect("valid test layout");
+    let bad_operand = StridedOperand {
+        buffer: &b,
+        layout: &bad_layout,
+    };
+    let mut bad_output = device
+        .upload(&[0.0_f32; 6])
+        .expect("bad SpMM output upload");
+    match prepare_spmm(&device, &gpu_csr, &bad_operand, &mut bad_output) {
+        Err(HephaestusError::DispatchFailed { message }) => {
+            assert!(
+                message.contains("layout rejected"),
+                "unexpected error: {message}"
+            );
+        }
+        Err(error) => panic!("expected invalid layout rejection, got {error:?}"),
+        Ok(_) => panic!("expected invalid layout rejection, got success"),
+    }
+}
+
+#[test]
+fn multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths() {
+    let Some(device) =
+        device("multi_storage_binary_kernel_matches_values_and_rejects_wrong_lengths")
+    else {
+        return;
+    };
+
+    let kernel = RocmMultiStorageKernel::new(
+        "contract-binary",
+        r#"
+extern "C" __global__ void contract_binary(
+    const float* lhs,
+    const float* rhs,
+    float* out,
+    unsigned int n
+) {
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = lhs[i] + rhs[i];
+}
+"#,
+        "contract_binary",
+        &[0, 1, 2],
+        [64, 1, 1],
+        0,
+    )
+    .expect("valid ROCm multi-storage kernel");
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("multi-storage lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("multi-storage rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("multi-storage output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("valid dispatch grid");
+
+    <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+        &kernel, &device, &lhs, &rhs, &output, &4, grid,
+    )
+    .expect("HIP multi-storage dispatch");
+    let mut values = [0.0_f32; 4];
+    device
+        .download(&output, &mut values)
+        .expect("multi-storage output download");
+    assert_eq!(values, [6.0, 8.0, 10.0, 12.0]);
+
+    let short_rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0])
+        .expect("short multi-storage rhs upload");
+    assert_length_mismatch(
+        <RocmMultiStorageKernel as BinaryStorageKernel<RocmDevice, f32, u32>>::dispatch(
+            &kernel, &device, &lhs, &short_rhs, &output, &4, grid,
+        ),
+        4,
+        3,
+    );
+}
+
+#[test]
+fn authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values() {
+    let Some(device) =
+        device("authored_kernel_streams_preserve_dispatch_copy_fill_and_grouped_values")
+    else {
+        return;
+    };
+
+    let lhs = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("stream lhs upload");
+    let rhs = device
+        .upload(&[5.0_f32, 6.0, 7.0, 8.0])
+        .expect("stream rhs upload");
+    let output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("stream output allocation");
+    let grid = DispatchGrid::covering_domain([4, 1, 1], [64, 1, 1]).expect("stream grid");
+    let prepared = device.prepare(&StreamAddKernel).expect("stream prepare");
+    let bindings = [
+        Binding::read(&lhs),
+        Binding::read(&rhs),
+        Binding::read_write(&output),
+    ];
+    let mut stream = device.stream().expect("stream open");
+    stream
+        .encode(&prepared, &bindings, &4, grid)
+        .expect("stream dispatch");
+
+    let copied = device
+        .alloc_zeroed::<f32>(4)
+        .expect("copy output allocation");
+    let prefix = device
+        .alloc_zeroed::<f32>(4)
+        .expect("prefix output allocation");
+    stream.copy(&output, &copied).expect("stream copy");
+    stream
+        .copy_prefix(&output, &prefix, 2)
+        .expect("stream prefix copy");
+    stream.fill_zero(&output).expect("stream fill");
+    stream.submit().expect("stream submit");
+
+    let mut output_values = [9.0_f32; 4];
+    let mut copied_values = [0.0_f32; 4];
+    let mut prefix_values = [0.0_f32; 4];
+    device
+        .download(&output, &mut output_values)
+        .expect("stream output download");
+    device
+        .download(&copied, &mut copied_values)
+        .expect("stream copy download");
+    device
+        .download(&prefix, &mut prefix_values)
+        .expect("stream prefix download");
+    assert_eq!(output_values, [0.0; 4]);
+    assert_eq!(copied_values, [6.0, 8.0, 10.0, 12.0]);
+    assert_eq!(prefix_values, [6.0, 8.0, 0.0, 0.0]);
+
+    let grouped_prepared = device
+        .prepare_grouped(&GroupedStreamAddKernel)
+        .expect("grouped stream prepare");
+    let grouped_output = device
+        .alloc_zeroed::<f32>(4)
+        .expect("grouped output allocation");
+    let grouped_bindings = [
+        GroupedBinding::read(0, 0, &lhs),
+        GroupedBinding::read(0, 1, &rhs),
+        GroupedBinding::read_write(0, 2, &grouped_output),
+    ];
+    let mut grouped_stream = device.grouped_stream().expect("grouped stream open");
+    grouped_stream
+        .encode_grouped_sequence("grouped-contract", |sequence| {
+            sequence.encode_grouped(&grouped_prepared, &grouped_bindings, &4, grid)
+        })
+        .expect("grouped stream dispatch");
+    grouped_stream
+        .submit_grouped()
+        .expect("grouped stream submit");
+
+    let mut grouped_values = [0.0_f32; 4];
+    device
+        .download(&grouped_output, &mut grouped_values)
+        .expect("grouped output download");
+    assert_eq!(grouped_values, [6.0, 8.0, 10.0, 12.0]);
+}
+
+#[test]
+fn map_reductions_match_cpu_values_for_strided_views_and_reject_invalid_shapes() {
+    let Some(device) =
+        device("map_reductions_match_cpu_values_for_strided_views_and_reject_invalid_shapes")
+    else {
+        return;
+    };
+
+    let matrix_values = [-3_i32, 4, -5, 6, -7, 8];
+    let matrix_buffer = device
+        .upload(&matrix_values)
+        .expect("HIP norm input upload");
+    let matrix_layout = Layout::c_contiguous([2, 3]).expect("norm matrix layout");
+    let matrix = StridedOperand {
+        buffer: &matrix_buffer,
+        layout: &matrix_layout,
+    };
+
+    let l1 = norm_l1(&device, matrix).expect("HIP L1 norm");
+    let mut l1_value = [0_i32];
+    device
+        .download(&l1, &mut l1_value)
+        .expect("HIP L1 download");
+    assert_eq!(l1_value, [33]);
+
+    let max = norm_max(&device, matrix).expect("HIP max norm");
+    let mut max_value = [0_i32];
+    device
+        .download(&max, &mut max_value)
+        .expect("HIP max norm download");
+    assert_eq!(max_value, [8]);
+
+    let dot_left_values = [99_i32, 1, 2, 3, 4, 5];
+    let dot_right_values = [6_i32, 7, 8, 9, 10];
+    let dot_left_buffer = device
+        .upload(&dot_left_values)
+        .expect("HIP strided dot lhs upload");
+    let dot_right_buffer = device
+        .upload(&dot_right_values)
+        .expect("HIP strided dot rhs upload");
+    let dot_left_layout = Layout::try_new([5], [1], 1).expect("valid test layout");
+    let dot_right_layout = Layout::c_contiguous([5]).expect("dot rhs layout");
+    let dot_value_buffer = dot(
+        &device,
+        StridedOperand {
+            buffer: &dot_left_buffer,
+            layout: &dot_left_layout,
+        },
+        StridedOperand {
+            buffer: &dot_right_buffer,
+            layout: &dot_right_layout,
+        },
+    )
+    .expect("HIP strided dot");
+    let mut dot_value = [0_i32];
+    device
+        .download(&dot_value_buffer, &mut dot_value)
+        .expect("HIP dot download");
+    assert_eq!(dot_value, [130]);
+
+    let trace_values = [1_i32, 2, 3, 4, 5, 6, 7, 8, 9];
+    let trace_buffer = device.upload(&trace_values).expect("HIP trace upload");
+    let trace_layout = Layout::c_contiguous([3, 3]).expect("trace layout");
+    let trace_value_buffer = trace(
+        &device,
+        StridedOperand {
+            buffer: &trace_buffer,
+            layout: &trace_layout,
+        },
+    )
+    .expect("HIP trace");
+    let mut trace_value = [0_i32];
+    device
+        .download(&trace_value_buffer, &mut trace_value)
+        .expect("HIP trace download");
+    assert_eq!(trace_value, [15]);
+
+    let l2_values = [3.0_f32, 4.0];
+    let l2_buffer = device.upload(&l2_values).expect("HIP L2 input upload");
+    let l2_layout = Layout::c_contiguous([2]).expect("L2 layout");
+    let l2 = norm_l2(
+        &device,
+        StridedOperand {
+            buffer: &l2_buffer,
+            layout: &l2_layout,
+        },
+    )
+    .expect("HIP L2 norm");
+    let mut l2_value = [0.0_f32];
+    device
+        .download(&l2, &mut l2_value)
+        .expect("HIP L2 download");
+    assert_eq!(l2_value, [5.0]);
+
+    let wrong_dot_layout = Layout::c_contiguous([4]).expect("wrong dot layout");
+    assert!(matches!(
+        dot(
+            &device,
+            StridedOperand {
+                buffer: &dot_left_buffer,
+                layout: &dot_left_layout,
+            },
+            StridedOperand {
+                buffer: &dot_right_buffer,
+                layout: &wrong_dot_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("dot product shape mismatch")
+    ));
+
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular trace layout");
+    assert!(matches!(
+        trace(
+            &device,
+            StridedOperand {
+                buffer: &matrix_buffer,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.starts_with("trace requires a square matrix")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_factorization_and_common_host_contracts_match_values() {
+    let Some(device) = device("cholesky_factorization_and_common_host_contracts_match_values")
+    else {
+        return;
+    };
+
+    let matrix_values = [4.0_f32, 1.0, 1.0, 3.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP Cholesky input upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("Cholesky matrix layout");
+    let factor = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP Cholesky factorization");
+
+    assert_eq!(factor.n(), 2);
+    let mut lower = [0.0_f32; 4];
+    device
+        .download(factor.lower(), &mut lower)
+        .expect("HIP Cholesky factor download");
+    assert_near(lower[0], 2.0, 64.0);
+    assert_near(lower[1], 0.0, 64.0);
+    assert_near(lower[2], 0.5, 64.0);
+    assert_near(lower[3], 2.75_f32.sqrt(), 64.0);
+    assert_near(factor.det(), 11.0, 128.0);
+
+    let rhs = device
+        .upload(&[1.0_f32, 2.0])
+        .expect("HIP Cholesky RHS upload");
+    let solution = factor.solve(&device, &rhs).expect("HIP Cholesky solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP Cholesky solution download");
+    assert_near(solution_values[0], 1.0 / 11.0, 128.0);
+    assert_near(solution_values[1], 7.0 / 11.0, 128.0);
+
+    let inverse = factor.inv(&device).expect("HIP Cholesky inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP Cholesky inverse download");
+    for (actual, expected) in
+        inverse_values
+            .iter()
+            .zip([3.0 / 11.0, -1.0 / 11.0, -1.0 / 11.0, 4.0 / 11.0])
+    {
+        assert_near(*actual, expected, 128.0);
+    }
+
+    let blocked = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked Cholesky factorization");
+    let mut blocked_lower = [0.0_f32; 4];
+    device
+        .download(blocked.lower(), &mut blocked_lower)
+        .expect("HIP blocked Cholesky factor download");
+    for (actual, expected) in blocked_lower.iter().zip(lower) {
+        assert_near(*actual, expected, 64.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_strided_input_and_blocked_density_contracts_are_enforced() {
+    let Some(device) = device("cholesky_strided_input_and_blocked_density_contracts_are_enforced")
+    else {
+        return;
+    };
+
+    let strided_values = [4.0_f32, 1.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided Cholesky input upload");
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
+    let factor = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided Cholesky factorization");
+    let mut lower = [0.0_f32; 4];
+    device
+        .download(factor.lower(), &mut lower)
+        .expect("HIP strided Cholesky factor download");
+    assert_near(lower[0], 2.0, 64.0);
+    assert_near(lower[2], 0.5, 64.0);
+
+    let blocked = cholesky_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        blocked,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn cholesky_rejects_empty_invalid_and_non_positive_definite_inputs() {
+    let Some(device) = device("cholesky_rejects_empty_invalid_and_non_positive_definite_inputs")
+    else {
+        return;
+    };
+
+    let empty_buffer = device.upload(&[] as &[f32]).expect("empty Cholesky upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Cholesky layout");
+    let empty = cholesky_decompose(
+        &device,
+        StridedOperand {
+            buffer: &empty_buffer,
+            layout: &empty_layout,
+        },
+    )
+    .expect("empty Cholesky factorization");
+    assert_eq!(empty.n(), 0);
+    assert_eq!(empty.lower().len(), 0);
+
+    let nonsquare_buffer = device
+        .upload(&[1.0_f32; 6])
+        .expect("nonsquare Cholesky upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare Cholesky layout");
+    assert!(matches!(
+        cholesky_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare_buffer,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite_buffer = device
+        .upload(&[4.0_f32, f32::NAN, 1.0, 3.0])
+        .expect("nonfinite Cholesky upload");
+    let dense_layout = Layout::c_contiguous([2, 2]).expect("dense Cholesky layout");
+    assert!(matches!(
+        cholesky_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+
+    let indefinite_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 1.0])
+        .expect("indefinite Cholesky upload");
+    assert!(matches!(
+        cholesky_decompose_blocked(
+            &device,
+            StridedOperand {
+                buffer: &indefinite_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("not positive-definite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn lu_factorization_and_host_contracts_match_values() {
+    let Some(device) = device("lu_factorization_and_host_contracts_match_values") else {
+        return;
+    };
+
+    let matrix_values = [0.0_f32, 2.0, 1.0, 3.0];
+    let matrix = device.upload(&matrix_values).expect("HIP LU input upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("LU matrix layout");
+    let factor = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP LU factorization");
+
+    assert_eq!(factor.n(), 2);
+    assert_eq!(factor.pivots(), &[1, 1]);
+    assert_near(factor.det(), -2.0, 128.0);
+    let mut packed = [0.0_f32; 4];
+    device
+        .download(factor.factors(), &mut packed)
+        .expect("HIP LU factor download");
+    assert_near(packed[0], 1.0, 128.0);
+    assert_near(packed[1], 3.0, 128.0);
+    assert_near(packed[2], 0.0, 128.0);
+    assert_near(packed[3], 2.0, 128.0);
+
+    let rhs = device.upload(&[4.0_f32, 7.0]).expect("HIP LU RHS upload");
+    let solution = factor.solve(&device, &rhs).expect("HIP LU solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP LU solution download");
+    assert_near(solution_values[0], 1.0, 128.0);
+    assert_near(solution_values[1], 2.0, 128.0);
+
+    let inverse = factor.inv(&device).expect("HIP LU inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP LU inverse download");
+    for (actual, expected) in inverse_values.iter().zip([-1.5_f32, 1.0, 0.5, 0.0]) {
+        assert_near(*actual, expected, 128.0);
+    }
+
+    let blocked = lu_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked LU factorization");
+    assert_eq!(blocked.pivots(), factor.pivots());
+    let mut blocked_packed = [0.0_f32; 4];
+    device
+        .download(blocked.factors(), &mut blocked_packed)
+        .expect("HIP blocked LU factor download");
+    for (actual, expected) in blocked_packed.iter().zip(packed) {
+        assert_near(*actual, expected, 128.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn lu_strided_and_invalid_contracts_are_enforced() {
+    let Some(device) = device("lu_strided_and_invalid_contracts_are_enforced") else {
+        return;
+    };
+
+    let strided_values = [0.0_f32, 2.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided LU upload");
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
+    let factor = lu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided LU factorization");
+    assert_eq!(factor.pivots(), &[1, 1]);
+
+    let blocked = lu_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        blocked,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let singular_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0])
+        .expect("HIP singular LU upload");
+    let dense_layout = Layout::c_contiguous([2, 2]).expect("dense LU layout");
+    assert!(matches!(
+        lu_decompose(
+            &device,
+            StridedOperand {
+                buffer: &singular_buffer,
+                layout: &dense_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("singular")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn qr_factorization_and_least_squares_match_values() {
+    let Some(device) = device("qr_factorization_and_least_squares_match_values") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device.upload(&matrix_values).expect("HIP QR input upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("QR matrix layout");
+    let factor = qr_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP QR factorization");
+    assert_eq!(factor.shape(), (3, 2));
+
+    let expected_layout = Layout::c_contiguous([3, 2]).expect("QR reference layout");
+    let expected = leto_ops::qr_decompose(&leto::ArrayView::<f32, 2>::new(
+        expected_layout,
+        &matrix_values,
+    ))
+    .expect("CPU QR reference");
+    let expected_r_matrix = expected.r();
+    let expected_r = leto::Storage::as_slice(expected_r_matrix.storage());
+    let mut actual_r = [0.0_f32; 6];
+    device
+        .download(factor.r_buffer(), &mut actual_r)
+        .expect("HIP QR factor download");
+    for row in 0..3 {
+        for col in row..2 {
+            assert_near(actual_r[row * 2 + col], expected_r[row * 2 + col], 256.0);
+        }
+    }
+
+    let rhs = device
+        .upload(&[5.0_f32, 11.0, 17.0])
+        .expect("HIP QR RHS upload");
+    let solution = factor
+        .solve_least_squares(&device, &rhs)
+        .expect("HIP QR least-squares solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP QR solution download");
+    assert_near(solution_values[0], 1.0, 512.0);
+    assert_near(solution_values[1], 2.0, 512.0);
+
+    let blocked = qr_decompose_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP blocked QR factorization");
+    assert_eq!(blocked.shape(), factor.shape());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs() {
+    let Some(device) = device("qr_rejects_underdetermined_rank_deficient_and_nonfinite_inputs")
+    else {
+        return;
+    };
+
+    let underdetermined_buffer = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP underdetermined QR upload");
+    let underdetermined_layout = Layout::c_contiguous([2, 2]).expect("square QR layout");
+    let rank_deficient_buffer = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0])
+        .expect("HIP rank-deficient QR upload");
+    let rank_deficient_layout = Layout::c_contiguous([3, 2]).expect("rank-deficient QR layout");
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &underdetermined_buffer,
+                layout: &underdetermined_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("m ≥ n")
+    ));
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &rank_deficient_buffer,
+                layout: &rank_deficient_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("rank-deficient")
+    ));
+
+    let nonfinite_buffer = device
+        .upload(&[1.0_f32, f32::NAN, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP nonfinite QR upload");
+    assert!(matches!(
+        qr_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite_buffer,
+                layout: &rank_deficient_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn full_piv_lu_matches_device_permutations_and_host_contracts() {
+    let Some(device) = device("full_piv_lu_matches_device_permutations_and_host_contracts") else {
+        return;
+    };
+
+    let matrix_values = [0.0_f32, 2.0, 1.0, 3.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP complete-pivot LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("complete-pivot LU layout");
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP complete-pivot LU factorization");
+    let expected = leto_ops::full_piv_lu(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU complete-pivot LU reference");
+
+    assert_eq!(factor.n(), 2);
+    assert_eq!(factor.rank(), expected.rank());
+    assert_eq!(factor.row_permutation(), expected.row_permutation());
+    assert_eq!(factor.col_permutation(), expected.col_permutation());
+    assert_near(factor.det(), expected.det(), 256.0);
+
+    let mut packed = [0.0_f32; 4];
+    device
+        .download(factor.lu_buffer(), &mut packed)
+        .expect("HIP complete-pivot LU factor download");
+    for (actual, expected) in packed.iter().zip(expected.lu_factors()) {
+        assert_near(*actual, *expected, 512.0);
+    }
+
+    let rhs = device
+        .upload(&[4.0_f32, 7.0])
+        .expect("HIP complete-pivot LU RHS upload");
+    let solution = factor
+        .solve(&device, &rhs)
+        .expect("HIP complete-pivot LU solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP complete-pivot LU solution download");
+    assert_near(solution_values[0], 1.0, 512.0);
+    assert_near(solution_values[1], 2.0, 512.0);
+
+    let inverse = factor.inv(&device).expect("HIP complete-pivot LU inverse");
+    let mut inverse_values = [0.0_f32; 4];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP complete-pivot LU inverse download");
+    for (actual, expected) in inverse_values.iter().zip([-1.5_f32, 1.0, 0.5, 0.0]) {
+        assert_near(*actual, expected, 512.0);
+    }
+
+    let blocked = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP dense complete-pivot LU factorization");
+    assert_eq!(blocked.row_permutation(), factor.row_permutation());
+    assert_eq!(blocked.col_permutation(), factor.col_permutation());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn full_piv_lu_preserves_strided_and_rank_contracts() {
+    let Some(device) = device("full_piv_lu_preserves_strided_and_rank_contracts") else {
+        return;
+    };
+
+    let strided_values = [0.0_f32, 2.0, 99.0, 1.0, 3.0, 88.0];
+    let strided_buffer = device
+        .upload(&strided_values)
+        .expect("HIP strided complete-pivot LU upload");
+    let strided_layout = Layout::try_new([2, 2], [3, 1], 0).expect("valid test layout");
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    )
+    .expect("HIP strided complete-pivot LU factorization");
+    assert_eq!(factor.rank(), 2);
+
+    let dense = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &strided_buffer,
+            layout: &strided_layout,
+        },
+    );
+    assert!(matches!(
+        dense,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let singular = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0])
+        .expect("HIP singular complete-pivot LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("singular complete-pivot LU layout");
+    let factor = full_piv_lu(
+        &device,
+        StridedOperand {
+            buffer: &singular,
+            layout: &layout,
+        },
+    )
+    .expect("rank-deficient complete-pivot LU remains factorable");
+    assert_eq!(factor.rank(), 1);
+    assert_eq!(factor.det(), 0.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn col_piv_qr_matches_device_permutation_and_least_squares_contracts() {
+    let Some(device) = device("col_piv_qr_matches_device_permutation_and_least_squares_contracts")
+    else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 0.0, 0.0, 2.0, 0.0, 0.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP column-pivot QR upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("column-pivot QR layout");
+    let factor = col_piv_qr(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP column-pivot QR factorization");
+    let expected = leto_ops::col_piv_qr(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU column-pivot QR reference");
+    assert_eq!(factor.rank(), expected.rank());
+    assert_eq!(factor.permutation(), expected.permutation());
+
+    let expected_r_matrix = expected.r();
+    let expected_r = leto::Storage::as_slice(expected_r_matrix.storage());
+    let mut actual_r = [0.0_f32; 6];
+    device
+        .download(factor.r(), &mut actual_r)
+        .expect("HIP column-pivot QR R download");
+    for row in 0..3 {
+        for col in row..2 {
+            assert_near(actual_r[row * 2 + col], expected_r[row * 2 + col], 1024.0);
+        }
+    }
+
+    let rhs = device
+        .upload(&[3.0_f32, 8.0, 0.0])
+        .expect("HIP column-pivot QR RHS upload");
+    let solution = factor
+        .solve_least_squares(&device, &rhs)
+        .expect("HIP column-pivot QR least-squares solve");
+    let mut solution_values = [0.0_f32; 2];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP column-pivot QR solution download");
+    assert_near(solution_values[0], 3.0, 1024.0);
+    assert_near(solution_values[1], 4.0, 1024.0);
+
+    let blocked = col_piv_qr_blocked(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("HIP dense column-pivot QR factorization");
+    assert_eq!(blocked.permutation(), factor.permutation());
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn col_piv_qr_reports_rank_and_rejects_nonfinite_values() {
+    let Some(device) = device("col_piv_qr_reports_rank_and_rejects_nonfinite_values") else {
+        return;
+    };
+
+    let rank_deficient = device
+        .upload(&[1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0])
+        .expect("HIP rank-deficient column-pivot QR upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("rank-deficient column-pivot QR layout");
+    let factor = col_piv_qr(
+        &device,
+        StridedOperand {
+            buffer: &rank_deficient,
+            layout: &layout,
+        },
+    )
+    .expect("rank-deficient column-pivot QR factorization");
+    assert_eq!(factor.rank(), 1);
+    let rhs = device
+        .upload(&[1.0_f32, 2.0, 3.0])
+        .expect("HIP rank-deficient column-pivot QR RHS upload");
+    assert!(matches!(
+        factor.solve_least_squares(&device, &rhs),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("full column rank")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, f32::NAN, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP nonfinite column-pivot QR upload");
+    assert!(matches!(
+        col_piv_qr(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn blocked_pivoted_decompositions_reject_non_dense_operands() {
+    let Some(device) = device("blocked_pivoted_decompositions_reject_non_dense_operands") else {
+        return;
+    };
+    let dense = device
+        .upload(&[1.0_f32; 16])
+        .expect("HIP dense blocked pivoted input upload");
+    let small = device
+        .upload(&[1.0_f32; 4])
+        .expect("HIP broadcast blocked pivoted input upload");
+    let transposed = Layout::try_new([4, 4], [1, 4], 0).expect("valid test layout");
+    let broadcast = Layout::try_new([4, 4], [0, 1], 0).expect("valid test layout");
+
+    let lu_result = full_piv_lu_blocked(
+        &device,
+        StridedOperand {
+            buffer: &dense,
+            layout: &transposed,
+        },
+    );
+    assert!(matches!(
+        lu_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+
+    let qr_result = col_piv_qr_blocked(
+        &device,
+        StridedOperand {
+            buffer: &small,
+            layout: &broadcast,
+        },
+    );
+    assert!(matches!(
+        qr_result,
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("dense") || message.contains("contiguous")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bidiagonalization_matches_leto_factors_and_validates_shapes() {
+    let Some(device) = device("bidiagonalization_matches_leto_factors_and_validates_shapes") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP bidiagonal upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("bidiagonal layout");
+    let factor = bidiagonalize(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm bidiagonalization");
+    let expected = leto_ops::bidiagonalize(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU bidiagonal reference");
+
+    assert_eq!(factor.shape(), (3, 2));
+    let expected_u_matrix = expected.u();
+    let expected_u = leto::Storage::as_slice(expected_u_matrix.storage());
+    let expected_b = leto::Storage::as_slice(expected.b().storage());
+    let expected_v = leto::Storage::as_slice(expected.v().storage());
+    let mut actual_u = vec![0.0_f32; expected_u.len()];
+    let mut actual_b = vec![0.0_f32; expected_b.len()];
+    let mut actual_v = vec![0.0_f32; expected_v.len()];
+    device
+        .download(factor.u_buffer(), &mut actual_u)
+        .expect("HIP U download");
+    device
+        .download(factor.b_buffer(), &mut actual_b)
+        .expect("HIP B download");
+    device
+        .download(factor.v_buffer(), &mut actual_v)
+        .expect("HIP V download");
+    for (actual, expected) in actual_u.iter().zip(expected_u) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    for (actual, expected) in actual_b.iter().zip(expected_b) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    for (actual, expected) in actual_v.iter().zip(expected_v) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    let mut reconstructed = vec![0.0_f32; matrix_values.len()];
+    for row in 0..3 {
+        for col in 0..2 {
+            let mut value = 0.0_f32;
+            for u_col in 0..3 {
+                for b_col in 0..2 {
+                    value += actual_u[row * 3 + u_col]
+                        * actual_b[u_col * 2 + b_col]
+                        * actual_v[col * 2 + b_col];
+                }
+            }
+            reconstructed[row * 2 + col] = value;
+        }
+    }
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+
+    let wide = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP wide bidiagonal upload");
+    let wide_layout = Layout::c_contiguous([2, 3]).expect("wide bidiagonal layout");
+    assert!(matches!(
+        bidiagonalize(
+            &device,
+            StridedOperand {
+                buffer: &wide,
+                layout: &wide_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("m ≥ n")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn svd_surfaces_match_leto_values_and_rank_contracts() {
+    let Some(device) = device("svd_surfaces_match_leto_values_and_rank_contracts") else {
+        return;
+    };
+
+    let matrix_values = [3.0_f32, 0.0, 0.0, 4.0, 0.0, 0.0];
+    let matrix = device.upload(&matrix_values).expect("HIP SVD upload");
+    let layout = Layout::c_contiguous([3, 2]).expect("SVD layout");
+    let expected = leto_ops::svd_decompose(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU SVD reference");
+    let factor = svd_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm thin SVD");
+    assert_eq!(factor.shape(), (3, 2));
+    let mut actual_values = vec![0.0_f32; expected.singular_values.len()];
+    device
+        .download(factor.singular_values(), &mut actual_values)
+        .expect("HIP thin SVD singular values download");
+    for (actual, expected) in actual_values.iter().zip(&expected.singular_values) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+    let mut actual_u =
+        vec![0.0_f32; leto::Storage::as_slice(expected.left_singular_vectors.storage()).len()];
+    let mut actual_v =
+        vec![0.0_f32; leto::Storage::as_slice(expected.right_singular_vectors.storage()).len()];
+    device
+        .download(factor.u(), &mut actual_u)
+        .expect("HIP thin SVD U download");
+    device
+        .download(factor.v(), &mut actual_v)
+        .expect("HIP thin SVD V download");
+    let reconstructed = reconstruct_svd(&actual_u, &actual_v, &actual_values, 3, 2);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+
+    let only_values = singular_values(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm singular-values-only SVD");
+    let mut only_values_host = vec![0.0_f32; expected.singular_values.len()];
+    device
+        .download(&only_values, &mut only_values_host)
+        .expect("HIP singular-values-only download");
+    for (actual, expected) in only_values_host.iter().zip(&expected.singular_values) {
+        assert_near(*actual, *expected, 2048.0);
+    }
+
+    let rank_deficient_values = [1.0_f32, 2.0, 2.0, 4.0, 3.0, 6.0];
+    let rank_deficient = device
+        .upload(&rank_deficient_values)
+        .expect("HIP rank-deficient SVD upload");
+    let rank_deficient_factor = svd_rank_revealing(
+        &device,
+        StridedOperand {
+            buffer: &rank_deficient,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm rank-revealing SVD");
+    let rank_expected = leto_ops::svd_decompose(&leto::ArrayView::<f32, 2>::new(
+        layout,
+        &rank_deficient_values,
+    ))
+    .expect("CPU rank-revealing SVD reference");
+    let mut rank_values = vec![0.0_f32; rank_expected.singular_values.len()];
+    device
+        .download(rank_deficient_factor.singular_values(), &mut rank_values)
+        .expect("HIP rank-revealing values download");
+    for (actual, expected) in rank_values.iter().zip(&rank_expected.singular_values) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    let mut rank_u =
+        vec![0.0_f32; leto::Storage::as_slice(rank_expected.left_singular_vectors.storage()).len()];
+    let mut rank_v = vec![
+        0.0_f32;
+        leto::Storage::as_slice(rank_expected.right_singular_vectors.storage())
+            .len()
+    ];
+    device
+        .download(rank_deficient_factor.u(), &mut rank_u)
+        .expect("HIP rank-revealing U download");
+    device
+        .download(rank_deficient_factor.v(), &mut rank_v)
+        .expect("HIP rank-revealing V download");
+    let reconstructed = reconstruct_svd(&rank_u, &rank_v, &rank_values, 3, 2);
+    for (actual, expected) in reconstructed.iter().zip(rank_deficient_values) {
+        assert_near(*actual, expected, 4096.0);
+    }
+    assert!(matches!(
+        svd_decompose(
+            &device,
+            StridedOperand {
+                buffer: &rank_deficient,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("thin SVD")
+    ));
+
+    let empty = device.upload(&[] as &[f32]).expect("HIP empty SVD upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty SVD layout");
+    let empty_factor = svd_decompose(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty SVD");
+    assert_eq!(empty_factor.shape(), (0, 0));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn udu_matches_leto_factors_and_operations() {
+    let Some(device) = device("udu_matches_leto_factors_and_operations") else {
+        return;
+    };
+
+    let matrix_values = [4.0_f32, 2.0, -2.0, 2.0, -3.0, 1.0, -2.0, 1.0, 2.0];
+    let matrix = device.upload(&matrix_values).expect("HIP UDU upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("UDU layout");
+    let factor = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm UDU");
+    let expected = leto_ops::udu_decompose(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU UDU reference");
+
+    assert_eq!(factor.n(), 3);
+    let mut actual_u = vec![0.0_f32; 9];
+    let mut actual_d = vec![0.0_f32; 3];
+    device
+        .download(factor.u_buffer(), &mut actual_u)
+        .expect("HIP UDU U download");
+    device
+        .download(factor.d_buffer(), &mut actual_d)
+        .expect("HIP UDU D download");
+    let expected_u_matrix = expected.u();
+    let expected_u = leto::Storage::as_slice(expected_u_matrix.storage());
+    let expected_diagonal = expected.diagonal();
+    for (actual, expected) in actual_u.iter().zip(expected_u) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    for (actual, expected) in actual_d.iter().zip(expected_diagonal) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+
+    let mut reconstructed = vec![0.0_f32; matrix_values.len()];
+    for row in 0..3 {
+        for col in 0..3 {
+            reconstructed[row * 3 + col] = (0..3)
+                .map(|k| actual_u[row * 3 + k] * actual_d[k] * actual_u[col * 3 + k])
+                .sum();
+        }
+    }
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 8192.0);
+    }
+    assert_near(factor.det(), expected.det(), 8192.0);
+
+    let rhs = device
+        .upload(&[3.0_f32, -1.0, 2.0])
+        .expect("HIP UDU RHS upload");
+    let solution = factor.solve(&device, &rhs).expect("ROCm UDU solve");
+    let mut solution_values = [0.0_f32; 3];
+    device
+        .download(&solution, &mut solution_values)
+        .expect("HIP UDU solution download");
+    for row in 0..3 {
+        let value = (0..3)
+            .map(|col| matrix_values[row * 3 + col] * solution_values[col])
+            .sum();
+        assert_near(value, [3.0, -1.0, 2.0][row], 8192.0);
+    }
+
+    let inverse = factor.inv(&device).expect("ROCm UDU inverse");
+    let mut inverse_values = [0.0_f32; 9];
+    device
+        .download(&inverse, &mut inverse_values)
+        .expect("HIP UDU inverse download");
+    for row in 0..3 {
+        for col in 0..3 {
+            let value = (0..3)
+                .map(|k| matrix_values[row * 3 + k] * inverse_values[k * 3 + col])
+                .sum();
+            assert_near(value, if row == col { 1.0 } else { 0.0 }, 16384.0);
+        }
+    }
+
+    let nonsquare = device
+        .upload(&[1.0_f32; 6])
+        .expect("HIP UDU nonsquare upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("UDU nonsquare layout");
+    assert!(matches!(
+        udu_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("square")
+    ));
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP non-finite UDU upload");
+    let nonfinite_layout = Layout::c_contiguous([2, 2]).expect("non-finite UDU layout");
+    assert!(matches!(
+        udu_decompose(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &nonfinite_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+
+    let empty = device.upload(&[] as &[f32]).expect("HIP empty UDU upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty UDU layout");
+    let empty_factor = udu_decompose(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty UDU");
+    assert_eq!(empty_factor.n(), 0);
+    assert_eq!(empty_factor.det(), 1.0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn bunch_kaufman_matches_leto_factors_and_permutation() {
+    let Some(device) = device("bunch_kaufman_matches_leto_factors_and_permutation") else {
+        return;
+    };
+
+    let matrix_values = [0.0_f32, 1.0, 1.0, 0.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP Bunch-Kaufman upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("Bunch-Kaufman layout");
+    let factor = bunch_kaufman(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm Bunch-Kaufman");
+    let expected = leto_ops::bunch_kaufman(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU Bunch-Kaufman reference");
+
+    assert_eq!(factor.n(), 2);
+    assert_eq!(factor.permutation(), expected.permutation());
+    assert_eq!(factor.permutation(), &[1, 0]);
+    let mut actual_l = vec![0.0_f32; 4];
+    let mut actual_d = vec![0.0_f32; 4];
+    device
+        .download(factor.l_buffer(), &mut actual_l)
+        .expect("HIP Bunch-Kaufman L download");
+    device
+        .download(factor.d_buffer(), &mut actual_d)
+        .expect("HIP Bunch-Kaufman D download");
+    let expected_l_matrix = expected.l();
+    let expected_l = leto::Storage::as_slice(expected_l_matrix.storage());
+    for (actual, expected) in actual_l.iter().zip(expected_l) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    let expected_d_matrix = expected.d();
+    let expected_d = leto::Storage::as_slice(expected_d_matrix.storage());
+    for (actual, expected) in actual_d.iter().zip(expected_d) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+
+    let mut reconstructed = [0.0_f32; 4];
+    for row in 0..2 {
+        for col in 0..2 {
+            let mut value = 0.0_f32;
+            for p in 0..2 {
+                for q in 0..2 {
+                    value += actual_l[row * 2 + p] * actual_d[p * 2 + q] * actual_l[col * 2 + q];
+                }
+            }
+            reconstructed[row * 2 + col] = value;
+        }
+    }
+    for row in 0..2 {
+        for col in 0..2 {
+            let expected_value =
+                matrix_values[factor.permutation()[row] * 2 + factor.permutation()[col]];
+            assert_near(reconstructed[row * 2 + col], expected_value, 8192.0);
+        }
+    }
+
+    let nonsymmetric = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP nonsymmetric Bunch-Kaufman upload");
+    assert!(matches!(
+        bunch_kaufman(
+            &device,
+            StridedOperand {
+                buffer: &nonsymmetric,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("symmetric")
+    ));
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP non-finite Bunch-Kaufman upload");
+    assert!(matches!(
+        bunch_kaufman(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty Bunch-Kaufman upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Bunch-Kaufman layout");
+    let empty_factor = bunch_kaufman(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty Bunch-Kaufman");
+    assert_eq!(empty_factor.n(), 0);
+    assert!(empty_factor.permutation().is_empty());
+}
+
+#[cfg(feature = "decomposition")]
+fn assert_complex_spectrum_close(
+    actual: &[eunomia::Complex<f32>],
+    expected: &[eunomia::Complex<f32>],
+    tolerance: f32,
+) {
+    assert_eq!(actual.len(), expected.len());
+    let mut actual = actual.to_vec();
+    let mut expected = expected.to_vec();
+    actual.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+    expected.sort_by(|lhs, rhs| {
+        lhs.re
+            .total_cmp(&rhs.re)
+            .then_with(|| lhs.im.total_cmp(&rhs.im))
+    });
+    for (actual, expected) in actual.iter().zip(expected.iter()) {
+        assert_near(actual.re, expected.re, tolerance);
+        assert_near(actual.im, expected.im, tolerance);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn symmetric_eigen_surfaces_match_leto_and_reconstruct() {
+    let Some(device) = device("symmetric_eigen_surfaces_match_leto_and_reconstruct") else {
+        return;
+    };
+
+    let matrix_values = [6.0_f32, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP symmetric eigen upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("symmetric eigen layout");
+    let factor = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm symmetric eigendecomposition");
+    let expected =
+        leto_ops::symmetric_eigen_jacobi(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+            .expect("CPU symmetric eigendecomposition reference");
+
+    assert_eq!(factor.n(), 3);
+    let mut actual_values = [0.0_f32; 3];
+    let mut actual_vectors = [0.0_f32; 9];
+    device
+        .download(factor.eigenvalues(), &mut actual_values)
+        .expect("HIP symmetric eigenvalues download");
+    device
+        .download(factor.eigenvectors(), &mut actual_vectors)
+        .expect("HIP symmetric eigenvectors download");
+    for (actual, expected) in actual_values.iter().zip(&expected.eigenvalues) {
+        assert_near(*actual, *expected, 4096.0);
+    }
+    for row in 0..3 {
+        for col in 0..3 {
+            let value = (0..3)
+                .map(|k| matrix_values[row * 3 + k] * actual_vectors[k * 3 + col])
+                .sum();
+            assert_near(
+                value,
+                actual_values[col] * actual_vectors[row * 3 + col],
+                8192.0,
+            );
+        }
+    }
+
+    let values_only = symmetric_eigenvalues_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm symmetric eigenvalues-only");
+    let mut actual_values_only = [0.0_f32; 3];
+    device
+        .download(&values_only, &mut actual_values_only)
+        .expect("HIP symmetric eigenvalues-only download");
+    assert_eq!(actual_values, actual_values_only);
+
+    let nonsymmetric = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0])
+        .expect("HIP nonsymmetric eigen upload");
+    let nonsymmetric_layout = Layout::c_contiguous([2, 2]).expect("nonsymmetric eigen layout");
+    assert!(matches!(
+        symmetric_eigen_jacobi(
+            &device,
+            StridedOperand {
+                buffer: &nonsymmetric,
+                layout: &nonsymmetric_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("not symmetric")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn general_eigenvalues_match_leto_complex_spectrum_and_validate_inputs() {
+    let Some(device) =
+        device("general_eigenvalues_match_leto_complex_spectrum_and_validate_inputs")
+    else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, -1.0, 1.0, 1.0];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP general eigen upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("general eigen layout");
+    let actual = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm general eigenvalues");
+    let mut actual_values = [eunomia::Complex::new(0.0_f32, 0.0); 2];
+    device
+        .download(&actual, &mut actual_values)
+        .expect("HIP general eigenvalues download");
+    let expected = leto_ops::eigenvalues(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU general eigenvalues reference");
+    assert_complex_spectrum_close(&actual_values, &expected, 4096.0);
+
+    let nonsquare = device
+        .upload(&[1.0_f32; 6])
+        .expect("HIP nonsquare eigen upload");
+    let nonsquare_layout = Layout::c_contiguous([2, 3]).expect("nonsquare eigen layout");
+    assert!(matches!(
+        eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &nonsquare,
+                layout: &nonsquare_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP non-finite eigen upload");
+    assert!(matches!(
+        eigenvalues(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message }) if message.contains("non-finite")
+    ));
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty eigen upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty eigen layout");
+    let empty_symmetric = symmetric_eigen_jacobi(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty symmetric eigen");
+    assert_eq!(empty_symmetric.n(), 0);
+    let empty_general = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty general eigen");
+    assert_eq!(empty_general.len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_matches_leto_and_reconstructs_similarity() {
+    let Some(device) = device("hessenberg_matches_leto_and_reconstructs_similarity") else {
+        return;
+    };
+
+    let matrix_values = [
+        4.0_f32, 5.0, -2.0, 2.0, 1.0, 2.0, 0.0, 1.0, -2.0, 0.0, 3.0, -2.0, 2.0, 1.0, -2.0, -1.0,
+    ];
+    let matrix = device
+        .upload(&matrix_values)
+        .expect("HIP Hessenberg upload");
+    let layout = Layout::c_contiguous([4, 4]).expect("Hessenberg layout");
+    let factor = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm Hessenberg reduction");
+    let expected = leto_ops::hessenberg(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU Hessenberg reference");
+
+    assert_eq!(factor.n(), 4);
+    let expected_q_matrix = expected.q();
+    let expected_h_matrix = expected.h();
+    let expected_q = leto::Storage::as_slice(expected_q_matrix.storage());
+    let expected_h = leto::Storage::as_slice(expected_h_matrix.storage());
+    let mut actual_q = [0.0_f32; 16];
+    let mut actual_h = [0.0_f32; 16];
+    device
+        .download(factor.q_buffer(), &mut actual_q)
+        .expect("HIP Hessenberg Q download");
+    device
+        .download(factor.h_buffer(), &mut actual_h)
+        .expect("HIP Hessenberg H download");
+    for (actual, expected) in actual_q.iter().zip(expected_q) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+    for (actual, expected) in actual_h.iter().zip(expected_h) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+
+    assert_orthogonal(&actual_q, 4);
+    for row in 0..4 {
+        for col in 0..4 {
+            if row > col + 1 {
+                assert_near(actual_h[row * 4 + col], 0.0, 8192.0);
+            }
+        }
+    }
+    let qh = matmul_square(&actual_q, &actual_h, 4);
+    let reconstructed = matmul_square(&qh, &transpose_square(&actual_q, 4), 4);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 16384.0);
+    }
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty Hessenberg upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Hessenberg layout");
+    let empty_factor = hessenberg(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty Hessenberg");
+    assert_eq!(empty_factor.n(), 0);
+    assert_eq!(empty_factor.q_buffer().len(), 0);
+    assert_eq!(empty_factor.h_buffer().len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn hessenberg_rejects_rectangular_and_nonfinite_inputs() {
+    let Some(device) = device("hessenberg_rejects_rectangular_and_nonfinite_inputs") else {
+        return;
+    };
+
+    let rectangular = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP rectangular Hessenberg upload");
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular Hessenberg layout");
+    assert!(matches!(
+        hessenberg(
+            &device,
+            StridedOperand {
+                buffer: &rectangular,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP nonfinite Hessenberg upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("square Hessenberg layout");
+    assert!(matches!(
+        hessenberg(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_matches_leto_and_reconstructs_real_spectrum() {
+    let Some(device) = device("schur_matches_leto_and_reconstructs_real_spectrum") else {
+        return;
+    };
+
+    let matrix_values = [1.0_f32, -3.0, 0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 5.0];
+    let matrix = device.upload(&matrix_values).expect("HIP Schur upload");
+    let layout = Layout::c_contiguous([3, 3]).expect("Schur layout");
+    let factor = schur(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm real Schur decomposition");
+    let expected = leto_ops::schur(&leto::ArrayView::<f32, 2>::new(layout, &matrix_values))
+        .expect("CPU Schur reference");
+
+    assert_eq!(factor.n(), 3);
+    let expected_q_matrix = expected.q();
+    let expected_t_matrix = expected.t();
+    let expected_q = leto::Storage::as_slice(expected_q_matrix.storage());
+    let expected_t = leto::Storage::as_slice(expected_t_matrix.storage());
+    let mut actual_q = [0.0_f32; 9];
+    let mut actual_t = [0.0_f32; 9];
+    device
+        .download(factor.q_buffer(), &mut actual_q)
+        .expect("HIP Schur Q download");
+    device
+        .download(factor.t_buffer(), &mut actual_t)
+        .expect("HIP Schur T download");
+    for (actual, expected) in actual_q.iter().zip(expected_q) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+    for (actual, expected) in actual_t.iter().zip(expected_t) {
+        assert_near(*actual, *expected, 8192.0);
+    }
+
+    assert_orthogonal(&actual_q, 3);
+    for row in 0..3 {
+        for col in 0..3 {
+            if row > col + 1 {
+                assert_near(actual_t[row * 3 + col], 0.0, 8192.0);
+            }
+        }
+    }
+    let subdiagonal = actual_t[3];
+    assert!(subdiagonal.abs() > 8192.0 * f32::EPSILON);
+    let discriminant = (actual_t[0] - actual_t[4]).powi(2) + 4.0 * actual_t[1] * subdiagonal;
+    assert!(
+        discriminant < 0.0,
+        "expected a real Schur 2x2 complex block"
+    );
+
+    let qt = matmul_square(&actual_q, &actual_t, 3);
+    let reconstructed = matmul_square(&qt, &transpose_square(&actual_q, 3), 3);
+    for (actual, expected) in reconstructed.iter().zip(matrix_values) {
+        assert_near(*actual, expected, 16384.0);
+    }
+
+    let t_buffer = device
+        .upload(&actual_t)
+        .expect("HIP Schur T spectrum upload");
+    let t_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &t_buffer,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm Schur T spectrum");
+    let a_values = eigenvalues(
+        &device,
+        StridedOperand {
+            buffer: &matrix,
+            layout: &layout,
+        },
+    )
+    .expect("ROCm input spectrum");
+    let mut actual_t_values = [eunomia::Complex::new(0.0_f32, 0.0); 3];
+    let mut actual_a_values = [eunomia::Complex::new(0.0_f32, 0.0); 3];
+    device
+        .download(&t_values, &mut actual_t_values)
+        .expect("HIP Schur T spectrum download");
+    device
+        .download(&a_values, &mut actual_a_values)
+        .expect("HIP input spectrum download");
+    assert_complex_spectrum_close(&actual_t_values, &actual_a_values, 8192.0);
+
+    let empty = device
+        .upload(&[] as &[f32])
+        .expect("HIP empty Schur upload");
+    let empty_layout = Layout::c_contiguous([0, 0]).expect("empty Schur layout");
+    let empty_factor = schur(
+        &device,
+        StridedOperand {
+            buffer: &empty,
+            layout: &empty_layout,
+        },
+    )
+    .expect("ROCm empty Schur");
+    assert_eq!(empty_factor.n(), 0);
+    assert_eq!(empty_factor.q_buffer().len(), 0);
+    assert_eq!(empty_factor.t_buffer().len(), 0);
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn schur_rejects_rectangular_and_nonfinite_inputs() {
+    let Some(device) = device("schur_rejects_rectangular_and_nonfinite_inputs") else {
+        return;
+    };
+
+    let rectangular = device
+        .upload(&[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("HIP rectangular Schur upload");
+    let rectangular_layout = Layout::c_contiguous([2, 3]).expect("rectangular Schur layout");
+    assert!(matches!(
+        schur(
+            &device,
+            StridedOperand {
+                buffer: &rectangular,
+                layout: &rectangular_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("square")
+    ));
+
+    let nonfinite = device
+        .upload(&[1.0_f32, 0.0, 0.0, f32::NAN])
+        .expect("HIP nonfinite Schur upload");
+    let square_layout = Layout::c_contiguous([2, 2]).expect("square Schur layout");
+    assert!(matches!(
+        schur(
+            &device,
+            StridedOperand {
+                buffer: &nonfinite,
+                layout: &square_layout,
+            },
+        ),
+        Err(HephaestusError::DispatchFailed { message })
+            if message.contains("non-finite")
+    ));
+}
+
+#[test]
+fn fluent_matrix_traits_match_operation_contracts() {
+    let Some(device) = device("fluent_matrix_traits_match_operation_contracts") else {
+        return;
+    };
+
+    let a_values = [1.0_f32, 2.0, 3.0, 4.0];
+    let b_values = [2.0_f32, 0.0, 1.0, 2.0];
+    let a = device.upload(&a_values).expect("HIP fluent matrix upload");
+    let b = device.upload(&b_values).expect("HIP fluent rhs upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("fluent matrix layout");
+    let a_operand = StridedOperand {
+        buffer: &a,
+        layout: &layout,
+    };
+    let b_operand = StridedOperand {
+        buffer: &b,
+        layout: &layout,
+    };
+    let normalized_operand = a_operand.as_operand();
+    assert_eq!(normalized_operand.layout.shape(), [2, 2]);
+
+    let product = a_operand
+        .matmul(&device, &b_operand)
+        .expect("ROCm fluent matmul");
+    let mut product_actual = [0.0_f32; 4];
+    device
+        .download(&product, &mut product_actual)
+        .expect("HIP fluent matmul download");
+    assert_eq!(product_actual, [8.0, 4.0, 18.0, 8.0]);
+
+    let l1 = a_operand.norm_l1(&device).expect("ROCm fluent L1 norm");
+    let mut l1_actual = [0.0_f32; 1];
+    device
+        .download(&l1, &mut l1_actual)
+        .expect("HIP fluent L1 download");
+    assert_eq!(l1_actual, [10.0]);
+
+    let trace = a_operand.trace(&device).expect("ROCm fluent trace");
+    let mut trace_actual = [0.0_f32; 1];
+    device
+        .download(&trace, &mut trace_actual)
+        .expect("HIP fluent trace download");
+    assert_eq!(trace_actual, [5.0]);
+    assert_eq!(a_operand.rank(&device).expect("ROCm fluent rank"), 2);
+
+    let determinant = a_operand.det(&device).expect("ROCm fluent determinant");
+    let mut determinant_actual = [0.0_f32; 1];
+    device
+        .download(&determinant, &mut determinant_actual)
+        .expect("HIP fluent determinant download");
+    assert_eq!(determinant_actual, [-2.0]);
+
+    let power = a_operand
+        .matpow(&device, 0)
+        .expect("ROCm fluent identity power");
+    let mut power_actual = [0.0_f32; 4];
+    device
+        .download(&power, &mut power_actual)
+        .expect("HIP fluent power download");
+    assert_eq!(power_actual, [1.0, 0.0, 0.0, 1.0]);
+
+    let pseudoinverse = a_operand.pinv(&device).expect("ROCm fluent pseudoinverse");
+    let mut pseudoinverse_actual = [0.0_f32; 4];
+    device
+        .download(&pseudoinverse, &mut pseudoinverse_actual)
+        .expect("HIP fluent pseudoinverse download");
+    let expected_pseudoinverse = leto_ops::pinv(&leto::ArrayView::<f32, 2>::new(layout, &a_values))
+        .expect("CPU fluent pseudoinverse reference");
+    let expected_pseudoinverse_slice = leto::Storage::as_slice(expected_pseudoinverse.storage());
+    for (actual, expected) in pseudoinverse_actual
+        .iter()
+        .zip(expected_pseudoinverse_slice)
+    {
+        assert_near(*actual, *expected, 4096.0);
+    }
+}
+
+#[cfg(feature = "decomposition")]
+#[test]
+fn fluent_decomposition_traits_match_solve_contract() {
+    let Some(device) = device("fluent_decomposition_traits_match_solve_contract") else {
+        return;
+    };
+
+    let values = [4.0_f32, 1.0, 2.0, 3.0];
+    let matrix = device.upload(&values).expect("HIP fluent LU upload");
+    let layout = Layout::c_contiguous([2, 2]).expect("fluent LU layout");
+    let operand = StridedOperand {
+        buffer: &matrix,
+        layout: &layout,
+    };
+    let factor = operand.lu(&device).expect("ROCm fluent LU");
+    let rhs = device
+        .upload(&[1.0_f32, 2.0])
+        .expect("HIP fluent rhs upload");
+    let solution = factor.solve(&device, &rhs).expect("ROCm fluent LU solve");
+    let mut actual = [0.0_f32; 2];
+    device
+        .download(&solution, &mut actual)
+        .expect("HIP fluent solve download");
+    assert_near(actual[0], 0.1, 4096.0);
+    assert_near(actual[1], 0.6, 4096.0);
+}
+
+fn assert_vector_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+    assert_eq!(actual.len(), expected.len());
+    for (index, (&got, &want)) in actual.iter().zip(expected).enumerate() {
+        assert!(
+            (got - want).abs() <= tolerance * want.abs().max(1.0),
+            "index {index}: got {got}, expected {want}"
+        );
+    }
+}
+
+#[test]
+fn dense_vector_ops_match_cpu_reference() {
+    let Some(dev) = device("dense_vector_ops_match_cpu_reference") else {
+        return;
+    };
+    let ops = RocmVectorOps::<f32>::new(&dev).expect("ROCm vector kernel descriptors");
+    let len = 257;
+    let left_host: Vec<f32> = (0..len)
+        .map(|index| (index as f32 - 128.0) * 0.03125)
+        .collect();
+    let right_host: Vec<f32> = (0..len).map(|index| (index as f32 * 0.017) - 2.0).collect();
+    let divisor_host: Vec<f32> = right_host.iter().map(|&value| value.abs() + 7.0).collect();
+    let left = dev.upload(&left_host).expect("ROCm left upload");
+    let right = dev.upload(&right_host).expect("ROCm right upload");
+    let divisor = dev.upload(&divisor_host).expect("ROCm divisor upload");
+    let tolerance = 8.0 * f32::EPSILON * len as f32;
+
+    let empty = dev.upload(&[] as &[f32]).expect("ROCm empty upload");
+    let empty_output = dev.alloc_zeroed::<f32>(0).expect("ROCm empty allocation");
+    ops.copy_vector(&dev, &empty, &empty_output)
+        .expect("ROCm empty copy");
+    ops.scale_vector(&dev, &empty_output, 2.0)
+        .expect("ROCm empty scale");
+    ops.axpy(&dev, &empty_output, &empty, 2.0)
+        .expect("ROCm empty axpy");
+    ops.xpay(&dev, &empty_output, &empty, 2.0)
+        .expect("ROCm empty xpay");
+    ops.subtract_into(&dev, &empty, &empty, &empty_output)
+        .expect("ROCm empty subtraction");
+    ops.add_into(&dev, &empty, &empty, &empty_output)
+        .expect("ROCm empty addition");
+    ops.multiply_into(&dev, &empty, &empty, &empty_output)
+        .expect("ROCm empty multiplication");
+    ops.divide_into(&dev, &empty, &empty, &empty_output)
+        .expect("ROCm empty division");
+    let empty_dot = ops.dot(&dev, &empty, &empty).expect("ROCm empty dot");
+    let empty_norm = ops.norm_l2(&dev, &empty).expect("ROCm empty norm");
+    assert_eq!(empty_dot, 0.0);
+    assert_eq!(empty_norm, 0.0);
+
+    let copy = dev.alloc_zeroed::<f32>(len).expect("ROCm copy allocation");
+    ops.copy_vector(&dev, &left, &copy)
+        .expect("ROCm vector copy");
+    let mut copied = vec![0.0; len];
+    dev.download(&copy, &mut copied)
+        .expect("ROCm copy download");
+    assert_vector_close(&copied, &left_host, 0.0);
+
+    let scaled = dev.upload(&left_host).expect("ROCm scale upload");
+    ops.scale_vector(&dev, &scaled, -1.75)
+        .expect("ROCm vector scale");
+    let expected_scale: Vec<f32> = left_host.iter().map(|&value| value * -1.75).collect();
+    let mut actual = vec![0.0; len];
+    dev.download(&scaled, &mut actual)
+        .expect("ROCm scale download");
+    assert_vector_close(&actual, &expected_scale, 1.0e-6);
+
+    let axpy = dev.upload(&left_host).expect("ROCm axpy upload");
+    ops.axpy(&dev, &axpy, &right, 0.625).expect("ROCm axpy");
+    let expected_axpy: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| 0.625_f32.mul_add(right, left))
+        .collect();
+    dev.download(&axpy, &mut actual)
+        .expect("ROCm axpy download");
+    assert_vector_close(&actual, &expected_axpy, 1.0e-6);
+
+    let xpay = dev.upload(&left_host).expect("ROCm xpay upload");
+    ops.xpay(&dev, &xpay, &right, -0.375).expect("ROCm xpay");
+    let expected_xpay: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| (-0.375_f32).mul_add(left, right))
+        .collect();
+    dev.download(&xpay, &mut actual)
+        .expect("ROCm xpay download");
+    assert_vector_close(&actual, &expected_xpay, 1.0e-6);
+
+    let difference = dev
+        .alloc_zeroed::<f32>(len)
+        .expect("ROCm subtraction allocation");
+    ops.subtract_into(&dev, &left, &right, &difference)
+        .expect("ROCm subtraction");
+    let expected_difference: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left - right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("ROCm subtraction download");
+    assert_vector_close(&actual, &expected_difference, 1.0e-6);
+
+    ops.add_into(&dev, &left, &right, &difference)
+        .expect("ROCm addition");
+    let expected_sum: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left + right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("ROCm addition download");
+    assert_vector_close(&actual, &expected_sum, 1.0e-6);
+
+    ops.multiply_into(&dev, &left, &right, &difference)
+        .expect("ROCm multiplication");
+    let expected_product: Vec<f32> = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&left, &right)| left * right)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("ROCm multiplication download");
+    assert_vector_close(&actual, &expected_product, 1.0e-6);
+
+    ops.divide_into(&dev, &left, &divisor, &difference)
+        .expect("ROCm division");
+    let expected_quotient: Vec<f32> = left_host
+        .iter()
+        .zip(&divisor_host)
+        .map(|(&left, &divisor)| left / divisor)
+        .collect();
+    dev.download(&difference, &mut actual)
+        .expect("ROCm division download");
+    assert_vector_close(&actual, &expected_quotient, 1.0e-6);
+
+    let prepared_dot = ops
+        .prepare_dot(&dev, &left, &right)
+        .expect("ROCm dot preparation");
+    let dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("ROCm prepared dot");
+    let expected_dot: f32 = left_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!((dot - expected_dot).abs() <= tolerance * expected_dot.abs().max(1.0));
+
+    let prepared_norm = ops
+        .prepare_norm_l2(&dev, &left)
+        .expect("ROCm norm preparation");
+    let norm = ops
+        .norm_l2_prepared(&dev, &prepared_norm, &left)
+        .expect("ROCm prepared norm");
+    let expected_norm = left_host
+        .iter()
+        .map(|&value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    assert!((norm - expected_norm).abs() <= tolerance * expected_norm.abs().max(1.0));
+
+    let replacement_host: Vec<f32> = right_host.iter().map(|&value| value * 0.5).collect();
+    let replacement = dev
+        .upload(&replacement_host)
+        .expect("ROCm replacement upload");
+    ops.copy_vector(&dev, &replacement, &left)
+        .expect("ROCm prepared-input update");
+    let updated_dot = ops
+        .dot_prepared(&dev, &prepared_dot, &left, &right)
+        .expect("ROCm repeated prepared dot");
+    let expected_updated_dot: f32 = replacement_host
+        .iter()
+        .zip(&right_host)
+        .map(|(&l, &r)| l * r)
+        .sum();
+    assert!(
+        (updated_dot - expected_updated_dot).abs()
+            <= tolerance * expected_updated_dot.abs().max(1.0)
+    );
+
+    let short = dev.upload(&vec![0.0; len - 1]).expect("ROCm short upload");
+    assert!(matches!(
+        ops.axpy(&dev, &left, &short, 1.0),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.add_into(&dev, &left, &short, &difference),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.multiply_into(&dev, &left, &short, &difference),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+    assert!(matches!(
+        ops.divide_into(&dev, &left, &short, &difference),
+        Err(HephaestusError::LengthMismatch { .. })
+    ));
+}

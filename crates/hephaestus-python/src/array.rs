@@ -69,7 +69,7 @@ impl PyArray {
         let len = data.len();
         let dev = device.inner.clone();
         let buffer = py
-            .detach(move || dev.upload(&data))
+            .detach(move || dev.upload_f32(&data))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -83,7 +83,7 @@ impl PyArray {
     fn zeros(len: usize, device: &PyDevice) -> PyResult<Self> {
         let buffer = device
             .inner
-            .alloc_zeroed(len)
+            .alloc_zeroed_f32(len)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -105,7 +105,7 @@ impl PyArray {
         let len = slice.len();
         let dev = device.inner.clone();
         let buffer = py
-            .detach(move || dev.upload(slice))
+            .detach(move || dev.upload_f32(slice))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             buffer,
@@ -135,7 +135,7 @@ impl PyArray {
     pub(crate) fn tolist(&self, py: Python<'_>) -> PyResult<Vec<f32>> {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
-        py.detach(move || dev.download(&buf))
+        py.detach(move || dev.download_f32(&buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -144,7 +144,7 @@ impl PyArray {
         let dev = self.device.clone();
         let buf = self.buffer.clone();
         let host_data = py
-            .detach(move || dev.download(&buf))
+            .detach(move || dev.download_f32(&buf))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(host_data.to_pyarray(py))
     }

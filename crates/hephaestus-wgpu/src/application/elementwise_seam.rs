@@ -7,8 +7,7 @@ use hephaestus_core::{
     TypedBinaryExpr, UnaryExpr, Wgsl,
 };
 
-use crate::application::canary;
-use crate::application::elementwise::reject_unsupported_unary;
+use crate::application::elementwise::reject_f64_unsupported_unary;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::application::prepared::{
     checked_bind_group, checked_submit, device_owner, validate_device_owner,
@@ -113,8 +112,7 @@ where
     Op: UnaryExpr<Wgsl> + 'static,
     T: DialectScalar<Wgsl> + Pod + 'static,
 {
-    reject_unsupported_unary::<Op, T>()?;
-    canary::require_template_safe::<T>(device, Op::EXPR, "prepared unary elementwise")?;
+    reject_f64_unsupported_unary::<Op, T>()?;
     validate_rank::<N>()?;
 
     let out_layout = output.layout;
@@ -241,7 +239,6 @@ where
     Op: BinaryExpr<Wgsl> + 'static,
     T: DialectScalar<Wgsl> + Pod + 'static,
 {
-    canary::require_template_safe::<T>(device, Op::EXPR, "prepared scalar elementwise")?;
     validate_rank::<N>()?;
 
     let out_layout = output.layout;
@@ -353,7 +350,6 @@ where
     Op: 'static,
     T: DialectScalar<Wgsl> + Pod + 'static,
 {
-    canary::require_template_safe::<T>(device, expr, "prepared binary elementwise")?;
     validate_rank::<N>()?;
 
     let out_layout = output.layout;

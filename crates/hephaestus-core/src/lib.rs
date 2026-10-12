@@ -1,8 +1,4 @@
-// `deny` (not `forbid`): the five precision-generic rule parameter blocks
-// carry `allow(unsafe_code)` manual `Pod` impls — the derive rejects generic
-// `repr(C)` structs, and the impls' layout proofs are the per-width size
-// asserts beside them. No other unsafe code exists in this crate.
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 //! # hephaestus-core
 //!
@@ -43,6 +39,7 @@ pub use domain::attention::{
     AttentionSemanticStatus, GroupedKeepMask, plan_attention_backward, plan_attention_forward,
 };
 pub use domain::buffer::DeviceBuffer;
+pub use domain::cat::{CatOps, validate_cat_shape};
 pub use domain::convolution::{
     ConvolutionBackwardOperands, ConvolutionForwardOperands, ConvolutionGradientViews,
     ConvolutionOps, ConvolutionPlan, TransposedConvolutionPlan, plan_convolution_backward,
@@ -72,13 +69,19 @@ pub use domain::device::{
     DeviceLimits, DevicePreference, validate_buffer_size, validate_slice_alignment,
 };
 pub use domain::dialect::{CudaC, DialectScalar, HipC, Host, KernelDialect, Wgsl};
+pub use domain::dot::{DotOps, validate_dot_shape};
 pub use domain::elementwise::ElementwiseOps;
-pub use domain::embedding::{EmbeddingOps, validate_embedding_gather_shape};
+pub use domain::embedding::{
+    EmbeddingOps, validate_embedding_gather_shape, validate_embedding_scatter_shape,
+};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};
 pub use domain::fixed_fd::{FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme};
 pub use domain::fusion::{FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps};
+pub use domain::gather::{GatherOps, validate_gather_shape};
+pub use domain::index_put::{IndexPutOps, validate_index_put_shape};
+pub use domain::index_select::{IndexSelectOps, validate_index_select_shape};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
     KernelInterface, KernelSource,
@@ -95,6 +98,8 @@ pub use domain::loss::{
     CrossEntropyScalar, CrossEntropyStatus, plan_cross_entropy_backward,
     plan_cross_entropy_forward,
 };
+pub use domain::masked_fill::{MaskedFillOps, validate_masked_fill_shape};
+pub use domain::nonzero::{NonzeroOps, validate_nonzero_shape};
 pub use domain::ops::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, BinaryExpr, BinaryValue,
     CeilOp, CombineExpr, CombineValue, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp,
@@ -123,18 +128,24 @@ pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
     StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
 };
+pub use domain::roll::{RollOps, validate_roll_shape};
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
+pub use domain::scatter::{ScatterOps, validate_scatter_shape};
 pub use domain::sliding_window::{
     SlidingWindowFoldOperands, SlidingWindowOps, SlidingWindowPlan, SlidingWindowUnfoldOperands,
     plan_sliding_window_fold, plan_sliding_window_unfold,
 };
+pub use domain::sort::{SortOps, validate_sort_shape};
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
+pub use domain::split::{SplitOps, validate_split_shape};
+pub use domain::stack::{StackOps, validate_stack_shape};
 pub use domain::staggered::{Staggered3DOps, Staggered3DParams, StaggeredAxis};
 pub use domain::stateful_update::{
-    AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
-    RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,
+    AdaGrad, AdaGradParameters, AdaGradParametersF64, Adam, AdamParameters, AdamParametersF64,
+    AdamW, AdamWParameters, AdamWParametersF64, RmsProp, RmsPropParameters, RmsPropParametersF64,
+    Sgd, SgdParameters, SgdParametersF64, StatefulUpdateAliasing, StatefulUpdateMeta,
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
-    StatefulUpdateStep, UpdateWidth, plan_stateful_update,
+    StatefulUpdateStep, StatefulUpdateStepF64, plan_stateful_update,
 };
 pub use domain::stencil::StencilOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
@@ -146,11 +157,13 @@ pub use domain::strided::{
     MAX_STRIDED_RANK, StridedMeta, map_layout_err, pad_shape, pad_shape_dyn, pad_strides,
     pad_usize_strides_dyn, to_u32,
 };
+pub use domain::tile::{TileOps, TileReps, validate_tile_shape};
 pub use domain::topk::{TopKOps, validate_topk_shape};
 pub use domain::triangular::{
     TriangularMode, TriangularOps, triangular_keeps, validate_triangular_shape,
 };
-pub use domain::vector::{DenseVectorOps, RetainedReductions};
+pub use domain::vector::{DenseVectorOps, RetainedReductions, VectorFactor, VectorScalar};
 pub use domain::view::{DynamicStridedView, StridedOperand, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
+pub use domain::where_cond::{WhereOps, validate_where_shape};
 pub use domain::window::WindowPlan;

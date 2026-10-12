@@ -38,6 +38,36 @@ pub trait EmbeddingOps<D: ComputeDevice, T: Pod> {
         indices: &D::Buffer<u32>,
         output: &D::Buffer<T>,
     ) -> Result<()>;
+
+    /// Accumulate `grad_table[indices[i]] += grad_out[i]` (each a row of
+    /// `embedding_dim` elements) for every `i`: the backward pass of
+    /// [`gather_into`](Self::gather_into) over the same indices.
+    ///
+    /// The gradients add onto the existing contents of `grad_table`; a
+    /// caller wanting pure per-table gradients zeroes it first.
+    ///
+    /// # Accumulation order
+    ///
+    /// Repeated indices make the sum order-observable in float rounding,
+    /// so every implementor accumulates each output row in ascending input
+    /// order (`i = 0..n`). The order is part of this contract, not a
+    /// backend detail: all backends agree bitwise, not merely within test
+    /// tolerance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed dispatch error when the buffer lengths do not agree
+    /// with `num_embeddings`/`embedding_dim`, when any index in `indices` is
+    /// `>= num_embeddings`, or when the backend dispatch fails.
+    fn scatter_add_into(
+        &self,
+        device: &D,
+        grad_table: &D::Buffer<T>,
+        num_embeddings: usize,
+        embedding_dim: usize,
+        indices: &D::Buffer<u32>,
+        grad_out: &D::Buffer<T>,
+    ) -> Result<()>;
 }
 
 /// Validate `table`/`output` lengths against `num_embeddings`,
@@ -54,6 +84,55 @@ pub fn validate_embedding_gather_shape(
     indices_len: usize,
     output_len: usize,
 ) -> Result<usize> {
+    validate_embedding_shapes(
+        table_len,
+        num_embeddings,
+        embedding_dim,
+        indices_len,
+        output_len,
+        "embedding table",
+        "embedding output",
+    )
+}
+
+/// Validate `grad_table`/`grad_out` lengths against `num_embeddings`,
+/// `embedding_dim`, and `indices_len`, returning the row count.
+///
+/// The scatter counterpart of
+/// [`validate_embedding_gather_shape`]: the arithmetic is identical, only
+/// the operand roles differ.
+///
+/// # Errors
+///
+/// Returns [`HephaestusError::InvalidConfiguration`] when any length
+/// disagrees.
+pub fn validate_embedding_scatter_shape(
+    grad_table_len: usize,
+    num_embeddings: usize,
+    embedding_dim: usize,
+    indices_len: usize,
+    grad_out_len: usize,
+) -> Result<usize> {
+    validate_embedding_shapes(
+        grad_table_len,
+        num_embeddings,
+        embedding_dim,
+        indices_len,
+        grad_out_len,
+        "embedding gradient table",
+        "embedding gradient source",
+    )
+}
+
+fn validate_embedding_shapes(
+    table_len: usize,
+    num_embeddings: usize,
+    embedding_dim: usize,
+    indices_len: usize,
+    other_len: usize,
+    table_role: &str,
+    other_role: &str,
+) -> Result<usize> {
     let expected_table_len = num_embeddings.checked_mul(embedding_dim).ok_or_else(|| {
         HephaestusError::InvalidConfiguration {
             message: "num_embeddings * embedding_dim overflows".to_string(),
@@ -62,20 +141,20 @@ pub fn validate_embedding_gather_shape(
     if table_len != expected_table_len {
         return Err(HephaestusError::InvalidConfiguration {
             message: format!(
-                "embedding table length {table_len} does not match \
+                "{table_role} length {table_len} does not match \
                  num_embeddings {num_embeddings} * embedding_dim {embedding_dim}"
             ),
         });
     }
-    let expected_output_len = indices_len.checked_mul(embedding_dim).ok_or_else(|| {
+    let expected_other_len = indices_len.checked_mul(embedding_dim).ok_or_else(|| {
         HephaestusError::InvalidConfiguration {
             message: "indices_len * embedding_dim overflows".to_string(),
         }
     })?;
-    if output_len != expected_output_len {
+    if other_len != expected_other_len {
         return Err(HephaestusError::InvalidConfiguration {
             message: format!(
-                "embedding output length {output_len} does not match \
+                "{other_role} length {other_len} does not match \
                  indices_len {indices_len} * embedding_dim {embedding_dim}"
             ),
         });
@@ -106,6 +185,28 @@ mod tests {
     fn rejects_an_output_length_mismatch() {
         let err =
             validate_embedding_gather_shape(12, 4, 3, 5, 14).expect_err("output length mismatch");
+        assert!(matches!(err, HephaestusError::InvalidConfiguration { .. }));
+    }
+
+    #[test]
+    fn scatter_accepts_matching_lengths() {
+        assert_eq!(
+            validate_embedding_scatter_shape(12, 4, 3, 5, 15).expect("valid"),
+            5
+        );
+    }
+
+    #[test]
+    fn scatter_rejects_a_gradient_table_length_mismatch() {
+        let err = validate_embedding_scatter_shape(11, 4, 3, 5, 15)
+            .expect_err("gradient table length mismatch");
+        assert!(matches!(err, HephaestusError::InvalidConfiguration { .. }));
+    }
+
+    #[test]
+    fn scatter_rejects_a_gradient_source_length_mismatch() {
+        let err = validate_embedding_scatter_shape(12, 4, 3, 5, 14)
+            .expect_err("gradient source length mismatch");
         assert!(matches!(err, HephaestusError::InvalidConfiguration { .. }));
     }
 }

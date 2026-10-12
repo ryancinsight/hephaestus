@@ -52,7 +52,9 @@ fn binary_elementwise_into_expression<T>(
 where
     T: DialectScalar<Wgsl> + Pod,
 {
-    canary::require_template_safe::<T>(device, expr, "binary elementwise")?;
+    if let Some(width) = canary::width_of::<T>() {
+        canary::require_expr_safe(device, expr, width, "binary elementwise")?;
+    }
     if a.len != b.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: a.len,

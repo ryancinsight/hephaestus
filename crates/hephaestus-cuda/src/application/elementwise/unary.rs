@@ -20,9 +20,9 @@ pub use hephaestus_core::{
     TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 
-fn shader_source<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+pub(crate) fn shader_source<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 extern "C" __global__ void unary_kernel(
     const {ty}* a,
     {ty}* out,
@@ -35,6 +35,7 @@ extern "C" __global__ void unary_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         expr = Op::EXPR,
     )

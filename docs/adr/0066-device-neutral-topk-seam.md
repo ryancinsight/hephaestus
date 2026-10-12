@@ -53,3 +53,15 @@ Coeus can bind `topk_axis_into` on WGPU (and the host reference pair) today,
 closing the `backlog.md#heph-topk-argminmax-provider-1` item's remaining
 scope. CUDA/ROCm/Metal implementations, the aggregate fold, and a
 larger-`k` heap-based algorithm are follow-up items.
+
+2026-10-09: CUDA/ROCm/Metal now implement `TopKOps` with the same
+incremental-insertion algorithm (in-place through the caller-sized outputs,
+`k` a runtime loop bound, `min`/`axis` baked into the pipeline key). The
+same increment added a strided-output conformance clause, which caught and
+fixed a WGSL dense-pack addressing bug: the `values`/`indices` outputs now
+address through independent strides/offsets (`TopKMeta` 64 to 96 bytes).
+CUDA verified on RTX 5080 hardware; ROCm/Metal compile-gated to their
+platforms. Folded into `assert_backend_contract`/`BackendUnderTest`
+2026-10-10 (HEPH-BACKEND-CONTRACT-FOLD-1): both top-k clauses run in the
+host aggregate instantiation. The heap-based larger-`k` variant remains
+open.

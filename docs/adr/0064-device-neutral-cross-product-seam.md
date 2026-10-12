@@ -55,3 +55,11 @@ CUDA/ROCm/Metal implementations and the aggregate fold are follow-up items.
 The `dot`/`norm_*` half of the originally reported gap needs no hephaestus
 change; closing it is a coeus-side binding task, reported back rather than
 duplicated here.
+
+2026-10-10: CUDA/ROCm/Metal now implement `CrossProductOps` — one thread
+per triple evaluating the standard formula, flat contiguous buffers with
+no strided metadata, `PipelineKey::CrossProduct` keyed by scalar and
+block width. CUDA verified on RTX 5080 hardware; ROCm/Metal
+compile-gated to their platforms; Metal delegates to the WGSL seam.
+Folded into `assert_backend_contract`/`BackendUnderTest` the same
+increment.

@@ -46,3 +46,11 @@ Coeus can bind `gather_into` on WGPU (and the host reference pair) today.
 CUDA/ROCm/Metal implementations, the aggregate fold, and the gradient
 counterpart (scatter-add for the embedding backward pass, named in the
 original backlog item but not delivered here) are follow-up items.
+
+2026-10-09: the gradient counterpart is delivered as
+`EmbeddingOps::scatter_add_into` — per-output-row scan in ascending input
+order on every backend (bitwise agreement, not just tolerance), with the
+same atomic-flag out-of-range rejection; CUDA/ROCm/Metal implement both
+directions. Folded into `assert_backend_contract`/`BackendUnderTest`
+2026-10-10 (HEPH-BACKEND-CONTRACT-FOLD-1): all four embedding clauses run
+in the host aggregate instantiation.

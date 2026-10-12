@@ -19,7 +19,6 @@ use super::resources::{
     validate_backward_owners, validate_forward_owners,
 };
 use super::shader::{BackwardStage, ForwardStage, backward_shader, forward_shader};
-use crate::application::canary;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::application::prepared::checked_bind_group;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -324,15 +323,11 @@ pub(super) fn prepare<T: WgslAttentionScalar>(
     if elements == 0 {
         return Ok(PreparedAttentionKernel::empty(device));
     }
-    // The softmax stages call `exp`; the composed source is scanned so the
-    // stages without it stay available where `exp` is blocked.
-    let source = shader();
-    canary::require_template_safe::<T>(device, &source, label)?;
     let pipeline = try_cached_pipeline(
         device,
         (kernel, TypeId::of::<T>(), WORKGROUP_WIDTH.get()),
         label,
-        move || source,
+        shader,
     )?;
     let metadata_buffer = metadata_buffer(device, metadata)?;
     let mut entries: smallvec::SmallVec<[wgpu::BindGroupEntry<'_>; 5]> =

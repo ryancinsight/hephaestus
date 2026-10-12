@@ -25,6 +25,9 @@ fn device_or_skip() -> Option<WgpuDevice> {
         .clone()
 }
 
+#[path = "accuracy_sweeps.rs"]
+mod accuracy_sweeps;
+
 #[path = "adaptive_pooling_contracts.rs"]
 mod adaptive_pooling_contracts;
 
@@ -36,6 +39,9 @@ mod attention_contracts;
 
 #[path = "axis_reduction_contracts.rs"]
 mod axis_reduction_contracts;
+
+#[path = "cat_contracts.rs"]
+mod cat_contracts;
 
 #[path = "contract.rs"]
 mod contract;
@@ -62,6 +68,9 @@ mod dense_vector;
 #[path = "dense_vector_contracts.rs"]
 mod dense_vector_contracts;
 
+#[path = "dot_contracts.rs"]
+mod dot_contracts;
+
 #[path = "elementwise_contracts.rs"]
 mod elementwise_contracts;
 
@@ -77,11 +86,26 @@ mod fft_contracts;
 #[path = "fusion_contracts.rs"]
 mod fusion_contracts;
 
+#[path = "gather_contracts.rs"]
+mod gather_contracts;
+
+#[path = "index_put_contracts.rs"]
+mod index_put_contracts;
+
+#[path = "index_select_contracts.rs"]
+mod index_select_contracts;
+
 #[path = "fixed_fd_contracts.rs"]
 mod fixed_fd_contracts;
 
 #[path = "interpolation_contracts.rs"]
 mod interpolation_contracts;
+
+#[path = "masked_fill_contracts.rs"]
+mod masked_fill_contracts;
+
+#[path = "nonzero_contracts.rs"]
+mod nonzero_contracts;
 
 #[path = "pad_contracts.rs"]
 mod pad_contracts;
@@ -95,8 +119,17 @@ mod random_contracts;
 #[path = "ray_integral_contracts.rs"]
 mod ray_integral_contracts;
 
+#[path = "retained_reduction_contracts.rs"]
+mod retained_reduction_contracts;
+
+#[path = "roll_contracts.rs"]
+mod roll_contracts;
+
 #[path = "scan_contracts.rs"]
 mod scan_contracts;
+
+#[path = "scatter_contracts.rs"]
+mod scatter_contracts;
 
 #[path = "seam_contracts.rs"]
 mod seam_contracts;
@@ -105,11 +138,23 @@ mod seam_contracts;
 #[path = "sparse_contracts.rs"]
 mod sparse_contracts;
 
+#[path = "sort_contracts.rs"]
+mod sort_contracts;
+
+#[path = "split_contracts.rs"]
+mod split_contracts;
+
+#[path = "stack_contracts.rs"]
+mod stack_contracts;
+
 #[path = "stateful_update_contracts.rs"]
 mod stateful_update_contracts;
 
 #[path = "stencil_contracts.rs"]
 mod stencil_contracts;
+
+#[path = "tile_contracts.rs"]
+mod tile_contracts;
 
 #[path = "topk_contracts.rs"]
 mod topk_contracts;
@@ -131,6 +176,9 @@ mod transfer_contracts;
 
 #[path = "triangular_contracts.rs"]
 mod triangular_contracts;
+
+#[path = "where_contracts.rs"]
+mod where_contracts;
 
 #[path = "typed_elementwise.rs"]
 mod typed_elementwise;
@@ -303,6 +351,7 @@ contract_cases!(
     attention_contracts::prepared_dispatch_resets_semantic_status_after_failure,
     attention_contracts::zero_probability_prefix_preserves_stable_convex_output,
     axis_reduction_contracts::wgpu_satisfies_the_axis_reduction_contract,
+    cat_contracts::wgpu_satisfies_the_cat_contract,
     convolution_contracts::wgpu_satisfies_the_convolution_contract,
     cross_product_contracts::wgpu_satisfies_the_cross_product_contract,
     ctc_contracts::wgpu_satisfies_the_ctc_contract,
@@ -312,6 +361,7 @@ contract_cases!(
     decomposition_contracts::wgpu_satisfies_the_decomposition_contract,
     dense_product_contracts::wgpu_satisfies_the_dense_product_contract,
     dense_vector_contracts::wgpu_satisfies_the_dense_vector_contract,
+    dense_vector_contracts::wgpu_satisfies_the_dense_vector_contract_f64,
     dense_vector::axpy_matches_the_cpu_reference,
     dense_vector::xpay_matches_the_cpu_reference,
     dense_vector::scale_and_copy_match_the_cpu_reference,
@@ -319,24 +369,34 @@ contract_cases!(
     dense_vector::reductions_match_the_cpu_reference,
     dense_vector::prepared_reductions_reuse_their_bound_allocation,
     dense_vector::mismatched_lengths_are_rejected,
+    dot_contracts::wgpu_satisfies_the_dot_contract,
+    dot_contracts::wgpu_satisfies_the_dot_contract_f64,
     elementwise_contracts::wgpu_satisfies_the_elementwise_contract,
     embedding_contracts::wgpu_satisfies_the_embedding_gather_contract,
+    embedding_contracts::wgpu_satisfies_the_embedding_scatter_add_contract,
     fft_contracts::prepared_fft_device_preflight_is_public_and_typed,
     fusion_contracts::runtime_rank_elementwise_broadcast_matches_reference,
     fusion_contracts::runtime_rank_reduction_matches_reference,
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
-    fusion_contracts::wgpu_satisfies_the_fusion_contract,
-    fusion_contracts::wgpu_satisfies_the_f64_fusion_contract,
+    gather_contracts::wgpu_satisfies_the_gather_contract,
+    index_put_contracts::wgpu_satisfies_the_index_put_contract,
+    index_select_contracts::wgpu_satisfies_the_index_select_contract,
     fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
+    masked_fill_contracts::wgpu_satisfies_the_masked_fill_contract,
+    nonzero_contracts::wgpu_satisfies_the_nonzero_contract,
     pad_contracts::wgpu_satisfies_the_pad_contract,
     parameterized_unary_contracts::wgpu_satisfies_the_parameterized_unary_contract,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
     random_contracts::wgpu_satisfies_the_random_init_contract,
     ray_integral_contracts::wgpu_satisfies_the_ray_integral_contract,
+    retained_reduction_contracts::wgpu_satisfies_the_retained_reduction_contract,
+    retained_reduction_contracts::wgpu_satisfies_the_retained_reduction_contract_f64,
+    roll_contracts::wgpu_satisfies_the_roll_contract,
     scan_contracts::wgpu_satisfies_the_scan_contract,
+    scatter_contracts::wgpu_satisfies_the_scatter_contract,
     seam_contracts::full_reduction_honors_output_offset,
     seam_contracts::empty_full_reductions_write_operator_identities,
     seam_contracts::prepared_elementwise_rejects_cross_device_dispatch,
@@ -348,6 +408,9 @@ contract_cases!(
     seam_contracts::full_reduction_rejects_foreign_buffers_before_mutation,
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
+    sort_contracts::wgpu_satisfies_the_sort_contract,
+    split_contracts::wgpu_satisfies_the_split_contract,
+    stack_contracts::wgpu_satisfies_the_stack_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
     stateful_update_contracts::wgpu_satisfies_the_f64_stateful_update_contract,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
@@ -360,6 +423,7 @@ contract_cases!(
     staggered3d::a_grid_thinner_than_the_stencil_is_rejected,
     staggered3d::storage_length_mismatch_is_rejected_before_launch,
     stencil_contracts::wgpu_satisfies_the_stencil_contract,
+    tile_contracts::wgpu_satisfies_the_tile_contract,
     topk_contracts::wgpu_satisfies_the_topk_contract,
     stencil_laplacian::laplacian_minimum_grid_matches_cpu_reference,
     stencil_laplacian::laplacian_dirichlet_matches_cpu_reference,
@@ -384,6 +448,7 @@ contract_cases!(
     triangular_contracts::wgpu_satisfies_the_triangular_contract,
     triangular_contracts::oversized_storage_binding_fails_before_output_mutation,
     triangular_contracts::unsupported_workgroup_width_fails_before_output_mutation,
+    where_contracts::wgpu_satisfies_the_where_contract,
     typed_elementwise_contracts::wgpu_satisfies_the_typed_elementwise_contract,
     typed_elementwise::typed_comparisons_are_exact_indicators_for_unsigned_operands,
     typed_elementwise::typed_comparisons_order_signed_operands_by_sign,
@@ -400,7 +465,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 139;
+const EXPECTED_CONTRACT_CASES: usize = 158;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -419,10 +484,15 @@ const EXPECTED_CONTRACT_CASES: usize = 139;
 // unconditional registrations on top of every combination.
 // `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
 // each add one unconditional registration on top of every combination.
+// The cat contract adds one unconditional registration on top of every
+// combination, and so do the split, stack, gather, scatter,
+// index_select, index_put, masked_fill, roll, tile, where, sort, and nonzero contracts.
+// The dot contract and its ShaderF64 twin add two unconditional
+// registrations on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 186;
+const EXPECTED_CONTRACT_CASES: usize = 205;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 144;
+const EXPECTED_CONTRACT_CASES: usize = 163;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
@@ -433,7 +503,12 @@ const EXPECTED_CONTRACT_CASES: usize = 144;
 // triangular masking, its two limit clauses, and adaptive pooling each add
 // their registrations on top. The fixed-scheme 3-D sweep adds one
 // unconditional registration on top of every combination, and so does CTC.
-const EXPECTED_CONTRACT_CASES: usize = 190;
+// The cat contract adds one unconditional registration on top of every
+// combination, and so do the split, stack, gather, scatter,
+// index_select, index_put, masked_fill, roll, tile, where, sort, and nonzero contracts.
+// The dot contract and its ShaderF64 twin add two unconditional
+// registrations on top of every combination.
+const EXPECTED_CONTRACT_CASES: usize = 207;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

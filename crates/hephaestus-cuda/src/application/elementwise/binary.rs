@@ -12,9 +12,9 @@ use hephaestus_core::{
 
 pub use hephaestus_core::{AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp};
 
-fn shader_source<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
+pub(crate) fn shader_source<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
-        r#"
+        r#"{prelude}
 extern "C" __global__ void binary_kernel(
     const {ty}* lhs_in,
     const {ty}* rhs_in,
@@ -29,6 +29,7 @@ extern "C" __global__ void binary_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         expr = expr,
     )

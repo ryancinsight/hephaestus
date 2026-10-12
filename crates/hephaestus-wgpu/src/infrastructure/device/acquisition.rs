@@ -1,4 +1,6 @@
-use super::{HephaestusError, Result, WgpuDevice};
+use super::WgpuDevice;
+
+use hephaestus_core::{HephaestusError, Result};
 
 impl WgpuDevice {
     pub(super) fn try_default_with_adapter_config(

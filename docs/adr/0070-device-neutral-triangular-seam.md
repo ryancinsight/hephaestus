@@ -63,3 +63,15 @@ today. `HEPH-SHAPE-OPS-PROVIDER-1` narrows further: cat, split, stack,
 gather, scatter, index_select, index_put, masked_fill, tile, where, sort,
 and nonzero remain. CUDA/ROCm/Metal implementations and the aggregate fold
 are follow-up items.
+
+2026-10-10: CUDA/ROCm/Metal now implement `TriangularOps` — one thread
+per `(row, col)` evaluating the WGSL seam's overflow-safe diagonal-side
+predicates verbatim, `mode` baked into the pipeline key, `diagonal`
+clamped host-side to `i32` exactly as the WGSL seam clamps it before
+uniform upload. CUDA verified on RTX 5080 hardware; ROCm/Metal
+compile-gated to their platforms; Metal delegates to the WGSL seam (which
+required publishing `TriangularStorage` so the provider can name the
+bound). The shared clause dropped its `D::Buffer<i32>: Clone` bound — the
+alias case reuses the same borrowed buffer, which aliases identically on
+owning (CUDA/ROCm) and handle-backed buffers. Folded into
+`assert_backend_contract`/`BackendUnderTest` the same increment.

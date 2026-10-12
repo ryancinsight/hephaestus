@@ -2,10 +2,11 @@
 //!
 //! [`HostRayIntegralOps`] evaluates the seam's midpoint ray-march in `f32`,
 //! the same arithmetic the device kernels perform: each ray is clipped to the
-//! node-centre bounding box by the slab method, the chord is split into
-//! `max(ceil(len / step), 1)` equal segments, and each segment's midpoint
-//! sample of the trilinearly interpolated field is weighted by the segment
-//! length. Interpolation is leto-ops'
+//! node-centre bounding box by the slab method and to the forward half-line
+//! `t >= 0`, the parameter chord is scaled by the direction length into world
+//! units, the world chord is split into `max(ceil(len / step), 1)` equal
+//! segments, and each segment's midpoint sample of the trilinearly
+//! interpolated field is weighted by the segment length. Interpolation is leto-ops'
 //! [`trilinear_index_space`](leto_ops::trilinear_index_space); a midpoint
 //! outside the node range contributes zero, as in the kernels, where leto's
 //! interpolation would clamp.
@@ -24,7 +25,12 @@ use crate::{HostBuffer, HostDevice, map_leto_error};
 pub struct HostRayIntegralOps;
 
 /// Parameter `t` along a ray where it enters and leaves the node-centre box,
-/// or `None` when it misses or grazes it.
+/// or `None` when it misses, grazes, or points away from it.
+///
+/// The line chord is clamped to the forward half-line: the domain is the ray
+/// from its origin, so an inside origin starts at `t = 0` and a backward ray
+/// misses. The caller rejects a zero direction before calling: every axis
+/// would divide by zero and an origin on a box face would form `0 * inf`.
 fn chord(origin: [f32; 3], direction: [f32; 3], geometry: &FieldGeometry) -> Option<(f32, f32)> {
     let mut enter = f32::NEG_INFINITY;
     let mut exit = f32::INFINITY;
@@ -41,6 +47,7 @@ fn chord(origin: [f32; 3], direction: [f32; 3], geometry: &FieldGeometry) -> Opt
         enter = enter.max(near.min(far));
         exit = exit.min(near.max(far));
     }
+    let enter = enter.max(0.0);
     (exit - enter > 0.0).then_some((enter, exit))
 }
 
@@ -84,16 +91,33 @@ impl RayIntegralOps<HostDevice> for HostRayIntegralOps {
         for ray in ray_cells.chunks_exact(RAY_STRIDE) {
             let origin = [ray[0], ray[1], ray[2]];
             let direction = [ray[3], ray[4], ray[5]];
+            // A zero direction carries no world direction; see `chord`.
+            if direction.iter().all(|&component| component == 0.0) {
+                integrals.push(0.0);
+                continue;
+            }
             let Some((enter, exit)) = chord(origin, direction, &geometry) else {
                 integrals.push(0.0);
                 continue;
             };
-            let length = exit - enter;
+            // The march length is in world units: scale the parameter chord
+            // by the direction length so non-unit directions integrate
+            // `field · dl`, as in the kernels. The midpoint parameter still
+            // advances by the parameter segment while each sample weighs the
+            // world segment, so the march covers exactly the clamped chord.
+            let direction_length = direction
+                .iter()
+                .map(|&component| component * component)
+                .sum::<f32>()
+                .sqrt();
+            let parameter_length = exit - enter;
+            let length = parameter_length * direction_length;
             let segments = segment_count(length, step)?;
             let segment = length / segments as f32;
+            let parameter_step = parameter_length / segments as f32;
             let mut sum = 0.0f32;
             for index in 0..segments {
-                let t = enter + (index as f32 + 0.5) * segment;
+                let t = enter + (index as f32 + 0.5) * parameter_step;
                 let node = [0, 1, 2].map(|axis| {
                     (origin[axis] + direction[axis] * t - geometry.origin[axis])
                         / geometry.spacing[axis]

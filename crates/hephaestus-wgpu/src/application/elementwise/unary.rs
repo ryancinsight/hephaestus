@@ -3,7 +3,7 @@ use hephaestus_core::{
     BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
 };
 
-use super::{reject_output_alias, reject_unsupported_unary};
+use super::{reject_f64_unsupported_unary, reject_output_alias};
 use crate::application::canary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -66,8 +66,10 @@ where
     Op: UnaryExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod,
 {
-    reject_unsupported_unary::<Op, T>()?;
-    canary::require_template_safe::<T>(device, Op::EXPR, "unary elementwise")?;
+    reject_f64_unsupported_unary::<Op, T>()?;
+    if let Some(width) = canary::width_of::<T>() {
+        canary::require_expr_safe(device, Op::EXPR, width, "unary elementwise")?;
+    }
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: out.len,

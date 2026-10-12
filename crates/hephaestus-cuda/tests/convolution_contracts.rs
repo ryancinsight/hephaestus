@@ -2,7 +2,7 @@
 
 #![cfg(feature = "cuda")]
 
-use hephaestus_conformance::assert_convolution_contract;
+use hephaestus_conformance::{assert_convolution_contract, assert_convolution_f64_contract};
 use hephaestus_cuda::{CudaConvolutionOps, CudaDevice};
 
 #[test]
@@ -15,6 +15,6 @@ fn cuda_satisfies_the_convolution_contract() {
         }
         Err(error) => panic!("CUDA convolution conformance requires a physical device: {error}"),
     };
-    assert_convolution_contract::<_, _, f32>(&device, &CudaConvolutionOps);
-    assert_convolution_contract::<_, _, f64>(&device, &CudaConvolutionOps);
+    assert_convolution_contract(&device, &CudaConvolutionOps);
+    assert_convolution_f64_contract(&device, &CudaConvolutionOps);
 }

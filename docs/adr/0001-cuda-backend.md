@@ -123,3 +123,13 @@ are separate from the local RTX 5080 runs ([failed contract](https://github.com/
 ABI and runtime loading. This corrects the Windows output-size defect and
 restores the original no-toolkit compilation contract. Git preserves the
 superseded dependency decision; the current record governs this replacement.
+
+2026-10-10: bring NVRTC acquisition under this record's distinguishability
+rule (HEPH-NVRTC-LOADER-ERRORS). `NvrtcDriver::get` no longer collapses
+every failure into `None`: a new `NvrtcDriverError` keeps the three fault
+identities — `NotFound` with every searched name/directory,
+`LoadFailed` with the rejected file path, `MissingSymbol` with the export
+name — and directory-enumeration faults are recorded rather than skipped.
+Regression tests drive real loader behavior (process image for a missing
+export, garbage file for a rejected load, absent/empty directories);
+existing real-device compilation contracts pass unchanged.

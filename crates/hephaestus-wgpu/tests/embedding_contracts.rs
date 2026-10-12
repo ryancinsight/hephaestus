@@ -2,6 +2,7 @@
 
 use hephaestus_conformance::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
+    assert_embedding_scatter_add_contract, assert_embedding_scatter_add_rejects_out_of_range_index,
 };
 use hephaestus_wgpu::WgpuEmbeddingOps;
 
@@ -11,4 +12,12 @@ pub(super) fn wgpu_satisfies_the_embedding_gather_contract() {
     };
     assert_embedding_gather_contract(&device, &WgpuEmbeddingOps);
     assert_embedding_gather_rejects_out_of_range_index(&device, &WgpuEmbeddingOps);
+}
+
+pub(super) fn wgpu_satisfies_the_embedding_scatter_add_contract() {
+    let Some(device) = super::device_or_skip() else {
+        return;
+    };
+    assert_embedding_scatter_add_contract(&device, &WgpuEmbeddingOps);
+    assert_embedding_scatter_add_rejects_out_of_range_index(&device, &WgpuEmbeddingOps);
 }

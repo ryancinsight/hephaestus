@@ -1,6 +1,8 @@
 //! WGPU instantiation of the shared stateful-update contract.
 
-use hephaestus_conformance::assert_stateful_update_contract;
+use hephaestus_conformance::{
+    assert_stateful_update_contract, assert_stateful_update_contract_f64,
+};
 use hephaestus_core::{
     ComputeDevice, DeviceFeature, DevicePreference, HephaestusError, Sgd, SgdParameters,
     StatefulUpdateOperands, StatefulUpdateOps, StridedView,
@@ -38,14 +40,14 @@ pub(super) fn wgpu_satisfies_the_stateful_update_contract() {
     let Some(device) = device("hephaestus-stateful-update-test") else {
         return;
     };
-    assert_stateful_update_contract::<_, _, f32>(&device, &WgpuStatefulUpdateOps);
+    assert_stateful_update_contract(&device, &WgpuStatefulUpdateOps);
 }
 
 pub(super) fn wgpu_satisfies_the_f64_stateful_update_contract() {
     let Some(device) = f64_device("hephaestus-stateful-update-f64-test") else {
         return;
     };
-    assert_stateful_update_contract::<_, _, f64>(&device, &WgpuStatefulUpdateOps);
+    assert_stateful_update_contract_f64(&device, &WgpuStatefulUpdateOps);
 }
 
 pub(super) fn foreign_device_buffers_fail_before_mutation() {
@@ -61,7 +63,7 @@ pub(super) fn foreign_device_buffers_fail_before_mutation() {
     let layout = Layout::c_contiguous([2]).expect("layout");
     let states = [StridedView::new(&state, &layout)];
     let error = WgpuStatefulUpdateOps
-        .stateful_update::<Sgd, f32, 1>(
+        .stateful_update::<Sgd, 1>(
             &dispatch,
             StatefulUpdateOperands {
                 parameter: StridedView::new(&parameter, &layout),

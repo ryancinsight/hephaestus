@@ -38,14 +38,18 @@ pub mod application;
 
 pub use infrastructure::{RocmBuffer, RocmDevice};
 
+pub use application::adaptive_pooling_seam::RocmAdaptivePoolingOps;
+pub use application::arg_reduce_seam::RocmArgReduceOps;
 pub use application::attention::RocmAttentionOps;
 pub use application::axis_reduction::{
     ProdOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
     prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
 pub use application::axis_reduction_seam::RocmAxisReductionOps;
+pub use application::cat_seam::RocmCatOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::convolution::RocmConvolutionOps;
+pub use application::cross_product_seam::RocmCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition::{
     GpuBidiagonalDecomposition, GpuBunchKaufmanDecomposition, GpuCholesky,
@@ -60,6 +64,7 @@ pub use application::decomposition::{
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::RocmDecompositionOps;
 pub use application::dense_product_seam::RocmDenseProductOps;
+pub use application::dot_seam::RocmDotOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -73,9 +78,13 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::RocmElementwiseOps;
+pub use application::embedding_seam::RocmEmbeddingOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
-pub use application::fusion::{RocmFusionOps, RocmFusionScalar};
+pub use application::gather_seam::RocmGatherOps;
+pub use application::index_put_seam::RocmIndexPutOps;
+pub use application::index_select_seam::RocmIndexSelectOps;
+pub use application::interpolation_seam::RocmInterpolationOps;
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -89,6 +98,9 @@ pub use application::loss::{
     CtcKernel, PreparedRocmCrossEntropyBackward, PreparedRocmCrossEntropyForward,
     RocmCrossEntropyOps, RocmCtcOps,
 };
+pub use application::masked_fill_seam::RocmMaskedFillOps;
+pub use application::nonzero_seam::RocmNonzeroOps;
+pub use application::pad_seam::RocmPadOps;
 pub use application::parameterized_elementwise::RocmParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
@@ -121,12 +133,17 @@ pub type RocmPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, RocmD
 pub use application::fixed_fd::{
     FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, RocmFixedFd3DOps,
 };
+pub use application::roll_seam::RocmRollOps;
+pub use application::scatter_seam::RocmScatterOps;
+pub use application::sort_seam::RocmSortOps;
 pub use application::sparse::seam::RocmSparseOps;
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, prepare_spmm, prepare_spmv,
     prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
+pub use application::split_seam::RocmSplitOps;
+pub use application::stack_seam::RocmStackOps;
 pub use application::staggered::{
     RocmStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,
 };
@@ -144,12 +161,17 @@ pub use application::strided_elementwise::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::tile_seam::RocmTileOps;
+pub use application::topk_seam::RocmTopKOps;
+pub use application::triangular_seam::RocmTriangularOps;
 pub use application::vector::{
-    PreparedDot as RocmPreparedDot, PreparedL2Norm as RocmPreparedNorm, RocmVectorOps,
+    PreparedDot as RocmPreparedDot, PreparedL2Norm as RocmPreparedNorm,
+    RetainedDot as RocmRetainedDot, RetainedL2Norm as RocmRetainedNorm, RocmVectorOps,
 };
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, RocmRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::where_seam::RocmWhereOps;
 pub use application::window::{RocmPoolingOps, RocmSlidingWindowOps};
 pub use hephaestus_core::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,

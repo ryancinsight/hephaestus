@@ -162,3 +162,39 @@ runtime state, virtual dispatch, or public wrapper migration. The aggregate
 contract names both roles so a future host omission is a compile error rather
 than an opt-in coverage gap. Provider-local matrix-function differentials now
 retain only stable provider diagnostics.
+
+2026-10-10: the elementwise CUDA generators migrated to this ADR's shared
+`DialectScalar::PRELUDE` owner
+(HEPH-CUDA-ELEMENTWISE-SCALAR-DECLARATIONS): the dense binary/unary/scalar
+and strided binary/unary/scalar sources now emit `T::PRELUDE`, closing the
+`__half`/`__nv_bfloat16`-undefined dispatch failure the `T:
+DialectScalar<CudaC>` bounds admitted. Evidence: a required-device
+F16/Bf16 value matrix (add/mul/div/neg/sqrt dense + strided, exact
+bit-pattern oracles, RTX 5080) and an in-crate PTX oracle asserting
+native `.f16`/`.bf16` add/mul/neg with no widened `.f32` arithmetic.
+Rejection analysis: typed comparisons stay compile-time excluded (no
+`TypedBinaryExpr<CudaC, F16/Bf16>` impls exist); the `sm_53`/`sm_80`
+`#error` guards remain source-level (untestable on sm_120); NVRTC-error
+propagation as typed dispatch failure was proven by the pre-fix 7/7
+failure run.
+
+2026-10-10: empty shared extents now write zero
+(HEPH-CUDA-PRODUCT-EMPTY-SUM). The `matmul_into`/`batched_matmul_into`
+early-outs returned success without writing when `k == 0` with nonempty
+output; they now short-circuit only on empty output. No kernel change was
+needed: with zero tiles the loop is skipped, neither operand is read, and
+`sum = 0` is written to every in-range cell — verified on RTX 5080 for
+`[2,0] x [0,3]`, strided padded outputs (padding cells keep sentinels),
+batched equivalents, all six admitted scalars, and both allocating forms.
+
+2026-10-10: rank-2 product addresses are range-checked host-side
+(HEPH-CUDA-PRODUCT-ADDRESS-RANGE). `map_layout` admitted `u32` origins
+while the `matmul`/`kron` kernels compute in signed `int`; a new
+`validate_signed_address_range` rejects layouts whose maximum corner
+address (via leto's `checked_min_max_offsets`) exceeds `i32::MAX`, which
+provably keeps every kernel offset conversion, coordinate product, and
+partial sum in range. Negative strides stay accepted whenever their
+addresses fit. The batched kernel needs no bound: it already widens every
+address term to `long long`. Evidence is a host-side metadata oracle (no
+allocation can back a `>= 2^31` origin in-test, and none is executed);
+ordinary strided products keep passing on-device.

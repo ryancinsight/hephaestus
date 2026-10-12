@@ -134,8 +134,104 @@ pub(crate) enum PipelineKey {
         entry: &'static str,
         scalar: TypeId,
     },
+    EmbeddingGather {
+        scalar: TypeId,
+        width: u32,
+    },
+    EmbeddingScatter {
+        scalar: TypeId,
+        width: u32,
+    },
+    Interpolation {
+        scalar: TypeId,
+        width: u32,
+        nearest: bool,
+    },
+    Gather {
+        scalar: TypeId,
+        width: u32,
+    },
+    AdaptivePooling {
+        scalar: TypeId,
+        width: u32,
+        maximum: bool,
+    },
+    ArgReduce {
+        scalar: TypeId,
+        width: u32,
+        min: bool,
+    },
+    TopK {
+        scalar: TypeId,
+        width: u32,
+    },
+    Triangular {
+        scalar: TypeId,
+        width: u32,
+        upper: bool,
+    },
+    CrossProduct {
+        scalar: TypeId,
+        width: u32,
+    },
+    Pad {
+        scalar: TypeId,
+        width: u32,
+    },
+    Cat {
+        scalar: TypeId,
+        width: u32,
+    },
+    Split {
+        scalar: TypeId,
+        width: u32,
+    },
+    Stack {
+        scalar: TypeId,
+        width: u32,
+    },
+    Scatter {
+        scalar: TypeId,
+        width: u32,
+    },
+    IndexSelect {
+        scalar: TypeId,
+        width: u32,
+    },
+    IndexPut {
+        scalar: TypeId,
+        width: u32,
+        accumulate: bool,
+    },
+    MaskedFill {
+        scalar: TypeId,
+        width: u32,
+    },
+    Roll {
+        scalar: TypeId,
+        width: u32,
+    },
+    Tile {
+        scalar: TypeId,
+        width: u32,
+    },
+    Where {
+        scalar: TypeId,
+        width: u32,
+    },
+    Sort {
+        scalar: TypeId,
+        width: u32,
+    },
+    Nonzero {
+        scalar: TypeId,
+        width: u32,
+    },
+    Dot {
+        scalar: TypeId,
+        width: u32,
+    },
     GroupedStream(u64),
-    Fusion(u64),
 }
 
 #[cfg(feature = "decomposition")]

@@ -47,7 +47,9 @@ where
     Op: BinaryExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod,
 {
-    canary::require_template_safe::<T>(device, Op::EXPR, "scalar elementwise")?;
+    if let Some(width) = canary::width_of::<T>() {
+        canary::require_expr_safe(device, Op::EXPR, width, "scalar elementwise")?;
+    }
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: out.len,

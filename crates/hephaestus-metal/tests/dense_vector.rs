@@ -42,7 +42,7 @@ fn dense_vector_ops_match_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let ops = MetalVectorOps::new(&device).expect("invariant: vector kernels compile");
+    let ops = MetalVectorOps::<f32>::new(&device).expect("invariant: vector kernels compile");
     let len = 257;
     let left_host: Vec<f32> = (0..len)
         .map(|index| (index as f32 - 128.0) * 0.03125)

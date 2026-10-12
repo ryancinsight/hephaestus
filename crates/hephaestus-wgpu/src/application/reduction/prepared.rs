@@ -8,11 +8,10 @@ use hephaestus_core::{
     reduction_pass_count, validate_reduction_width,
 };
 
-use super::{
-    PreparedAxisReduction, ReductionFinalOpWrapper, ReductionOpWrapper,
-    final_reduction_shader_source, shader_source,
+use super::prepared_axis::PreparedAxisReduction;
+use super::shaders::{
+    ReductionFinalOpWrapper, ReductionOpWrapper, final_reduction_shader_source, shader_source,
 };
-use crate::application::canary;
 use crate::application::pipeline::{encode_compute_pass, try_cached_pipeline, workgroups};
 use crate::application::prepared::{checked_bind_group, validate_buffer_owner};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -278,7 +277,6 @@ where
 {
     validate_reduction_width(width)?;
     validate_buffer_owner(input, device, "reduction input")?;
-    canary::require_template_safe::<T>(device, <Op as CombineExpr<Wgsl>>::EXPR, "reduction")?;
 
     if input.len == 0 {
         let output = device.upload(&[T::IDENTITY])?;
