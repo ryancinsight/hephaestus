@@ -47,10 +47,10 @@ impl GroupedKernelSource<Wgsl> for OversizedGroupedKernel {
 
 #[path = "stream_tests/command_stream.rs"]
 mod command_stream;
-#[path = "stream_tests/grouped_dispatch.rs"]
-mod grouped_dispatch;
 #[path = "stream_tests/fixtures.rs"]
 mod fixtures;
+#[path = "stream_tests/grouped_dispatch.rs"]
+mod grouped_dispatch;
 #[path = "stream_tests/stream_setup.rs"]
 mod stream_setup;
 pub(crate) use fixtures::*;
