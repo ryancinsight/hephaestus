@@ -332,7 +332,7 @@ pub fn assert_backend_contract<
     let device = backend.device;
     crate::attention::assert_attention_contract(device, backend.attention);
     crate::axis_reduction::assert_axis_reduction_contract(device, backend.axis_reduction);
-    crate::convolution::assert_convolution_contract(device, backend.convolution);
+    crate::convolution::assert_convolution_contract::<_, _, f32>(device, backend.convolution);
     crate::cross_entropy::assert_cross_entropy_contract(device, backend.cross_entropy);
     crate::ctc::assert_ctc_contract(device, backend.ctc);
     crate::decomposition::assert_decomposition_contract(device, backend.decomposition);

@@ -125,7 +125,7 @@ pub use axis_reduction::assert_axis_reduction_contract;
 pub use blocked_cholesky::assert_blocked_cholesky_contract;
 pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
-pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
+pub use convolution::{ContractScalar, assert_convolution_contract};
 pub use cross_entropy::{
     assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_for,
     assert_cross_entropy_contract, assert_cross_entropy_contract_for,
