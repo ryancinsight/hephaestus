@@ -15,7 +15,14 @@ fn combine_and_identity_agree_per_dialect() {
         "0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))"
     );
     assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
-    assert!(<SoftplusOp as UnaryExpr<HipC>>::EXPR.contains("exp(x)"));
+    assert_eq!(
+        <SoftplusOp as UnaryExpr<CudaC>>::EXPR,
+        "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
+    );
+    assert_eq!(
+        <SoftplusOp as UnaryExpr<HipC>>::EXPR,
+        "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
+    );
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("tanh(log(1.0 + exp(x)))"));
     assert!(<MishGradOp as UnaryExpr<CudaC>>::EXPR.contains("tanhf(logf(1.0f + expf(x)))"));
     assert_eq!(
@@ -99,6 +106,22 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) - 1.0"));
     assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.15"));
     assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("1.00000010489199531"));
+    // KERNEL-TAIL: the WGSL softplus tree is `max + C(-|x|)` with three
+    // nested Chebyshev arms (pin each crossover plus the log2 leading
+    // coefficient of the near arm and the ~1.0 leading coefficient of
+    // the far arm).
+    let softplus_wgsl = <SoftplusOp as UnaryExpr<Wgsl>>::EXPR;
+    assert!(softplus_wgsl.starts_with("max(x, 0.0) + select("));
+    assert!(softplus_wgsl.contains("(-abs(x)) > -2.0"));
+    assert!(softplus_wgsl.contains("(-abs(x)) > -5.0"));
+    assert!(softplus_wgsl.contains("(-abs(x)) > -14.5"));
+    assert!(softplus_wgsl.contains("6.93147180559945397e-1"));
+    assert!(softplus_wgsl.contains("9.99970853800730142e-1"));
+    assert_eq!(
+        softplus_wgsl.chars().filter(|&c| c == '(').count(),
+        softplus_wgsl.chars().filter(|&c| c == ')').count(),
+        "wgsl softplus parens balance"
+    );
     assert_eq!(
         <SincOp as UnaryExpr<CudaC>>::EXPR,
         "((x) == 0.0f ? 1.0f : sin(x) / (x))"
@@ -280,6 +303,12 @@ fn comparisons_use_scalar_correct_mask_literals() {
     const _: () = assert!(<Expm1Op as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<Log1pOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
     const _: () = assert!(<Log1pOp as UnaryExpr<HipC>>::SUPPORTS_F64);
+    // KERNEL-TAIL: the WGSL softplus tree nests `select` over f32-graded
+    // arms (and ADR 0072 refuses f64 `exp` on Vulkan); the native C
+    // builtins serve both precisions.
+    const _: () = assert!(!<SoftplusOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(<SoftplusOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<SoftplusOp as UnaryExpr<HipC>>::SUPPORTS_F64);
     assert_eq!(
         <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
         "lhs >= rhs ? 1.0f : 0.0f"

@@ -136,7 +136,7 @@ impl_math_unary_exprs!(
 // The expm1 small arm is the degree-8 Taylor series in Horner form: the
 // truncation remainder `|x|^9 / 9!` peaks at `1.1e-8` relative on
 // `|x| <= 0.5`, and eight roundings land the arm under 5e-7 relative,
-// inside the conformance clause's `1e-6`. The degree is f32-graded (an
+// inside the conformance clause's `1e-5`. The degree is f32-graded (an
 // f64 arm needs degree 15 for the same crossover), and the `u - 1` arm
 // calls `exp`, which the WGSL canary records as f32-grade at f64 on the
 // reference adapter — so the spelling reports `SUPPORTS_F64 = false`
@@ -145,8 +145,8 @@ impl_math_unary_exprs!(
 // The log1p small arm is `x * g(x)` where `g` is the degree-5 Chebyshev
 // interpolant of `log1p(x) / x` on `|x| <= 0.15` (second-kind nodes,
 // monomial basis solved in f64), in Horner form: a dense f32 sweep of
-// the exact op sequence peaks at 2.4e-7 relative (4.2x inside the
-// clause's `1e-6`), and the `x = -1` lane stays on the `log(u)` arm
+// the exact op sequence peaks at 2.4e-7 relative (42x inside the
+// clause's `1e-5`), and the `x = -1` lane stays on the `log(u)` arm
 // (`log(0) = -inf`, matching `ln_1p`). A compensated `log(u) -
 // (u - 1 - x) / u` arm was tried first and reads back `0` on-device: the
 // toolchain folds the algebraically-zero correction (proven by sentinel

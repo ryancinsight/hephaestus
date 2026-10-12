@@ -146,7 +146,9 @@ impl_activation_unary_exprs!(
         "(1.0 / (1.0 + exp(-x))) * (1.0 + x * (1.0 - (1.0 / (1.0 + exp(-x)))))",
         "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
     ),
-    (SoftplusOp, "log(1.0 + exp(x))", "log(1.0f + exp(x))"),
+    // SoftplusOp stays out of the macro: the WGSL spelling is a
+    // machine-built select tree (see below) and the C spelling calls the
+    // native `log1p` builtin.
     (
         SoftplusGradOp,
         "1.0 / (1.0 + exp(-x))",
@@ -194,6 +196,183 @@ impl_activation_unary_exprs!(
         "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
     ),
 );
+
+// Softplus stays out of the macro (KERNEL-TAIL, ADR 0061 Decision 6):
+// the naive `log(1.0 + exp(x))` collapses to `0` on the negative tail
+// and overflows to `inf` past `x = 88.7`. Both spellings use the stable
+// `max(x, 0) + log1p(exp(-|x|))` value form. The C spelling calls the
+// native `log1p` builtin with a ternary max (the `SincOp` precedent, so
+// lane promotion keeps f64 served): `fabs`/`exp`/`log1p` all resolve by
+// lane width. WGSL has no `log1p`, so the correction `C(t) =
+// log(1+e^t)` over `t = -|x|` is a nested select of `h(t) * exp(t)`
+// arms, where each `h` is a degree-8/8/10 Chebyshev interpolant of
+// `C(t)/e^t` (second-kind nodes, monomial basis solved in f64) in
+// Horner form: `[-2, 0]` in `t`, `[-5, -2]` in `t + 3.5`, `[-14.5,
+// -5]` in `t + 9.75`, and bare `exp(t)` below `-14.5` (relative error
+// `e^t/2`). The `h` form keeps every arm flat (no cancellable
+// subexpression, which the toolchain folds — see the log1p note in
+// `unary.rs`) and shift-only (no divisions). A dense f32 sweep of the
+// exact op sequences peaks at 3.1e-7 relative (33x inside the
+// clause's `1e-5`), 60x or better off the `-14.5` step. The spelling
+// nests `select` with f32-graded coefficients and calls `exp`, which
+// ADR 0072 refuses at f64 on Vulkan, so it reports `SUPPORTS_F64 =
+// false`.
+macro_rules! softplus_t {
+    () => {
+        "(-abs(x))"
+    };
+}
+macro_rules! softplus_v1 {
+    () => {
+        concat!("(", softplus_t!(), " + 3.5)")
+    };
+}
+macro_rules! softplus_v2 {
+    () => {
+        concat!("(", softplus_t!(), " + 9.75)")
+    };
+}
+macro_rules! softplus_h0 {
+    () => {
+        concat!(
+            "((6.93147180559945397e-1) + ",
+            softplus_t!(),
+            " * (",
+            "(-1.93147586403548732e-1) + ",
+            softplus_t!(),
+            " * (",
+            "(-2.84352040718936286e-2) + ",
+            softplus_t!(),
+            " * (",
+            "(9.41862813798837600e-3) + ",
+            softplus_t!(),
+            " * (",
+            "(2.67131131618634533e-3) + ",
+            softplus_t!(),
+            " * (",
+            "(-8.35752342888512116e-4) + ",
+            softplus_t!(),
+            " * (",
+            "(-4.96122577225520736e-4) + ",
+            softplus_t!(),
+            " * (",
+            "(-8.68501153407044322e-5) + ",
+            softplus_t!(),
+            " * (",
+            "(-5.17321760132185863e-6)",
+            ")))))))))",
+        )
+    };
+}
+macro_rules! softplus_h1 {
+    () => {
+        concat!(
+            "((9.85198547057971052e-1) + ",
+            softplus_v1!(),
+            " * (",
+            "(-1.45109350049478381e-2) + ",
+            softplus_v1!(),
+            " * (",
+            "(-6.97112657087159762e-3) + ",
+            softplus_v1!(),
+            " * (",
+            "(-2.13968209547450976e-3) + ",
+            softplus_v1!(),
+            " * (",
+            "(-4.48016097503929817e-4) + ",
+            softplus_v1!(),
+            " * (",
+            "(-5.84704447694812013e-5) + ",
+            softplus_v1!(),
+            " * (",
+            "(-9.19991568228865382e-8) + ",
+            softplus_v1!(),
+            " * (",
+            "(2.80316537311396042e-6) + ",
+            softplus_v1!(),
+            " * (",
+            "(6.92814640194401173e-7)",
+            ")))))))))",
+        )
+    };
+}
+macro_rules! softplus_h2 {
+    () => {
+        concat!(
+            "((9.99970853800730142e-1) + ",
+            softplus_v2!(),
+            " * (",
+            "(-2.92392498687087273e-5) + ",
+            softplus_v2!(),
+            " * (",
+            "(-1.45769054776144263e-5) + ",
+            softplus_v2!(),
+            " * (",
+            "(-4.78557294927118903e-6) + ",
+            softplus_v2!(),
+            " * (",
+            "(-1.20954778997214633e-6) + ",
+            softplus_v2!(),
+            " * (",
+            "(-2.57862383315131484e-7) + ",
+            softplus_v2!(),
+            " * (",
+            "(-4.12964752589472005e-8) + ",
+            softplus_v2!(),
+            " * (",
+            "(-4.39292646187302683e-9) + ",
+            softplus_v2!(),
+            " * (",
+            "(-6.31587298884327074e-10) + ",
+            softplus_v2!(),
+            " * (",
+            "(-1.31500316555508508e-10) + ",
+            softplus_v2!(),
+            " * (",
+            "(-1.11694139559869794e-11)",
+            ")))))))))))",
+        )
+    };
+}
+macro_rules! wgsl_softplus_expr {
+    () => {
+        concat!(
+            "max(x, 0.0) + select(",
+            "exp(",
+            softplus_t!(),
+            ")",
+            ", select(",
+            softplus_h2!(),
+            " * exp(",
+            softplus_t!(),
+            ")",
+            ", select(",
+            softplus_h1!(),
+            " * exp(",
+            softplus_t!(),
+            ")",
+            ", ",
+            softplus_h0!(),
+            " * exp(",
+            softplus_t!(),
+            ")",
+            ", ",
+            softplus_t!(),
+            " > -2.0), ",
+            softplus_t!(),
+            " > -5.0), ",
+            softplus_t!(),
+            " > -14.5)",
+        )
+    };
+}
+impl UnaryExpr<Wgsl> for SoftplusOp {
+    const EXPR: &'static str = wgsl_softplus_expr!();
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for SoftplusOp {
+    const EXPR: &'static str = "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))";
+}
 
 // The two gradient masks stay out of the macro: their WGSL spellings are
 // `select` with literal-only arms, which concretize to `f32` and reject

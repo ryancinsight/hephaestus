@@ -8,7 +8,7 @@
 
 use hephaestus_conformance::{
     assert_bessel_contract, assert_elementwise_contract, assert_expm1_log1p_contract,
-    assert_k0_contract, assert_sinc_contract,
+    assert_k0_contract, assert_sinc_contract, assert_softplus_contract,
 };
 use hephaestus_rocm::{RocmDevice, RocmElementwiseOps};
 
@@ -27,4 +27,5 @@ fn rocm_satisfies_the_elementwise_contract() {
     assert_bessel_contract(&device, &RocmElementwiseOps);
     assert_k0_contract(&device, &RocmElementwiseOps);
     assert_expm1_log1p_contract(&device, &RocmElementwiseOps);
+    assert_softplus_contract(&device, &RocmElementwiseOps);
 }

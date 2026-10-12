@@ -31,6 +31,9 @@ const PROBED: [MathBuiltin; 4] = [
 /// Text every gate refusal carries.
 const BLOCKED: &str = "blocked on this backend";
 
+/// Text the op-level `SUPPORTS_F64` spelling refusal carries.
+const SPELLING_F64_REFUSAL: &str = "does not support f64 in WGSL";
+
 /// Assert a typed backend refusal whose message names the blocked rule.
 #[track_caller]
 fn assert_blocked(error: &HephaestusError) {
@@ -177,10 +180,19 @@ fn gates_refuse_undefined_lowerings_with_cause() {
             .expect_err("f64 tanh must refuse on Vulkan");
     assert_blocked(&error);
 
+    // Softplus no longer reaches the builtin gate: its tail-accurate WGSL
+    // spells `select` with literal-only arms, which concretize to `f32`
+    // and fail validation against `array<f64>` outputs, so the op-level
+    // `SUPPORTS_F64` refusal fires first on every backend (the `SignOp`
+    // precedent). The safety property is unchanged — f64 still refuses —
+    // only the refusal path moved with the spelling.
     let error =
         unary_elementwise_into::<SoftplusOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
-            .expect_err("f64 softplus (exp/log-bearing) must refuse on Vulkan");
-    assert_blocked(&error);
+            .expect_err("f64 softplus must refuse on Vulkan");
+    assert!(
+        matches!(&error, HephaestusError::Unsupported { message } if message.contains(SPELLING_F64_REFUSAL)),
+        "expected an op-level f64 spelling refusal, got: {error:?}"
+    );
 
     // Vector types are judged by their component: vec2<f64> refuses while
     // vec2<f32> still computes.

@@ -14,7 +14,8 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, Expm1Op, J0Op,
-    J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
+    J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView, SubOp, UnaryExpr,
+    UnaryValue,
 };
 use leto::Layout;
 
@@ -127,8 +128,20 @@ where
     k0_guard_yields_nan(device, ops);
 }
 
-/// Relative tolerance for the expm1/log1p tail clauses, derived below.
-const EXPM1_LOG1P_REL_BOUND: f64 = 1e-6;
+/// Relative tolerance shared by the KERNEL-TAIL clauses, derived below.
+/// A correct f32 rendering combines ppm-level polynomial arms (dense
+/// f32 sweeps of the exact op sequences peak at ~3e-7) with native
+/// transcendentals — and the transcendentals are the binding
+/// constraint: a dense Vulkan sweep on the reference adapter (RTX 5080)
+/// measures `exp` up to 32 ULP data-dependently (3.8e-6 relative worst
+/// over `[-90, 88]`, 15.5 ULP worst over the `[-40, -10]` tail), and
+/// `log` carries ~1 ULP of unit magnitude in absolute error near 1. The
+/// assertions admit `1e-5`, 2.6x headroom over the weakest accurate
+/// platform link, with room for cross-driver variance; the naive
+/// transcriptions (collapse to `0`, overflow to `inf`) still fail by
+/// five orders of magnitude. Oracles are f64 value functions, accurate
+/// to a few ULP.
+const TAIL_REL_BOUND: f64 = 1e-5;
 
 /// Run the expm1/log1p tail clauses against one backend.
 ///
@@ -136,10 +149,8 @@ const EXPM1_LOG1P_REL_BOUND: f64 = 1e-6;
 /// reserves for the unfused GPU renderings: the naive `(exp(x) - 1.0)` and
 /// `log(1.0 + x)` transcriptions cancel to exactly `0` once `|x|` drops to
 /// f32's `ulp(1)` — 100% relative error against an oracle of magnitude `|x|`.
-/// A correct f32 rendering (native `expm1f`/`log1pf` on the C dialects, the
-/// regrouped forms on WGSL) holds a few ULP, under 5e-7 relative including
-/// the output rounding; the assertions admit `1e-6`, headroom that still
-/// fails the naive transcription by six orders of magnitude. Oracles are f64
+/// Shares the `TAIL_REL_BOUND` derivation (native `expm1f`/`log1pf` on
+/// the C dialects, Taylor/Chebyshev select arms on WGSL). Oracles are f64
 /// `exp_m1`/`ln_1p`, accurate to a few ULP; every probe stays inside the
 /// overflow limit (`expm1` finite below 88.7, `log1p` on `x > -1`), so
 /// relative error is the honest metric. Control points at `+-0.5`/`+-1` pin
@@ -159,6 +170,33 @@ where
     Log1pOp: UnaryExpr<E::Dialect>,
 {
     expm1_log1p_tails_match_oracle(device, ops);
+}
+
+/// Run the softplus tail clauses against one backend.
+///
+/// Shares the `TAIL_REL_BOUND` derivation: `softplus` is defective at
+/// both tails under the naive `log(1.0 + exp(x))` transcription — the
+/// negative tail collapses to exactly `0` once `exp(x)` drops below
+/// f32's `ulp(1)` (100% relative error against an oracle of magnitude
+/// `exp(x)`), and the positive tail overflows to `inf` past `x = 88.7`
+/// where the true value is `x` itself. Oracles are the f64
+/// [`UnaryValue`] stable form `max(x, 0) + ln_1p(exp(-|x|))`. Control
+/// points at `0`/`+-0.5`/`+-1`/`5` pin the already-correct range; only
+/// the tail probes exercise the defects.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_softplus_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    SoftplusOp: UnaryExpr<E::Dialect>,
+{
+    softplus_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -378,7 +416,7 @@ where
         let expected = f64::from(x).exp_m1();
         let error = (f64::from(got) - expected).abs();
         assert!(
-            error <= EXPM1_LOG1P_REL_BOUND * expected.abs(),
+            error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: expm1 lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
@@ -390,8 +428,33 @@ where
         let expected = f64::from(x).ln_1p();
         let error = (f64::from(got) - expected).abs();
         assert!(
-            error <= EXPM1_LOG1P_REL_BOUND * expected.abs(),
+            error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: log1p lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-20`/`-30` collapse to exactly `0` under the
+/// naive transcription (`exp(x)` drops below f32's `ulp(1)`, so `1.0 +
+/// exp(x)` rounds to `1.0`); positive-tail probes at `90`/`100` overflow
+/// to `inf` (`exp(x)` overflows, and `log(inf)` stays `inf`). The
+/// controls pin the already-correct middle range.
+fn softplus_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    SoftplusOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [-30.0f32, -20.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0, 90.0, 100.0];
+    let got = unary::<_, _, SoftplusOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <SoftplusOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: softplus lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }

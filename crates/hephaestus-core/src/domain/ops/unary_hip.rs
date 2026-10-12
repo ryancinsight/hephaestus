@@ -81,7 +81,11 @@ impl_hip_unary_exprs!(
         SiluGradOp,
         "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
     ),
-    (SoftplusOp, "log(1.0f + exp(x))"),
+    // Stable `max + log1p` form (see activation.rs); native builtins keep f64.
+    (
+        SoftplusOp,
+        "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
+    ),
     (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
     (MishOp, "x * tanhf(logf(1.0f + expf(x)))"),
     (
