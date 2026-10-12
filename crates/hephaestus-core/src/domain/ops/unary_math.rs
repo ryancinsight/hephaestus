@@ -154,8 +154,18 @@ impl_math_unary_exprs!(
 // polynomials with no cancellable subexpression — the expm1 Taylor arm
 // above survives for exactly that reason. The spelling nests `select`
 // and reports `SUPPORTS_F64 = false` per the `SignOp` precedent.
+/// The WGSL `expm1` spelling as a reusable fragment: `elu`'s negative arm
+/// is exactly `expm1`, so [`EluOp`](super::EluOp) nests this whole select
+/// rather than duplicating the Taylor coefficients (the `GeluOp`/
+/// `GeluGradOp` fragment precedent in `activation.rs`).
+macro_rules! wgsl_expm1_expr {
+    () => {
+        "select(exp(x) - 1.0, x * (1.0 + x * (0.5 + x * (0.16666666666666666 + x * (0.041666666666666664 + x * (0.008333333333333333 + x * (0.001388888888888889 + x * (0.0001984126984126984 + x * 0.0000248015873015873))))))), abs(x) < 0.5)"
+    };
+}
+pub(crate) use wgsl_expm1_expr;
 impl UnaryExpr<Wgsl> for Expm1Op {
-    const EXPR: &'static str = "select(exp(x) - 1.0, x * (1.0 + x * (0.5 + x * (0.16666666666666666 + x * (0.041666666666666664 + x * (0.008333333333333333 + x * (0.001388888888888889 + x * (0.0001984126984126984 + x * 0.0000248015873015873))))))), abs(x) < 0.5)";
+    const EXPR: &'static str = wgsl_expm1_expr!();
     const SUPPORTS_F64: bool = false;
 }
 impl UnaryExpr<CudaC> for Expm1Op {

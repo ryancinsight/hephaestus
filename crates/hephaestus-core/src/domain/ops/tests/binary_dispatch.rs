@@ -26,9 +26,14 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("tanh(log(1.0 + exp(x)))"));
     assert!(<MishGradOp as UnaryExpr<CudaC>>::EXPR.contains("tanhf(logf(1.0f + expf(x)))"));
     assert_eq!(
-        <EluOp as UnaryExpr<HipC>>::EXPR,
-        "x >= 0.0f ? x : expf(x) - 1.0f"
+        <EluOp as UnaryExpr<CudaC>>::EXPR,
+        "((x) >= 0.0f ? (x) : expm1(x))"
     );
+    assert_eq!(
+        <EluOp as UnaryExpr<HipC>>::EXPR,
+        "((x) >= 0.0f ? (x) : expm1(x))"
+    );
+    assert!(<EluOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.5"));
     assert_eq!(
         <EluGradOp as UnaryExpr<Wgsl>>::EXPR,
         "select(exp(x), 1.0, x >= 0.0)"
