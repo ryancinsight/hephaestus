@@ -88,3 +88,16 @@ fn restricted_calls_honor_identifier_boundaries() {
     assert!(found("exp(x) * tanh(x)").is_empty());
     assert!(found("my_sin(x) + cosine(x)").is_empty());
 }
+
+#[test]
+fn token_width_reads_the_component_type() {
+    assert_eq!(token_width("f64"), Some(CanaryWidth::F64));
+    assert_eq!(token_width("vec2<f64>"), Some(CanaryWidth::F64));
+    assert_eq!(token_width("vec4<f64>"), Some(CanaryWidth::F64));
+    assert_eq!(token_width("f32"), Some(CanaryWidth::F32));
+    assert_eq!(token_width("vec3<f32>"), Some(CanaryWidth::F32));
+    // 16-bit floats and integers sit outside the restricted width.
+    assert_eq!(token_width("f16"), None);
+    assert_eq!(token_width("vec2<u32>"), None);
+    assert_eq!(token_width("i32"), None);
+}
