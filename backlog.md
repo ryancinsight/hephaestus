@@ -213,16 +213,6 @@
 - Verification: `python scripts/lockfile.py --check` passes at `7a3a9ec` with 49 first-party Git sources; local execution preserves the guard while hosted delivery is delayed.
 - Last-update: 2026-09-07; driver: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285).
 
-<a id="heph-nvrtc-loader-errors"></a>
-
-## HEPH-NVRTC-LOADER-ERRORS — Preserve runtime compiler loader faults [patch] — todo
-
-- **Outcome/scope:** preserve library, directory-enumeration and missing-export errors in `infrastructure/compiler.rs` runtime compiler acquisition; no driver ABI or mathematical kernel change.
-- **Evidence:** `NvrtcDriver::get` discards required-symbol errors with `.ok()?`; `find_nvrtc_library` suppresses library and directory errors, reporting every failure as unavailable.
-- **Acceptance:** real absent-library, present-invalid-library and missing-export cases retain their identities and error categories; existing real-device kernel compilation and dispatch contracts pass.
-- **Dependencies/authority:** the native driver boundary item; authorized provider change, separate compiler acquisition contract.
-- **Verification:** locked warning-denied checks, required-device bounded Nextest, native-loader failure tests and independent review; no fake compiler or weakened runtime budgets.
-
 ## HEPH-STAGGERED-3D-ROCM — ROCm kernels for the staggered pair [minor] — todo <a id="heph-staggered-3d-rocm"></a>
 
 - **Outcome:** `RocmStaggered3DOps` implementing `Staggered3DOps<RocmDevice>`,

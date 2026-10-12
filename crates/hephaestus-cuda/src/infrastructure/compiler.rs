@@ -1,41 +1,14 @@
-use libloading::Library;
-use std::sync::OnceLock;
-
 use crate::infrastructure::device::{CudaContext, CurrentContext};
 
 mod headers;
+mod loader;
+
+use loader::NvrtcDriver;
 
 #[allow(non_camel_case_types)]
 pub type nvrtcProgram = *mut std::ffi::c_void;
 #[allow(non_camel_case_types)]
 pub type nvrtcResult = i32;
-
-#[allow(non_snake_case)]
-pub struct NvrtcDriver {
-    _lib: Library,
-    pub nvrtcCreateProgram: unsafe extern "C" fn(
-        prog: *mut nvrtcProgram,
-        src: *const std::ffi::c_char,
-        name: *const std::ffi::c_char,
-        numHeaders: std::ffi::c_int,
-        headers: *const *const std::ffi::c_char,
-        includeNames: *const *const std::ffi::c_char,
-    ) -> nvrtcResult,
-    pub nvrtcCompileProgram: unsafe extern "C" fn(
-        prog: nvrtcProgram,
-        numOptions: std::ffi::c_int,
-        options: *const *const std::ffi::c_char,
-    ) -> nvrtcResult,
-    pub nvrtcGetPTXSize:
-        unsafe extern "C" fn(prog: nvrtcProgram, ptxSize: *mut usize) -> nvrtcResult,
-    pub nvrtcGetPTX:
-        unsafe extern "C" fn(prog: nvrtcProgram, ptx: *mut std::ffi::c_char) -> nvrtcResult,
-    pub nvrtcGetProgramLogSize:
-        unsafe extern "C" fn(prog: nvrtcProgram, logSize: *mut usize) -> nvrtcResult,
-    pub nvrtcGetProgramLog:
-        unsafe extern "C" fn(prog: nvrtcProgram, log: *mut std::ffi::c_char) -> nvrtcResult,
-    pub nvrtcDestroyProgram: unsafe extern "C" fn(prog: *mut nvrtcProgram) -> nvrtcResult,
-}
 
 /// A loaded CUDA module and one resolved kernel function handle.
 ///
@@ -110,124 +83,9 @@ impl Drop for SafeCachedKernel {
     }
 }
 
-static NVRTC_DRIVER: OnceLock<Option<NvrtcDriver>> = OnceLock::new();
-
-impl NvrtcDriver {
-    #[allow(non_snake_case)]
-    pub fn get() -> Option<&'static Self> {
-        NVRTC_DRIVER
-            .get_or_init(|| {
-                let lib = find_nvrtc_library()?;
-                // SAFETY: each symbol is resolved from the loaded NVRTC
-                // library by its documented exported name, and the function
-                // pointer types recorded in `NvrtcDriver` match the NVRTC C
-                // ABI signatures. The raw function pointers copied out of
-                // the `Symbol` guards remain valid because `_lib` keeps the
-                // library loaded for the driver's `'static` lifetime.
-                unsafe {
-                    let nvrtcCreateProgram = *lib.get(b"nvrtcCreateProgram\0").ok()?;
-                    let nvrtcCompileProgram = *lib.get(b"nvrtcCompileProgram\0").ok()?;
-                    let nvrtcGetPTXSize = *lib.get(b"nvrtcGetPTXSize\0").ok()?;
-                    let nvrtcGetPTX = *lib.get(b"nvrtcGetPTX\0").ok()?;
-                    let nvrtcGetProgramLogSize = *lib.get(b"nvrtcGetProgramLogSize\0").ok()?;
-                    let nvrtcGetProgramLog = *lib.get(b"nvrtcGetProgramLog\0").ok()?;
-                    let nvrtcDestroyProgram = *lib.get(b"nvrtcDestroyProgram\0").ok()?;
-
-                    Some(Self {
-                        _lib: lib,
-                        nvrtcCreateProgram,
-                        nvrtcCompileProgram,
-                        nvrtcGetPTXSize,
-                        nvrtcGetPTX,
-                        nvrtcGetProgramLogSize,
-                        nvrtcGetProgramLog,
-                        nvrtcDestroyProgram,
-                    })
-                }
-            })
-            .as_ref()
-    }
-}
-
-fn find_nvrtc_library() -> Option<Library> {
-    // SAFETY (all `Library::new` calls in this fn): loading a shared library
-    // runs its platform initialization code; the probed names and paths all
-    // resolve the NVRTC redistributable shipped with the CUDA toolkit, whose
-    // initializers uphold the platform loader contract. No other invariant
-    // is required at load time — symbol typing is justified at the `get`
-    // sites in `NvrtcDriver::get`.
-    if let Ok(lib) = unsafe { Library::new("nvrtc") } {
-        return Some(lib);
-    }
-    // SAFETY: as above.
-    if let Ok(lib) = unsafe { Library::new("nvrtc64") } {
-        return Some(lib);
-    }
-
-    if let Ok(cuda_path) = std::env::var("CUDA_PATH") {
-        let paths = vec![
-            format!("{}/bin/x64", cuda_path),
-            format!("{}/bin", cuda_path),
-            format!("{}/lib64", cuda_path),
-            format!("{}/lib", cuda_path),
-        ];
-        for dir in paths {
-            let cleaned_dir = dir.replace('\\', "/");
-            if let Ok(entries) = std::fs::read_dir(&cleaned_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file()
-                        && let Some(filename) = path.file_name().and_then(|s| s.to_str())
-                    {
-                        let extension = path.extension().and_then(|s| s.to_str());
-                        let matches = if cfg!(windows) {
-                            // Windows paths are case-insensitive, so the
-                            // whole comparison folds case: some toolkit
-                            // installers ship `NVRTC64_120_0.DLL`. Extension
-                            // matching goes through `Path::extension` rather
-                            // than `str::ends_with` for the same reason.
-                            let lowered = filename.to_ascii_lowercase();
-                            lowered.starts_with("nvrtc")
-                                && !lowered.contains("builtins")
-                                && extension.is_some_and(|e| e.eq_ignore_ascii_case("dll"))
-                        } else {
-                            filename.starts_with("libnvrtc")
-                                && (extension == Some("so") || filename.contains(".so."))
-                        };
-                        if matches {
-                            // SAFETY: as above (NVRTC library under
-                            // `CUDA_PATH`).
-                            if let Ok(lib) = unsafe { Library::new(&path) } {
-                                return Some(lib);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let fallback_names = if cfg!(windows) {
-        vec![
-            "nvrtc64_130_0.dll",
-            "nvrtc64_120_0.dll",
-            "nvrtc64_112_0.dll",
-        ]
-    } else {
-        vec!["libnvrtc.so"]
-    };
-    for name in fallback_names {
-        // SAFETY: as above (versioned NVRTC fallback names).
-        if let Ok(lib) = unsafe { Library::new(name) } {
-            return Some(lib);
-        }
-    }
-    None
-}
-
 /// Compile a CUDA C++ source code string to PTX at runtime using NVRTC.
 pub fn compile_cuda_to_ptx(src: &str, device: &crate::CudaDevice) -> Result<String, String> {
-    let nvrtc = NvrtcDriver::get().ok_or_else(|| "NVRTC driver not available".to_string())?;
+    let nvrtc = NvrtcDriver::get().map_err(ToString::to_string)?;
 
     let src_c = std::ffi::CString::new(src).map_err(|e| e.to_string())?;
     let name_c = std::ffi::CString::new("kernel.cu").map_err(|e| e.to_string())?;
