@@ -79,3 +79,4 @@
 | [0068](0068-device-neutral-adaptive-pooling-seam.md) | Device-neutral rank-2 adaptive pooling seam | Accepted |
 | [0070](0070-device-neutral-triangular-seam.md) | Device-neutral rank-2 triangular masking seam | Accepted |
 | [0071](0071-precision-generic-stateful-update-seam.md) | Precision-generic stateful-update seam | Accepted |
+| [0072](0072-wgsl-f64-builtin-verdict-by-backend.md) | WGSL f64 builtin verdicts keyed by backend, not adapter | Accepted |

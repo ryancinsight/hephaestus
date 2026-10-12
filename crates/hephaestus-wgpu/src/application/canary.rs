@@ -1,30 +1,36 @@
-//! Per-builtin driver capability canary for WGSL.
+//! Per-builtin capability canary for WGSL math builtins.
 //!
-//! Spec-valid WGSL compiles and runs exactly on most drivers, but three f64
-//! transcendental builtins are driver-defective on the recorded NVIDIA Vulkan
-//! adapter (RTX 5080, vendor `0x10DE`, device `0x2C02`): `log` and `tanh`
-//! abort pipeline compilation (`0xc0000005` / `0x80000003`, bare-wgpu repro
-//! with zero repo code on the stack), and `pow` passes validation then
-//! access-violates at dispatch. A fourth, `exp`, dispatches but computes at
-//! f32 grade (`e^1` equals `f32(e)` bit-for-bit). The templates are spec-valid,
-//! so a blanket static gate would wrongly disable good drivers; the full fix
-//! is an out-of-process dynamic probe (a crash-class compile cannot be probed
-//! in-process without aborting the parent). Until then this module pairs two
-//! mechanisms behind one query surface:
+//! naga lowers WGSL `exp`, `log`, `pow`, and `tanh` on the Vulkan backend to
+//! the GLSL.std.450 extended instructions `Exp` (27), `Log` (28), `Pow` (26),
+//! and `Tanh` (21) at every float width, but the GLSL.std.450 specification
+//! admits only 16- or 32-bit floating-point operands for those instructions
+//! (<https://registry.khronos.org/SPIR-V/specs/unified1/GLSL.std.450.html>).
+//! An f64 operand is invalid SPIR-V, so every Vulkan driver's behavior on it
+//! is undefined. The observed behaviors span the full range: on NVIDIA
+//! RTX 5080 (driver 610.60) f64 `log`/`tanh` abort pipeline compilation, f64
+//! `pow` access-violates at dispatch, and f64 `exp` computes at f32 grade; on
+//! Mesa lavapipe (hosted CI) f64 `exp` returns zero for every input. The
+//! defect is the lowering, not an adapter, so the verdict is keyed by
+//! backend and width rather than by adapter identity. Two mechanisms share
+//! one query surface:
 //!
-//! - [`builtin_verdict`](crate::application::canary::builtin_verdict): a recorded table keyed by exact adapter identity
-//!   (backend, vendor, device). Known-bad triples report [`BuiltinVerdict`](crate::application::canary::BuiltinVerdict);
-//!   every unknown adapter (or device without adapter info) default-allows,
-//!   preserving current behavior where nothing is proven.
-//! - [`probe_precision`](crate::application::canary::probe_precision): a live one-dispatch measurement of a builtin's
-//!   precision grade against CPU truth. It refuses crash-class pairs up front
-//!   (via the table) so probing itself can never abort the process.
+//! - [`builtin_verdict`](crate::application::canary::builtin_verdict): the
+//!   specification rule. f64 transcendentals on Vulkan report
+//!   [`BuiltinVerdict::Blocked`](crate::application::canary::BuiltinVerdict)
+//!   with the cause; every other pair, and a device without adapter info,
+//!   reports supported.
+//! - [`probe_precision`](crate::application::canary::probe_precision): a live
+//!   one-dispatch measurement of a builtin's precision grade against CPU
+//!   truth. It refuses blocked pairs before building any shader, so probing
+//!   can never compile undefined SPIR-V or abort the process.
 //!
-//! Seams gate crash-class dispatch with [`require_expr_safe`](crate::application::canary::require_expr_safe) (which scans the
-//! op template text for builtin calls, so composite expressions like
-//! `GeluTanhOp` are covered without a manual op-to-builtin map) or the
-//! explicit [`require_builtin`](crate::application::canary::require_builtin), turning process aborts into typed
-//! [`HephaestusError::Unsupported`](hephaestus_core::HephaestusError::Unsupported) naming the cause.
+//! Seams gate dispatch with [`require_expr_safe`](crate::application::canary::require_expr_safe)
+//! (which scans the WGSL text for builtin calls, so composite expressions
+//! like `GeluTanhOp` are covered without a manual op-to-builtin map) or the
+//! explicit [`require_builtin`](crate::application::canary::require_builtin),
+//! turning undefined results and process aborts into a typed
+//! [`HephaestusError::Unsupported`](hephaestus_core::HephaestusError::Unsupported)
+//! naming the cause.
 
 use eunomia::Pod;
 use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};
@@ -34,16 +40,16 @@ use super::elementwise::encode_elementwise;
 use super::pipeline::{try_cached_pipeline, workgroups};
 use crate::infrastructure::device::WgpuDevice;
 
-/// WGSL math builtins with recorded or probeable driver behavior.
+/// WGSL math builtins with a verdict rule and a live precision probe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MathBuiltin {
-    /// `exp(x)`: degraded to f32 grade at f64 on the recorded adapter.
+    /// `exp(x)`: GLSL.std.450 `Exp`, undefined at f64 on Vulkan.
     Exp,
-    /// `log(x)`: aborts pipeline compilation at f64 on the recorded adapter.
+    /// `log(x)`: GLSL.std.450 `Log`, undefined at f64 on Vulkan.
     Log,
-    /// `pow(x, y)`: passes validation, access-violates at dispatch at f64.
+    /// `pow(x, y)`: GLSL.std.450 `Pow`, undefined at f64 on Vulkan.
     Pow,
-    /// `tanh(x)`: aborts pipeline compilation at f64 on the recorded adapter.
+    /// `tanh(x)`: GLSL.std.450 `Tanh`, undefined at f64 on Vulkan.
     Tanh,
 }
 
@@ -68,109 +74,79 @@ pub fn width_of<T: 'static>() -> Option<CanaryWidth> {
     }
 }
 
-/// Verdict for one (adapter, builtin, width) triple.
+/// Verdict for one (device, builtin, width) triple.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuiltinVerdict {
-    /// No defect recorded; dispatch normally.
+    /// No defect known; dispatch normally.
     Supported,
-    /// Dispatches but computes below width precision.
+    /// Dispatches but computes below width precision. No current rule
+    /// produces it: the one degraded pair once recorded (f64 `exp` on
+    /// NVIDIA Vulkan) is undefined SPIR-V and now reports
+    /// [`BuiltinVerdict::Blocked`].
     Degraded {
         /// Recorded worst-case relative error against CPU truth.
         max_relative_error: f64,
         /// What was measured, where, and when.
         cause: &'static str,
     },
-    /// Compiling or dispatching aborts/crashes the process; refuse instead.
+    /// The lowering is undefined on this backend: compiling or dispatching
+    /// may abort the process or return wrong values; refuse instead.
     Blocked {
-        /// What was observed, where, and when.
+        /// The violated contract and the behaviors observed.
         cause: &'static str,
     },
 }
 
-struct Finding {
-    backend: wgpu::Backend,
-    vendor: u32,
-    device: u32,
-    builtin: MathBuiltin,
-    width: CanaryWidth,
-    verdict: BuiltinVerdict,
+/// Cause recorded for one f64 builtin on Vulkan: the specification clause
+/// plus every driver behavior observed for it.
+const fn blocked_cause(builtin: MathBuiltin) -> &'static str {
+    match builtin {
+        MathBuiltin::Exp => {
+            "naga lowers f64 `exp` to GLSL.std.450 Exp, which admits only 16/32-bit operands; observed f32-grade results on NVIDIA RTX 5080 (driver 610.60) and all-zero results on Mesa lavapipe"
+        }
+        MathBuiltin::Log => {
+            "naga lowers f64 `log` to GLSL.std.450 Log, which admits only 16/32-bit operands; observed pipeline-compile abort (0xc0000005) on NVIDIA RTX 5080 (driver 610.60)"
+        }
+        MathBuiltin::Pow => {
+            "naga lowers f64 `pow` to GLSL.std.450 Pow, which admits only 16/32-bit operands; observed dispatch access violation (0xc0000005) on NVIDIA RTX 5080 (driver 610.60)"
+        }
+        MathBuiltin::Tanh => {
+            "naga lowers f64 `tanh` to GLSL.std.450 Tanh, which admits only 16/32-bit operands; observed pipeline-compile abort (0x80000003) on NVIDIA RTX 5080 (driver 610.60)"
+        }
+    }
 }
 
-/// Crash- and degradation-class pairs proven by probe. Keyed by exact adapter
-/// identity; entries carry their provenance and are removed only by deliberate
-/// re-proof (a driver update may fix the defect, but assuming so risks a
-/// process abort, so the safe direction is to keep the block).
-const FINDINGS: &[Finding] = &[
-    Finding {
-        backend: wgpu::Backend::Vulkan,
-        vendor: 0x10DE,
-        device: 0x2C02,
-        builtin: MathBuiltin::Log,
-        width: CanaryWidth::F64,
-        verdict: BuiltinVerdict::Blocked {
-            cause: "NVIDIA Vulkan on RTX 5080 (driver 610.60) aborts compiling naga-valid f64 `log` (0xc0000005; bare-wgpu repro, keystone 2026-10-08)",
-        },
-    },
-    Finding {
-        backend: wgpu::Backend::Vulkan,
-        vendor: 0x10DE,
-        device: 0x2C02,
-        builtin: MathBuiltin::Tanh,
-        width: CanaryWidth::F64,
-        verdict: BuiltinVerdict::Blocked {
-            cause: "NVIDIA Vulkan on RTX 5080 (driver 610.60) aborts compiling naga-valid f64 `tanh` (0x80000003; bare-wgpu repro, keystone 2026-10-08)",
-        },
-    },
-    Finding {
-        backend: wgpu::Backend::Vulkan,
-        vendor: 0x10DE,
-        device: 0x2C02,
-        builtin: MathBuiltin::Pow,
-        width: CanaryWidth::F64,
-        verdict: BuiltinVerdict::Blocked {
-            cause: "NVIDIA Vulkan on RTX 5080 (driver 610.60) passes f64 `pow` validation then access-violates at dispatch (0xc0000005; scalar-power 2026-10-07)",
-        },
-    },
-    Finding {
-        backend: wgpu::Backend::Vulkan,
-        vendor: 0x10DE,
-        device: 0x2C02,
-        builtin: MathBuiltin::Exp,
-        width: CanaryWidth::F64,
-        verdict: BuiltinVerdict::Degraded {
-            max_relative_error: 6e-8,
-            cause: "NVIDIA Vulkan on RTX 5080 (driver 610.60) computes f64 `exp` at f32 grade: e^1 equals f32(e) bit-for-bit (attention/fusion 2026-10-07)",
-        },
-    },
-];
+/// Whether `width` operands of the GLSL.std.450 precision-restricted
+/// instructions are undefined on this device's backend.
+fn restricted_width_undefined(device: &WgpuDevice, width: CanaryWidth) -> bool {
+    width == CanaryWidth::F64
+        && device
+            .adapter_info()
+            .is_some_and(|info| info.backend == wgpu::Backend::Vulkan)
+}
 
-/// Report the recorded verdict for one builtin at one width on this device.
+/// Report the verdict for one builtin at one width on this device.
 ///
-/// Unknown adapters and devices without adapter info default to
-/// [`BuiltinVerdict::Supported`]: the table only ever blocks proven-bad
-/// triples, never speculative ones.
+/// Every f64 builtin on the Vulkan backend is blocked: its SPIR-V lowering is
+/// outside the GLSL.std.450 operand contract, so no driver result is defined.
+/// Other backends and widths, and devices without adapter info, report
+/// [`BuiltinVerdict::Supported`].
 #[must_use]
 pub fn builtin_verdict(
     device: &WgpuDevice,
     builtin: MathBuiltin,
     width: CanaryWidth,
 ) -> BuiltinVerdict {
-    let Some(info) = device.adapter_info() else {
-        return BuiltinVerdict::Supported;
-    };
-    FINDINGS
-        .iter()
-        .find(|entry| {
-            entry.backend == info.backend
-                && entry.vendor == info.vendor
-                && entry.device == info.device
-                && entry.builtin == builtin
-                && entry.width == width
-        })
-        .map_or(BuiltinVerdict::Supported, |entry| entry.verdict)
+    if restricted_width_undefined(device, width) {
+        BuiltinVerdict::Blocked {
+            cause: blocked_cause(builtin),
+        }
+    } else {
+        BuiltinVerdict::Supported
+    }
 }
 
-/// Refuse dispatch when `builtin` is crash-class at `width` on this device.
+/// Refuse dispatch when `builtin` is blocked at `width` on this device.
 ///
 /// Degraded and supported pairs pass through: degradation is a precision
 /// caveat for tolerance selection, not a dispatch refusal.
@@ -178,7 +154,7 @@ pub fn builtin_verdict(
 /// # Errors
 ///
 /// Returns [`HephaestusError::Unsupported`] naming the operation, builtin,
-/// and recorded cause when the table blocks the triple.
+/// and cause when [`builtin_verdict`] blocks the pair.
 pub fn require_builtin(
     device: &WgpuDevice,
     builtin: MathBuiltin,
@@ -188,7 +164,7 @@ pub fn require_builtin(
     match builtin_verdict(device, builtin, width) {
         BuiltinVerdict::Blocked { cause } => Err(HephaestusError::Unsupported {
             message: format!(
-                "{operation}: WGSL {builtin:?} at {width:?} is driver-blocked: {cause}"
+                "{operation}: WGSL {builtin:?} at {width:?} is blocked on this backend: {cause}"
             ),
         }),
         BuiltinVerdict::Supported | BuiltinVerdict::Degraded { .. } => Ok(()),
@@ -202,8 +178,28 @@ const TOKENS: &[(MathBuiltin, &str)] = &[
     (MathBuiltin::Tanh, "tanh("),
 ];
 
+/// The remaining WGSL builtins naga lowers to GLSL.std.450 instructions
+/// whose operands the specification restricts to 16 or 32 bits: `Radians`
+/// (11) through `Atan2` (25) and `Exp2`/`Log2` (29, 30). They carry no live
+/// probe, so they have no [`MathBuiltin`] variant; [`require_expr_safe`]
+/// refuses them under the same rule as the probed four.
+const RESTRICTED_TOKENS: &[&str] = &[
+    "radians(", "degrees(", "sin(", "cos(", "tan(", "asin(", "acos(", "atan(", "sinh(", "cosh(",
+    "asinh(", "acosh(", "atanh(", "atan2(", "exp2(", "log2(",
+];
+
 fn is_ident_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Whether `source` calls `token` (a name followed by `(`) at an identifier
+/// boundary, so `atanh(` never matches `tanh(`.
+fn calls(source: &[u8], token: &str) -> bool {
+    let token = token.as_bytes();
+    source
+        .windows(token.len())
+        .enumerate()
+        .any(|(start, window)| window == token && (start == 0 || !is_ident_byte(source[start - 1])))
 }
 
 /// Scan WGSL source for the canary builtins, honoring identifier boundaries.
@@ -213,35 +209,19 @@ fn is_ident_byte(byte: u8) -> bool {
 /// will compile, so composite expressions are covered without a manual map.
 #[must_use]
 pub fn scan_builtins(source: &str) -> Vec<MathBuiltin> {
-    let bytes = source.as_bytes();
-    let mut found = Vec::new();
-    for (builtin, token) in TOKENS {
-        let token = token.as_bytes();
-        if bytes.len() < token.len() {
-            continue;
-        }
-        let mut matched = false;
-        for start in 0..=(bytes.len() - token.len()) {
-            if bytes[start..start + token.len()] != *token {
-                continue;
-            }
-            if start > 0 && is_ident_byte(bytes[start - 1]) {
-                continue;
-            }
-            matched = true;
-            break;
-        }
-        if matched {
-            found.push(*builtin);
-        }
-    }
-    found
+    TOKENS
+        .iter()
+        .filter(|(_, token)| calls(source.as_bytes(), token))
+        .map(|(builtin, _)| *builtin)
+        .collect()
 }
 
-/// Refuse dispatch when `source` uses a crash-class builtin at `width`.
+/// Refuse dispatch when `source` uses a blocked builtin at `width`.
 ///
 /// Callers pass the template or composed WGSL they are about to compile; each
-/// [`MathBuiltin`] found by [`scan_builtins`] goes through [`require_builtin`].
+/// [`MathBuiltin`] found by [`scan_builtins`] goes through [`require_builtin`],
+/// and every other GLSL.std.450 precision-restricted builtin is refused under
+/// the same backend-and-width rule.
 ///
 /// # Errors
 ///
@@ -256,6 +236,18 @@ pub fn require_expr_safe(
     for builtin in scan_builtins(source) {
         require_builtin(device, builtin, width, operation)?;
     }
+    if restricted_width_undefined(device, width)
+        && let Some(token) = RESTRICTED_TOKENS
+            .iter()
+            .find(|token| calls(source.as_bytes(), token))
+    {
+        let name = token.trim_end_matches('(');
+        return Err(HephaestusError::Unsupported {
+            message: format!(
+                "{operation}: WGSL `{name}` at {width:?} is blocked on this backend: naga lowers it to a GLSL.std.450 instruction that admits only 16/32-bit operands"
+            ),
+        });
+    }
     Ok(())
 }
 
@@ -266,7 +258,7 @@ pub enum PrecisionGrade {
     Exact,
     /// f64 computing at f32 grade (worst error near f32 epsilon).
     SingleGrade,
-    /// Worse than f32 grade: a broken driver or a broken probe.
+    /// Worse than f32 grade: a broken lowering, driver, or probe.
     Poor,
 }
 
@@ -465,14 +457,14 @@ fn probe_with<T: ScalarProbe>(
 
 /// Measure one builtin's precision grade live against CPU truth.
 ///
-/// Crash-class pairs are refused from the recorded table before any shader is
-/// built, so probing itself can never abort the process. f64 probing needs a
+/// Blocked pairs are refused by [`builtin_verdict`] before any shader is
+/// built, so probing never compiles undefined SPIR-V or aborts the process. f64 probing needs a
 /// device with the `ShaderF64` feature; without it pipeline creation fails
 /// with a typed validation error.
 ///
 /// # Errors
 ///
-/// Returns [`HephaestusError::Unsupported`] for table-blocked triples, and
+/// Returns [`HephaestusError::Unsupported`] for blocked pairs, and
 /// surfaces pipeline, dispatch, or transfer failures otherwise.
 pub fn probe_precision(
     device: &WgpuDevice,

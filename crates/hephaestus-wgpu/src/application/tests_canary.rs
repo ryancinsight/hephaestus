@@ -65,3 +65,26 @@ fn grades_cut_between_exact_single_and_poor() {
     // f32 has no single-grade band: worse than exact is poor.
     assert_eq!(report(CanaryWidth::F32, 1e-4).grade(), PrecisionGrade::Poor);
 }
+
+#[test]
+fn restricted_calls_honor_identifier_boundaries() {
+    let found = |source: &str| -> Vec<&str> {
+        RESTRICTED_TOKENS
+            .iter()
+            .copied()
+            .filter(|token| calls(source.as_bytes(), token))
+            .collect()
+    };
+    assert_eq!(found("sin(x)"), ["sin("]);
+    // Each longer name is its own call, never its shorter stem.
+    assert_eq!(found("asin(x)"), ["asin("]);
+    assert_eq!(found("sinh(x)"), ["sinh("]);
+    assert_eq!(found("atan2(y, x)"), ["atan2("]);
+    assert_eq!(found("exp2(x) + log2(x)"), ["exp2(", "log2("]);
+    // Composite templates surface every restricted call they contain.
+    assert_eq!(found("cos(a) * sin(b)"), ["sin(", "cos("]);
+    // The probed four are not restricted tokens, and identifiers that merely
+    // end in a restricted name are not calls.
+    assert!(found("exp(x) * tanh(x)").is_empty());
+    assert!(found("my_sin(x) + cosine(x)").is_empty());
+}
