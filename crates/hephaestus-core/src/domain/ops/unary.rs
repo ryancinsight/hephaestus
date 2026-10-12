@@ -350,13 +350,62 @@ impl_math_unary_exprs!(
     (AtanhOp, "atanh(x)", "atanh(x)"),
     (AsinhOp, "asinh(x)", "asinh(x)"),
     (AcoshOp, "acosh(x)", "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0)", "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0 + (x))", "log(1.0f + (x))"),
+    // Expm1/Log1p stay out of the macro: WGSL has no `expm1`/`log1p`
+    // builtin, so the WGSL spellings branch below while the C spellings
+    // call the native builtins (see below).
     (FloorOp, "floor(x)", "floor(x)"),
     (CeilOp, "ceil(x)", "ceil(x)"),
     (RoundOp, "round(x)", "rint(x)"),
     (TruncOp, "trunc(x)", "trunc(x)"),
 );
+
+// Expm1/Log1p stay out of the macros (KERNEL-TAIL, ADR 0061 Decision 6):
+// the naive `(exp(x) - 1.0)` / `log(1.0 + x)` transcriptions cancel to
+// exactly `0` once `|x|` reaches f32's `ulp(1)`. The C spellings call the
+// native builtins unsuffixed, so overload resolution picks the lane width
+// exactly as `SinOp` documents and both precisions stay served. WGSL has
+// neither builtin, so both WGSL spellings select a tail-accurate small
+// arm (`|x| < 0.5` for expm1, `|x| < 0.15` for log1p) and the naive
+// transcription above, where `u = exp(x)` (resp. `u = 1 + x`) sits far
+// enough from 1 that the subtraction is already accurate — and
+// bit-identical to the previous rendering, so the fix is strictly
+// tail-local.
+//
+// The expm1 small arm is the degree-8 Taylor series in Horner form: the
+// truncation remainder `|x|^9 / 9!` peaks at `1.1e-8` relative on
+// `|x| <= 0.5`, and eight roundings land the arm under 5e-7 relative,
+// inside the conformance clause's `1e-6`. The degree is f32-graded (an
+// f64 arm needs degree 15 for the same crossover), and the `u - 1` arm
+// calls `exp`, which the WGSL canary records as f32-grade at f64 on the
+// reference adapter — so the spelling reports `SUPPORTS_F64 = false`
+// until an f64 sweep proves a degree-bumped form.
+//
+// The log1p small arm is `x * g(x)` where `g` is the degree-5 Chebyshev
+// interpolant of `log1p(x) / x` on `|x| <= 0.15` (second-kind nodes,
+// monomial basis solved in f64), in Horner form: a dense f32 sweep of
+// the exact op sequence peaks at 2.4e-7 relative (4.2x inside the
+// clause's `1e-6`), and the `x = -1` lane stays on the `log(u)` arm
+// (`log(0) = -inf`, matching `ln_1p`). A compensated `log(u) -
+// (u - 1 - x) / u` arm was tried first and reads back `0` on-device: the
+// toolchain folds the algebraically-zero correction (proven by sentinel
+// probe on the reference adapter), so WGSL tail arms must be pure
+// polynomials with no cancellable subexpression — the expm1 Taylor arm
+// above survives for exactly that reason. The spelling nests `select`
+// and reports `SUPPORTS_F64 = false` per the `SignOp` precedent.
+impl UnaryExpr<Wgsl> for Expm1Op {
+    const EXPR: &'static str = "select(exp(x) - 1.0, x * (1.0 + x * (0.5 + x * (0.16666666666666666 + x * (0.041666666666666664 + x * (0.008333333333333333 + x * (0.001388888888888889 + x * (0.0001984126984126984 + x * 0.0000248015873015873))))))), abs(x) < 0.5)";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for Expm1Op {
+    const EXPR: &'static str = "expm1(x)";
+}
+impl UnaryExpr<Wgsl> for Log1pOp {
+    const EXPR: &'static str = "select(log(1.0 + x), (x * (1.00000010489199531 + x * ((-5.00000091861519613e-1) + x * (3.33272810783040052e-1 + x * ((-2.49946998041162383e-1) + x * (2.05754288391658408e-1 + x * (-1.71704947320801854e-1))))))), abs(x) < 0.15)";
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for Log1pOp {
+    const EXPR: &'static str = "log1p(x)";
+}
 
 // Sign stays out of the macro: the WGSL spelling nests `select` with
 // literal-only arms, which concretize to `f32` and reject `f64` output
@@ -419,8 +468,9 @@ impl_hip_unary_exprs!(
     (AtanhOp, "atanh(x)"),
     (AsinhOp, "asinh(x)"),
     (AcoshOp, "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0f + (x))"),
+    // Native builtins, unsuffixed for lane-width overload (see above).
+    (Expm1Op, "expm1(x)"),
+    (Log1pOp, "log1p(x)"),
     (SignOp, "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"),
     (FloorOp, "floor(x)"),
     (CeilOp, "ceil(x)"),

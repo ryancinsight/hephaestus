@@ -54,7 +54,10 @@ fn combine_and_identity_agree_per_dialect() {
         <Log10Op as UnaryExpr<Wgsl>>::EXPR,
         "log(x) * 0.43429448190325182"
     );
-    assert_eq!(<Expm1Op as UnaryExpr<CudaC>>::EXPR, "(exp(x) - 1.0f)");
+    assert_eq!(<Expm1Op as UnaryExpr<CudaC>>::EXPR, "expm1(x)");
+    assert_eq!(<Expm1Op as UnaryExpr<HipC>>::EXPR, "expm1(x)");
+    assert_eq!(<Log1pOp as UnaryExpr<CudaC>>::EXPR, "log1p(x)");
+    assert_eq!(<Log1pOp as UnaryExpr<HipC>>::EXPR, "log1p(x)");
     assert_eq!(<RoundOp as UnaryExpr<HipC>>::EXPR, "rint(x)");
     assert_eq!(<ErfOp as UnaryExpr<CudaC>>::EXPR, "erf(x)");
     assert_eq!(<ErfcOp as UnaryExpr<HipC>>::EXPR, "erfc(x)");
@@ -75,6 +78,27 @@ fn combine_and_identity_agree_per_dialect() {
         <SincOp as UnaryExpr<Wgsl>>::EXPR,
         "select(sin(x) / x, 1.0, x == 0.0)"
     );
+    // KERNEL-TAIL: the WGSL tail forms branch — the expm1 small arm is
+    // the degree-8 Taylor series at |x| < 0.5 (pin the 1/6 Horner
+    // coefficient), the log1p small arm the degree-6 Chebyshev form at
+    // |x| < 0.15 (pin its leading coefficient) — and both keep the naive
+    // transcription as the outer arm.
+    for expr in [
+        <Expm1Op as UnaryExpr<Wgsl>>::EXPR,
+        <Log1pOp as UnaryExpr<Wgsl>>::EXPR,
+    ] {
+        assert!(expr.starts_with("select("), "wgsl tail form branches");
+        assert_eq!(
+            expr.chars().filter(|&c| c == '(').count(),
+            expr.chars().filter(|&c| c == ')').count(),
+            "wgsl tail parens balance"
+        );
+    }
+    assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.5"));
+    assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("0.16666666666666666"));
+    assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) - 1.0"));
+    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.15"));
+    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("1.00000010489199531"));
     assert_eq!(
         <SincOp as UnaryExpr<CudaC>>::EXPR,
         "((x) == 0.0f ? 1.0f : sin(x) / (x))"
@@ -247,6 +271,15 @@ fn comparisons_use_scalar_correct_mask_literals() {
     const _: () = assert!(<K0Op as UnaryExpr<HipC>>::SUPPORTS_F64);
     const _: () = assert!(<ReluOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
     const _: () = assert!(<Log10Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    // KERNEL-TAIL: the WGSL tail forms nest `select` and opt out of f64
+    // (the expm1 Taylor degree is f32-graded besides); the native C
+    // builtins serve both precisions through lane-width overload.
+    const _: () = assert!(!<Expm1Op as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(!<Log1pOp as UnaryExpr<Wgsl>>::SUPPORTS_F64);
+    const _: () = assert!(<Expm1Op as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<Expm1Op as UnaryExpr<HipC>>::SUPPORTS_F64);
+    const _: () = assert!(<Log1pOp as UnaryExpr<CudaC>>::SUPPORTS_F64);
+    const _: () = assert!(<Log1pOp as UnaryExpr<HipC>>::SUPPORTS_F64);
     assert_eq!(
         <GeOp as TypedBinaryExpr<CudaC, f32>>::EXPR,
         "lhs >= rhs ? 1.0f : 0.0f"
