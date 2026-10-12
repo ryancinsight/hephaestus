@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, DeviceFeature, DialectScalar, HephaestusError, StatefulUpdateAliasing,
+    BlockWidth, DialectScalar, HephaestusError, StatefulScalar, StatefulUpdateAliasing,
     StatefulUpdateMeta, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, Wgsl,
     plan_stateful_update,
 };
@@ -19,11 +19,11 @@ struct StatefulKernel<Rule>(PhantomData<Rule>);
 fn parameters_declaration<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<Wgsl>,
-    T: DialectScalar<Wgsl>,
+    T: StatefulScalar,
 {
-    let fields = Rule::parameter_fields_for::<T>()
+    let fields = Rule::PARAMETER_FIELDS
         .iter()
-        .map(|field| format!("    {field}: {ty},\n", ty = T::TYPE_TOKEN))
+        .map(|field| format!("    {field}: {ty},\n", ty = <T as DialectScalar<Wgsl>>::TYPE_TOKEN))
         .collect::<String>();
     format!("struct Parameters {{\n{fields}}}\n")
 }
@@ -31,9 +31,9 @@ where
 fn shader_source<Rule, T>(width: BlockWidth) -> String
 where
     Rule: StatefulUpdateRule<Wgsl>,
-    T: DialectScalar<Wgsl>,
+    T: StatefulScalar,
 {
-    let ty = T::TYPE_TOKEN;
+    let ty = <T as DialectScalar<Wgsl>>::TYPE_TOKEN;
     let state_one_binding = if Rule::STATE_COUNT == 2 {
         format!("@group(0) @binding(5) var<storage, read_write> state_one: array<{ty}>;\n")
     } else {
@@ -138,7 +138,7 @@ fn dispatch<Rule, T, P, const N: usize>(
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<Wgsl>,
-    T: DialectScalar<Wgsl>,
+    T: StatefulScalar,
     P: Pod,
 {
     validate(parameters)?;
@@ -237,34 +237,32 @@ pub struct WgpuStatefulUpdateOps;
 impl StatefulUpdateOps<WgpuDevice> for WgpuStatefulUpdateOps {
     type Dialect = Wgsl;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<T, Rule, const N: usize>(
         &self,
         device: &WgpuDevice,
-        operands: StatefulUpdateOperands<'_, WgpuBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, WgpuBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
+        T: StatefulScalar,
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        dispatch::<Rule, f32, _, N>(device, operands, &parameters, Rule::validate_parameters)
-    }
-
-    fn stateful_update_f64<Rule, const N: usize>(
-        &self,
-        device: &WgpuDevice,
-        operands: StatefulUpdateOperands<'_, WgpuBuffer<f64>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
-    ) -> Result<()>
-    where
-        Rule: StatefulUpdateRule<Self::Dialect>,
-    {
-        if !device.supports_device_feature(DeviceFeature::ShaderF64) {
+        if let Some(feature) = T::REQUIRED_DEVICE_FEATURE
+            && !device.supports_device_feature(feature)
+        {
             return Err(HephaestusError::InvalidConfiguration {
-                message: "WGPU stateful update requires the ShaderF64 device feature for f64"
-                    .to_string(),
+                message: format!(
+                    "WGPU stateful update requires the {feature:?} device feature for {}",
+                    <T as DialectScalar<Wgsl>>::TYPE_TOKEN
+                ),
             });
         }
-        dispatch::<Rule, f64, _, N>(device, operands, &parameters, Rule::validate_parameters_f64)
+        dispatch::<Rule, T, _, N>(
+            device,
+            operands,
+            &parameters,
+            Rule::validate_parameters::<T>,
+        )
     }
 }
 
@@ -274,30 +272,28 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn f32_shader_keeps_the_padded_uniform_and_f32_storage() {
-        let source = shader_source::<Sgd, f32>(BlockWidth::DEFAULT);
-        assert!(source.contains("momentum: f32,"));
-        assert!(source.contains("padding_zero: f32,"));
-        assert!(source.contains("array<f32>"));
-        assert!(!source.contains("f64"));
+    fn sgd_uniform_and_storage_use_the_width_token<T: StatefulScalar>() {
+        let token = <T as DialectScalar<Wgsl>>::TYPE_TOKEN;
+        let source = shader_source::<Sgd, T>(BlockWidth::DEFAULT);
+        assert!(source.contains(&format!("momentum: {token},")));
+        assert!(source.contains(&format!("padding_zero: {token},")));
+        assert!(source.contains(&format!("array<{token}>")));
+    }
+
+    fn adam_body_selects_the_width_literal<T: StatefulScalar>() {
+        let source = shader_source::<Adam, T>(BlockWidth::DEFAULT);
+        assert!(source.contains(&format!("({} - parameters.beta_one)", T::ONE_LITERAL)));
     }
 
     #[test]
-    fn f64_shader_drops_padding_and_types_storage_f64() {
-        let source = shader_source::<Sgd, f64>(BlockWidth::DEFAULT);
-        assert!(source.contains("momentum: f64,"));
-        assert!(!source.contains("padding"));
-        assert!(source.contains("array<f64>"));
-        assert!(!source.contains("array<f32>"));
+    fn sgd_shader_keeps_the_padded_uniform_and_storage_at_both_widths() {
+        sgd_uniform_and_storage_use_the_width_token::<f32>();
+        sgd_uniform_and_storage_use_the_width_token::<f64>();
     }
 
     #[test]
-    fn f64_adam_selects_the_double_literal_body() {
-        let source = shader_source::<Adam, f64>(BlockWidth::DEFAULT);
-        assert!(source.contains("(1.0 - parameters.beta_one)"));
-        assert!(!source.contains("1.0f"));
-        let source_f32 = shader_source::<Adam, f32>(BlockWidth::DEFAULT);
-        assert!(source_f32.contains("(1.0f - parameters.beta_one)"));
+    fn adam_shader_selects_the_width_literal_at_both_widths() {
+        adam_body_selects_the_width_literal::<f32>();
+        adam_body_selects_the_width_literal::<f64>();
     }
 }

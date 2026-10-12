@@ -13,105 +13,132 @@ fn assert_invalid<T>(result: Result<T>, expected: &str) {
     }
 }
 
-#[test]
-fn rejects_zeroed_adam_parameter_block() {
-    let parameters = AdamParameters::zeroed();
+fn rejects_zeroed_adam_block<T: StatefulScalar>() {
+    let parameters = AdamParameters::<T>::zeroed();
     assert!(<Adam as StatefulUpdateRule<Wgsl>>::validate_parameters(&parameters).is_err());
 }
 
 #[test]
-fn adam_bias_correction_matches_closed_form() {
-    let parameters = AdamParameters::new(0.01, 0.9, 0.999, 1.0e-8, 3)
+fn rejects_zeroed_adam_parameter_block_at_both_widths() {
+    rejects_zeroed_adam_block::<f32>();
+    rejects_zeroed_adam_block::<f64>();
+}
+
+fn bias_correction_matches<T: StatefulScalar>(
+    beta_one: T,
+    beta_two: T,
+    expected_one: T,
+    expected_two: T,
+) {
+    let parameters = AdamParameters::new(T::from_f64(0.01), beta_one, beta_two, T::from_f64(1.0e-8), 3)
         .expect("analytically valid Adam parameters");
-    assert_eq!(parameters.bias_correction_one, 1.0 - 0.9_f32.powi(3));
-    assert_eq!(parameters.bias_correction_two, 1.0 - 0.999_f32.powi(3));
+    assert_eq!(parameters.bias_correction_one(), expected_one);
+    assert_eq!(parameters.bias_correction_two(), expected_two);
 }
 
 #[test]
-fn rejects_nonfinite_and_out_of_domain_parameters() {
+fn adam_bias_correction_matches_closed_form_at_both_widths() {
+    bias_correction_matches(
+        0.9_f32,
+        0.999_f32,
+        1.0 - 0.9_f32.powi(3),
+        1.0 - 0.999_f32.powi(3),
+    );
+    bias_correction_matches(
+        0.9_f64,
+        0.999_f64,
+        1.0 - 0.9_f64.powi(3),
+        1.0 - 0.999_f64.powi(3),
+    );
+}
+
+fn rejects_out_of_domain<T: StatefulScalar>(
+    nan: T,
+    one: T,
+    negative_rate: T,
+    negative_decay: T,
+    big_alpha: T,
+    zero: T,
+) {
     assert_invalid(
-        SgdParameters::new(f32::NAN, 0.0),
+        SgdParameters::new(nan, T::ZERO),
         "SGD parameter learning_rate must be finite, got NaN",
     );
     assert_invalid(
-        SgdParameters::new(0.1, 1.0),
+        SgdParameters::new(T::from_f64(0.1), one),
         "SGD parameter momentum must lie in [0, 1), got 1",
     );
     assert_invalid(
-        AdamParameters::new(-0.1, 0.9, 0.999, 1.0e-8, 1),
+        AdamParameters::new(negative_rate, T::from_f64(0.9), T::from_f64(0.999), T::from_f64(1.0e-8), 1),
         "Adam parameter learning_rate must be nonnegative, got -0.1",
     );
     assert_invalid(
-        RmsPropParameters::new(0.1, 1.0, 1.0e-8),
+        RmsPropParameters::new(T::from_f64(0.1), big_alpha, T::from_f64(1.0e-8)),
         "RMSProp alpha must lie in [0, 1) and epsilon must be positive",
     );
     assert_invalid(
-        AdaGradParameters::new(0.1, 0.0),
+        AdaGradParameters::new(T::from_f64(0.1), zero),
         "AdaGrad epsilon must be positive",
     );
     assert_invalid(
-        AdamWParameters::new(0.1, 0.9, 0.999, 1.0e-8, -0.1, 1),
+        AdamWParameters::new(
+            T::from_f64(0.1),
+            T::from_f64(0.9),
+            T::from_f64(0.999),
+            T::from_f64(1.0e-8),
+            negative_decay,
+            1,
+        ),
         "AdamW parameter weight_decay must be nonnegative, got -0.1",
     );
 }
 
 #[test]
-fn all_rules_accept_zero_learning_rate() {
-    SgdParameters::new(0.0, 0.9).expect("zero-rate SGD parameters");
-    AdamParameters::new(0.0, 0.9, 0.999, 1.0e-8, 1).expect("zero-rate Adam parameters");
-    AdamWParameters::new(0.0, 0.9, 0.999, 1.0e-8, 0.01, 1).expect("zero-rate AdamW parameters");
-    RmsPropParameters::new(0.0, 0.9, 1.0e-8).expect("zero-rate RMSProp parameters");
-    AdaGradParameters::new(0.0, 1.0e-8).expect("zero-rate AdaGrad parameters");
-}
-
-#[test]
-fn f64_bias_correction_matches_closed_form() {
-    let parameters = AdamParametersF64::new(0.01, 0.9, 0.999, 1.0e-8, 3)
-        .expect("analytically valid f64 Adam parameters");
-    assert_eq!(parameters.bias_correction_one, 1.0 - 0.9_f64.powi(3));
-    assert_eq!(parameters.bias_correction_two, 1.0 - 0.999_f64.powi(3));
-}
-
-#[test]
-fn f64_rejects_nonfinite_and_out_of_domain_parameters() {
-    assert_invalid(
-        SgdParametersF64::new(f64::NAN, 0.0),
-        "SGD parameter learning_rate must be finite, got NaN",
+fn rejects_nonfinite_and_out_of_domain_parameters_at_both_widths() {
+    rejects_out_of_domain(
+        f32::NAN,
+        1.0_f32,
+        -0.1_f32,
+        -0.1_f32,
+        1.0_f32,
+        0.0_f32,
     );
-    assert_invalid(
-        SgdParametersF64::new(0.1, 1.0),
-        "SGD parameter momentum must lie in [0, 1), got 1",
-    );
-    assert_invalid(
-        AdamParametersF64::new(-0.1, 0.9, 0.999, 1.0e-8, 1),
-        "Adam parameter learning_rate must be nonnegative, got -0.1",
-    );
-    assert_invalid(
-        RmsPropParametersF64::new(0.1, 1.0, 1.0e-8),
-        "RMSProp alpha must lie in [0, 1) and epsilon must be positive",
-    );
-    assert_invalid(
-        AdaGradParametersF64::new(0.1, 0.0),
-        "AdaGrad epsilon must be positive",
-    );
-    assert_invalid(
-        AdamWParametersF64::new(0.1, 0.9, 0.999, 1.0e-8, -0.1, 1),
-        "AdamW parameter weight_decay must be nonnegative, got -0.1",
+    rejects_out_of_domain(
+        f64::NAN,
+        1.0_f64,
+        -0.1_f64,
+        -0.1_f64,
+        1.0_f64,
+        0.0_f64,
     );
 }
 
-#[test]
-fn f64_rules_accept_zero_learning_rate() {
-    SgdParametersF64::new(0.0, 0.9).expect("zero-rate f64 SGD parameters");
-    AdamParametersF64::new(0.0, 0.9, 0.999, 1.0e-8, 1).expect("zero-rate f64 Adam parameters");
-    AdamWParametersF64::new(0.0, 0.9, 0.999, 1.0e-8, 0.01, 1)
-        .expect("zero-rate f64 AdamW parameters");
-    RmsPropParametersF64::new(0.0, 0.9, 1.0e-8).expect("zero-rate f64 RMSProp parameters");
-    AdaGradParametersF64::new(0.0, 1.0e-8).expect("zero-rate f64 AdaGrad parameters");
+fn accepts_zero_learning_rate<T: StatefulScalar>() {
+    SgdParameters::new(T::ZERO, T::from_f64(0.9)).expect("zero-rate SGD parameters");
+    AdamParameters::new(
+        T::ZERO,
+        T::from_f64(0.9),
+        T::from_f64(0.999),
+        T::from_f64(1.0e-8),
+        1,
+    )
+    .expect("zero-rate Adam parameters");
+    AdamWParameters::new(
+        T::ZERO,
+        T::from_f64(0.9),
+        T::from_f64(0.999),
+        T::from_f64(1.0e-8),
+        T::from_f64(0.01),
+        1,
+    )
+    .expect("zero-rate AdamW parameters");
+    RmsPropParameters::new(T::ZERO, T::from_f64(0.9), T::from_f64(1.0e-8))
+        .expect("zero-rate RMSProp parameters");
+    AdaGradParameters::new(T::ZERO, T::from_f64(1.0e-8)).expect("zero-rate AdaGrad parameters");
 }
 
 #[test]
-fn f64_rejects_zeroed_adam_parameter_block() {
-    let parameters = AdamParametersF64::zeroed();
-    assert!(<Adam as StatefulUpdateRule<Wgsl>>::validate_parameters_f64(&parameters).is_err());
+fn all_rules_accept_zero_learning_rate_at_both_widths() {
+    accepts_zero_learning_rate::<f32>();
+    accepts_zero_learning_rate::<f64>();
 }

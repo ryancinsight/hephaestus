@@ -1,6 +1,7 @@
 use eunomia::{FloatElement, Pod, Zeroable};
 
 use super::super::error::{HephaestusError, Result};
+use super::scalar::StatefulScalar;
 
 fn require_finite<T: FloatElement + core::fmt::Display>(
     name: &str,
@@ -27,47 +28,54 @@ fn require_nonnegative<T: FloatElement + PartialOrd + core::fmt::Display>(
     Ok(())
 }
 
-/// Validated stochastic-gradient-descent parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct SgdParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) momentum: f32,
-    padding: [f32; 2],
-}
+// Each parameter block is a `repr(transparent)` array of `T` slots in the packed
+// uniform order that the rule's field list names. A homogeneous array has no
+// inter-field or tail padding, so the block is padding-free at every width.
+// The padding slots are explicit, not implicit. `StatefulScalar` is sealed to
+// `f32` and `f64`, both `Pod`, so the derived `Pod` and `Zeroable` impls hold
+// for every instantiation. The size assertions below pin both widths.
 
-impl SgdParameters {
+/// Validated stochastic-gradient-descent parameters.
+///
+/// Slots: learning rate, momentum, two padding slots.
+// The bound sits on the definition because the derived `Pod` impl requires
+// `Copy` of the slot type for every instantiation, which the derive cannot
+// express through use-site bounds alone.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct SgdParameters<T: StatefulScalar>([T; 4]);
+
+impl<T: StatefulScalar> SgdParameters<T> {
     /// Validate and construct SGD parameters.
     ///
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless the learning
     /// rate is finite and non-negative and momentum is finite in `[0, 1)`.
-    pub fn new(learning_rate: f32, momentum: f32) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            momentum,
-            padding: [0.0; 2],
-        };
+    pub fn new(learning_rate: T, momentum: T) -> Result<Self> {
+        let parameters = Self([learning_rate, momentum, T::ZERO, T::ZERO]);
         parameters.validate()?;
         Ok(parameters)
     }
 
+    pub(crate) fn learning_rate(&self) -> T {
+        self.0[0]
+    }
+
+    pub(crate) fn momentum(&self) -> T {
+        self.0[1]
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
+        let (learning_rate, momentum) = (self.learning_rate(), self.momentum());
         require_finite(
             "SGD",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("momentum", self.momentum),
-            ],
+            &[("learning_rate", learning_rate), ("momentum", momentum)],
         )?;
-        require_nonnegative("SGD", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.momentum) {
+        require_nonnegative("SGD", "learning_rate", learning_rate)?;
+        if !(T::ZERO..T::ONE).contains(&momentum) {
             return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "SGD parameter momentum must lie in [0, 1), got {}",
-                    self.momentum
-                ),
+                message: format!("SGD parameter momentum must lie in [0, 1), got {momentum}"),
             });
         }
         Ok(())
@@ -75,19 +83,17 @@ impl SgdParameters {
 }
 
 /// Validated Adam parameters with host-computed bias corrections.
-#[repr(C)]
+///
+/// Slots: learning rate, `beta_one`, `beta_two`, epsilon, the two bias
+/// corrections, two padding slots.
+// The bound sits on the definition because the derived `Pod` impl requires
+// `Copy` of the slot type for every instantiation, which the derive cannot
+// express through use-site bounds alone.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) beta_one: f32,
-    pub(crate) beta_two: f32,
-    pub(crate) epsilon: f32,
-    pub(crate) bias_correction_one: f32,
-    pub(crate) bias_correction_two: f32,
-    padding: [f32; 2],
-}
+pub struct AdamParameters<T: StatefulScalar>([T; 8]);
 
-impl AdamParameters {
+impl<T: StatefulScalar> AdamParameters<T> {
     /// Validate and construct Adam parameters for one-based `step`.
     ///
     /// # Errors
@@ -96,54 +102,75 @@ impl AdamParameters {
     /// is finite and non-negative, epsilon is finite and positive, beta values
     /// lie in `[0, 1)`, and `step` is positive and representable as `i32`.
     pub fn new(
-        learning_rate: f32,
-        beta_one: f32,
-        beta_two: f32,
-        epsilon: f32,
+        learning_rate: T,
+        beta_one: T,
+        beta_two: T,
+        epsilon: T,
         step: usize,
     ) -> Result<Self> {
         let step = validate_step("Adam", step)?;
-        let parameters = Self {
+        let parameters = Self([
             learning_rate,
             beta_one,
             beta_two,
             epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-            padding: [0.0; 2],
-        };
+            T::ONE - beta_one.integer_power(step),
+            T::ONE - beta_two.integer_power(step),
+            T::ZERO,
+            T::ZERO,
+        ]);
         parameters.validate()?;
         Ok(parameters)
+    }
+
+    pub(crate) fn learning_rate(&self) -> T {
+        self.0[0]
+    }
+
+    pub(crate) fn beta_one(&self) -> T {
+        self.0[1]
+    }
+
+    pub(crate) fn beta_two(&self) -> T {
+        self.0[2]
+    }
+
+    pub(crate) fn epsilon(&self) -> T {
+        self.0[3]
+    }
+
+    pub(crate) fn bias_correction_one(&self) -> T {
+        self.0[4]
+    }
+
+    pub(crate) fn bias_correction_two(&self) -> T {
+        self.0[5]
     }
 
     pub(crate) fn validate(&self) -> Result<()> {
         validate_adaptive_values(
             "Adam",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
+            self.learning_rate(),
+            self.beta_one(),
+            self.beta_two(),
+            self.epsilon(),
+            self.bias_correction_one(),
+            self.bias_correction_two(),
         )
     }
 }
 
 /// Validated AdamW parameters with host-computed bias corrections.
-#[repr(C)]
+///
+/// Slots: the Adam slots, then weight decay, then one padding slot.
+// The bound sits on the definition because the derived `Pod` impl requires
+// `Copy` of the slot type for every instantiation, which the derive cannot
+// express through use-site bounds alone.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamWParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) beta_one: f32,
-    pub(crate) beta_two: f32,
-    pub(crate) epsilon: f32,
-    pub(crate) bias_correction_one: f32,
-    pub(crate) bias_correction_two: f32,
-    pub(crate) weight_decay: f32,
-    padding: f32,
-}
+pub struct AdamWParameters<T: StatefulScalar>([T; 8]);
 
-impl AdamWParameters {
+impl<T: StatefulScalar> AdamWParameters<T> {
     /// Validate and construct AdamW parameters for one-based `step`.
     ///
     /// # Errors
@@ -151,40 +178,68 @@ impl AdamWParameters {
     /// Returns [`HephaestusError::InvalidConfiguration`] when the embedded Adam
     /// contract fails or weight decay is not finite and non-negative.
     pub fn new(
-        learning_rate: f32,
-        beta_one: f32,
-        beta_two: f32,
-        epsilon: f32,
-        weight_decay: f32,
+        learning_rate: T,
+        beta_one: T,
+        beta_two: T,
+        epsilon: T,
+        weight_decay: T,
         step: usize,
     ) -> Result<Self> {
         let step = validate_step("AdamW", step)?;
-        let parameters = Self {
+        let parameters = Self([
             learning_rate,
             beta_one,
             beta_two,
             epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
+            T::ONE - beta_one.integer_power(step),
+            T::ONE - beta_two.integer_power(step),
             weight_decay,
-            padding: 0.0,
-        };
+            T::ZERO,
+        ]);
         parameters.validate()?;
         Ok(parameters)
+    }
+
+    pub(crate) fn learning_rate(&self) -> T {
+        self.0[0]
+    }
+
+    pub(crate) fn beta_one(&self) -> T {
+        self.0[1]
+    }
+
+    pub(crate) fn beta_two(&self) -> T {
+        self.0[2]
+    }
+
+    pub(crate) fn epsilon(&self) -> T {
+        self.0[3]
+    }
+
+    pub(crate) fn bias_correction_one(&self) -> T {
+        self.0[4]
+    }
+
+    pub(crate) fn bias_correction_two(&self) -> T {
+        self.0[5]
+    }
+
+    pub(crate) fn weight_decay(&self) -> T {
+        self.0[6]
     }
 
     pub(crate) fn validate(&self) -> Result<()> {
         validate_adaptive_values(
             "AdamW",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
+            self.learning_rate(),
+            self.beta_one(),
+            self.beta_two(),
+            self.epsilon(),
+            self.bias_correction_one(),
+            self.bias_correction_two(),
         )?;
-        require_finite("AdamW", &[("weight_decay", self.weight_decay)])?;
-        require_nonnegative("AdamW", "weight_decay", self.weight_decay)
+        require_finite("AdamW", &[("weight_decay", self.weight_decay())])?;
+        require_nonnegative("AdamW", "weight_decay", self.weight_decay())
     }
 }
 
@@ -199,7 +254,7 @@ fn validate_step(name: &str, step: usize) -> Result<i32> {
     })
 }
 
-fn validate_adaptive_values<T: FloatElement + PartialOrd + core::fmt::Display>(
+fn validate_adaptive_values<T: StatefulScalar>(
     name: &str,
     learning_rate: T,
     beta_one: T,
@@ -236,16 +291,16 @@ fn validate_adaptive_values<T: FloatElement + PartialOrd + core::fmt::Display>(
 }
 
 /// Validated RMSProp parameters.
-#[repr(C)]
+///
+/// Slots: learning rate, alpha, epsilon, one padding slot.
+// The bound sits on the definition because the derived `Pod` impl requires
+// `Copy` of the slot type for every instantiation, which the derive cannot
+// express through use-site bounds alone.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct RmsPropParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) alpha: f32,
-    pub(crate) epsilon: f32,
-    padding: f32,
-}
+pub struct RmsPropParameters<T: StatefulScalar>([T; 4]);
 
-impl RmsPropParameters {
+impl<T: StatefulScalar> RmsPropParameters<T> {
     /// Validate and construct RMSProp parameters.
     ///
     /// # Errors
@@ -253,28 +308,36 @@ impl RmsPropParameters {
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
     /// is finite and non-negative, epsilon is finite and positive, and alpha
     /// lies in `[0, 1)`.
-    pub fn new(learning_rate: f32, alpha: f32, epsilon: f32) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            alpha,
-            epsilon,
-            padding: 0.0,
-        };
+    pub fn new(learning_rate: T, alpha: T, epsilon: T) -> Result<Self> {
+        let parameters = Self([learning_rate, alpha, epsilon, T::ZERO]);
         parameters.validate()?;
         Ok(parameters)
     }
 
+    pub(crate) fn learning_rate(&self) -> T {
+        self.0[0]
+    }
+
+    pub(crate) fn alpha(&self) -> T {
+        self.0[1]
+    }
+
+    pub(crate) fn epsilon(&self) -> T {
+        self.0[2]
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
+        let (learning_rate, alpha, epsilon) = (self.learning_rate(), self.alpha(), self.epsilon());
         require_finite(
             "RMSProp",
             &[
-                ("learning_rate", self.learning_rate),
-                ("alpha", self.alpha),
-                ("epsilon", self.epsilon),
+                ("learning_rate", learning_rate),
+                ("alpha", alpha),
+                ("epsilon", epsilon),
             ],
         )?;
-        require_nonnegative("RMSProp", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.alpha) || self.epsilon <= 0.0 {
+        require_nonnegative("RMSProp", "learning_rate", learning_rate)?;
+        if !(T::ZERO..T::ONE).contains(&alpha) || epsilon <= T::ZERO {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "RMSProp alpha must lie in [0, 1) and epsilon must be positive"
                     .to_string(),
@@ -285,41 +348,44 @@ impl RmsPropParameters {
 }
 
 /// Validated AdaGrad parameters.
-#[repr(C)]
+///
+/// Slots: learning rate, epsilon, two padding slots.
+// The bound sits on the definition because the derived `Pod` impl requires
+// `Copy` of the slot type for every instantiation, which the derive cannot
+// express through use-site bounds alone.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdaGradParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) epsilon: f32,
-    padding: [f32; 2],
-}
+pub struct AdaGradParameters<T: StatefulScalar>([T; 4]);
 
-impl AdaGradParameters {
+impl<T: StatefulScalar> AdaGradParameters<T> {
     /// Validate and construct AdaGrad parameters.
     ///
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
     /// is finite and non-negative and epsilon is finite and positive.
-    pub fn new(learning_rate: f32, epsilon: f32) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            epsilon,
-            padding: [0.0; 2],
-        };
+    pub fn new(learning_rate: T, epsilon: T) -> Result<Self> {
+        let parameters = Self([learning_rate, epsilon, T::ZERO, T::ZERO]);
         parameters.validate()?;
         Ok(parameters)
     }
 
+    pub(crate) fn learning_rate(&self) -> T {
+        self.0[0]
+    }
+
+    pub(crate) fn epsilon(&self) -> T {
+        self.0[1]
+    }
+
     pub(crate) fn validate(&self) -> Result<()> {
+        let (learning_rate, epsilon) = (self.learning_rate(), self.epsilon());
         require_finite(
             "AdaGrad",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("epsilon", self.epsilon),
-            ],
+            &[("learning_rate", learning_rate), ("epsilon", epsilon)],
         )?;
-        require_nonnegative("AdaGrad", "learning_rate", self.learning_rate)?;
-        if self.epsilon <= 0.0 {
+        require_nonnegative("AdaGrad", "learning_rate", learning_rate)?;
+        if epsilon <= T::ZERO {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "AdaGrad epsilon must be positive".to_string(),
             });
@@ -328,265 +394,19 @@ impl AdaGradParameters {
     }
 }
 
-const _: () = assert!(core::mem::size_of::<SgdParameters>() == 16);
-const _: () = assert!(core::mem::size_of::<AdamParameters>() == 32);
-const _: () = assert!(core::mem::size_of::<AdamWParameters>() == 32);
-const _: () = assert!(core::mem::size_of::<RmsPropParameters>() == 16);
-const _: () = assert!(core::mem::size_of::<AdaGradParameters>() == 16);
-
-// f64 uniform twins. The f32 structs above are a frozen uniform ABI (their
-// padding fields keep the 16/32-byte sizes device kernels were built
-// against), so f64 gets its own padding-free structs — field counts times
-// 8 bytes already satisfy uniform granularity — sharing the generic
-// validation helpers with the f32 originals.
-
-/// Validated f64 stochastic-gradient-descent parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct SgdParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) momentum: f64,
-}
-
-impl SgdParametersF64 {
-    /// Validate and construct f64 SGD parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`SgdParameters::new`].
-    pub fn new(learning_rate: f64, momentum: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            momentum,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "SGD",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("momentum", self.momentum),
-            ],
-        )?;
-        require_nonnegative("SGD", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.momentum) {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "SGD parameter momentum must lie in [0, 1), got {}",
-                    self.momentum
-                ),
-            });
-        }
-        Ok(())
-    }
-}
-
-/// Validated f64 Adam parameters with host-computed bias corrections.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) beta_one: f64,
-    pub(crate) beta_two: f64,
-    pub(crate) epsilon: f64,
-    pub(crate) bias_correction_one: f64,
-    pub(crate) bias_correction_two: f64,
-}
-
-impl AdamParametersF64 {
-    /// Validate and construct f64 Adam parameters for one-based `step`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdamParameters::new`].
-    pub fn new(
-        learning_rate: f64,
-        beta_one: f64,
-        beta_two: f64,
-        epsilon: f64,
-        step: usize,
-    ) -> Result<Self> {
-        let step = validate_step("Adam", step)?;
-        let parameters = Self {
-            learning_rate,
-            beta_one,
-            beta_two,
-            epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        validate_adaptive_values(
-            "Adam",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
-        )
-    }
-}
-
-/// Validated f64 AdamW parameters with host-computed bias corrections.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamWParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) beta_one: f64,
-    pub(crate) beta_two: f64,
-    pub(crate) epsilon: f64,
-    pub(crate) bias_correction_one: f64,
-    pub(crate) bias_correction_two: f64,
-    pub(crate) weight_decay: f64,
-}
-
-impl AdamWParametersF64 {
-    /// Validate and construct f64 AdamW parameters for one-based `step`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdamWParameters::new`].
-    pub fn new(
-        learning_rate: f64,
-        beta_one: f64,
-        beta_two: f64,
-        epsilon: f64,
-        weight_decay: f64,
-        step: usize,
-    ) -> Result<Self> {
-        let step = validate_step("AdamW", step)?;
-        let parameters = Self {
-            learning_rate,
-            beta_one,
-            beta_two,
-            epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-            weight_decay,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        validate_adaptive_values(
-            "AdamW",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
-        )?;
-        require_finite("AdamW", &[("weight_decay", self.weight_decay)])?;
-        require_nonnegative("AdamW", "weight_decay", self.weight_decay)
-    }
-}
-
-/// Validated f64 RMSProp parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct RmsPropParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) alpha: f64,
-    pub(crate) epsilon: f64,
-}
-
-impl RmsPropParametersF64 {
-    /// Validate and construct f64 RMSProp parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`RmsPropParameters::new`].
-    pub fn new(learning_rate: f64, alpha: f64, epsilon: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            alpha,
-            epsilon,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "RMSProp",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("alpha", self.alpha),
-                ("epsilon", self.epsilon),
-            ],
-        )?;
-        require_nonnegative("RMSProp", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.alpha) || self.epsilon <= 0.0 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: "RMSProp alpha must lie in [0, 1) and epsilon must be positive"
-                    .to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
-/// Validated f64 AdaGrad parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdaGradParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) epsilon: f64,
-}
-
-impl AdaGradParametersF64 {
-    /// Validate and construct f64 AdaGrad parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdaGradParameters::new`].
-    pub fn new(learning_rate: f64, epsilon: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            epsilon,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "AdaGrad",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("epsilon", self.epsilon),
-            ],
-        )?;
-        require_nonnegative("AdaGrad", "learning_rate", self.learning_rate)?;
-        if self.epsilon <= 0.0 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: "AdaGrad epsilon must be positive".to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
-const _: () = assert!(core::mem::size_of::<SgdParametersF64>() == 16);
-const _: () = assert!(core::mem::size_of::<AdamParametersF64>() == 48);
-const _: () = assert!(core::mem::size_of::<AdamWParametersF64>() == 56);
-const _: () = assert!(core::mem::size_of::<RmsPropParametersF64>() == 24);
-const _: () = assert!(core::mem::size_of::<AdaGradParametersF64>() == 16);
+// The padded slot counts equal the rule field lists at both widths. The f32
+// sizes are the uniform sizes the pre-generic structs fixed; the f64 sizes
+// double them with the same slot counts.
+const _: () = assert!(core::mem::size_of::<SgdParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<SgdParameters<f64>>() == 32);
+const _: () = assert!(core::mem::size_of::<AdamParameters<f32>>() == 32);
+const _: () = assert!(core::mem::size_of::<AdamParameters<f64>>() == 64);
+const _: () = assert!(core::mem::size_of::<AdamWParameters<f32>>() == 32);
+const _: () = assert!(core::mem::size_of::<AdamWParameters<f64>>() == 64);
+const _: () = assert!(core::mem::size_of::<RmsPropParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<RmsPropParameters<f64>>() == 32);
+const _: () = assert!(core::mem::size_of::<AdaGradParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<AdaGradParameters<f64>>() == 32);
 
 #[cfg(test)]
 #[path = "tests_parameters.rs"]

@@ -1,8 +1,6 @@
 //! WGPU instantiation of the shared stateful-update contract.
 
-use hephaestus_conformance::{
-    assert_stateful_update_contract, assert_stateful_update_contract_f64,
-};
+use hephaestus_conformance::assert_stateful_update_at;
 use hephaestus_core::{
     ComputeDevice, DeviceFeature, DevicePreference, HephaestusError, Sgd, SgdParameters,
     StatefulUpdateOperands, StatefulUpdateOps, StridedView,
@@ -21,7 +19,7 @@ fn device(label: &str) -> Option<WgpuDevice> {
     }
 }
 
-fn f64_device(label: &str) -> Option<WgpuDevice> {
+fn shader_f64_device(label: &str) -> Option<WgpuDevice> {
     match WgpuDevice::try_with_device_preference_and_required_device_features(
         label,
         DevicePreference::HighPerformance,
@@ -29,10 +27,12 @@ fn f64_device(label: &str) -> Option<WgpuDevice> {
     ) {
         Ok(device) => Some(device),
         Err(error) if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_none() => {
-            eprintln!("skip WGPU f64 stateful-update conformance: device unavailable ({error})");
+            eprintln!("skip WGPU ShaderF64 stateful-update conformance: device unavailable ({error})");
             None
         }
-        Err(error) => panic!("WGPU f64 stateful-update conformance requires a device: {error}"),
+        Err(error) => {
+            panic!("WGPU ShaderF64 stateful-update conformance requires a device: {error}")
+        }
     }
 }
 
@@ -40,14 +40,14 @@ pub(super) fn wgpu_satisfies_the_stateful_update_contract() {
     let Some(device) = device("hephaestus-stateful-update-test") else {
         return;
     };
-    assert_stateful_update_contract(&device, &WgpuStatefulUpdateOps);
+    assert_stateful_update_at::<f32, _, _>(&device, &WgpuStatefulUpdateOps);
 }
 
-pub(super) fn wgpu_satisfies_the_f64_stateful_update_contract() {
-    let Some(device) = f64_device("hephaestus-stateful-update-f64-test") else {
+pub(super) fn wgpu_satisfies_the_stateful_update_contract_on_shader_f64_devices() {
+    let Some(device) = shader_f64_device("hephaestus-stateful-update-shader-f64-test") else {
         return;
     };
-    assert_stateful_update_contract_f64(&device, &WgpuStatefulUpdateOps);
+    assert_stateful_update_at::<f64, _, _>(&device, &WgpuStatefulUpdateOps);
 }
 
 pub(super) fn foreign_device_buffers_fail_before_mutation() {
@@ -63,7 +63,7 @@ pub(super) fn foreign_device_buffers_fail_before_mutation() {
     let layout = Layout::c_contiguous([2]).expect("layout");
     let states = [StridedView::new(&state, &layout)];
     let error = WgpuStatefulUpdateOps
-        .stateful_update::<Sgd, 1>(
+        .stateful_update::<f32, Sgd, 1>(
             &dispatch,
             StatefulUpdateOperands {
                 parameter: StridedView::new(&parameter, &layout),

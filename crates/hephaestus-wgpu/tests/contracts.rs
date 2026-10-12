@@ -347,7 +347,7 @@ contract_cases!(
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
-    stateful_update_contracts::wgpu_satisfies_the_f64_stateful_update_contract,
+    stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract_on_shader_f64_devices,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
     staggered_contracts::wgpu_satisfies_the_staggered_contract,
     staggered3d::staggered_gradient_matches_cpu_on_every_axis,

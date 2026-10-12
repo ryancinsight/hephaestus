@@ -1,8 +1,9 @@
 //! Provider-owned stateful parameter updates for ROCm.
 
 use hephaestus_core::{
-    BlockWidth, DialectScalar, HipC, Result, StatefulUpdateAliasing, StatefulUpdateMeta,
-    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
+    BlockWidth, DialectScalar, HipC, Result, StatefulScalar, StatefulUpdateAliasing,
+    StatefulUpdateMeta, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
+    plan_stateful_update,
 };
 
 use crate::application::pipeline::{
@@ -16,10 +17,10 @@ const ENTRY_POINT: &str = "stateful_update_kernel";
 fn parameters_declaration<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: StatefulScalar,
 {
-    let ty = T::TYPE_TOKEN;
-    let fields = Rule::parameter_fields_for::<T>()
+    let ty = <T as DialectScalar<HipC>>::TYPE_TOKEN;
+    let fields = Rule::PARAMETER_FIELDS
         .iter()
         .map(|field| format!("    {ty} {field};\n"))
         .collect::<String>();
@@ -29,9 +30,9 @@ where
 fn kernel_source<Rule, T>() -> String
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: StatefulScalar,
 {
-    let ty = T::TYPE_TOKEN;
+    let ty = <T as DialectScalar<HipC>>::TYPE_TOKEN;
     let state_one_argument = if Rule::STATE_COUNT == 2 {
         format!(",\n    {ty}* state_one")
     } else {
@@ -110,7 +111,7 @@ extern "C" __global__ void {entry_point}(
 "#,
         parameters = parameters_declaration::<Rule, T>(),
         entry_point = ENTRY_POINT,
-        ty = T::TYPE_TOKEN,
+        ty = <T as DialectScalar<HipC>>::TYPE_TOKEN,
         body = Rule::body_for::<T>(),
     )
 }
@@ -145,7 +146,7 @@ fn launch<Rule, T, P, const N: usize>(
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: StatefulScalar,
 {
     let width = BlockWidth::DEFAULT;
     let kernel = cached_kernel(
@@ -234,7 +235,7 @@ fn dispatch<Rule, T, P, const N: usize>(
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: StatefulScalar,
 {
     validate(&parameters)?;
     validate_device(device, &operands)?;
@@ -249,28 +250,17 @@ where
 impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
     type Dialect = HipC;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<T, Rule, const N: usize>(
         &self,
         device: &RocmDevice,
-        operands: StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
+        T: StatefulScalar,
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        dispatch::<Rule, f32, _, N>(device, operands, parameters, Rule::validate_parameters)
-    }
-
-    fn stateful_update_f64<Rule, const N: usize>(
-        &self,
-        device: &RocmDevice,
-        operands: StatefulUpdateOperands<'_, RocmBuffer<f64>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
-    ) -> Result<()>
-    where
-        Rule: StatefulUpdateRule<Self::Dialect>,
-    {
-        dispatch::<Rule, f64, _, N>(device, operands, parameters, Rule::validate_parameters_f64)
+        dispatch::<Rule, T, _, N>(device, operands, parameters, Rule::validate_parameters::<T>)
     }
 }
 
@@ -290,27 +280,37 @@ mod tests {
         let adam = kernel_source::<Adam, f32>();
         assert!(adam.contains("float bias_correction_two;"));
         assert!(adam.contains("float* state_one"));
-        assert!(adam.contains(<Adam as StatefulUpdateRule<HipC>>::BODY));
+        assert!(adam.contains(<Adam as StatefulUpdateRule<HipC>>::body_for::<f32>().as_str()));
+    }
+
+    fn source_types_storage_and_parameters_use_the_width_token<T: StatefulScalar>() {
+        let token = <T as DialectScalar<HipC>>::TYPE_TOKEN;
+        let sgd = kernel_source::<Sgd, T>();
+        assert!(sgd.contains(&format!("{token} momentum;")));
+        assert!(sgd.contains(&format!("{token}* parameter,")));
+        assert!(sgd.contains(&format!("const {token}* gradient,")));
+
+        let adam = kernel_source::<Adam, T>();
+        assert!(adam.contains(&format!("{token} bias_correction_two;")));
+        assert!(adam.contains(&format!("{token}* state_one")));
+    }
+
+    fn adam_selects_the_width_literal_body<T: StatefulScalar>() {
+        let adam = kernel_source::<Adam, T>();
+        let body = <Adam as StatefulUpdateRule<HipC>>::body_for::<T>();
+        assert!(adam.contains(body.as_str()));
+        assert!(body.contains(T::ONE_LITERAL));
     }
 
     #[test]
-    fn f64_source_types_storage_and_parameters_double() {
-        let sgd = kernel_source::<Sgd, f64>();
-        assert!(sgd.contains("double momentum;"));
-        assert!(sgd.contains("double* parameter,"));
-        assert!(sgd.contains("const double* gradient,"));
-        assert!(!sgd.contains("float"));
-
-        let adam = kernel_source::<Adam, f64>();
-        assert!(adam.contains("double bias_correction_two;"));
-        assert!(adam.contains("double* state_one"));
+    fn source_types_storage_and_parameters_follow_the_width_at_both_widths() {
+        source_types_storage_and_parameters_use_the_width_token::<f32>();
+        source_types_storage_and_parameters_use_the_width_token::<f64>();
     }
 
     #[test]
-    fn f64_adam_selects_the_double_literal_body() {
-        let adam = kernel_source::<Adam, f64>();
-        let body = <Adam as StatefulUpdateRule<HipC>>::body_for::<f64>();
-        assert!(adam.contains(body));
-        assert!(!body.contains("1.0f"));
+    fn adam_selects_the_width_literal_body_at_both_widths() {
+        adam_selects_the_width_literal_body::<f32>();
+        adam_selects_the_width_literal_body::<f64>();
     }
 }

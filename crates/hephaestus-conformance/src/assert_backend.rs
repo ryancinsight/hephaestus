@@ -42,16 +42,16 @@
 use crate::typed_elementwise::TypedElementwiseBackend;
 use eunomia::Pod;
 use hephaestus_core::{
-    AbsOp, AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, AddOp,
+    AbsOp, AddOp,
     AttentionOps, AxisReductionOps, BatchSubmitOps, BinaryExpr, CeluGradOp, CeluOp, CombineExpr,
     ComputeDevice, ConvolutionOps, CrossEntropyOps, CtcOps, CumProdOp, CumSumOp, DecompositionOps,
     DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DenseVectorOps, DialectScalar,
     DivOp, ElementwiseOps, EqOp, FixedFd3DOps, FullReductionOps, GeOp, GtOp, HardshrinkGradOp,
     HardshrinkOp, HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp,
     LtOp, MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr,
-    ParameterizedUnaryOps, ProdOp, RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters,
-    ScanOps, Sgd, SgdParameters, SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp,
-    Staggered3DOps, StatefulUpdateOps, StatefulUpdateRule, StencilOps, SubOp, SumOp,
+    ParameterizedUnaryOps, ProdOp, RandomInitOps, RayIntegralOps,
+    ScanOps, SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp,
+    Staggered3DOps, StatefulUpdateOps, StencilOps, SubOp, SumOp,
     ThresholdGradOp, ThresholdOp, TypedBinaryExpr, UnaryExpr,
 };
 
@@ -321,13 +321,6 @@ pub fn assert_backend_contract<
         + IdentityToken<CumProdOp, <B as ScanOps<D, f32>>::Dialect>,
     i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, <B as ScanOps<D, i32>>::Dialect>,
     // stateful-update markers
-    Sgd: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = SgdParameters>,
-    Adam: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamParameters>,
-    AdamW: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamWParameters>,
-    RmsProp:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = RmsPropParameters>,
-    AdaGrad:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdaGradParameters>,
 {
     let device = backend.device;
     crate::attention::assert_attention_contract(device, backend.attention);

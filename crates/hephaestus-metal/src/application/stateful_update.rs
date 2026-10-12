@@ -1,6 +1,9 @@
 //! Stateful parameter updates through WGPU's native Metal path.
 
-use hephaestus_core::{StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, Wgsl};
+use hephaestus_core::{
+    HephaestusError, StatefulScalar, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
+    Wgsl,
+};
 use hephaestus_wgpu::{WgpuDevice, WgpuStatefulUpdateOps};
 
 use crate::{MetalBuffer, MetalDevice, Result};
@@ -12,15 +15,28 @@ pub struct MetalStatefulUpdateOps;
 impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
     type Dialect = Wgsl;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<T, Rule, const N: usize>(
         &self,
         device: &MetalDevice,
-        operands: StatefulUpdateOperands<'_, MetalBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, MetalBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
+        T: StatefulScalar,
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
+        // The native Metal path has no double-precision shader: a width that
+        // requires a device feature (f64 requires `ShaderF64`) is unsupported.
+        if T::REQUIRED_DEVICE_FEATURE.is_some() {
+            return Err(HephaestusError::Unsupported {
+                message: format!(
+                    "{} does not support {} stateful updates for {}",
+                    core::any::type_name::<MetalDevice>(),
+                    core::any::type_name::<T>(),
+                    core::any::type_name::<Rule>(),
+                ),
+            });
+        }
         let parameter = hephaestus_core::StridedView::new(
             &operands.parameter.buffer.inner,
             operands.parameter.layout,
@@ -35,7 +51,7 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     &state_zero.buffer.inner,
                     state_zero.layout,
                 )];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<Rule, N>(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<T, Rule, N>(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {
@@ -51,7 +67,7 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     hephaestus_core::StridedView::new(&state_zero.buffer.inner, state_zero.layout),
                     hephaestus_core::StridedView::new(&state_one.buffer.inner, state_one.layout),
                 ];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<Rule, N>(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<T, Rule, N>(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {

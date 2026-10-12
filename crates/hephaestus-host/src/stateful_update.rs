@@ -22,8 +22,8 @@
 //! thread already holds.
 
 use hephaestus_core::{
-    Host, Result, StatefulUpdateAliasing, StatefulUpdateOperands, StatefulUpdateOps,
-    StatefulUpdateRule, plan_stateful_update,
+    Host, Result, StatefulScalar, StatefulUpdateAliasing, StatefulUpdateOperands,
+    StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
 };
 use leto::{ArrayView, ArrayViewMut};
 
@@ -129,13 +129,14 @@ pub struct HostStatefulUpdateOps;
 impl StatefulUpdateOps<HostDevice> for HostStatefulUpdateOps {
     type Dialect = Host;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<T, Rule, const N: usize>(
         &self,
         _device: &HostDevice,
-        operands: StatefulUpdateOperands<'_, HostBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, HostBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
+        T: StatefulScalar,
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
         Rule::validate_parameters(&parameters)?;
@@ -147,37 +148,8 @@ impl StatefulUpdateOps<HostDevice> for HostStatefulUpdateOps {
             operands,
             &parameters,
             |parameter, gradient, state_zero, state_one, parameters| {
-                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(0.0)];
+                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(T::ZERO)];
                 let step = Rule::update(*parameter, gradient, states, parameters);
-                *parameter = step.parameter;
-                *state_zero = step.states[0];
-                if let Some(slot) = state_one {
-                    *slot = step.states[1];
-                }
-            },
-        )
-    }
-
-    fn stateful_update_f64<Rule, const N: usize>(
-        &self,
-        _device: &HostDevice,
-        operands: StatefulUpdateOperands<'_, HostBuffer<f64>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
-    ) -> Result<()>
-    where
-        Rule: StatefulUpdateRule<Self::Dialect>,
-    {
-        Rule::validate_parameters_f64(&parameters)?;
-        let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
-        if plan.is_empty() {
-            return Ok(());
-        }
-        run_update(
-            operands,
-            &parameters,
-            |parameter, gradient, state_zero, state_one, parameters| {
-                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(0.0)];
-                let step = Rule::update_f64(*parameter, gradient, states, parameters);
                 *parameter = step.parameter;
                 *state_zero = step.states[0];
                 if let Some(slot) = state_one {
@@ -193,27 +165,31 @@ mod tests {
     use super::HostStatefulUpdateOps;
     use eunomia::Zeroable;
     use hephaestus_core::{
-        Adam, AdamParametersF64, ComputeDevice, HephaestusError, Host, Sgd, SgdParameters,
-        SgdParametersF64, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
+        Adam, AdamParameters, ComputeDevice, HephaestusError, Host, Sgd, SgdParameters,
+        StatefulScalar, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
         StridedView,
     };
     use leto::Layout;
 
-    #[test]
-    fn host_sgd_f64_matches_hand_derived_arithmetic() {
+    fn sgd_matches_hand_derived_arithmetic<T: StatefulScalar>() {
         // lr = 0.25, momentum = 0.5: every intermediate is binary-exact.
         // elem0: s = 0*0.5+2 = 2.0, p = 10-0.25*2 = 9.5.
         // elem1: s = 1*0.5+1 = 1.5, p = 4-0.25*1.5 = 3.625.
         let device = super::HostDevice::new();
         let layout = Layout::c_contiguous([2]).expect("valid layout");
-        let parameter = device.upload(&[10.0_f64, 4.0]).expect("upload succeeds");
-        let gradient = device.upload(&[2.0_f64, 1.0]).expect("upload succeeds");
-        let state = device.upload(&[0.0_f64, 1.0]).expect("upload succeeds");
+        let parameter = device
+            .upload(&[T::from_f64(10.0), T::from_f64(4.0)])
+            .expect("upload succeeds");
+        let gradient = device
+            .upload(&[T::from_f64(2.0), T::from_f64(1.0)])
+            .expect("upload succeeds");
+        let state = device.upload(&[T::ZERO, T::ONE]).expect("upload succeeds");
         let states = [StridedView::new(&state, &layout)];
-        let parameters = SgdParametersF64::new(0.25, 0.5).expect("valid f64 SGD parameters");
+        let parameters = SgdParameters::new(T::from_f64(0.25), T::from_f64(0.5))
+            .expect("valid SGD parameters");
 
         HostStatefulUpdateOps
-            .stateful_update_f64::<Sgd, 1>(
+            .stateful_update::<T, Sgd, 1>(
                 &device,
                 StatefulUpdateOperands {
                     parameter: StridedView::new(&parameter, &layout),
@@ -222,38 +198,47 @@ mod tests {
                 },
                 parameters,
             )
-            .expect("host f64 SGD succeeds");
+            .expect("host SGD succeeds");
 
-        let mut actual_parameter = [0.0_f64; 2];
-        let mut actual_state = [0.0_f64; 2];
+        let mut actual_parameter = [T::ZERO; 2];
+        let mut actual_state = [T::ZERO; 2];
         device
             .download(&parameter, &mut actual_parameter)
             .expect("download succeeds");
         device
             .download(&state, &mut actual_state)
             .expect("download succeeds");
-        assert_eq!(actual_parameter, [9.5, 3.625]);
-        assert_eq!(actual_state, [2.0, 1.5]);
+        assert_eq!(actual_parameter, [T::from_f64(9.5), T::from_f64(3.625)]);
+        assert_eq!(actual_state, [T::from_f64(2.0), T::from_f64(1.5)]);
     }
 
-    #[test]
-    fn host_adam_f64_dispatch_equals_the_value_definition() {
-        // Two-state path: the seam must equal `update_f64` elementwise.
+    fn adam_dispatch_equals_value_definition<T: StatefulScalar>() {
+        // Two-state path: the seam must equal `update` elementwise.
         let device = super::HostDevice::new();
         let layout = Layout::c_contiguous([2]).expect("valid layout");
-        let parameter = device.upload(&[1.0_f64, -2.0]).expect("upload succeeds");
-        let gradient = device.upload(&[2.0_f64, 0.5]).expect("upload succeeds");
-        let state_zero = device.upload(&[0.5_f64, 0.25]).expect("upload succeeds");
-        let state_one = device.upload(&[0.25_f64, 0.125]).expect("upload succeeds");
+        let parameter_initial = [T::ONE, T::from_f64(-2.0)];
+        let gradient_initial = [T::from_f64(2.0), T::from_f64(0.5)];
+        let state_zero_initial = [T::from_f64(0.5), T::from_f64(0.25)];
+        let state_one_initial = [T::from_f64(0.25), T::from_f64(0.125)];
+        let parameter = device.upload(&parameter_initial).expect("upload succeeds");
+        let gradient = device.upload(&gradient_initial).expect("upload succeeds");
+        let state_zero = device.upload(&state_zero_initial).expect("upload succeeds");
+        let state_one = device.upload(&state_one_initial).expect("upload succeeds");
         let states = [
             StridedView::new(&state_zero, &layout),
             StridedView::new(&state_one, &layout),
         ];
-        let parameters =
-            AdamParametersF64::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid f64 Adam parameters");
+        let parameters = AdamParameters::new(
+            T::from_f64(0.1),
+            T::from_f64(0.9),
+            T::from_f64(0.999),
+            T::from_f64(1.0e-6),
+            3,
+        )
+        .expect("valid Adam parameters");
 
         HostStatefulUpdateOps
-            .stateful_update_f64::<Adam, 1>(
+            .stateful_update::<T, Adam, 1>(
                 &device,
                 StatefulUpdateOperands {
                     parameter: StridedView::new(&parameter, &layout),
@@ -262,87 +247,52 @@ mod tests {
                 },
                 parameters,
             )
-            .expect("host f64 Adam succeeds");
+            .expect("host Adam succeeds");
 
-        for (index, ((&p, &g), (&s0, &s1))) in [1.0_f64, -2.0]
-            .iter()
-            .zip([2.0_f64, 0.5].iter())
-            .zip([0.5_f64, 0.25].iter().zip([0.25_f64, 0.125].iter()))
-            .enumerate()
-        {
-            let expected =
-                <Adam as StatefulUpdateRule<Host>>::update_f64(p, g, [s0, s1], &parameters);
-            let mut actual_parameter = [0.0_f64; 2];
-            let mut actual_zero = [0.0_f64; 2];
-            let mut actual_one = [0.0_f64; 2];
-            device
-                .download(&parameter, &mut actual_parameter)
-                .expect("download succeeds");
-            device
-                .download(&state_zero, &mut actual_zero)
-                .expect("download succeeds");
-            device
-                .download(&state_one, &mut actual_one)
-                .expect("download succeeds");
+        let mut actual_parameter = [T::ZERO; 2];
+        let mut actual_zero = [T::ZERO; 2];
+        let mut actual_one = [T::ZERO; 2];
+        device
+            .download(&parameter, &mut actual_parameter)
+            .expect("download succeeds");
+        device
+            .download(&state_zero, &mut actual_zero)
+            .expect("download succeeds");
+        device
+            .download(&state_one, &mut actual_one)
+            .expect("download succeeds");
+        for index in 0..2 {
+            let expected = <Adam as StatefulUpdateRule<Host>>::update(
+                parameter_initial[index],
+                gradient_initial[index],
+                [state_zero_initial[index], state_one_initial[index]],
+                &parameters,
+            );
             assert_eq!(actual_parameter[index], expected.parameter);
             assert_eq!(actual_zero[index], expected.states[0]);
             assert_eq!(actual_one[index], expected.states[1]);
         }
     }
 
-    #[test]
-    fn host_sgd_f32_still_matches_after_the_shared_runner_refactor() {
-        // The f32 path now runs through the shared `run_update` driver;
-        // pin its arithmetic so the refactor cannot drift it.
-        let device = super::HostDevice::new();
-        let layout = Layout::c_contiguous([2]).expect("valid layout");
-        let parameter = device.upload(&[10.0_f32, 4.0]).expect("upload succeeds");
-        let gradient = device.upload(&[2.0_f32, 1.0]).expect("upload succeeds");
-        let state = device.upload(&[0.0_f32, 1.0]).expect("upload succeeds");
-        let states = [StridedView::new(&state, &layout)];
-        let parameters = SgdParameters::new(0.25, 0.5).expect("valid SGD parameters");
-
-        HostStatefulUpdateOps
-            .stateful_update::<Sgd, 1>(
-                &device,
-                StatefulUpdateOperands {
-                    parameter: StridedView::new(&parameter, &layout),
-                    gradient: StridedView::new(&gradient, &layout),
-                    states: &states,
-                },
-                parameters,
-            )
-            .expect("host f32 SGD succeeds");
-
-        let mut actual_parameter = [0.0_f32; 2];
-        let mut actual_state = [0.0_f32; 2];
-        device
-            .download(&parameter, &mut actual_parameter)
-            .expect("download succeeds");
-        device
-            .download(&state, &mut actual_state)
-            .expect("download succeeds");
-        assert_eq!(actual_parameter, [9.5, 3.625]);
-        assert_eq!(actual_state, [2.0, 1.5]);
-    }
-
-    #[test]
-    fn host_f64_rejects_invalid_parameters_before_mutation() {
+    fn rejects_invalid_parameters_before_mutation<T: StatefulScalar>() {
         // A zeroed Adam block carries epsilon = 0, which validation must
         // reject before any buffer is touched.
         let device = super::HostDevice::new();
         let layout = Layout::c_contiguous([2]).expect("valid layout");
-        let parameter = device.upload(&[10.0_f64, 4.0]).expect("upload succeeds");
-        let gradient = device.upload(&[2.0_f64, 1.0]).expect("upload succeeds");
-        let state_zero = device.upload(&[0.0_f64, 1.0]).expect("upload succeeds");
-        let state_one = device.upload(&[0.0_f64, 1.0]).expect("upload succeeds");
+        let initial = [T::from_f64(10.0), T::from_f64(4.0)];
+        let parameter = device.upload(&initial).expect("upload succeeds");
+        let gradient = device
+            .upload(&[T::from_f64(2.0), T::ONE])
+            .expect("upload succeeds");
+        let state_zero = device.upload(&[T::ZERO, T::ONE]).expect("upload succeeds");
+        let state_one = device.upload(&[T::ZERO, T::ONE]).expect("upload succeeds");
         let states = [
             StridedView::new(&state_zero, &layout),
             StridedView::new(&state_one, &layout),
         ];
-        let parameters = AdamParametersF64::zeroed();
+        let parameters = AdamParameters::<T>::zeroed();
 
-        let result = HostStatefulUpdateOps.stateful_update_f64::<Adam, 1>(
+        let result = HostStatefulUpdateOps.stateful_update::<T, Adam, 1>(
             &device,
             StatefulUpdateOperands {
                 parameter: StridedView::new(&parameter, &layout),
@@ -359,14 +309,28 @@ mod tests {
             "Adam beta values must lie in [0, 1), epsilon and bias corrections must be positive"
         );
 
-        let mut actual_parameter = [0.0_f64; 2];
+        let mut actual_parameter = [T::ZERO; 2];
         device
             .download(&parameter, &mut actual_parameter)
             .expect("download succeeds");
-        assert_eq!(
-            actual_parameter,
-            [10.0, 4.0],
-            "rejected dispatch must not mutate"
-        );
+        assert_eq!(actual_parameter, initial, "rejected dispatch must not mutate");
+    }
+
+    #[test]
+    fn host_sgd_matches_hand_derived_arithmetic_at_both_widths() {
+        sgd_matches_hand_derived_arithmetic::<f32>();
+        sgd_matches_hand_derived_arithmetic::<f64>();
+    }
+
+    #[test]
+    fn host_adam_dispatch_equals_the_value_definition_at_both_widths() {
+        adam_dispatch_equals_value_definition::<f32>();
+        adam_dispatch_equals_value_definition::<f64>();
+    }
+
+    #[test]
+    fn host_rejects_invalid_parameters_before_mutation_at_both_widths() {
+        rejects_invalid_parameters_before_mutation::<f32>();
+        rejects_invalid_parameters_before_mutation::<f64>();
     }
 }

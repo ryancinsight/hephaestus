@@ -2,9 +2,9 @@ use eunomia::Pod;
 
 use super::super::dialect::KernelDialect;
 use super::parameters::{
-    AdaGradParameters, AdaGradParametersF64, AdamParameters, AdamParametersF64, AdamWParameters,
-    AdamWParametersF64, RmsPropParameters, RmsPropParametersF64, SgdParameters, SgdParametersF64,
+    AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
+use super::scalar::StatefulScalar;
 
 mod sealed {
     pub trait Sealed {}
@@ -18,48 +18,34 @@ mod sealed {
 /// [`StatefulUpdateRule::BODY`]'s conditionally-rendered `state_one`
 /// statements simply do not exist for that rule.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StatefulUpdateStep {
+pub struct StatefulUpdateStep<T> {
     /// `parameter_next`.
-    pub parameter: f32,
+    pub parameter: T,
     /// `state_zero_next` and, for a two-state rule, `state_one_next`.
-    pub states: [f32; 2],
-}
-
-/// f64 twin of [`StatefulUpdateStep`]: one value-level update step's outputs
-/// in double precision, with the same slot convention.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StatefulUpdateStepF64 {
-    /// `parameter_next`.
-    pub parameter: f64,
-    /// `state_zero_next` and, for a two-state rule, `state_one_next`.
-    pub states: [f64; 2],
+    pub states: [T; 2],
 }
 
 /// Compile-time rule contract shared by all accelerator dialects.
 pub trait StatefulUpdateRule<L: KernelDialect>:
     sealed::Sealed + Copy + Send + Sync + 'static
 {
-    /// Validated POD parameters uploaded once per dispatch.
-    type Parameters: Pod;
-    /// f64 twin of [`Self::Parameters`]: padding-free, same field order.
-    type ParametersF64: Pod;
+    /// Validated POD parameters for scalar `T`, uploaded once per dispatch.
+    type Parameters<T: StatefulScalar>: Pod;
     /// Number of writable persistent-state views required by the rule.
     const STATE_COUNT: usize;
-    /// Parameter field names in their packed host order, including padding.
+    /// Parameter field names in packed order, including padding fields. The
+    /// same list renders the uniform block at every admitted width.
     const PARAMETER_FIELDS: &'static [&'static str];
-    /// f64 field names in packed order (no padding fields exist).
-    const PARAMETER_FIELDS_F64: &'static [&'static str];
     /// Dialect-neutral scalar statements computing `parameter_next` and states.
+    ///
+    /// The literal `{one}` marks `1.0`; [`Self::body_for`] substitutes the
+    /// width's [`StatefulScalar::ONE_LITERAL`] when a kernel is rendered.
     const BODY: &'static str;
-    /// f64 body spelling, when [`Self::BODY`] pins `f32` literals (`1.0f`).
-    /// `None` means the body is scalar-neutral (operand-only arithmetic) and
-    /// backends reuse [`Self::BODY`] verbatim for f64 launches.
-    const BODY_F64: Option<&'static str> = None;
+
     /// Revalidate a possibly byte-constructed parameter block before launch.
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()>;
-    /// Revalidate a possibly byte-constructed f64 parameter block.
-    fn validate_parameters_f64(parameters: &Self::ParametersF64)
-    -> super::super::error::Result<()>;
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
+    ) -> super::super::error::Result<()>;
 
     /// Apply one update step as a value function, the rule's definition
     /// (ADR 0061 Decision 1): exactly the arithmetic [`Self::BODY`] renders,
@@ -70,45 +56,18 @@ pub trait StatefulUpdateRule<L: KernelDialect>:
     /// and the update is dialect-neutral scalar arithmetic, so the same
     /// `impl<L: KernelDialect> StatefulUpdateRule<L>` block below already
     /// covers [`Host`](crate::Host) with no separate blanket impl.
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep;
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T>;
 
-    /// f64 twin of [`Self::update`]: exactly the arithmetic the f64 body
-    /// renders, in the same operation order.
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64;
-
-    /// Body spelling for launches over scalar `T`: the f64 spelling where
-    /// the f32 body pins `f32` literals, else [`Self::BODY`] verbatim.
-    /// Backends call this with `f32`/`f64` only; any other scalar resolves
-    /// to the f32 spelling, matching the f32-only [`Self::BODY`] contract.
+    /// Body spelling for launches over scalar `T`: [`Self::BODY`] with its
+    /// `{one}` literal replaced by `T`'s width-specific spelling.
     #[must_use]
-    fn body_for<T: 'static>() -> &'static str {
-        if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
-            Self::BODY_F64.unwrap_or(Self::BODY)
-        } else {
-            Self::BODY
-        }
-    }
-
-    /// Parameter field names for launches over scalar `T`: the padding-free
-    /// list for f64, the padded uniform list otherwise (see
-    /// [`Self::body_for`] for the width contract).
-    #[must_use]
-    fn parameter_fields_for<T: 'static>() -> &'static [&'static str] {
-        if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
-            Self::PARAMETER_FIELDS_F64
-        } else {
-            Self::PARAMETER_FIELDS
-        }
+    fn body_for<T: StatefulScalar>() -> String {
+        Self::BODY.replace("{one}", T::ONE_LITERAL)
     }
 }
 
@@ -135,45 +94,27 @@ impl sealed::Sealed for RmsProp {}
 impl sealed::Sealed for AdaGrad {}
 
 impl<L: KernelDialect> StatefulUpdateRule<L> for Sgd {
-    type Parameters = SgdParameters;
-    type ParametersF64 = SgdParametersF64;
+    type Parameters<T: StatefulScalar> = SgdParameters<T>;
     const STATE_COUNT: usize = 1;
     const PARAMETER_FIELDS: &'static [&'static str] =
         &["learning_rate", "momentum", "padding_zero", "padding_one"];
-    const PARAMETER_FIELDS_F64: &'static [&'static str] = &["learning_rate", "momentum"];
     const BODY: &'static str = "state_zero_next = state_zero_value * parameters.momentum + gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * state_zero_next;";
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
-        parameters.validate()
-    }
-    fn validate_parameters_f64(
-        parameters: &Self::ParametersF64,
+
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
     ) -> super::super::error::Result<()> {
         parameters.validate()
     }
 
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep {
-        let state_zero_next = states[0] * parameters.momentum + gradient;
-        let parameter_next = parameter - parameters.learning_rate * state_zero_next;
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T> {
+        let state_zero_next = states[0] * parameters.momentum() + gradient;
+        let parameter_next = parameter - parameters.learning_rate() * state_zero_next;
         StatefulUpdateStep {
-            parameter: parameter_next,
-            states: [state_zero_next, states[1]],
-        }
-    }
-
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64 {
-        let state_zero_next = states[0] * parameters.momentum + gradient;
-        let parameter_next = parameter - parameters.learning_rate * state_zero_next;
-        StatefulUpdateStepF64 {
             parameter: parameter_next,
             states: [state_zero_next, states[1]],
         }
@@ -181,8 +122,7 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for Sgd {
 }
 
 impl<L: KernelDialect> StatefulUpdateRule<L> for Adam {
-    type Parameters = AdamParameters;
-    type ParametersF64 = AdamParametersF64;
+    type Parameters<T: StatefulScalar> = AdamParameters<T>;
     const STATE_COUNT: usize = 2;
     const PARAMETER_FIELDS: &'static [&'static str] = &[
         "learning_rate",
@@ -194,60 +134,28 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for Adam {
         "padding_zero",
         "padding_one",
     ];
-    const PARAMETER_FIELDS_F64: &'static [&'static str] = &[
-        "learning_rate",
-        "beta_one",
-        "beta_two",
-        "epsilon",
-        "bias_correction_one",
-        "bias_correction_two",
-    ];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0f - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0f - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
-    const BODY_F64: Option<&'static str> = Some(
-        "state_zero_next = state_zero_value * parameters.beta_one + (1.0 - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0 - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);",
-    );
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
-        parameters.validate()
-    }
-    fn validate_parameters_f64(
-        parameters: &Self::ParametersF64,
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + ({one} - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + ({one} - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
+
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
     ) -> super::super::error::Result<()> {
         parameters.validate()
     }
 
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep {
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T> {
         let state_zero_next =
-            states[0] * parameters.beta_one + (1.0 - parameters.beta_one) * gradient;
+            states[0] * parameters.beta_one() + (T::ONE - parameters.beta_one()) * gradient;
         let state_one_next =
-            states[1] * parameters.beta_two + (1.0 - parameters.beta_two) * gradient * gradient;
+            states[1] * parameters.beta_two() + (T::ONE - parameters.beta_two()) * gradient * gradient;
         let parameter_next = parameter
-            - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one)
-                / ((state_one_next / parameters.bias_correction_two).sqrt() + parameters.epsilon);
+            - parameters.learning_rate() * (state_zero_next / parameters.bias_correction_one())
+                / ((state_one_next / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
         StatefulUpdateStep {
-            parameter: parameter_next,
-            states: [state_zero_next, state_one_next],
-        }
-    }
-
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64 {
-        let state_zero_next =
-            states[0] * parameters.beta_one + (1.0 - parameters.beta_one) * gradient;
-        let state_one_next =
-            states[1] * parameters.beta_two + (1.0 - parameters.beta_two) * gradient * gradient;
-        let parameter_next = parameter
-            - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one)
-                / ((state_one_next / parameters.bias_correction_two).sqrt() + parameters.epsilon);
-        StatefulUpdateStepF64 {
             parameter: parameter_next,
             states: [state_zero_next, state_one_next],
         }
@@ -255,8 +163,7 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for Adam {
 }
 
 impl<L: KernelDialect> StatefulUpdateRule<L> for AdamW {
-    type Parameters = AdamWParameters;
-    type ParametersF64 = AdamWParametersF64;
+    type Parameters<T: StatefulScalar> = AdamWParameters<T>;
     const STATE_COUNT: usize = 2;
     const PARAMETER_FIELDS: &'static [&'static str] = &[
         "learning_rate",
@@ -268,61 +175,29 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for AdamW {
         "weight_decay",
         "padding",
     ];
-    const PARAMETER_FIELDS_F64: &'static [&'static str] = &[
-        "learning_rate",
-        "beta_one",
-        "beta_two",
-        "epsilon",
-        "bias_correction_one",
-        "bias_correction_two",
-        "weight_decay",
-    ];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + (1.0f - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0f - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value * (1.0f - parameters.learning_rate * parameters.weight_decay) - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
-    const BODY_F64: Option<&'static str> = Some(
-        "state_zero_next = state_zero_value * parameters.beta_one + (1.0 - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + (1.0 - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value * (1.0 - parameters.learning_rate * parameters.weight_decay) - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);",
-    );
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
-        parameters.validate()
-    }
-    fn validate_parameters_f64(
-        parameters: &Self::ParametersF64,
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.beta_one + ({one} - parameters.beta_one) * gradient_value;\n    state_one_next = state_one_value * parameters.beta_two + ({one} - parameters.beta_two) * gradient_value * gradient_value;\n    parameter_next = parameter_value * ({one} - parameters.learning_rate * parameters.weight_decay) - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one) / (sqrt(state_one_next / parameters.bias_correction_two) + parameters.epsilon);";
+
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
     ) -> super::super::error::Result<()> {
         parameters.validate()
     }
 
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep {
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T> {
         let state_zero_next =
-            states[0] * parameters.beta_one + (1.0 - parameters.beta_one) * gradient;
+            states[0] * parameters.beta_one() + (T::ONE - parameters.beta_one()) * gradient;
         let state_one_next =
-            states[1] * parameters.beta_two + (1.0 - parameters.beta_two) * gradient * gradient;
-        let parameter_next = parameter * (1.0 - parameters.learning_rate * parameters.weight_decay)
-            - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one)
-                / ((state_one_next / parameters.bias_correction_two).sqrt() + parameters.epsilon);
+            states[1] * parameters.beta_two() + (T::ONE - parameters.beta_two()) * gradient * gradient;
+        let parameter_next = parameter
+            * (T::ONE - parameters.learning_rate() * parameters.weight_decay())
+            - parameters.learning_rate() * (state_zero_next / parameters.bias_correction_one())
+                / ((state_one_next / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
         StatefulUpdateStep {
-            parameter: parameter_next,
-            states: [state_zero_next, state_one_next],
-        }
-    }
-
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64 {
-        let state_zero_next =
-            states[0] * parameters.beta_one + (1.0 - parameters.beta_one) * gradient;
-        let state_one_next =
-            states[1] * parameters.beta_two + (1.0 - parameters.beta_two) * gradient * gradient;
-        let parameter_next = parameter * (1.0 - parameters.learning_rate * parameters.weight_decay)
-            - parameters.learning_rate * (state_zero_next / parameters.bias_correction_one)
-                / ((state_one_next / parameters.bias_correction_two).sqrt() + parameters.epsilon);
-        StatefulUpdateStepF64 {
             parameter: parameter_next,
             states: [state_zero_next, state_one_next],
         }
@@ -330,52 +205,29 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for AdamW {
 }
 
 impl<L: KernelDialect> StatefulUpdateRule<L> for RmsProp {
-    type Parameters = RmsPropParameters;
-    type ParametersF64 = RmsPropParametersF64;
+    type Parameters<T: StatefulScalar> = RmsPropParameters<T>;
     const STATE_COUNT: usize = 1;
     const PARAMETER_FIELDS: &'static [&'static str] =
         &["learning_rate", "alpha", "epsilon", "padding"];
-    const PARAMETER_FIELDS_F64: &'static [&'static str] = &["learning_rate", "alpha", "epsilon"];
-    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.alpha + (1.0f - parameters.alpha) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);";
-    const BODY_F64: Option<&'static str> = Some(
-        "state_zero_next = state_zero_value * parameters.alpha + (1.0 - parameters.alpha) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);",
-    );
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
-        parameters.validate()
-    }
-    fn validate_parameters_f64(
-        parameters: &Self::ParametersF64,
+    const BODY: &'static str = "state_zero_next = state_zero_value * parameters.alpha + ({one} - parameters.alpha) * gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);";
+
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
     ) -> super::super::error::Result<()> {
         parameters.validate()
     }
 
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep {
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T> {
         let state_zero_next =
-            states[0] * parameters.alpha + (1.0 - parameters.alpha) * gradient * gradient;
+            states[0] * parameters.alpha() + (T::ONE - parameters.alpha()) * gradient * gradient;
         let parameter_next = parameter
-            - parameters.learning_rate * gradient / (state_zero_next.sqrt() + parameters.epsilon);
+            - parameters.learning_rate() * gradient / (state_zero_next.sqrt() + parameters.epsilon());
         StatefulUpdateStep {
-            parameter: parameter_next,
-            states: [state_zero_next, states[1]],
-        }
-    }
-
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64 {
-        let state_zero_next =
-            states[0] * parameters.alpha + (1.0 - parameters.alpha) * gradient * gradient;
-        let parameter_next = parameter
-            - parameters.learning_rate * gradient / (state_zero_next.sqrt() + parameters.epsilon);
-        StatefulUpdateStepF64 {
             parameter: parameter_next,
             states: [state_zero_next, states[1]],
         }
@@ -383,47 +235,28 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for RmsProp {
 }
 
 impl<L: KernelDialect> StatefulUpdateRule<L> for AdaGrad {
-    type Parameters = AdaGradParameters;
-    type ParametersF64 = AdaGradParametersF64;
+    type Parameters<T: StatefulScalar> = AdaGradParameters<T>;
     const STATE_COUNT: usize = 1;
     const PARAMETER_FIELDS: &'static [&'static str] =
         &["learning_rate", "epsilon", "padding_zero", "padding_one"];
-    const PARAMETER_FIELDS_F64: &'static [&'static str] = &["learning_rate", "epsilon"];
     const BODY: &'static str = "state_zero_next = state_zero_value + gradient_value * gradient_value;\n    parameter_next = parameter_value - parameters.learning_rate * gradient_value / (sqrt(state_zero_next) + parameters.epsilon);";
-    fn validate_parameters(parameters: &Self::Parameters) -> super::super::error::Result<()> {
-        parameters.validate()
-    }
-    fn validate_parameters_f64(
-        parameters: &Self::ParametersF64,
+
+    fn validate_parameters<T: StatefulScalar>(
+        parameters: &Self::Parameters<T>,
     ) -> super::super::error::Result<()> {
         parameters.validate()
     }
 
-    fn update(
-        parameter: f32,
-        gradient: f32,
-        states: [f32; 2],
-        parameters: &Self::Parameters,
-    ) -> StatefulUpdateStep {
+    fn update<T: StatefulScalar>(
+        parameter: T,
+        gradient: T,
+        states: [T; 2],
+        parameters: &Self::Parameters<T>,
+    ) -> StatefulUpdateStep<T> {
         let state_zero_next = states[0] + gradient * gradient;
         let parameter_next = parameter
-            - parameters.learning_rate * gradient / (state_zero_next.sqrt() + parameters.epsilon);
+            - parameters.learning_rate() * gradient / (state_zero_next.sqrt() + parameters.epsilon());
         StatefulUpdateStep {
-            parameter: parameter_next,
-            states: [state_zero_next, states[1]],
-        }
-    }
-
-    fn update_f64(
-        parameter: f64,
-        gradient: f64,
-        states: [f64; 2],
-        parameters: &Self::ParametersF64,
-    ) -> StatefulUpdateStepF64 {
-        let state_zero_next = states[0] + gradient * gradient;
-        let parameter_next = parameter
-            - parameters.learning_rate * gradient / (state_zero_next.sqrt() + parameters.epsilon);
-        StatefulUpdateStepF64 {
             parameter: parameter_next,
             states: [state_zero_next, states[1]],
         }
