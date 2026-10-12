@@ -62,7 +62,7 @@ impl hephaestus_core::StencilOps<MetalDevice> for MetalStencilOps {
     }
 }
 
-pub use hephaestus_core::{Staggered3DParams, StaggeredAxis};
+pub use hephaestus_core::{FixedFd3DParams, Staggered3DParams, StaggeredAxis};
 
 /// Compiled 3-D staggered pair using the native Metal-selected WGPU kernels.
 #[derive(Debug)]
@@ -155,5 +155,87 @@ impl hephaestus_core::Staggered3DOps<MetalDevice> for MetalStaggered3DOps {
         params: &Staggered3DParams,
     ) -> Result<()> {
         kernel.divergence(device, input, output, params)
+    }
+}
+
+/// Compiled fixed-scheme sweep using the native Metal-selected WGPU kernel.
+#[derive(Debug)]
+pub struct FixedFd3DKernel {
+    inner: wgpu_backend::FixedFd3DKernel,
+}
+
+impl FixedFd3DKernel {
+    /// Compile the sweep for a Metal device.
+    pub fn new(device: &MetalDevice) -> Result<Self> {
+        Ok(Self {
+            inner: wgpu_backend::FixedFd3DKernel::new(device.wgpu_device())?,
+        })
+    }
+
+    /// Sweep the scheme in `params` over Metal buffers.
+    pub fn sweep(
+        &self,
+        device: &MetalDevice,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        self.inner.sweep(
+            device.wgpu_device(),
+            input.wgpu_buffer(),
+            output.wgpu_buffer(),
+            params,
+        )
+    }
+
+    /// Sweep the transpose of the scheme in `params` over Metal buffers.
+    pub fn adjoint(
+        &self,
+        device: &MetalDevice,
+        upstream: &MetalBuffer<f32>,
+        grad: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        self.inner.adjoint(
+            device.wgpu_device(),
+            upstream.wgpu_buffer(),
+            grad.wgpu_buffer(),
+            params,
+        )
+    }
+}
+
+/// Provider-owned implementation of [`hephaestus_core::FixedFd3DOps`] for
+/// Metal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetalFixedFd3DOps;
+
+impl hephaestus_core::FixedFd3DOps<MetalDevice> for MetalFixedFd3DOps {
+    type FixedFd3D = FixedFd3DKernel;
+
+    fn prepare_fixed_fd_3d(&self, device: &MetalDevice) -> Result<Self::FixedFd3D> {
+        FixedFd3DKernel::new(device)
+    }
+
+    fn fixed_fd_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::FixedFd3D,
+        input: &MetalBuffer<f32>,
+        output: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        kernel.sweep(device, input, output, params)
+    }
+
+    fn fixed_fd_adjoint_into(
+        &self,
+        device: &MetalDevice,
+        kernel: &Self::FixedFd3D,
+        upstream: &MetalBuffer<f32>,
+        grad: &MetalBuffer<f32>,
+        params: &FixedFd3DParams,
+    ) -> Result<()> {
+        kernel.adjoint(device, upstream, grad, params)
     }
 }

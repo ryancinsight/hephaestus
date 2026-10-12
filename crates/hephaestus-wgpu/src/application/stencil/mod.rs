@@ -3,9 +3,12 @@
 //! These kernels live in Hephaestus so that consumers (`cfd-core`, etc.) remain
 //! thin typed callers rather than owning WGSL source and dispatch details.
 
+mod fixed_fd3d;
 mod laplacian2d;
 mod staggered3d;
 
+pub use fixed_fd3d::WgpuFixedFd3DOps;
+pub use fixed_fd3d::{FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme};
 pub use laplacian2d::WgpuStencilOps;
 pub use laplacian2d::{BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity};
 pub use staggered3d::WgpuStaggered3DOps;

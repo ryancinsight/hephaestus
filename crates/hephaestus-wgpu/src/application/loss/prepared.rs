@@ -51,21 +51,21 @@ impl PreparedCrossEntropyKernel {
 }
 
 /// Prepared WGPU forward cross-entropy resources.
-pub struct PreparedCrossEntropyForward {
+pub struct PreparedCrossEntropyForward<T> {
     preflight: PreparedCrossEntropyKernel,
     status: WgpuBuffer<u32>,
     probabilities: PreparedCrossEntropyKernel,
     mean: PreparedCrossEntropyKernel,
-    _row_losses: WgpuBuffer<f32>,
+    _row_losses: WgpuBuffer<T>,
 }
 
-impl PreparedCrossEntropyForward {
+impl<T> PreparedCrossEntropyForward<T> {
     pub(super) fn new(
         preflight: PreparedCrossEntropyKernel,
         status: WgpuBuffer<u32>,
         probabilities: PreparedCrossEntropyKernel,
         mean: PreparedCrossEntropyKernel,
-        row_losses: WgpuBuffer<f32>,
+        row_losses: WgpuBuffer<T>,
     ) -> Self {
         Self {
             preflight,

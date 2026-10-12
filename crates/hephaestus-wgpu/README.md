@@ -3,8 +3,8 @@
 The portable wgpu backend of the Atlas accelerator substrate (atlas ADR 0001),
 and the reference implementation of the `hephaestus-core` `ComputeDevice` seam.
 It runs anywhere wgpu does — Vulkan, Metal, and the rest — with no vendor
-toolkit at build time. Most consumers reach it through the `hephaestus` facade
-as `hephaestus::wgpu`.
+toolkit at build time. Most consumers reach it through the `hephaestus-compute`
+facade as `hephaestus::wgpu`.
 
 ## What it provides
 

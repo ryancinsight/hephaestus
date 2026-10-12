@@ -40,14 +40,19 @@ impl CombineExpr<Wgsl> for MinOp {
     const EXPR: &'static str = "min(lhs, rhs)";
 }
 impl CombineExpr<CudaC> for MinOp {
-    const EXPR: &'static str = "min(lhs, rhs)";
+    // Explicit comparison, matching `CombineValue` exactly (a NaN operand
+    // never displaces a number, a NaN lhs is kept): CUDA ships no
+    // `min`/`max` overloads for `__half`/`__nv_bfloat16`, so the builtins
+    // cannot serve halves.
+    const EXPR: &'static str = "(rhs < lhs ? rhs : lhs)";
 }
 
 impl CombineExpr<Wgsl> for MaxOp {
     const EXPR: &'static str = "max(lhs, rhs)";
 }
 impl CombineExpr<CudaC> for MaxOp {
-    const EXPR: &'static str = "max(lhs, rhs)";
+    // See `MinOp`: explicit comparison for `CombineValue` parity and halves.
+    const EXPR: &'static str = "(rhs > lhs ? rhs : lhs)";
 }
 
 /// The combine as a value function, the operator's definition (ADR 0061).

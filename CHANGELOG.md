@@ -4,6 +4,25 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] Add ROCm and Metal runtime-rank expression fusion over the shared
+  `FusedElementwiseOps`/`FusedReductionOps` seams. `RocmFusionOps` emits HIP
+  C++ through the `HipC` dialect for `f32`/`i32`/`u32`/`f64` (halves join
+  when the dialect gains them); `MetalFusionOps` delegates to the inner WGPU
+  device in WGSL. A new `assert_fusion_contract` conformance suite pins
+  broadcast, reduction, signed-stride, empty-axis, and rejection semantics
+  identically across WGPU, CUDA, ROCm, and Metal.
+
+- [minor] **Breaking:** precision-generic stateful updates over one
+  `UpdateWidth` seam (ADR 0071). The `*ParametersF64` twins, `update_f64`
+  methods, per-width backend entries, and
+  `assert_stateful_update_contract_f64` are deleted; callers use
+  `SgdParameters::<f64>`, `stateful_update::<Rule, f64, N>`, and
+  `assert_stateful_update_contract::<_, _, f64>`. f32 layouts and values are
+  bit-identical; f64 fixtures widen from f32-rounded lifts shared with the
+  Leto oracle. Five reasoned `allow(unsafe_code)` Pod impls (the Eunomia
+  derive rejects generic `repr(C)`) replace the derived twins under
+  crate-wide `deny(unsafe_code)`. Checker `type_suffixed_fns` falls 7 -> 0.
+
 - [patch] Add the zero-cost `DenseMatrixFunctionOps` role for host-delegated
   `f32` matrix exponential and pseudoinverse, with one shared conformance clause
   across WGPU, CUDA, ROCm, and Metal. Diagonal, nilpotent, rotation, general,

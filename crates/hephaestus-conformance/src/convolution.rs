@@ -15,49 +15,46 @@ use leto_ops::{
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
 };
 
-mod rank_cases;
+pub(crate) mod rank_cases;
 
-/// Run the shared regular and transposed convolution clauses.
+pub use rank_cases::ContractScalar;
+use rank_cases::assert_download_eq;
+
+/// Run the shared regular, transposed, and rank-one-through-three
+/// convolution clauses at scalar `T`.
+///
+/// Every clause body is written once against [`ContractScalar`] and
+/// monomorphized per width; callers select the width with turbofish
+/// (`_contract::<_, _, f64>`). Both widths run the same clause set.
 ///
 /// # Panics
 ///
 /// Panics with the violated clause when the backend does not satisfy the
 /// provider contract.
-pub fn assert_convolution_contract<D, O>(device: &D, operations: &O)
+pub fn assert_convolution_contract<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: ConvolutionOps<D, f32>,
+    O: ConvolutionOps<D, T>,
+    T: ContractScalar,
 {
-    regular_forward_backward(device, operations);
-    transposed_forward_backward(device, operations);
-    rank_cases::assert_higher_rank_contract(device, operations);
-    aliases_are_rejected_before_mutation(device, operations);
+    regular_forward_backward::<D, O, T>(device, operations);
+    transposed_forward_backward::<D, O, T>(device, operations);
+    rank_cases::rank_one::<D, O, T>(device, operations);
+    rank_cases::rank_two::<D, O, T>(device, operations);
+    rank_cases::rank_three::<D, O, T>(device, operations);
+    aliases_are_rejected_before_mutation::<D, O, T>(device, operations);
 }
 
-/// Run the shared `f64` convolution clauses across spatial ranks one through
-/// three.
-///
-/// # Panics
-///
-/// Panics with the violated clause when the backend does not satisfy the
-/// provider contract.
-pub fn assert_convolution_f64_contract<D, O>(device: &D, operations: &O)
+fn regular_forward_backward<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: ConvolutionOps<D, f64>,
+    O: ConvolutionOps<D, T>,
+    T: ContractScalar,
 {
-    rank_cases::assert_all_rank_contract(device, operations);
-}
-
-fn regular_forward_backward<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: ConvolutionOps<D, f32>,
-{
-    let input_host = [1.0_f32, 2.0, 3.0, 4.0];
-    let weight_host = [2.0_f32, -1.0];
-    let bias_host = [1.0_f32];
-    let grad_output_host = [1.0_f32, -2.0, 3.0];
+    let input_host = [1i8, 2, 3, 4].map(T::from_fixture);
+    let weight_host = [2i8, -1].map(T::from_fixture);
+    let bias_host = [1i8].map(T::from_fixture);
+    let grad_output_host = [1i8, -2, 3].map(T::from_fixture);
     let input_layout =
         Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid conformance fixture layout");
     let weight_layout =
@@ -67,7 +64,7 @@ where
     let bias_layout = Layout::try_new([1], [1], 0).expect("valid conformance fixture layout");
     let parameters = ConvolutionParameters::new([1], [0], [1]).expect("valid regular parameters");
 
-    let mut expected_output = [0.0_f32; 3];
+    let mut expected_output = [T::from_fixture(0); 3];
     convolution_forward_into(
         &ArrayView::new(input_layout, &input_host),
         &ArrayView::new(weight_layout, &weight_host),
@@ -80,7 +77,7 @@ where
     let input = device.upload(&input_host).expect("input upload");
     let weight = device.upload(&weight_host).expect("weight upload");
     let bias = device.upload(&bias_host).expect("bias upload");
-    let output = device.alloc_zeroed::<f32>(3).expect("output allocation");
+    let output = device.alloc_zeroed::<T>(3).expect("output allocation");
     let prepared = operations
         .prepare_convolution_forward(
             device,
@@ -98,9 +95,9 @@ where
         .expect("regular forward dispatch");
     assert_download_eq(device, &output, &expected_output, "regular forward");
 
-    let initial_input_gradient = [1.0_f32; 4];
-    let initial_weight_gradient = [-1.0_f32; 2];
-    let initial_bias_gradient = [2.0_f32];
+    let initial_input_gradient = [T::from_fixture(1); 4];
+    let initial_weight_gradient = [T::from_fixture(-1); 2];
+    let initial_bias_gradient = [T::from_fixture(2); 1];
     let mut expected_input_gradient = initial_input_gradient;
     let mut expected_weight_gradient = initial_weight_gradient;
     let mut expected_bias_gradient = initial_bias_gradient;
@@ -175,15 +172,16 @@ where
     );
 }
 
-fn transposed_forward_backward<D, O>(device: &D, operations: &O)
+fn transposed_forward_backward<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: ConvolutionOps<D, f32>,
+    O: ConvolutionOps<D, T>,
+    T: ContractScalar,
 {
-    let input_host = [1.0_f32, -2.0, 3.0];
-    let weight_host = [1.0_f32, 2.0];
-    let bias_host = [-1.0_f32];
-    let grad_output_host = [1.0_f32, 2.0, -1.0, 1.0, 3.0];
+    let input_host = [1i8, -2, 3].map(T::from_fixture);
+    let weight_host = [1i8, 2].map(T::from_fixture);
+    let bias_host = [-1i8].map(T::from_fixture);
+    let grad_output_host = [1i8, 2, -1, 1, 3].map(T::from_fixture);
     let input_layout =
         Layout::try_new([1, 1, 3], [3, 3, 1], 0).expect("valid conformance fixture layout");
     let weight_layout =
@@ -194,7 +192,7 @@ where
     let parameters = TransposedConvolutionParameters::new([2], [1], [1], [1])
         .expect("valid transposed parameters");
 
-    let mut expected_output = [0.0_f32; 5];
+    let mut expected_output = [T::from_fixture(0); 5];
     convolution_transposed_forward_into(
         &ArrayView::new(input_layout, &input_host),
         &ArrayView::new(weight_layout, &weight_host),
@@ -207,7 +205,7 @@ where
     let input = device.upload(&input_host).expect("input upload");
     let weight = device.upload(&weight_host).expect("weight upload");
     let bias = device.upload(&bias_host).expect("bias upload");
-    let output = device.alloc_zeroed::<f32>(5).expect("output allocation");
+    let output = device.alloc_zeroed::<T>(5).expect("output allocation");
     let prepared = operations
         .prepare_convolution_transposed_forward(
             device,
@@ -225,9 +223,9 @@ where
         .expect("transposed forward dispatch");
     assert_download_eq(device, &output, &expected_output, "transposed forward");
 
-    let initial_input_gradient = [1.0_f32; 3];
-    let initial_weight_gradient = [-1.0_f32; 2];
-    let initial_bias_gradient = [2.0_f32];
+    let initial_input_gradient = [T::from_fixture(1); 3];
+    let initial_weight_gradient = [T::from_fixture(-1); 2];
+    let initial_bias_gradient = [T::from_fixture(2); 1];
     let mut expected_input_gradient = initial_input_gradient;
     let mut expected_weight_gradient = initial_weight_gradient;
     let mut expected_bias_gradient = initial_bias_gradient;
@@ -298,14 +296,17 @@ where
     );
 }
 
-fn aliases_are_rejected_before_mutation<D, O>(device: &D, operations: &O)
+fn aliases_are_rejected_before_mutation<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
-    O: ConvolutionOps<D, f32>,
+    O: ConvolutionOps<D, T>,
+    T: ContractScalar,
 {
-    let initial = [1.0_f32, 2.0, 3.0, 4.0];
+    let initial = [1i8, 2, 3, 4].map(T::from_fixture);
     let shared = device.upload(&initial).expect("shared buffer upload");
-    let weight = device.upload(&[2.0_f32, -1.0]).expect("weight upload");
+    let weight = device
+        .upload(&[2i8, -1].map(T::from_fixture))
+        .expect("weight upload");
     let input_layout =
         Layout::try_new([1, 1, 4], [4, 4, 1], 0).expect("valid conformance fixture layout");
     let weight_layout =
@@ -339,15 +340,4 @@ where
         &initial,
         "alias rejection preserves storage",
     );
-}
-
-fn assert_download_eq<D>(device: &D, buffer: &D::Buffer<f32>, expected: &[f32], clause: &str)
-where
-    D: ComputeDevice,
-{
-    let mut actual = vec![0.0_f32; expected.len()];
-    device
-        .download(buffer, &mut actual)
-        .expect("device buffer download");
-    assert_eq!(actual, expected, "{}: {clause}", device.backend_name());
 }

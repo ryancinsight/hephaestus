@@ -11,6 +11,7 @@ mod ops;
 mod parameters;
 mod plan;
 mod rules;
+mod width;
 
 pub use metadata::StatefulUpdateMeta;
 pub use operands::{StatefulUpdateAliasing, StatefulUpdateOperands};
@@ -20,3 +21,4 @@ pub use parameters::{
 };
 pub use plan::{StatefulUpdatePlan, plan_stateful_update};
 pub use rules::{AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule, StatefulUpdateStep};
+pub use width::UpdateWidth;

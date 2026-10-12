@@ -14,7 +14,7 @@ use hephaestus_core::CrossEntropyStatus;
 
 const BLOCK_WIDTH: BlockWidth = BlockWidth::DEFAULT;
 
-pub(super) fn compile(
+pub(super) fn compile<T: 'static>(
     device: &CudaDevice,
     entry: &'static str,
     source: impl FnOnce() -> String,
@@ -23,7 +23,7 @@ pub(super) fn compile(
         device,
         PipelineKey::CrossEntropy {
             entry,
-            scalar: TypeId::of::<f32>(),
+            scalar: TypeId::of::<T>(),
         },
         entry,
         source,
@@ -31,40 +31,36 @@ pub(super) fn compile(
 }
 
 /// Prepared CUDA mean cross-entropy forward resources.
-pub struct PreparedCrossEntropyForward<'a> {
+pub struct PreparedCrossEntropyForward<'a, T> {
     device: &'a CudaDevice,
     preflight_kernel: Arc<SafeCachedKernel>,
     forward_kernel: Arc<SafeCachedKernel>,
     mean_kernel: Arc<SafeCachedKernel>,
     status: CudaBuffer<u32>,
-    row_losses: CudaBuffer<f32>,
-    logits: &'a CudaBuffer<f32>,
+    row_losses: CudaBuffer<T>,
+    logits: &'a CudaBuffer<T>,
     targets: &'a CudaBuffer<u32>,
-    loss: &'a CudaBuffer<f32>,
-    probabilities: &'a CudaBuffer<f32>,
+    loss: &'a CudaBuffer<T>,
+    probabilities: &'a CudaBuffer<T>,
     metadata: ForwardMeta,
     batch: usize,
 }
 
-pub(super) struct PreparedForwardSpec {
+pub(super) struct PreparedForwardSpec<T> {
     pub(super) preflight_kernel: Arc<SafeCachedKernel>,
     pub(super) forward_kernel: Arc<SafeCachedKernel>,
     pub(super) mean_kernel: Arc<SafeCachedKernel>,
     pub(super) status: CudaBuffer<u32>,
-    pub(super) row_losses: CudaBuffer<f32>,
+    pub(super) row_losses: CudaBuffer<T>,
     pub(super) metadata: ForwardMeta,
     pub(super) batch: usize,
 }
 
-impl<'a> PreparedCrossEntropyForward<'a> {
+impl<'a, T> PreparedCrossEntropyForward<'a, T> {
     pub(super) fn new(
         device: &'a CudaDevice,
-        operands: hephaestus_core::CrossEntropyForwardOperands<
-            'a,
-            CudaBuffer<f32>,
-            CudaBuffer<u32>,
-        >,
-        spec: PreparedForwardSpec,
+        operands: hephaestus_core::CrossEntropyForwardOperands<'a, CudaBuffer<T>, CudaBuffer<u32>>,
+        spec: PreparedForwardSpec<T>,
     ) -> Self {
         Self {
             device,
@@ -139,38 +135,34 @@ impl<'a> PreparedCrossEntropyForward<'a> {
 }
 
 /// Prepared CUDA additive mean cross-entropy backward resources.
-pub struct PreparedCrossEntropyBackward<'a> {
+pub struct PreparedCrossEntropyBackward<'a, T> {
     device: &'a CudaDevice,
     preflight_kernel: Arc<SafeCachedKernel>,
     kernel: Arc<SafeCachedKernel>,
     status: CudaBuffer<u32>,
-    output_gradient: &'a CudaBuffer<f32>,
-    probabilities: &'a CudaBuffer<f32>,
+    output_gradient: &'a CudaBuffer<T>,
+    probabilities: &'a CudaBuffer<T>,
     targets: &'a CudaBuffer<u32>,
-    logit_gradient: &'a CudaBuffer<f32>,
-    metadata: BackwardMeta,
+    logit_gradient: &'a CudaBuffer<T>,
+    metadata: BackwardMeta<T>,
     batch: usize,
     elements: usize,
 }
 
-pub(super) struct PreparedBackwardSpec {
+pub(super) struct PreparedBackwardSpec<T> {
     pub(super) preflight_kernel: Arc<SafeCachedKernel>,
     pub(super) kernel: Arc<SafeCachedKernel>,
     pub(super) status: CudaBuffer<u32>,
-    pub(super) metadata: BackwardMeta,
+    pub(super) metadata: BackwardMeta<T>,
     pub(super) batch: usize,
     pub(super) elements: usize,
 }
 
-impl<'a> PreparedCrossEntropyBackward<'a> {
+impl<'a, T: Copy> PreparedCrossEntropyBackward<'a, T> {
     pub(super) fn new(
         device: &'a CudaDevice,
-        operands: hephaestus_core::CrossEntropyBackwardOperands<
-            'a,
-            CudaBuffer<f32>,
-            CudaBuffer<u32>,
-        >,
-        spec: PreparedBackwardSpec,
+        operands: hephaestus_core::CrossEntropyBackwardOperands<'a, CudaBuffer<T>, CudaBuffer<u32>>,
+        spec: PreparedBackwardSpec<T>,
     ) -> Self {
         Self {
             device,

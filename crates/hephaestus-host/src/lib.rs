@@ -22,6 +22,8 @@ pub mod convolution;
 pub mod cross_entropy;
 /// Direct-loop batched cross-product seam implementor.
 pub mod cross_product;
+/// Direct-loop CTC step seam implementor.
+pub mod ctc;
 /// Leto as a decomposition-seam implementor.
 pub mod decomposition;
 /// Leto-backed dense product, composition, and matrix-function implementors.
@@ -32,6 +34,8 @@ pub mod dense_vector;
 pub mod elementwise;
 /// Direct-loop embedding-table gather seam implementor.
 pub mod embedding;
+/// Leto-backed fixed-scheme three-dimensional sweep implementor.
+pub mod fixed_fd;
 /// Leto-backed rank-2 axis resampling (nearest / linear) seam implementor.
 pub mod interpolation;
 mod operands;
@@ -75,6 +79,7 @@ pub use convolution::{
 };
 pub use cross_entropy::{HostCrossEntropyBackward, HostCrossEntropyForward, HostCrossEntropyOps};
 pub use cross_product::HostCrossProductOps;
+pub use ctc::HostCtcOps;
 pub use decomposition::HostDecompositionOps;
 pub use dense_product::HostDenseProductOps;
 pub use dense_vector::{HostDenseVectorOps, HostPreparedDot, HostPreparedNorm};
@@ -82,6 +87,7 @@ pub use elementwise::{
     HostElementwiseOps, HostPreparedBinary, HostPreparedScalar, HostPreparedUnary,
 };
 pub use embedding::HostEmbeddingOps;
+pub use fixed_fd::HostFixedFdOps;
 pub use interpolation::HostInterpolationOps;
 pub use pad::HostPadOps;
 pub use parameterized::HostParameterizedUnaryOps;
@@ -194,6 +200,18 @@ pub(crate) fn map_leto_error<E: core::fmt::Display>(error: E) -> HephaestusError
     HephaestusError::DispatchFailed {
         message: format!("leto rejected the host operation: {error}"),
     }
+}
+
+/// An element count (a length, a window size, a position along an axis) as
+/// the element type `T`, exactly or refused.
+///
+/// Float elements always accept the count; an integer element whose range does
+/// not contain it is a configuration the operation cannot carry out, reported
+/// as [`HephaestusError::InvalidConfiguration`] rather than a wrapped value.
+pub(crate) fn element_count<T: eunomia::TryFromCount>(count: usize) -> Result<T> {
+    T::try_from_count(count).map_err(|error| HephaestusError::InvalidConfiguration {
+        message: error.to_string(),
+    })
 }
 
 impl ComputeDevice for HostDevice {

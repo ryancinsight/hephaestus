@@ -22,16 +22,17 @@ pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
     GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp,
-    HardswishGradOp, HardswishOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
-    MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
-    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
-    binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    HardswishGradOp, HardswishOp, IdentityOp, J0Op, J1Op, K0Op, LeOp, LgammaOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, LtOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp,
+    ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SincOp, SinhOp,
+    SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp,
+    TanhOp, TruncOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::MetalElementwiseOps;
 pub use application::full_reduction_seam::MetalFullReductionOps;
+pub use application::fusion::MetalFusionOps;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
@@ -41,7 +42,7 @@ pub use application::linalg_traits::MatrixDecompose;
 pub use application::linalg_traits::{
     AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
 };
-pub use application::loss::MetalCrossEntropyOps;
+pub use application::loss::{CtcKernel, MetalCrossEntropyOps, MetalCtcOps};
 pub use application::parameterized_elementwise::{
     MetalParameterizedUnaryOps, parameterized_unary_strided_into,
 };
@@ -70,11 +71,13 @@ pub use application::sparse::{
 };
 pub use application::sparse_seam::MetalSparseOps;
 pub use application::stateful_update::MetalStatefulUpdateOps;
+pub use application::stencil::MetalFixedFd3DOps;
 pub use application::stencil::MetalStaggered3DOps;
 pub use application::stencil::MetalStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };
+pub use application::stencil::{FixedFd3DKernel, FixedFd3DParams};
 pub use application::stencil::{Staggered3DKernel, Staggered3DParams, StaggeredAxis};
 pub use application::storage_kernel::{
     MetalBinaryStorageKernel, MetalMultiStorageKernel, MetalStorageAccess, MetalStorageBinding,
