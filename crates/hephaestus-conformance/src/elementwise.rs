@@ -14,8 +14,8 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, EluOp, Expm1Op,
-    GeluOp, GeluTanhOp, J0Op, J1Op, K0Op, Log1pOp, MishOp, MulOp, NegOp, SincOp, SoftplusOp,
-    SqrtOp, StridedView, SubOp, UnaryExpr, UnaryValue,
+    GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, J0Op, J1Op, K0Op, Log1pOp, MishGradOp, MishOp,
+    MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView, SubOp, UnaryExpr, UnaryValue,
 };
 use leto::Layout;
 
@@ -283,6 +283,39 @@ where
 {
     gelu_tails_match_oracle(device, ops);
     gelu_tanh_tails_match_oracle(device, ops);
+}
+
+/// Run the gradient tail clauses against one backend.
+///
+/// Shares the `TAIL_REL_BOUND` derivation. The three gradient forms are
+/// defective on the negative tail: `mish-grad` through the naive
+/// `tanh(log(1 + exp(x)))` lead term (reads `0`, missing `~3%` of the
+/// total at `x = -30`); `gelu-grad` through the naive `0.5·(1 + erf)`
+/// term (reads `0`, missing the `Φ` term, `~1%` on the probes);
+/// `gelu-tanh-grad` through both `1 ± tanh` factors (both collapse, and
+/// the total reads `-0.0`, `100%` off). Oracles are the f64
+/// [`UnaryValue`] forms. Probes stay where the truths are normal f32
+/// (and, for `gelu-tanh-grad`, where the `sigmoid` intermediate is
+/// normal too, so no `FTZ` driver can diverge); controls pin the
+/// already-correct range.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_grad_tails_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    MishGradOp: UnaryExpr<E::Dialect>,
+    GeluGradOp: UnaryExpr<E::Dialect>,
+    GeluTanhGradOp: UnaryExpr<E::Dialect>,
+{
+    mish_grad_tails_match_oracle(device, ops);
+    gelu_grad_tails_match_oracle(device, ops);
+    gelu_tanh_grad_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -641,6 +674,84 @@ where
         assert!(
             error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: gelu-tanh lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-80`/`-60`/`-30` miss the `tanh(sp)` lead
+/// term under the naive transcription (the inner `log(1 + exp(x))`
+/// reads `0`, so the lead term is `0` instead of `sp` — `~3%` of the
+/// total at `x = -30`); `-14.5`/`-7` pin the spelling's arm boundaries
+/// and the rest are already-correct controls.
+fn mish_grad_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    MishGradOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        -80.0f32, -60.0, -30.0, -14.5, -7.0, -1.0, 0.0, 1.0, 5.0, 20.0,
+    ];
+    let got = unary::<_, _, MishGradOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <MishGradOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: mish-grad lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-12`/`-10`/`-8`/`-6` miss the `Φ` term
+/// under the naive transcription (`0.5·(1 + erf)` reads `0` — `~1%` of
+/// the total on these lanes); `-4`/`-2` pin the `erfc` spelling's arm
+/// boundaries and the rest are already-correct controls.
+fn gelu_grad_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    GeluGradOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        -12.0f32, -10.0, -8.0, -6.0, -4.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0,
+    ];
+    let got = unary::<_, _, GeluGradOp, 12>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <GeluGradOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: gelu-grad lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-9.5`/`-8`/`-6` collapse to exactly `0`
+/// under the naive transcription (both `1 ± tanh` factors lose their
+/// true values — `100%` off); the deepest probe stops where the
+/// `sigmoid` intermediate is still a normal float, and the rest are
+/// already-correct controls.
+fn gelu_tanh_grad_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    GeluTanhGradOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [-9.5f32, -8.0, -6.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0, 10.0];
+    let got = unary::<_, _, GeluTanhGradOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <GeluTanhGradOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: gelu-tanh-grad lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }

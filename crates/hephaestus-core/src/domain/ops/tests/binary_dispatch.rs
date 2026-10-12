@@ -39,7 +39,21 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x * tanh(max(x, 0.0) +"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains(", x, x > 9.0)"));
-    assert!(<MishGradOp as UnaryExpr<CudaC>>::EXPR.contains("tanhf(logf(1.0f + expf(x)))"));
+    assert_eq!(
+        <MishGradOp as UnaryExpr<CudaC>>::EXPR,
+        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
+    );
+    assert_eq!(
+        <MishGradOp as UnaryExpr<HipC>>::EXPR,
+        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
+    );
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) * (1.0 + x)"));
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -7.0)"));
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
+    // The middle-arm `(1 - sp^2)` parenthesizes the fragment: it is
+    // `max + select(...)`, only `+`-safe, and the bare form under `*`
+    // re-associates (`1 - max + sel*max + sel`, the `-5.46e-3` defect).
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("(1.0 - ("));
     assert_eq!(
         <EluOp as UnaryExpr<CudaC>>::EXPR,
         "((x) >= 0.0f ? (x) : expm1(x))"
@@ -106,8 +120,28 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.0)"));
     assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0406)"));
     assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("-1.0250950928e+3"));
-    assert!(<GeluGradOp as UnaryExpr<CudaC>>::EXPR.contains("erff(x *"));
-    assert!(<GeluGradOp as UnaryExpr<HipC>>::EXPR.contains("expf(-0.5f * x * x)"));
+    assert_eq!(
+        <GeluGradOp as UnaryExpr<CudaC>>::EXPR,
+        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
+    );
+    assert_eq!(
+        <GeluGradOp as UnaryExpr<HipC>>::EXPR,
+        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
+    );
+    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.0)"));
+    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0406)"));
+    assert_eq!(
+        <GeluTanhGradOp as UnaryExpr<Wgsl>>::EXPR,
+        "(1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) + 2.0 * x * (1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * (1.0 / (1.0 + exp(2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * 0.7978845608 * (1.0 + 0.134145 * x * x)"
+    );
+    assert_eq!(
+        <GeluTanhGradOp as UnaryExpr<CudaC>>::EXPR,
+        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+    );
+    assert_eq!(
+        <GeluTanhGradOp as UnaryExpr<HipC>>::EXPR,
+        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+    );
     assert_eq!(
         <SignOp as UnaryExpr<Wgsl>>::EXPR,
         "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)"
@@ -124,12 +158,32 @@ fn combine_and_identity_agree_per_dialect() {
     for expr in [
         <Expm1Op as UnaryExpr<Wgsl>>::EXPR,
         <Log1pOp as UnaryExpr<Wgsl>>::EXPR,
+        <MishGradOp as UnaryExpr<Wgsl>>::EXPR,
+        <GeluGradOp as UnaryExpr<Wgsl>>::EXPR,
     ] {
         assert!(expr.starts_with("select("), "wgsl tail form branches");
         assert_eq!(
             expr.chars().filter(|&c| c == '(').count(),
             expr.chars().filter(|&c| c == ')').count(),
             "wgsl tail parens balance"
+        );
+    }
+    // KERNEL-TAIL grads: the C-dialect spellings are long single literals
+    // with no `select` structure to eyeball, so every one pins paren
+    // balance here -- an extra `)` only surfaces as an nvrtc failure
+    // otherwise (the `MishGradOp` `))))))` defect).
+    for expr in [
+        <MishGradOp as UnaryExpr<CudaC>>::EXPR,
+        <MishGradOp as UnaryExpr<HipC>>::EXPR,
+        <GeluGradOp as UnaryExpr<CudaC>>::EXPR,
+        <GeluGradOp as UnaryExpr<HipC>>::EXPR,
+        <GeluTanhGradOp as UnaryExpr<CudaC>>::EXPR,
+        <GeluTanhGradOp as UnaryExpr<HipC>>::EXPR,
+    ] {
+        assert_eq!(
+            expr.chars().filter(|&c| c == '(').count(),
+            expr.chars().filter(|&c| c == ')').count(),
+            "c tail parens balance"
         );
     }
     assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.5"));

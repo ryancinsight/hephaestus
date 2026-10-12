@@ -243,15 +243,31 @@ impl UnaryExpr<Wgsl> for GeluOp {
 impl UnaryExpr<CudaC> for GeluOp {
     const EXPR: &'static str = "0.5f * x * erfc(-x * 0.7071067811865476f)";
 }
+// Exact GELU gradient (KERNEL-TAIL): the naive `0.5·(1 + erf)` term
+// collapses to `0` on the negative tail, missing the `Φ` term (`~1%`
+// of the total on the probes). The C spelling calls the native `erfc`
+// builtin (unsuffixed builtins, so lane promotion keeps f64 served).
+// The WGSL spelling reuses `GeluOp`'s `erfc`/`erf` arm structure
+// verbatim for the `Φ` term — zero new coefficients — and adds the
+// Gaussian term once outside the select (it needs no correction: its
+// decay is the true asymptotic). Nested selects and f32-transcribed
+// coefficients report `SUPPORTS_F64 = false` per the `GeluOp`
+// precedent.
 impl UnaryExpr<Wgsl> for GeluGradOp {
     const EXPR: &'static str = concat!(
-        "(0.5 * (1.0 + ",
+        "select(select(0.5 * ",
+        wgsl_gelu_erfc!(rb),
+        ", 0.5 * ",
+        wgsl_gelu_erfc!(ra),
+        ", x > -4.0406), 0.5 * (1.0 + ",
         wgsl_gelu_erf_expr!(),
-        ") + x * exp(-0.5 * x * x) * 0.3989422804014327)"
+        "), x > -2.0) + x * exp(-0.5 * x * x) * 0.3989422804014327"
     );
+    const SUPPORTS_F64: bool = false;
 }
 impl UnaryExpr<CudaC> for GeluGradOp {
-    const EXPR: &'static str = "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f";
+    const EXPR: &'static str =
+        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f";
 }
 
 macro_rules! impl_activation_unary_exprs {
@@ -287,10 +303,17 @@ impl_activation_unary_exprs!(
         "x / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))",
         "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
     ),
+    // GeluTanhGradOp uses the oracle's sigmoid algebra (ADR 0061
+    // Decision 6): `s + 2·x·s·(1-s)·c0·(1+3·c1·x²)` with
+    // `s = σ(2z)` and `(1-s) = σ(-2z)` never forms `1 ± tanh(z)`,
+    // which collapses both terms on the negative tail. The stable
+    // `(1-s)` form is used everywhere (no select): it costs a few ULP
+    // where the direct subtraction would serve, immaterial at the
+    // clause bound, and stays correct through saturation.
     (
         GeluTanhGradOp,
-        "0.5 * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x))) + 0.5 * x * (1.0 - tanh(0.7978845608 * (x + 0.044715 * x * x * x)) * tanh(0.7978845608 * (x + 0.044715 * x * x * x))) * 0.7978845608 * (1.0 + 0.134145 * x * x)",
-        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+        "(1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) + 2.0 * x * (1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * (1.0 / (1.0 + exp(2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * 0.7978845608 * (1.0 + 0.134145 * x * x)",
+        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
     ),
     (SiluOp, "x / (1.0 + exp(-x))", "x / (1.0f + exp(-x))"),
     (
@@ -309,11 +332,9 @@ impl_activation_unary_exprs!(
     // MishOp stays out of the macro: the WGSL spelling wraps the
     // `softplus` fragment (see below) and the C spelling calls the
     // native `log1p` builtin.
-    (
-        MishGradOp,
-        "tanh(log(1.0 + exp(x))) + x * (1.0 - tanh(log(1.0 + exp(x))) * tanh(log(1.0 + exp(x)))) * (1.0 / (1.0 + exp(-x)))",
-        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
-    ),
+    // MishGradOp stays out of the macro: the WGSL spelling guards the
+    // `tanh(sp)` lead term by arm (see below) and the C spelling uses
+    // the stable `max + log1p` softplus under the `tanh`.
     // EluOp stays out of the macro: the WGSL spelling nests the `expm1`
     // fragment (see below) and the C spelling calls the native builtin.
     (
@@ -579,6 +600,46 @@ impl UnaryExpr<Wgsl> for MishOp {
 }
 impl UnaryExpr<CudaC> for MishOp {
     const EXPR: &'static str = "x * tanh(log1p(exp(x)))";
+}
+
+// Mish gradient (KERNEL-TAIL): the naive `tanh(log(1 + exp(x)))` lead
+// term reads `0` on the negative tail, missing `~3%` of the total at
+// `x = -30` — and feeding the tiny `sp` to `tanh` is exactly the
+// driver hazard the `MishOp` guards dodge (Metal returns `0`,
+// lavapipe garbage). The C spelling evaluates the stable
+// `max + log1p` softplus under the `tanh` (CUDA/ROCm `tanh` is proven
+// at tiny inputs by the `mish` clause). The WGSL spelling guards on
+// `x`: at `x <= -14.5` it takes `exp(x)·(1 + x)` directly (there the
+// fragment is on its bare-`exp` arm and `tanh(sp) = sp` to `1e-13`,
+// so this is the composition with no `tanh` at all); on
+// `(-14.5, -7]` it takes `sp + x·(1-sp²)·σ(x)` with the fragment value
+// (`tanh(sp) = sp` to `2.7e-7`, `30x` inside the bound); above `-7` the
+// full `tanh` form (`sp > 9e-4`, safe on every probed driver). No
+// `tanh` text appears below the top arm, so no driver ever evaluates
+// it on a tiny input. Nested selects report `SUPPORTS_F64 = false` per
+// the `MishOp` precedent.
+impl UnaryExpr<Wgsl> for MishGradOp {
+    const EXPR: &'static str = concat!(
+        "select(exp(x) * (1.0 + x), select(",
+        wgsl_softplus_expr!(),
+        // Parenthesized: the fragment is `max + select(...)`, which is
+        // only `+`-safe — under `*` the bare form re-associates.
+        " + x * (1.0 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ")) * (1.0 / (1.0 + exp(-x))), tanh(",
+        wgsl_softplus_expr!(),
+        ") + x * (1.0 - tanh(",
+        wgsl_softplus_expr!(),
+        ") * tanh(",
+        wgsl_softplus_expr!(),
+        ")) * (1.0 / (1.0 + exp(-x))), x > -7.0), x > -14.5)"
+    );
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for MishGradOp {
+    const EXPR: &'static str = "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))";
 }
 
 // The two gradient masks stay out of the macro: their WGSL spellings are

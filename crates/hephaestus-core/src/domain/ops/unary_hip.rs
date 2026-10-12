@@ -59,9 +59,10 @@ impl_hip_unary_exprs!(
     (SincOp, "((x) == 0.0f ? 1.0f : sin(x) / (x))"),
     // Native `erfc` (see activation.rs); the unsuffixed builtin keeps f64 served.
     (GeluOp, "0.5f * x * erfc(-x * 0.7071067811865476f)"),
+    // Native `erfc` (see activation.rs); the unsuffixed builtins keep f64 served.
     (
         GeluGradOp,
-        "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f"
+        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
     ),
     (ReluOp, "max(x, 0.0f)"),
     (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
@@ -74,9 +75,10 @@ impl_hip_unary_exprs!(
         GeluTanhOp,
         "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
     ),
+    // Sigmoid algebra (see activation.rs); the unsuffixed `exp` keeps f64 served.
     (
         GeluTanhGradOp,
-        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
     ),
     (SiluOp, "x / (1.0f + exp(-x))"),
     (
@@ -92,9 +94,10 @@ impl_hip_unary_exprs!(
     // Native `log1p` under the `tanh` (see activation.rs); the unsuffixed
     // builtins keep f64 served.
     (MishOp, "x * tanh(log1p(exp(x)))"),
+    // Stable `max + log1p` softplus under the `tanh` (see activation.rs).
     (
         MishGradOp,
-        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
+        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
     ),
     // Native `expm1` on the negative arm (see activation.rs); the unsuffixed
     // builtin keeps f64 served.
