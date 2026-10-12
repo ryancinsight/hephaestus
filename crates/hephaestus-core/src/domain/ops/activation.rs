@@ -401,23 +401,28 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // softplus overflows. The WGSL spelling wraps the whole `softplus`
 // value fragment in `x * tanh(...)`, adding zero new coefficients, and
 // reports `SUPPORTS_F64 = false` per the `SoftplusOp` precedent
-// (nested selects, f32-graded arms). `tanh` of a tiny input is
-// unreliable across drivers (Metal returns exactly `0`; lavapipe
-// returned `2^-25` for `9.35e-14` on the unguarded spelling — the
-// suite's first tiny input to `tanh`, which has no tiny-value
-// coverage), so at `x <= -14.5` the spelling takes `x * exp(x)`
-// directly: there the fragment itself is on its bare-`exp` arm, so
-// this reuses its value while skipping the `tanh` (`tanh(S) = S` to
-// `1e-13` there; the arms agree to `2.5e-7` at the boundary). Both
-// `select` arms evaluate without trapping (the discarded `x * exp(x)`
-// overflows for large positive `x`, the `SincOp` precedent). Accuracy
+// (nested selects, f32-graded arms). `tanh` is unreliable across
+// drivers at both extremes — of a tiny input (Metal returns exactly
+// `0`; lavapipe returned `2^-25` for `9.35e-14` — the suite's first
+// tiny input to `tanh`, which has no tiny-value coverage) and of a
+// large one (Apple's unguarded `tanh` forms `inf/inf = NaN` past
+// `S = 44.4`) — so the spelling guards on `x` instead of trusting it
+// there: at `x <= -14.5` it takes `x * exp(x)` (there the fragment
+// itself is on its bare-`exp` arm, so this reuses its value while
+// skipping the `tanh`; `tanh(S) = S` to `1e-13` there and the arms
+// agree to `2.5e-7` at the boundary), and at `x > 9` it takes `x`
+// itself (`tanh(S)` rounds to exactly `1` past `S = 8.66`, and
+// `S(x) > x`, so both arms agree exactly at the boundary). All
+// `select` arms evaluate (the discarded `NaN`/`inf` never trap — the
+// `SincOp` precedent, proven on Metal by the `sinc(0)` clause — and
+// `select` is a real conditional move, never arithmetized). Accuracy
 // is the slice-2 fragment proof plus `exp`'s own ULP, inside the
 // clause's `1e-5`.
 impl UnaryExpr<Wgsl> for MishOp {
     const EXPR: &'static str = concat!(
-        "select(x * exp(x), x * tanh(",
+        "select(select(x * exp(x), x * tanh(",
         wgsl_softplus_expr!(),
-        "), x > -14.5)"
+        "), x > -14.5), x, x > 9.0)"
     );
     const SUPPORTS_F64: bool = false;
 }
