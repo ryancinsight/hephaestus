@@ -25,6 +25,10 @@ pub use application::adaptive_pooling_seam::WgpuAdaptivePoolingOps;
 pub use application::arg_reduce_seam::WgpuArgReduceOps;
 pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
+pub use application::canary::{
+    BuiltinVerdict, CanaryWidth, MathBuiltin, PrecisionGrade, PrecisionReport, builtin_verdict,
+    probe_precision, require_builtin, require_expr_safe, scan_builtins, width_of,
+};
 pub use application::convolution::WgpuConvolutionOps;
 pub use application::cross_product_seam::WgpuCrossProductOps;
 #[cfg(feature = "decomposition")]
@@ -34,11 +38,11 @@ pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
     GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp,
-    HardswishGradOp, HardswishOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
-    MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
-    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
-    binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    HardswishGradOp, HardswishOp, IdentityOp, J0Op, J1Op, K0Op, LeOp, LgammaOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, LtOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp,
+    ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SincOp, SinhOp,
+    SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp,
+    TanhOp, TruncOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
@@ -61,7 +65,8 @@ pub use application::linalg::{
 #[cfg(any(feature = "decomposition", feature = "sparse"))]
 pub use application::linalg::{matexp, pinv};
 pub use application::loss::{
-    PreparedCrossEntropyBackward, PreparedCrossEntropyForward, WgpuCrossEntropyOps,
+    CtcKernel, PreparedCrossEntropyBackward, PreparedCrossEntropyForward, WgpuCrossEntropyOps,
+    WgpuCtcOps,
 };
 pub use application::pad_seam::{WgpuPadOps, pad_into};
 pub use application::parameterized_elementwise::{
@@ -97,6 +102,9 @@ pub use application::stateful_update::WgpuStatefulUpdateOps;
 pub use application::stencil::WgpuStencilOps;
 pub use application::stencil::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+};
+pub use application::stencil::{
+    FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, WgpuFixedFd3DOps,
 };
 pub use application::stencil::{
     Staggered3DKernel, Staggered3DParams, StaggeredAxis, WgpuStaggered3DOps,

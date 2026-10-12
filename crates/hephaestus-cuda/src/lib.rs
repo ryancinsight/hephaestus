@@ -52,11 +52,11 @@ pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
     GeluGradOp, GeluOp, GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp,
-    HardswishGradOp, HardswishOp, IdentityOp, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
-    MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp, ReluOp, RoundOp,
-    SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SinhOp, SoftplusGradOp,
-    SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp, TanhOp, TruncOp,
-    binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
+    HardswishGradOp, HardswishOp, IdentityOp, J0Op, J1Op, K0Op, LeOp, LgammaOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, LtOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, PowOp, RecipOp, ReluGradOp,
+    ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp, SincOp, SinhOp,
+    SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, TanOp, TanhGradOp,
+    TanhOp, TruncOp, binary_elementwise, binary_elementwise_into, binary_elementwise_typed,
     binary_elementwise_typed_into, scalar_elementwise, scalar_elementwise_into, unary_elementwise,
     unary_elementwise_into,
 };
@@ -71,7 +71,7 @@ pub use application::linalg::{
     kron, kron_into, matexp, matmul, matmul_into, matpow, matrix_rank, matrix_rank_with_tolerance,
     norm_l1, norm_l2, norm_max, pinv, trace,
 };
-pub use application::loss::CudaCrossEntropyOps;
+pub use application::loss::{CtcKernel, CudaCrossEntropyOps, CudaCtcOps};
 pub use application::parameterized_elementwise::CudaParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
@@ -104,6 +104,9 @@ pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 pub type CudaScanOps = hephaestus_core::AxisScanOps<CudaDevice>;
 /// A scan prepared against one operand pair on this device.
 pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaDevice, T>;
+pub use application::fixed_fd::{
+    CudaFixedFd3DOps, FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme,
+};
 pub use application::sparse::seam::CudaSparseOps;
 pub use application::staggered::{
     CudaStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,

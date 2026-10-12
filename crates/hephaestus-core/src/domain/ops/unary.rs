@@ -1,9 +1,4 @@
-//! Unary operation markers and their math-function expressions.
-
-use super::UnaryExpr;
-use crate::domain::dialect::{CudaC, HipC, Wgsl};
-
-// ── Unary markers ────────────────────────────────────────────────────────
+//! Unary operation markers.
 
 /// Exponential operation marker.
 #[derive(Clone, Copy, Debug, Default)]
@@ -134,6 +129,22 @@ pub struct ErfcOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LgammaOp;
 
+/// Unnormalized `sinc` operation marker: `sin(x)/x` with `sinc(0) = 1`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SincOp;
+
+/// Bessel function of the first kind J0 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct J0Op;
+
+/// Bessel function of the first kind J1 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct J1Op;
+
+/// Modified Bessel function of the second kind K0 operation marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct K0Op;
+
 /// Exact Gaussian Error Linear Unit operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GeluOp;
@@ -229,209 +240,3 @@ pub struct SoftsignOp;
 /// Softsign activation gradient operation marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SoftsignGradOp;
-
-impl UnaryExpr<Wgsl> for ExpOp {
-    const EXPR: &'static str = "exp(x)";
-}
-impl UnaryExpr<CudaC> for ExpOp {
-    const EXPR: &'static str = "exp(x)";
-}
-
-impl UnaryExpr<Wgsl> for ExpNegOp {
-    const EXPR: &'static str = "exp(-x)";
-}
-impl UnaryExpr<CudaC> for ExpNegOp {
-    const EXPR: &'static str = "exp(-x)";
-}
-
-impl UnaryExpr<Wgsl> for LnOp {
-    const EXPR: &'static str = "log(x)";
-}
-impl UnaryExpr<CudaC> for LnOp {
-    const EXPR: &'static str = "log(x)";
-}
-
-impl UnaryExpr<Wgsl> for SinOp {
-    const EXPR: &'static str = "sin(x)";
-}
-impl UnaryExpr<CudaC> for SinOp {
-    const EXPR: &'static str = "sin(x)";
-}
-
-impl UnaryExpr<Wgsl> for CosOp {
-    const EXPR: &'static str = "cos(x)";
-}
-impl UnaryExpr<CudaC> for CosOp {
-    const EXPR: &'static str = "cos(x)";
-}
-
-impl UnaryExpr<Wgsl> for SqrtOp {
-    const EXPR: &'static str = "sqrt(x)";
-}
-impl UnaryExpr<CudaC> for SqrtOp {
-    const EXPR: &'static str = "sqrt(x)";
-}
-
-impl UnaryExpr<Wgsl> for AbsOp {
-    const EXPR: &'static str = "abs(x)";
-}
-impl UnaryExpr<CudaC> for AbsOp {
-    const EXPR: &'static str = "abs(x)";
-}
-
-impl UnaryExpr<Wgsl> for NegOp {
-    const EXPR: &'static str = "-x";
-}
-impl UnaryExpr<CudaC> for NegOp {
-    const EXPR: &'static str = "-x";
-}
-
-impl UnaryExpr<Wgsl> for RecipOp {
-    const EXPR: &'static str = "1.0 / x";
-}
-impl UnaryExpr<CudaC> for RecipOp {
-    const EXPR: &'static str = "1.0 / x";
-}
-
-impl UnaryExpr<Wgsl> for IdentityOp {
-    const EXPR: &'static str = "x";
-}
-impl UnaryExpr<CudaC> for IdentityOp {
-    const EXPR: &'static str = "x";
-}
-
-macro_rules! impl_math_unary_exprs {
-    ($(($op:ty, $wgsl:literal, $cuda:literal)),+ $(,)?) => {
-        $(
-            impl UnaryExpr<Wgsl> for $op {
-                const EXPR: &'static str = $wgsl;
-            }
-            impl UnaryExpr<CudaC> for $op {
-                const EXPR: &'static str = $cuda;
-            }
-        )+
-    };
-}
-
-impl_math_unary_exprs!(
-    (TanOp, "tan(x)", "tan(x)"),
-    (AsinOp, "asin(x)", "asin(x)"),
-    (AcosOp, "acos(x)", "acos(x)"),
-    (AtanOp, "atan(x)", "atan(x)"),
-    (SinhOp, "sinh(x)", "sinh(x)"),
-    (CoshOp, "cosh(x)", "cosh(x)"),
-    (Log2Op, "log2(x)", "log2(x)"),
-    (
-        Log10Op,
-        "log(x) * 0.43429448190325182f",
-        "log(x) * 0.43429448190325182f"
-    ),
-    (Exp2Op, "exp2(x)", "exp2(x)"),
-    (AtanhOp, "atanh(x)", "atanh(x)"),
-    (AsinhOp, "asinh(x)", "asinh(x)"),
-    (AcoshOp, "acosh(x)", "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0)", "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0 + (x))", "log(1.0f + (x))"),
-    (
-        SignOp,
-        "select(select(0.0, -1.0, x < 0.0), 1.0, x > 0.0)",
-        "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"
-    ),
-    (FloorOp, "floor(x)", "floor(x)"),
-    (CeilOp, "ceil(x)", "ceil(x)"),
-    (RoundOp, "round(x)", "rint(x)"),
-    (TruncOp, "trunc(x)", "trunc(x)"),
-);
-
-macro_rules! impl_hip_unary_exprs {
-    ($(($op:ty, $expr:literal)),+ $(,)?) => {
-        $(
-            impl UnaryExpr<HipC> for $op {
-                const EXPR: &'static str = $expr;
-            }
-        )+
-    };
-}
-
-impl_hip_unary_exprs!(
-    (ExpOp, "exp(x)"),
-    (ExpNegOp, "exp(-x)"),
-    (LnOp, "log(x)"),
-    (SinOp, "sin(x)"),
-    (CosOp, "cos(x)"),
-    (SqrtOp, "sqrt(x)"),
-    (AbsOp, "abs(x)"),
-    (NegOp, "-x"),
-    (RecipOp, "1.0 / x"),
-    (IdentityOp, "x"),
-    (TanOp, "tan(x)"),
-    (AsinOp, "asin(x)"),
-    (AcosOp, "acos(x)"),
-    (AtanOp, "atan(x)"),
-    (SinhOp, "sinh(x)"),
-    (CoshOp, "cosh(x)"),
-    (Log2Op, "log2(x)"),
-    (Log10Op, "log(x) * 0.43429448190325182f"),
-    (Exp2Op, "exp2(x)"),
-    (AtanhOp, "atanh(x)"),
-    (AsinhOp, "asinh(x)"),
-    (AcoshOp, "acosh(x)"),
-    (Expm1Op, "(exp(x) - 1.0f)"),
-    (Log1pOp, "log(1.0f + (x))"),
-    (SignOp, "(x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f)"),
-    (FloorOp, "floor(x)"),
-    (CeilOp, "ceil(x)"),
-    (RoundOp, "rint(x)"),
-    (TruncOp, "trunc(x)"),
-    (ErfOp, "erf(x)"),
-    (ErfcOp, "erfc(x)"),
-    (LgammaOp, "lgamma(x)"),
-    (GeluOp, "0.5f * x * (1.0f + erff(x * 0.7071067811865476f))"),
-    (
-        GeluGradOp,
-        "0.5f * (1.0f + erff(x * 0.7071067811865476f)) + x * expf(-0.5f * x * x) * 0.3989422804014327f"
-    ),
-    (ReluOp, "max(x, 0.0f)"),
-    (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
-    (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
-    (SigmoidGradOp, "x * (1.0f - x)"),
-    (TanhOp, "tanh(x)"),
-    (TanhGradOp, "1.0f - x * x"),
-    (
-        GeluTanhOp,
-        "0.5f * x * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x)))"
-    ),
-    (
-        GeluTanhGradOp,
-        "0.5f * (1.0f + tanh(0.7978845608f * (x + 0.044715f * x * x * x))) + 0.5f * x * (1.0f - tanh(0.7978845608f * (x + 0.044715f * x * x * x)) * tanh(0.7978845608f * (x + 0.044715f * x * x * x))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
-    ),
-    (SiluOp, "x / (1.0f + exp(-x))"),
-    (
-        SiluGradOp,
-        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
-    ),
-    (SoftplusOp, "log(1.0f + exp(x))"),
-    (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
-    (MishOp, "x * tanhf(logf(1.0f + expf(x)))"),
-    (
-        MishGradOp,
-        "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
-    ),
-    (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
-    (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
-    (HardsigmoidOp, "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"),
-    (
-        HardsigmoidGradOp,
-        "(x > -3.0f && x < 3.0f) ? (1.0f / 6.0f) : 0.0f"
-    ),
-    (HardswishOp, "x * fminf(fmaxf(x + 3.0f, 0.0f), 6.0f) / 6.0f"),
-    (
-        HardswishGradOp,
-        "x >= 3.0f ? 1.0f : (x > -3.0f ? (2.0f * x + 3.0f) / 6.0f : 0.0f)"
-    ),
-    (SoftsignOp, "x / (1.0f + fabsf(x))"),
-    (
-        SoftsignGradOp,
-        "1.0f / ((1.0f + fabsf(x)) * (1.0f + fabsf(x)))"
-    ),
-);

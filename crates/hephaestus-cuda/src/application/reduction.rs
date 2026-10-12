@@ -18,10 +18,7 @@ pub(crate) fn shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>
     width: BlockWidth,
 ) -> String {
     format!(
-        r#"
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#define min(a,b) ((a) < (b) ? (a) : (b))
-
+        r#"{prelude}
 extern "C" __global__ void reduction_kernel(
     const {ty}* input,
     {ty}* output,
@@ -54,6 +51,7 @@ extern "C" __global__ void reduction_kernel(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = T::TOKEN,
@@ -204,7 +202,7 @@ pub(crate) fn plan_axis_reduction_dispatch<T>(
 pub(crate) fn axis_reduction_shader_source<Op: CombineExpr<CudaC>, T: IdentityToken<Op, CudaC>>()
 -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     unsigned int input_shape[2];
     int input_strides[2];
@@ -246,6 +244,7 @@ extern "C" __global__ void axis_reduction_kernel(
     output[out_off] = acc;
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         identity = T::TOKEN,
         expr = Op::EXPR,
@@ -254,7 +253,7 @@ extern "C" __global__ void axis_reduction_kernel(
 
 pub(crate) fn mean_axis_shader_source<T: IdentityToken<SumOp, CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     unsigned int input_shape[2];
     int input_strides[2];
@@ -294,6 +293,7 @@ extern "C" __global__ void mean_axis_kernel(
     output[out_off] = acc / ({ty})axis_len;
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         identity = T::TOKEN,
     )
@@ -570,3 +570,7 @@ where
     reject_empty_axis(axis_len(input, axis)?, "max_axis", axis)?;
     reduce_axis::<MaxOp, T>(device, input, axis, width)
 }
+
+#[cfg(test)]
+#[path = "tests_reduction.rs"]
+mod tests;

@@ -26,7 +26,7 @@ pub(super) struct Layout2Meta {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct CrossEntropyMeta {
+pub(super) struct CrossEntropyMeta<T> {
     logits: Layout2Meta,
     targets: Layout1Meta,
     loss: Layout1Meta,
@@ -35,13 +35,14 @@ pub(super) struct CrossEntropyMeta {
     logit_gradient: Layout2Meta,
     batch: i32,
     classes: i32,
-    probability_tolerance: f32,
+    probability_tolerance: T,
 }
 
-impl CrossEntropyMeta {
+impl<T> CrossEntropyMeta<T> {
     pub(super) fn forward(
-        operands: &CrossEntropyForwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+        operands: &CrossEntropyForwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
         plan: CrossEntropyPlan,
+        probability_tolerance: T,
     ) -> Result<Self> {
         Ok(Self {
             logits: Layout2Meta::new(operands.logits.layout)?,
@@ -52,13 +53,14 @@ impl CrossEntropyMeta {
             logit_gradient: Layout2Meta::empty(),
             batch: narrow(plan.batch, "batch")?,
             classes: narrow(plan.classes, "class count")?,
-            probability_tolerance: plan.probability_tolerance,
+            probability_tolerance,
         })
     }
 
     pub(super) fn backward(
-        operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+        operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
         plan: CrossEntropyPlan,
+        probability_tolerance: T,
     ) -> Result<Self> {
         Ok(Self {
             logits: Layout2Meta::empty(),
@@ -69,7 +71,7 @@ impl CrossEntropyMeta {
             logit_gradient: Layout2Meta::new(operands.logit_gradient.layout)?,
             batch: narrow(plan.batch, "batch")?,
             classes: narrow(plan.classes, "class count")?,
-            probability_tolerance: plan.probability_tolerance,
+            probability_tolerance,
         })
     }
 }

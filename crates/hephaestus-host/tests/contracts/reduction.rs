@@ -129,3 +129,43 @@ fn mean_axis_rejects_an_empty_reduced_axis() {
         "{result:?}"
     );
 }
+
+/// `mean_axis_into` divides the column sums by the reduced axis length as the
+/// element type: exact for floats, truncating for integers.
+#[test]
+fn mean_axis_divides_by_the_reduced_axis_length() {
+    use hephaestus_core::AxisReductionOps;
+    let device = HostDevice::new();
+    let ops = hephaestus_host::HostAxisReductionOps;
+    let input_layout = Layout::c_contiguous([3, 2]).expect("input layout");
+    let out_layout = Layout::c_contiguous([1, 2]).expect("output layout");
+
+    let floats = device
+        .upload::<f32>(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .expect("upload");
+    let float_out = device.alloc_zeroed::<f32>(2).expect("output alloc");
+    ops.mean_axis_into(
+        &device,
+        StridedView::new(&floats, &input_layout),
+        0,
+        StridedView::new(&float_out, &out_layout),
+    )
+    .expect("float mean");
+    let mut mean = [0.0_f32; 2];
+    device.download(&float_out, &mut mean).expect("download");
+    assert_eq!(mean, [3.0, 4.0]);
+
+    let integers = device.upload::<i32>(&[1, 2, 3, 4, 4, 6]).expect("upload");
+    let integer_out = device.alloc_zeroed::<i32>(2).expect("output alloc");
+    ops.mean_axis_into(
+        &device,
+        StridedView::new(&integers, &input_layout),
+        0,
+        StridedView::new(&integer_out, &out_layout),
+    )
+    .expect("integer mean");
+    let mut mean = [0_i32; 2];
+    device.download(&integer_out, &mut mean).expect("download");
+    // Column sums 8 and 12 over three rows: 8 / 3 truncates to 2, 12 / 3 is 4.
+    assert_eq!(mean, [2, 4]);
+}

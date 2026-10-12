@@ -1,11 +1,12 @@
+use super::CudaCrossEntropyScalar;
 use super::prelude::prelude;
 use hephaestus_core::CrossEntropyStatus;
 
-pub(crate) fn forward_preflight_source() -> String {
+pub(crate) fn forward_preflight_source<T: CudaCrossEntropyScalar>() -> String {
     format!(
         r#"{prelude}
 extern "C" __global__ void cross_entropy_forward_preflight(
-    const float* logits,
+    const {ty}* logits,
     const unsigned int* targets,
     unsigned int* status,
     const ForwardMeta parameters
@@ -20,45 +21,49 @@ extern "C" __global__ void cross_entropy_forward_preflight(
         cross_entropy_fail(status, {invalid_target}u);
         return;
     }}
-    float maximum = logits[physical2(parameters.logits, row, 0)];
+    {ty} maximum = logits[physical2(parameters.logits, row, 0)];
     if (!isfinite(maximum)) {{
         cross_entropy_fail(status, {nonfinite_logits}u);
         return;
     }}
     for (long long column = 1; column < classes; ++column) {{
-        const float value = logits[physical2(parameters.logits, row, column)];
+        const {ty} value = logits[physical2(parameters.logits, row, column)];
         if (!isfinite(value)) {{
             cross_entropy_fail(status, {nonfinite_logits}u);
             return;
         }}
         maximum = value > maximum ? value : maximum;
     }}
-    float denominator = 0.0f;
+    {ty} denominator = {zero};
     for (long long column = 0; column < classes; ++column) {{
-        denominator += expf(logits[physical2(parameters.logits, row, column)] - maximum);
+        denominator += {exp}(logits[physical2(parameters.logits, row, column)] - maximum);
     }}
-    const float target_logit = logits[physical2(parameters.logits, row, (long long)target)];
-    const float row_loss = logf(denominator) + (maximum - target_logit);
-    if (!(denominator > 0.0f) || !isfinite(denominator) || !isfinite(row_loss)) {{
+    const {ty} target_logit = logits[physical2(parameters.logits, row, (long long)target)];
+    const {ty} row_loss = {log}(denominator) + (maximum - target_logit);
+    if (!(denominator > {zero}) || !isfinite(denominator) || !isfinite(row_loss)) {{
         cross_entropy_fail(status, {arithmetic}u);
     }}
 }}
 "#,
-        prelude = prelude(),
+        prelude = prelude::<T>(),
+        ty = T::TYPE_TOKEN,
+        exp = T::EXP,
+        log = T::LOG,
+        zero = T::ZERO,
         invalid_target = CrossEntropyStatus::TargetOutOfRange.code(),
         nonfinite_logits = CrossEntropyStatus::NonFiniteLogits.code(),
         arithmetic = CrossEntropyStatus::NonFiniteForwardArithmetic.code(),
     )
 }
 
-pub(crate) fn backward_preflight_source() -> String {
+pub(crate) fn backward_preflight_source<T: CudaCrossEntropyScalar>() -> String {
     format!(
         r#"{prelude}
 extern "C" __global__ void cross_entropy_backward_preflight(
-    const float* output_gradient,
-    const float* probabilities,
+    const {ty}* output_gradient,
+    const {ty}* probabilities,
     const unsigned int* targets,
-    const float* logit_gradient,
+    const {ty}* logit_gradient,
     unsigned int* status,
     const BackwardMeta parameters
 ) {{
@@ -72,22 +77,22 @@ extern "C" __global__ void cross_entropy_backward_preflight(
         cross_entropy_fail(status, {invalid_target}u);
         return;
     }}
-    const float upstream = output_gradient[physical1(parameters.output_gradient, 0)];
+    const {ty} upstream = output_gradient[physical1(parameters.output_gradient, 0)];
     if (!isfinite(upstream)) {{
         cross_entropy_fail(status, {nonfinite_upstream}u);
         return;
     }}
-    float sum = 0.0f;
+    {ty} sum = {zero};
     unsigned int row_status = 0xffffffffu;
     for (long long column = 0; column < classes; ++column) {{
-        const float probability = probabilities[physical2(parameters.probabilities, row, column)];
-        if (!isfinite(probability) || probability < 0.0f || probability > 1.0f) {{
+        const {ty} probability = probabilities[physical2(parameters.probabilities, row, column)];
+        if (!isfinite(probability) || probability < {zero} || probability > {one}) {{
             row_status = min(row_status, {invalid_probabilities}u);
         }}
         sum += probability;
-        const float delta = probability - (column == (long long)target ? 1.0f : 0.0f);
-        const float increment = (upstream / (float)batch) * delta;
-        const float current = logit_gradient[physical2(parameters.logit_gradient, row, column)];
+        const {ty} delta = probability - (column == (long long)target ? {one} : {zero});
+        const {ty} increment = (upstream / ({ty})batch) * delta;
+        const {ty} current = logit_gradient[physical2(parameters.logit_gradient, row, column)];
         if (!isfinite(current)) {{
             row_status = min(row_status, {nonfinite_gradient}u);
         }}
@@ -95,7 +100,7 @@ extern "C" __global__ void cross_entropy_backward_preflight(
             row_status = min(row_status, {arithmetic}u);
         }}
     }}
-    if (!isfinite(sum) || fabsf(sum - 1.0f) > parameters.tolerance) {{
+    if (!isfinite(sum) || {fabs}(sum - {one}) > parameters.tolerance) {{
         row_status = min(row_status, {invalid_probabilities}u);
     }}
     if (row_status != 0xffffffffu) {{
@@ -103,7 +108,11 @@ extern "C" __global__ void cross_entropy_backward_preflight(
     }}
 }}
 "#,
-        prelude = prelude(),
+        prelude = prelude::<T>(),
+        ty = T::TYPE_TOKEN,
+        fabs = T::FABS,
+        one = T::ONE,
+        zero = T::ZERO,
         nonfinite_upstream = CrossEntropyStatus::NonFiniteOutputGradient.code(),
         invalid_target = CrossEntropyStatus::TargetOutOfRange.code(),
         invalid_probabilities = CrossEntropyStatus::InvalidProbabilities.code(),
@@ -118,8 +127,8 @@ mod tests {
 
     #[test]
     fn preflight_sources_validate_before_writes() {
-        let forward = forward_preflight_source();
-        let backward = backward_preflight_source();
+        let forward = forward_preflight_source::<f32>();
+        let backward = backward_preflight_source::<f32>();
         assert!(forward.contains("logf(denominator) + (maximum - target_logit)"));
         assert!(forward.contains("atomicMin(status, code)"));
         assert!(backward.contains("fabsf(sum - 1.0f) > parameters.tolerance"));
@@ -136,5 +145,21 @@ mod tests {
             !backward
                 .contains("logit_gradient[physical2(parameters.logit_gradient, row, column)] +=")
         );
+    }
+
+    #[test]
+    fn f64_preflight_sources_use_native_double_arithmetic() {
+        let forward = forward_preflight_source::<f64>();
+        let backward = backward_preflight_source::<f64>();
+        assert!(forward.contains("const double* logits,"));
+        assert!(forward.contains("log(denominator) + (maximum - target_logit)"));
+        assert!(!forward.contains("logf("));
+        assert!(!forward.contains("expf("));
+        assert!(backward.contains("fabs(sum - 1.0) > parameters.tolerance"));
+        assert!(!backward.contains("fabsf("));
+        assert!(backward.contains("const double upstream"));
+        assert!(backward.contains("double tolerance;"));
+        assert!(!forward.contains("float"));
+        assert!(!backward.contains("float"));
     }
 }

@@ -3,7 +3,8 @@ use hephaestus_core::{
     BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
 };
 
-use super::reject_output_alias;
+use super::{reject_output_alias, reject_unsupported_unary};
+use crate::application::canary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -12,10 +13,10 @@ pub use hephaestus_core::{
     AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, EluGradOp,
     EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
     GeluTanhGradOp, GeluTanhOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp,
-    IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp, MishOp, NegOp, RecipOp,
-    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, TanOp, TanhGradOp,
-    TanhOp, TruncOp,
+    IdentityOp, J0Op, J1Op, K0Op, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp, MishOp,
+    NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp,
+    SiluOp, SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp,
+    TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 
 fn shader_source<Op: UnaryExpr<Wgsl>, T: DialectScalar<Wgsl>>(width: BlockWidth) -> String {
@@ -65,6 +66,8 @@ where
     Op: UnaryExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod,
 {
+    reject_unsupported_unary::<Op, T>()?;
+    canary::require_template_safe::<T>(device, Op::EXPR, "unary elementwise")?;
     if out.len != a.len {
         return Err(HephaestusError::LengthMismatch {
             host_len: out.len,

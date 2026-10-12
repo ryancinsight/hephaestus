@@ -8,6 +8,7 @@ mod backend;
 mod convolution;
 mod cross_entropy;
 mod cross_product;
+mod ctc;
 mod decomposition;
 mod dense_product;
 mod dense_vector;

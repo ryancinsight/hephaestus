@@ -22,5 +22,19 @@ fn rocm_satisfies_the_stateful_update_contract() {
         }
         Err(error) => panic!("ROCm stateful-update conformance requires a device: {error}"),
     };
-    assert_stateful_update_contract(&device, &RocmStatefulUpdateOps);
+    assert_stateful_update_contract::<_, _, f32>(&device, &RocmStatefulUpdateOps);
+}
+
+#[cfg(all(feature = "rocm", target_os = "linux"))]
+#[test]
+fn rocm_satisfies_the_f64_stateful_update_contract() {
+    let device = match RocmDevice::try_default() {
+        Ok(device) => device,
+        Err(error) if std::env::var_os("HEPHAESTUS_ROCM_REQUIRE_DEVICE").is_none() => {
+            eprintln!("skip ROCm f64 stateful-update conformance: device unavailable ({error})");
+            return;
+        }
+        Err(error) => panic!("ROCm f64 stateful-update conformance requires a device: {error}"),
+    };
+    assert_stateful_update_contract::<_, _, f64>(&device, &RocmStatefulUpdateOps);
 }

@@ -13,8 +13,8 @@ spectral and tensor packages share one device layer without an `apollo`→`coeus
 dependency edge. Autodiff stays in `coeus`; kernels dispatched here are
 autodiff-agnostic functions.
 
-Most consumers should depend on the `hephaestus` facade, which re-exports this
-crate flat.
+Most consumers should depend on the `hephaestus-compute` facade, which re-exports
+this crate flat.
 
 ## What it defines
 

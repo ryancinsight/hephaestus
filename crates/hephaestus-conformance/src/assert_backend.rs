@@ -44,15 +44,15 @@ use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, AddOp,
     AttentionOps, AxisReductionOps, BatchSubmitOps, BinaryExpr, CeluGradOp, CeluOp, CombineExpr,
-    ComputeDevice, ConvolutionOps, CrossEntropyOps, CumProdOp, CumSumOp, DecompositionOps,
+    ComputeDevice, ConvolutionOps, CrossEntropyOps, CtcOps, CumProdOp, CumSumOp, DecompositionOps,
     DenseCompositionOps, DenseMatrixFunctionOps, DenseProductOps, DenseVectorOps, DialectScalar,
-    DivOp, ElementwiseOps, EqOp, FullReductionOps, GeOp, GtOp, HardshrinkGradOp, HardshrinkOp,
-    HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp, LtOp, MaxOp,
-    MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr, ParameterizedUnaryOps, ProdOp,
-    RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters, ScanOps, Sgd, SgdParameters,
-    SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp, Staggered3DOps, StatefulUpdateOps,
-    StatefulUpdateRule, StencilOps, SubOp, SumOp, ThresholdGradOp, ThresholdOp, TypedBinaryExpr,
-    UnaryExpr,
+    DivOp, ElementwiseOps, EqOp, FixedFd3DOps, FullReductionOps, GeOp, GtOp, HardshrinkGradOp,
+    HardshrinkOp, HardtanhGradOp, HardtanhOp, IdentityToken, LeOp, LeakyReluGradOp, LeakyReluOp,
+    LtOp, MaxOp, MinOp, MulOp, NeOp, NegOp, OpIdentity, ParameterizedUnaryExpr,
+    ParameterizedUnaryOps, ProdOp, RandomInitOps, RayIntegralOps, RmsProp, RmsPropParameters,
+    ScanOps, Sgd, SgdParameters, SoftshrinkGradOp, SoftshrinkOp, SparseOperatorOps, SqrtOp,
+    Staggered3DOps, StatefulUpdateOps, StatefulUpdateRule, StencilOps, SubOp, SumOp,
+    ThresholdGradOp, ThresholdOp, TypedBinaryExpr, UnaryExpr,
 };
 
 /// A backend's seam implementations, borrowed for one conformance run.
@@ -66,7 +66,33 @@ use hephaestus_core::{
 ///
 /// The type parameters are the seam types, in field order. They are unnamed in
 /// practice — construct the struct with a literal and let inference bind them.
-pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z> {
+pub struct BackendUnderTest<
+    'a,
+    D,
+    A,
+    R,
+    C,
+    X,
+    V,
+    P,
+    K,
+    M,
+    U,
+    I,
+    E,
+    G,
+    F,
+    N,
+    T,
+    O,
+    B,
+    S,
+    H,
+    L,
+    Y,
+    W,
+    Z,
+> {
     /// The device every clause runs against.
     pub device: &'a D,
     /// `AttentionOps<D, f32>`.
@@ -77,6 +103,8 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, 
     pub convolution: &'a C,
     /// `CrossEntropyOps<D, f32>`.
     pub cross_entropy: &'a X,
+    /// `CtcOps<D>`.
+    pub ctc: &'a V,
     /// `DecompositionOps<D>`.
     pub decomposition: &'a P,
     /// `DenseCompositionOps<D>`.
@@ -89,6 +117,8 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, 
     pub dense_vector: &'a I,
     /// `ElementwiseOps<D, f32>`.
     pub elementwise: &'a E,
+    /// `FixedFd3DOps<D>`.
+    pub fixed_fd_3d: &'a G,
     /// `FullReductionOps<D, f32>`.
     pub full_reduction: &'a F,
     /// `ParameterizedUnaryOps<D>`.
@@ -126,9 +156,34 @@ pub struct BackendUnderTest<'a, D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, 
 /// not satisfy the contract.
 #[expect(
     clippy::type_complexity,
-    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-two parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
+    reason = "BackendUnderTest is already the factoring this lint asks for: the seam set is one named struct, and what remains here is that struct's own parameter list. The twenty-four parameters cannot collapse further, because every clause below declares marker bounds whose marker types resolve from the concrete seam type, so each seam stays a distinct parameter rather than an associated type or a trait object; a type alias would have to repeat the same list to be usable."
 )]
-pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S, H, L, Y, W, Z>(
+pub fn assert_backend_contract<
+    D,
+    A,
+    R,
+    C,
+    X,
+    V,
+    P,
+    K,
+    M,
+    U,
+    I,
+    E,
+    G,
+    F,
+    N,
+    T,
+    O,
+    B,
+    S,
+    H,
+    L,
+    Y,
+    W,
+    Z,
+>(
     backend: &BackendUnderTest<
         '_,
         D,
@@ -136,12 +191,14 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
         R,
         C,
         X,
+        V,
         P,
         K,
         M,
         U,
         I,
         E,
+        G,
         F,
         N,
         T,
@@ -160,12 +217,14 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
     R: AxisReductionOps<D, f32>,
     C: ConvolutionOps<D, f32>,
     X: CrossEntropyOps<D, f32>,
+    V: CtcOps<D>,
     P: DecompositionOps<D>,
     K: DenseCompositionOps<D>,
     M: DenseMatrixFunctionOps<D>,
     U: DenseProductOps<D, f32>,
     I: DenseVectorOps<D, f32>,
     E: ElementwiseOps<D, f32>,
+    G: FixedFd3DOps<D>,
     F: FullReductionOps<D, f32>,
     N: ParameterizedUnaryOps<D>,
     T: RandomInitOps<D, f32>,
@@ -262,19 +321,33 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
         + IdentityToken<CumProdOp, <B as ScanOps<D, f32>>::Dialect>,
     i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, <B as ScanOps<D, i32>>::Dialect>,
     // stateful-update markers
-    Sgd: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = SgdParameters>,
-    Adam: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamParameters>,
-    AdamW: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamWParameters>,
-    RmsProp:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = RmsPropParameters>,
-    AdaGrad:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdaGradParameters>,
+    Sgd: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = SgdParameters<f32>,
+        >,
+    Adam: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdamParameters<f32>,
+        >,
+    AdamW: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdamWParameters<f32>,
+        >,
+    RmsProp: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = RmsPropParameters<f32>,
+        >,
+    AdaGrad: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdaGradParameters<f32>,
+        >,
 {
     let device = backend.device;
     crate::attention::assert_attention_contract(device, backend.attention);
     crate::axis_reduction::assert_axis_reduction_contract(device, backend.axis_reduction);
-    crate::convolution::assert_convolution_contract(device, backend.convolution);
+    crate::convolution::assert_convolution_contract::<_, _, f32>(device, backend.convolution);
     crate::cross_entropy::assert_cross_entropy_contract(device, backend.cross_entropy);
+    crate::ctc::assert_ctc_contract(device, backend.ctc);
     crate::decomposition::assert_decomposition_contract(device, backend.decomposition);
     crate::dense_composition::assert_dense_composition_contract(device, backend.dense_composition);
     crate::dense_matrix_function::assert_dense_matrix_function_contract(
@@ -284,6 +357,7 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
     crate::dense_product::assert_dense_product_contract(device, backend.dense_product);
     crate::dense_vector::assert_dense_vector_contract(device, backend.dense_vector);
     crate::elementwise::assert_elementwise_contract(device, backend.elementwise);
+    crate::fixed_fd::assert_fixed_fd_3d_contract(device, backend.fixed_fd_3d);
     crate::full_reduction::assert_full_reduction_contract(device, backend.full_reduction);
     crate::parameterized_unary::assert_parameterized_unary_contract(
         device,
@@ -297,7 +371,10 @@ pub fn assert_backend_contract<D, A, R, C, X, P, K, M, U, I, E, F, N, T, O, B, S
     crate::sparse::assert_sparse_operator_contract(device, backend.sparse_operator);
     crate::sparse::assert_batch_submit_contract(device, backend.batch_submit);
     crate::staggered::assert_staggered_3d_contract(device, backend.staggered_3d);
-    crate::stateful_update::assert_stateful_update_contract(device, backend.stateful_update);
+    crate::stateful_update::assert_stateful_update_contract::<_, _, f32>(
+        device,
+        backend.stateful_update,
+    );
     crate::stencil::assert_stencil_contract(device, backend.stencil);
     crate::typed_elementwise::assert_typed_elementwise_contract(device, backend.typed_elementwise);
     crate::transfer::assert_transfer_contract(device);

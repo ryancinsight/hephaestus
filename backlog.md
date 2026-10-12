@@ -805,3 +805,19 @@ status ledger that stood here is program history; recover any entry with
 - Dependencies: none. Priority P2; risk: silently scaled integrals for callers passing unnormalized directions.
 - Verification: strict Clippy, device clause runs (RTX 5080: Vulkan, DX12, CUDA), host nextest, doc sync.
 - Last-update: 2026-09-18.
+
+<a id="heph-wgsl-f64-transcendentals-1"></a>
+
+## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
+- Priority: feature.
+- Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
+  precision-restricted builtins compute on Vulkan through WGSL routines built
+  only from width-unrestricted f64 operations (add, multiply, `fma`,
+  `floor`, `ldexp`), lifting the ADR 0072 refusals op by op.
+- Scope: `crates/hephaestus-wgpu/src/application/canary.rs` and the WGSL
+  composition each gated seam uses; `docs/adr/0072-*`.
+- Acceptance: each routine documents its range reduction and a derived
+  relative-error bound; the canary probe grades it Exact (`<= 1e-12`) on
+  lavapipe and NVIDIA Vulkan, with special values (NaN, +-Inf, overflow and
+  underflow edges) asserted against CPU truth.
+- Needs: none. Next step: derive the `exp` reduction and its bound.

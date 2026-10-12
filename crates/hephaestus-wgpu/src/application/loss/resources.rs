@@ -31,9 +31,9 @@ pub(super) fn raw_binding(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGrou
     }
 }
 
-pub(super) fn validate_forward_owners(
+pub(super) fn validate_forward_owners<T>(
     device: &WgpuDevice,
-    operands: &CrossEntropyForwardOperands<'_, WgpuBuffer<f32>, WgpuBuffer<u32>>,
+    operands: &CrossEntropyForwardOperands<'_, WgpuBuffer<T>, WgpuBuffer<u32>>,
 ) -> Result<()> {
     validate_buffer_owner(operands.logits.buffer, device, "cross-entropy")?;
     validate_buffer_owner(operands.targets.buffer, device, "cross-entropy")?;
@@ -41,9 +41,9 @@ pub(super) fn validate_forward_owners(
     validate_buffer_owner(operands.probabilities.buffer, device, "cross-entropy")
 }
 
-pub(super) fn validate_backward_owners(
+pub(super) fn validate_backward_owners<T>(
     device: &WgpuDevice,
-    operands: &CrossEntropyBackwardOperands<'_, WgpuBuffer<f32>, WgpuBuffer<u32>>,
+    operands: &CrossEntropyBackwardOperands<'_, WgpuBuffer<T>, WgpuBuffer<u32>>,
 ) -> Result<()> {
     validate_buffer_owner(operands.output_gradient.buffer, device, "cross-entropy")?;
     validate_buffer_owner(operands.probabilities.buffer, device, "cross-entropy")?;
@@ -51,8 +51,8 @@ pub(super) fn validate_backward_owners(
     validate_buffer_owner(operands.logit_gradient.buffer, device, "cross-entropy")
 }
 
-pub(super) fn forward_aliases(
-    operands: &CrossEntropyForwardOperands<'_, WgpuBuffer<f32>, WgpuBuffer<u32>>,
+pub(super) fn forward_aliases<T>(
+    operands: &CrossEntropyForwardOperands<'_, WgpuBuffer<T>, WgpuBuffer<u32>>,
 ) -> bool {
     operands.loss.buffer.aliases(operands.logits.buffer)
         || operands.loss.buffer.aliases(operands.targets.buffer)
@@ -67,8 +67,8 @@ pub(super) fn forward_aliases(
             .aliases(operands.targets.buffer)
 }
 
-pub(super) fn backward_aliases(
-    operands: &CrossEntropyBackwardOperands<'_, WgpuBuffer<f32>, WgpuBuffer<u32>>,
+pub(super) fn backward_aliases<T>(
+    operands: &CrossEntropyBackwardOperands<'_, WgpuBuffer<T>, WgpuBuffer<u32>>,
 ) -> bool {
     operands
         .logit_gradient

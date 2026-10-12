@@ -22,9 +22,13 @@ pub mod device_api;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Three-dimensional fixed-scheme first-derivative sweep.
+pub mod fixed_fd;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Runtime-rank expression fusion implemented by the ROCm provider.
+pub mod fusion;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 /// Native HIP mean cross-entropy.
@@ -48,6 +52,8 @@ pub mod random_seam;
 pub mod reduction;
 /// Device-resident CSR sparse matrix products.
 pub mod sparse;
+/// Three-dimensional staggered gradient/divergence kernels.
+pub mod staggered;
 /// Provider-owned stateful parameter updates.
 pub mod stateful_update;
 /// Two-dimensional Laplacian stencil kernels.

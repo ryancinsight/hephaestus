@@ -39,6 +39,14 @@ pub enum HephaestusError {
         /// Backend-reported detail.
         message: String,
     },
+    /// The requested operation is not supported by this backend, dialect, or
+    /// scalar combination (e.g. a WGSL template whose literal-only `select`
+    /// arms cannot target `f64` buffers).
+    #[error("operation not supported: {message}")]
+    Unsupported {
+        /// Which combination was rejected and why.
+        message: String,
+    },
     /// A configuration or argument value supplied to a kernel or dispatch
     /// parameter was invalid.
     #[error("invalid configuration: {message}")]

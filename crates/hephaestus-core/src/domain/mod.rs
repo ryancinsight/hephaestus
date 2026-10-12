@@ -14,6 +14,8 @@ pub mod buffer;
 pub mod convolution;
 /// Device-neutral batched 3-vector cross product seam.
 pub mod cross_product;
+/// Backend-neutral connectionist temporal classification seam.
+pub mod ctc;
 /// Shared CPU-side panel factorisation routines for blocked decomposition.
 pub mod decomposition;
 /// Device-neutral dense decomposition seam (ADR 0042).
@@ -35,6 +37,8 @@ pub mod error;
 pub mod fdtd;
 /// Device-neutral dense complex Fourier-transform contracts.
 pub mod fft;
+/// Fixed-scheme three-dimensional first-derivative contracts.
+pub mod fixed_fd;
 /// Runtime-rank expression-fusion contracts.
 pub mod fusion;
 /// Backend-neutral kernel authoring: interface and source declarations.

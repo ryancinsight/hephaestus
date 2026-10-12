@@ -115,8 +115,10 @@ macro_rules! impl_fusion_scalar {
 }
 
 impl_fusion_scalar!(f32, "f32(axis_length)");
+impl_fusion_scalar!(f64, "f64(axis_length)");
 impl_fusion_scalar!(i32, "i32(axis_length)");
 impl_fusion_scalar!(u32, "u32(axis_length)");
+impl_fusion_scalar!(eunomia::F16, "f16(axis_length)");
 
 pub(crate) fn validate_expression_source(source: &str) -> Result<()> {
     if source.trim().is_empty() {
@@ -193,7 +195,7 @@ pub(crate) fn elementwise_source<T: DialectScalar<Wgsl>>(
     let layouts_binding = input_count + 1;
     let loads = input_loads::<T>(input_count);
     format!(
-        "{layout}\n{inputs}\
+        "{prelude}{layout}\n{inputs}\
 @group(0) @binding({output_binding}) var<storage, read_write> output: array<{ty}>;
 @group(0) @binding({layouts_binding}) var<storage, read> layouts: array<LayoutInfo>;
 
@@ -214,6 +216,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {{
 {loads}    {output_offset}    output[u32(output_offset)] = {expression};
 }}
 ",
+        prelude = T::PRELUDE,
         layout = wgsl_layout(),
         inputs = input_declarations::<T>(input_count),
         output_binding = output_binding,
@@ -249,7 +252,7 @@ pub(crate) fn reduction_source<T: WgpuFusionScalar>(
         }
     };
     Ok(format!(
-        "{layout}\n{inputs}
+        "{prelude}{layout}\n{inputs}
 @group(0) @binding({output_binding}) var<storage, read_write> output: array<{ty}>;
 @group(0) @binding({layouts_binding}) var<storage, read> layouts: array<LayoutInfo>;
 
@@ -280,6 +283,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {{
 {output_offset}    output[u32(output_offset)] = {final_value};
 }}
 ",
+        prelude = T::PRELUDE,
         layout = wgsl_layout(),
         inputs = input_declarations::<T>(input_count),
         output_binding = output_binding,
@@ -293,4 +297,58 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {{
         expression = expression,
         output_offset = output_offset(),
     ))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn f16_fusion_shaders_carry_the_enable_prelude() {
+        let elementwise = elementwise_source::<eunomia::F16>(1, "input_0");
+        assert!(
+            elementwise.starts_with("enable f16;"),
+            "F16 elementwise shader must open with the enable directive"
+        );
+        let reduction = reduction_source::<eunomia::F16>(1, "input_0", FusedReduction::Sum)
+            .expect("valid fused reduction");
+        assert!(
+            reduction.starts_with("enable f16;"),
+            "F16 reduction shader must open with the enable directive"
+        );
+        assert!(
+            !elementwise_source::<f32>(1, "input_0").starts_with("enable"),
+            "f32 fusion shader must not gain a prelude"
+        );
+    }
+
+    #[test]
+    fn f64_fusion_shaders_annotate_the_accumulator_and_divisor() {
+        let elementwise = elementwise_source::<f64>(1, "input_0");
+        assert!(
+            !elementwise.starts_with("enable"),
+            "f64 fusion shader needs no prelude: naga accepts f64 types unconditionally"
+        );
+        assert!(
+            elementwise.contains("array<f64>"),
+            "f64 elementwise shader must bind f64 storage"
+        );
+        let sum = reduction_source::<f64>(1, "input_0", FusedReduction::Sum)
+            .expect("valid fused reduction");
+        assert!(
+            sum.contains("var acc: f64 = 0.0;"),
+            "f64 sum accumulator must be type-annotated so the AbstractFloat identity converts"
+        );
+        let mean = reduction_source::<f64>(1, "input_0", FusedReduction::Mean)
+            .expect("valid fused reduction");
+        assert!(
+            mean.contains("acc / f64(axis_length)"),
+            "f64 mean divisor must construct f64 explicitly: u32 never converts implicitly"
+        );
+        let max = reduction_source::<f64>(1, "input_0", FusedReduction::Maximum)
+            .expect("valid fused reduction");
+        assert!(
+            max.contains("var acc: f64 = -1.7976931348623157e+308;"),
+            "f64 maximum must seed the exact f64 minimum"
+        );
+    }
 }

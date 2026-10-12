@@ -4,9 +4,9 @@ use hephaestus_core::{
 
 use crate::{RocmBuffer, RocmDevice};
 
-pub(super) fn validate_forward_device(
+pub(super) fn validate_forward_device<T>(
     device: &RocmDevice,
-    operands: &CrossEntropyForwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+    operands: &CrossEntropyForwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
 ) -> Result<()> {
     require_matching_device(
         buffer_matches(device, operands.logits.buffer)
@@ -16,9 +16,9 @@ pub(super) fn validate_forward_device(
     )
 }
 
-pub(super) fn validate_backward_device(
+pub(super) fn validate_backward_device<T>(
     device: &RocmDevice,
-    operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+    operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
 ) -> Result<()> {
     require_matching_device(
         buffer_matches(device, operands.output_gradient.buffer)
@@ -28,8 +28,8 @@ pub(super) fn validate_backward_device(
     )
 }
 
-pub(super) fn forward_aliases(
-    operands: &CrossEntropyForwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+pub(super) fn forward_aliases<T>(
+    operands: &CrossEntropyForwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
 ) -> bool {
     operands.loss.buffer.aliases(operands.logits.buffer)
         || operands.loss.buffer.aliases(operands.targets.buffer)
@@ -44,8 +44,8 @@ pub(super) fn forward_aliases(
             .aliases(operands.targets.buffer)
 }
 
-pub(super) fn backward_aliases(
-    operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<f32>, RocmBuffer<u32>>,
+pub(super) fn backward_aliases<T>(
+    operands: &CrossEntropyBackwardOperands<'_, RocmBuffer<T>, RocmBuffer<u32>>,
 ) -> bool {
     operands
         .logit_gradient

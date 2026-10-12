@@ -8,6 +8,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+use crate::application::canary;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -108,7 +109,7 @@ pub fn submit_prepared_axis_reduction_batch<T>(
 
 fn shader_source<Op: CombineExpr<Wgsl>, T: IdentityToken<Op, Wgsl>>(width: BlockWidth) -> String {
     format!(
-        r#"@group(0) @binding(0) var<storage, read> input: array<{ty}>;
+        r#"{prelude}@group(0) @binding(0) var<storage, read> input: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> output: array<{ty}>;
 
 var<workgroup> shared_data: array<{ty}, {wg}>;
@@ -144,6 +145,7 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
@@ -155,7 +157,7 @@ fn final_reduction_shader_source<Op: CombineExpr<Wgsl>, T: IdentityToken<Op, Wgs
     width: BlockWidth,
 ) -> String {
     format!(
-        r#"@group(0) @binding(0) var<storage, read> input: array<{ty}>;
+        r#"{prelude}@group(0) @binding(0) var<storage, read> input: array<{ty}>;
 @group(0) @binding(1) var<storage, read_write> output: array<{ty}>;
 
 var<workgroup> shared_data: array<{ty}, {wg}>;
@@ -192,6 +194,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {{
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
@@ -223,7 +226,7 @@ where
     T: IdentityToken<Op, Wgsl>,
 {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     input_shape: vec2<u32>,
     input_strides: vec2<i32>,
@@ -294,6 +297,7 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
@@ -309,7 +313,7 @@ where
     T: IdentityToken<SumOp, Wgsl>,
 {
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     input_shape: vec2<u32>,
     input_strides: vec2<i32>,
@@ -376,6 +380,7 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         identity = <T as IdentityToken<SumOp, Wgsl>>::TOKEN,
@@ -394,7 +399,7 @@ where
 {
     let (tile_cols, tile_rows) = axis0_tile_shape(width);
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     input_shape: vec2<u32>,
     input_strides: vec2<i32>,
@@ -457,6 +462,7 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         tile_cols = tile_cols,
@@ -472,7 +478,7 @@ where
 {
     let (tile_cols, tile_rows) = axis0_tile_shape(width);
     format!(
-        r#"
+        r#"{prelude}
 struct AxisReductionMeta {{
     input_shape: vec2<u32>,
     input_strides: vec2<i32>,
@@ -532,6 +538,7 @@ fn main(
     }}
 }}
 "#,
+        prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
         tile_cols = tile_cols,
@@ -698,12 +705,13 @@ fn axis_reduction_pipeline<Op, T>(
     device: &WgpuDevice,
     width: BlockWidth,
     dispatch: &mut AxisReductionDispatch,
-) -> wgpu::ComputePipeline
+) -> Result<wgpu::ComputePipeline>
 where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    if dispatch.meta.offsets[2] == 0 {
+    canary::require_template_safe::<T>(device, <Op as CombineExpr<Wgsl>>::EXPR, "axis reduction")?;
+    Ok(if dispatch.meta.offsets[2] == 0 {
         let (tile_cols, _) = axis0_tile_shape(width);
         dispatch.groups = dispatch.meta.offsets[3].div_ceil(tile_cols);
         cached_pipeline(
@@ -730,7 +738,7 @@ where
             "hephaestus-axis-reduction-parallel",
             || axis_reduction_parallel_shader_source::<Op, T>(width),
         )
-    }
+    })
 }
 
 fn mean_axis_pipeline<T>(
@@ -791,7 +799,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch)?;
     prepared_axis_reduction(
         device,
         pipeline,
@@ -900,7 +908,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch)?;
     dispatch_axis_reduction(device, &pipeline, input, output, dispatch)
 }
 
@@ -1156,15 +1164,5 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn axis_zero_tile_preserves_the_requested_workgroup_width() {
-        assert_eq!(axis0_tile_shape(BlockWidth::DEFAULT), (64, 4));
-        assert_eq!(
-            axis0_tile_shape(BlockWidth::new(32).expect("non-zero width")),
-            (32, 1)
-        );
-    }
-}
+#[path = "tests_reduction.rs"]
+mod tests;
