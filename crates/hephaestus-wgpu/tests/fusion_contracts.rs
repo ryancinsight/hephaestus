@@ -2,9 +2,10 @@
 
 use std::borrow::Cow;
 
+use hephaestus_conformance::assert_fusion_contract;
 use hephaestus_core::{
-    ComputeDevice, DeviceBuffer, DynamicStridedView, FusedElementwiseOps, FusedExpression,
-    FusedReduction, FusedReductionOps, HephaestusError, Wgsl,
+    ComputeDevice, DeviceBuffer, DeviceFeature, DevicePreference, DynamicStridedView,
+    FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps, HephaestusError, Wgsl,
 };
 use hephaestus_wgpu::{WgpuDevice, WgpuFusionOps};
 use leto::LayoutDyn;
@@ -165,4 +166,43 @@ pub(super) fn fusion_rejects_noninjective_output() {
         "unexpected error: {error}"
     );
     assert_eq!(download(&device, &output), [7.0]);
+}
+
+fn f64_device_or_skip() -> Option<WgpuDevice> {
+    match WgpuDevice::try_with_device_preference_and_required_device_features(
+        "hephaestus-fusion-f64-test",
+        DevicePreference::HighPerformance,
+        &[DeviceFeature::ShaderF64],
+    ) {
+        Ok(device) => Some(device),
+        Err(error) if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_none() => {
+            eprintln!("skip WGPU f64 fusion conformance: device unavailable ({error})");
+            None
+        }
+        Err(error) => panic!("WGPU f64 fusion conformance requires a device: {error}"),
+    }
+}
+
+pub(super) fn wgpu_satisfies_the_fusion_contract() {
+    let Some(device) = device_or_skip() else {
+        return;
+    };
+    assert_fusion_contract::<_, _, _, f32, _, _>(
+        &device,
+        &WgpuFusionOps,
+        &AddExpression,
+        &InputExpression,
+    );
+}
+
+pub(super) fn wgpu_satisfies_the_f64_fusion_contract() {
+    let Some(device) = f64_device_or_skip() else {
+        return;
+    };
+    assert_fusion_contract::<_, _, _, f64, _, _>(
+        &device,
+        &WgpuFusionOps,
+        &AddExpression,
+        &InputExpression,
+    );
 }

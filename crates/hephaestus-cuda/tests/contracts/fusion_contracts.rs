@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 
+use hephaestus_conformance::assert_fusion_contract;
 use hephaestus_core::{
     ComputeDevice, CudaC, DeviceBuffer, DynamicStridedView, FusedElementwiseOps, FusedExpression,
     FusedReduction, FusedReductionOps, HephaestusError,
@@ -200,4 +201,30 @@ fn fusion_rejects_noninjective_output() {
         "unexpected error: {error}"
     );
     assert_eq!(download(&device, &output), [7.0]);
+}
+
+#[test]
+fn cuda_satisfies_the_fusion_contract() {
+    let Some(device) = device("cuda_satisfies_the_fusion_contract") else {
+        return;
+    };
+    assert_fusion_contract::<_, _, _, f32, _, _>(
+        &device,
+        &CudaFusionOps,
+        &AddExpression,
+        &InputExpression,
+    );
+}
+
+#[test]
+fn cuda_satisfies_the_f64_fusion_contract() {
+    let Some(device) = device("cuda_satisfies_the_f64_fusion_contract") else {
+        return;
+    };
+    assert_fusion_contract::<_, _, _, f64, _, _>(
+        &device,
+        &CudaFusionOps,
+        &AddExpression,
+        &InputExpression,
+    );
 }

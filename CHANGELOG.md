@@ -4,6 +4,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [minor] Add ROCm and Metal runtime-rank expression fusion over the shared
+  `FusedElementwiseOps`/`FusedReductionOps` seams. `RocmFusionOps` emits HIP
+  C++ through the `HipC` dialect for `f32`/`i32`/`u32`/`f64` (halves join
+  when the dialect gains them); `MetalFusionOps` delegates to the inner WGPU
+  device in WGSL. A new `assert_fusion_contract` conformance suite pins
+  broadcast, reduction, signed-stride, empty-axis, and rejection semantics
+  identically across WGPU, CUDA, ROCm, and Metal.
+
 - [minor] **Breaking:** precision-generic stateful updates over one
   `UpdateWidth` seam (ADR 0071). The `*ParametersF64` twins, `update_f64`
   methods, per-width backend entries, and

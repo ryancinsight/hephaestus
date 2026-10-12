@@ -27,6 +27,8 @@ pub mod fixed_fd;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Runtime-rank expression fusion implemented by the ROCm provider.
+pub mod fusion;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 /// Native HIP mean cross-entropy.

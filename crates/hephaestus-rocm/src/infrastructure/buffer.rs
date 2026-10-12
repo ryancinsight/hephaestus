@@ -51,6 +51,10 @@ impl<T> RocmBuffer<T> {
     pub(crate) fn aliases<U>(&self, other: &RocmBuffer<U>) -> bool {
         self.ptr != 0 && self.ptr == other.ptr
     }
+
+    pub(crate) fn belongs_to(&self, device: &crate::RocmDevice) -> bool {
+        Arc::ptr_eq(&self.context, &device.context)
+    }
 }
 
 impl<T> DeviceBuffer<T> for RocmBuffer<T> {

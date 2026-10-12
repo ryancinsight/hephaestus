@@ -135,6 +135,7 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
     },
     GroupedStream(u64),
+    Fusion(u64),
 }
 
 #[cfg(feature = "decomposition")]

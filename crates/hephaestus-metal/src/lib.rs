@@ -32,6 +32,7 @@ pub use application::elementwise::{
 };
 pub use application::elementwise_seam::MetalElementwiseOps;
 pub use application::full_reduction_seam::MetalFullReductionOps;
+pub use application::fusion::MetalFusionOps;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
