@@ -3,6 +3,7 @@ use super::super::dialect::KernelDialect;
 use super::super::error::Result;
 use super::operands::StatefulUpdateOperands;
 use super::rules::StatefulUpdateRule;
+use super::width::UpdateWidth;
 
 /// Device-neutral stateful parameter-update dispatch.
 ///
@@ -12,20 +13,24 @@ pub trait StatefulUpdateOps<D: ComputeDevice> {
     /// Kernel dialect authored by this backend.
     type Dialect: KernelDialect;
 
-    /// Apply one update in place to the parameter and persistent state.
+    /// Apply one update in place to the parameter and persistent state, at
+    /// scalar width `T`.
     ///
     /// Validation completes before dispatch, so a rejected operation performs
-    /// no mutation.
+    /// no mutation. Width-limited backends reject unsupported widths inside
+    /// this method (returning `HephaestusError::Unsupported`) instead of
+    /// shipping per-width method twins.
     ///
     /// # Errors
     ///
     /// Returns an error for invalid parameters, state count, shape, storage
-    /// span, writable aliasing, buffer aliasing, or backend dispatch failure.
-    fn stateful_update<Rule, const N: usize>(
+    /// span, writable aliasing, buffer aliasing, unsupported width, or
+    /// backend dispatch failure.
+    fn stateful_update<Rule, T: UpdateWidth, const N: usize>(
         &self,
         device: &D,
-        operands: StatefulUpdateOperands<'_, D::Buffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, D::Buffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
         Rule: StatefulUpdateRule<Self::Dialect>;

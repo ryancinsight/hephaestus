@@ -1,3 +1,4 @@
+use eunomia::RealField;
 use leto::Layout;
 
 use crate::domain::buffer::DeviceBuffer;
@@ -19,6 +20,8 @@ pub struct CrossEntropyPlan {
     pub max_physical_offset: usize,
     /// Gamma-derived tolerance for validating a stored f32 probability row.
     pub probability_tolerance: f32,
+    /// Gamma-derived tolerance for validating a stored f64 probability row.
+    pub probability_tolerance_f64: f64,
 }
 
 impl CrossEntropyPlan {
@@ -168,27 +171,33 @@ fn dimensions(batch: usize, classes: usize) -> Result<CrossEntropyPlan> {
         classes,
         elements,
         max_physical_offset: 0,
-        probability_tolerance: probability_tolerance(classes)?,
+        probability_tolerance: probability_tolerance::<f32>(classes)?,
+        probability_tolerance_f64: probability_tolerance::<f64>(classes)?,
     })
 }
 
-fn probability_tolerance(classes: usize) -> Result<f32> {
+fn probability_tolerance<T: RealField>(classes: usize) -> Result<T> {
     #[expect(
         clippy::cast_precision_loss,
-        reason = "f32 kernels represent the runtime class count in native precision"
+        reason = "usize class counts below 2^53 represent exactly in f64"
     )]
-    let summation_steps = classes.saturating_sub(1) as f32;
-    let summation_error = f32::EPSILON * summation_steps;
-    if summation_error >= 1.0 {
+    let steps = classes.saturating_sub(1) as f64;
+    // `from_f64` is a single correctly-rounded cast for both widths (`as f32`
+    // for f32, identity for f64), so the f32 path below is bit-identical to
+    // the previous `classes as f32` spelling.
+    let summation_steps = T::from_f64(steps);
+    let summation_error = T::EPSILON * summation_steps;
+    let width = core::any::type_name::<T>();
+    if summation_error >= T::ONE {
         return Err(invalid(format!(
-            "cross-entropy class count {classes} exceeds the f32 probability-validation bound"
+            "cross-entropy class count {classes} exceeds the {width} probability-validation bound"
         )));
     }
-    let gamma = summation_error / (1.0 - summation_error);
-    let tolerance = gamma + f32::EPSILON * (1.0 + gamma);
-    if !tolerance.is_finite() || tolerance >= 0.5 {
+    let gamma = summation_error / (T::ONE - summation_error);
+    let tolerance = gamma + T::EPSILON * (T::ONE + gamma);
+    if !tolerance.is_finite() || tolerance >= T::from_f32(0.5) {
         return Err(invalid(format!(
-            "cross-entropy class count {classes} exceeds the f32 probability-validation bound"
+            "cross-entropy class count {classes} exceeds the {width} probability-validation bound"
         )));
     }
     Ok(tolerance)

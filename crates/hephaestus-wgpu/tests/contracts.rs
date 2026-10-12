@@ -46,6 +46,9 @@ mod convolution_contracts;
 #[path = "cross_product_contracts.rs"]
 mod cross_product_contracts;
 
+#[path = "ctc_contracts.rs"]
+mod ctc_contracts;
+
 #[cfg(feature = "decomposition")]
 #[path = "decomposition_contracts.rs"]
 mod decomposition_contracts;
@@ -73,6 +76,9 @@ mod fft_contracts;
 
 #[path = "fusion_contracts.rs"]
 mod fusion_contracts;
+
+#[path = "fixed_fd_contracts.rs"]
+mod fixed_fd_contracts;
 
 #[path = "interpolation_contracts.rs"]
 mod interpolation_contracts;
@@ -302,6 +308,7 @@ contract_cases!(
     axis_reduction_contracts::wgpu_satisfies_the_axis_reduction_contract,
     convolution_contracts::wgpu_satisfies_the_convolution_contract,
     cross_product_contracts::wgpu_satisfies_the_cross_product_contract,
+    ctc_contracts::wgpu_satisfies_the_ctc_contract,
     #[cfg(feature = "decomposition")]
     decomposition_contracts::non_blocked_decomposition_heap_readbacks_are_provider_owned,
     #[cfg(feature = "decomposition")]
@@ -322,6 +329,9 @@ contract_cases!(
     fusion_contracts::runtime_rank_reduction_matches_reference,
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
+    fusion_contracts::wgpu_satisfies_the_fusion_contract,
+    fusion_contracts::wgpu_satisfies_the_f64_fusion_contract,
+    fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
     pad_contracts::wgpu_satisfies_the_pad_contract,
@@ -343,6 +353,7 @@ contract_cases!(
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
+    stateful_update_contracts::wgpu_satisfies_the_f64_stateful_update_contract,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
     staggered_contracts::wgpu_satisfies_the_staggered_contract,
     staggered3d::staggered_gradient_matches_cpu_on_every_axis,
@@ -393,7 +404,7 @@ contract_cases!(
 );
 
 #[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 137;
+const EXPECTED_CONTRACT_CASES: usize = 140;
 // The four hand-rolled `blocked_lu_*` differential cases folded into the
 // shared `assert_blocked_lu_contract` clause: four registrations removed,
 // one added. The four `blocked_cholesky_*` differentials folded into
@@ -413,9 +424,9 @@ const EXPECTED_CONTRACT_CASES: usize = 137;
 // `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
 // each add one unconditional registration on top of every combination.
 #[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 184;
+const EXPECTED_CONTRACT_CASES: usize = 187;
 #[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 142;
+const EXPECTED_CONTRACT_CASES: usize = 145;
 #[cfg(all(feature = "decomposition", feature = "sparse"))]
 // One below the pre-fold counts: the per-backend long-line scan test became a
 // shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
@@ -423,9 +434,11 @@ const EXPECTED_CONTRACT_CASES: usize = 142;
 // moved into shared clauses. The feature-gated matrix-function fold removes
 // seven more registrations while retaining one exact-diagnostic edge, and
 // pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
-// roll, triangular masking, its two limit clauses, and adaptive pooling each add
-// their registrations on top.
-const EXPECTED_CONTRACT_CASES: usize = 186;
+// triangular masking, its two limit clauses, and adaptive pooling each add
+// their registrations on top. The fixed-scheme 3-D sweep adds one
+// unconditional registration on top of every combination, and so does CTC,
+// as does the roll contract.
+const EXPECTED_CONTRACT_CASES: usize = 191;
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

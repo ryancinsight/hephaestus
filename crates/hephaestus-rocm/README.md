@@ -4,7 +4,7 @@ Native AMD ROCm/HIP device substrate for the Atlas accelerator stack. It
 implements the shared `hephaestus_core::ComputeDevice` seam over the Linux HIP
 runtime, so consumers that bind generically (`<D: ComputeDevice>`) substitute
 ROCm for wgpu or CUDA without source changes. Most consumers reach it through
-the `hephaestus` facade as `hephaestus::rocm`.
+the `hephaestus-compute` facade as `hephaestus::rocm`.
 
 ## What it provides
 

@@ -1,4 +1,8 @@
-#![forbid(unsafe_code)]
+// `deny` (not `forbid`): the five precision-generic rule parameter blocks
+// carry `allow(unsafe_code)` manual `Pod` impls — the derive rejects generic
+// `repr(C)` structs, and the impls' layout proofs are the per-width size
+// asserts beside them. No other unsafe code exists in this crate.
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 //! # hephaestus-core
 //!
@@ -46,6 +50,10 @@ pub use domain::convolution::{
     plan_transposed_convolution_forward,
 };
 pub use domain::cross_product::{CrossProductOps, validate_cross_product_lengths};
+pub use domain::ctc::{
+    CtcBackwardParams, CtcOps, CtcProblem, CtcSampleMeta, CtcStateBuffers, CtcStepOps,
+    CtcStepParams, drive_ctc_forward,
+};
 pub use domain::decomposition::{
     BlockedCholeskyBackend, BlockedCholeskyFactors, BlockedDecompositionBackend, BlockedLuFactors,
     BlockedQrBackend, BlockedQrFactors, PanelRegion, TrailingGemm, TrailingHh, TrailingSyrk,
@@ -69,6 +77,7 @@ pub use domain::embedding::{EmbeddingOps, validate_embedding_gather_shape};
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};
+pub use domain::fixed_fd::{FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme};
 pub use domain::fusion::{FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps};
 pub use domain::interface::{
     Access, BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource,
@@ -91,11 +100,12 @@ pub use domain::ops::{
     CeilOp, CombineExpr, CombineValue, CosOp, CoshOp, CumProdOp, CumSumOp, DivOp, EluGradOp, EluOp,
     EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp, GeluGradOp, GeluOp,
     GeluTanhGradOp, GeluTanhOp, GtOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp,
-    HardswishOp, IdentityOp, IdentityToken, LeOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, LtOp,
-    MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp, ProdOp, RecipOp,
-    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, SubOp, SumOp, TanOp,
-    TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr, UnaryValue,
+    HardswishOp, IdentityOp, IdentityToken, J0Op, J1Op, K0Op, LeOp, LgammaOp, LnOp, Log1pOp,
+    Log2Op, Log10Op, LtOp, MaxOp, MinOp, MishGradOp, MishOp, MulOp, NeOp, NegOp, OpIdentity, PowOp,
+    ProdOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp,
+    SiluOp, SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp,
+    SubOp, SumOp, TanOp, TanhGradOp, TanhOp, TruncOp, TypedBinaryExpr, TypedBinaryValue, UnaryExpr,
+    UnaryValue,
 };
 pub use domain::pad::{PadOps, PadWidth, validate_pad_shape};
 pub use domain::parameterized::{
@@ -125,7 +135,7 @@ pub use domain::stateful_update::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
     RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
-    StatefulUpdateStep, plan_stateful_update,
+    StatefulUpdateStep, UpdateWidth, plan_stateful_update,
 };
 pub use domain::stencil::StencilOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};

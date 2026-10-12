@@ -2,6 +2,7 @@ use core::any::TypeId;
 
 use hephaestus_core::{AttentionSemanticStatus, Result};
 
+use super::super::WgslAttentionScalar;
 use super::super::metadata::AttentionMeta;
 use super::super::prepared::PreparedAttentionKernel;
 use super::super::resources::binding;
@@ -14,29 +15,29 @@ use crate::infrastructure::device::WgpuDevice;
     clippy::too_many_arguments,
     reason = "finite preflight preparation enumerates the device ABI and semantic status"
 )]
-pub(super) fn prepare_finite<K: 'static>(
+pub(super) fn prepare_finite<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
     elements: usize,
     layout: &'static str,
     rank: u32,
     failure: AttentionSemanticStatus,
-    source: &WgpuBuffer<f32>,
+    source: &WgpuBuffer<T>,
     status: &WgpuBuffer<u32>,
 ) -> Result<PreparedAttentionKernel> {
-    prepare_status::<K>(
+    prepare_status::<K, T>(
         device,
         metadata,
         elements,
         "hephaestus-attention-finite-preflight",
         &[binding(0, source), binding(1, status)],
-        || finite_preflight_shader(layout, rank, failure, WORKGROUP_WIDTH.get()),
+        || finite_preflight_shader::<T>(layout, rank, failure, WORKGROUP_WIDTH.get()),
     )
 }
 
-pub(super) fn prepare_status<K: 'static>(
+pub(super) fn prepare_status<K: 'static, T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
     elements: usize,
     label: &'static str,
     storage_entries: &[wgpu::BindGroupEntry<'_>],

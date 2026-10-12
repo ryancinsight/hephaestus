@@ -47,8 +47,8 @@ pub(super) struct ForwardMeta {
 }
 
 impl ForwardMeta {
-    pub(super) fn new(
-        operands: &CrossEntropyForwardOperands<'_, CudaBuffer<f32>, CudaBuffer<u32>>,
+    pub(super) fn new<T>(
+        operands: &CrossEntropyForwardOperands<'_, CudaBuffer<T>, CudaBuffer<u32>>,
     ) -> Result<Self> {
         Ok(Self {
             logits: LayoutMeta::new(operands.logits.layout)?,
@@ -61,18 +61,18 @@ impl ForwardMeta {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub(super) struct BackwardMeta {
+pub(super) struct BackwardMeta<T> {
     output_gradient: LayoutMeta,
     probabilities: LayoutMeta,
     targets: LayoutMeta,
     logit_gradient: LayoutMeta,
-    tolerance: f32,
+    tolerance: T,
 }
 
-impl BackwardMeta {
+impl<T> BackwardMeta<T> {
     pub(super) fn new(
-        operands: &CrossEntropyBackwardOperands<'_, CudaBuffer<f32>, CudaBuffer<u32>>,
-        tolerance: f32,
+        operands: &CrossEntropyBackwardOperands<'_, CudaBuffer<T>, CudaBuffer<u32>>,
+        tolerance: T,
     ) -> Result<Self> {
         Ok(Self {
             output_gradient: LayoutMeta::new(operands.output_gradient.layout)?,

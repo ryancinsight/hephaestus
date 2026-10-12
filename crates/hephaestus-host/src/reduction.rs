@@ -25,9 +25,10 @@
 //! never does.
 //!
 //! `mean_axis_into` divides the accumulated sum by the reduced axis length
-//! cast to `T`, matching the WGSL kernels' `partials[0] / T(axis_len)`: for
+//! as `T`, matching the WGSL kernels' `partials[0] / T(axis_len)`: for
 //! an integer `T` this is truncating integer division, safe here because an
-//! empty reduced axis is rejected before any division executes.
+//! empty reduced axis is rejected before any division executes. A length an
+//! integer `T` cannot represent is refused, never wrapped into a wrong divisor.
 
 use eunomia::{NumericElement, Pod};
 use hephaestus_core::{
@@ -38,7 +39,7 @@ use hephaestus_core::{
 use leto::{ArrayView, Layout};
 
 use crate::combine::{axis_len, combine_fn, offset_2d, unsupported_operator};
-use crate::{HostBuffer, HostDevice, map_leto_error};
+use crate::{HostBuffer, HostDevice, element_count, map_leto_error};
 
 /// Whole-operand reductions for the host reference device.
 #[derive(Clone, Copy, Debug, Default)]
@@ -221,11 +222,7 @@ where
         else {
             return Ok(());
         };
-        let reduced_len_i32 =
-            i32::try_from(reduced_len).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("reduced axis length {reduced_len} exceeds i32 range"),
-            })?;
-        let divisor = T::cast_from(reduced_len_i32);
+        let divisor = element_count::<T>(reduced_len)?;
         let input_cells = input.buffer.read();
         let mut output_cells = output.buffer.write();
         fold_axis_reduction(

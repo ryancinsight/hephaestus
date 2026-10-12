@@ -233,13 +233,22 @@ impl BinaryExpr<CudaC> for PowOp {
 macro_rules! impl_typed_comparison_exprs {
     (
         $(
-            ($op:ty, $wgsl_f32:literal, $wgsl_u32:literal, $wgsl_i32:literal,
+            ($op:ty, $wgsl_f32:literal, $wgsl_f64:literal, $wgsl_u32:literal, $wgsl_i32:literal,
                 $cuda_f32:literal, $cuda_f64:literal, $cuda_u32:literal, $cuda_i32:literal)
         ),+ $(,)?
     ) => {
         $(
             impl TypedBinaryExpr<Wgsl, f32> for $op {
                 const EXPR: &'static str = $wgsl_f32;
+            }
+            // f64 needs its own spelling: `select` with AbstractFloat-only
+            // arms concretizes to `f32`, and automatic conversions do not
+            // convert `f32` to `f64` at the typed output assignment (naga
+            // rejects `out[i] = select(0.0, 1.0, ...)` into `array<f64>`).
+            // The comparison operators stay generic over the operand type;
+            // only the mask literals need the explicit `f64(...)` form.
+            impl TypedBinaryExpr<Wgsl, f64> for $op {
+                const EXPR: &'static str = $wgsl_f64;
             }
             impl TypedBinaryExpr<Wgsl, u32> for $op {
                 const EXPR: &'static str = $wgsl_u32;
@@ -276,6 +285,7 @@ impl_typed_comparison_exprs!(
     (
         EqOp,
         "select(0.0, 1.0, lhs == rhs)",
+        "select(f64(0.0), f64(1.0), lhs == rhs)",
         "select(0u, 1u, lhs == rhs)",
         "select(0, 1, lhs == rhs)",
         "lhs == rhs ? 1.0f : 0.0f",
@@ -286,6 +296,7 @@ impl_typed_comparison_exprs!(
     (
         NeOp,
         "select(0.0, 1.0, lhs != rhs)",
+        "select(f64(0.0), f64(1.0), lhs != rhs)",
         "select(0u, 1u, lhs != rhs)",
         "select(0, 1, lhs != rhs)",
         "lhs != rhs ? 1.0f : 0.0f",
@@ -296,6 +307,7 @@ impl_typed_comparison_exprs!(
     (
         LtOp,
         "select(0.0, 1.0, lhs < rhs)",
+        "select(f64(0.0), f64(1.0), lhs < rhs)",
         "select(0u, 1u, lhs < rhs)",
         "select(0, 1, lhs < rhs)",
         "lhs < rhs ? 1.0f : 0.0f",
@@ -306,6 +318,7 @@ impl_typed_comparison_exprs!(
     (
         GtOp,
         "select(0.0, 1.0, lhs > rhs)",
+        "select(f64(0.0), f64(1.0), lhs > rhs)",
         "select(0u, 1u, lhs > rhs)",
         "select(0, 1, lhs > rhs)",
         "lhs > rhs ? 1.0f : 0.0f",
@@ -316,6 +329,7 @@ impl_typed_comparison_exprs!(
     (
         LeOp,
         "select(0.0, 1.0, lhs <= rhs)",
+        "select(f64(0.0), f64(1.0), lhs <= rhs)",
         "select(0u, 1u, lhs <= rhs)",
         "select(0, 1, lhs <= rhs)",
         "lhs <= rhs ? 1.0f : 0.0f",
@@ -326,6 +340,7 @@ impl_typed_comparison_exprs!(
     (
         GeOp,
         "select(0.0, 1.0, lhs >= rhs)",
+        "select(f64(0.0), f64(1.0), lhs >= rhs)",
         "select(0u, 1u, lhs >= rhs)",
         "select(0, 1, lhs >= rhs)",
         "lhs >= rhs ? 1.0f : 0.0f",

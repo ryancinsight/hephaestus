@@ -14,6 +14,11 @@ use crate::{MetalBuffer, MetalDevice};
 /// Operand conversion borrows the existing device buffers, so delegation adds
 /// no payload copy, host transfer, or backend selection. WGPU preparation still
 /// owns its bounded metadata, status, and dispatch-resource allocations.
+///
+/// There is intentionally no `f64` implementation: the delegation would need
+/// the WGPU `ShaderF64` feature, which Metal targets cannot offer (Apple
+/// Silicon has no double-precision hardware), so f64 stays a compile-time
+/// absence rather than a runtime failure.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetalCrossEntropyOps;
 

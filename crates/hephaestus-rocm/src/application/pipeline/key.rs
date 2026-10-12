@@ -132,8 +132,10 @@ pub(crate) enum PipelineKey {
     },
     CrossEntropy {
         entry: &'static str,
+        scalar: TypeId,
     },
     GroupedStream(u64),
+    Fusion(u64),
 }
 
 #[cfg(feature = "decomposition")]

@@ -57,6 +57,8 @@ pub mod convolution;
 pub mod cross_entropy;
 /// Contract clauses for the [`CrossProductOps`](hephaestus_core::CrossProductOps) seam.
 pub mod cross_product;
+/// Contract clauses for the [`CtcOps`](hephaestus_core::CtcOps) seam.
+pub mod ctc;
 /// Contract clauses for the
 /// [`DecompositionOps`](hephaestus_core::DecompositionOps) seam.
 pub mod decomposition;
@@ -77,8 +79,15 @@ pub mod elementwise;
 /// [`EmbeddingOps`](hephaestus_core::EmbeddingOps) seam.
 pub mod embedding;
 /// Contract clauses for the
+/// [`FixedFd3DOps`](hephaestus_core::FixedFd3DOps) seam.
+pub mod fixed_fd;
+/// Contract clauses for the
 /// [`FullReductionOps`](hephaestus_core::FullReductionOps) seam.
 pub mod full_reduction;
+/// Contract clauses for the
+/// [`FusedElementwiseOps`](hephaestus_core::FusedElementwiseOps) and
+/// [`FusedReductionOps`](hephaestus_core::FusedReductionOps) seams.
+pub mod fusion;
 /// Contract clauses for the
 /// [`InterpolationOps`](hephaestus_core::InterpolationOps) seam.
 pub mod interpolation;
@@ -122,19 +131,29 @@ pub use axis_reduction::assert_axis_reduction_contract;
 pub use blocked_cholesky::assert_blocked_cholesky_contract;
 pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
-pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
-pub use cross_entropy::assert_cross_entropy_contract;
+pub use convolution::{ContractScalar, assert_convolution_contract};
+pub use cross_entropy::{
+    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_for,
+    assert_cross_entropy_contract, assert_cross_entropy_contract_for,
+};
 pub use cross_product::assert_cross_product_contract;
+pub use ctc::assert_ctc_contract;
 pub use decomposition::assert_decomposition_contract;
 pub use dense_composition::assert_dense_composition_contract;
 pub use dense_matrix_function::assert_dense_matrix_function_contract;
 pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
-pub use elementwise::assert_elementwise_contract;
+pub use elementwise::{
+    assert_bessel_contract, assert_elementwise_contract, assert_elu_contract,
+    assert_expm1_log1p_contract, assert_gelu_contract, assert_grad_tails_contract,
+    assert_k0_contract, assert_mish_contract, assert_sinc_contract, assert_softplus_contract,
+};
 pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
 };
+pub use fixed_fd::assert_fixed_fd_3d_contract;
 pub use full_reduction::assert_full_reduction_contract;
+pub use fusion::assert_fusion_contract;
 pub use interpolation::assert_interpolation_contract;
 pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
@@ -144,7 +163,7 @@ pub use roll::{RollContractFixtures, assert_roll_contract, assert_roll_contract_
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;
-pub use stateful_update::assert_stateful_update_contract;
+pub use stateful_update::{StatefulUpdateWidth, assert_stateful_update_contract};
 pub use stencil::assert_stencil_contract;
 pub use topk::assert_topk_contract;
 pub use transfer::assert_transfer_contract;

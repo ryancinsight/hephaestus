@@ -37,7 +37,7 @@ handle: `in_len == 1` (every output sample reads the sole input element)
 and `out_len == 1` (the single output sample reads input index `0`).
 
 Weight arithmetic runs entirely in `T`'s native precision via
-`leto_ops::Scalar::from_usize` (host) and `T`'s own WGSL type token via a
+`eunomia::TryFromCount::try_from_count` (host) and `T`'s own WGSL type token via a
 constructor cast from the loop-index `u32` (WGPU) — no widen-compute-narrow
 cast (HARD per `integrity`: fake generics; `numerical_discipline`: concrete
 precision contract). `Nearest` mode rounds half down (`frac < 0.5` keeps

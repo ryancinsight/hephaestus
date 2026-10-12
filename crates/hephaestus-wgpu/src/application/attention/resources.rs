@@ -2,17 +2,18 @@ use hephaestus_core::{
     AttentionBackwardOperands, AttentionForwardOperands, HephaestusError, Result,
 };
 
+use super::WgslAttentionScalar;
 use super::metadata::AttentionMeta;
 use crate::application::prepared::validate_buffer_owner;
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use crate::infrastructure::pool::PooledBuffer;
 
-pub(super) fn metadata_buffer(
+pub(super) fn metadata_buffer<T: super::WgslAttentionScalar>(
     device: &WgpuDevice,
-    metadata: &AttentionMeta,
+    metadata: &AttentionMeta<T>,
 ) -> Result<PooledBuffer> {
-    let buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AttentionMeta>(1)?)?;
+    let buffer = device.get_uniform_buffer(WgpuDevice::byte_size::<AttentionMeta<T>>(1)?)?;
 
     device
         .queue()
@@ -31,9 +32,9 @@ pub(super) fn raw_binding(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGrou
     }
 }
 
-pub(super) fn validate_forward_owners(
+pub(super) fn validate_forward_owners<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionForwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionForwardOperands<'_, WgpuBuffer<T>, T>,
 ) -> Result<()> {
     for buffer in [
         operands.query.buffer,
@@ -50,9 +51,9 @@ pub(super) fn validate_forward_owners(
     Ok(())
 }
 
-pub(super) fn validate_backward_owners(
+pub(super) fn validate_backward_owners<T: WgslAttentionScalar>(
     device: &WgpuDevice,
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
 ) -> Result<()> {
     for buffer in [
         operands.grad_output.buffer,
@@ -76,8 +77,8 @@ pub(super) fn validate_backward_owners(
     Ok(())
 }
 
-pub(super) fn forward_aliases(
-    operands: &AttentionForwardOperands<'_, WgpuBuffer<f32>, f32>,
+pub(super) fn forward_aliases<T: WgslAttentionScalar>(
+    operands: &AttentionForwardOperands<'_, WgpuBuffer<T>, T>,
 ) -> bool {
     let reads = [
         operands.query.buffer,
@@ -94,8 +95,8 @@ pub(super) fn forward_aliases(
             })
 }
 
-pub(super) fn backward_aliases(
-    operands: &AttentionBackwardOperands<'_, WgpuBuffer<f32>, f32>,
+pub(super) fn backward_aliases<T: WgslAttentionScalar>(
+    operands: &AttentionBackwardOperands<'_, WgpuBuffer<T>, T>,
 ) -> bool {
     let reads = [
         operands.grad_output.buffer,

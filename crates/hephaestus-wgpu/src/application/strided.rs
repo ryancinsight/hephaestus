@@ -23,6 +23,8 @@ use hephaestus_core::{
 use leto::Layout;
 
 use crate::application::bindings::BindGroupEntries;
+use crate::application::canary;
+use crate::application::elementwise::reject_unsupported_unary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
@@ -266,6 +268,7 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
+    canary::require_template_safe::<T>(device, expr, "strided binary elementwise")?;
 
     let out_layout = out.layout;
     let a_layout = a
@@ -445,6 +448,8 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
+    reject_unsupported_unary::<Op, T>()?;
+    canary::require_template_safe::<T>(device, Op::EXPR, "strided unary elementwise")?;
 
     let out_layout = out.layout;
     let a_layout = a
@@ -547,6 +552,7 @@ where
     const {
         assert!(N <= MAX_STRIDED_RANK, "strided dispatch supports rank <= 8");
     }
+    canary::require_template_safe::<T>(device, Op::EXPR, "strided scalar elementwise")?;
 
     let out_layout = out.layout;
     let a_layout = a

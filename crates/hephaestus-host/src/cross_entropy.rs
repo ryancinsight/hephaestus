@@ -20,11 +20,14 @@
 //! `cross_entropy_forward_into`/`cross_entropy_backward_accumulate` is
 //! necessarily satisfied too, so the real computation always proceeds.
 
+use eunomia::RealField;
 use hephaestus_core::{
     CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps, CrossEntropyPlan,
-    CrossEntropyStatus, Result, plan_cross_entropy_backward, plan_cross_entropy_forward,
+    CrossEntropyScalar, CrossEntropyStatus, Result, plan_cross_entropy_backward,
+    plan_cross_entropy_forward,
 };
 use leto::{ArrayView, ArrayViewMut, Layout};
+use leto_ops::RealScalar;
 
 use crate::operands::with_operands;
 use crate::{HostBuffer, HostDevice, map_leto_error};
@@ -38,33 +41,35 @@ pub struct HostCrossEntropyOps;
 /// The host dispatches no kernel, so preparation only runs the host-visible
 /// structural plan; the value-dependent preflight status runs at dispatch
 /// time, once the caller's buffers hold their final contents.
-pub struct HostCrossEntropyForward<'a> {
-    operands: CrossEntropyForwardOperands<'a, HostBuffer<f32>, HostBuffer<u32>>,
+pub struct HostCrossEntropyForward<'a, T> {
+    operands: CrossEntropyForwardOperands<'a, HostBuffer<T>, HostBuffer<u32>>,
     plan: CrossEntropyPlan,
 }
 
 /// Prepared host cross-entropy additive backward resources.
-pub struct HostCrossEntropyBackward<'a> {
-    operands: CrossEntropyBackwardOperands<'a, HostBuffer<f32>, HostBuffer<u32>>,
+pub struct HostCrossEntropyBackward<'a, T> {
+    operands: CrossEntropyBackwardOperands<'a, HostBuffer<T>, HostBuffer<u32>>,
     plan: CrossEntropyPlan,
 }
 
-impl CrossEntropyOps<HostDevice, f32> for HostCrossEntropyOps {
+impl<T: CrossEntropyScalar + RealScalar + RealField> CrossEntropyOps<HostDevice, T>
+    for HostCrossEntropyOps
+{
     type PreparedForward<'a>
-        = HostCrossEntropyForward<'a>
+        = HostCrossEntropyForward<'a, T>
     where
         HostDevice: 'a,
-        f32: 'a;
+        T: 'a;
     type PreparedBackward<'a>
-        = HostCrossEntropyBackward<'a>
+        = HostCrossEntropyBackward<'a, T>
     where
         HostDevice: 'a,
-        f32: 'a;
+        T: 'a;
 
     fn prepare_cross_entropy_forward<'a>(
         &self,
         _device: &'a HostDevice,
-        operands: CrossEntropyForwardOperands<'a, HostBuffer<f32>, HostBuffer<u32>>,
+        operands: CrossEntropyForwardOperands<'a, HostBuffer<T>, HostBuffer<u32>>,
     ) -> Result<Self::PreparedForward<'a>> {
         let plan = plan_cross_entropy_forward(&operands, forward_aliases(&operands))?;
         Ok(HostCrossEntropyForward { operands, plan })
@@ -113,7 +118,7 @@ impl CrossEntropyOps<HostDevice, f32> for HostCrossEntropyOps {
     fn prepare_cross_entropy_backward<'a>(
         &self,
         _device: &'a HostDevice,
-        operands: CrossEntropyBackwardOperands<'a, HostBuffer<f32>, HostBuffer<u32>>,
+        operands: CrossEntropyBackwardOperands<'a, HostBuffer<T>, HostBuffer<u32>>,
     ) -> Result<Self::PreparedBackward<'a>> {
         let plan = plan_cross_entropy_backward(&operands, backward_aliases(&operands))?;
         Ok(HostCrossEntropyBackward { operands, plan })
@@ -131,7 +136,7 @@ impl CrossEntropyOps<HostDevice, f32> for HostCrossEntropyOps {
         let targets = gather_targets(&targets_cells, operands.targets.layout, plan.batch)?;
         let mut logit_gradient_cells = operands.logit_gradient.buffer.write();
 
-        // `output_gradient` and `probabilities` are both `f32` reads that
+        // `output_gradient` and `probabilities` are both scalar reads that
         // are never proven disjoint by the plan, so they share one guard
         // when they alias, per this crate's `HostBuffer` lock discipline.
         with_operands(
@@ -156,7 +161,7 @@ impl CrossEntropyOps<HostDevice, f32> for HostCrossEntropyOps {
                     &probabilities_view,
                     &targets,
                     plan.classes,
-                    plan.probability_tolerance,
+                    T::tolerance(&plan),
                 );
                 let arithmetic_status = backward_arithmetic_status(
                     upstream,
@@ -192,10 +197,10 @@ impl CrossEntropyOps<HostDevice, f32> for HostCrossEntropyOps {
 /// Illegal-aliasing predicate mirroring `hephaestus-wgpu`'s
 /// `application/loss/resources.rs::forward_aliases`: a writable destination
 /// must not alias a readable operand or the other destination. `targets` is
-/// `HostBuffer<u32>` and can never alias an `f32` buffer by construction, so
-/// only the `f32`-typed pairs need checking.
-fn forward_aliases(
-    operands: &CrossEntropyForwardOperands<'_, HostBuffer<f32>, HostBuffer<u32>>,
+/// `HostBuffer<u32>` and can never alias a scalar buffer by construction, so
+/// only the scalar-typed pairs need checking.
+fn forward_aliases<T>(
+    operands: &CrossEntropyForwardOperands<'_, HostBuffer<T>, HostBuffer<u32>>,
 ) -> bool {
     operands.loss.buffer.aliases(operands.logits.buffer)
         || operands.loss.buffer.aliases(operands.probabilities.buffer)
@@ -207,8 +212,8 @@ fn forward_aliases(
 
 /// Illegal-aliasing predicate mirroring `hephaestus-wgpu`'s
 /// `application/loss/resources.rs::backward_aliases`.
-fn backward_aliases(
-    operands: &CrossEntropyBackwardOperands<'_, HostBuffer<f32>, HostBuffer<u32>>,
+fn backward_aliases<T>(
+    operands: &CrossEntropyBackwardOperands<'_, HostBuffer<T>, HostBuffer<u32>>,
 ) -> bool {
     operands
         .logit_gradient
@@ -260,7 +265,7 @@ fn finalize_status(status: u32) -> u32 {
 
 /// Read a validated `[row, class]` element; the plan already proved every
 /// such index is in bounds for the layout it was built from.
-fn read_row_major(view: &ArrayView<'_, f32, 2>, row: usize, class: usize) -> f32 {
+fn read_row_major<T: Copy>(view: &ArrayView<'_, T, 2>, row: usize, class: usize) -> T {
     *view
         .get([row, class])
         .expect("invariant: plan-validated row-major index is in bounds")
@@ -274,8 +279,8 @@ fn read_row_major(view: &ArrayView<'_, f32, 2>, row: usize, class: usize) -> f32
 /// row raised it. A row whose target is out of range skips its own
 /// logit/arithmetic checks, exactly as the shader returns early for that
 /// row; every other row is still evaluated.
-fn forward_preflight_status(
-    logits: &ArrayView<'_, f32, 2>,
+fn forward_preflight_status<T: CrossEntropyScalar + RealField>(
+    logits: &ArrayView<'_, T, 2>,
     targets: &[u32],
     classes: usize,
 ) -> u32 {
@@ -287,7 +292,7 @@ fn forward_preflight_status(
             status = status.min(CrossEntropyStatus::TargetOutOfRange.code());
             continue;
         }
-        let mut maximum = f32::MIN;
+        let mut maximum = T::FINITE_MIN;
         for class in 0..classes {
             let value = read_row_major(logits, row, class);
             if !value.is_finite() {
@@ -297,14 +302,14 @@ fn forward_preflight_status(
                 maximum = value;
             }
         }
-        let mut denominator = 0.0_f32;
+        let mut denominator = T::ZERO;
         for class in 0..classes {
             denominator += (read_row_major(logits, row, class) - maximum).exp();
         }
         let target_class = usize::try_from(target).expect("invariant: in-range target fits usize");
         let target_logit = read_row_major(logits, row, target_class);
         let row_loss = denominator.ln() + (maximum - target_logit);
-        if !denominator.is_finite() || denominator <= 0.0 || !row_loss.is_finite() {
+        if !denominator.is_finite() || denominator <= T::ZERO || !row_loss.is_finite() {
             status = status.min(CrossEntropyStatus::NonFiniteForwardArithmetic.code());
         }
     }
@@ -316,12 +321,12 @@ fn forward_preflight_status(
 /// value for every row), each row's target range, and each row's saved
 /// probabilities. Unlike the forward preflight, no row is skipped early,
 /// matching the shader.
-fn backward_row_status(
-    upstream: f32,
-    probabilities: &ArrayView<'_, f32, 2>,
+fn backward_row_status<T: CrossEntropyScalar + RealField>(
+    upstream: T,
+    probabilities: &ArrayView<'_, T, 2>,
     targets: &[u32],
     classes: usize,
-    tolerance: f32,
+    tolerance: T,
 ) -> u32 {
     let class_bound = u32::try_from(classes)
         .expect("invariant: cross-entropy plan bounds classes within u32 range");
@@ -333,16 +338,16 @@ fn backward_row_status(
         if target >= class_bound {
             status = status.min(CrossEntropyStatus::TargetOutOfRange.code());
         }
-        let mut sum = 0.0_f32;
+        let mut sum = T::ZERO;
         let mut row_invalid = false;
         for class in 0..classes {
             let probability = read_row_major(probabilities, row, class);
-            if !probability.is_finite() || !(0.0..=1.0).contains(&probability) {
+            if !probability.is_finite() || !(T::ZERO..=T::ONE).contains(&probability) {
                 row_invalid = true;
             }
             sum += probability;
         }
-        if row_invalid || !sum.is_finite() || (sum - 1.0).abs() > tolerance {
+        if row_invalid || !sum.is_finite() || (sum - T::ONE).abs() > tolerance {
             status = status.min(CrossEntropyStatus::InvalidProbabilities.code());
         }
     }
@@ -352,25 +357,25 @@ fn backward_row_status(
 /// Recompute `hephaestus-wgpu`'s `backward_arithmetic` preflight shader over
 /// every element: the pre-existing destination value's finiteness and the
 /// finiteness of the increment the accumulate pass would add.
-fn backward_arithmetic_status(
-    upstream: f32,
-    probabilities: &ArrayView<'_, f32, 2>,
+fn backward_arithmetic_status<T: CrossEntropyScalar + RealField>(
+    upstream: T,
+    probabilities: &ArrayView<'_, T, 2>,
     targets: &[u32],
-    destination: &ArrayView<'_, f32, 2>,
+    destination: &ArrayView<'_, T, 2>,
     classes: usize,
     batch: usize,
 ) -> u32 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "mirrors the WGSL shader's f32(dimensions.x) batch scale"
-    )]
-    let scale = upstream / batch as f32;
+    let scale = T::preflight_scale(upstream, batch);
     let mut status = u32::MAX;
     for (row, &target) in targets.iter().enumerate() {
         for class in 0..classes {
             let class_index = u32::try_from(class)
                 .expect("invariant: cross-entropy plan bounds classes within u32 range");
-            let indicator = if class_index == target { 1.0 } else { 0.0 };
+            let indicator = if class_index == target {
+                T::ONE
+            } else {
+                T::ZERO
+            };
             let probability = read_row_major(probabilities, row, class);
             let increment = scale * (probability - indicator);
             let current = read_row_major(destination, row, class);
