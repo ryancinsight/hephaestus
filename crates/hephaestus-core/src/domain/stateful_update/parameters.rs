@@ -1,6 +1,7 @@
 use eunomia::{FloatElement, Pod, Zeroable};
 
 use super::super::error::{HephaestusError, Result};
+use super::width::UpdateWidth;
 
 fn require_finite<T: FloatElement + core::fmt::Display>(
     name: &str,
@@ -27,27 +28,39 @@ fn require_nonnegative<T: FloatElement + PartialOrd + core::fmt::Display>(
     Ok(())
 }
 
-/// Validated stochastic-gradient-descent parameters.
+/// Validated SGD parameters.
+///
+/// Generic over the update width: `SgdParameters` is the f32 spelling (the
+/// frozen 16-byte uniform block device kernels were built against),
+/// `SgdParameters<f64>` the padding-free double-precision block. Layouts are
+/// pinned by the size asserts below.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct SgdParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) momentum: f32,
-    padding: [f32; 2],
+#[derive(Clone, Copy, Debug, Zeroable)]
+pub struct SgdParameters<T: UpdateWidth = f32> {
+    pub(crate) learning_rate: T,
+    pub(crate) momentum: T,
+    padding: T::Pad<2>,
 }
 
-impl SgdParameters {
+// SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
+// padding bytes exist and every bit pattern is valid. Layout pinned by the
+// size asserts below. (`Pod` cannot be derived: the derive rejects generic
+// `repr(C)` structs on stable Rust.)
+#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+unsafe impl<T: UpdateWidth> Pod for SgdParameters<T> {}
+
+impl<T: UpdateWidth> SgdParameters<T> {
     /// Validate and construct SGD parameters.
     ///
     /// # Errors
     ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] unless the learning
-    /// rate is finite and non-negative and momentum is finite in `[0, 1)`.
-    pub fn new(learning_rate: f32, momentum: f32) -> Result<Self> {
+    /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
+    /// and momentum are finite and momentum lies in `[0, 1)`.
+    pub fn new(learning_rate: T, momentum: T) -> Result<Self> {
         let parameters = Self {
             learning_rate,
             momentum,
-            padding: [0.0; 2],
+            padding: T::Pad::<2>::zeroed(),
         };
         parameters.validate()?;
         Ok(parameters)
@@ -62,12 +75,9 @@ impl SgdParameters {
             ],
         )?;
         require_nonnegative("SGD", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.momentum) {
+        if !(T::ZERO..T::ONE).contains(&self.momentum) {
             return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "SGD parameter momentum must lie in [0, 1), got {}",
-                    self.momentum
-                ),
+                message: "SGD momentum must lie in [0, 1)".to_string(),
             });
         }
         Ok(())
@@ -75,19 +85,29 @@ impl SgdParameters {
 }
 
 /// Validated Adam parameters with host-computed bias corrections.
+///
+/// Generic over the update width: `AdamParameters` is the f32 spelling (the
+/// frozen 32-byte uniform block), `AdamParameters<f64>` the padding-free
+/// double-precision block.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) beta_one: f32,
-    pub(crate) beta_two: f32,
-    pub(crate) epsilon: f32,
-    pub(crate) bias_correction_one: f32,
-    pub(crate) bias_correction_two: f32,
-    padding: [f32; 2],
+#[derive(Clone, Copy, Debug, Zeroable)]
+pub struct AdamParameters<T: UpdateWidth = f32> {
+    pub(crate) learning_rate: T,
+    pub(crate) beta_one: T,
+    pub(crate) beta_two: T,
+    pub(crate) epsilon: T,
+    pub(crate) bias_correction_one: T,
+    pub(crate) bias_correction_two: T,
+    padding: T::Pad<2>,
 }
 
-impl AdamParameters {
+// SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
+// padding bytes exist and every bit pattern is valid. Layout pinned by the
+// size asserts below.
+#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+unsafe impl<T: UpdateWidth> Pod for AdamParameters<T> {}
+
+impl<T: UpdateWidth> AdamParameters<T> {
     /// Validate and construct Adam parameters for one-based `step`.
     ///
     /// # Errors
@@ -96,10 +116,10 @@ impl AdamParameters {
     /// is finite and non-negative, epsilon is finite and positive, beta values
     /// lie in `[0, 1)`, and `step` is positive and representable as `i32`.
     pub fn new(
-        learning_rate: f32,
-        beta_one: f32,
-        beta_two: f32,
-        epsilon: f32,
+        learning_rate: T,
+        beta_one: T,
+        beta_two: T,
+        epsilon: T,
         step: usize,
     ) -> Result<Self> {
         let step = validate_step("Adam", step)?;
@@ -108,9 +128,9 @@ impl AdamParameters {
             beta_one,
             beta_two,
             epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-            padding: [0.0; 2],
+            bias_correction_one: T::ONE - beta_one.powi(step),
+            bias_correction_two: T::ONE - beta_two.powi(step),
+            padding: T::Pad::<2>::zeroed(),
         };
         parameters.validate()?;
         Ok(parameters)
@@ -130,20 +150,30 @@ impl AdamParameters {
 }
 
 /// Validated AdamW parameters with host-computed bias corrections.
+///
+/// Generic over the update width: `AdamWParameters` is the f32 spelling (the
+/// frozen 32-byte uniform block), `AdamWParameters<f64>` the padding-free
+/// double-precision block.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamWParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) beta_one: f32,
-    pub(crate) beta_two: f32,
-    pub(crate) epsilon: f32,
-    pub(crate) bias_correction_one: f32,
-    pub(crate) bias_correction_two: f32,
-    pub(crate) weight_decay: f32,
-    padding: f32,
+#[derive(Clone, Copy, Debug, Zeroable)]
+pub struct AdamWParameters<T: UpdateWidth = f32> {
+    pub(crate) learning_rate: T,
+    pub(crate) beta_one: T,
+    pub(crate) beta_two: T,
+    pub(crate) epsilon: T,
+    pub(crate) bias_correction_one: T,
+    pub(crate) bias_correction_two: T,
+    pub(crate) weight_decay: T,
+    padding: T::Pad<1>,
 }
 
-impl AdamWParameters {
+// SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
+// padding bytes exist and every bit pattern is valid. Layout pinned by the
+// size asserts below.
+#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+unsafe impl<T: UpdateWidth> Pod for AdamWParameters<T> {}
+
+impl<T: UpdateWidth> AdamWParameters<T> {
     /// Validate and construct AdamW parameters for one-based `step`.
     ///
     /// # Errors
@@ -151,11 +181,11 @@ impl AdamWParameters {
     /// Returns [`HephaestusError::InvalidConfiguration`] when the embedded Adam
     /// contract fails or weight decay is not finite and non-negative.
     pub fn new(
-        learning_rate: f32,
-        beta_one: f32,
-        beta_two: f32,
-        epsilon: f32,
-        weight_decay: f32,
+        learning_rate: T,
+        beta_one: T,
+        beta_two: T,
+        epsilon: T,
+        weight_decay: T,
         step: usize,
     ) -> Result<Self> {
         let step = validate_step("AdamW", step)?;
@@ -164,10 +194,10 @@ impl AdamWParameters {
             beta_one,
             beta_two,
             epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
+            bias_correction_one: T::ONE - beta_one.powi(step),
+            bias_correction_two: T::ONE - beta_two.powi(step),
             weight_decay,
-            padding: 0.0,
+            padding: T::Pad::<1>::zeroed(),
         };
         parameters.validate()?;
         Ok(parameters)
@@ -236,16 +266,26 @@ fn validate_adaptive_values<T: FloatElement + PartialOrd + core::fmt::Display>(
 }
 
 /// Validated RMSProp parameters.
+///
+/// Generic over the update width: `RmsPropParameters` is the f32 spelling
+/// (the frozen 16-byte uniform block), `RmsPropParameters<f64>` the
+/// padding-free double-precision block.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct RmsPropParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) alpha: f32,
-    pub(crate) epsilon: f32,
-    padding: f32,
+#[derive(Clone, Copy, Debug, Zeroable)]
+pub struct RmsPropParameters<T: UpdateWidth = f32> {
+    pub(crate) learning_rate: T,
+    pub(crate) alpha: T,
+    pub(crate) epsilon: T,
+    padding: T::Pad<1>,
 }
 
-impl RmsPropParameters {
+// SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
+// padding bytes exist and every bit pattern is valid. Layout pinned by the
+// size asserts below.
+#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+unsafe impl<T: UpdateWidth> Pod for RmsPropParameters<T> {}
+
+impl<T: UpdateWidth> RmsPropParameters<T> {
     /// Validate and construct RMSProp parameters.
     ///
     /// # Errors
@@ -253,12 +293,12 @@ impl RmsPropParameters {
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
     /// is finite and non-negative, epsilon is finite and positive, and alpha
     /// lies in `[0, 1)`.
-    pub fn new(learning_rate: f32, alpha: f32, epsilon: f32) -> Result<Self> {
+    pub fn new(learning_rate: T, alpha: T, epsilon: T) -> Result<Self> {
         let parameters = Self {
             learning_rate,
             alpha,
             epsilon,
-            padding: 0.0,
+            padding: T::Pad::<1>::zeroed(),
         };
         parameters.validate()?;
         Ok(parameters)
@@ -274,7 +314,7 @@ impl RmsPropParameters {
             ],
         )?;
         require_nonnegative("RMSProp", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.alpha) || self.epsilon <= 0.0 {
+        if !(T::ZERO..T::ONE).contains(&self.alpha) || self.epsilon <= T::ZERO {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "RMSProp alpha must lie in [0, 1) and epsilon must be positive"
                     .to_string(),
@@ -285,26 +325,36 @@ impl RmsPropParameters {
 }
 
 /// Validated AdaGrad parameters.
+///
+/// Generic over the update width: `AdaGradParameters` is the f32 spelling
+/// (the frozen 16-byte uniform block), `AdaGradParameters<f64>` the
+/// padding-free double-precision block.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdaGradParameters {
-    pub(crate) learning_rate: f32,
-    pub(crate) epsilon: f32,
-    padding: [f32; 2],
+#[derive(Clone, Copy, Debug, Zeroable)]
+pub struct AdaGradParameters<T: UpdateWidth = f32> {
+    pub(crate) learning_rate: T,
+    pub(crate) epsilon: T,
+    padding: T::Pad<2>,
 }
 
-impl AdaGradParameters {
+// SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
+// padding bytes exist and every bit pattern is valid. Layout pinned by the
+// size asserts below.
+#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+unsafe impl<T: UpdateWidth> Pod for AdaGradParameters<T> {}
+
+impl<T: UpdateWidth> AdaGradParameters<T> {
     /// Validate and construct AdaGrad parameters.
     ///
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] unless learning rate
     /// is finite and non-negative and epsilon is finite and positive.
-    pub fn new(learning_rate: f32, epsilon: f32) -> Result<Self> {
+    pub fn new(learning_rate: T, epsilon: T) -> Result<Self> {
         let parameters = Self {
             learning_rate,
             epsilon,
-            padding: [0.0; 2],
+            padding: T::Pad::<2>::zeroed(),
         };
         parameters.validate()?;
         Ok(parameters)
@@ -319,7 +369,7 @@ impl AdaGradParameters {
             ],
         )?;
         require_nonnegative("AdaGrad", "learning_rate", self.learning_rate)?;
-        if self.epsilon <= 0.0 {
+        if self.epsilon <= T::ZERO {
             return Err(HephaestusError::InvalidConfiguration {
                 message: "AdaGrad epsilon must be positive".to_string(),
             });
@@ -328,265 +378,19 @@ impl AdaGradParameters {
     }
 }
 
-const _: () = assert!(core::mem::size_of::<SgdParameters>() == 16);
-const _: () = assert!(core::mem::size_of::<AdamParameters>() == 32);
-const _: () = assert!(core::mem::size_of::<AdamWParameters>() == 32);
-const _: () = assert!(core::mem::size_of::<RmsPropParameters>() == 16);
-const _: () = assert!(core::mem::size_of::<AdaGradParameters>() == 16);
-
-// f64 uniform twins. The f32 structs above are a frozen uniform ABI (their
-// padding fields keep the 16/32-byte sizes device kernels were built
-// against), so f64 gets its own padding-free structs — field counts times
-// 8 bytes already satisfy uniform granularity — sharing the generic
-// validation helpers with the f32 originals.
-
-/// Validated f64 stochastic-gradient-descent parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct SgdParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) momentum: f64,
-}
-
-impl SgdParametersF64 {
-    /// Validate and construct f64 SGD parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`SgdParameters::new`].
-    pub fn new(learning_rate: f64, momentum: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            momentum,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "SGD",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("momentum", self.momentum),
-            ],
-        )?;
-        require_nonnegative("SGD", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.momentum) {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: format!(
-                    "SGD parameter momentum must lie in [0, 1), got {}",
-                    self.momentum
-                ),
-            });
-        }
-        Ok(())
-    }
-}
-
-/// Validated f64 Adam parameters with host-computed bias corrections.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) beta_one: f64,
-    pub(crate) beta_two: f64,
-    pub(crate) epsilon: f64,
-    pub(crate) bias_correction_one: f64,
-    pub(crate) bias_correction_two: f64,
-}
-
-impl AdamParametersF64 {
-    /// Validate and construct f64 Adam parameters for one-based `step`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdamParameters::new`].
-    pub fn new(
-        learning_rate: f64,
-        beta_one: f64,
-        beta_two: f64,
-        epsilon: f64,
-        step: usize,
-    ) -> Result<Self> {
-        let step = validate_step("Adam", step)?;
-        let parameters = Self {
-            learning_rate,
-            beta_one,
-            beta_two,
-            epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        validate_adaptive_values(
-            "Adam",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
-        )
-    }
-}
-
-/// Validated f64 AdamW parameters with host-computed bias corrections.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdamWParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) beta_one: f64,
-    pub(crate) beta_two: f64,
-    pub(crate) epsilon: f64,
-    pub(crate) bias_correction_one: f64,
-    pub(crate) bias_correction_two: f64,
-    pub(crate) weight_decay: f64,
-}
-
-impl AdamWParametersF64 {
-    /// Validate and construct f64 AdamW parameters for one-based `step`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdamWParameters::new`].
-    pub fn new(
-        learning_rate: f64,
-        beta_one: f64,
-        beta_two: f64,
-        epsilon: f64,
-        weight_decay: f64,
-        step: usize,
-    ) -> Result<Self> {
-        let step = validate_step("AdamW", step)?;
-        let parameters = Self {
-            learning_rate,
-            beta_one,
-            beta_two,
-            epsilon,
-            bias_correction_one: 1.0 - beta_one.powi(step),
-            bias_correction_two: 1.0 - beta_two.powi(step),
-            weight_decay,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        validate_adaptive_values(
-            "AdamW",
-            self.learning_rate,
-            self.beta_one,
-            self.beta_two,
-            self.epsilon,
-            self.bias_correction_one,
-            self.bias_correction_two,
-        )?;
-        require_finite("AdamW", &[("weight_decay", self.weight_decay)])?;
-        require_nonnegative("AdamW", "weight_decay", self.weight_decay)
-    }
-}
-
-/// Validated f64 RMSProp parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct RmsPropParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) alpha: f64,
-    pub(crate) epsilon: f64,
-}
-
-impl RmsPropParametersF64 {
-    /// Validate and construct f64 RMSProp parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`RmsPropParameters::new`].
-    pub fn new(learning_rate: f64, alpha: f64, epsilon: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            alpha,
-            epsilon,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "RMSProp",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("alpha", self.alpha),
-                ("epsilon", self.epsilon),
-            ],
-        )?;
-        require_nonnegative("RMSProp", "learning_rate", self.learning_rate)?;
-        if !(0.0..1.0).contains(&self.alpha) || self.epsilon <= 0.0 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: "RMSProp alpha must lie in [0, 1) and epsilon must be positive"
-                    .to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
-/// Validated f64 AdaGrad parameters.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct AdaGradParametersF64 {
-    pub(crate) learning_rate: f64,
-    pub(crate) epsilon: f64,
-}
-
-impl AdaGradParametersF64 {
-    /// Validate and construct f64 AdaGrad parameters.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HephaestusError::InvalidConfiguration`] under the same
-    /// contract as [`AdaGradParameters::new`].
-    pub fn new(learning_rate: f64, epsilon: f64) -> Result<Self> {
-        let parameters = Self {
-            learning_rate,
-            epsilon,
-        };
-        parameters.validate()?;
-        Ok(parameters)
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        require_finite(
-            "AdaGrad",
-            &[
-                ("learning_rate", self.learning_rate),
-                ("epsilon", self.epsilon),
-            ],
-        )?;
-        require_nonnegative("AdaGrad", "learning_rate", self.learning_rate)?;
-        if self.epsilon <= 0.0 {
-            return Err(HephaestusError::InvalidConfiguration {
-                message: "AdaGrad epsilon must be positive".to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
-const _: () = assert!(core::mem::size_of::<SgdParametersF64>() == 16);
-const _: () = assert!(core::mem::size_of::<AdamParametersF64>() == 48);
-const _: () = assert!(core::mem::size_of::<AdamWParametersF64>() == 56);
-const _: () = assert!(core::mem::size_of::<RmsPropParametersF64>() == 24);
-const _: () = assert!(core::mem::size_of::<AdaGradParametersF64>() == 16);
+// The f32 layouts above are a FROZEN UNIFORM ABI (their padding fields keep
+// the sizes device kernels were built against); the f64 layouts are the
+// padding-free twins. Both monomorphizations are pinned here.
+const _: () = assert!(core::mem::size_of::<SgdParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<AdamParameters<f32>>() == 32);
+const _: () = assert!(core::mem::size_of::<AdamWParameters<f32>>() == 32);
+const _: () = assert!(core::mem::size_of::<RmsPropParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<AdaGradParameters<f32>>() == 16);
+const _: () = assert!(core::mem::size_of::<SgdParameters<f64>>() == 16);
+const _: () = assert!(core::mem::size_of::<AdamParameters<f64>>() == 48);
+const _: () = assert!(core::mem::size_of::<AdamWParameters<f64>>() == 56);
+const _: () = assert!(core::mem::size_of::<RmsPropParameters<f64>>() == 24);
+const _: () = assert!(core::mem::size_of::<AdaGradParameters<f64>>() == 16);
 
 #[cfg(test)]
 #[path = "tests_parameters.rs"]

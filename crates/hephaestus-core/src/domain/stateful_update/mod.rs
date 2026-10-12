@@ -11,16 +11,14 @@ mod ops;
 mod parameters;
 mod plan;
 mod rules;
+mod width;
 
 pub use metadata::StatefulUpdateMeta;
 pub use operands::{StatefulUpdateAliasing, StatefulUpdateOperands};
 pub use ops::StatefulUpdateOps;
 pub use parameters::{
-    AdaGradParameters, AdaGradParametersF64, AdamParameters, AdamParametersF64, AdamWParameters,
-    AdamWParametersF64, RmsPropParameters, RmsPropParametersF64, SgdParameters, SgdParametersF64,
+    AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
 pub use plan::{StatefulUpdatePlan, plan_stateful_update};
-pub use rules::{
-    AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule, StatefulUpdateStep,
-    StatefulUpdateStepF64,
-};
+pub use rules::{AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule, StatefulUpdateStep};
+pub use width::UpdateWidth;

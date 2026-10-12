@@ -2,7 +2,8 @@
 
 use hephaestus_core::{
     BlockWidth, DialectScalar, HipC, Result, StatefulUpdateAliasing, StatefulUpdateMeta,
-    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, plan_stateful_update,
+    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, UpdateWidth,
+    plan_stateful_update,
 };
 
 use crate::application::pipeline::{
@@ -13,12 +14,11 @@ use crate::{RocmBuffer, RocmDevice};
 
 const ENTRY_POINT: &str = "stateful_update_kernel";
 
-fn parameters_declaration<Rule, T>() -> String
+fn parameters_declaration<Rule, T>(ty: &'static str) -> String
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: 'static,
 {
-    let ty = T::TYPE_TOKEN;
     let fields = Rule::parameter_fields_for::<T>()
         .iter()
         .map(|field| format!("    {ty} {field};\n"))
@@ -26,12 +26,11 @@ where
     format!("typedef struct {{\n{fields}}} StatefulUpdateParameters;\n")
 }
 
-fn kernel_source<Rule, T>() -> String
+fn kernel_source<Rule, T>(ty: &'static str) -> String
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: 'static,
 {
-    let ty = T::TYPE_TOKEN;
     let state_one_argument = if Rule::STATE_COUNT == 2 {
         format!(",\n    {ty}* state_one")
     } else {
@@ -108,9 +107,9 @@ extern "C" __global__ void {entry_point}(
     state_zero[state_zero_offset] = state_zero_next;
 {state_one_store}}}
 "#,
-        parameters = parameters_declaration::<Rule, T>(),
+        parameters = parameters_declaration::<Rule, T>(ty),
         entry_point = ENTRY_POINT,
-        ty = T::TYPE_TOKEN,
+        ty = ty,
         body = Rule::body_for::<T>(),
     )
 }
@@ -142,10 +141,11 @@ fn launch<Rule, T, P, const N: usize>(
     parameters: P,
     meta: StatefulUpdateMeta,
     len: usize,
+    ty: &'static str,
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: 'static,
 {
     let width = BlockWidth::DEFAULT;
     let kernel = cached_kernel(
@@ -156,7 +156,7 @@ where
             width: width.get(),
         },
         ENTRY_POINT,
-        kernel_source::<Rule, T>,
+        || kernel_source::<Rule, T>(ty),
     )?;
     let mut meta = meta;
     let mut parameters = parameters;
@@ -231,10 +231,11 @@ fn dispatch<Rule, T, P, const N: usize>(
     operands: StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
     parameters: P,
     validate: fn(&P) -> Result<()>,
+    ty: &'static str,
 ) -> Result<()>
 where
     Rule: StatefulUpdateRule<HipC>,
-    T: DialectScalar<HipC>,
+    T: UpdateWidth,
 {
     validate(&parameters)?;
     validate_device(device, &operands)?;
@@ -243,34 +244,56 @@ where
         return Ok(());
     }
 
-    launch::<Rule, T, P, N>(device, operands, parameters, plan.metadata(), plan.len())
+    launch::<Rule, T, P, N>(
+        device,
+        operands,
+        parameters,
+        plan.metadata(),
+        plan.len(),
+        ty,
+    )
+}
+
+/// HIP C type token for an update width, or a typed rejection.
+///
+/// The fused [`StatefulUpdateOps::stateful_update`] entry point is generic
+/// over [`UpdateWidth`], which cannot name the dialect spelling; the token
+/// crosses that bound gap as a value instead. Widths outside f32/f64 are
+/// rejected here rather than silently compiled against a fallback spelling.
+fn scalar_token<T: UpdateWidth>() -> Result<&'static str> {
+    if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f64>() {
+        Ok(<f64 as DialectScalar<HipC>>::TYPE_TOKEN)
+    } else if core::any::TypeId::of::<T>() == core::any::TypeId::of::<f32>() {
+        Ok(<f32 as DialectScalar<HipC>>::TYPE_TOKEN)
+    } else {
+        Err(hephaestus_core::HephaestusError::Unsupported {
+            message: format!(
+                "ROCm does not support stateful updates at {}",
+                core::any::type_name::<T>(),
+            ),
+        })
+    }
 }
 
 impl StatefulUpdateOps<RocmDevice> for RocmStatefulUpdateOps {
     type Dialect = HipC;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<Rule, T: UpdateWidth, const N: usize>(
         &self,
         device: &RocmDevice,
-        operands: StatefulUpdateOperands<'_, RocmBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, RocmBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
     {
-        dispatch::<Rule, f32, _, N>(device, operands, parameters, Rule::validate_parameters)
-    }
-
-    fn stateful_update_f64<Rule, const N: usize>(
-        &self,
-        device: &RocmDevice,
-        operands: StatefulUpdateOperands<'_, RocmBuffer<f64>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
-    ) -> Result<()>
-    where
-        Rule: StatefulUpdateRule<Self::Dialect>,
-    {
-        dispatch::<Rule, f64, _, N>(device, operands, parameters, Rule::validate_parameters_f64)
+        dispatch::<Rule, T, _, N>(
+            device,
+            operands,
+            parameters,
+            Rule::validate_parameters::<T>,
+            scalar_token::<T>()?,
+        )
     }
 }
 
@@ -282,12 +305,12 @@ mod tests {
 
     #[test]
     fn source_specializes_state_cardinality_and_parameters() {
-        let sgd = kernel_source::<Sgd, f32>();
+        let sgd = kernel_source::<Sgd, f32>("float");
         assert!(sgd.contains("float momentum;"));
         assert!(!sgd.contains("float* state_one"));
         assert!(sgd.contains(<Sgd as StatefulUpdateRule<HipC>>::BODY));
 
-        let adam = kernel_source::<Adam, f32>();
+        let adam = kernel_source::<Adam, f32>("float");
         assert!(adam.contains("float bias_correction_two;"));
         assert!(adam.contains("float* state_one"));
         assert!(adam.contains(<Adam as StatefulUpdateRule<HipC>>::BODY));
@@ -295,20 +318,20 @@ mod tests {
 
     #[test]
     fn f64_source_types_storage_and_parameters_double() {
-        let sgd = kernel_source::<Sgd, f64>();
+        let sgd = kernel_source::<Sgd, f64>("double");
         assert!(sgd.contains("double momentum;"));
         assert!(sgd.contains("double* parameter,"));
         assert!(sgd.contains("const double* gradient,"));
         assert!(!sgd.contains("float"));
 
-        let adam = kernel_source::<Adam, f64>();
+        let adam = kernel_source::<Adam, f64>("double");
         assert!(adam.contains("double bias_correction_two;"));
         assert!(adam.contains("double* state_one"));
     }
 
     #[test]
     fn f64_adam_selects_the_double_literal_body() {
-        let adam = kernel_source::<Adam, f64>();
+        let adam = kernel_source::<Adam, f64>("double");
         let body = <Adam as StatefulUpdateRule<HipC>>::body_for::<f64>();
         assert!(adam.contains(body));
         assert!(!body.contains("1.0f"));

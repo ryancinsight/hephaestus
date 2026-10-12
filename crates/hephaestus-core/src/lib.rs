@@ -1,4 +1,8 @@
-#![forbid(unsafe_code)]
+// `deny` (not `forbid`): the five precision-generic rule parameter blocks
+// carry `allow(unsafe_code)` manual `Pod` impls — the derive rejects generic
+// `repr(C)` structs, and the impls' layout proofs are the per-width size
+// asserts beside them. No other unsafe code exists in this crate.
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 //! # hephaestus-core
 //!
@@ -127,11 +131,10 @@ pub use domain::sliding_window::{
 pub use domain::sparse::{BatchSubmitOps, SparseOperatorOps, validate_csr};
 pub use domain::staggered::{Staggered3DOps, Staggered3DParams, StaggeredAxis};
 pub use domain::stateful_update::{
-    AdaGrad, AdaGradParameters, AdaGradParametersF64, Adam, AdamParameters, AdamParametersF64,
-    AdamW, AdamWParameters, AdamWParametersF64, RmsProp, RmsPropParameters, RmsPropParametersF64,
-    Sgd, SgdParameters, SgdParametersF64, StatefulUpdateAliasing, StatefulUpdateMeta,
+    AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RmsProp,
+    RmsPropParameters, Sgd, SgdParameters, StatefulUpdateAliasing, StatefulUpdateMeta,
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
-    StatefulUpdateStep, StatefulUpdateStepF64, plan_stateful_update,
+    StatefulUpdateStep, UpdateWidth, plan_stateful_update,
 };
 pub use domain::stencil::StencilOps;
 pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};

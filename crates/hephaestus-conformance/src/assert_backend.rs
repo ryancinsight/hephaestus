@@ -321,13 +321,26 @@ pub fn assert_backend_contract<
         + IdentityToken<CumProdOp, <B as ScanOps<D, f32>>::Dialect>,
     i32: OpIdentity<CumSumOp> + IdentityToken<CumSumOp, <B as ScanOps<D, i32>>::Dialect>,
     // stateful-update markers
-    Sgd: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = SgdParameters>,
-    Adam: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamParameters>,
-    AdamW: StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdamWParameters>,
-    RmsProp:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = RmsPropParameters>,
-    AdaGrad:
-        StatefulUpdateRule<<Y as StatefulUpdateOps<D>>::Dialect, Parameters = AdaGradParameters>,
+    Sgd: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = SgdParameters<f32>,
+        >,
+    Adam: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdamParameters<f32>,
+        >,
+    AdamW: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdamWParameters<f32>,
+        >,
+    RmsProp: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = RmsPropParameters<f32>,
+        >,
+    AdaGrad: StatefulUpdateRule<
+            <Y as StatefulUpdateOps<D>>::Dialect,
+            Parameters<f32> = AdaGradParameters<f32>,
+        >,
 {
     let device = backend.device;
     crate::attention::assert_attention_contract(device, backend.attention);
@@ -358,7 +371,10 @@ pub fn assert_backend_contract<
     crate::sparse::assert_sparse_operator_contract(device, backend.sparse_operator);
     crate::sparse::assert_batch_submit_contract(device, backend.batch_submit);
     crate::staggered::assert_staggered_3d_contract(device, backend.staggered_3d);
-    crate::stateful_update::assert_stateful_update_contract(device, backend.stateful_update);
+    crate::stateful_update::assert_stateful_update_contract::<_, _, f32>(
+        device,
+        backend.stateful_update,
+    );
     crate::stencil::assert_stencil_contract(device, backend.stencil);
     crate::typed_elementwise::assert_typed_elementwise_contract(device, backend.typed_elementwise);
     crate::transfer::assert_transfer_contract(device);

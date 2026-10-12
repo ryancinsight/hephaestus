@@ -21,7 +21,7 @@ fn sgd_update_matches_hand_derived_arithmetic_at_zero_state() {
     // learning_rate = 0.25 and momentum = 0.5 are exact in binary, so
     // every intermediate stays exact: state_zero_next = 0*0.5 + 2.0 =
     // 2.0; parameter_next = 10.0 - 0.25*2.0 = 9.5.
-    let parameters = SgdParameters::new(0.25, 0.5).expect("valid SGD parameters");
+    let parameters = SgdParameters::<f32>::new(0.25, 0.5).expect("valid SGD parameters");
     let step = <Sgd as StatefulUpdateRule<Host>>::update(10.0, 2.0, [0.0, 0.0], &parameters);
     assert_eq!(step.states, [2.0, 0.0]);
     assert_eq!(step.parameter, 9.5);
@@ -32,7 +32,7 @@ fn sgd_update_is_identity_at_zero_gradient_and_zero_state() {
     // Multiplying by 0.0 and subtracting 0.0 are exact regardless of
     // `learning_rate`/`momentum`'s own rounding, so this holds for any
     // valid parameters.
-    let parameters = SgdParameters::new(0.1, 0.9).expect("valid SGD parameters");
+    let parameters = SgdParameters::<f32>::new(0.1, 0.9).expect("valid SGD parameters");
     let step = <Sgd as StatefulUpdateRule<Host>>::update(5.0, 0.0, [0.0, 0.0], &parameters);
     assert_eq!(step.parameter, 5.0);
     assert_eq!(step.states[0], 0.0);
@@ -45,7 +45,8 @@ fn adam_update_resets_at_zero_beta_and_zero_gradient() {
     // at gradient = 0 both moment estimates collapse to exactly 0.0
     // regardless of the prior state's magnitude, leaving the parameter
     // unchanged (0.0 numerator over a nonzero denominator).
-    let parameters = AdamParameters::new(0.1, 0.0, 0.0, 1.0, 1).expect("valid Adam parameters");
+    let parameters =
+        AdamParameters::<f32>::new(0.1, 0.0, 0.0, 1.0, 1).expect("valid Adam parameters");
     let step = <Adam as StatefulUpdateRule<Host>>::update(10.0, 0.0, [3.0, 4.0], &parameters);
     assert_eq!(step.states, [0.0, 0.0]);
     assert_eq!(step.parameter, 10.0);
@@ -54,7 +55,7 @@ fn adam_update_resets_at_zero_beta_and_zero_gradient() {
 #[test]
 fn adam_update_matches_the_bias_corrected_second_moment_formula() {
     let parameters =
-        AdamParameters::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid Adam parameters");
+        AdamParameters::<f32>::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid Adam parameters");
     let step = <Adam as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.25], &parameters);
     let expected_state_zero = 0.5 * parameters.beta_one + (1.0 - parameters.beta_one) * 2.0;
     let expected_state_one = 0.25 * parameters.beta_two + (1.0 - parameters.beta_two) * 2.0 * 2.0;
@@ -67,8 +68,8 @@ fn adam_update_matches_the_bias_corrected_second_moment_formula() {
 
 #[test]
 fn adamw_update_applies_decoupled_weight_decay_before_the_adam_step() {
-    let parameters =
-        AdamWParameters::new(0.1, 0.9, 0.999, 1.0e-6, 0.01, 3).expect("valid AdamW parameters");
+    let parameters = AdamWParameters::<f32>::new(0.1, 0.9, 0.999, 1.0e-6, 0.01, 3)
+        .expect("valid AdamW parameters");
     let step = <AdamW as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.25], &parameters);
     let expected_state_zero = 0.5 * parameters.beta_one + (1.0 - parameters.beta_one) * 2.0;
     let expected_state_one = 0.25 * parameters.beta_two + (1.0 - parameters.beta_two) * 2.0 * 2.0;
@@ -81,7 +82,8 @@ fn adamw_update_applies_decoupled_weight_decay_before_the_adam_step() {
 
 #[test]
 fn rmsprop_update_matches_hand_derived_arithmetic() {
-    let parameters = RmsPropParameters::new(0.05, 0.9, 1.0e-6).expect("valid RMSProp parameters");
+    let parameters =
+        RmsPropParameters::<f32>::new(0.05, 0.9, 1.0e-6).expect("valid RMSProp parameters");
     let step = <RmsProp as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.0], &parameters);
     let expected_state_zero: f32 = 0.5 * parameters.alpha + (1.0 - parameters.alpha) * 2.0 * 2.0;
     let expected_parameter =
@@ -92,7 +94,7 @@ fn rmsprop_update_matches_hand_derived_arithmetic() {
 
 #[test]
 fn adagrad_update_accumulates_without_decay() {
-    let parameters = AdaGradParameters::new(0.05, 1.0e-6).expect("valid AdaGrad parameters");
+    let parameters = AdaGradParameters::<f32>::new(0.05, 1.0e-6).expect("valid AdaGrad parameters");
     let step = <AdaGrad as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.0], &parameters);
     let expected_state_zero: f32 = 0.5 + 2.0 * 2.0;
     let expected_parameter =
@@ -107,8 +109,8 @@ fn adagrad_update_accumulates_without_decay() {
 
 #[test]
 fn sgd_update_f64_matches_hand_derived_arithmetic() {
-    let parameters = SgdParametersF64::new(0.25, 0.5).expect("valid f64 SGD parameters");
-    let step = <Sgd as StatefulUpdateRule<Host>>::update_f64(10.0, 2.0, [0.0, 0.0], &parameters);
+    let parameters = SgdParameters::<f64>::new(0.25, 0.5).expect("valid f64 SGD parameters");
+    let step = <Sgd as StatefulUpdateRule<Host>>::update(10.0, 2.0, [0.0, 0.0], &parameters);
     assert_eq!(step.states, [2.0, 0.0]);
     assert_eq!(step.parameter, 9.5);
 }
@@ -116,8 +118,8 @@ fn sgd_update_f64_matches_hand_derived_arithmetic() {
 #[test]
 fn adam_update_f64_matches_the_bias_corrected_second_moment_formula() {
     let parameters =
-        AdamParametersF64::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid f64 Adam parameters");
-    let step = <Adam as StatefulUpdateRule<Host>>::update_f64(1.0, 2.0, [0.5, 0.25], &parameters);
+        AdamParameters::<f64>::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid f64 Adam parameters");
+    let step = <Adam as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.25], &parameters);
     let expected_state_zero = 0.5 * parameters.beta_one + (1.0 - parameters.beta_one) * 2.0;
     let expected_state_one = 0.25 * parameters.beta_two + (1.0 - parameters.beta_two) * 2.0 * 2.0;
     let expected_parameter = 1.0
@@ -129,9 +131,9 @@ fn adam_update_f64_matches_the_bias_corrected_second_moment_formula() {
 
 #[test]
 fn adamw_update_f64_applies_decoupled_weight_decay() {
-    let parameters = AdamWParametersF64::new(0.1, 0.9, 0.999, 1.0e-6, 0.01, 3)
+    let parameters = AdamWParameters::<f64>::new(0.1, 0.9, 0.999, 1.0e-6, 0.01, 3)
         .expect("valid f64 AdamW parameters");
-    let step = <AdamW as StatefulUpdateRule<Host>>::update_f64(1.0, 2.0, [0.5, 0.25], &parameters);
+    let step = <AdamW as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.25], &parameters);
     let expected_state_zero = 0.5 * parameters.beta_one + (1.0 - parameters.beta_one) * 2.0;
     let expected_state_one = 0.25 * parameters.beta_two + (1.0 - parameters.beta_two) * 2.0 * 2.0;
     let expected_parameter = 1.0 * (1.0 - parameters.learning_rate * parameters.weight_decay)
@@ -144,8 +146,8 @@ fn adamw_update_f64_applies_decoupled_weight_decay() {
 #[test]
 fn rmsprop_update_f64_matches_hand_derived_arithmetic() {
     let parameters =
-        RmsPropParametersF64::new(0.05, 0.9, 1.0e-6).expect("valid f64 RMSProp parameters");
-    let step = <RmsProp as StatefulUpdateRule<Host>>::update_f64(1.0, 2.0, [0.5, 0.0], &parameters);
+        RmsPropParameters::<f64>::new(0.05, 0.9, 1.0e-6).expect("valid f64 RMSProp parameters");
+    let step = <RmsProp as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.0], &parameters);
     let expected_state_zero: f64 = 0.5 * parameters.alpha + (1.0 - parameters.alpha) * 2.0 * 2.0;
     let expected_parameter =
         1.0 - parameters.learning_rate * 2.0 / (expected_state_zero.sqrt() + parameters.epsilon);
@@ -155,8 +157,9 @@ fn rmsprop_update_f64_matches_hand_derived_arithmetic() {
 
 #[test]
 fn adagrad_update_f64_accumulates_without_decay() {
-    let parameters = AdaGradParametersF64::new(0.05, 1.0e-6).expect("valid f64 AdaGrad parameters");
-    let step = <AdaGrad as StatefulUpdateRule<Host>>::update_f64(1.0, 2.0, [0.5, 0.0], &parameters);
+    let parameters =
+        AdaGradParameters::<f64>::new(0.05, 1.0e-6).expect("valid f64 AdaGrad parameters");
+    let step = <AdaGrad as StatefulUpdateRule<Host>>::update(1.0, 2.0, [0.5, 0.0], &parameters);
     let expected_state_zero: f64 = 0.5 + 2.0 * 2.0;
     let expected_parameter =
         1.0 - parameters.learning_rate * 2.0 / (expected_state_zero.sqrt() + parameters.epsilon);
