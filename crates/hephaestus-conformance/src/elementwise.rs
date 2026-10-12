@@ -13,9 +13,9 @@
 
 use eunomia::Pod;
 use hephaestus_core::{
-    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, Expm1Op, J0Op,
-    J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView, SubOp, UnaryExpr,
-    UnaryValue,
+    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, EluOp, Expm1Op,
+    J0Op, J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView, SubOp,
+    UnaryExpr, UnaryValue,
 };
 use leto::Layout;
 
@@ -197,6 +197,34 @@ where
     SoftplusOp: UnaryExpr<E::Dialect>,
 {
     softplus_tails_match_oracle(device, ops);
+}
+
+/// Run the elu tail clauses against one backend.
+///
+/// Shares the `TAIL_REL_BOUND` derivation: `elu` is defective just below
+/// zero under the naive `exp(x) - 1` transcription — the subtraction
+/// cancels every significant bit once `|x|` drops to f32's `ulp(1)`
+/// (100% relative error against an oracle of magnitude `|x|`). The
+/// negative arm is exactly `expm1`, so the fix reuses its spelling
+/// (native `expm1` on the C dialects, the Taylor select arm on WGSL).
+/// Oracles are the f64 [`UnaryValue`] form `x` at `x >= 0`, `exp_m1`
+/// below. Control points at `-20`/`-1`/`-0.5`/`0`/`0.5`/`1`/`5` pin the
+/// already-correct arms on both sides of the `-0.5` crossover; only the
+/// `0-` probes exercise the defect.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_elu_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    EluOp: UnaryExpr<E::Dialect>,
+{
+    elu_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -455,6 +483,32 @@ where
         assert!(
             error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: softplus lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// `0-` probes at `-1e-10`/`-1e-7`/`-1e-5` collapse to exactly `0` under
+/// the naive transcription (`exp(x)` rounds to `1.0` at f32's `ulp(1)`,
+/// so `exp(x) - 1` loses every significant bit); the controls pin the
+/// already-correct arms on both sides of the `-0.5` crossover.
+fn elu_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    EluOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        -1e-10f32, -1e-7, -1e-5, -0.5, -1.0, -20.0, 0.0, 0.5, 1.0, 5.0,
+    ];
+    let got = unary::<_, _, EluOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <EluOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: elu lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }

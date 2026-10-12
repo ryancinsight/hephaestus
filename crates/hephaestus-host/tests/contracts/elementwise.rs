@@ -6,9 +6,9 @@
 
 use eunomia::F16;
 use hephaestus_conformance::{
-    assert_bessel_contract, assert_elementwise_contract, assert_expm1_log1p_contract,
-    assert_k0_contract, assert_sinc_contract, assert_softplus_contract,
-    assert_typed_elementwise_contract,
+    assert_bessel_contract, assert_elementwise_contract, assert_elu_contract,
+    assert_expm1_log1p_contract, assert_k0_contract, assert_sinc_contract,
+    assert_softplus_contract, assert_typed_elementwise_contract,
 };
 use hephaestus_core::{AddOp, ComputeDevice, ElementwiseOps, ExpOp, PowOp, StridedView};
 use hephaestus_host::{HostDevice, HostElementwiseOps};
@@ -42,6 +42,11 @@ fn host_satisfies_the_expm1_log1p_contract() {
 #[test]
 fn host_satisfies_the_softplus_contract() {
     assert_softplus_contract(&HostDevice::new(), &HostElementwiseOps);
+}
+
+#[test]
+fn host_satisfies_the_elu_contract() {
+    assert_elu_contract(&HostDevice::new(), &HostElementwiseOps);
 }
 
 #[test]

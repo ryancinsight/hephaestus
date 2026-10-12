@@ -92,7 +92,9 @@ impl_hip_unary_exprs!(
         MishGradOp,
         "tanhf(logf(1.0f + expf(x))) + x * (1.0f - tanhf(logf(1.0f + expf(x))) * tanhf(logf(1.0f + expf(x)))) * (1.0f / (1.0f + expf(-x)))"
     ),
-    (EluOp, "x >= 0.0f ? x : expf(x) - 1.0f"),
+    // Native `expm1` on the negative arm (see activation.rs); the unsuffixed
+    // builtin keeps f64 served.
+    (EluOp, "((x) >= 0.0f ? (x) : expm1(x))"),
     (EluGradOp, "x >= 0.0f ? 1.0f : expf(x)"),
     (HardsigmoidOp, "fminf(fmaxf(x / 6.0f + 0.5f, 0.0f), 1.0f)"),
     (
