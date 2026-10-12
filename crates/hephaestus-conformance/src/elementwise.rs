@@ -13,8 +13,8 @@
 
 use eunomia::Pod;
 use hephaestus_core::{
-    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, J0Op, J1Op,
-    K0Op, MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
+    AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, Expm1Op, J0Op,
+    J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SqrtOp, StridedView, SubOp, UnaryExpr,
 };
 use leto::Layout;
 
@@ -125,6 +125,40 @@ where
 {
     k0_branches_match_oracle(device, ops);
     k0_guard_yields_nan(device, ops);
+}
+
+/// Relative tolerance for the expm1/log1p tail clauses, derived below.
+const EXPM1_LOG1P_REL_BOUND: f64 = 1e-6;
+
+/// Run the expm1/log1p tail clauses against one backend.
+///
+/// `expm1`/`log1p` near zero are the KERNEL-TAIL defect ADR 0061 Decision 6
+/// reserves for the unfused GPU renderings: the naive `(exp(x) - 1.0)` and
+/// `log(1.0 + x)` transcriptions cancel to exactly `0` once `|x|` drops to
+/// f32's `ulp(1)` — 100% relative error against an oracle of magnitude `|x|`.
+/// A correct f32 rendering (native `expm1f`/`log1pf` on the C dialects, the
+/// regrouped forms on WGSL) holds a few ULP, under 5e-7 relative including
+/// the output rounding; the assertions admit `1e-6`, headroom that still
+/// fails the naive transcription by six orders of magnitude. Oracles are f64
+/// `exp_m1`/`ln_1p`, accurate to a few ULP; every probe stays inside the
+/// overflow limit (`expm1` finite below 88.7, `log1p` on `x > -1`), so
+/// relative error is the honest metric. Control points at `+-0.5`/`+-1` pin
+/// the already-correct range; only the tail probes exercise the defect.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_expm1_log1p_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    Expm1Op: UnaryExpr<E::Dialect>,
+    Log1pOp: UnaryExpr<E::Dialect>,
+{
+    expm1_log1p_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -319,6 +353,45 @@ where
         assert!(
             got.is_nan(),
             "{name}: k0 guard lane {lane} (x = {x}): got {got}, expected NaN"
+        );
+    }
+}
+
+/// Tail probes at `+-1e-10`/`+-1e-7`/`+-1e-5` collapse to exactly `0` under
+/// the naive transcriptions (`1.0 + x` rounds to `1.0` at f32's `ulp(1)`,
+/// and `exp(x) - 1` loses every significant bit the same way); the control
+/// points at `+-0.5`/`+-1` already pass and pin the correct range.
+fn expm1_log1p_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    Expm1Op: UnaryExpr<E::Dialect>,
+    Log1pOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [
+        1e-10f32, -1e-10, 1e-7, -1e-7, 1e-5, -1e-5, 0.5, -0.5, 1.0, -1.0,
+    ];
+    let got_expm1 = unary::<_, _, Expm1Op, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got_expm1.iter().zip(&points).enumerate() {
+        let expected = f64::from(x).exp_m1();
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= EXPM1_LOG1P_REL_BOUND * expected.abs(),
+            "{name}: expm1 lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+    let points_log1p = [
+        1e-10f32, -1e-10, 1e-7, -1e-7, 1e-5, -1e-5, 0.5, -0.5, 1.0, 2.0,
+    ];
+    let got_log1p = unary::<_, _, Log1pOp, 10>(device, ops, &points_log1p);
+    for (lane, (&got, &x)) in got_log1p.iter().zip(&points_log1p).enumerate() {
+        let expected = f64::from(x).ln_1p();
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= EXPM1_LOG1P_REL_BOUND * expected.abs(),
+            "{name}: log1p lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }

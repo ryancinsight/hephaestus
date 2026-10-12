@@ -7,7 +7,8 @@
 #![cfg(feature = "cuda")]
 
 use hephaestus_conformance::{
-    assert_bessel_contract, assert_elementwise_contract, assert_k0_contract, assert_sinc_contract,
+    assert_bessel_contract, assert_elementwise_contract, assert_expm1_log1p_contract,
+    assert_k0_contract, assert_sinc_contract,
 };
 use hephaestus_core::{CudaC, EqOp, GeOp, GtOp, LeOp, LtOp, NeOp, TypedBinaryExpr};
 use hephaestus_cuda::{CudaDevice, CudaElementwiseOps};
@@ -26,6 +27,7 @@ fn cuda_satisfies_the_elementwise_contract() {
     assert_sinc_contract(&device, &CudaElementwiseOps);
     assert_bessel_contract(&device, &CudaElementwiseOps);
     assert_k0_contract(&device, &CudaElementwiseOps);
+    assert_expm1_log1p_contract(&device, &CudaElementwiseOps);
 }
 
 #[test]
