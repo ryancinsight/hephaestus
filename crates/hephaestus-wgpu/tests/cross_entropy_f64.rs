@@ -1,8 +1,9 @@
 //! WGSL f64 cross-entropy backward contract.
 //!
-//! Forward stays out of this binary: the f64 forward shaders need `log`,
-//! which aborts shader compilation on some Vulkan drivers, so only the
-//! backward path (pure IEEE-double arithmetic) executes here. CUDA proves
+//! Forward stays out of this binary: the f64 forward shaders need `exp` and
+//! `log`, whose f64 SPIR-V lowering is undefined, so the backend refuses them
+//! on Vulkan (ADR 0072) and only the backward path (pure IEEE-double
+//! arithmetic) executes here. CUDA proves
 //! the f64 forward path on hardware.
 
 use hephaestus_conformance::assert_cross_entropy_backward_contract_for;

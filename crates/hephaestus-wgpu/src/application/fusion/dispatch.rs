@@ -351,9 +351,7 @@ where
     validate_common(device, inputs, output)?;
     let metadata = metadata_for_elementwise(inputs, output)?;
     let source_expression = expression_source.into_owned();
-    if let Some(width) = canary::width_of::<T>() {
-        canary::require_expr_safe(device, &source_expression, width, "fused elementwise")?;
-    }
+    canary::require_template_safe::<T>(device, &source_expression, "fused elementwise")?;
     let pipeline_expression = source_expression.clone();
     let input_buffers = inputs.iter().map(|input| input.buffer).collect::<Vec<_>>();
     submit(
@@ -396,9 +394,7 @@ where
         });
     }
     let source_expression = expression_source.into_owned();
-    if let Some(width) = canary::width_of::<T>() {
-        canary::require_expr_safe(device, &source_expression, width, "fused reduction")?;
-    }
+    canary::require_template_safe::<T>(device, &source_expression, "fused reduction")?;
     let pipeline_expression = format!("{reduction:?}:{source_expression}");
     let shader_expression = source_expression.clone();
     let mut empty_input_buffers = Vec::with_capacity(inputs.len());

@@ -9,12 +9,13 @@
 
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CrossEntropyForwardOperands, CrossEntropyOps, DeviceFeature,
-    DevicePreference, StridedView,
+    DevicePreference, ElementwiseOps, HephaestusError, StridedView,
 };
 use hephaestus_wgpu::{
     BuiltinVerdict, CanaryWidth, ExpOp, MathBuiltin, PowOp, PrecisionGrade, SinOp, SoftplusOp,
-    TanhOp, WgpuCrossEntropyOps, WgpuDevice, binary_elementwise_into, builtin_verdict,
-    probe_precision, require_builtin, scan_builtins, unary_elementwise_into,
+    TanhOp, WgpuCrossEntropyOps, WgpuDevice, WgpuElementwiseOps, binary_elementwise_into,
+    builtin_verdict, probe_precision, require_builtin, scan_builtins, unary_elementwise_into,
+    unary_elementwise_strided_into,
 };
 use leto::Layout;
 
@@ -28,6 +29,15 @@ const PROBED: [MathBuiltin; 4] = [
 
 /// Text every gate refusal carries.
 const BLOCKED: &str = "blocked on this backend";
+
+/// Assert a typed backend refusal whose message names the blocked rule.
+#[track_caller]
+fn assert_blocked(error: &HephaestusError) {
+    assert!(
+        matches!(error, HephaestusError::Unsupported { message } if message.contains(BLOCKED)),
+        "expected a typed blocked refusal, got: {error:?}"
+    );
+}
 
 fn device() -> Option<WgpuDevice> {
     let mut limits = WgpuDevice::downlevel_device_limits();
@@ -101,8 +111,8 @@ fn live_grades_measure_truth_without_crashing() {
             let error = probe_precision(&device, builtin, CanaryWidth::F64)
                 .expect_err("canary must refuse undefined f64 lowerings on Vulkan");
             assert!(
-                error.to_string().contains("refuses to compile"),
-                "unexpected refusal: {error}"
+                matches!(&error, HephaestusError::Unsupported { message } if message.contains("refuses to compile")),
+                "unexpected refusal: {error:?}"
             );
         }
         return;
@@ -141,26 +151,42 @@ fn gates_refuse_undefined_lowerings_with_cause() {
     let output = device.alloc_uninitialized::<f64>(4).expect("output");
     let error = unary_elementwise_into::<ExpOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
         .expect_err("f64 exp must refuse on Vulkan");
-    assert!(error.to_string().contains(BLOCKED), "got: {error}");
+    assert_blocked(&error);
 
     let error =
         unary_elementwise_into::<TanhOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
             .expect_err("f64 tanh must refuse on Vulkan");
-    assert!(error.to_string().contains(BLOCKED), "got: {error}");
+    assert_blocked(&error);
 
     let error =
         unary_elementwise_into::<SoftplusOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
             .expect_err("f64 softplus (exp/log-bearing) must refuse on Vulkan");
-    assert!(error.to_string().contains(BLOCKED), "got: {error}");
+    assert_blocked(&error);
 
     // Restricted builtins without a probe refuse under the same rule.
     let error = unary_elementwise_into::<SinOp, f64>(&device, &input, &output, BlockWidth::DEFAULT)
         .expect_err("f64 sin must refuse on Vulkan");
-    let message = error.to_string();
-    assert!(
-        message.contains(BLOCKED) && message.contains("`sin`"),
-        "got: {message}"
-    );
+    assert_blocked(&error);
+    assert!(error.to_string().contains("`sin`"), "got: {error}");
+
+    // Strided and prepared seams compile the same templates and refuse alike.
+    let layout = Layout::c_contiguous([4]).expect("vector");
+    let error = unary_elementwise_strided_into::<ExpOp, f64, 1>(
+        &device,
+        StridedView::new(&input, &layout),
+        StridedView::new(&output, &layout),
+        BlockWidth::DEFAULT,
+    )
+    .expect_err("strided f64 exp must refuse on Vulkan");
+    assert_blocked(&error);
+    let Err(error) = WgpuElementwiseOps.prepare_unary_into::<TanhOp, 1>(
+        &device,
+        StridedView::new(&input, &layout),
+        StridedView::new(&output, &layout),
+    ) else {
+        panic!("prepared f64 tanh must refuse on Vulkan");
+    };
+    assert_blocked(&error);
 
     let error = binary_elementwise_into::<PowOp, f64>(
         &device,
@@ -170,7 +196,7 @@ fn gates_refuse_undefined_lowerings_with_cause() {
         BlockWidth::DEFAULT,
     )
     .expect_err("f64 pow must refuse on Vulkan");
-    assert!(error.to_string().contains(BLOCKED), "got: {error}");
+    assert_blocked(&error);
 
     let matrix = Layout::c_contiguous([1, 2]).expect("matrix");
     let vector = Layout::c_contiguous([1]).expect("vector");
@@ -189,5 +215,5 @@ fn gates_refuse_undefined_lowerings_with_cause() {
             },
         )
         .expect_err("f64 CE forward (exp/log-bearing) must refuse on Vulkan");
-    assert!(error.to_string().contains(BLOCKED), "got: {error}");
+    assert_blocked(&error);
 }

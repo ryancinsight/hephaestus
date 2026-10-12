@@ -9,7 +9,7 @@
 //! is undefined. The observed behaviors span the full range: on NVIDIA
 //! RTX 5080 (driver 610.60) f64 `log`/`tanh` abort pipeline compilation, f64
 //! `pow` access-violates at dispatch, and f64 `exp` computes at f32 grade; on
-//! Mesa lavapipe (hosted CI) f64 `exp` returns zero for every input. The
+//! Mesa lavapipe (hosted CI) f64 `exp` reaches a worst relative error of 1. The
 //! defect is the lowering, not an adapter, so the verdict is keyed by
 //! backend and width rather than by adapter identity. Two mechanisms share
 //! one query surface:
@@ -102,7 +102,7 @@ pub enum BuiltinVerdict {
 const fn blocked_cause(builtin: MathBuiltin) -> &'static str {
     match builtin {
         MathBuiltin::Exp => {
-            "naga lowers f64 `exp` to GLSL.std.450 Exp, which admits only 16/32-bit operands; observed f32-grade results on NVIDIA RTX 5080 (driver 610.60) and all-zero results on Mesa lavapipe"
+            "naga lowers f64 `exp` to GLSL.std.450 Exp, which admits only 16/32-bit operands; observed f32-grade results on NVIDIA RTX 5080 (driver 610.60) and a worst relative error of 1 on Mesa lavapipe"
         }
         MathBuiltin::Log => {
             "naga lowers f64 `log` to GLSL.std.450 Log, which admits only 16/32-bit operands; observed pipeline-compile abort (0xc0000005) on NVIDIA RTX 5080 (driver 610.60)"
@@ -118,19 +118,18 @@ const fn blocked_cause(builtin: MathBuiltin) -> &'static str {
 
 /// Whether `width` operands of the GLSL.std.450 precision-restricted
 /// instructions are undefined on this device's backend.
+///
+/// The backend is read from the live `wgpu::Device`, so a device wrapped
+/// without recorded adapter info is judged like an acquired one.
 fn restricted_width_undefined(device: &WgpuDevice, width: CanaryWidth) -> bool {
-    width == CanaryWidth::F64
-        && device
-            .adapter_info()
-            .is_some_and(|info| info.backend == wgpu::Backend::Vulkan)
+    width == CanaryWidth::F64 && device.inner().adapter_info().backend == wgpu::Backend::Vulkan
 }
 
 /// Report the verdict for one builtin at one width on this device.
 ///
 /// Every f64 builtin on the Vulkan backend is blocked: its SPIR-V lowering is
 /// outside the GLSL.std.450 operand contract, so no driver result is defined.
-/// Other backends and widths, and devices without adapter info, report
-/// [`BuiltinVerdict::Supported`].
+/// Other backends and widths report [`BuiltinVerdict::Supported`].
 #[must_use]
 pub fn builtin_verdict(
     device: &WgpuDevice,
@@ -249,6 +248,24 @@ pub fn require_expr_safe(
         });
     }
     Ok(())
+}
+
+/// Refuse dispatch when the WGSL template `expr`, instantiated at scalar
+/// `T`, uses a builtin blocked at that width.
+///
+/// Non-float scalars have no canary width and pass through.
+///
+/// # Errors
+///
+/// Returns [`HephaestusError::Unsupported`] as [`require_expr_safe`] does.
+pub(crate) fn require_template_safe<T: 'static>(
+    device: &WgpuDevice,
+    expr: &str,
+    operation: &'static str,
+) -> Result<()> {
+    width_of::<T>().map_or(Ok(()), |width| {
+        require_expr_safe(device, expr, width, operation)
+    })
 }
 
 /// Measured precision grade of one live probe.
