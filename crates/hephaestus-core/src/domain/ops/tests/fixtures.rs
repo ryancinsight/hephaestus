@@ -90,8 +90,9 @@ where
     );
 
     // J0/J1 resolve their x = 0 values exactly, match the classic J(1)
-    // constants through the rational branch, and carry even/odd symmetry
-    // bit-exactly (negation is exact, and J0's branch sees only |x|).
+    // constants through the provider core, and carry even/odd symmetry
+    // bit-exactly (libm evaluates J0 over |x| and J1 odd, verified for
+    // every shipped scalar).
     assert_eq!(<J0Op as UnaryValue>::apply(T::ZERO), T::ONE);
     assert_eq!(<J1Op as UnaryValue>::apply(T::ZERO), T::ZERO);
     assert!(
