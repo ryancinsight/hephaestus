@@ -2,10 +2,11 @@
 //!
 //! One thread per `(lane, dst_idx)` pair (flat-dispatched over
 //! `lanes * axis_len`) computes its own wrapped source index and copies
-//! directly — no shared state between threads. `axis` bakes into the
-//! generated WGSL at pipeline-cache-key granularity; `shift` is an ordinary
-//! runtime uniform value (it does not change which shader instructions are
-//! legal, only the wrap arithmetic's operand).
+//! directly — no shared state between threads. The generated WGSL is
+//! axis-agnostic (lanes `[axis, other]` stride packing carries `axis`), so
+//! the pipeline-cache key needs only the kernel marker, scalar, and block
+//! width; `shift` is an ordinary runtime uniform value (it does not change
+//! which shader instructions are legal, only the wrap arithmetic's operand).
 
 use std::any::TypeId;
 

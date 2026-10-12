@@ -24,7 +24,7 @@
   coeus binds afterward.
 - Verification: per-op conformance clause across backends, boundary/empty
   cases, strict Clippy, independent review.
-- Last-update: 2026-09-27.
+- Last-update: 2026-10-12.
 
 <a id="heph-topk-argminmax-provider-1"></a>
 
