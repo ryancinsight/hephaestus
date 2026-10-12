@@ -14,7 +14,13 @@ use leto_ops::{
     convolution_transposed_forward_into,
 };
 
-trait ContractScalar: Scalar + Pod + PartialEq + Debug {
+/// Scalar widths the shared convolution contract runs at.
+///
+/// Fixtures use exactly representable integer values, so every clause body
+/// is written once against this seam and monomorphized per width instead of
+/// duplicated per-width files.
+pub trait ContractScalar: Scalar + Pod + PartialEq + Debug {
+    /// Lift an integer fixture value to this width.
     fn from_fixture(value: i8) -> Self;
 }
 
@@ -30,26 +36,7 @@ impl ContractScalar for f64 {
     }
 }
 
-pub(super) fn assert_higher_rank_contract<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: ConvolutionOps<D, f32>,
-{
-    rank_two(device, operations);
-    rank_three(device, operations);
-}
-
-pub(super) fn assert_all_rank_contract<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: ConvolutionOps<D, f64>,
-{
-    rank_one(device, operations);
-    rank_two(device, operations);
-    rank_three(device, operations);
-}
-
-fn rank_one<D, O, T>(device: &D, operations: &O)
+pub(crate) fn rank_one<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: ConvolutionOps<D, T>,
@@ -80,7 +67,7 @@ where
     );
 }
 
-fn rank_two<D, O, T>(device: &D, operations: &O)
+pub(crate) fn rank_two<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: ConvolutionOps<D, T>,
@@ -111,7 +98,7 @@ where
     );
 }
 
-fn rank_three<D, O, T>(device: &D, operations: &O)
+pub(crate) fn rank_three<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: ConvolutionOps<D, T>,
@@ -369,8 +356,12 @@ fn fixture<T: ContractScalar>(values: &[i8]) -> Vec<T> {
     values.iter().copied().map(T::from_fixture).collect()
 }
 
-fn assert_download_eq<D, T>(device: &D, buffer: &D::Buffer<T>, expected: &[T], clause: &str)
-where
+pub(crate) fn assert_download_eq<D, T>(
+    device: &D,
+    buffer: &D::Buffer<T>,
+    expected: &[T],
+    clause: &str,
+) where
     D: ComputeDevice,
     T: ContractScalar,
 {

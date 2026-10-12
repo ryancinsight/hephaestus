@@ -40,7 +40,7 @@ impl PyCsrMatrix {
         let buffer = arr.buffer.clone();
 
         let host_data = py
-            .detach(move || device.download_f32(&buffer))
+            .detach(move || device.download(&buffer))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let view = leto::ArrayView2::new(layout, &host_data);
@@ -87,7 +87,7 @@ impl PyCsrMatrix {
         let cpu_dense = cpu_csr.to_dense();
         let dense_buf = self
             .device
-            .upload_f32(leto::Storage::as_slice(cpu_dense.storage()))
+            .upload(leto::Storage::as_slice(cpu_dense.storage()))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(PyArray {

@@ -2,10 +2,9 @@
 
 use eunomia::{FloatElement, Pod, RealField};
 use hephaestus_core::{
-    AdaGrad, AdaGradParameters, AdaGradParametersF64, Adam, AdamParameters, AdamParametersF64,
-    AdamW, AdamWParameters, AdamWParametersF64, ComputeDevice, HephaestusError, KernelDialect,
-    RmsProp, RmsPropParameters, RmsPropParametersF64, Sgd, SgdParameters, SgdParametersF64,
-    StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, StridedView,
+    AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, ComputeDevice,
+    HephaestusError, RmsProp, RmsPropParameters, Sgd, SgdParameters, StatefulUpdateOperands,
+    StatefulUpdateOps, StatefulUpdateRule, StridedView, UpdateWidth,
 };
 use leto::{ArrayView, ArrayViewMut, Layout};
 use leto_ops::{
@@ -17,74 +16,33 @@ use leto_ops::{
 
 const REPEATED_STEPS: usize = 2;
 
-/// Width-indexed backend entry point.
+/// Width-indexed stateful-update clause seam.
 ///
-/// Selects `stateful_update` (f32) or `stateful_update_f64` (f64) plus the
-/// matching parameter struct, so every clause below runs for both widths from
-/// one body instead of a duplicated f64 file.
-trait Width: Pod + RealField + RealScalar {
-    /// Backend parameter struct for `Rule` at this width.
-    type BackendParameters<Rule, Dialect>: Pod
-    where
-        Rule: StatefulUpdateRule<Dialect>,
-        Dialect: KernelDialect;
-
+/// Extends the core [`UpdateWidth`] seam with the oracle bounds the clauses
+/// need, so every clause below runs for both widths from one body instead of
+/// a duplicated f64 entry.
+pub trait StatefulUpdateWidth:
+    UpdateWidth + RealField + RealScalar + Pod + PartialEq + core::fmt::Debug
+{
     /// Dispatch one update at this width.
     fn dispatch<D, O, Rule, const N: usize>(
         device: &D,
         operations: &O,
         operands: StatefulUpdateOperands<'_, D::Buffer<Self>, N>,
-        parameters: Self::BackendParameters<Rule, O::Dialect>,
-    ) -> Result<(), HephaestusError>
-    where
-        D: ComputeDevice,
-        O: StatefulUpdateOps<D>,
-        Rule: StatefulUpdateRule<O::Dialect>;
-}
-
-impl Width for f32 {
-    type BackendParameters<Rule, Dialect>
-        = Rule::Parameters
-    where
-        Rule: StatefulUpdateRule<Dialect>,
-        Dialect: KernelDialect;
-
-    fn dispatch<D, O, Rule, const N: usize>(
-        device: &D,
-        operations: &O,
-        operands: StatefulUpdateOperands<'_, D::Buffer<Self>, N>,
-        parameters: Self::BackendParameters<Rule, O::Dialect>,
+        parameters: <Rule as StatefulUpdateRule<O::Dialect>>::Parameters<Self>,
     ) -> Result<(), HephaestusError>
     where
         D: ComputeDevice,
         O: StatefulUpdateOps<D>,
         Rule: StatefulUpdateRule<O::Dialect>,
     {
-        operations.stateful_update::<Rule, N>(device, operands, parameters)
+        operations.stateful_update::<Rule, Self, N>(device, operands, parameters)
     }
 }
 
-impl Width for f64 {
-    type BackendParameters<Rule, Dialect>
-        = Rule::ParametersF64
-    where
-        Rule: StatefulUpdateRule<Dialect>,
-        Dialect: KernelDialect;
+impl StatefulUpdateWidth for f32 {}
 
-    fn dispatch<D, O, Rule, const N: usize>(
-        device: &D,
-        operations: &O,
-        operands: StatefulUpdateOperands<'_, D::Buffer<Self>, N>,
-        parameters: Self::BackendParameters<Rule, O::Dialect>,
-    ) -> Result<(), HephaestusError>
-    where
-        D: ComputeDevice,
-        O: StatefulUpdateOps<D>,
-        Rule: StatefulUpdateRule<O::Dialect>,
-    {
-        operations.stateful_update_f64::<Rule, N>(device, operands, parameters)
-    }
-}
+impl StatefulUpdateWidth for f64 {}
 
 #[derive(Clone)]
 struct HostOperands<T> {
@@ -209,14 +167,14 @@ fn run_cpu<Rule: CpuRule<T>, T: FloatElement>(parameters: Rule::Parameters) -> H
 fn run_backend<D, O, Rule, T>(
     device: &D,
     operations: &O,
-    parameters: T::BackendParameters<Rule, O::Dialect>,
+    parameters: <Rule as StatefulUpdateRule<O::Dialect>>::Parameters<T>,
     state_count: usize,
 ) -> HostOperands<T>
 where
     D: ComputeDevice,
     O: StatefulUpdateOps<D>,
     Rule: StatefulUpdateRule<O::Dialect>,
-    T: Width,
+    T: StatefulUpdateWidth,
 {
     let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
     let seeded = HostOperands::seeded();
@@ -289,14 +247,14 @@ fn assert_close<T: RealField>(name: &str, actual: &[T], expected: &[T]) {
 fn assert_rule<D, O, BackendRule, HostRule, T>(
     device: &D,
     operations: &O,
-    backend_parameters: T::BackendParameters<BackendRule, O::Dialect>,
+    backend_parameters: <BackendRule as StatefulUpdateRule<O::Dialect>>::Parameters<T>,
     host_parameters: HostRule::Parameters,
 ) where
     D: ComputeDevice,
     O: StatefulUpdateOps<D>,
     BackendRule: StatefulUpdateRule<O::Dialect>,
     HostRule: CpuRule<T>,
-    T: Width,
+    T: StatefulUpdateWidth,
 {
     let name = device.backend_name();
     let actual = run_backend::<D, O, BackendRule, T>(
@@ -351,12 +309,12 @@ fn assert_sgd_layout<D, O, T, const N: usize>(
     parameter_initial: &[T],
     gradient_initial: &[T],
     state_initial: &[T],
-    parameters: SgdParameterPair<T, T::BackendParameters<Sgd, O::Dialect>>,
+    parameters: SgdParameterPair<T, <Sgd as StatefulUpdateRule<O::Dialect>>::Parameters<T>>,
 ) where
     D: ComputeDevice,
     O: StatefulUpdateOps<D>,
     Sgd: StatefulUpdateRule<O::Dialect>,
-    T: Width,
+    T: StatefulUpdateWidth,
 {
     let mut expected_parameter = parameter_initial.to_vec();
     let mut expected_state = state_initial.to_vec();
@@ -411,12 +369,12 @@ fn assert_sgd_layout<D, O, T, const N: usize>(
 fn assert_rejections_are_atomic<D, O, T>(
     device: &D,
     operations: &O,
-    backend_parameters: T::BackendParameters<Sgd, O::Dialect>,
+    backend_parameters: <Sgd as StatefulUpdateRule<O::Dialect>>::Parameters<T>,
 ) where
     D: ComputeDevice,
     O: StatefulUpdateOps<D>,
     Sgd: StatefulUpdateRule<O::Dialect>,
-    T: Width,
+    T: StatefulUpdateWidth,
 {
     let layout = Layout::c_contiguous([2]).expect("layout");
     let state_layout = Layout::c_contiguous([1]).expect("state layout");
@@ -476,161 +434,121 @@ fn assert_rejections_are_atomic<D, O, T>(
 
 /// Run all stateful-update value and rejection clauses against one backend.
 ///
-/// # Panics
-///
-/// Panics with the backend and violated differential, repeated-dispatch,
-/// striding, guard-storage, rank-boundary, alias, or failure-atomicity clause
-/// when the provider diverges from the Leto CPU contract.
-pub fn assert_stateful_update_contract<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: StatefulUpdateOps<D>,
-    Sgd: StatefulUpdateRule<O::Dialect, Parameters = SgdParameters>,
-    Adam: StatefulUpdateRule<O::Dialect, Parameters = AdamParameters>,
-    AdamW: StatefulUpdateRule<O::Dialect, Parameters = AdamWParameters>,
-    RmsProp: StatefulUpdateRule<O::Dialect, Parameters = RmsPropParameters>,
-    AdaGrad: StatefulUpdateRule<O::Dialect, Parameters = AdaGradParameters>,
-{
-    assert_rule::<D, O, Sgd, CpuSgd, f32>(
-        device,
-        operations,
-        SgdParameters::new(0.05, 0.9).expect("SGD parameters"),
-        CpuSgdParameters::new(0.05, 0.9).expect("Leto SGD parameters"),
-    );
-    assert_rule::<D, O, Adam, CpuAdam, f32>(
-        device,
-        operations,
-        AdamParameters::new(0.01, 0.9, 0.99, 1.0e-6, 3).expect("Adam parameters"),
-        CpuAdamParameters::new(0.01, 0.9, 0.99, 1.0e-6, 3).expect("Leto Adam parameters"),
-    );
-    assert_rule::<D, O, AdamW, CpuAdamW, f32>(
-        device,
-        operations,
-        AdamWParameters::new(0.01, 0.9, 0.99, 1.0e-6, 0.1, 3).expect("AdamW parameters"),
-        CpuAdamWParameters::new(0.01, 0.9, 0.99, 1.0e-6, 0.1, 3).expect("Leto AdamW parameters"),
-    );
-    assert_rule::<D, O, RmsProp, CpuRmsProp, f32>(
-        device,
-        operations,
-        RmsPropParameters::new(0.05, 0.9, 1.0e-6).expect("RMSProp parameters"),
-        CpuRmsPropParameters::new(0.05, 0.9, 1.0e-6).expect("Leto RMSProp parameters"),
-    );
-    assert_rule::<D, O, AdaGrad, CpuAdaGrad, f32>(
-        device,
-        operations,
-        AdaGradParameters::new(0.05, 1.0e-6).expect("AdaGrad parameters"),
-        CpuAdaGradParameters::new(0.05, 1.0e-6).expect("Leto AdaGrad parameters"),
-    );
-
-    assert_sgd_layout(
-        device,
-        operations,
-        Layout::c_contiguous([]).expect("scalar layout"),
-        &[2.0_f32],
-        &[0.5_f32],
-        &[0.25_f32],
-        SgdParameterPair::new(
-            SgdParameters::new(0.1, 0.5).expect("SGD parameters"),
-            CpuSgdParameters::new(0.1, 0.5).expect("Leto SGD parameters"),
-        ),
-    );
-    assert_sgd_layout(
-        device,
-        operations,
-        Layout::c_contiguous([1, 1, 1, 0, 1, 1, 1, 1]).expect("empty rank-eight layout"),
-        &[9.0_f32],
-        &[8.0_f32],
-        &[7.0_f32],
-        SgdParameterPair::new(
-            SgdParameters::new(0.1, 0.5).expect("SGD parameters"),
-            CpuSgdParameters::new(0.1, 0.5).expect("Leto SGD parameters"),
-        ),
-    );
-    assert_rejections_are_atomic::<D, O, f32>(
-        device,
-        operations,
-        SgdParameters::new(0.1, 0.0).expect("SGD parameters"),
-    );
-}
-
-/// Run all stateful-update value and rejection clauses at f64 against one backend.
-///
-/// Mirrors [`assert_stateful_update_contract`] with the `ParametersF64` twins
-/// and the f64 Leto oracle; every clause body is shared through [`Width`].
+/// Fixture scalars lift through [`FloatElement::from_f32`], so f32 clauses
+/// run bit-identical values while f64 clauses widen the same f32-rounded
+/// fixtures; backend and Leto oracle always share one parameter value.
 ///
 /// # Panics
 ///
 /// Panics with the backend and violated differential, repeated-dispatch,
 /// striding, guard-storage, rank-boundary, alias, or failure-atomicity clause
 /// when the provider diverges from the Leto CPU contract.
-pub fn assert_stateful_update_contract_f64<D, O>(device: &D, operations: &O)
+pub fn assert_stateful_update_contract<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: StatefulUpdateOps<D>,
-    Sgd: StatefulUpdateRule<O::Dialect, ParametersF64 = SgdParametersF64>,
-    Adam: StatefulUpdateRule<O::Dialect, ParametersF64 = AdamParametersF64>,
-    AdamW: StatefulUpdateRule<O::Dialect, ParametersF64 = AdamWParametersF64>,
-    RmsProp: StatefulUpdateRule<O::Dialect, ParametersF64 = RmsPropParametersF64>,
-    AdaGrad: StatefulUpdateRule<O::Dialect, ParametersF64 = AdaGradParametersF64>,
+    T: StatefulUpdateWidth,
+    Sgd: StatefulUpdateRule<O::Dialect, Parameters<T> = SgdParameters<T>>,
+    Adam: StatefulUpdateRule<O::Dialect, Parameters<T> = AdamParameters<T>>,
+    AdamW: StatefulUpdateRule<O::Dialect, Parameters<T> = AdamWParameters<T>>,
+    RmsProp: StatefulUpdateRule<O::Dialect, Parameters<T> = RmsPropParameters<T>>,
+    AdaGrad: StatefulUpdateRule<O::Dialect, Parameters<T> = AdaGradParameters<T>>,
 {
-    assert_rule::<D, O, Sgd, CpuSgd, f64>(
+    assert_rule::<D, O, Sgd, CpuSgd, T>(
         device,
         operations,
-        SgdParametersF64::new(0.05, 0.9).expect("SGD parameters"),
-        CpuSgdParameters::new(0.05, 0.9).expect("Leto SGD parameters"),
+        SgdParameters::<T>::new(T::from_f32(0.05), T::from_f32(0.9)).expect("SGD parameters"),
+        CpuSgdParameters::<T>::new(T::from_f32(0.05), T::from_f32(0.9))
+            .expect("Leto SGD parameters"),
     );
-    assert_rule::<D, O, Adam, CpuAdam, f64>(
+    assert_rule::<D, O, Adam, CpuAdam, T>(
         device,
         operations,
-        AdamParametersF64::new(0.01, 0.9, 0.99, 1.0e-6, 3).expect("Adam parameters"),
-        CpuAdamParameters::new(0.01, 0.9, 0.99, 1.0e-6, 3).expect("Leto Adam parameters"),
+        AdamParameters::<T>::new(
+            T::from_f32(0.01),
+            T::from_f32(0.9),
+            T::from_f32(0.99),
+            T::from_f32(1.0e-6),
+            3,
+        )
+        .expect("Adam parameters"),
+        CpuAdamParameters::<T>::new(
+            T::from_f32(0.01),
+            T::from_f32(0.9),
+            T::from_f32(0.99),
+            T::from_f32(1.0e-6),
+            3,
+        )
+        .expect("Leto Adam parameters"),
     );
-    assert_rule::<D, O, AdamW, CpuAdamW, f64>(
+    assert_rule::<D, O, AdamW, CpuAdamW, T>(
         device,
         operations,
-        AdamWParametersF64::new(0.01, 0.9, 0.99, 1.0e-6, 0.1, 3).expect("AdamW parameters"),
-        CpuAdamWParameters::new(0.01, 0.9, 0.99, 1.0e-6, 0.1, 3).expect("Leto AdamW parameters"),
+        AdamWParameters::<T>::new(
+            T::from_f32(0.01),
+            T::from_f32(0.9),
+            T::from_f32(0.99),
+            T::from_f32(1.0e-6),
+            T::from_f32(0.1),
+            3,
+        )
+        .expect("AdamW parameters"),
+        CpuAdamWParameters::<T>::new(
+            T::from_f32(0.01),
+            T::from_f32(0.9),
+            T::from_f32(0.99),
+            T::from_f32(1.0e-6),
+            T::from_f32(0.1),
+            3,
+        )
+        .expect("Leto AdamW parameters"),
     );
-    assert_rule::<D, O, RmsProp, CpuRmsProp, f64>(
+    assert_rule::<D, O, RmsProp, CpuRmsProp, T>(
         device,
         operations,
-        RmsPropParametersF64::new(0.05, 0.9, 1.0e-6).expect("RMSProp parameters"),
-        CpuRmsPropParameters::new(0.05, 0.9, 1.0e-6).expect("Leto RMSProp parameters"),
+        RmsPropParameters::<T>::new(T::from_f32(0.05), T::from_f32(0.9), T::from_f32(1.0e-6))
+            .expect("RMSProp parameters"),
+        CpuRmsPropParameters::<T>::new(T::from_f32(0.05), T::from_f32(0.9), T::from_f32(1.0e-6))
+            .expect("Leto RMSProp parameters"),
     );
-    assert_rule::<D, O, AdaGrad, CpuAdaGrad, f64>(
+    assert_rule::<D, O, AdaGrad, CpuAdaGrad, T>(
         device,
         operations,
-        AdaGradParametersF64::new(0.05, 1.0e-6).expect("AdaGrad parameters"),
-        CpuAdaGradParameters::new(0.05, 1.0e-6).expect("Leto AdaGrad parameters"),
+        AdaGradParameters::<T>::new(T::from_f32(0.05), T::from_f32(1.0e-6))
+            .expect("AdaGrad parameters"),
+        CpuAdaGradParameters::<T>::new(T::from_f32(0.05), T::from_f32(1.0e-6))
+            .expect("Leto AdaGrad parameters"),
     );
 
-    assert_sgd_layout(
+    assert_sgd_layout::<D, O, T, 0>(
         device,
         operations,
         Layout::c_contiguous([]).expect("scalar layout"),
-        &[2.0_f64],
-        &[0.5_f64],
-        &[0.25_f64],
+        &[T::from_f32(2.0)],
+        &[T::from_f32(0.5)],
+        &[T::from_f32(0.25)],
         SgdParameterPair::new(
-            SgdParametersF64::new(0.1, 0.5).expect("SGD parameters"),
-            CpuSgdParameters::new(0.1, 0.5).expect("Leto SGD parameters"),
+            SgdParameters::<T>::new(T::from_f32(0.1), T::from_f32(0.5)).expect("SGD parameters"),
+            CpuSgdParameters::<T>::new(T::from_f32(0.1), T::from_f32(0.5))
+                .expect("Leto SGD parameters"),
         ),
     );
-    assert_sgd_layout(
+    assert_sgd_layout::<D, O, T, 8>(
         device,
         operations,
         Layout::c_contiguous([1, 1, 1, 0, 1, 1, 1, 1]).expect("empty rank-eight layout"),
-        &[9.0_f64],
-        &[8.0_f64],
-        &[7.0_f64],
+        &[T::from_f32(9.0)],
+        &[T::from_f32(8.0)],
+        &[T::from_f32(7.0)],
         SgdParameterPair::new(
-            SgdParametersF64::new(0.1, 0.5).expect("SGD parameters"),
-            CpuSgdParameters::new(0.1, 0.5).expect("Leto SGD parameters"),
+            SgdParameters::<T>::new(T::from_f32(0.1), T::from_f32(0.5)).expect("SGD parameters"),
+            CpuSgdParameters::<T>::new(T::from_f32(0.1), T::from_f32(0.5))
+                .expect("Leto SGD parameters"),
         ),
     );
-    assert_rejections_are_atomic::<D, O, f64>(
+    assert_rejections_are_atomic::<D, O, T>(
         device,
         operations,
-        SgdParametersF64::new(0.1, 0.0).expect("SGD parameters"),
+        SgdParameters::<T>::new(T::from_f32(0.1), T::from_f32(0.0)).expect("SGD parameters"),
     );
 }

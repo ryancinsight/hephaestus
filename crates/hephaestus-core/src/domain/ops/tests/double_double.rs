@@ -18,7 +18,7 @@ fn integer_exponent(k: f64) -> i32 {
 
 /// An unevaluated sum `hi + lo`.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct DoubleDouble {
+pub(crate) struct DoubleDouble {
     pub(super) hi: f64,
     pub(super) lo: f64,
 }

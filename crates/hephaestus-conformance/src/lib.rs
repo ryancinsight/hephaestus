@@ -125,10 +125,10 @@ pub use axis_reduction::assert_axis_reduction_contract;
 pub use blocked_cholesky::assert_blocked_cholesky_contract;
 pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
-pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
+pub use convolution::{ContractScalar, assert_convolution_contract};
 pub use cross_entropy::{
-    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_f64,
-    assert_cross_entropy_contract, assert_cross_entropy_contract_f64,
+    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_for,
+    assert_cross_entropy_contract, assert_cross_entropy_contract_for,
 };
 pub use cross_product::assert_cross_product_contract;
 pub use ctc::assert_ctc_contract;
@@ -153,7 +153,7 @@ pub use ray_integral::assert_ray_integral_contract;
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use sparse::{assert_batch_submit_contract, assert_sparse_operator_contract};
 pub use staggered::assert_staggered_3d_contract;
-pub use stateful_update::{assert_stateful_update_contract, assert_stateful_update_contract_f64};
+pub use stateful_update::{StatefulUpdateWidth, assert_stateful_update_contract};
 pub use stencil::assert_stencil_contract;
 pub use topk::assert_topk_contract;
 pub use transfer::assert_transfer_contract;

@@ -33,13 +33,13 @@ fn total_elements<T, B: DeviceBuffer<T>>(buffers: &[B]) -> usize {
 
 ```toml
 # contracts only
-hephaestus-compute = "0.19"
+hephaestus-compute = "0.20"
 
 # portable compute
-hephaestus-compute = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
+hephaestus-compute = { version = "0.20", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; needs a CUDA toolkit at build time for headers
-hephaestus-compute = { version = "0.19", features = ["cuda", "decomposition"] }
+hephaestus-compute = { version = "0.20", features = ["cuda", "decomposition"] }
 ```
 
 ## Feature flags select what is compiled

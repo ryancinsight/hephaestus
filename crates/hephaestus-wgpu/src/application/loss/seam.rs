@@ -240,7 +240,7 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
         device: &'a WgpuDevice,
         operands: CrossEntropyForwardOperands<'a, WgpuBuffer<f64>, WgpuBuffer<u32>>,
     ) -> Result<Self::PreparedForward<'a>> {
-        require_shader_f64(device)?;
+        require_extended_precision(device)?;
         // The forward shaders call f64 `log`, which aborts pipeline
         // compilation on the recorded adapters; refuse with cause instead.
         canary::require_builtin(
@@ -265,7 +265,7 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
         device: &'a WgpuDevice,
         operands: CrossEntropyBackwardOperands<'a, WgpuBuffer<f64>, WgpuBuffer<u32>>,
     ) -> Result<Self::PreparedBackward<'a>> {
-        require_shader_f64(device)?;
+        require_extended_precision(device)?;
         prepare_backward(device, operands)
     }
 
@@ -278,7 +278,7 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
     }
 }
 
-fn require_shader_f64(device: &WgpuDevice) -> Result<()> {
+fn require_extended_precision(device: &WgpuDevice) -> Result<()> {
     if device.supports_device_feature(DeviceFeature::ShaderF64) {
         Ok(())
     } else {

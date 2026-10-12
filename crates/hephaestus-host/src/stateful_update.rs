@@ -23,7 +23,7 @@
 
 use hephaestus_core::{
     Host, Result, StatefulUpdateAliasing, StatefulUpdateOperands, StatefulUpdateOps,
-    StatefulUpdateRule, plan_stateful_update,
+    StatefulUpdateRule, UpdateWidth, plan_stateful_update,
 };
 use leto::{ArrayView, ArrayViewMut};
 
@@ -129,11 +129,11 @@ pub struct HostStatefulUpdateOps;
 impl StatefulUpdateOps<HostDevice> for HostStatefulUpdateOps {
     type Dialect = Host;
 
-    fn stateful_update<Rule, const N: usize>(
+    fn stateful_update<Rule, T: UpdateWidth, const N: usize>(
         &self,
         _device: &HostDevice,
-        operands: StatefulUpdateOperands<'_, HostBuffer<f32>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters,
+        operands: StatefulUpdateOperands<'_, HostBuffer<T>, N>,
+        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::Parameters<T>,
     ) -> Result<()>
     where
         Rule: StatefulUpdateRule<Self::Dialect>,
@@ -147,37 +147,11 @@ impl StatefulUpdateOps<HostDevice> for HostStatefulUpdateOps {
             operands,
             &parameters,
             |parameter, gradient, state_zero, state_one, parameters| {
-                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(0.0)];
+                let states = [
+                    *state_zero,
+                    state_one.as_deref().copied().unwrap_or(T::ZERO),
+                ];
                 let step = Rule::update(*parameter, gradient, states, parameters);
-                *parameter = step.parameter;
-                *state_zero = step.states[0];
-                if let Some(slot) = state_one {
-                    *slot = step.states[1];
-                }
-            },
-        )
-    }
-
-    fn stateful_update_f64<Rule, const N: usize>(
-        &self,
-        _device: &HostDevice,
-        operands: StatefulUpdateOperands<'_, HostBuffer<f64>, N>,
-        parameters: <Rule as StatefulUpdateRule<Self::Dialect>>::ParametersF64,
-    ) -> Result<()>
-    where
-        Rule: StatefulUpdateRule<Self::Dialect>,
-    {
-        Rule::validate_parameters_f64(&parameters)?;
-        let plan = plan_stateful_update(operands, Rule::STATE_COUNT, aliasing(&operands))?;
-        if plan.is_empty() {
-            return Ok(());
-        }
-        run_update(
-            operands,
-            &parameters,
-            |parameter, gradient, state_zero, state_one, parameters| {
-                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(0.0)];
-                let step = Rule::update_f64(*parameter, gradient, states, parameters);
                 *parameter = step.parameter;
                 *state_zero = step.states[0];
                 if let Some(slot) = state_one {
@@ -193,7 +167,7 @@ mod tests {
     use super::HostStatefulUpdateOps;
     use eunomia::Zeroable;
     use hephaestus_core::{
-        Adam, AdamParametersF64, ComputeDevice, Host, Sgd, SgdParameters, SgdParametersF64,
+        Adam, AdamParameters, ComputeDevice, HephaestusError, Host, Sgd, SgdParameters,
         StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, StridedView,
     };
     use leto::Layout;
@@ -209,10 +183,10 @@ mod tests {
         let gradient = device.upload(&[2.0_f64, 1.0]).expect("upload succeeds");
         let state = device.upload(&[0.0_f64, 1.0]).expect("upload succeeds");
         let states = [StridedView::new(&state, &layout)];
-        let parameters = SgdParametersF64::new(0.25, 0.5).expect("valid f64 SGD parameters");
+        let parameters = SgdParameters::<f64>::new(0.25, 0.5).expect("valid f64 SGD parameters");
 
         HostStatefulUpdateOps
-            .stateful_update_f64::<Sgd, 1>(
+            .stateful_update::<Sgd, f64, 1>(
                 &device,
                 StatefulUpdateOperands {
                     parameter: StridedView::new(&parameter, &layout),
@@ -237,7 +211,7 @@ mod tests {
 
     #[test]
     fn host_adam_f64_dispatch_equals_the_value_definition() {
-        // Two-state path: the seam must equal `update_f64` elementwise.
+        // Two-state path: the seam must equal `update` elementwise.
         let device = super::HostDevice::new();
         let layout = Layout::c_contiguous([2]).expect("valid layout");
         let parameter = device.upload(&[1.0_f64, -2.0]).expect("upload succeeds");
@@ -248,11 +222,11 @@ mod tests {
             StridedView::new(&state_zero, &layout),
             StridedView::new(&state_one, &layout),
         ];
-        let parameters =
-            AdamParametersF64::new(0.1, 0.9, 0.999, 1.0e-6, 3).expect("valid f64 Adam parameters");
+        let parameters = AdamParameters::<f64>::new(0.1, 0.9, 0.999, 1.0e-6, 3)
+            .expect("valid f64 Adam parameters");
 
         HostStatefulUpdateOps
-            .stateful_update_f64::<Adam, 1>(
+            .stateful_update::<Adam, f64, 1>(
                 &device,
                 StatefulUpdateOperands {
                     parameter: StridedView::new(&parameter, &layout),
@@ -270,7 +244,7 @@ mod tests {
             .enumerate()
         {
             let expected =
-                <Adam as StatefulUpdateRule<Host>>::update_f64(p, g, [s0, s1], &parameters);
+                <Adam as StatefulUpdateRule<Host>>::update::<f64>(p, g, [s0, s1], &parameters);
             let mut actual_parameter = [0.0_f64; 2];
             let mut actual_zero = [0.0_f64; 2];
             let mut actual_one = [0.0_f64; 2];
@@ -302,7 +276,7 @@ mod tests {
         let parameters = SgdParameters::new(0.25, 0.5).expect("valid SGD parameters");
 
         HostStatefulUpdateOps
-            .stateful_update::<Sgd, 1>(
+            .stateful_update::<Sgd, f32, 1>(
                 &device,
                 StatefulUpdateOperands {
                     parameter: StridedView::new(&parameter, &layout),
@@ -339,9 +313,9 @@ mod tests {
             StridedView::new(&state_zero, &layout),
             StridedView::new(&state_one, &layout),
         ];
-        let parameters = AdamParametersF64::zeroed();
+        let parameters = AdamParameters::<f64>::zeroed();
 
-        let result = HostStatefulUpdateOps.stateful_update_f64::<Adam, 1>(
+        let result = HostStatefulUpdateOps.stateful_update::<Adam, f64, 1>(
             &device,
             StatefulUpdateOperands {
                 parameter: StridedView::new(&parameter, &layout),
@@ -350,7 +324,13 @@ mod tests {
             },
             parameters,
         );
-        assert!(result.is_err(), "zeroed Adam block must be rejected");
+        let Err(HephaestusError::InvalidConfiguration { message }) = result else {
+            panic!("zeroed Adam block was accepted");
+        };
+        assert_eq!(
+            message,
+            "Adam beta values must lie in [0, 1), epsilon and bias corrections must be positive"
+        );
 
         let mut actual_parameter = [0.0_f64; 2];
         device
