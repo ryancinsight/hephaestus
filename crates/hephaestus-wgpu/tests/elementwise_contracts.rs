@@ -6,7 +6,7 @@
 
 use hephaestus_conformance::{
     assert_bessel_contract, assert_elementwise_contract, assert_elu_contract,
-    assert_expm1_log1p_contract, assert_k0_contract, assert_sinc_contract,
+    assert_expm1_log1p_contract, assert_k0_contract, assert_mish_contract, assert_sinc_contract,
     assert_softplus_contract,
 };
 use hephaestus_wgpu::WgpuElementwiseOps;
@@ -22,4 +22,5 @@ pub(super) fn wgpu_satisfies_the_elementwise_contract() {
     assert_expm1_log1p_contract(&device, &WgpuElementwiseOps);
     assert_softplus_contract(&device, &WgpuElementwiseOps);
     assert_elu_contract(&device, &WgpuElementwiseOps);
+    assert_mish_contract(&device, &WgpuElementwiseOps);
 }

@@ -14,8 +14,8 @@
 use eunomia::Pod;
 use hephaestus_core::{
     AbsOp, AddOp, BinaryExpr, ComputeDevice, DialectScalar, DivOp, ElementwiseOps, EluOp, Expm1Op,
-    J0Op, J1Op, K0Op, Log1pOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView, SubOp,
-    UnaryExpr, UnaryValue,
+    J0Op, J1Op, K0Op, Log1pOp, MishOp, MulOp, NegOp, SincOp, SoftplusOp, SqrtOp, StridedView,
+    SubOp, UnaryExpr, UnaryValue,
 };
 use leto::Layout;
 
@@ -225,6 +225,34 @@ where
     EluOp: UnaryExpr<E::Dialect>,
 {
     elu_tails_match_oracle(device, ops);
+}
+
+/// Run the mish tail clauses against one backend.
+///
+/// Shares the `TAIL_REL_BOUND` derivation: `mish` inherits softplus's
+/// negative-tail defect through the naive `tanh(log(1.0 + exp(x)))`
+/// inner transcription — `1.0 + exp(x)` rounds to `1.0`, so the inner
+/// value collapses to exactly `0` and the product to `0` (100%
+/// relative error against an oracle of magnitude `|x| * exp(x)`). The
+/// positive tail is already correct (`inf` flows through `tanh` to
+/// `1`, and the output is `x` itself). Oracles are the f64
+/// [`UnaryValue`] form `x * tanh(softplus(x))`. Control points at
+/// `-1`/`-0.5`/`0`/`0.5`/`1`/`5`/`20`/`90` pin the already-correct
+/// range; only the negative-tail probes exercise the defect.
+///
+/// # Panics
+///
+/// Panics with the violated clause when the backend does not satisfy the
+/// contract. Backends call this from a test that has already acquired a
+/// device.
+pub fn assert_mish_contract<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect> + Pod,
+    MishOp: UnaryExpr<E::Dialect>,
+{
+    mish_tails_match_oracle(device, ops);
 }
 
 /// Dispatch one rank-1 unary op and return the downloaded results.
@@ -509,6 +537,30 @@ where
         assert!(
             error <= TAIL_REL_BOUND * expected.abs(),
             "{name}: elu lane {lane} (x = {x}): got {got}, oracle {expected}"
+        );
+    }
+}
+
+/// Negative-tail probes at `-30`/`-20` collapse to exactly `0` under
+/// the naive transcription (`1.0 + exp(x)` rounds to `1.0`, so the
+/// `tanh(log(...))` inner factor is `tanh(0) = 0`); the controls pin
+/// the already-correct middle and positive ranges.
+fn mish_tails_match_oracle<D, E>(device: &D, ops: &E)
+where
+    D: ComputeDevice,
+    E: ElementwiseOps<D, f32>,
+    f32: DialectScalar<E::Dialect>,
+    MishOp: UnaryExpr<E::Dialect>,
+{
+    let name = device.backend_name();
+    let points = [-30.0f32, -20.0, -1.0, -0.5, 0.0, 0.5, 1.0, 5.0, 20.0, 90.0];
+    let got = unary::<_, _, MishOp, 10>(device, ops, &points);
+    for (lane, (&got, &x)) in got.iter().zip(&points).enumerate() {
+        let expected = <MishOp as UnaryValue>::apply(f64::from(x));
+        let error = (f64::from(got) - expected).abs();
+        assert!(
+            error <= TAIL_REL_BOUND * expected.abs(),
+            "{name}: mish lane {lane} (x = {x}): got {got}, oracle {expected}"
         );
     }
 }

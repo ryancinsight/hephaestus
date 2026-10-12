@@ -155,11 +155,9 @@ impl_activation_unary_exprs!(
         "1.0 / (1.0 + exp(-x))",
         "1.0f / (1.0f + exp(-x))"
     ),
-    (
-        MishOp,
-        "x * tanh(log(1.0 + exp(x)))",
-        "x * tanhf(logf(1.0f + expf(x)))"
-    ),
+    // MishOp stays out of the macro: the WGSL spelling wraps the
+    // `softplus` fragment (see below) and the C spelling calls the
+    // native `log1p` builtin.
     (
         MishGradOp,
         "tanh(log(1.0 + exp(x))) + x * (1.0 - tanh(log(1.0 + exp(x))) * tanh(log(1.0 + exp(x)))) * (1.0 / (1.0 + exp(-x)))",
@@ -391,6 +389,45 @@ impl UnaryExpr<Wgsl> for SoftplusOp {
 }
 impl UnaryExpr<CudaC> for SoftplusOp {
     const EXPR: &'static str = "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))";
+}
+
+// Mish stays out of the macro (KERNEL-TAIL): the naive
+// `tanh(log(1.0 + exp(x)))` inner transcription inherits softplus's
+// negative-tail collapse (`1.0 + exp(x)` rounds to `1.0`, so the inner
+// factor is `tanh(0) = 0` and the product `0`). The C spelling calls
+// the native `log1p` builtin under the `tanh` (unsuffixed, so lane
+// promotion keeps f64 served); no `max` gate is needed because `inf`
+// flows through `tanh` to `1` and the output is `x` itself where
+// softplus overflows. The WGSL spelling wraps the whole `softplus`
+// value fragment in `x * tanh(...)`, adding zero new coefficients, and
+// reports `SUPPORTS_F64 = false` per the `SoftplusOp` precedent
+// (nested selects, f32-graded arms). `tanh` is unreliable across
+// drivers at both extremes — of a tiny input (Metal returns exactly
+// `0`; lavapipe returned `2^-25` for `9.35e-14` — the suite's first
+// tiny input to `tanh`, which has no tiny-value coverage) and of a
+// large one (Apple's unguarded `tanh` forms `inf/inf = NaN` past
+// `S = 44.4`) — so the spelling guards on `x` instead of trusting it
+// there: at `x <= -14.5` it takes `x * exp(x)` (there the fragment
+// itself is on its bare-`exp` arm, so this reuses its value while
+// skipping the `tanh`; `tanh(S) = S` to `1e-13` there and the arms
+// agree to `2.5e-7` at the boundary), and at `x > 9` it takes `x`
+// itself (`tanh(S)` rounds to exactly `1` past `S = 8.66`, and
+// `S(x) > x`, so both arms agree exactly at the boundary). All
+// `select` arms evaluate (the discarded `NaN`/`inf` never trap — the
+// `SincOp` precedent, proven on Metal by the `sinc(0)` clause — and
+// `select` is a real conditional move, never arithmetized). Accuracy
+// is the slice-2 fragment proof plus `exp`'s own ULP, inside the
+// clause's `1e-5`.
+impl UnaryExpr<Wgsl> for MishOp {
+    const EXPR: &'static str = concat!(
+        "select(select(x * exp(x), x * tanh(",
+        wgsl_softplus_expr!(),
+        "), x > -14.5), x, x > 9.0)"
+    );
+    const SUPPORTS_F64: bool = false;
+}
+impl UnaryExpr<CudaC> for MishOp {
+    const EXPR: &'static str = "x * tanh(log1p(exp(x)))";
 }
 
 // The two gradient masks stay out of the macro: their WGSL spellings are

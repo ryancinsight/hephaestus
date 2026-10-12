@@ -143,7 +143,7 @@ pub use dense_product::assert_dense_product_contract;
 pub use dense_vector::assert_dense_vector_contract;
 pub use elementwise::{
     assert_bessel_contract, assert_elementwise_contract, assert_elu_contract,
-    assert_expm1_log1p_contract, assert_k0_contract, assert_sinc_contract,
+    assert_expm1_log1p_contract, assert_k0_contract, assert_mish_contract, assert_sinc_contract,
     assert_softplus_contract,
 };
 pub use embedding::{
