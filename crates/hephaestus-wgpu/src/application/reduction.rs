@@ -8,6 +8,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+use crate::application::canary;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -704,12 +705,13 @@ fn axis_reduction_pipeline<Op, T>(
     device: &WgpuDevice,
     width: BlockWidth,
     dispatch: &mut AxisReductionDispatch,
-) -> wgpu::ComputePipeline
+) -> Result<wgpu::ComputePipeline>
 where
     Op: CombineExpr<Wgsl>,
     T: DialectScalar<Wgsl> + Pod + OpIdentity<Op> + IdentityToken<Op, Wgsl>,
 {
-    if dispatch.meta.offsets[2] == 0 {
+    canary::require_template_safe::<T>(device, <Op as CombineExpr<Wgsl>>::EXPR, "axis reduction")?;
+    Ok(if dispatch.meta.offsets[2] == 0 {
         let (tile_cols, _) = axis0_tile_shape(width);
         dispatch.groups = dispatch.meta.offsets[3].div_ceil(tile_cols);
         cached_pipeline(
@@ -736,7 +738,7 @@ where
             "hephaestus-axis-reduction-parallel",
             || axis_reduction_parallel_shader_source::<Op, T>(width),
         )
-    }
+    })
 }
 
 fn mean_axis_pipeline<T>(
@@ -797,7 +799,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction());
     };
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch)?;
     prepared_axis_reduction(
         device,
         pipeline,
@@ -906,7 +908,7 @@ where
     let Some(mut dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
-    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch);
+    let pipeline = axis_reduction_pipeline::<Op, T>(device, width, &mut dispatch)?;
     dispatch_axis_reduction(device, &pipeline, input, output, dispatch)
 }
 
