@@ -27,7 +27,9 @@ fn shader_f64_device(label: &str) -> Option<WgpuDevice> {
     ) {
         Ok(device) => Some(device),
         Err(error) if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_none() => {
-            eprintln!("skip WGPU ShaderF64 stateful-update conformance: device unavailable ({error})");
+            eprintln!(
+                "skip WGPU ShaderF64 stateful-update conformance: device unavailable ({error})"
+            );
             None
         }
         Err(error) => {

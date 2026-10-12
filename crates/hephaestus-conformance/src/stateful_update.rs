@@ -167,16 +167,17 @@ where
         &two_states[..]
     };
     for _ in 0..REPEATED_STEPS {
-        operations.stateful_update::<T, Rule, 2>(
-            device,
-            StatefulUpdateOperands {
-                parameter: StridedView::new(&parameter, &layout),
-                gradient: StridedView::new(&gradient, &layout),
-                states,
-            },
-            parameters,
-        )
-        .expect("stateful update dispatch");
+        operations
+            .stateful_update::<T, Rule, 2>(
+                device,
+                StatefulUpdateOperands {
+                    parameter: StridedView::new(&parameter, &layout),
+                    gradient: StridedView::new(&gradient, &layout),
+                    states,
+                },
+                parameters,
+            )
+            .expect("stateful update dispatch");
     }
     let mut actual = seeded;
     device
@@ -300,16 +301,17 @@ fn assert_sgd_layout<D, O, T, const N: usize>(
     let gradient = device.upload(gradient_initial).expect("gradient upload");
     let state = device.upload(state_initial).expect("state upload");
     let states = [StridedView::new(&state, &layout)];
-    operations.stateful_update::<T, Sgd, N>(
-        device,
-        StatefulUpdateOperands {
-            parameter: StridedView::new(&parameter, &layout),
-            gradient: StridedView::new(&gradient, &layout),
-            states: &states,
-        },
-        parameters.backend,
-    )
-    .expect("boundary dispatch");
+    operations
+        .stateful_update::<T, Sgd, N>(
+            device,
+            StatefulUpdateOperands {
+                parameter: StridedView::new(&parameter, &layout),
+                gradient: StridedView::new(&gradient, &layout),
+                states: &states,
+            },
+            parameters.backend,
+        )
+        .expect("boundary dispatch");
     let mut actual_parameter = vec![T::ZERO; parameter_initial.len()];
     let mut actual_gradient = vec![T::ZERO; gradient_initial.len()];
     let mut actual_state = vec![T::ZERO; state_initial.len()];
@@ -354,16 +356,17 @@ fn assert_rejections_are_atomic<D, O, T>(
         .expect("gradient upload");
     let state = device.upload(&state_initial).expect("state upload");
     let states = [StridedView::new(&state, &state_layout)];
-    let error = operations.stateful_update::<T, Sgd, 1>(
-        device,
-        StatefulUpdateOperands {
-            parameter: StridedView::new(&parameter, &layout),
-            gradient: StridedView::new(&gradient, &layout),
-            states: &states,
-        },
-        backend_parameters,
-    )
-    .expect_err("shape mismatch must be rejected");
+    let error = operations
+        .stateful_update::<T, Sgd, 1>(
+            device,
+            StatefulUpdateOperands {
+                parameter: StridedView::new(&parameter, &layout),
+                gradient: StridedView::new(&gradient, &layout),
+                states: &states,
+            },
+            backend_parameters,
+        )
+        .expect_err("shape mismatch must be rejected");
     assert!(
         matches!(error, HephaestusError::DispatchFailed { .. }),
         "{}: expected shape dispatch failure, got {error}",
@@ -381,16 +384,17 @@ fn assert_rejections_are_atomic<D, O, T>(
     assert_eq!(state_after, state_initial);
 
     let aliased_states = [StridedView::new(&parameter, &layout)];
-    let error = operations.stateful_update::<T, Sgd, 1>(
-        device,
-        StatefulUpdateOperands {
-            parameter: StridedView::new(&parameter, &layout),
-            gradient: StridedView::new(&gradient, &layout),
-            states: &aliased_states,
-        },
-        backend_parameters,
-    )
-    .expect_err("aliased state must be rejected");
+    let error = operations
+        .stateful_update::<T, Sgd, 1>(
+            device,
+            StatefulUpdateOperands {
+                parameter: StridedView::new(&parameter, &layout),
+                gradient: StridedView::new(&gradient, &layout),
+                states: &aliased_states,
+            },
+            backend_parameters,
+        )
+        .expect_err("aliased state must be rejected");
     assert!(
         matches!(error, HephaestusError::DispatchFailed { .. }),
         "{}: expected alias dispatch failure, got {error}",
@@ -441,7 +445,8 @@ where
     assert_rule::<D, O, Adam, CpuAdam, T>(
         device,
         operations,
-        AdamParameters::new(lit(0.01), lit(0.9), lit(0.99), lit(1.0e-6), 3).expect("Adam parameters"),
+        AdamParameters::new(lit(0.01), lit(0.9), lit(0.99), lit(1.0e-6), 3)
+            .expect("Adam parameters"),
         CpuAdamParameters::new(lit(0.01), lit(0.9), lit(0.99), lit(1.0e-6), 3)
             .expect("Leto Adam parameters"),
     );
@@ -457,7 +462,8 @@ where
         device,
         operations,
         RmsPropParameters::new(lit(0.05), lit(0.9), lit(1.0e-6)).expect("RMSProp parameters"),
-        CpuRmsPropParameters::new(lit(0.05), lit(0.9), lit(1.0e-6)).expect("Leto RMSProp parameters"),
+        CpuRmsPropParameters::new(lit(0.05), lit(0.9), lit(1.0e-6))
+            .expect("Leto RMSProp parameters"),
     );
     assert_rule::<D, O, AdaGrad, CpuAdaGrad, T>(
         device,

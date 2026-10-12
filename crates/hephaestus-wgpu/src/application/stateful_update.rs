@@ -23,7 +23,12 @@ where
 {
     let fields = Rule::PARAMETER_FIELDS
         .iter()
-        .map(|field| format!("    {field}: {ty},\n", ty = <T as DialectScalar<Wgsl>>::TYPE_TOKEN))
+        .map(|field| {
+            format!(
+                "    {field}: {ty},\n",
+                ty = <T as DialectScalar<Wgsl>>::TYPE_TOKEN
+            )
+        })
         .collect::<String>();
     format!("struct Parameters {{\n{fields}}}\n")
 }

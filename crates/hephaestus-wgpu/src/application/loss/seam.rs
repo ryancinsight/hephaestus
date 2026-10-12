@@ -240,7 +240,7 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
         device: &'a WgpuDevice,
         operands: CrossEntropyForwardOperands<'a, WgpuBuffer<f64>, WgpuBuffer<u32>>,
     ) -> Result<Self::PreparedForward<'a>> {
-        require_shader_f64(device)?;
+        require_device_feature(device, DeviceFeature::ShaderF64, "cross-entropy")?;
         // The forward shaders call f64 `log`, which aborts pipeline
         // compilation on the recorded adapters; refuse with cause instead.
         canary::require_builtin(
@@ -265,7 +265,7 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
         device: &'a WgpuDevice,
         operands: CrossEntropyBackwardOperands<'a, WgpuBuffer<f64>, WgpuBuffer<u32>>,
     ) -> Result<Self::PreparedBackward<'a>> {
-        require_shader_f64(device)?;
+        require_device_feature(device, DeviceFeature::ShaderF64, "cross-entropy")?;
         prepare_backward(device, operands)
     }
 
@@ -278,12 +278,16 @@ impl CrossEntropyOps<WgpuDevice, f64> for WgpuCrossEntropyOps {
     }
 }
 
-fn require_shader_f64(device: &WgpuDevice) -> Result<()> {
-    if device.supports_device_feature(DeviceFeature::ShaderF64) {
+fn require_device_feature(
+    device: &WgpuDevice,
+    feature: DeviceFeature,
+    operation: &str,
+) -> Result<()> {
+    if device.supports_device_feature(feature) {
         Ok(())
     } else {
         Err(HephaestusError::InvalidConfiguration {
-            message: "WGPU cross-entropy requires the ShaderF64 device feature for f64".to_string(),
+            message: format!("WGPU {operation} requires the {feature:?} device feature"),
         })
     }
 }

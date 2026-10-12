@@ -127,8 +127,8 @@ pub use blocked_lu::assert_blocked_lu_contract;
 pub use blocked_qr::assert_blocked_qr_contract;
 pub use convolution::{assert_convolution_contract, assert_convolution_f64_contract};
 pub use cross_entropy::{
-    assert_cross_entropy_backward_contract, assert_cross_entropy_backward_contract_f64,
-    assert_cross_entropy_contract, assert_cross_entropy_contract_f64,
+    assert_cross_entropy_at, assert_cross_entropy_backward_at,
+    assert_cross_entropy_backward_contract, assert_cross_entropy_contract,
 };
 pub use cross_product::assert_cross_product_contract;
 pub use ctc::assert_ctc_contract;

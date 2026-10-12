@@ -148,7 +148,10 @@ impl StatefulUpdateOps<HostDevice> for HostStatefulUpdateOps {
             operands,
             &parameters,
             |parameter, gradient, state_zero, state_one, parameters| {
-                let states = [*state_zero, state_one.as_deref().copied().unwrap_or(T::ZERO)];
+                let states = [
+                    *state_zero,
+                    state_one.as_deref().copied().unwrap_or(T::ZERO),
+                ];
                 let step = Rule::update(*parameter, gradient, states, parameters);
                 *parameter = step.parameter;
                 *state_zero = step.states[0];
@@ -166,8 +169,7 @@ mod tests {
     use eunomia::Zeroable;
     use hephaestus_core::{
         Adam, AdamParameters, ComputeDevice, HephaestusError, Host, Sgd, SgdParameters,
-        StatefulScalar, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule,
-        StridedView,
+        StatefulScalar, StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdateRule, StridedView,
     };
     use leto::Layout;
 
@@ -185,8 +187,8 @@ mod tests {
             .expect("upload succeeds");
         let state = device.upload(&[T::ZERO, T::ONE]).expect("upload succeeds");
         let states = [StridedView::new(&state, &layout)];
-        let parameters = SgdParameters::new(T::from_f64(0.25), T::from_f64(0.5))
-            .expect("valid SGD parameters");
+        let parameters =
+            SgdParameters::new(T::from_f64(0.25), T::from_f64(0.5)).expect("valid SGD parameters");
 
         HostStatefulUpdateOps
             .stateful_update::<T, Sgd, 1>(
@@ -313,7 +315,10 @@ mod tests {
         device
             .download(&parameter, &mut actual_parameter)
             .expect("download succeeds");
-        assert_eq!(actual_parameter, initial, "rejected dispatch must not mutate");
+        assert_eq!(
+            actual_parameter, initial,
+            "rejected dispatch must not mutate"
+        );
     }
 
     #[test]

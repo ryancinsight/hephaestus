@@ -15,8 +15,8 @@ fn sgd_hand_derived<T: StatefulScalar>() {
     // learning_rate = 0.25 and momentum = 0.5 are exact in binary, so every
     // intermediate stays exact: state_zero_next = 0*0.5 + 2.0 = 2.0;
     // parameter_next = 10.0 - 0.25*2.0 = 9.5.
-    let parameters = SgdParameters::new(T::from_f64(0.25), T::from_f64(0.5))
-        .expect("valid SGD parameters");
+    let parameters =
+        SgdParameters::new(T::from_f64(0.25), T::from_f64(0.5)).expect("valid SGD parameters");
     let step = <Sgd as StatefulUpdateRule<Host>>::update(
         T::from_f64(10.0),
         T::from_f64(2.0),
@@ -30,8 +30,8 @@ fn sgd_hand_derived<T: StatefulScalar>() {
 fn sgd_identity_at_zero_gradient<T: StatefulScalar>() {
     // Multiplying by 0.0 and subtracting 0.0 are exact regardless of
     // `learning_rate`/`momentum`'s own rounding.
-    let parameters = SgdParameters::new(T::from_f64(0.1), T::from_f64(0.9))
-        .expect("valid SGD parameters");
+    let parameters =
+        SgdParameters::new(T::from_f64(0.1), T::from_f64(0.9)).expect("valid SGD parameters");
     let step = <Sgd as StatefulUpdateRule<Host>>::update(
         T::from_f64(5.0),
         T::ZERO,
@@ -47,14 +47,8 @@ fn adam_resets_at_zero_beta<T: StatefulScalar>() {
     // (`bias_correction = 1 - 0^step = 1` exactly for `step >= 1`), and at
     // gradient = 0 both moment estimates collapse to exactly 0.0, leaving the
     // parameter unchanged.
-    let parameters = AdamParameters::new(
-        T::from_f64(0.1),
-        T::ZERO,
-        T::ZERO,
-        T::ONE,
-        1,
-    )
-    .expect("valid Adam parameters");
+    let parameters = AdamParameters::new(T::from_f64(0.1), T::ZERO, T::ZERO, T::ONE, 1)
+        .expect("valid Adam parameters");
     let step = <Adam as StatefulUpdateRule<Host>>::update(
         T::from_f64(10.0),
         T::ZERO,
@@ -81,13 +75,14 @@ fn adam_matches_bias_corrected_formula<T: StatefulScalar>() {
         [T::from_f64(0.5), T::from_f64(0.25)],
         &parameters,
     );
-    let expected_state_zero = T::from_f64(0.5) * parameters.beta_one()
-        + (T::ONE - parameters.beta_one()) * two;
-    let expected_state_one = T::from_f64(0.25) * parameters.beta_two()
-        + (T::ONE - parameters.beta_two()) * two * two;
+    let expected_state_zero =
+        T::from_f64(0.5) * parameters.beta_one() + (T::ONE - parameters.beta_one()) * two;
+    let expected_state_one =
+        T::from_f64(0.25) * parameters.beta_two() + (T::ONE - parameters.beta_two()) * two * two;
     let expected_parameter = T::ONE
         - parameters.learning_rate() * (expected_state_zero / parameters.bias_correction_one())
-            / ((expected_state_one / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
+            / ((expected_state_one / parameters.bias_correction_two()).sqrt()
+                + parameters.epsilon());
     assert_eq!(step.states, [expected_state_zero, expected_state_one]);
     assert_eq!(step.parameter, expected_parameter);
 }
@@ -109,25 +104,23 @@ fn adamw_applies_decoupled_weight_decay<T: StatefulScalar>() {
         [T::from_f64(0.5), T::from_f64(0.25)],
         &parameters,
     );
-    let expected_state_zero = T::from_f64(0.5) * parameters.beta_one()
-        + (T::ONE - parameters.beta_one()) * two;
-    let expected_state_one = T::from_f64(0.25) * parameters.beta_two()
-        + (T::ONE - parameters.beta_two()) * two * two;
+    let expected_state_zero =
+        T::from_f64(0.5) * parameters.beta_one() + (T::ONE - parameters.beta_one()) * two;
+    let expected_state_one =
+        T::from_f64(0.25) * parameters.beta_two() + (T::ONE - parameters.beta_two()) * two * two;
     let expected_parameter = T::ONE
         * (T::ONE - parameters.learning_rate() * parameters.weight_decay())
         - parameters.learning_rate() * (expected_state_zero / parameters.bias_correction_one())
-            / ((expected_state_one / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
+            / ((expected_state_one / parameters.bias_correction_two()).sqrt()
+                + parameters.epsilon());
     assert_eq!(step.states, [expected_state_zero, expected_state_one]);
     assert_eq!(step.parameter, expected_parameter);
 }
 
 fn rmsprop_matches_hand_derived_arithmetic<T: StatefulScalar>() {
-    let parameters = RmsPropParameters::new(
-        T::from_f64(0.05),
-        T::from_f64(0.9),
-        T::from_f64(1.0e-6),
-    )
-    .expect("valid RMSProp parameters");
+    let parameters =
+        RmsPropParameters::new(T::from_f64(0.05), T::from_f64(0.9), T::from_f64(1.0e-6))
+            .expect("valid RMSProp parameters");
     let two = T::from_f64(2.0);
     let step = <RmsProp as StatefulUpdateRule<Host>>::update(
         T::ONE,

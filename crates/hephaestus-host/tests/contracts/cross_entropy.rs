@@ -1,7 +1,7 @@
 //! Host instantiation of the shared mean cross-entropy clause, plus
 //! host-specific cases it does not reach.
 
-use hephaestus_conformance::{assert_cross_entropy_contract, assert_cross_entropy_contract_f64};
+use hephaestus_conformance::{assert_cross_entropy_at, assert_cross_entropy_contract};
 use hephaestus_core::{
     ComputeDevice, CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps,
     HephaestusError, StridedView,
@@ -16,7 +16,7 @@ fn host_satisfies_the_cross_entropy_contract() {
 
 #[test]
 fn host_satisfies_the_f64_cross_entropy_contract() {
-    assert_cross_entropy_contract_f64(&HostDevice::new(), &HostCrossEntropyOps);
+    assert_cross_entropy_at::<f64, _, _>(&HostDevice::new(), &HostCrossEntropyOps);
 }
 
 /// f64 forward/backward through the generic host seam: logits `[[0, 0]]`

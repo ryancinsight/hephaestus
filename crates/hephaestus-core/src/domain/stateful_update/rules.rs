@@ -150,11 +150,12 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for Adam {
     ) -> StatefulUpdateStep<T> {
         let state_zero_next =
             states[0] * parameters.beta_one() + (T::ONE - parameters.beta_one()) * gradient;
-        let state_one_next =
-            states[1] * parameters.beta_two() + (T::ONE - parameters.beta_two()) * gradient * gradient;
+        let state_one_next = states[1] * parameters.beta_two()
+            + (T::ONE - parameters.beta_two()) * gradient * gradient;
         let parameter_next = parameter
             - parameters.learning_rate() * (state_zero_next / parameters.bias_correction_one())
-                / ((state_one_next / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
+                / ((state_one_next / parameters.bias_correction_two()).sqrt()
+                    + parameters.epsilon());
         StatefulUpdateStep {
             parameter: parameter_next,
             states: [state_zero_next, state_one_next],
@@ -191,12 +192,13 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for AdamW {
     ) -> StatefulUpdateStep<T> {
         let state_zero_next =
             states[0] * parameters.beta_one() + (T::ONE - parameters.beta_one()) * gradient;
-        let state_one_next =
-            states[1] * parameters.beta_two() + (T::ONE - parameters.beta_two()) * gradient * gradient;
+        let state_one_next = states[1] * parameters.beta_two()
+            + (T::ONE - parameters.beta_two()) * gradient * gradient;
         let parameter_next = parameter
             * (T::ONE - parameters.learning_rate() * parameters.weight_decay())
             - parameters.learning_rate() * (state_zero_next / parameters.bias_correction_one())
-                / ((state_one_next / parameters.bias_correction_two()).sqrt() + parameters.epsilon());
+                / ((state_one_next / parameters.bias_correction_two()).sqrt()
+                    + parameters.epsilon());
         StatefulUpdateStep {
             parameter: parameter_next,
             states: [state_zero_next, state_one_next],
@@ -226,7 +228,8 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for RmsProp {
         let state_zero_next =
             states[0] * parameters.alpha() + (T::ONE - parameters.alpha()) * gradient * gradient;
         let parameter_next = parameter
-            - parameters.learning_rate() * gradient / (state_zero_next.sqrt() + parameters.epsilon());
+            - parameters.learning_rate() * gradient
+                / (state_zero_next.sqrt() + parameters.epsilon());
         StatefulUpdateStep {
             parameter: parameter_next,
             states: [state_zero_next, states[1]],
@@ -255,7 +258,8 @@ impl<L: KernelDialect> StatefulUpdateRule<L> for AdaGrad {
     ) -> StatefulUpdateStep<T> {
         let state_zero_next = states[0] + gradient * gradient;
         let parameter_next = parameter
-            - parameters.learning_rate() * gradient / (state_zero_next.sqrt() + parameters.epsilon());
+            - parameters.learning_rate() * gradient
+                / (state_zero_next.sqrt() + parameters.epsilon());
         StatefulUpdateStep {
             parameter: parameter_next,
             states: [state_zero_next, states[1]],

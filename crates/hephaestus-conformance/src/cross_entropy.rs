@@ -19,24 +19,7 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    assert_cross_entropy_contract_for::<D, O, f32>(device, operations);
-}
-
-/// Run strided forward and additive-backward clauses at f64 against one backend.
-///
-/// Mirrors [`assert_cross_entropy_contract`] with the f64 Leto oracle; every
-/// clause body is shared through the width-generic driver below.
-///
-/// # Panics
-///
-/// Panics with the backend and violated clause when provider results diverge
-/// from the Leto CPU contract.
-pub fn assert_cross_entropy_contract_f64<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: CrossEntropyOps<D, f64>,
-{
-    assert_cross_entropy_contract_for::<D, O, f64>(device, operations);
+    assert_cross_entropy_at::<f32, D, O>(device, operations);
 }
 
 /// Run the additive-backward clauses against one backend, without forward.
@@ -56,26 +39,19 @@ where
     D: ComputeDevice,
     O: CrossEntropyOps<D, f32>,
 {
-    assert_cross_entropy_backward_contract_for::<D, O, f32>(device, operations);
+    assert_cross_entropy_backward_at::<f32, D, O>(device, operations);
 }
 
-/// Run the additive-backward clauses at f64 against one backend, without forward.
+/// Run strided forward and additive-backward clauses at scalar `T`.
 ///
-/// Mirrors [`assert_cross_entropy_backward_contract`] with the f64 Leto oracle.
+/// Each width is one monomorphization of the same clause bodies, so a backend
+/// selects its width at the call site (`assert_cross_entropy_at::<f64, _, _>`).
 ///
 /// # Panics
 ///
 /// Panics with the backend and violated clause when provider results diverge
-/// from the Leto CPU contract.
-pub fn assert_cross_entropy_backward_contract_f64<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: CrossEntropyOps<D, f64>,
-{
-    assert_cross_entropy_backward_contract_for::<D, O, f64>(device, operations);
-}
-
-fn assert_cross_entropy_contract_for<D, O, T>(device: &D, operations: &O)
+/// from the Leto CPU contract at `T`.
+pub fn assert_cross_entropy_at<T, D, O>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,
@@ -91,7 +67,14 @@ where
     invalid_probability_precedes_later_arithmetic::<D, O, T>(device, operations);
 }
 
-fn assert_cross_entropy_backward_contract_for<D, O, T>(device: &D, operations: &O)
+/// Run the additive-backward clauses at scalar `T` against one backend, without
+/// forward.
+///
+/// # Panics
+///
+/// Panics with the backend and violated clause when provider results diverge
+/// from the Leto CPU contract at `T`.
+pub fn assert_cross_entropy_backward_at<T, D, O>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,

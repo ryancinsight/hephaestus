@@ -51,7 +51,11 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     &state_zero.buffer.inner,
                     state_zero.layout,
                 )];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<T, Rule, N>(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<
+                    T,
+                    Rule,
+                    N,
+                >(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {
@@ -67,7 +71,11 @@ impl StatefulUpdateOps<MetalDevice> for MetalStatefulUpdateOps {
                     hephaestus_core::StridedView::new(&state_zero.buffer.inner, state_zero.layout),
                     hephaestus_core::StridedView::new(&state_one.buffer.inner, state_one.layout),
                 ];
-                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<T, Rule, N>(
+                <WgpuStatefulUpdateOps as StatefulUpdateOps<WgpuDevice>>::stateful_update::<
+                    T,
+                    Rule,
+                    N,
+                >(
                     &WgpuStatefulUpdateOps,
                     device.wgpu_device(),
                     StatefulUpdateOperands {

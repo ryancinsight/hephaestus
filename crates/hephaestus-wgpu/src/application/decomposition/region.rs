@@ -104,20 +104,25 @@ fn checked_wg_x(wg_x: usize) -> Result<u32> {
 }
 
 /// Convert a region field to `u32`, returning `TransferFailed` on overflow.
-fn region_u32(value: usize, name: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::TransferFailed {
-        message: format!("region {name} {value} exceeds u32"),
-    })
+fn region_extent<T>(value: T, name: &str) -> Result<u32>
+where
+    T: TryInto<u32> + Copy + core::fmt::Display,
+{
+    value
+        .try_into()
+        .map_err(|_| HephaestusError::TransferFailed {
+            message: format!("region {name} {value} exceeds u32"),
+        })
 }
 
 /// Build a `RegionCopyMeta` from a `MatrixRegion`, checking all field widths.
 fn region_meta(region: MatrixRegion) -> Result<RegionCopyMeta> {
     Ok(RegionCopyMeta {
-        stride: region_u32(region.stride, "stride")?,
-        row_start: region_u32(region.row_start, "row_start")?,
-        col_start: region_u32(region.col_start, "col_start")?,
-        rows: region_u32(region.rows, "rows")?,
-        cols: region_u32(region.cols, "cols")?,
+        stride: region_extent(region.stride, "stride")?,
+        row_start: region_extent(region.row_start, "row_start")?,
+        col_start: region_extent(region.col_start, "col_start")?,
+        rows: region_extent(region.rows, "rows")?,
+        cols: region_extent(region.cols, "cols")?,
     })
 }
 

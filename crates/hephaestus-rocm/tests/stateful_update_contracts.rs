@@ -1,9 +1,7 @@
 //! ROCm instantiation of the shared stateful-update contract.
 
 #[cfg(all(feature = "rocm", target_os = "linux"))]
-use hephaestus_conformance::{
-    assert_stateful_update_contract,
-};
+use hephaestus_conformance::assert_stateful_update_contract;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 use hephaestus_rocm::RocmDevice;
 use hephaestus_rocm::RocmStatefulUpdateOps;
@@ -26,4 +24,3 @@ fn rocm_satisfies_the_stateful_update_contract() {
     };
     assert_stateful_update_contract(&device, &RocmStatefulUpdateOps);
 }
-

@@ -30,8 +30,14 @@ fn bias_correction_matches<T: StatefulScalar>(
     expected_one: T,
     expected_two: T,
 ) {
-    let parameters = AdamParameters::new(T::from_f64(0.01), beta_one, beta_two, T::from_f64(1.0e-8), 3)
-        .expect("analytically valid Adam parameters");
+    let parameters = AdamParameters::new(
+        T::from_f64(0.01),
+        beta_one,
+        beta_two,
+        T::from_f64(1.0e-8),
+        3,
+    )
+    .expect("analytically valid Adam parameters");
     assert_eq!(parameters.bias_correction_one(), expected_one);
     assert_eq!(parameters.bias_correction_two(), expected_two);
 }
@@ -69,7 +75,13 @@ fn rejects_out_of_domain<T: StatefulScalar>(
         "SGD parameter momentum must lie in [0, 1), got 1",
     );
     assert_invalid(
-        AdamParameters::new(negative_rate, T::from_f64(0.9), T::from_f64(0.999), T::from_f64(1.0e-8), 1),
+        AdamParameters::new(
+            negative_rate,
+            T::from_f64(0.9),
+            T::from_f64(0.999),
+            T::from_f64(1.0e-8),
+            1,
+        ),
         "Adam parameter learning_rate must be nonnegative, got -0.1",
     );
     assert_invalid(
@@ -95,22 +107,8 @@ fn rejects_out_of_domain<T: StatefulScalar>(
 
 #[test]
 fn rejects_nonfinite_and_out_of_domain_parameters_at_both_widths() {
-    rejects_out_of_domain(
-        f32::NAN,
-        1.0_f32,
-        -0.1_f32,
-        -0.1_f32,
-        1.0_f32,
-        0.0_f32,
-    );
-    rejects_out_of_domain(
-        f64::NAN,
-        1.0_f64,
-        -0.1_f64,
-        -0.1_f64,
-        1.0_f64,
-        0.0_f64,
-    );
+    rejects_out_of_domain(f32::NAN, 1.0_f32, -0.1_f32, -0.1_f32, 1.0_f32, 0.0_f32);
+    rejects_out_of_domain(f64::NAN, 1.0_f64, -0.1_f64, -0.1_f64, 1.0_f64, 0.0_f64);
 }
 
 fn accepts_zero_learning_rate<T: StatefulScalar>() {
