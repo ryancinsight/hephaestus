@@ -22,10 +22,16 @@ atlas gate counts (`type_suffixed_fns`, baseline 7, now 29). A type-suffixed
 name is a per-type clone of one algorithm. The standards require one generic
 entry point, parameterized by `T: Scalar`, and monomorphized per scalar.
 
-The split is not only naming. The f32 uniform blocks are padded to vec4
-alignment for WGSL, and the f64 blocks are padding-free, because the f64 WGSL
-type has no matching uniform alignment. Any unified struct therefore has to
-express two layouts, one per scalar. That is the reason the twins exist.
+The split is not only naming. The f32 parameter structs carry explicit padding
+fields (`padding`, `padding_zero`, `padding_one`) so their sizes stay 16 and 32
+bytes; `parameters.rs` documents these as a frozen uniform ABI that device
+kernels were built against. The f64 structs are padding-free: 16, 48, 56, 24
+and 16 bytes for SGD, Adam, AdamW, RMSProp and AdaGrad (`parameters.rs`
+size assertions). The WGSL `Parameters` struct is generated from the per-scalar
+field list (`wgpu` `stateful_update.rs`, `parameters_declaration`), so the
+layout difference reaches the shader only through that list. No source in the
+repository shows a WGSL alignment rule that forces the f64 layout; an earlier
+draft of this ADR claimed one, and it was removed.
 
 ## Decision
 
@@ -82,5 +88,11 @@ express two layouts, one per scalar. That is the reason the twins exist.
 ## Open question for review
 
 The layout associated type is the one choice that changes the GPU ABI shape.
-Review should confirm that the padded-f32 and padding-free-f64 layouts are
-what the shaders expect, before implementation starts.
+Verified by reading source (2026-10-11): the WGSL and CUDA/ROCm `Parameters`
+declarations follow the per-scalar field lists, and the field order matches
+the Rust `repr(C)` structs for all five rules. Not verified: (1) the WGSL f64
+shader declares no `enable f64;` directive (`dialect.rs` gives the Wgsl f64
+impl no `PRELUDE`; the fusion test asserts naga accepts f64 unconditionally),
+so it has not been compiled on a device; (2) whether the f32 padding fields are
+required by any device, or can be dropped as a breaking ABI change. Both need a
+device or naga run before implementation starts.
