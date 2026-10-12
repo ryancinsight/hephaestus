@@ -19,6 +19,7 @@ mod pad;
 mod parameterized;
 mod random;
 mod reduction;
+mod roll;
 mod scan;
 mod sparse;
 mod stateful;
