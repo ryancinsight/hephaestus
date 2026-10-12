@@ -15,8 +15,8 @@
 //! and the embarrassingly parallel posterior, and a single shared driver in
 //! this module walks them. A backend that ran its own loop would duplicate
 //! the walk five times over; a host that faked steps it never takes would be
-//! a mock wearing a trait impl. So [`CtcStepOps`] is the step seam GPUs bind,
-//! [`CtcOps`] is the coarse seam every backend — host included — binds, and
+//! a mock wearing a trait impl. So [`CtcStepOps`](crate::domain::ctc::CtcStepOps) is the step seam GPUs bind,
+//! [`CtcOps`](crate::domain::ctc::CtcOps) is the coarse seam every backend — host included — binds, and
 //! GPU coarse methods are one call into the shared driver.
 //!
 //! # Log-space arithmetic
@@ -30,7 +30,7 @@
 //!
 //! # What the driver keeps on the device
 //!
-//! [`CtcStateBuffers`] owns the forward recurrences between the passes —
+//! [`CtcStateBuffers`](crate::domain::ctc::CtcStateBuffers) owns the forward recurrences between the passes —
 //! alpha and beta, the expanded labels, per-sample metadata, likelihoods,
 //! and divisors — allocated once per problem and retained across backward,
 //! exactly the provider state's device image. The scalar loss is summed on

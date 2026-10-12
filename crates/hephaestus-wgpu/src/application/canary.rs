@@ -12,19 +12,19 @@
 //! in-process without aborting the parent). Until then this module pairs two
 //! mechanisms behind one query surface:
 //!
-//! - [`builtin_verdict`]: a recorded table keyed by exact adapter identity
-//!   (backend, vendor, device). Known-bad triples report [`BuiltinVerdict`];
+//! - [`builtin_verdict`](crate::application::canary::builtin_verdict): a recorded table keyed by exact adapter identity
+//!   (backend, vendor, device). Known-bad triples report [`BuiltinVerdict`](crate::application::canary::BuiltinVerdict);
 //!   every unknown adapter (or device without adapter info) default-allows,
 //!   preserving current behavior where nothing is proven.
-//! - [`probe_precision`]: a live one-dispatch measurement of a builtin's
+//! - [`probe_precision`](crate::application::canary::probe_precision): a live one-dispatch measurement of a builtin's
 //!   precision grade against CPU truth. It refuses crash-class pairs up front
 //!   (via the table) so probing itself can never abort the process.
 //!
-//! Seams gate crash-class dispatch with [`require_expr_safe`] (which scans the
+//! Seams gate crash-class dispatch with [`require_expr_safe`](crate::application::canary::require_expr_safe) (which scans the
 //! op template text for builtin calls, so composite expressions like
 //! `GeluTanhOp` are covered without a manual op-to-builtin map) or the
-//! explicit [`require_builtin`], turning process aborts into typed
-//! [`HephaestusError::Unsupported`] naming the cause.
+//! explicit [`require_builtin`](crate::application::canary::require_builtin), turning process aborts into typed
+//! [`HephaestusError::Unsupported`](hephaestus_core::HephaestusError::Unsupported) naming the cause.
 
 use eunomia::Pod;
 use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};

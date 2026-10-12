@@ -10,12 +10,12 @@ use double_double::DoubleDouble;
 
 #[path = "tests/binary_dispatch.rs"]
 mod binary_dispatch;
+#[path = "tests/fixtures.rs"]
+mod fixtures;
 #[path = "tests/gelu.rs"]
 mod gelu;
 #[path = "tests/hardswish.rs"]
 mod hardswish;
-#[path = "tests/fixtures.rs"]
-mod fixtures;
 #[path = "tests/mish.rs"]
 mod mish;
 #[path = "tests/silu.rs"]

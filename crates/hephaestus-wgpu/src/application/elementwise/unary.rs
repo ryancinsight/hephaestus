@@ -3,7 +3,7 @@ use hephaestus_core::{
     BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, UnaryExpr, Wgsl,
 };
 
-use super::{reject_unsupported_unary, reject_output_alias};
+use super::{reject_output_alias, reject_unsupported_unary};
 use crate::application::canary;
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;

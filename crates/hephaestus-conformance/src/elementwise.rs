@@ -104,7 +104,7 @@ where
 
 /// Run the K0 clauses against one backend.
 ///
-/// Shares the [`BESSEL_BOUND`] derivation: the 9.8.5 branch rounds f32
+/// Shares the `BESSEL_BOUND` derivation: the 9.8.5 branch rounds f32
 /// coefficients through two six-level Horners plus one `log`, and the 9.8.6
 /// branch rounds one `exp`/`sqrt` plus a six-level series, each landing
 /// within ~2e-6 absolute on O(1) values. Oracles are leto's scalar
