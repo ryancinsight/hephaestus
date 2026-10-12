@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "rocm", target_os = "linux"))]
 
-use hephaestus_conformance::{assert_cross_entropy_contract, assert_cross_entropy_contract_f64};
+use hephaestus_conformance::{assert_cross_entropy_contract, assert_cross_entropy_contract_for};
 use hephaestus_rocm::{RocmCrossEntropyOps, RocmDevice};
 
 fn device(clause: &str) -> Option<RocmDevice> {
@@ -29,5 +29,5 @@ fn rocm_satisfies_shared_f64_cross_entropy_contract() {
     let Some(device) = device("ROCm f64 cross-entropy conformance") else {
         return;
     };
-    assert_cross_entropy_contract_f64(&device, &RocmCrossEntropyOps);
+    assert_cross_entropy_contract_for::<_, _, f64>(&device, &RocmCrossEntropyOps);
 }

@@ -22,23 +22,6 @@ where
     assert_cross_entropy_contract_for::<D, O, f32>(device, operations);
 }
 
-/// Run strided forward and additive-backward clauses at f64 against one backend.
-///
-/// Mirrors [`assert_cross_entropy_contract`] with the f64 Leto oracle; every
-/// clause body is shared through the width-generic driver below.
-///
-/// # Panics
-///
-/// Panics with the backend and violated clause when provider results diverge
-/// from the Leto CPU contract.
-pub fn assert_cross_entropy_contract_f64<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: CrossEntropyOps<D, f64>,
-{
-    assert_cross_entropy_contract_for::<D, O, f64>(device, operations);
-}
-
 /// Run the additive-backward clauses against one backend, without forward.
 ///
 /// Backends whose forward path is driver-limited (WGSL f64 needs `log`, which
@@ -59,23 +42,18 @@ where
     assert_cross_entropy_backward_contract_for::<D, O, f32>(device, operations);
 }
 
-/// Run the additive-backward clauses at f64 against one backend, without forward.
+/// Run strided forward and additive-backward clauses at scalar `T` against
+/// one backend.
 ///
-/// Mirrors [`assert_cross_entropy_backward_contract`] with the f64 Leto oracle.
+/// The width-generic driver behind [`assert_cross_entropy_contract`]: every
+/// clause body is shared, and the Leto oracle runs at `T`. Callers select
+/// the width with turbofish (`_for::<_, _, f64>`).
 ///
 /// # Panics
 ///
 /// Panics with the backend and violated clause when provider results diverge
 /// from the Leto CPU contract.
-pub fn assert_cross_entropy_backward_contract_f64<D, O>(device: &D, operations: &O)
-where
-    D: ComputeDevice,
-    O: CrossEntropyOps<D, f64>,
-{
-    assert_cross_entropy_backward_contract_for::<D, O, f64>(device, operations);
-}
-
-fn assert_cross_entropy_contract_for<D, O, T>(device: &D, operations: &O)
+pub fn assert_cross_entropy_contract_for<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,
@@ -91,7 +69,19 @@ where
     invalid_probability_precedes_later_arithmetic::<D, O, T>(device, operations);
 }
 
-fn assert_cross_entropy_backward_contract_for<D, O, T>(device: &D, operations: &O)
+/// Run the additive-backward clauses at scalar `T` against one backend,
+/// without forward.
+///
+/// The width-generic driver behind
+/// [`assert_cross_entropy_backward_contract`]: backends whose forward path
+/// is driver-limited still prove backward at any width through this entry
+/// point. Callers select the width with turbofish (`_for::<_, _, f64>`).
+///
+/// # Panics
+///
+/// Panics with the backend and violated clause when provider results diverge
+/// from the Leto CPU contract.
+pub fn assert_cross_entropy_backward_contract_for<D, O, T>(device: &D, operations: &O)
 where
     D: ComputeDevice,
     O: CrossEntropyOps<D, T>,
