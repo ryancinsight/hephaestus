@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.20.1"
+version = "0.20.2"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -26,11 +26,11 @@ categories = ["science", "hardware-support"]
 [workspace.dependencies]
 # ── Local Workspace Crates ──
 hephaestus-conformance = { path = "crates/hephaestus-conformance" }
-hephaestus-core = { version = "0.20.1", path = "crates/hephaestus-core" }
-hephaestus-wgpu = { version = "0.20.1", path = "crates/hephaestus-wgpu" }
-hephaestus-cuda = { version = "0.20.1", path = "crates/hephaestus-cuda", default-features = false }
-hephaestus-rocm = { version = "0.20.1", path = "crates/hephaestus-rocm", default-features = false }
-hephaestus-metal = { version = "0.20.1", path = "crates/hephaestus-metal" }
+hephaestus-core = { version = "0.20.2", path = "crates/hephaestus-core" }
+hephaestus-wgpu = { version = "0.20.2", path = "crates/hephaestus-wgpu" }
+hephaestus-cuda = { version = "0.20.2", path = "crates/hephaestus-cuda", default-features = false }
+hephaestus-rocm = { version = "0.20.2", path = "crates/hephaestus-rocm", default-features = false }
+hephaestus-metal = { version = "0.20.2", path = "crates/hephaestus-metal" }
 
 # ── GPU ──
 # Hephaestus owns the Atlas WGPU ABI; consumers pin this exact major.
@@ -69,15 +69,15 @@ eunomia = { version = "0.9.0", git = "https://github.com/ryancinsight/eunomia", 
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only — no CPU compute dependency (leto-ops is not pulled). Leto PR
 # #167 is merged, so the lockfile records its reviewed default source.
-leto = { version = "0.45.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { version = "0.45.2", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
 themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
 # Keep the operation layer on the same default Leto source identity as the
 # metadata layer.
-leto-ops = { version = "0.45.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "mnemosyne-memory", "topology"] }
-moirai-sync = { version = "0.7.0", git = "https://github.com/ryancinsight/Moirai.git" }
+leto-ops = { version = "0.45.2", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "mnemosyne-memory", "topology"] }
+moirai-sync = { version = "0.8.2", git = "https://github.com/ryancinsight/Moirai.git" }
 # ── Python FFI ──
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
