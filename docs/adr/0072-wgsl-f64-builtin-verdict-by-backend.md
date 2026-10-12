@@ -31,10 +31,13 @@ returns `Blocked` for the four probed builtins with a cause naming the
 instruction and the observed behaviors; `require_expr_safe` also refuses the
 sixteen restricted builtins that carry no probe. The backend is read from
 the live `wgpu::Device`, so wrapped devices without recorded adapter info
-are judged too. Every seam that compiles WGSL from an op template or
-composed source (contiguous, prepared, and strided elementwise; fusion;
-cross-entropy forward; attention) checks it through one helper and returns
-a typed `Unsupported` instead of dispatching.
+are judged too. Every seam that compiles WGSL from an op or combine
+template or composed source (contiguous, prepared, and strided elementwise;
+full and axis reductions; scans; fusion; cross-entropy forward; attention)
+checks it through one helper and returns a typed `Unsupported` instead of
+dispatching. Raw consumer-authored kernels (`storage_kernel`, `stream`)
+compile the consumer's own WGSL unchecked; `require_expr_safe` is public so
+the consumer can apply the same rule.
 Other backends and f32 stay supported; the live probe keeps measuring f64
 `exp` against CPU truth wherever it is allowed.
 

@@ -8,14 +8,15 @@
 //! on any driver: blocked pairs are refused before any shader is built.
 
 use hephaestus_core::{
-    BlockWidth, ComputeDevice, CrossEntropyForwardOperands, CrossEntropyOps, DeviceFeature,
-    DevicePreference, ElementwiseOps, HephaestusError, StridedView,
+    BlockWidth, CombineExpr, ComputeDevice, CrossEntropyForwardOperands, CrossEntropyOps,
+    DeviceFeature, DevicePreference, ElementwiseOps, FullReductionOps, HephaestusError,
+    IdentityToken, OpIdentity, StridedView, Wgsl,
 };
 use hephaestus_wgpu::{
     BuiltinVerdict, CanaryWidth, ExpOp, MathBuiltin, PowOp, PrecisionGrade, SinOp, SoftplusOp,
-    TanhOp, WgpuCrossEntropyOps, WgpuDevice, WgpuElementwiseOps, binary_elementwise_into,
-    builtin_verdict, probe_precision, require_builtin, scan_builtins, unary_elementwise_into,
-    unary_elementwise_strided_into,
+    TanhOp, WgpuCrossEntropyOps, WgpuDevice, WgpuElementwiseOps, WgpuFullReductionOps,
+    binary_elementwise_into, builtin_verdict, probe_precision, require_builtin, scan_builtins,
+    unary_elementwise_into, unary_elementwise_strided_into,
 };
 use leto::Layout;
 
@@ -55,6 +56,24 @@ fn device() -> Option<WgpuDevice> {
             None
         }
     }
+}
+
+/// A consumer-defined combine whose template calls `exp` and `log`: the
+/// reduction seams compile it at the requested width like any op template.
+#[derive(Clone, Copy)]
+struct LogAddExp;
+
+impl CombineExpr<Wgsl> for LogAddExp {
+    const EXPR: &'static str = "max(lhs, rhs) + log(1.0 + exp(-abs(lhs - rhs)))";
+}
+
+impl OpIdentity<LogAddExp> for f64 {
+    // Far below any finite input, so `exp` of the gap underflows to zero.
+    const IDENTITY: Self = -1.0e308;
+}
+
+impl IdentityToken<LogAddExp, Wgsl> for f64 {
+    const TOKEN: &'static str = "-1.0e308";
 }
 
 fn is_vulkan(device: &WgpuDevice) -> bool {
@@ -185,6 +204,15 @@ fn gates_refuse_undefined_lowerings_with_cause() {
         StridedView::new(&output, &layout),
     ) else {
         panic!("prepared f64 tanh must refuse on Vulkan");
+    };
+    assert_blocked(&error);
+
+    let Err(error) = WgpuFullReductionOps.prepare_reduce_full::<LogAddExp, 1>(
+        &device,
+        StridedView::new(&input, &layout),
+        StridedView::new(&output, &Layout::c_contiguous([1]).expect("scalar")),
+    ) else {
+        panic!("f64 reduction with an exp/log combine must refuse on Vulkan");
     };
     assert_blocked(&error);
 

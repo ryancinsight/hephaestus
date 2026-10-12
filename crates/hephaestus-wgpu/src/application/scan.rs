@@ -10,6 +10,7 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+use crate::application::canary;
 use crate::application::pipeline::cached_pipeline;
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -148,6 +149,7 @@ where
     else {
         return Ok(());
     };
+    canary::require_template_safe::<T>(device, <Op as CombineExpr<Wgsl>>::EXPR, "axis scan")?;
     let pipeline = cached_pipeline(
         device,
         (
