@@ -46,7 +46,7 @@ pub struct SgdParameters<T: UpdateWidth = f32> {
 // padding bytes exist and every bit pattern is valid. Layout pinned by the
 // size asserts below. (`Pod` cannot be derived: the derive rejects generic
 // `repr(C)` structs on stable Rust.)
-#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+#[expect(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
 unsafe impl<T: UpdateWidth> Pod for SgdParameters<T> {}
 
 impl<T: UpdateWidth> SgdParameters<T> {
@@ -104,7 +104,7 @@ pub struct AdamParameters<T: UpdateWidth = f32> {
 // SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
 // padding bytes exist and every bit pattern is valid. Layout pinned by the
 // size asserts below.
-#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+#[expect(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
 unsafe impl<T: UpdateWidth> Pod for AdamParameters<T> {}
 
 impl<T: UpdateWidth> AdamParameters<T> {
@@ -170,7 +170,7 @@ pub struct AdamWParameters<T: UpdateWidth = f32> {
 // SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
 // padding bytes exist and every bit pattern is valid. Layout pinned by the
 // size asserts below.
-#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+#[expect(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
 unsafe impl<T: UpdateWidth> Pod for AdamWParameters<T> {}
 
 impl<T: UpdateWidth> AdamWParameters<T> {
@@ -282,7 +282,7 @@ pub struct RmsPropParameters<T: UpdateWidth = f32> {
 // SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
 // padding bytes exist and every bit pattern is valid. Layout pinned by the
 // size asserts below.
-#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+#[expect(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
 unsafe impl<T: UpdateWidth> Pod for RmsPropParameters<T> {}
 
 impl<T: UpdateWidth> RmsPropParameters<T> {
@@ -340,7 +340,7 @@ pub struct AdaGradParameters<T: UpdateWidth = f32> {
 // SAFETY: `repr(C)` with every field `Pod` at identical alignment, so no
 // padding bytes exist and every bit pattern is valid. Layout pinned by the
 // size asserts below.
-#[allow(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
+#[expect(unsafe_code, reason = "proven padding-free Pod impl; see SAFETY above")]
 unsafe impl<T: UpdateWidth> Pod for AdaGradParameters<T> {}
 
 impl<T: UpdateWidth> AdaGradParameters<T> {
