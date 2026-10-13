@@ -1,5 +1,7 @@
 use super::*;
 
+use hephaestus_core::HephaestusError;
+
 #[test]
 fn module_cases_share_process_state() {
     crate::test_support::run_cases(&[
