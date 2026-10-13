@@ -1,4 +1,5 @@
 use super::*;
+use hephaestus_core::{Binding, CommandStream, DispatchGrid, HephaestusError, KernelDevice};
 
 pub(crate) fn command_stream_dispatches_prepared_wgsl_kernel() {
     let Some(device) = try_device() else {
