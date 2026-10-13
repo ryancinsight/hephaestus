@@ -3,8 +3,8 @@ use hephaestus_core::{
     MulOp, NeOp, TypedBinaryExpr,
 };
 
-use super::helpers::arithmetic;
-use super::helpers::compare;
+use super::arithmetic_dispatch::arithmetic;
+use super::comparison_dispatch::compare;
 
 /// IEEE-754 `f32` special-value semantics, asserted only where the dialect
 /// advertises them (`KernelDialect::IEEE_SPECIAL_VALUES`, ADR 0043).

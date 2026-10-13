@@ -3,7 +3,7 @@ use hephaestus_core::{
     TypedBinaryExpr,
 };
 
-use super::helpers::compare;
+use super::comparison_dispatch::compare;
 
 /// `u32` comparisons: unsigned ordering with an equal pair at both ends.
 pub(crate) fn unsigned_comparisons_are_exact_indicators<D, E>(device: &D, ops: &E)

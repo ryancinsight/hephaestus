@@ -22,7 +22,8 @@
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo
 - Priority: correctness.
-- Remaining acceptance: hosted execution of the expanded Metal lane before release.
+- Remaining acceptance: exact-head hosted Metal and required provider gates,
+  followed by the authorized provider merge.
 - Outcome: macOS CI triggers on WGPU, core, conformance, facade, and test-policy
   changes; it runs minimal/default WGPU and existing Metal contracts with Metal
   acquisition and both required-device flags. Existing public APIs remain stable.
@@ -41,7 +42,9 @@
 - Publication closure: partition upstream decomposition aggregation, WGPU
   device ownership/lifetimes, and shared CTC dispatch into leaf modules, and
   replace the old utility modules with identity/tolerance and storage-binding
-  responsibilities. Mathematical operation order remains unchanged; later
+  responsibilities. Integrate upstream `cf811ae9`, partition its typed
+  comparison/arithmetic dispatch and host decomposition type/solve utilities,
+  and remove the internal upload-only forwarding function. Mathematical operation order remains unchanged; later
   conversion closure makes representation boundaries explicit.
   Implementation-bearing manifests fall from 17 to
   the recorded 14; utility modules fall from two to zero. See the scoped

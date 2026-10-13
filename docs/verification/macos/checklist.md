@@ -32,6 +32,10 @@ Target version: **0.20.4**. Change class: **[patch]**. Phase: **Closure**.
 - [x] [patch] Close the fixed conversion budget with checked word/address,
   native-precision count, lossless pointer, and integer duration conversions;
   keep every fixture range, value oracle, tolerance, and workload.
+- [x] [patch] Integrate upstream `cf811ae9`; partition its new utility modules
+  into typed dispatch and host decomposition type/solve leaves, with direct
+  device uploads and every existing numerical oracle retained.
+- [ ] [patch] Pass the final exact-head hosted Metal/provider gates and merge.
 - [x] [patch] Preserve standalone Git dependency identities in Cargo.lock;
   synchronize version, README, backlog, audit, and changelog evidence.
 

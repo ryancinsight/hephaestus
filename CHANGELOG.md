@@ -13,6 +13,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Fixed
 
+- [patch] Integrate current upstream QR routing and source partitions; separate
+  typed comparison/arithmetic dispatch and host decomposition type/solve
+  responsibilities, and replace the internal upload helper with direct device
+  uploads. Numerical operations and the existing publication baseline remain
+  unchanged.
 - [patch] The macOS Metal workflow now triggers on WGPU, shared conformance,
   facade, and verification-policy changes and runs the complete minimal and
   default WGPU suites on required Metal hardware. Both facade configurations,

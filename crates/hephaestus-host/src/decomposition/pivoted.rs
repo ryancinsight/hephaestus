@@ -2,7 +2,7 @@ use hephaestus_core::{ColPivQrHandle, FullPivLuHandle, Result};
 
 use crate::{HostBuffer, HostDevice};
 
-use super::helpers::solve_with;
+use super::solve::solve_with;
 
 /// Column-pivoted QR on the host.
 pub struct HostColPivQr {

@@ -70,7 +70,11 @@
   remain unchanged; subsequent conversion closure makes their representation
   boundaries explicit.
   Manifest implementations return from 17 to the recorded 14 and utility
-  modules from two to zero; no baseline is regenerated.
+  modules from two to zero; no baseline is regenerated. Integration of current
+  upstream `cf811ae9` introduces two new utility modules; comparison/arithmetic
+  dispatch and host decomposition type/solve responsibilities replace them.
+  Direct `ComputeDevice` uploads remove the internal forwarding helper. The
+  inherited QR routing and all numerical oracles remain intact.
 - Python link finding: the deprecated workspace-wide `extension-module`
   feature suppresses the Python library needed by Rust binding test binaries.
   Remove it and retain the existing Maturin >= 1.9.4 environment-selected

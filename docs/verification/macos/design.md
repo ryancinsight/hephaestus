@@ -85,3 +85,12 @@ reloading the present parent must preserve a device fault with both image names.
 The physical CUDA transfer test retains all value assertions and still fails
 when hardware is required. The full workspace verifies this portability fix
 together with the native Metal surface.
+
+Current upstream integration (`cf811ae9`) introduces two further utility
+modules. Partition typed-elementwise execution into comparison and arithmetic
+dispatch leaves, retaining each operation, layout, upload, allocation, dispatch,
+and readback unchanged. Host decomposition separates its zero-sized operation
+type from the Leto solve bridge. Callers upload through `ComputeDevice` directly;
+the internal upload-only forwarding function is removed. Public definitions,
+solve order, buffers, errors, numerical inputs, and value oracles remain identical.
+The inherited QR routing optimization and source partitions remain in the merge.

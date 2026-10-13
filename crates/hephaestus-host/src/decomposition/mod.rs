@@ -10,16 +10,17 @@
 //! diagonal).
 
 mod basic;
-mod helpers;
 mod ops;
 mod orthogonal;
 mod pivoted;
+mod solve;
 mod spectral;
 mod symmetric;
+mod types;
 
 pub use basic::{HostCholesky, HostLu, HostQr};
-pub use helpers::HostDecompositionOps;
 pub use orthogonal::{HostBidiagonal, HostHessenberg, HostSchur};
 pub use pivoted::{HostColPivQr, HostFullPivLu};
 pub use spectral::{HostSvd, HostSymmetricEigen};
 pub use symmetric::{HostBunchKaufman, HostUdu};
+pub use types::HostDecompositionOps;

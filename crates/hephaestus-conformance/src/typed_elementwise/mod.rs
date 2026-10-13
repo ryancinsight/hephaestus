@@ -12,10 +12,11 @@
 //! implementations may assume they do not occur, so their behaviour is
 //! capability-gated, not a universal clause.
 
+mod arithmetic_dispatch;
 mod backend;
+mod comparison_dispatch;
 mod comparisons;
 mod entry;
-mod helpers;
 mod reuse;
 mod shapes;
 mod special;
