@@ -1,7 +1,3 @@
-//! Elementwise operations on `Array`: unary transcendentals, binary
-//! arithmetic dunders (array-array and array-scalar), and their
-//! module-level function forms.
-
 use crate::array::PyArray;
 use crate::backend::{backend_binary, backend_scalar, backend_unary};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -9,116 +5,7 @@ use pyo3::prelude::*;
 
 #[pymethods]
 impl PyArray {
-    // ── Unary Operations ──
-
-    fn exp(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::ExpOp, hephaestus_cuda::ExpOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn log(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::LnOp, hephaestus_cuda::LnOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn sin(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::SinOp, hephaestus_cuda::SinOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn cos(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::CosOp, hephaestus_cuda::CosOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn sqrt(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::SqrtOp, hephaestus_cuda::SqrtOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn abs(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::AbsOp, hephaestus_cuda::AbsOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    fn neg(&self, py: Python<'_>) -> PyResult<Self> {
-        let dev = self.device.clone();
-        let buf = self.buffer.clone();
-        let out_buf = py
-            .detach(move || {
-                backend_unary!(&dev, &buf, hephaestus_wgpu::NegOp, hephaestus_cuda::NegOp)
-            })
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self {
-            buffer: out_buf,
-            device: self.device.clone(),
-            shape: self.shape.clone(),
-        })
-    }
-
-    // ── Binary Operations ──
-
-    fn __add__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __add__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -169,11 +56,11 @@ impl PyArray {
         }
     }
 
-    fn __radd__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __radd__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         self.__add__(py, other)
     }
 
-    fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -224,7 +111,7 @@ impl PyArray {
         }
     }
 
-    fn __rsub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __rsub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
@@ -251,7 +138,7 @@ impl PyArray {
         }
     }
 
-    fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -302,11 +189,11 @@ impl PyArray {
         }
     }
 
-    fn __rmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __rmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         self.__mul__(py, other)
     }
 
-    fn __truediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __truediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(other_arr) = other.extract::<PyRef<'_, PyArray>>() {
             if self.shape != other_arr.shape {
                 return Err(PyValueError::new_err(format!(
@@ -357,7 +244,7 @@ impl PyArray {
         }
     }
 
-    fn __rtruediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn __rtruediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(val) = other.extract::<f32>() {
             let dev = self.device.clone();
             let buf = self.buffer.clone();
@@ -388,7 +275,7 @@ impl PyArray {
         }
     }
 
-    fn __pow__(
+    pub(crate) fn __pow__(
         &self,
         py: Python<'_>,
         other: &Bound<'_, PyAny>,
@@ -444,7 +331,7 @@ impl PyArray {
         }
     }
 
-    fn __rpow__(
+    pub(crate) fn __rpow__(
         &self,
         py: Python<'_>,
         other: &Bound<'_, PyAny>,
@@ -483,66 +370,4 @@ impl PyArray {
             Err(PyTypeError::new_err("unsupported operand type(s) for **"))
         }
     }
-}
-
-// ── Module-level function forms ──
-
-#[pyfunction]
-pub(crate) fn add(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__add__(py, b)
-}
-
-#[pyfunction]
-pub(crate) fn sub(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__sub__(py, b)
-}
-
-#[pyfunction]
-pub(crate) fn mul(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__mul__(py, b)
-}
-
-#[pyfunction]
-pub(crate) fn div(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__truediv__(py, b)
-}
-
-#[pyfunction]
-pub(crate) fn pow(py: Python<'_>, a: &PyArray, b: &Bound<'_, PyAny>) -> PyResult<PyArray> {
-    a.__pow__(py, b, None)
-}
-
-#[pyfunction]
-pub(crate) fn exp(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.exp(py)
-}
-
-#[pyfunction]
-pub(crate) fn log(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.log(py)
-}
-
-#[pyfunction]
-pub(crate) fn sin(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.sin(py)
-}
-
-#[pyfunction]
-pub(crate) fn cos(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.cos(py)
-}
-
-#[pyfunction]
-pub(crate) fn sqrt(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.sqrt(py)
-}
-
-#[pyfunction]
-pub(crate) fn abs(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.abs(py)
-}
-
-#[pyfunction]
-pub(crate) fn neg(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
-    a.neg(py)
 }
