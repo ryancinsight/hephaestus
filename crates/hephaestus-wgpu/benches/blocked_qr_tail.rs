@@ -2,10 +2,11 @@
 //!
 //! Local evidence records the machine and driver in `benchmark_results.md`.
 //! The 70×35 workload crosses the fixed 32-column panel boundary with a
-//! three-column tail; 192×128 exercises the direct-route limit; 192×129 and
-//! 384×256 exercise retained blocked schedules. Every timed iteration factors
-//! the same device-resident input and waits for completion; a separate value
-//! check compares the complete `R` factor against Leto before measurement.
+//! three-column tail; 192×128 exercises the direct-route panel limit and
+//! 192×129 the direct-route row limit; 256×129 and 384×256 exercise retained
+//! blocked schedules. Every timed iteration factors the same device-resident
+//! input and waits for completion; a separate value check compares the
+//! complete `R` factor against Leto before measurement.
 
 #![cfg(feature = "decomposition")]
 
@@ -111,7 +112,8 @@ fn blocked_qr_tail(c: &mut Criterion) {
     };
     measure_shape::<70, 35>(c, &device, "blocked_qr/final_two_panels_70x35");
     measure_shape::<192, 128>(c, &device, "blocked_qr/four_panels_192x128");
-    measure_shape::<192, 129>(c, &device, "blocked_qr/routing_boundary_192x129");
+    measure_shape::<192, 129>(c, &device, "blocked_qr/row_limit_192x129");
+    measure_shape::<256, 129>(c, &device, "blocked_qr/routing_boundary_256x129");
     measure_shape::<384, 256>(c, &device, "blocked_qr/eight_panels_384x256");
 }
 

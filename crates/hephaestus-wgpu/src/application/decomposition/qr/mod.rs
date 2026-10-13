@@ -6,10 +6,11 @@
 //! Two entry points are provided:
 //!
 //! - [`qr_decompose`] — full host delegation (panel + trailing on CPU).
-//! - [`qr_decompose_blocked`] — width-selected hybrid algorithm. Matrices up to
-//!   four panels use one host factorization; wider matrices factor panels on the
-//!   CPU, apply wide trailing Householder updates on the GPU, and finish the
-//!   final at-most-one-block tail on the CPU after a paired readback.
+//! - [`qr_decompose_blocked`] — shape-selected hybrid algorithm. Matrices up to
+//!   four panels wide or below 256 rows use one host factorization; taller,
+//!   wider matrices factor panels on the CPU, apply wide trailing Householder
+//!   updates on the GPU, and finish the final at-most-one-block tail on the
+//!   CPU after a paired readback.
 //!
 //! # Mathematical Foundations
 //!

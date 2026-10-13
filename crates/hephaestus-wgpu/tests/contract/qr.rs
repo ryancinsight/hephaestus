@@ -79,19 +79,20 @@ pub(crate) fn blocked_qr_least_squares_matches_leto_reference() {
 ///
 /// `qr_decompose` uploads the host factor's **R**. `qr_decompose_blocked`
 /// delegates to it at or below `QR_DIRECT_PANEL_LIMIT` (4) panels of
-/// `QR_BLOCK_SIZE` (32) columns, and only past that runs the device schedule
-/// whose panel write-back zeroes every `col < row` entry before the buffer
-/// reaches the caller. Both regimes are exercised here: a shape at `n = 35`
-/// (2 panels, delegating) and one at `n = 129` (5 panels, device path). A
-/// shape inside the delegating regime alone would assert nothing about the
-/// device write-back — the two handles would be the same uploaded buffer.
+/// `QR_BLOCK_SIZE` (32) columns, or below `QR_DIRECT_ROW_LIMIT` (256) rows,
+/// and only past both runs the device schedule whose panel write-back zeroes
+/// every `col < row` entry before the buffer reaches the caller. Both regimes
+/// are exercised here: a shape at `n = 35` (2 panels, delegating) and one at
+/// `256x129` (5 panels and 256 rows, device path). A shape inside the
+/// delegating regime alone would assert nothing about the device write-back —
+/// the two handles would be the same uploaded buffer.
 #[cfg(feature = "decomposition")]
 pub(crate) fn qr_r_buffer_is_upper_triangular_on_both_entry_points() {
     let Some(device) = device_or_skip() else {
         return;
     };
     // (m, n, exercises the device schedule)
-    for (m, n, blocked_route) in [(70usize, 35usize, false), (138usize, 129usize, true)] {
+    for (m, n, blocked_route) in [(70usize, 35usize, false), (256usize, 129usize, true)] {
         qr_r_buffer_contract_at_shape(&device, m, n, blocked_route);
     }
 }
@@ -106,7 +107,7 @@ pub(crate) fn qr_accumulated_q_matches_host_reference() {
     // (m, n, exercises the device schedule, checks orthogonality)
     for (m, n, blocked_route, check_orthogonality) in [
         (70usize, 35usize, false, false),
-        (138usize, 129usize, true, true),
+        (256usize, 129usize, true, true),
     ] {
         qr_accumulated_q_contract_at_shape(&device, m, n, blocked_route, check_orthogonality);
     }
@@ -120,8 +121,10 @@ pub(crate) fn blocked_qr_preserves_panel_boundary_contracts() {
     use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
+    // Tall enough for the 129-column case to exercise the device schedule
+    // under the row rule; narrower cases still delegate via the panel rule.
     for cols in [32usize, 33, 35, 64, 65, 128, 129] {
-        let rows = cols + 9;
+        let rows = 256usize;
         let mut matrix_host = vec![0.0f32; rows * cols];
         for row in 0..rows {
             for col in 0..cols {
