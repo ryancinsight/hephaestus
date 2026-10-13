@@ -1,5 +1,7 @@
 use super::*;
 
+use hephaestus_core::{BlockWidth, CudaC, DialectScalar, SumOp};
+
 #[test]
 fn reduced_precision_sources_carry_the_scalar_prelude() {
     let width = BlockWidth::DEFAULT;
