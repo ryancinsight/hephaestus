@@ -8,9 +8,9 @@ use hephaestus_core::{
     reduction_pass_count, validate_reduction_width,
 };
 
-use super::{
-    PreparedAxisReduction, ReductionFinalOpWrapper, ReductionOpWrapper,
-    final_reduction_shader_source, shader_source,
+use super::dispatch::PreparedAxisReduction;
+use super::shaders::{
+    ReductionFinalOpWrapper, ReductionOpWrapper, final_reduction_shader_source, shader_source,
 };
 use crate::application::canary;
 use crate::application::pipeline::{encode_compute_pass, try_cached_pipeline, workgroups};
