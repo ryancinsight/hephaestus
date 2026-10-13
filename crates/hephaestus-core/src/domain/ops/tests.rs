@@ -8,7 +8,7 @@ mod double_double;
 
 use double_double::DoubleDouble;
 
-#[path = "tests/binary_dispatch.rs"]
+#[path = "tests/binary_dispatch/mod.rs"]
 mod binary_dispatch;
 #[path = "tests/fixtures.rs"]
 mod fixtures;
