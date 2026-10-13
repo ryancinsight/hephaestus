@@ -7,7 +7,7 @@
 //!
 //! - [`qr_decompose`] — full host delegation (panel + trailing on CPU).
 //! - [`qr_decompose_blocked`] — shape-selected hybrid algorithm. Matrices up to
-//!   four panels wide or below 256 rows use one host factorization; taller,
+//!   four panels wide or below 2048 rows use one host factorization; taller,
 //!   wider matrices factor panels on the CPU, apply wide trailing Householder
 //!   updates on the GPU, and finish the final at-most-one-block tail on the
 //!   CPU after a paired readback.
@@ -49,6 +49,8 @@ mod accumulate;
 mod api;
 mod householder;
 mod panel;
+#[cfg(test)]
+mod tests;
 
 pub use api::{qr_decompose, qr_decompose_blocked};
 pub use panel::GpuQrDecomposition;
