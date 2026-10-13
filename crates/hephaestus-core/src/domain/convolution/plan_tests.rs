@@ -1,5 +1,8 @@
+use super::super::{ConvolutionBackwardOperands, ConvolutionForwardOperands};
 use super::*;
+use crate::domain::buffer::DeviceBuffer;
 use crate::domain::view::StridedView;
+use leto::{ConvolutionParameters, Layout, TransposedConvolutionParameters};
 use themis::MemoryTier;
 
 struct Buffer {
