@@ -1,4 +1,10 @@
-use super::*;
+use hephaestus_core::BlockWidth;
+
+use super::shaders::{
+    axis_reduction_axis0_tiled_shader_source, axis_reduction_parallel_shader_source,
+    axis0_tile_shape, final_reduction_shader_source, mean_axis_parallel_shader_source,
+    mean_axis0_tiled_shader_source, shader_source,
+};
 
 #[test]
 fn axis_zero_tile_preserves_the_requested_workgroup_width() {
