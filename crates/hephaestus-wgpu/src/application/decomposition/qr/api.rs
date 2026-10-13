@@ -73,14 +73,26 @@ const QR_BLOCK_SIZE: usize = 32;
 /// blocked region transfers and per-panel synchronization.
 const QR_DIRECT_PANEL_LIMIT: usize = 4;
 
+/// Minimum row count for the blocked schedule to pay. Below it the per-panel
+/// gather/download/factor/upload/scatter round-trips dominate the GPU
+/// trailing update at every measured width (RTX 5080, WDDM:
+/// 192x129 direct 346 us vs blocked 1171 us; 240x161 701 us vs 1666 us),
+/// while at 256 rows and above the blocked path wins up to 1.7x
+/// (256x129 1622 us vs 1283 us; 768x513 19105 us vs 13301 us).
+/// The cut sits exactly on leto's `BLOCK_MIN_ROWS` unblocked/blocked
+/// boundary, so the direct regime always runs leto's fast unblocked sweep;
+/// re-tune from a fresh crossover sweep if either threshold moves.
+const QR_DIRECT_ROW_LIMIT: usize = 256;
+
 /// Blocked QR factorization **A = Q R** with hybrid trailing Householder
 /// application.
 ///
-/// Dense matrices of at most four `QR_BLOCK_SIZE` panels use the canonical
-/// [`qr_decompose`] host factorization directly. This regime has no wide
-/// enough trailing work to repay the blocked path's region gather/scatter,
-/// compact device scratch, and per-panel synchronization, so one dense download
-/// and one `R` upload replace that schedule.
+/// Dense matrices of at most four `QR_BLOCK_SIZE` panels, or with fewer than
+/// `QR_DIRECT_ROW_LIMIT` rows, use the canonical [`qr_decompose`] host
+/// factorization directly. These regimes have no wide or tall enough trailing
+/// work to repay the blocked path's region gather/scatter, compact device
+/// scratch, and per-panel synchronization, so one dense download and one `R`
+/// upload replace that schedule.
 ///
 /// The algorithm processes the matrix in panels of `QR_BLOCK_SIZE` columns.
 /// For wider matrices, each panel *k* performs:
@@ -134,9 +146,10 @@ pub fn qr_decompose_blocked(
 
     let block_size = QR_BLOCK_SIZE.min(n);
     // Component profiling shows the blocked schedule remains transfer-bound
-    // through four panels. Route that bounded regime directly; wider shapes
-    // keep the GPU path pending their own measured crossover.
-    if n.div_ceil(block_size) <= QR_DIRECT_PANEL_LIMIT {
+    // through four panels and below QR_DIRECT_ROW_LIMIT rows. Route those
+    // bounded regimes directly; taller, wider shapes keep the GPU path
+    // pending their own measured crossover.
+    if n.div_ceil(block_size) <= QR_DIRECT_PANEL_LIMIT || m < QR_DIRECT_ROW_LIMIT {
         return qr_decompose(device, matrix);
     }
 

@@ -229,7 +229,7 @@ pub(crate) fn qr_r_buffer_contract_at_shape(
     use leto::Layout;
 
     assert_eq!(
-        n.div_ceil(32) > 4,
+        n.div_ceil(32) > 4 && m >= 256,
         blocked_route,
         "fixture [{m}, {n}] must land in the intended routing regime"
     );
@@ -320,7 +320,7 @@ pub(crate) fn qr_accumulated_q_contract_at_shape(
     use leto::Layout;
 
     assert_eq!(
-        n.div_ceil(32) > 4,
+        n.div_ceil(32) > 4 && m >= 256,
         blocked_route,
         "fixture [{m}, {n}] must land in the intended routing regime"
     );
