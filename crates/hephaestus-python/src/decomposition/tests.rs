@@ -1,6 +1,10 @@
 use super::*;
+
+use crate::array::PyArray;
+use crate::backend::BackendBuffer;
 use crate::device::PyDevice;
 use crate::test_support::prepare_python;
+use pyo3::prelude::*;
 
 fn cuda_device_or_skip() -> Option<PyDevice> {
     match PyDevice::new(Some("cuda")) {
