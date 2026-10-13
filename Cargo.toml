@@ -160,6 +160,17 @@ dbg_macro = "deny"
 print_stdout = "allow" # 78 (0 prod)
 print_stderr = "allow" # 78 (0 prod)
 
+# Release/bench codegen matches leto/coeus exactly (same fingerprint, shared
+# cache): one codegen unit plus thin LTO lets LLVM inline cross-crate
+# numeric kernels and autovectorize the hot loops. Measured on the
+# leto QR blocked path (Ultra 9 285K): 256x129 goes 1094 us without to
+# 422 us with (2.4x); hephaestus ran the weak profile while its CPU
+# baselines were compared against GPU dispatches. Bench inherits release.
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+
 # Keep standalone verification within the Atlas shared-cache debuginfo budget.
 [profile.dev]
 debug = "line-tables-only"
