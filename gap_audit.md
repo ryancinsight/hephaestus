@@ -1,5 +1,37 @@
 # Gap Audit - hephaestus
 
+## [HEPH-WGPU-READBACK-COMPLETION-407] Mapping callback publication [patch] — resolved
+
+- Failure: `stage_and_read` equates a successful submission poll with callback
+  delivery, then treats `MAP_PENDING` as `TransferFailed`. WGPU 30 extracts
+  callbacks before firing them outside its internal locks, so a peer poll can
+  return while the callback remains on another thread.
+- Correction: retained and overflow completion slots own a mutex/condition
+  variable alongside the existing atomic state. The same guard covers
+  publication/notification and predicate-check/parking. Release/acquire state
+  publication precedes mapped-byte access, and each wakeup rechecks the predicate.
+- Deadline invariant: every callback park uses
+  `timeout.saturating_sub(started.elapsed())` from the submission poll's start.
+  Pending expiry reports the original `DeviceWaitTimeout` bound and callback
+  context; delivered failures retain their mapping error.
+- Lifetime invariant: both owners quarantine a slot through notification and
+  reader termination. The existing mapping guard unmaps before staging-buffer
+  recycling on success, timeout, error, and consumer unwind. No device-wide lock
+  or test-harness serialization enters the correction.
+- Evidence: the new 16-reader, 64-generation exact-value Metal regression fails
+  before the runtime correction in owned, subrange, and padded readbacks, then
+  passes with the correction. Retained/overflow success and failure, deadline
+  exhaustion, delayed publication/reuse, and Loom wakeup/reclamation tests pass.
+  Required-device parallel contracts pass eight repeated runs: 64 test
+  executions, including 16,384 exact-value regression readbacks. WGPU Nextest
+  passes 84/85 tests; its sole failure is the independent FP64 aggregate below.
+  Default/minimal-library Clippy, four doctests, and warning-denied rustdoc pass;
+  external lockfile identities and the existing contract harness remain unchanged.
+- Independent limitation: required-device aggregation on this Metal host fails
+  two unchanged FP64 acquisition clauses because `SHADER_F64` is unavailable.
+  Windows/Vulkan reproduction remains a hosted-validation boundary.
+
+
 This register is the SSOT for hephaestus's known limitations. Items are grouped
 by actionability so an open defect is never confused with an intentional
 architectural decision or a tracked future-work item:

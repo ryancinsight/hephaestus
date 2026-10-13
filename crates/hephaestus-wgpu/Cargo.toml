@@ -45,6 +45,8 @@ leto-ops = { workspace = true }
 loom = { workspace = true }
 aequitas = { workspace = true }
 syn = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [[bench]]
 name = "elementwise_into"

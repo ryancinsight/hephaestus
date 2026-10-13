@@ -2,6 +2,20 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## 0.20.3 — 2026-10-13
+
+### Fixed
+
+- [patch] WGPU readbacks wait for mapping callback publication after submission
+  completion, including when another polling thread owns the callback (#407).
+  Retained and overflow slots use guarded notification under one elapsed-time
+  budget; pending callback expiry returns `DeviceWaitTimeout`, mapping failures
+  retain `TransferFailed`, and both owners preserve completion-slot quarantine.
+  Staging unmap, error, and unwind cleanup remain in the shared transfer path.
+- [patch] Add exact-value concurrent full, owned, subrange, and odd packed
+  readbacks on the process-shared device, plus callback deadline/reuse contracts
+  and a Loom notification model. The contract harness retains parallel execution.
+
 ## Unreleased
 
 - [minor] Add ROCm and Metal runtime-rank expression fusion over the shared

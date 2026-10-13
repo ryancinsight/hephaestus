@@ -1,5 +1,24 @@
 # Backlog — hephaestus
 
+## HEPH-WGPU-READBACK-COMPLETION-407 [patch] — resolved
+
+- Priority: correctness. Target version: 0.20.3.
+- Finding: completed GPU submissions can precede callback publication when
+  another WGPU polling thread owns the extracted mapping callbacks.
+- Resolution: wait on per-slot guarded notification with the submission's
+  remaining timeout budget. Preserve reader/callback ownership, pre-submission
+  overflow allocation, typed transfer/timeout errors, and staging unmap.
+- Evidence: the unchanged runtime fails the concurrent Metal regression with
+  the #407 callback-pending error. The corrected required-device parallel
+  contracts pass 8/8 repeated runs (64 test executions and 16,384 regression
+  readbacks). WGPU Nextest passes 84/85 tests; the sole failure is the unchanged
+  aggregate's two unsupported FP64 acquisition clauses. Seven slot/Loom tests,
+  default/minimal-library Clippy, four doctests, and warning-denied rustdoc pass.
+- Residual: this host lacks native shader FP64. The unchanged required-device
+  aggregate rejects its two optional FP64 acquisition clauses; this correction
+  does not alter precision tests or serialize the shared-device harness.
+
+
 <a id="heph-shape-ops-provider-1"></a>
 
 ## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
