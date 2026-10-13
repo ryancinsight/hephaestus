@@ -13,10 +13,10 @@ mod command;
 mod commands;
 mod device;
 mod grouped;
-mod helpers;
 mod kernel;
 mod prepared;
 mod storage;
+mod storage_bindings;
 
 #[cfg(test)]
 #[path = "../tests_stream.rs"]

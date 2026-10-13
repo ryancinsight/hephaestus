@@ -5,7 +5,7 @@ use leto::Layout;
 
 use hephaestus_core::{BunchKaufmanHandle, UduHandle};
 
-use super::common::DECOMP_BOUND;
+use super::tolerance::DECOMP_BOUND;
 
 /// Symmetric-indefinite factorizations: `U·D·Uᵀ` on the SPD fixture
 /// `[[4,2],[2,3]]` (det 8, exact solve) with `f64` reconstruction, and

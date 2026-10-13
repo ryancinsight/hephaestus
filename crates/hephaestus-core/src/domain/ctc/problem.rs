@@ -1,6 +1,7 @@
 //! CTC problem description and validation.
 
 use crate::{HephaestusError, Result};
+use eunomia::FloatElement;
 
 /// Per-sample derived geometry: valid frames, expanded states, and the
 /// message and label offsets into the packed buffers.
@@ -138,7 +139,7 @@ impl CtcProblem {
                 })?;
                 meta.push(word);
             }
-            let divisor = target_length.max(1) as f32;
+            let divisor = f32::from_count(target_length.max(1));
             if !divisor.is_finite() {
                 return Err(invalid(format!(
                     "ctc sample {sample} target divisor is not finite"
@@ -238,7 +239,7 @@ impl CtcProblem {
     /// Batch divisor as the device arithmetic sees it.
     #[must_use]
     pub fn batch_divisor(&self) -> f32 {
-        self.batch as f32
+        f32::from_count(self.batch)
     }
 
     /// Expected element count of the contiguous log-probability and gradient

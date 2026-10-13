@@ -79,6 +79,7 @@ mod fixtures;
 #[path = "contract/linalg_products.rs"]
 mod linalg_products;
 #[path = "contract/lu.rs"]
+#[cfg(feature = "decomposition")]
 mod lu;
 #[path = "contract/reduction.rs"]
 mod reduction;

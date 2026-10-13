@@ -1,8 +1,8 @@
 //! Device-side stream opening.
 
 use super::command::WgpuBoundDispatch;
-use super::helpers::push_storage_bind_group_entries;
 use super::prepared::WgpuPrepared;
+use super::storage_bindings::push_storage_bind_group_entries;
 use crate::application::bindings::BindGroupEntries;
 use crate::application::prepared::checked_bind_group;
 use crate::infrastructure::device::WgpuDevice;

@@ -97,3 +97,6 @@ pub(crate) fn to_i64(value: isize, what: &str) -> Result<i64> {
         message: format!("{what} {value} exceeds i64 range"),
     })
 }
+
+#[cfg(test)]
+mod word_tests;

@@ -346,7 +346,9 @@ mod tests {
     fn missing_export_preserves_symbol_and_source() {
         #[cfg(target_os = "windows")]
         let candidate = Path::new("kernel32.dll");
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "macos")]
+        let candidate = Path::new("/usr/lib/libSystem.B.dylib");
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
         let candidate = Path::new("libc.so.6");
         let library = open(candidate).expect("system library is loadable");
         let error = NvrtcDriver::from_library(library).expect_err("system library is not NVRTC");

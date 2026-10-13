@@ -2,7 +2,7 @@ use hephaestus_core::{BunchKaufmanHandle, Result, UduHandle};
 
 use crate::{HostBuffer, HostDevice};
 
-use super::helpers::solve_with;
+use super::solve::solve_with;
 
 /// Bunch–Kaufman factorization on the host.
 pub struct HostBunchKaufman {

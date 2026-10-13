@@ -41,7 +41,69 @@ pub(super) fn absent(name: &str, error: &libloading::Error) -> bool {
             Err(_) => false, // Access/metadata failures are driver faults.
         })
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        // dyld distinguishes a missing requested image (a list of failed
+        // search paths) from a present image with a missing dependency
+        // ("Library not loaded" / "Referenced from"). Only accept the former,
+        // and require every attempted path to retain the requested file suffix and
+        // report absence. Unknown, invalid-image, and dependency errors remain
+        // driver faults. No path existence probe can substitute for dyld:
+        // system images can exist solely in its shared cache.
+        let diagnostic = error.to_string();
+        let prefix = format!("dlopen({name}, ");
+        let Some((flags, reason)) = diagnostic
+            .strip_prefix(&prefix)
+            .and_then(|remaining| remaining.split_once("): "))
+        else {
+            return false;
+        };
+        if !flags.strip_prefix("0x").is_some_and(|digits| {
+            !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) {
+            return false;
+        }
+        let Some(mut attempts) = reason.strip_prefix("tried: ") else {
+            return false;
+        };
+        let Some(requested_file) = std::path::Path::new(name)
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+        else {
+            return false;
+        };
+        loop {
+            let Some((path, outcome)) = attempts
+                .strip_prefix('\'')
+                .and_then(|entry| entry.split_once("' ("))
+            else {
+                return false;
+            };
+            // dyld prepends its Cryptex namespace even to a bare soname;
+            // that attempted path ends in the requested file without a slash
+            // before it. Header identity still excludes dependent images.
+            if !path.ends_with(requested_file) {
+                return false;
+            }
+            let Some((reason, remaining)) = outcome.split_once(')') else {
+                return false;
+            };
+            if !matches!(
+                reason,
+                "no such file" | "not in dyld cache" | "no such file, not in dyld cache"
+            ) {
+                return false;
+            }
+            if remaining.is_empty() {
+                return true;
+            }
+            let Some(next) = remaining.strip_prefix(", ") else {
+                return false;
+            };
+            attempts = next;
+        }
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
         // dlerror exposes text rather than errno. Recognize only the exact
         // requested-soname ENOENT diagnostic; a dependency name, unfamiliar

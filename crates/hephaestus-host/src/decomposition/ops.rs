@@ -1,4 +1,4 @@
-use hephaestus_core::{DecompositionOps, Result, StridedView};
+use hephaestus_core::{ComputeDevice, DecompositionOps, Result, StridedView};
 
 use crate::operands::{upload_array, with_matrix_view};
 use crate::{HostBuffer, HostDevice};
@@ -6,8 +6,6 @@ use crate::{HostBuffer, HostDevice};
 use super::basic::HostCholesky;
 use super::basic::HostLu;
 use super::basic::HostQr;
-use super::helpers::HostDecompositionOps;
-use super::helpers::buffer_of;
 use super::orthogonal::HostBidiagonal;
 use super::orthogonal::HostHessenberg;
 use super::orthogonal::HostSchur;
@@ -17,6 +15,7 @@ use super::spectral::HostSvd;
 use super::spectral::HostSymmetricEigen;
 use super::symmetric::HostBunchKaufman;
 use super::symmetric::HostUdu;
+use super::types::HostDecompositionOps;
 
 impl DecompositionOps<HostDevice> for HostDecompositionOps {
     type Lu<'op> = HostLu;
@@ -79,7 +78,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
     ) -> Result<Self::FullPivLu<'op>> {
         let order = input.layout.shape()[0];
         let inner = with_matrix_view(&input, |view| leto_ops::full_piv_lu(&view))?;
-        let factors = buffer_of(device, inner.lu_factors())?;
+        let factors = device.upload(inner.lu_factors())?;
         Ok(HostFullPivLu {
             inner,
             order,
@@ -95,7 +94,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         let inner = with_matrix_view(&input, |view| leto_ops::symmetric_eigen_jacobi(&view))?;
         Ok(HostSymmetricEigen {
             order: inner.eigenvalues.len(),
-            eigenvalues: buffer_of(device, &inner.eigenvalues)?,
+            eigenvalues: device.upload(&inner.eigenvalues)?,
             eigenvectors: upload_array(device, &inner.eigenvectors)?,
         })
     }
@@ -107,7 +106,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
     ) -> Result<HostBuffer<f32>> {
         let values =
             with_matrix_view(&input, |view| leto_ops::symmetric_eigenvalues_jacobi(&view))?;
-        buffer_of(device, &values)
+        device.upload(&values)
     }
 
     fn svd<'op>(
@@ -121,7 +120,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
             shape,
             u: upload_array(device, &inner.left_singular_vectors)?,
             v: upload_array(device, &inner.right_singular_vectors)?,
-            singular_values: buffer_of(device, &inner.singular_values)?,
+            singular_values: device.upload(&inner.singular_values)?,
         })
     }
 
@@ -131,7 +130,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'_, HostBuffer<f32>, 2>,
     ) -> Result<HostBuffer<f32>> {
         let values = with_matrix_view(&input, |view| leto_ops::singular_values(&view))?;
-        buffer_of(device, &values)
+        device.upload(&values)
     }
 
     fn eigenvalues(
@@ -140,7 +139,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         input: StridedView<'_, HostBuffer<f32>, 2>,
     ) -> Result<HostBuffer<eunomia::Complex<f32>>> {
         let values = with_matrix_view(&input, |view| leto_ops::eigenvalues(&view))?;
-        buffer_of(device, &values)
+        device.upload(&values)
     }
 
     fn schur<'op>(
@@ -211,7 +210,7 @@ impl DecompositionOps<HostDevice> for HostDecompositionOps {
         Ok(HostUdu {
             order,
             u: upload_array(device, &inner.u())?,
-            d: buffer_of(device, inner.diagonal())?,
+            d: device.upload(inner.diagonal())?,
             inner,
         })
     }

@@ -71,8 +71,8 @@ where
 
     let kernel = cached_kernel(device, key, "matmul_kernel", || matmul_shader_source::<T>())?;
 
-    let workgroups_x = cols.div_ceil(16);
-    let workgroups_y = rows.div_ceil(16);
+    let workgroups_x = b_meta.shape[1].div_ceil(16);
+    let workgroups_y = a_meta.shape[0].div_ceil(16);
 
     let mut a_ptr = lhs.buffer.raw();
     let mut b_ptr = rhs.buffer.raw();
@@ -84,21 +84,18 @@ where
     // Argument list mirrors `matmul_kernel(const T*, const T*, T*, MatrixLayout,
     // MatrixLayout, MatrixLayout)`.
     let mut args: [*mut std::ffi::c_void; 6] = [
-        &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut a_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-            as *mut std::ffi::c_void,
-        &mut b_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-            as *mut std::ffi::c_void,
-        &mut c_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-            as *mut std::ffi::c_void,
+        std::ptr::from_mut(&mut a_ptr).cast(),
+        std::ptr::from_mut(&mut b_ptr).cast(),
+        std::ptr::from_mut(&mut c_ptr).cast(),
+        std::ptr::from_mut(&mut a_meta_val).cast(),
+        std::ptr::from_mut(&mut b_meta_val).cast(),
+        std::ptr::from_mut(&mut c_meta_val).cast(),
     ];
 
     launch_kernel(
         device,
         &kernel,
-        LaunchConfig::planar(workgroups_x as u32, workgroups_y as u32, 16, 16),
+        LaunchConfig::planar(workgroups_x, workgroups_y, 16, 16),
         &mut args,
     )
 }

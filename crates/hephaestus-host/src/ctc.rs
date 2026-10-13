@@ -15,6 +15,7 @@
 //! tie-break and the `ln(1 + exp(d))` correction through the same
 //! `f32` entry points, so host results are bit-identical to the oracle.
 
+use eunomia::FloatElement;
 use hephaestus_core::{
     CtcBackwardParams, CtcOps, CtcProblem, CtcStateBuffers, CtcStepOps, DeviceBuffer,
     HephaestusError, Result,
@@ -133,7 +134,7 @@ impl HostCtcOps {
         let problem = &state.problem;
         validate_step(problem, log_probs.len(), state)?;
         require_output_disjoint(&state.alpha, &[log_probs])?;
-        let t = t as usize;
+        let t = usize::try_from(t).expect("CTC frame word fits host usize");
         let inputs = log_probs.read();
         let labels = state.labels.read();
         let mut alpha = state.alpha.write();
@@ -145,7 +146,8 @@ impl HostCtcOps {
             }
             let labels_offset = sample.labels_offset;
             for s in 0..sample.states {
-                let label = labels[labels_offset + s] as usize;
+                let label = usize::try_from(labels[labels_offset + s])
+                    .expect("CTC label word fits host usize");
                 let out = sample.offset + t * sample.states + s;
                 if t == 0 {
                     let weight = if s < 2 {
@@ -161,7 +163,12 @@ impl HostCtcOps {
                 if s > 0 {
                     value = w_merge(value, read_pair(&alpha, prev + s - 1));
                 }
-                if s > 1 && s % 2 == 1 && label != labels[labels_offset + s - 2] as usize {
+                if s > 1
+                    && s % 2 == 1
+                    && label
+                        != usize::try_from(labels[labels_offset + s - 2])
+                            .expect("CTC label word fits host usize")
+                {
                     value = w_merge(value, read_pair(&alpha, prev + s - 2));
                 }
                 let emission = inputs[(t * batch + b) * classes + label];
@@ -179,7 +186,7 @@ impl HostCtcOps {
         let problem = &state.problem;
         validate_step(problem, log_probs.len(), state)?;
         require_output_disjoint(&state.beta, &[log_probs])?;
-        let t = t as usize;
+        let t = usize::try_from(t).expect("CTC frame word fits host usize");
         let inputs = log_probs.read();
         let labels = state.labels.read();
         let mut beta = state.beta.write();
@@ -192,7 +199,8 @@ impl HostCtcOps {
             let labels_offset = sample.labels_offset;
             let states = sample.states;
             for s in 0..states {
-                let label = labels[labels_offset + s] as usize;
+                let label = usize::try_from(labels[labels_offset + s])
+                    .expect("CTC label word fits host usize");
                 let out = sample.offset + t * states + s;
                 if t == sample.frames - 1 {
                     let weight = if s == states - 1 || s + 2 == states {
@@ -205,7 +213,9 @@ impl HostCtcOps {
                 }
                 let next = sample.offset + (t + 1) * states;
                 let emission = |state: usize| {
-                    inputs[((t + 1) * batch + b) * classes + labels[labels_offset + state] as usize]
+                    inputs[((t + 1) * batch + b) * classes
+                        + usize::try_from(labels[labels_offset + state])
+                            .expect("CTC label word fits host usize")]
                 };
                 let mut value = w_add((emission(s), 0.0), read_pair(&beta, next + s));
                 if s + 1 < states {
@@ -214,7 +224,12 @@ impl HostCtcOps {
                         w_add((emission(s + 1), 0.0), read_pair(&beta, next + s + 1)),
                     );
                 }
-                if s + 2 < states && s % 2 == 1 && label != labels[labels_offset + s + 2] as usize {
+                if s + 2 < states
+                    && s % 2 == 1
+                    && label
+                        != usize::try_from(labels[labels_offset + s + 2])
+                            .expect("CTC label word fits host usize")
+                {
                     value = w_merge(
                         value,
                         w_add((emission(s + 2), 0.0), read_pair(&beta, next + s + 2)),
@@ -277,7 +292,10 @@ impl CtcStepOps<HostDevice> for HostCtcOps {
         let alpha = state.alpha.read();
         let mut likelihood = state.likelihood.write();
         for (b, sample) in problem.samples().iter().enumerate() {
-            debug_assert_eq!(_meta[b * 4] as usize, sample.frames);
+            debug_assert_eq!(
+                usize::try_from(_meta[b * 4]).expect("CTC frame count fits host usize"),
+                sample.frames
+            );
             if sample.frames == 0 {
                 let weight = if sample.states == 1 {
                     (0.0, 0.0)
@@ -334,17 +352,23 @@ impl CtcStepOps<HostDevice> for HostCtcOps {
         let mut grad = grad.write();
         let batch = problem.batch();
         let classes = problem.classes();
-        let batch_divisor = params.dims[1] as f32;
-        debug_assert_eq!(batch_divisor, batch as f32);
+        let batch_divisor = f32::from_integer(i64::from(params.dims[1]));
+        debug_assert_eq!(batch_divisor, f32::from_count(batch));
         for (b, sample) in problem.samples().iter().enumerate() {
-            debug_assert_eq!(_meta[b * 4] as usize, sample.frames);
+            debug_assert_eq!(
+                usize::try_from(_meta[b * 4]).expect("CTC frame count fits host usize"),
+                sample.frames
+            );
             let ll = read_pair(&likelihood, b);
             for t in 0..sample.frames {
                 let base = sample.offset + t * sample.states;
                 for class in 0..classes {
                     let mut posterior = 0.0_f32;
                     for s in 0..sample.states {
-                        if labels[sample.labels_offset + s] as usize != class {
+                        if usize::try_from(labels[sample.labels_offset + s])
+                            .expect("CTC label word fits host usize")
+                            != class
+                        {
                             continue;
                         }
                         let a = read_pair(&alpha, base + s);

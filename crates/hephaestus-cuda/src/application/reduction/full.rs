@@ -5,6 +5,7 @@ use hephaestus_core::{
 };
 
 use crate::CudaDevice;
+use crate::application::linalg::to_u32;
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
@@ -60,13 +61,18 @@ where
         return Ok(out);
     }
 
-    let mut current_len = input.len();
+    // The kernel length argument is an unsigned 32-bit word. Validate the
+    // initial count before allocation; each ceiling-division pass only shrinks it.
+    let mut current_len = to_u32(input.len(), "reduction length")?;
     let mut temp_buffers: Vec<CudaBuffer<T>> =
         Vec::with_capacity(reduction_pass_count(input.len(), width));
 
     while current_len > 1 {
-        let grid_size_val = grid_size(current_len, width)?;
-        let out_len = current_len.div_ceil(width.get() as usize);
+        let host_len = usize::try_from(current_len)
+            .expect("u32 counts fit supported 32-bit and 64-bit host indices");
+        let grid_size_val = grid_size(host_len, width)?;
+        let out_len = usize::try_from(current_len.div_ceil(width.get()))
+            .expect("a reduced u32 count fits the host index");
         let out_buffer = device.alloc_uninitialized::<T>(out_len)?;
 
         let key = PipelineKey::Reduction {
@@ -90,13 +96,13 @@ where
 
         let mut src_val = source_ptr;
         let mut out_val = out_buffer.raw();
-        let mut n_val = current_len as u32;
+        let mut n_val = current_len;
 
         // Argument list mirrors `reduction_kernel(const T*, T*, unsigned int)`.
         let mut args: [*mut std::ffi::c_void; 3] = [
-            &mut src_val as *mut u64 as *mut std::ffi::c_void,
-            &mut out_val as *mut u64 as *mut std::ffi::c_void,
-            &mut n_val as *mut u32 as *mut std::ffi::c_void,
+            std::ptr::from_mut(&mut src_val).cast(),
+            std::ptr::from_mut(&mut out_val).cast(),
+            std::ptr::from_mut(&mut n_val).cast(),
         ];
 
         launch_kernel(
@@ -107,7 +113,7 @@ where
         )?;
 
         temp_buffers.push(out_buffer);
-        current_len = out_len;
+        current_len = current_len.div_ceil(width.get());
     }
 
     Ok(temp_buffers

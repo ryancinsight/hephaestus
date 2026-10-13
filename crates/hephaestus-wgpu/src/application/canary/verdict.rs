@@ -17,6 +17,18 @@ pub enum MathBuiltin {
     Tanh,
 }
 
+impl MathBuiltin {
+    /// Stable cache tags equal the original declaration-order discriminants.
+    pub(crate) const fn cache_tag(self) -> u32 {
+        match self {
+            Self::Exp => 0,
+            Self::Log => 1,
+            Self::Pow => 2,
+            Self::Tanh => 3,
+        }
+    }
+}
+
 /// Element width under test.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CanaryWidth {

@@ -66,7 +66,9 @@ where
             parameters,
             D::buffers_alias(operands.input.buffer, operands.output.buffer),
         )?;
-        plan.validate_address_limit(i32::MAX as usize)?;
+        plan.validate_address_limit(
+            usize::try_from(i32::MAX).expect("signed shader address bound fits host usize"),
+        )?;
         let metadata = metadata::WindowMeta::new(
             metadata::WindowLayoutMeta::new(operands.input.layout)?,
             metadata::WindowLayoutMeta::new(operands.output.layout)?,
@@ -119,7 +121,9 @@ where
             parameters,
             D::buffers_alias(operands.input.buffer, operands.output.buffer),
         )?;
-        plan.validate_address_limit(i32::MAX as usize)?;
+        plan.validate_address_limit(
+            usize::try_from(i32::MAX).expect("signed shader address bound fits host usize"),
+        )?;
         let metadata = metadata::WindowMeta::new(
             metadata::WindowLayoutMeta::new(operands.input.layout)?,
             metadata::WindowLayoutMeta::empty(),

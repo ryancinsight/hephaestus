@@ -65,6 +65,16 @@ Python exceptions, and releases the GIL around compute. Every kernel lives in
 the Rust crates it wraps, so there is one implementation and one place to
 verify it.
 
+## Native Rust tests and wheel builds
+
+Rust binding tests embed the detected Python interpreter and link its library.
+The workspace does not enable PyO3's deprecated `extension-module` feature,
+which disables that link for test executables. Maturin >= 1.9.4 sets
+`PYO3_BUILD_EXTENSION_MODULE` for wheel builds; the build helper supplies the
+macOS cdylib arguments, so Python symbols resolve from the loading interpreter.
+Manual extension builds set the same environment variable. See
+[PyO3's link contract](https://pyo3.rs/v0.29.0/building-and-distribution.html#the-pyo3_build_extension_module-environment-variable).
+
 ## Links
 
 - [Source and issues](https://github.com/ryancinsight/hephaestus)

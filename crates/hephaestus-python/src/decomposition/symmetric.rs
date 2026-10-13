@@ -47,7 +47,10 @@ pub(crate) fn cholesky(py: Python<'_>, a: &PyArray) -> PyResult<PyArray> {
 }
 
 #[pyfunction]
-pub(crate) fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, PyArray, Vec<u64>)> {
+pub(crate) fn bunch_kaufman(
+    py: Python<'_>,
+    a: &PyArray,
+) -> PyResult<(PyArray, PyArray, Vec<usize>)> {
     if a.shape.len() != 2 || a.shape[0] != a.shape[1] {
         return Err(PyValueError::new_err(
             "bunch_kaufman requires a square 2D matrix",
@@ -66,7 +69,7 @@ pub(crate) fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, P
                     layout: &layout,
                 };
                 let decomp = hephaestus_wgpu::bunch_kaufman(device, op)?;
-                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                let perm = decomp.permutation().to_vec();
                 Ok((
                     BackendBuffer::Wgpu(decomp.l_buffer().clone()),
                     BackendBuffer::Wgpu(decomp.d_buffer().clone()),
@@ -80,7 +83,7 @@ pub(crate) fn bunch_kaufman(py: Python<'_>, a: &PyArray) -> PyResult<(PyArray, P
                     layout: &layout,
                 };
                 let decomp = hephaestus_cuda::bunch_kaufman(device, op)?;
-                let perm = decomp.permutation().iter().map(|&x| x as u64).collect();
+                let perm = decomp.permutation().to_vec();
                 Ok((
                     clone_cuda_buffer(device, decomp.l_buffer())?,
                     clone_cuda_buffer(device, decomp.d_buffer())?,

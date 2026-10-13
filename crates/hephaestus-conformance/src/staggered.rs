@@ -14,6 +14,7 @@
 //!   divergence gathers rather than scatters re-derives the transpose, and this
 //!   is the clause that says whether it re-derived it correctly.
 
+use eunomia::FloatElement;
 use hephaestus_core::{ComputeDevice, Staggered3DOps, Staggered3DParams, StaggeredAxis};
 use leto_ops::staggered_first_derivative_coefficients;
 
@@ -21,11 +22,17 @@ const AXES: [StaggeredAxis; 3] = [StaggeredAxis::X, StaggeredAxis::Y, StaggeredA
 const SHAPE: [u32; 3] = [8, 6, 10];
 
 fn cells() -> usize {
-    SHAPE.iter().map(|extent| *extent as usize).product()
+    SHAPE
+        .iter()
+        .map(|extent| usize::try_from(*extent).expect("fixture extent fits host"))
+        .product()
 }
 
 fn coordinate(index: usize, axis: StaggeredAxis) -> usize {
-    let (ny, nz) = (SHAPE[1] as usize, SHAPE[2] as usize);
+    let (ny, nz) = (
+        usize::try_from(SHAPE[1]).expect("fixture y extent fits host"),
+        usize::try_from(SHAPE[2]).expect("fixture z extent fits host"),
+    );
     match axis {
         StaggeredAxis::X => index / (ny * nz),
         StaggeredAxis::Y => (index / nz) % ny,
@@ -68,13 +75,14 @@ where
         for order in [2_usize, 4] {
             let spacing = 0.5_f32;
             let params = params(axis, order, spacing);
-            let halo = params.half_order() as usize;
-            let extent = SHAPE[axis.index()] as usize;
+            let halo = usize::try_from(params.half_order()).expect("stencil half-order fits host");
+            let extent =
+                usize::try_from(SHAPE[axis.index()]).expect("fixture axis extent fits host");
 
             // Analytical: a ramp of slope `slope` along the axis.
             let slope = 3.0_f32;
             let field: Vec<f32> = (0..count)
-                .map(|index| slope * spacing * coordinate(index, axis) as f32)
+                .map(|index| slope * spacing * f32::from_count(coordinate(index, axis)))
                 .collect();
             let input = device.upload(&field).expect("ramp upload");
             let output = device.alloc_zeroed::<f32>(count).expect("output alloc");
@@ -122,10 +130,12 @@ where
         let order = 4_usize;
         let params = params(axis, order, 1.0);
         let p: Vec<f32> = (0..count)
-            .map(|index| ((index % 7) as f32).mul_add(0.3, ((index % 5) as f32) * -0.11))
+            .map(|index| {
+                f32::from_count(index % 7).mul_add(0.3, f32::from_count(index % 5) * -0.11)
+            })
             .collect();
         let u: Vec<f32> = (0..count)
-            .map(|index| ((index % 11) as f32).mul_add(0.17, 0.4))
+            .map(|index| f32::from_count(index % 11).mul_add(0.17, 0.4))
             .collect();
 
         let mut gradient = vec![0.0_f32; count];
@@ -150,7 +160,8 @@ where
         let right: f32 = -p.iter().zip(&divergence).map(|(a, b)| a * b).sum::<f32>();
         // Both sides sum the same products in a different order, so the bound is
         // the accumulated rounding of a length-N f32 sum.
-        let bound = 64.0 * f32::EPSILON * left.abs().max(right.abs()).max(1.0) * count as f32;
+        let bound =
+            64.0 * f32::EPSILON * left.abs().max(right.abs()).max(1.0) * f32::from_count(count);
         assert!(
             (left - right).abs() <= bound,
             "{name}: {axis:?}: the pair is not a negative adjoint, <Gp,u>={left:e} but \

@@ -64,7 +64,7 @@ impl WindowLayoutMeta {
                 .saturating_sub(1)
                 .checked_mul(layout.strides()[axis].unsigned_abs())
                 .ok_or_else(|| invalid(format!("window address span overflows on axis {axis}")))?;
-            if span > i32::MAX as usize {
+            if i32::try_from(span).is_err() {
                 return Err(invalid(format!(
                     "window address span {span} on axis {axis} exceeds signed C-family range"
                 )));
@@ -78,7 +78,7 @@ impl WindowLayoutMeta {
                     "window element product overflows C-family u32 at axis {axis}"
                 ))
             })?;
-            if product > i32::MAX as u32 {
+            if i32::try_from(product).is_err() {
                 return Err(invalid(format!(
                     "window element product {product} exceeds signed C-family address range"
                 )));

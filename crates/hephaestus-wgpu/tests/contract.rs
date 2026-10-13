@@ -57,10 +57,12 @@ mod axis_tiling;
 #[path = "contract/buffer.rs"]
 mod buffer;
 #[path = "contract/cholesky.rs"]
+#[cfg(feature = "decomposition")]
 mod cholesky;
 #[path = "contract/device.rs"]
 mod device;
 #[path = "contract/eigenvalues.rs"]
+#[cfg(feature = "decomposition")]
 mod eigenvalues;
 #[path = "contract/elementwise.rs"]
 mod elementwise;
@@ -71,8 +73,10 @@ mod linalg_norms;
 #[path = "contract/linalg_products.rs"]
 mod linalg_products;
 #[path = "contract/lu.rs"]
+#[cfg(feature = "decomposition")]
 mod lu;
 #[path = "contract/qr.rs"]
+#[cfg(feature = "decomposition")]
 mod qr;
 #[path = "contract/reduction.rs"]
 mod reduction;
@@ -81,6 +85,7 @@ mod reduction_prepared;
 #[path = "contract/scan.rs"]
 mod scan;
 #[path = "contract/sparse.rs"]
+#[cfg(feature = "sparse")]
 mod sparse;
 #[path = "contract/svd.rs"]
 mod svd;
@@ -89,17 +94,22 @@ pub(crate) use fixtures::*;
 pub(crate) use axis::*;
 pub(crate) use axis_tiling::*;
 pub(crate) use buffer::*;
+#[cfg(feature = "decomposition")]
 pub(crate) use cholesky::*;
 pub(crate) use device::*;
+#[cfg(feature = "decomposition")]
 pub(crate) use eigenvalues::*;
 pub(crate) use elementwise::*;
 pub(crate) use linalg_norms::*;
 pub(crate) use linalg_products::*;
+#[cfg(feature = "decomposition")]
 pub(crate) use lu::*;
+#[cfg(feature = "decomposition")]
 pub(crate) use qr::*;
 pub(crate) use reduction::*;
 pub(crate) use reduction_prepared::*;
 pub(crate) use scan::*;
+#[cfg(feature = "sparse")]
 pub(crate) use sparse::*;
 pub(crate) use svd::*;
 

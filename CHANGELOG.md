@@ -2,6 +2,72 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.20.4] - 2026-10-13
+
+### Added
+
+- [patch] Direct canonical-provider Metal acquisition contracts for native
+  adapter identity, optional features, both device preferences, enumeration
+  bounds, impossible-limit rejection, and exact integer dispatch across a
+  workgroup boundary. Test diagnostics use structured tracing spans.
+
+### Fixed
+
+- [patch] Correct canary precision classification with operation/precision
+  calibration envelopes derived from portable builtin accuracy. Preserve
+  native probe values, raw errors, live assertions, and kernel value oracles;
+  prove bound arithmetic with exact rationals. Reject nonzero exact-zero
+  results and invalid errors, and enforce required Metal canary acquisition.
+
+
+- [patch] Replace moved upstream casts with lossless pointers, checked kernel
+  count words, validated launch dimensions, native canary inputs with an
+  associated CPU reference precision, and native Python permutation indices.
+  Reject oversized CUDA counts before dispatch. Preserve fixture bits and
+  numerical oracles; add bit-pattern, reference, and count-boundary tests.
+- [patch] Include Python in workspace doctests under the restored embedding
+  link contract; Maturin retains environment-selected extension-only linking.
+
+- [patch] Integrate current upstream QR routing and source partitions; separate
+  typed comparison/arithmetic dispatch and host decomposition type/solve
+  responsibilities, and replace the internal upload helper with direct device
+  uploads. Numerical operations and the existing publication baseline remain
+  unchanged.
+- [patch] The macOS Metal workflow now triggers on WGPU, shared conformance,
+  facade, and verification-policy changes and runs the complete minimal and
+  default WGPU suites on required Metal hardware. Both facade configurations,
+  strict Clippy, doctests, and warning-denied rustdoc join that lane.
+  Its Hermes checkout matches the current 0.8 dependency floor instead of
+  supplying an incompatible 0.4 patch.
+- [patch] Document `WgpuDevice::try_metal` as the full Metal operation surface
+  per ADR 0047, and distinguish verified WGPU-on-Metal families from pending
+  CUDA/ROCm implementations in the backlog. Public APIs remain unchanged.
+- [patch] Gate decomposition/sparse contract modules at their ownership
+  boundaries and update the independent consolidated-case inventory for all
+  four feature combinations. No registered operation clause is removed.
+- [patch] Separate required adapter availability from optional native FP64
+  support in fusion, stateful-update, and cross-entropy backward tests.
+  Unsupported precision now executes typed rejection and unchanged-operand
+  checks; supported devices retain the complete shared value oracles.
+- [patch] Partition decomposition aggregation, WGPU device state and lifecycle,
+  and CTC dispatch out of module manifests. Replace decomposition `common`
+  with identity/tolerance leaves and stream `helpers` with storage bindings;
+  update every caller and remove both old modules. Public paths, computation,
+  ownership, pool capacities, and deadlines retain their contracts.
+- [patch] Restore Python Rust-test linking by removing the deprecated global
+  PyO3 extension feature. Maturin >= 1.9.4 retains extension-only wheel linking
+  through its build environment; PyO3's build helper owns macOS cdylib flags.
+  Binding tests and a real extension import/value check run on native Metal.
+- [patch] Classify a missing requested CUDA driver image from native macOS
+  dyld diagnostics as adapter absence while preserving dependency, invalid
+  image, and required-symbol faults. Driver/NVRTC symbol contracts use the
+  real macOS system library. Required hardware enforcement remains active.
+- [patch] Replace inherited unchecked conversions across CTC/FD/window
+  metadata, host/conformance arithmetic counts, prepared-buffer identity,
+  Metal Laplacian fixtures, and pool timing with checked or lossless forms.
+  Native precision, fixture values, tolerances, workloads, and operation
+  order remain unchanged; integer deadlines no longer truncate.
+
 ## 0.20.3 — 2026-10-13
 
 ### Fixed

@@ -22,6 +22,7 @@
 //!   device. The provider proves `⟨Af, u⟩ = ⟨f, Aᵀu⟩` itself; this clause
 //!   proves the device computes the same transpose.
 
+use eunomia::FloatElement;
 use hephaestus_core::{
     ComputeDevice, FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme, StaggeredAxis,
 };
@@ -219,18 +220,20 @@ where
 
     for scheme in SCHEMES {
         for axis in AXES {
-            let mut shapes = vec![SHAPE.map(|extent| extent as usize)];
+            let mut shapes = vec![
+                SHAPE.map(|extent| usize::try_from(extent).expect("fixture extent fits host")),
+            ];
             for extent in extra_extents(scheme) {
                 let mut shape = [5_usize, 4, 6];
-                shape[axis.index()] = *extent as usize;
+                shape[axis.index()] = usize::try_from(*extent).expect("fixture extent fits host");
                 shapes.push(shape);
             }
             for shape in shapes {
                 let [nx, ny, nz] = shape;
                 let params = FixedFd3DParams::new(
-                    nx as u32,
-                    ny as u32,
-                    nz as u32,
+                    u32::try_from(nx).expect("fixture x extent fits device"),
+                    u32::try_from(ny).expect("fixture y extent fits device"),
+                    u32::try_from(nz).expect("fixture z extent fits device"),
                     axis,
                     scheme,
                     [SPACING; 3],
@@ -242,7 +245,8 @@ where
                 // Provider: the device sweep matches the CPU sweep lane by lane.
                 let field: Vec<f32> = (0..count)
                     .map(|index| {
-                        ((index * 7 % 13) as f32).mul_add(0.31, -((index * 3 % 7) as f32) * 0.17)
+                        f32::from_count(index * 7 % 13)
+                            .mul_add(0.31, -f32::from_count(index * 3 % 7) * 0.17)
                     })
                     .collect();
                 let expected = oracle(scheme, axis, shape, &field);
@@ -265,7 +269,9 @@ where
                 if shape[axis.index()] > 1 {
                     let slope = 3.0_f32;
                     let ramp: Vec<f32> = (0..count)
-                        .map(|index| slope * SPACING * coordinate(index, shape, axis) as f32)
+                        .map(|index| {
+                            slope * SPACING * f32::from_count(coordinate(index, shape, axis))
+                        })
                         .collect();
                     let got = dispatch(device, ops, &kernel, &params, &ramp);
                     for (index, value) in got.iter().enumerate() {
@@ -297,7 +303,8 @@ where
                 let upstream_count: usize = upstream_shape.iter().product();
                 let upstream: Vec<f32> = (0..upstream_count)
                     .map(|index| {
-                        ((index * 5 % 11) as f32).mul_add(0.41, -((index * 2 % 5) as f32) * 0.23)
+                        f32::from_count(index * 5 % 11)
+                            .mul_add(0.41, -f32::from_count(index * 2 % 5) * 0.23)
                     })
                     .collect();
                 let expected = adjoint_oracle(scheme, axis, shape, &upstream);

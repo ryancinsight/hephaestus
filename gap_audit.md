@@ -31,6 +31,102 @@
   two unchanged FP64 acquisition clauses because `SHADER_F64` is unavailable.
   Windows/Vulkan reproduction remains a hosted-validation boundary.
 
+## [HEPH-MACOS-METAL-CONFORMANCE-1] Canonical macOS Metal coverage [patch] — resolved
+
+- Finding: the macOS workflow tested only the legacy forwarding crate and did
+  not trigger on WGPU or shared-conformance changes. New WGPU operation families
+  therefore lacked required-device Metal CI coverage despite already executing
+  through the canonical provider.
+- Resolution: run the complete minimal/default WGPU suites with
+  `WGPU_BACKEND=metal` and both required-device flags, assert the integration
+  device's Metal identity, and include provider/conformance/facade/test-policy
+  paths in the workflow triggers. Direct acquisition tests validate optional
+  features, both preferences, bounded enumeration, capacity rejection, and
+  exact 257-element unsigned addition across a workgroup boundary.
+- Evidence: aarch64 macOS, Rust 1.95.0, standalone `--locked` graph on
+  2026-10-13: 151 default WGPU/Metal, 85 minimal, 88 decomposition-only, 85
+  sparse-only, and 341 core/conformance/host Nextest tests pass with zero skips.
+  The consolidated suites retain 191/142/189/147 named cases in those four
+  feature configurations. Both facade surfaces, warning-denied default/minimal
+  Clippy, four doctests, and warning-denied rustdoc pass. Git dependency
+  revisions remain unchanged. A Rust 1.97.0 consumer of the local Hermes and
+  Hephaestus providers verifies the exact native NEON/Metal result -37.625
+  for 515 dyadic inputs and unchanged input readback.
+- Additional findings: upstream test modules and case counts drifted across
+  optional feature combinations, while required-adapter FP64 tests conflated
+  device availability with optional native precision. Feature-gate modules at
+  their ownership boundary; express the independent inventory as disjoint
+  feature-set cardinalities. On unsupported hardware, execute real fusion,
+  stateful-update, and cross-entropy backward requests and verify typed
+  rejection plus unchanged operands. Supported hardware retains the complete
+  shared FP64 value oracles.
+  The Metal workflow pins Hermes 0.8.1, matching Leto's 0.8 dependency floor;
+  the previous 0.4.1 checkout cannot satisfy that patch edge.
+- Publication findings: three upstream implementation-bearing manifests and
+  two utility modules raise the structural ratchet above its recorded row.
+  Decomposition aggregation/identity/tolerance, WGPU state/cache/mapping/
+  retention/wait, CTC dispatch, and stream storage bindings now have dedicated
+  leaves. Mathematical operation order, ownership, and device-module privacy
+  remain unchanged; subsequent conversion closure makes their representation
+  boundaries explicit.
+  Manifest implementations return from 17 to the recorded 14 and utility
+  modules from two to zero; no baseline is regenerated. Integration of current
+  upstream `cf811ae9` introduces two new utility modules; comparison/arithmetic
+  dispatch and host decomposition type/solve responsibilities replace them.
+  Direct `ComputeDevice` uploads remove the internal forwarding helper. The
+  inherited QR routing and all numerical oracles remain intact.
+- Upstream integration conversion finding: 64 moved casts fail the same
+  added-line publication rule. CUDA argument pointers use lossless standard
+  construction; launch grids use validated dimensions; full batch/reduction
+  counts reject unsigned-word overflow before dispatch. Native canary inputs
+  preserve all original bits with an explicit associated CPU reference type.
+  Python permutation metadata retains its native index width and exact Python
+  integer values. Strict workspace Clippy and all 780 tests pass with required
+  Metal, including three new bit-pattern/reference/word-boundary tests.
+- Hosted Metal finding: the inherited fixed precision cutoff rejects a
+  conformant pow result. The operation/precision calibration model now derives
+  its envelopes from portable builtin accuracy and input conditioning. Exact
+  integer-rational tests prove outward enclosure; grade boundaries reject
+  invalid and excessive errors. Raw GPU results and numerical-kernel oracles
+  retain their contracts. Zero references require exact-zero GPU results, and
+  canary acquisition honors required Metal without swallowing device faults.
+- Python link finding: the deprecated workspace-wide `extension-module`
+  feature suppresses the Python library needed by Rust binding test binaries.
+  Remove it and retain the existing Maturin >= 1.9.4 environment-selected
+  extension mode; PyO3's build helper owns the cdylib flags. On Rust 1.97.0,
+  CPython 3.14.7 and NumPy 2.4.5, strict binding Clippy and two Rust tests pass.
+  The WGPU lifecycle exercises three real binding clauses; the CUDA clause
+  has no device evidence here. A built extension imports and computes exact
+  515-element Metal add/sum/min/max results with unchanged operands and no
+  direct Python interpreter library dependency.
+- CUDA portability finding: driver absence recognizes the ELF loader's text
+  but misclassifies dyld's direct-image search list as a device fault; driver
+  and NVRTC symbol tests also name Linux's libc on macOS. Parse only the named
+  direct-image header and absent requested-file attempts, including dyld-cache
+  absence; all other diagnostics retain device-fault semantics. Real library
+  tests verify missing, invalid, missing-symbol, and missing-dependency cases.
+  The dependency fixture computes `x*x + x + 1` as 7/13/31 before its owned
+  dependent image is removed. Nine loader contracts and strict CUDA Clippy
+  pass. Required CUDA still fails on this device-absent Mac. The full locked
+  Rust 1.97.0 workspace passes 777 tests with zero Nextest skips; optional CUDA
+  hardware clauses do not provide device execution evidence on this host.
+- Conversion findings: inherited counts exceed five fixed package rows, and
+  moved CTC/retention casts become newly added lines. Complete checked word/
+  address, native-precision count, lossless pointer, and duration conversions
+  across the affected operation families. Conformance/core/host/ROCm/WGPU
+  counts fall from 50/48/37/169/319 to 30/24/19/162/298; their rows stay
+  31/24/20/163/303. Fixture domains, values, tolerances, and arithmetic order
+  remain unchanged. Integer duration comparison no longer truncates deadlines.
+- Boundary: this verifies the current advertised WGPU surface on Metal.
+  Hosted execution of the updated workflow and Intel hardware remain
+  unmeasured. Documented host-delegated algorithms retain their native-kernel
+  and performance roadmap; the separate ADR 0047 consumer migration remains
+  open. No new forwarding layer or CPU/backend fallback is introduced.
+- Existing numerical scope: `HEPH-KERNEL-TAIL-ACCURACY` and
+  `HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT` remain open in backlog.md. The current
+  operation suite does not establish correctness in their missing tail and
+  ray-parameterization scenarios, so this closure establishes Metal coverage
+  rather than project-wide numerical completeness.
 
 This register is the SSOT for hephaestus's known limitations. Items are grouped
 by actionability so an open defect is never confused with an intentional

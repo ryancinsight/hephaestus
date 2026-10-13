@@ -1,4 +1,4 @@
-//! Bind-group layout helpers.
+//! Storage-binding indices, entries, and parameter-buffer layout.
 
 use crate::application::bindings::BindGroupEntries;
 use crate::infrastructure::device::WgpuDevice;

@@ -5,7 +5,7 @@ use leto::Layout;
 
 use hephaestus_core::{ColPivQrHandle, QrHandle};
 
-use super::common::DECOMP_BOUND;
+use super::tolerance::DECOMP_BOUND;
 
 /// QR least squares on the consistent system `A·x = b` with
 /// `A = [[1,0],[0,1],[1,1]]`, `b = [1,1,2]`: the minimizer is `x = [1,1]`

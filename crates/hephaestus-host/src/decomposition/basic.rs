@@ -2,7 +2,7 @@ use hephaestus_core::{CholeskyHandle, LuHandle, QrHandle, Result};
 
 use crate::{HostBuffer, HostDevice};
 
-use super::helpers::solve_with;
+use super::solve::solve_with;
 
 /// Partially pivoted LU on the host.
 pub struct HostLu {

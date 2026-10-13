@@ -76,11 +76,13 @@ impl FixedFd3DOps<HostDevice> for HostFixedFdOps {
         let h = 1.0 / params.scales[0];
         let operator = FiniteDifference3D::new(map_scheme(params.scheme()), h, h, h)
             .map_err(map_leto_error)?;
-        let [nx, ny, nz] = params.output_dims().map(|extent| extent as usize);
+        let [nx, ny, nz] = params.output_dims().map(|extent| {
+            usize::try_from(extent).expect("validated stencil extent fits host usize")
+        });
         let [ix, iy, iz] = [
-            params.dims_axis[0] as usize,
-            params.dims_axis[1] as usize,
-            params.dims_axis[2] as usize,
+            usize::try_from(params.dims_axis[0]).expect("validated stencil extent fits host usize"),
+            usize::try_from(params.dims_axis[1]).expect("validated stencil extent fits host usize"),
+            usize::try_from(params.dims_axis[2]).expect("validated stencil extent fits host usize"),
         ];
         let input_layout = dense_layout([ix, iy, iz])?;
         let output_layout = dense_layout([nx, ny, nz])?;
@@ -110,8 +112,12 @@ impl FixedFd3DOps<HostDevice> for HostFixedFdOps {
         let h = 1.0 / params.scales[0];
         let operator = FiniteDifference3D::new(map_scheme(params.scheme()), h, h, h)
             .map_err(map_leto_error)?;
-        let [nx, ny, nz] = params.dims().map(|extent| extent as usize);
-        let [ux, uy, uz] = params.output_dims().map(|extent| extent as usize);
+        let [nx, ny, nz] = params.dims().map(|extent| {
+            usize::try_from(extent).expect("validated stencil extent fits host usize")
+        });
+        let [ux, uy, uz] = params.output_dims().map(|extent| {
+            usize::try_from(extent).expect("validated stencil extent fits host usize")
+        });
         let upstream_layout = dense_layout([ux, uy, uz])?;
         let grad_layout = dense_layout([nx, ny, nz])?;
         let field =

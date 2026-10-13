@@ -7,7 +7,7 @@ use hephaestus_core::{
     BidiagonalHandle, HessenbergHandle, SchurHandle, SvdHandle, SymmetricEigenHandle,
 };
 
-use super::common::DECOMP_BOUND;
+use super::tolerance::DECOMP_BOUND;
 
 /// Symmetric Jacobi eigendecomposition: the fixture `[[2,1],[1,2]]` has
 /// the exact spectrum `{1, 3}`; the clause asserts the eigenvalue

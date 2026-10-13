@@ -17,7 +17,14 @@ impl CtcStepParams {
     #[must_use]
     pub fn for_frame(problem: &CtcProblem, t: u32) -> Self {
         Self {
-            dims: [t, problem.batch as u32, problem.classes as u32, 0],
+            dims: [
+                t,
+                u32::try_from(problem.batch)
+                    .expect("CTC batch is validated to u32 at construction"),
+                u32::try_from(problem.classes)
+                    .expect("CTC classes are validated to u32 at construction"),
+                0,
+            ],
         }
     }
 }
@@ -46,7 +53,14 @@ impl CtcBackwardParams {
             return Err(invalid("ctc upstream seed is not finite".to_owned()));
         }
         Ok(Self {
-            dims: [0, problem.batch as u32, problem.classes as u32, 0],
+            dims: [
+                0,
+                u32::try_from(problem.batch)
+                    .expect("CTC batch is validated to u32 at construction"),
+                u32::try_from(problem.classes)
+                    .expect("CTC classes are validated to u32 at construction"),
+                0,
+            ],
             scalars: [upstream, 0.0, 0.0, 0.0],
         })
     }
