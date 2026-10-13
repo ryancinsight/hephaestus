@@ -1,0 +1,13 @@
+//! ROCm/HIP fixed-scheme three-dimensional first-derivative dispatch.
+//!
+//! The HIP counterpart of the CUDA sweep, computing the same five schemes
+//! from the same parameter block. One entry point serves every scheme behind
+//! a uniform branch, and the per-lane arithmetic keeps the provider's exact
+//! operation order. `f32` only, matching
+//! [`FixedFd3DParams`](hephaestus_core::FixedFd3DParams)'s lane layout.
+
+mod kernel;
+mod ops;
+
+pub use hephaestus_core::{FixedFd3DParams, FixedFd3DScheme};
+pub use ops::{FixedFd3DKernel, RocmFixedFd3DOps};
