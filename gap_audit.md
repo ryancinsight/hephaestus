@@ -44,7 +44,7 @@
   features, both preferences, bounded enumeration, capacity rejection, and
   exact 257-element unsigned addition across a workgroup boundary.
 - Evidence: aarch64 macOS, Rust 1.95.0, standalone `--locked` graph on
-  2026-10-13: 148 default WGPU/Metal, 82 minimal, 85 decomposition-only, 82
+  2026-10-13: 151 default WGPU/Metal, 85 minimal, 88 decomposition-only, 85
   sparse-only, and 341 core/conformance/host Nextest tests pass with zero skips.
   The consolidated suites retain 191/142/189/147 named cases in those four
   feature configurations. Both facade surfaces, warning-denied default/minimal
@@ -83,6 +83,13 @@
   Python permutation metadata retains its native index width and exact Python
   integer values. Strict workspace Clippy and all 780 tests pass with required
   Metal, including three new bit-pattern/reference/word-boundary tests.
+- Hosted Metal finding: the inherited fixed precision cutoff rejects a
+  conformant pow result. The operation/precision calibration model now derives
+  its envelopes from portable builtin accuracy and input conditioning. Exact
+  integer-rational tests prove outward enclosure; grade boundaries reject
+  invalid and excessive errors. Raw GPU results and numerical-kernel oracles
+  retain their contracts. Zero references require exact-zero GPU results, and
+  canary acquisition honors required Metal without swallowing device faults.
 - Python link finding: the deprecated workspace-wide `extension-module`
   feature suppresses the Python library needed by Rust binding test binaries.
   Remove it and retain the existing Maturin >= 1.9.4 environment-selected

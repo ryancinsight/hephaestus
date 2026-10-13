@@ -115,3 +115,21 @@ native-width permutation indices as the same exact Python integers, avoiding
 an unnecessary intermediate widening. Existing fixtures, tolerances, workloads,
 errors, and public numerical APIs remain unchanged. Oversized CUDA counts now
 return a typed dispatch failure instead of truncating their kernel arguments.
+
+Hosted Metal run `38458373262` exposes an empirical canary cutoff that rejects
+an error allowed by the portable builtin accuracy model. Replace all fixed
+precision cuts with one operation/precision calibration owner. The co-located
+`canary/accuracy.rs` proof derives the fixed-probe ULP budgets and the comparison
+bound `(gpu_error + reference_error) / (1 - reference_error)`. Native probe
+inputs, shader arithmetic, reported errors, and numerical-kernel value oracles
+remain unchanged. Binary64 uses an explicit width-scaled diagnostic model;
+WGSL supplies no binary64 conformance contract, and illegal lowerings still
+reject before shader construction. Exact-zero reference outputs require exact
+zero GPU results; nonzero and nonfinite results cannot hide behind a denominator
+floor. Required canary acquisition selects Metal and preserves every device fault.
+
+Integer-rational tests decode the measured binary64 bounds and compare them
+with exact numerator/denominator products in at most 107 bits. They prove
+outward enclosure and at most two adjacent steps of rounding headroom. Native,
+single-grade, invalid-error, and rejection boundaries retain value assertions.
+See the [portable WGSL accuracy rules](https://www.w3.org/TR/WGSL/#floating-point-accuracy).

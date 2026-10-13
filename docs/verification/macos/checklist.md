@@ -38,13 +38,17 @@ Target version: **0.20.4**. Change class: **[patch]**. Phase: **Closure**.
 - [x] [patch] Replace 64 moved upstream casts; preserve native probe-input bits
   and reference results, pointer identity, grids, and Python integers. Validate
   CUDA argument word boundaries before dispatch; pass all 780 workspace tests.
+- [x] [patch] Replace empirical canary cuts with the derived operation/precision
+  calibration model; verify exact rational enclosures and rejection boundaries.
+  Preserve all native probe values, raw errors, and live grade assertions;
+  pass all 783 workspace tests and all four native Metal feature configurations.
 - [ ] [patch] Pass the final exact-head hosted Metal/provider gates and merge.
 - [x] [patch] Preserve standalone Git dependency identities in Cargo.lock;
   synchronize version, README, backlog, audit, and changelog evidence.
 
 Evidence (2026-10-13, aarch64 macOS, Rust 1.95.0, standalone `--locked`
-dependency graph): 148 default WGPU/Metal, 82 minimal WGPU, 85
-decomposition-only WGPU, 82 sparse-only WGPU, and 341 core/conformance/host
+dependency graph): 151 default WGPU/Metal, 85 minimal WGPU, 88
+decomposition-only WGPU, 85 sparse-only WGPU, and 341 core/conformance/host
 Nextest tests pass with zero skips; four doctests pass. Both Clippy surfaces
 pass with warnings denied, and rustdoc passes with `RUSTDOCFLAGS='-D warnings'`.
 The consolidated integration suites retain 191 default, 142 minimal, 189
@@ -57,7 +61,9 @@ this Mac. A manual extension build under `PYO3_BUILD_EXTENSION_MODULE=1` imports
 and computes exact 515-element Metal results; its linkage contains no Python
 interpreter library.
 The initial Rust 1.97.0 workspace run passes 777 tests with zero Nextest skips;
-after upstream conversion closure, all 780 pass with the three new contracts.
+after upstream conversion closure, all 780 pass with three new contracts.
+The final calibration model adds three exact-rational/boundary/zero-identity
+contracts; all 783 workspace tests pass with zero skips.
 Nine focused driver/compiler loader contracts pass; the dependency fixture
 computes `x*x + x + 1` as 7, 13 and 31 before its owned dependency is removed.
 CUDA hardware clauses remain unavailable here; these counts establish portable

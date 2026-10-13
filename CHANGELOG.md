@@ -13,6 +13,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Fixed
 
+- [patch] Correct canary precision classification with operation/precision
+  calibration envelopes derived from portable builtin accuracy. Preserve
+  native probe values, raw errors, live assertions, and kernel value oracles;
+  prove bound arithmetic with exact rationals. Reject nonzero exact-zero
+  results and invalid errors, and enforce required Metal canary acquisition.
+
+
 - [patch] Replace moved upstream casts with lossless pointers, checked kernel
   count words, validated launch dimensions, native canary inputs with an
   associated CPU reference precision, and native Python permutation indices.

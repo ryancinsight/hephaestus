@@ -28,7 +28,7 @@
   changes; it runs minimal/default WGPU and existing Metal contracts with Metal
   acquisition and both required-device flags. Existing public APIs remain stable.
 - Evidence: 2026-10-13, aarch64 macOS, Rust 1.95.0, standalone `--locked` graph:
-  148 default WGPU/Metal, 82 minimal, 85 decomposition-only, 82 sparse-only,
+  151 default WGPU/Metal, 85 minimal, 88 decomposition-only, 85 sparse-only,
   and 341 core/conformance/host Nextest tests pass with zero skips; strict
   Clippy, feature/facade checks, four doctests, and warning-denied rustdoc pass.
   All 191/142/189/147 consolidated cases retain their value or rejection
@@ -54,6 +54,11 @@
   integers. Reject oversized CUDA count words before dispatch. Three new
   bit-pattern/reference/boundary tests raise the complete required-Metal
   workspace run to 780 passing tests; strict Clippy also passes.
+- Hosted calibration closure: replace the empirical precision cuts with
+  operation/precision error envelopes derived from the portable builtin model;
+  preserve every probe value, reported error, and live grade assertion. Exact
+  rational tests prove outward bounds; zero identities and required Metal
+  acquisition reject invalid results and device faults.
 - Python closure: remove the deprecated workspace-wide extension feature that
   prevents embedded test executables from linking Python. Preserve Maturin's
   environment-selected extension mode and use PyO3's cdylib build helper. Both

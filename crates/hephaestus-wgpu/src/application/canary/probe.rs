@@ -7,6 +7,7 @@ use crate::application::elementwise::encode_elementwise;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::infrastructure::device::WgpuDevice;
 
+use super::accuracy::{PrecisionModel, accuracy_bound, relative_error};
 use super::verdict::BuiltinVerdict;
 use super::verdict::CanaryWidth;
 use super::verdict::MathBuiltin;
@@ -15,7 +16,7 @@ use super::verdict::builtin_verdict;
 /// Measured precision grade of one live probe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrecisionGrade {
-    /// Within a few ulps of CPU truth at width precision.
+    /// Within the fixed probes' native-width operation calibration envelope.
     Exact,
     /// f64 computing at f32 grade (worst error near f32 epsilon).
     SingleGrade,
@@ -37,19 +38,25 @@ pub struct PrecisionReport {
 }
 
 impl PrecisionReport {
-    /// Map the measured error to its grade. Thresholds sit in the gaps:
-    /// exact f64 lands near `1e-15`, f32-grade near `6e-8`, so the `1e-12` /
-    /// `1e-5` cuts misclassify nothing. f32 truth is itself rounded, so the
-    /// exact cut for f32 admits a few ulps of combined libm and rounding error.
+    /// Classify the fixed probes with their operation-specific calibration
+    /// envelopes, including native input rounding and CPU-reference error.
+    /// Binary64 uses the width-scaled diagnostic model; backend legality is
+    /// checked separately before a probe can execute. Nonfinite or negative
+    /// reported errors have no valid precision interpretation.
     #[must_use]
     pub fn grade(&self) -> PrecisionGrade {
-        let exact_cut = match self.width {
-            CanaryWidth::F32 => 2e-7,
-            CanaryWidth::F64 => 1e-12,
+        if !self.max_relative_error.is_finite() || self.max_relative_error < 0.0 {
+            return PrecisionGrade::Poor;
+        }
+        let native = match self.width {
+            CanaryWidth::F32 => accuracy_bound::<f32>(self.builtin),
+            CanaryWidth::F64 => accuracy_bound::<f64>(self.builtin),
         };
-        if self.max_relative_error <= exact_cut {
+        if self.max_relative_error <= native {
             PrecisionGrade::Exact
-        } else if self.width == CanaryWidth::F64 && self.max_relative_error <= 1e-5 {
+        } else if self.width == CanaryWidth::F64
+            && self.max_relative_error <= accuracy_bound::<f32>(self.builtin)
+        {
             PrecisionGrade::SingleGrade
         } else {
             PrecisionGrade::Poor
@@ -178,31 +185,19 @@ fn reference_value<T: FloatElement>(builtin: MathBuiltin, lhs: T, rhs: T) -> T {
     }
 }
 
-trait ScalarProbe: DialectScalar<Wgsl> + FloatElement + Pod + core::ops::Neg<Output = Self> {
-    /// CPU oracle precision required to distinguish binary32-grade lowering
-    /// from native binary64 results. This never selects GPU arithmetic.
-    type Reference: FloatElement;
+trait ScalarProbe: DialectScalar<Wgsl> + PrecisionModel + Pod + core::ops::Neg<Output = Self> {
     const MATH_E: Self;
-    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64;
+    fn rel_err(gpu: Self, cpu: Self::Reference) -> Self::Reference {
+        relative_error(gpu.to_reference(), cpu)
+    }
 }
 
 impl ScalarProbe for f32 {
-    type Reference = f64;
     const MATH_E: Self = core::f32::consts::E;
-
-    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64 {
-        // Exact widening is confined to error measurement against the oracle.
-        ((f64::from(gpu) - cpu).abs() / cpu.abs().max(1e-30)).min(f64::INFINITY)
-    }
 }
 
 impl ScalarProbe for f64 {
-    type Reference = f64;
     const MATH_E: Self = core::f64::consts::E;
-
-    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64 {
-        ((gpu - cpu).abs() / cpu.abs().max(1e-300)).min(f64::INFINITY)
-    }
 }
 
 fn probe_with<T: ScalarProbe<Reference = f64>>(

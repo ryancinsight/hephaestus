@@ -47,17 +47,38 @@ fn device() -> Option<WgpuDevice> {
     let mut limits = WgpuDevice::downlevel_device_limits();
     limits.max_storage_buffers_per_shader_stage = Some(5);
     limits.max_buffers_and_acceleration_structures_per_shader_stage = Some(6);
-    match WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
-        "hephaestus-canary",
-        DevicePreference::HighPerformance,
-        &[DeviceFeature::ShaderF64],
-        limits,
-    ) {
-        Ok(device) => Some(device),
-        Err(error) => {
-            eprintln!("canary skip: {error}");
+    let required_metal = std::env::var_os("HEPHAESTUS_METAL_REQUIRE_DEVICE").is_some();
+    let required = required_metal || std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some();
+    let acquired = if required_metal {
+        WgpuDevice::try_metal_with_device_preference_and_optional_device_features_and_limits(
+            "hephaestus-canary",
+            DevicePreference::HighPerformance,
+            &[DeviceFeature::ShaderF64],
+            limits,
+        )
+    } else {
+        WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+            "hephaestus-canary",
+            DevicePreference::HighPerformance,
+            &[DeviceFeature::ShaderF64],
+            limits,
+        )
+    };
+    match acquired {
+        Ok(device) => {
+            if required_metal {
+                assert_eq!(
+                    device.adapter_info().expect("acquired adapter").backend,
+                    wgpu::Backend::Metal
+                );
+            }
+            Some(device)
+        }
+        Err(HephaestusError::AdapterUnavailable { message }) if !required => {
+            tracing::info!(%message, "optional canary adapter absent");
             None
         }
+        Err(error) => panic!("canary adapter acquisition failed: {error}"),
     }
 }
 
@@ -113,8 +134,8 @@ fn vulkan_blocks_every_probed_transcendental_at_double_width() {
 #[test]
 fn live_grades_measure_truth_without_crashing() {
     let Some(device) = device() else { return };
-    // f32 transcendentals are exact on every adapter measured so far; a Poor
-    // grade anywhere is a new driver finding, not a passing result.
+    // Every original probe must satisfy the portable operation calibration
+    // envelope; a result outside that model still fails this value assertion.
     for builtin in PROBED {
         let report = probe_precision(&device, builtin, CanaryWidth::F32)
             .expect("f32 probes dispatch on any adapter");

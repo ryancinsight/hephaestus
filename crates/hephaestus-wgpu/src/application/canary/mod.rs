@@ -32,6 +32,7 @@
 //! [`HephaestusError::Unsupported`](hephaestus_core::HephaestusError::Unsupported)
 //! naming the cause.
 
+mod accuracy;
 mod probe;
 mod scan;
 mod verdict;
