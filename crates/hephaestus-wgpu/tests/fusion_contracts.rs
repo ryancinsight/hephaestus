@@ -2,10 +2,11 @@
 
 use std::borrow::Cow;
 
+use super::device_features::device_with_optional_features;
 use hephaestus_conformance::assert_fusion_contract;
 use hephaestus_core::{
-    ComputeDevice, DeviceBuffer, DeviceFeature, DevicePreference, DynamicStridedView,
-    FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps, HephaestusError, Wgsl,
+    ComputeDevice, DeviceBuffer, DeviceFeature, DynamicStridedView, FusedElementwiseOps,
+    FusedExpression, FusedReduction, FusedReductionOps, HephaestusError, Wgsl,
 };
 use hephaestus_wgpu::{WgpuDevice, WgpuFusionOps};
 use leto::LayoutDyn;
@@ -168,21 +169,6 @@ pub(super) fn fusion_rejects_noninjective_output() {
     assert_eq!(download(&device, &output), [7.0]);
 }
 
-fn f64_device_or_skip() -> Option<WgpuDevice> {
-    match WgpuDevice::try_with_device_preference_and_required_device_features(
-        "hephaestus-fusion-f64-test",
-        DevicePreference::HighPerformance,
-        &[DeviceFeature::ShaderF64],
-    ) {
-        Ok(device) => Some(device),
-        Err(error) if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_none() => {
-            eprintln!("skip WGPU f64 fusion conformance: device unavailable ({error})");
-            None
-        }
-        Err(error) => panic!("WGPU f64 fusion conformance requires a device: {error}"),
-    }
-}
-
 pub(super) fn wgpu_satisfies_the_fusion_contract() {
     let Some(device) = device_or_skip() else {
         return;
@@ -195,10 +181,62 @@ pub(super) fn wgpu_satisfies_the_fusion_contract() {
     );
 }
 
-pub(super) fn wgpu_satisfies_the_f64_fusion_contract() {
-    let Some(device) = f64_device_or_skip() else {
+pub(super) fn wgpu_fusion_respects_precision_capabilities() {
+    let Some(device) = device_with_optional_features(
+        "hephaestus-fusion-precision-contract",
+        &[DeviceFeature::ShaderF64],
+    ) else {
         return;
     };
+    if !device.supports_device_feature(DeviceFeature::ShaderF64) {
+        let original = [2.0_f64, 3.0, 5.0, 7.0];
+        let input = device.upload(&original).expect("input");
+        let output = device.upload(&[11.0_f64; 4]).expect("output");
+        let input_layout = layout(&[4], &[1]);
+        let output_layout = layout(&[4], &[1]);
+        let scalar_output = device.upload(&[13.0_f64]).expect("scalar output");
+        let scalar_layout = layout(&[1], &[1]);
+        let inputs = [DynamicStridedView::new(&input, &input_layout)];
+        let failures = [
+            WgpuFusionOps.fused_elementwise_into(
+                &device,
+                &InputExpression,
+                &inputs,
+                DynamicStridedView::new(&output, &output_layout),
+            ),
+            WgpuFusionOps.fused_reduce_into(
+                &device,
+                &InputExpression,
+                &inputs,
+                FusedReduction::Sum,
+                0,
+                DynamicStridedView::new(&scalar_output, &scalar_layout),
+            ),
+        ];
+        for failure in failures {
+            match failure {
+                Err(HephaestusError::DispatchFailed { message }) => {
+                    assert!(message.contains("FLOAT64"), "{message}");
+                }
+                other => panic!("unsupported native precision must reject fusion: {other:?}"),
+            }
+        }
+        assert_eq!(
+            device.download_owned(&input).expect("input readback"),
+            original
+        );
+        assert_eq!(
+            device.download_owned(&output).expect("output readback"),
+            [11.0; 4]
+        );
+        assert_eq!(
+            device
+                .download_owned(&scalar_output)
+                .expect("scalar readback"),
+            [13.0]
+        );
+        return;
+    }
     assert_fusion_contract::<_, _, _, f64, _, _>(
         &device,
         &WgpuFusionOps,

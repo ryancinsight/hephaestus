@@ -70,7 +70,9 @@ where
             parameters,
             D::buffers_alias(operands.input.buffer, operands.output.buffer),
         )?;
-        plan.validate_address_limit(i32::MAX as usize)?;
+        plan.validate_address_limit(
+            usize::try_from(i32::MAX).expect("signed shader address bound fits host usize"),
+        )?;
         let metadata = metadata::WindowMeta::new(
             metadata::WindowLayoutMeta::new(operands.input.layout)?,
             metadata::WindowLayoutMeta::new(operands.output.layout)?,
@@ -123,7 +125,9 @@ where
             || D::buffers_alias(operands.grad_output.buffer, operands.grad_input.buffer);
         let plan =
             plan_pooling_backward::<T, _, R, S>(&operands, parameters, mode, illegal_aliasing)?;
-        plan.validate_address_limit(i32::MAX as usize)?;
+        plan.validate_address_limit(
+            usize::try_from(i32::MAX).expect("signed shader address bound fits host usize"),
+        )?;
         let input_layout = operands
             .input
             .map_or(operands.grad_input.layout, |input| input.layout);

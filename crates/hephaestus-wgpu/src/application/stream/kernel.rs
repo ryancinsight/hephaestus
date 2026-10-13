@@ -2,8 +2,8 @@
 
 use super::command::WgpuCommandStream;
 use super::grouped::grouped_layouts;
-use super::helpers::{binding_index, storage_layout_entries};
 use super::prepared::{WgpuGroupedPrepared, WgpuPrepared};
+use super::storage_bindings::{binding_index, storage_layout_entries};
 use crate::application::bindings::UniformBuffers;
 use crate::application::prepared::device_owner;
 use crate::infrastructure::device::WgpuDevice;

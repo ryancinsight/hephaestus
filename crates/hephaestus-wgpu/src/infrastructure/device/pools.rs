@@ -41,7 +41,7 @@ impl WgpuDevice {
     }
 
     /// Release parked staging retention when no staging transfer has happened
-    /// for [`STAGING_POOL_IDLE_DECAY`]. Runs on the staging acquire path so
+    /// for [`super::retention::STAGING_POOL_IDLE_DECAY`]. Runs on the staging acquire path so
     /// decay needs no timer infrastructure; when warm it costs one clock read
     /// and two relaxed loads.
     fn maybe_decay_staging(&self) {

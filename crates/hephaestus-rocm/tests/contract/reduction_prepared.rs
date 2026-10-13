@@ -6,7 +6,7 @@ fn prepared_reduction_reuses_device_outputs_and_batches() {
         return;
     };
 
-    let input: Vec<u32> = (0..1027).map(|index| (index % 17) as u32).collect();
+    let input: Vec<u32> = (0..1027_u32).map(|index| index % 17).collect();
     let expected_sum: u32 = input.iter().sum();
     let expected_min = input.iter().copied().min().expect("non-empty input");
     let expected_max = input.iter().copied().max().expect("non-empty input");
@@ -93,14 +93,14 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
         },
     )
     .expect("HIP prepared dot");
-    let dot_output = prepared_dot.output() as *const _;
+    let dot_output = std::ptr::from_ref(prepared_dot.output());
     prepared_dot.dispatch().expect("HIP prepared dot dispatch");
     let mut got = [0.0_f32];
     device
         .download(prepared_dot.output(), &mut got)
         .expect("HIP prepared dot download");
     assert_eq!(got, [70.0]);
-    assert_eq!(dot_output, prepared_dot.output() as *const _);
+    assert_eq!(dot_output, std::ptr::from_ref(prepared_dot.output()));
 
     device
         .write_buffer(&lhs, &[2.0_f32, 2.0, 2.0, 2.0])
@@ -112,7 +112,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
         .download(prepared_dot.output(), &mut got)
         .expect("HIP repeated prepared dot download");
     assert_eq!(got, [52.0]);
-    assert_eq!(dot_output, prepared_dot.output() as *const _);
+    assert_eq!(dot_output, std::ptr::from_ref(prepared_dot.output()));
 
     let reversed = Layout::try_new([4], [-1], 3).expect("valid test layout");
     let reversed_dot = prepare_dot(
@@ -147,7 +147,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
         },
     )
     .expect("HIP prepared L2 norm");
-    let norm_output = prepared_norm.output() as *const _;
+    let norm_output = std::ptr::from_ref(prepared_norm.output());
     device
         .write_buffer(prepared_norm.output(), &[f32::NAN])
         .expect("HIP prepared L2 output poison");
@@ -159,7 +159,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
         .expect("HIP prepared L2 norm download");
     let expected = 30.0_f32.sqrt();
     assert!((got[0] - expected).abs() <= 2.0 * f32::EPSILON * expected.max(1.0));
-    assert_eq!(norm_output, prepared_norm.output() as *const _);
+    assert_eq!(norm_output, std::ptr::from_ref(prepared_norm.output()));
 
     device
         .write_buffer(&norm_input, &[4.0_f32; 4])
@@ -174,7 +174,7 @@ fn prepared_map_reductions_reuse_resources_and_validate_layouts() {
         .download(prepared_norm.output(), &mut got)
         .expect("HIP repeated prepared L2 norm download");
     assert_eq!(got, [8.0]);
-    assert_eq!(norm_output, prepared_norm.output() as *const _);
+    assert_eq!(norm_output, std::ptr::from_ref(prepared_norm.output()));
 
     let empty = device.upload::<f32>(&[]).expect("HIP empty map input");
     let empty_layout = Layout::c_contiguous([0]).expect("HIP empty map layout");

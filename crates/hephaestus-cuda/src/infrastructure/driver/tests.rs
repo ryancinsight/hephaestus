@@ -13,7 +13,10 @@ fn absent_library_preserves_its_identity() {
             absent,
         } => {
             assert_eq!(actual, name);
-            assert!(absent, "requested missing library is classified as absent");
+            assert!(
+                absent,
+                "requested missing library is classified as absent: {source}"
+            );
             assert!(
                 !source.to_string().is_empty(),
                 "loader diagnostic is preserved"
@@ -27,7 +30,9 @@ fn absent_library_preserves_its_identity() {
 fn required_symbol_failure_preserves_export_identity() {
     #[cfg(target_os = "windows")]
     let name = "kernel32.dll";
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    let name = "/usr/lib/libSystem.B.dylib";
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     let name = "libc.so.6";
     let error = Driver::load(name).expect_err("system library does not export CUDA");
     match error {
@@ -39,6 +44,98 @@ fn required_symbol_failure_preserves_export_identity() {
             );
         }
         other => panic!("wrong failure category: {other:?}"),
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn missing_dependency_is_a_driver_fault() {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    #[derive(Debug)]
+    struct LibraryDirectory(PathBuf);
+    impl Drop for LibraryDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    let _trace = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+            .with_test_writer()
+            .finish(),
+    );
+    let directory = LibraryDirectory(std::env::temp_dir().join(format!(
+        "hephaestus-loader-dependency-{}",
+        std::process::id()
+    )));
+    std::fs::create_dir(&directory.0).expect("unique library fixture directory");
+    let dependency = directory.0.join("dependency.dylib");
+    let requested = directory.0.join("requested.dylib");
+    let dependency_source = directory.0.join("dependency.c");
+    let requested_source = directory.0.join("requested.c");
+    {
+        let _phase = tracing::info_span!("arrange", contract = "real_loader_dependency").entered();
+        std::fs::write(
+            &dependency_source,
+            "int dependency_value(int input) { return input * input + 1; }\n",
+        )
+        .expect("dependency source");
+        std::fs::write(
+            &requested_source,
+            "int dependency_value(int);\nint loader_value(int input) { return dependency_value(input) + input; }\n",
+        )
+        .expect("requested image source");
+        for (source, output, dependencies) in [
+            (&dependency_source, &dependency, Vec::new()),
+            (&requested_source, &requested, vec![&dependency]),
+        ] {
+            let compiled = Command::new("cc")
+                .arg("-dynamiclib")
+                .arg(source)
+                .args(dependencies)
+                .arg("-o")
+                .arg(output)
+                .output()
+                .expect("native compiler");
+            assert!(
+                compiled.status.success(),
+                "native fixture compilation: {}",
+                String::from_utf8_lossy(&compiled.stderr)
+            );
+        }
+        // SAFETY: these owned images contain the audited C functions above.
+        // The symbol signature is C int -> C int, and the library lives until
+        // every call finishes. Inputs bound all polynomial intermediates.
+        let library = unsafe { libloading::Library::new(&requested) }.expect("complete image");
+        // SAFETY: loader_value is the owned image's C int -> C int export;
+        // its symbol borrow cannot outlive the retained library.
+        let function = unsafe {
+            library
+                .get::<unsafe extern "C" fn(core::ffi::c_int) -> core::ffi::c_int>(b"loader_value")
+        }
+        .expect("polynomial export");
+        for (input, expected) in [(2, 7), (3, 13), (5, 31)] {
+            // SAFETY: the validated export is live and every input is in the
+            // bounded exact-integer domain established above.
+            assert_eq!(unsafe { function(input) }, expected);
+        }
+    }
+    std::fs::remove_file(&dependency).expect("remove owned dependency image");
+    let error = {
+        let _phase = tracing::info_span!("act", contract = "missing_dependency").entered();
+        Driver::load(requested.to_str().expect("fixture path"))
+            .expect_err("present image cannot load without its dependency")
+    };
+    let _phase = tracing::info_span!("assert", contract = "fault_identity").entered();
+    match error.report() {
+        hephaestus_core::HephaestusError::DeviceUnavailable { message } => {
+            assert!(message.contains(requested.to_str().expect("requested path")));
+            assert!(message.contains(dependency.to_str().expect("dependency path")));
+        }
+        other => panic!("dependent-image fault was hidden as adapter absence: {other}"),
     }
 }
 

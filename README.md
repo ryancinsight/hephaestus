@@ -24,7 +24,7 @@ re-exports the contract layer and each backend, so a consumer names one dependen
 # contracts only — compiles on a machine with no accelerator
 hephaestus-compute = "0.19"
 
-# portable compute
+# portable compute; on macOS acquire WgpuDevice::try_metal
 hephaestus-compute = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; execution needs a driver and runtime kernel compilation needs NVRTC
@@ -344,6 +344,19 @@ Metal adapter on macOS. The Metal workflow checks both minimal and default featu
 surfaces, then runs warning-denied Clippy, doctests, rustdoc, and required
 device contracts with `HEPHAESTUS_METAL_REQUIRE_DEVICE=1`; a missing Metal
 adapter fails the hardware lane instead of producing a skip-only result.
+
+The macOS lane also runs the complete `hephaestus-wgpu` suite with
+`WGPU_BACKEND=metal` and both required-device flags set. The integration
+harness acquires `WgpuDevice::try_metal` and asserts Metal adapter identity;
+minimal and default WGPU surfaces retain the same value oracles. This covers
+FFT, runtime-rank fusion, shape/indexing, interpolation, adaptive pooling,
+and the remaining WGPU families without extending the retired forwarding
+crate. Changes to WGPU, shared conformance, or the facade trigger this lane.
+Optional native FP64 support is a device capability. Fusion, stateful-update,
+and cross-entropy backward tests retain their FP64 value oracles on supporting
+adapters; other adapters must reject those requests before changing any operand.
+The scoped [macOS acceptance checklist](docs/verification/macos/checklist.md)
+records local evidence and remaining hosted verification.
 
 The `elementwise_into`, `reduction_width`, and `prepared_map_reduction`
 benchmarks run real WGPU dispatch and validate output values. The prepared

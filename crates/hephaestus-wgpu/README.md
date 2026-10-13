@@ -54,6 +54,20 @@ Metal is an adapter preference of this crate, not a separate backend
 (ADR 0047): `WgpuDevice::try_metal` acquires a Metal-only adapter and the same
 WGSL kernels execute through the native Apple Metal path.
 
+For macOS, enable the facade's `wgpu` feature and acquire
+`hephaestus::wgpu::WgpuDevice::try_metal("application")`. The provider's buffers
+and dispatch seams use the selected Metal context; its documented host-delegated
+families retain the same execution contract. Metal acquisition rejects
+unavailable adapters or incompatible limits
+and enables optional features only when the selected adapter supports them.
+The macOS workflow runs this provider's complete minimal and default contract
+suites with `WGPU_BACKEND=metal`, `HEPHAESTUS_WGPU_REQUIRE_DEVICE=1`, and
+`HEPHAESTUS_METAL_REQUIRE_DEVICE=1`. Missing required hardware fails the lane.
+Native FP64 requires the optional `DeviceFeature::ShaderF64` capability.
+Fusion, stateful-update, and cross-entropy backward contracts execute their
+shared FP64 value oracles when supported and verify typed rejection with
+unchanged operands otherwise.
+
 The crate re-exports the exact `wgpu` version it builds against (wgpu 30) so
 downstream code can author provider-owned WGPU bindings without adding a second
 direct `wgpu` dependency.

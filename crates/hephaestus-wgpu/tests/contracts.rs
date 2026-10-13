@@ -6,22 +6,46 @@
 
 use hephaestus_wgpu::{HephaestusError, WgpuDevice};
 
+#[path = "device_features.rs"]
+mod device_features;
+
+#[path = "metal_acquisition.rs"]
+mod metal_acquisition;
+
 fn device_or_skip() -> Option<WgpuDevice> {
     static DEVICE: std::sync::OnceLock<Option<WgpuDevice>> = std::sync::OnceLock::new();
     DEVICE
-        .get_or_init(
-            || match WgpuDevice::try_default("hephaestus-integration-contracts") {
-                Ok(device) => Some(device),
+        .get_or_init(|| {
+            let require_metal = std::env::var_os("HEPHAESTUS_METAL_REQUIRE_DEVICE").is_some();
+            let acquired = if require_metal {
+                WgpuDevice::try_metal("hephaestus-integration-contracts")
+            } else {
+                WgpuDevice::try_default("hephaestus-integration-contracts")
+            };
+            match acquired {
+                Ok(device) => {
+                    if require_metal {
+                        assert_eq!(
+                            device
+                                .adapter_info()
+                                .expect("Metal adapter identity")
+                                .backend,
+                            hephaestus_wgpu::wgpu::Backend::Metal
+                        );
+                    }
+                    Some(device)
+                }
                 Err(error @ HephaestusError::AdapterUnavailable { .. }) => {
-                    if std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some() {
+                    if require_metal || std::env::var_os("HEPHAESTUS_WGPU_REQUIRE_DEVICE").is_some()
+                    {
                         panic!("WGPU adapter required, but acquisition failed: {error}");
                     }
                     eprintln!("skipping WGPU integration contracts: adapter unavailable");
                     None
                 }
                 Err(error) => panic!("WGPU integration contracts require a provider: {error}"),
-            },
-        )
+            }
+        })
         .clone()
 }
 
@@ -330,7 +354,7 @@ contract_cases!(
     fusion_contracts::runtime_rank_empty_sum_uses_identity_and_mean_rejects_empty_axis,
     fusion_contracts::fusion_rejects_noninjective_output,
     fusion_contracts::wgpu_satisfies_the_fusion_contract,
-    fusion_contracts::wgpu_satisfies_the_f64_fusion_contract,
+    fusion_contracts::wgpu_fusion_respects_precision_capabilities,
     fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
@@ -353,7 +377,7 @@ contract_cases!(
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
-    stateful_update_contracts::wgpu_satisfies_the_f64_stateful_update_contract,
+    stateful_update_contracts::wgpu_stateful_update_respects_precision_capabilities,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
     staggered_contracts::wgpu_satisfies_the_staggered_contract,
     staggered3d::staggered_gradient_matches_cpu_on_every_axis,
@@ -403,42 +427,22 @@ contract_cases!(
     wgpu_reexport::provider_exports_wgpu_abi_types,
 );
 
-#[cfg(all(not(feature = "decomposition"), not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 140;
-// The four hand-rolled `blocked_lu_*` differential cases folded into the
-// shared `assert_blocked_lu_contract` clause: four registrations removed,
-// one added. The four `blocked_cholesky_*` differentials folded into
-// `assert_blocked_cholesky_contract` the same way, and the blocked-QR
-// differential became `assert_blocked_qr_contract`, so this combination is a
-// further net two below.
-// The eight feature-gated matrix-function cases become one exact-diagnostic
-// edge now that their differentials live in `assert_dense_matrix_function_contract`.
-// `pad_contracts::wgpu_satisfies_the_pad_contract`,
-// `cross_product_contracts::wgpu_satisfies_the_cross_product_contract`,
-// `arg_reduce_contracts::wgpu_satisfies_the_arg_reduce_contract`,
-// `embedding_contracts::wgpu_satisfies_the_embedding_gather_contract`,
-// `topk_contracts::wgpu_satisfies_the_topk_contract`,
-// `interpolation_contracts::wgpu_satisfies_the_interpolation_contract`, and
-// The roll contract, triangular contract and its two pre-dispatch limit clauses add four
-// unconditional registrations on top of every combination.
-// `adaptive_pooling_contracts::wgpu_satisfies_the_adaptive_pooling_contract`
-// each add one unconditional registration on top of every combination.
-#[cfg(all(feature = "decomposition", not(feature = "sparse")))]
-const EXPECTED_CONTRACT_CASES: usize = 187;
-#[cfg(all(not(feature = "decomposition"), feature = "sparse"))]
-const EXPECTED_CONTRACT_CASES: usize = 145;
-#[cfg(all(feature = "decomposition", feature = "sparse"))]
-// One below the pre-fold counts: the per-backend long-line scan test became a
-// shared Leto clause instantiated from scan_contracts.rs. Four blocked-LU,
-// four blocked-Cholesky, and one blocked-QR differential registrations also
-// moved into shared clauses. The feature-gated matrix-function fold removes
-// seven more registrations while retaining one exact-diagnostic edge, and
-// pad, cross-product, arg-reduce, embedding gather, topk, interpolation, and
-// triangular masking, its two limit clauses, and adaptive pooling each add
-// their registrations on top. The fixed-scheme 3-D sweep adds one
-// unconditional registration on top of every combination, and so does CTC,
-// as does the roll contract.
-const EXPECTED_CONTRACT_CASES: usize = 191;
+// The registration inventory partitions into disjoint sets: 142 unconditional
+// cases, 44 decomposition-only cases, two sparse-only cases, and three cases
+// enabled by either optional feature. Native-precision capability/rejection
+// contracts belong to the unconditional set. These cardinalities retain the
+// independent migration guard for every feature combination.
+const EXPECTED_CONTRACT_CASES: usize =
+    142 + if cfg!(feature = "decomposition") {
+        44
+    } else {
+        0
+    } + if cfg!(feature = "sparse") { 2 } else { 0 }
+        + if cfg!(any(feature = "decomposition", feature = "sparse")) {
+            3
+        } else {
+            0
+        };
 
 #[test]
 fn integration_contract_cases_share_process_devices() {

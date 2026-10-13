@@ -174,7 +174,7 @@ pub fn validate_reduction_width(width: BlockWidth) -> Result<()> {
 pub fn reduction_pass_count(mut len: usize, width: BlockWidth) -> usize {
     // `width.get()` is `u32`; this is a lossless widening on all supported
     // Rust targets (`usize >= 32` bits).
-    let width = width.get() as usize;
+    let width = usize::try_from(width.get()).expect("reduction width fits supported host usize");
     let mut passes = 0;
     while len > 1 {
         len = len.div_ceil(width);

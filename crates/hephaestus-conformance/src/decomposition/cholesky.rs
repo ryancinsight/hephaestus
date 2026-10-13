@@ -5,7 +5,7 @@ use leto::Layout;
 
 use hephaestus_core::CholeskyHandle;
 
-use super::common::DECOMP_BOUND;
+use super::tolerance::DECOMP_BOUND;
 
 /// Cholesky of the SPD matrix `[[4,2],[2,3]]`: `det = 8`,
 /// `A·[1,1]ᵀ = [6,5]ᵀ`, and `L·Lᵀ` reconstructs `A`.

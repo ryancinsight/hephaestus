@@ -142,7 +142,12 @@ mod tests {
 
     #[test]
     fn to_u32_overflow() {
-        let big = (u32::MAX as usize) + 1;
-        assert!(to_u32(big, "test").is_err());
+        let big = usize::try_from(u32::MAX).expect("device word fits host usize") + 1;
+        match to_u32(big, "test").expect_err("out-of-range device word must reject") {
+            HephaestusError::DispatchFailed { message } => {
+                assert_eq!(message, format!("test {big} exceeds u32 range"));
+            }
+            other => panic!("wrong device-word range error: {other}"),
+        }
     }
 }

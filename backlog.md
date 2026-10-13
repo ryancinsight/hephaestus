@@ -18,6 +18,54 @@
   aggregate rejects its two optional FP64 acquisition clauses; this correction
   does not alter precision tests or serialize the shared-device harness.
 
+<a id="heph-macos-metal-conformance-1"></a>
+
+## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo
+- Priority: correctness.
+- Remaining acceptance: hosted execution of the expanded Metal lane before release.
+- Outcome: macOS CI triggers on WGPU, core, conformance, facade, and test-policy
+  changes; it runs minimal/default WGPU and existing Metal contracts with Metal
+  acquisition and both required-device flags. Existing public APIs remain stable.
+- Evidence: 2026-10-13, aarch64 macOS, Rust 1.95.0, standalone `--locked` graph:
+  146 default WGPU/Metal, 80 minimal, 83 decomposition-only, 80 sparse-only,
+  and 341 core/conformance/host Nextest tests pass with zero skips; strict
+  Clippy, feature/facade checks, four doctests, and warning-denied rustdoc pass.
+  All 191/142/189/147 consolidated cases retain their value or rejection
+  contracts. Unsupported FP64 executes typed rejection before mutation for
+  fusion, stateful updates, and cross-entropy backward. The shared local
+  Hermes/Hephaestus consumer reduces 515 exact dyadic inputs to -37.625 on
+  both native NEON and Metal under Rust 1.97.0.
+- Design: ADR 0047 makes Metal an adapter of WGPU. FFT, fusion, triangular
+  masking, cross product, arg-reduction/top-k, interpolation, and adaptive
+  pooling therefore use the existing WGPU implementations on Metal.
+- Publication closure: partition upstream decomposition aggregation, WGPU
+  device ownership/lifetimes, and shared CTC dispatch into leaf modules, and
+  replace the old utility modules with identity/tolerance and storage-binding
+  responsibilities. Mathematical operation order remains unchanged; later
+  conversion closure makes representation boundaries explicit.
+  Implementation-bearing manifests fall from 17 to
+  the recorded 14; utility modules fall from two to zero. See the scoped
+  [design note](docs/verification/macos/design.md).
+- Python closure: remove the deprecated workspace-wide extension feature that
+  prevents embedded test executables from linking Python. Preserve Maturin's
+  environment-selected extension mode and use PyO3's cdylib build helper. Both
+  Rust tests pass; the WGPU lifecycle executes its three binding clauses, and
+  a real imported extension computes exact add/sum/min/max Metal values without
+  linking the interpreter library. External dependency identities stay fixed.
+- Loader closure: recognize dyld's direct-image missing-path grammar without
+  concealing dependency, invalid-image, or missing-symbol faults. Driver/NVRTC
+  symbol tests select the real macOS system library. Nine loader contracts
+  pass, and required CUDA still rejects absent hardware. The complete locked
+  Rust 1.97.0 workspace passes 777 tests with zero Nextest skips.
+- Conversion closure: replace bare casts throughout fixed/staggered FD
+  conformance, CTC and window metadata, host CTC/FD, prepared-output identity
+  tests, and Metal Laplacian fixtures with checked/lossless/native-precision
+  conversions. Conformance/core/host/ROCm/WGPU counts fall from
+  50/48/37/169/319 to 30/24/19/162/298 under the unchanged budget. Fixture
+  domains, values, tolerances, and operation order retain their contracts.
+- Residual: hosted workflow execution and Intel hardware are unmeasured;
+  the separate forwarding-crate retirement and native-kernel/performance
+  roadmap retain their existing scope. Target version: 0.20.4.
 
 <a id="heph-shape-ops-provider-1"></a>
 
@@ -26,15 +74,16 @@
 - Status: split one op at a time (per ADR 0062's precedent), not one
   `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `RollOps` (ADR 0069),
   `TriangularOps` (ADR 0070, tril/triu) — all host + wgpu.
-- Triangular residual: CUDA, ROCm, and Metal implementors plus the
+- Triangular residual: CUDA and ROCm implementors plus the
   `assert_backend_contract` aggregate fold remain tracked scope; host + wgpu
-  delivery does not close those backend obligations.
+  delivery does not close those backend obligations. The canonical WGPU
+  implementation also passes the required-device Metal lane (ADR 0047).
 - Outcome: cat, split, stack, gather, scatter, index_select, index_put,
   masked_fill, tile, where, sort, and nonzero remain, implemented
   natively on every accelerator backend (no host round-trip), split into
   their own items as each is taken up.
-- Scope: per-op core domain seam + wgpu/cuda/rocm/metal application
-  modules; conformance clauses differential-tested against Leto per op.
+- Scope: per-op core domain seam + wgpu/cuda/rocm application modules;
+  Metal uses WGPU per ADR 0047. Conformance clauses compare against Leto per op.
 - Driver: coeus's accelerator bridge has no path for this family today and
   falls back to host execution for every one of these ops (relayed consumer
   audit, 2026-09-26).
@@ -47,13 +96,14 @@
 
 <a id="heph-topk-argminmax-provider-1"></a>
 
-## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm/Metal for topk/argmax/argmin [minor] — todo
+## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm for topk/argmax/argmin [minor] — todo
 - Priority: feature.
 - Status: `ArgReduceOps` (argmax/argmin, ADR 0063) and `TopKOps` (topk, ADR
   0066) both delivered — host + wgpu, differential-tested including tie-break
   cases. Narrowed to the remaining backends and the `assert_backend_contract`
-  aggregate fold (deferred until a seam has all four backend implementations).
-- Outcome: `ArgReduceOps`/`TopKOps` implemented for cuda/rocm/metal.
+  aggregate fold (deferred until a seam has every provider implementation).
+- Outcome: `ArgReduceOps`/`TopKOps` implemented for cuda/rocm. The canonical
+  WGPU implementations pass on Metal under HEPH-MACOS-METAL-CONFORMANCE-1.
 - Scope: per-backend implementors following the existing wgpu kernels'
   algorithms (host/wgpu already agree on tie-break by construction — matching
   algorithm, not just contract); conformance already covers the shared
@@ -72,8 +122,8 @@
   Narrowed to the gradient counterpart, which this increment does not cover.
 - Outcome: the backward pass for embedding gather — scatter-add gradients
   into a table-shaped gradient buffer at the same indices `gather_into` read.
-- Scope: core seam addition, wgpu device implementor first (cuda/rocm/metal
-  follow), conformance vs a host-loop reference (accumulation order must be
+- Scope: core seam addition, wgpu device implementor first (including Metal;
+  cuda/rocm follow), conformance vs a host-loop reference (accumulation order must be
   documented since scatter-add is not commutative-associative in float
   rounding across execution orders).
 - Driver: coeus consumer audit — needed for the embedding-lookup layer's
@@ -84,7 +134,7 @@
 
 <a id="heph-interpolation-provider-1"></a>
 
-## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm/Metal for interpolation [minor] — todo
+## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm for interpolation [minor] — todo
 - Priority: feature.
 - Status: `InterpolationOps` (nearest/linear, ADR 0067) delivered — host +
   wgpu, align-corners convention, differential-tested including the
@@ -92,9 +142,10 @@
   separate mode: on a regular grid it composes as two calls to
   `interpolate_axis_into` (documented in the ADR), so it needs no distinct
   binding. Narrowed to the remaining backends and the
-  `assert_backend_contract` aggregate fold (deferred until a seam has all
-  four backend implementations).
-- Outcome: `InterpolationOps` implemented for cuda/rocm/metal.
+  `assert_backend_contract` aggregate fold (deferred until a seam has every
+  provider implementation).
+- Outcome: `InterpolationOps` implemented for cuda/rocm. The canonical WGPU
+  implementation passes on Metal under HEPH-MACOS-METAL-CONFORMANCE-1.
 - Scope: per-backend implementors following the existing wgpu kernel's
   algorithm (host/wgpu already agree on the align-corners mapping and the
   nearest-mode tie rule by construction); conformance already covers the
@@ -106,7 +157,7 @@
 
 <a id="heph-adaptive-pooling-provider-1"></a>
 
-## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm/Metal for adaptive pooling [minor] — todo
+## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm for adaptive pooling [minor] — todo
 - Priority: feature.
 - Status: `AdaptivePoolingOps` (avg/max, ADR 0068) delivered — host + wgpu,
   differential-tested including the non-divisible-extent case (windows can
@@ -114,9 +165,10 @@
   `out_len == in_len` degenerate cases. 2D pooling is not a separate mode:
   it composes as two calls to `adaptive_pool_axis_into` (documented in the
   ADR). Narrowed to the remaining backends and the `assert_backend_contract`
-  aggregate fold (deferred until a seam has all four backend
+  aggregate fold (deferred until a seam has every provider
   implementations).
-- Outcome: `AdaptivePoolingOps` implemented for cuda/rocm/metal.
+- Outcome: `AdaptivePoolingOps` implemented for cuda/rocm. The canonical WGPU
+  implementation passes on Metal under HEPH-MACOS-METAL-CONFORMANCE-1.
 - Scope: per-backend implementors following the existing wgpu kernel's
   window-derivation formula; conformance already covers the shared clause,
   so this item is implementation-only.
@@ -138,8 +190,9 @@
   half that had no seam at all.
 - Outcome: cross-product batched over flat `(x, y, z)` triples, on-device.
 - Scope: `hephaestus-core`/`hephaestus-host`/`hephaestus-wgpu` delivered;
-  cuda/rocm/metal implementors remain, plus the `assert_backend_contract`
-  aggregate fold once all four backends implement it.
+  cuda/rocm implementors remain, plus the `assert_backend_contract` aggregate
+  fold once every provider implements it. The canonical WGPU implementation
+  also passes on Metal under HEPH-MACOS-METAL-CONFORMANCE-1.
 - Driver: coeus consumer audit, 2026-09-26.
 - Verification: differential vs the standard basis identities (host +
   real-device wgpu), strict Clippy, independent review.
@@ -147,12 +200,13 @@
 
 <a id="heph-fused-expr-rocm-metal-1"></a>
 
-## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm/Metal [minor] [arch] — todo
+## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm [minor] [arch] — todo
 - Priority: feature.
 - Outcome: the fused-expression dispatch seam that wgpu and cuda already
-  implement gains ROCm and Metal implementors, so backend choice does not
-  change which expressions fuse.
-- Scope: port the existing wgpu/cuda fused-dispatch design to rocm/metal
+  implement gains a ROCm implementor, so backend choice does not change which
+  expressions fuse. The canonical WGPU expression dispatch passes on Metal
+  under HEPH-MACOS-METAL-CONFORMANCE-1.
+- Scope: port the existing wgpu/cuda fused-dispatch design to rocm
   through the generic accelerator layer; no per-vendor algorithm fork.
 - Driver: coeus consumer audit — coeus cannot rely on fusion outside
   wgpu/cuda today.

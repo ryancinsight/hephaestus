@@ -1,16 +1,11 @@
-//! Shared decomposition-clause support: the derived bound and the
-//! multi-family identity clause.
-//!
-//! Single-family helpers live with their families; only genuinely shared
-//! items are here.
+//! Analytical identity-factorization oracle shared across decomposition families.
 
 use hephaestus_core::{
     CholeskyHandle, ComputeDevice, DecompositionOps, LuHandle, QrHandle, StridedView,
 };
 use leto::Layout;
 
-/// Derived clause bound; see the module-level derivation.
-pub(crate) const DECOMP_BOUND: f32 = 1e-3;
+use super::tolerance::DECOMP_BOUND;
 
 /// Factorizing the identity is exact: every arithmetic step multiplies by
 /// 0 or 1 or takes `sqrt(1)`, so no rounding occurs and the factors admit

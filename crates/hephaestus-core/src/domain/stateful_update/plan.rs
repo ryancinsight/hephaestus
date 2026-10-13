@@ -118,7 +118,7 @@ where
                     message: format!("operand {operand} address range rejected: {error}"),
                 }
             })?;
-            if maximum > i32::MAX as usize {
+            if i32::try_from(maximum).is_err() {
                 return Err(HephaestusError::DispatchFailed {
                     message: format!(
                         "operand {operand} maximum offset {maximum} exceeds device i32 address range"

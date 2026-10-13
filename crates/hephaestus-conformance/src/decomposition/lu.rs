@@ -5,7 +5,7 @@ use leto::Layout;
 
 use hephaestus_core::{FullPivLuHandle, LuHandle};
 
-use super::common::DECOMP_BOUND;
+use super::tolerance::DECOMP_BOUND;
 
 /// LU with a forced pivot: `A = [[0,2,1],[1,1,1],[2,4,1]]` has `a₀₀ = 0`,
 /// `det A = 4`, and `A·[1,1,1]ᵀ = [3,3,7]ᵀ`.

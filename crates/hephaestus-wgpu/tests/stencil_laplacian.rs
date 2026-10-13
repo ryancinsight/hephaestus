@@ -10,6 +10,7 @@
 //! stencil, including Dirichlet/Neumann/Periodic boundary handling.
 
 use aequitas::systems::si::{quantities::Length, units::Meter};
+use eunomia::FloatElement;
 use hephaestus_core::{ComputeDevice, HephaestusError};
 use hephaestus_wgpu::{
     BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity, WgpuDevice,
@@ -59,8 +60,8 @@ fn run_laplacian(
     let input = device.upload(field).unwrap();
     let output = device.alloc_zeroed::<f32>(field.len()).unwrap();
     let params = Laplacian2DParams::new(
-        nx as u32,
-        ny as u32,
+        u32::try_from(nx).expect("fixture x extent fits device"),
+        u32::try_from(ny).expect("fixture y extent fits device"),
         Length::from_unit::<Meter>(dx),
         Length::from_unit::<Meter>(dy),
         bc,
@@ -76,7 +77,7 @@ fn run_laplacian(
 }
 
 pub(super) fn laplacian_minimum_grid_matches_cpu_reference() {
-    let field: Vec<f32> = (0..4).map(|i| (i as f32) * 0.5 - 0.75).collect();
+    let field: Vec<f32> = (0..4).map(|i| f32::from_count(i) * 0.5 - 0.75).collect();
     let Some(got) = run_laplacian(&field, 2, 2, 1.0, 1.0, BoundaryCondition::Dirichlet) else {
         return;
     };
@@ -86,7 +87,7 @@ pub(super) fn laplacian_minimum_grid_matches_cpu_reference() {
 
 pub(super) fn laplacian_dirichlet_matches_cpu_reference() {
     let Some(got) = run_laplacian(
-        &(0..30).map(|i| i as f32).collect::<Vec<_>>(),
+        &(0..30).map(f32::from_count).collect::<Vec<_>>(),
         6,
         5,
         0.5,
@@ -96,7 +97,7 @@ pub(super) fn laplacian_dirichlet_matches_cpu_reference() {
         return;
     };
     let expected = leto_laplacian_2d(
-        &(0..30).map(|i| i as f32).collect::<Vec<_>>(),
+        &(0..30).map(f32::from_count).collect::<Vec<_>>(),
         6,
         5,
         0.5,
@@ -109,8 +110,8 @@ pub(super) fn laplacian_dirichlet_matches_cpu_reference() {
 pub(super) fn laplacian_neumann_matches_cpu_reference() {
     let field: Vec<f32> = (0..30)
         .map(|k| {
-            let i = (k % 6) as f32;
-            let j = (k / 6) as f32;
+            let i = f32::from_count(k % 6);
+            let j = f32::from_count(k / 6);
             (i + 1.0).ln() + (j + 2.0).sin()
         })
         .collect();
@@ -125,8 +126,8 @@ pub(super) fn laplacian_neumann_matches_cpu_reference() {
 pub(super) fn laplacian_periodic_matches_cpu_reference() {
     let field: Vec<f32> = (0..30)
         .map(|k| {
-            let i = (k % 6) as f32;
-            let j = (k / 6) as f32;
+            let i = f32::from_count(k % 6);
+            let j = f32::from_count(k / 6);
             i.sin() + j.cos()
         })
         .collect();
@@ -142,8 +143,8 @@ pub(super) fn laplacian_non_square_2x3_matches_cpu_reference() {
     // Covers nx < ny aspect ratio and the nx == 2 minimum in the X direction.
     let field: Vec<f32> = (0..6)
         .map(|k| {
-            let i = (k % 2) as f32;
-            let j = (k / 2) as f32;
+            let i = f32::from_count(k % 2);
+            let j = f32::from_count(k / 2);
             i * i + j * j * j
         })
         .collect();
@@ -159,8 +160,8 @@ pub(super) fn laplacian_non_square_3x2_matches_cpu_reference() {
     // Covers ny < nx aspect ratio and the ny == 2 minimum in the Y direction.
     let field: Vec<f32> = (0..6)
         .map(|k| {
-            let i = (k % 3) as f32;
-            let j = (k / 3) as f32;
+            let i = f32::from_count(k % 3);
+            let j = f32::from_count(k / 3);
             (i + 1.0).ln() + (j + 2.0).sin()
         })
         .collect();
@@ -177,8 +178,8 @@ pub(super) fn laplacian_large_dirichlet_16x16_matches_cpu_reference() {
     let n = 16;
     let field: Vec<f32> = (0..n * n)
         .map(|k| {
-            let i = (k % n) as f32;
-            let j = (k / n) as f32;
+            let i = f32::from_count(k % n);
+            let j = f32::from_count(k / n);
             (i + 1.0).ln() + (j + 2.0).sin()
         })
         .collect();
@@ -195,10 +196,10 @@ pub(super) fn laplacian_large_periodic_16x16_matches_cpu_reference() {
     let n = 16;
     let field: Vec<f32> = (0..n * n)
         .map(|k| {
-            let i = (k % n) as f32;
-            let j = (k / n) as f32;
-            let x = 2.0 * std::f32::consts::PI * i / n as f32;
-            let y = 2.0 * std::f32::consts::PI * j / n as f32;
+            let i = f32::from_count(k % n);
+            let j = f32::from_count(k / n);
+            let x = 2.0 * std::f32::consts::PI * i / f32::from_count(n);
+            let y = 2.0 * std::f32::consts::PI * j / f32::from_count(n);
             x.sin() * y.cos()
         })
         .collect();
