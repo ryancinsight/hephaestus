@@ -27,7 +27,12 @@ const DECOMPOSITION_SOURCES: &[(&str, &str)] = &[
     ),
     (
         "col_piv_qr",
-        include_str!("../src/application/decomposition/col_piv_qr.rs"),
+        concat!(
+            include_str!("../src/application/decomposition/col_piv_qr/types.rs"),
+            include_str!("../src/application/decomposition/col_piv_qr/source.rs"),
+            include_str!("../src/application/decomposition/col_piv_qr/stages.rs"),
+            include_str!("../src/application/decomposition/col_piv_qr/api.rs"),
+        ),
     ),
     (
         "eigen",
