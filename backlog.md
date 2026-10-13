@@ -1,5 +1,22 @@
 # Backlog — hephaestus
 
+<a id="heph-wgpu-bundle-1"></a>
+
+## HEPH-WGPU-BUNDLE-1 — Pre-validated compute bundles for repeated dispatches [minor] — todo
+- Priority: tightening.
+- Hypothesis: recording each repeatedly dispatched prepared op once into a
+  `wgpu::ComputeBundle` removes per-dispatch `finish` validation (38.0us of
+  52us host per 65536-element reduction, debug) while keeping one submit per
+  dispatch so host/GPU pipelining is preserved — the combination the falsified
+  shared-encoder batch (HEPH-WGPU-REDUCTION-BATCH-1) could not achieve.
+- Scope: one op family first (full reduction); bundle recorded at prepare
+  time, executed per dispatch. Exact-value conformance must prove bundle
+  outputs equal direct-dispatch outputs; criterion must show a measured
+  per-dispatch win on RTX 5080 WDDM before extending to other families.
+- Acceptance: same gates as any perf increment (strict Clippy, rustdoc,
+  required-device lanes); close unfavorably with numbers if bundles do not
+  beat direct dispatch end-to-end.
+
 <a id="heph-wgpu-reduction-batch-1"></a>
 
 ## HEPH-WGPU-REDUCTION-BATCH-1 — Batched full-reduction dispatch — resolved (falsified, not shipped)
