@@ -229,7 +229,7 @@ pub(crate) fn qr_r_buffer_contract_at_shape(
     use leto::Layout;
 
     assert_eq!(
-        n.div_ceil(32) > 4 && m >= 256,
+        n.div_ceil(32) > 4 && m >= 2048,
         blocked_route,
         "fixture [{m}, {n}] must land in the intended routing regime"
     );
@@ -314,13 +314,12 @@ pub(crate) fn qr_accumulated_q_contract_at_shape(
     m: usize,
     n: usize,
     blocked_route: bool,
-    check_orthogonality: bool,
 ) {
     use hephaestus_wgpu::{StridedOperand, qr_decompose_blocked};
     use leto::Layout;
 
     assert_eq!(
-        n.div_ceil(32) > 4 && m >= 256,
+        n.div_ceil(32) > 4 && m >= 2048,
         blocked_route,
         "fixture [{m}, {n}] must land in the intended routing regime"
     );
@@ -377,30 +376,11 @@ pub(crate) fn qr_accumulated_q_contract_at_shape(
         }
     }
 
-    if !check_orthogonality {
-        return;
-    }
-
-    // Elementwise agreement with a same-order reference cannot detect a wrong
-    // reflector order if both orders were wrong alike, so QᵀQ is checked
-    // against I independently. The same backward-stability constant bounds the
-    // departure from orthogonality; the f64 accumulation below contributes at
-    // most m·ε_f64, negligible against it.
-    let mut max_residual = 0.0f64;
-    for i in 0..m {
-        for j in 0..m {
-            let mut dot = 0.0f64;
-            for r in 0..m {
-                dot += f64::from(q_gpu[r * m + i]) * f64::from(q_gpu[r * m + j]);
-            }
-            let expected = if i == j { 1.0 } else { 0.0 };
-            max_residual = max_residual.max((dot - expected).abs());
-        }
-    }
-    assert!(
-        max_residual <= f64::from(tolerance),
-        "device Q is not orthogonal at [{m}, {n}]: max |QᵀQ − I| = {max_residual} exceeds {tolerance}"
-    );
+    // Orthogonality (QᵀQ against I, order-independent) lives in the
+    // `qr::tests::blocked_schedule_accumulates_orthogonal_q` unit test, which
+    // drives the shared schedule directly at 160×129: five panels exercise
+    // the multi-panel walk while the m×m Gram stays cheap. Repeating it here
+    // would pay a 2048³ Gram for the same schedule property.
 }
 
 /// Shared adversarial-layout driver: every non-dense view (transposed,

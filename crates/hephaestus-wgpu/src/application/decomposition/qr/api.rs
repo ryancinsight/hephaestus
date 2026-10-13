@@ -75,14 +75,16 @@ const QR_DIRECT_PANEL_LIMIT: usize = 4;
 
 /// Minimum row count for the blocked schedule to pay. Below it the per-panel
 /// gather/download/factor/upload/scatter round-trips dominate the GPU
-/// trailing update at every measured width (RTX 5080, WDDM:
-/// 192x129 direct 346 us vs blocked 1171 us; 240x161 701 us vs 1666 us),
-/// while at 256 rows and above the blocked path wins up to 1.7x
-/// (256x129 1622 us vs 1283 us; 768x513 19105 us vs 13301 us).
-/// The cut sits exactly on leto's `BLOCK_MIN_ROWS` unblocked/blocked
-/// boundary, so the direct regime always runs leto's fast unblocked sweep;
-/// re-tune from a fresh crossover sweep if either threshold moves.
-const QR_DIRECT_ROW_LIMIT: usize = 256;
+/// trailing update at every measured width (RTX 5080 WDDM + strong release
+/// profile + leto column-gated QR: 256x129 direct 568 us vs blocked
+/// 1386 us; 512x512 5351 us vs 9263 us; 1024x1024 32103 us vs 48443 us;
+/// 1536x1536 1.24x; 2048x512 1.40x). The first non-loss for the blocked
+/// path is the 2048x2048 tie (231.5 ms vs 229.3 ms), so the cut sits there;
+/// larger shapes keep the GPU path, whose per-panel tax fraction shrinks
+/// with size. Tuned on f32; f64 consumer-GPU arithmetic favors direct
+/// further. Re-tune from a fresh crossover sweep if the profile, the leto
+/// gate, the transfer stack, or the trailing kernel changes.
+const QR_DIRECT_ROW_LIMIT: usize = 2048;
 
 /// Blocked QR factorization **A = Q R** with hybrid trailing Householder
 /// application.
