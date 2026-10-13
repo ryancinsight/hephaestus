@@ -2,20 +2,30 @@
 
 <a id="heph-wgpu-bundle-1"></a>
 
-## HEPH-WGPU-BUNDLE-1 — Pre-validated compute bundles for repeated dispatches [minor] — todo
+## HEPH-WGPU-BUNDLE-1 — Pre-validated compute bundles for repeated dispatches — resolved (infeasible)
+- Priority: tightening. No version bump: no code changed.
+- Cause: wgpu 30 exposes render bundles only; there is no
+  `ComputeBundle`/`create_compute_bundle_encoder`/`execute_bundles` API, and a
+  finished `CommandBuffer` is single-submit. The item's mechanism does not
+  exist. Verified against wgpu 30.0.0 sources on 2026-10-13.
+- Redirect: HEPH-WGPU-FUSION-1 below is the remaining candidate against
+  per-dispatch finish validation and per-pass WDDM latency.
+
+<a id="heph-wgpu-fusion-1"></a>
+
+## HEPH-WGPU-FUSION-1 — Fuse reduction passes to cut per-dispatch commands [minor] — todo
 - Priority: tightening.
-- Hypothesis: recording each repeatedly dispatched prepared op once into a
-  `wgpu::ComputeBundle` removes per-dispatch `finish` validation (38.0us of
-  52us host per 65536-element reduction, debug) while keeping one submit per
-  dispatch so host/GPU pipelining is preserved — the combination the falsified
-  shared-encoder batch (HEPH-WGPU-REDUCTION-BATCH-1) could not achieve.
-- Scope: one op family first (full reduction); bundle recorded at prepare
-  time, executed per dispatch. Exact-value conformance must prove bundle
-  outputs equal direct-dispatch outputs; criterion must show a measured
-  per-dispatch win on RTX 5080 WDDM before extending to other families.
+- Hypothesis: fusing each reduction tree (and map+reduce pairs) into fewer
+  compute passes reduces both per-dispatch `finish` validation (scales with
+  command count) and per-pass WDDM drain latency (~25us/pass measured on RTX
+  5080), the two costs shared-encoder batching could not remove
+  (HEPH-WGPU-REDUCTION-BATCH-1).
+- Scope: spike first on one op family (full reduction, N=65536): fuse levels
+  where the workgroup math admits it, prove exact-value equality with direct
+  dispatch, and measure end-to-end on RTX 5080 WDDM. Ship only on a measured
+  win; close unfavorably with numbers otherwise.
 - Acceptance: same gates as any perf increment (strict Clippy, rustdoc,
-  required-device lanes); close unfavorably with numbers if bundles do not
-  beat direct dispatch end-to-end.
+  required-device lanes).
 
 <a id="heph-wgpu-reduction-batch-1"></a>
 
