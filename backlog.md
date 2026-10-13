@@ -1,5 +1,33 @@
 # Backlog — hephaestus
 
+<a id="heph-wgpu-reduction-batch-1"></a>
+
+## HEPH-WGPU-REDUCTION-BATCH-1 — Batched full-reduction dispatch — resolved (falsified, not shipped)
+- Priority: tightening. No version bump: no code changed.
+- Hypothesis: one `FullReductionOps::dispatch_many_full` seam method sharing
+  a single encoder/submission across N prepared reductions would remove
+  per-op submit overhead (default per-op loop on other backends).
+- Falsification (2026-10-13, RTX 5080 WDDM, criterion, 8x f32 full reduction
+  + one wait): N=65536 sequential 520us vs batched 513us (1.01x); N=256
+  sequential 202us vs batched 176us (1.15x). A correct implementation with
+  exact-value conformance on WGPU/CUDA/host was built, measured, and reverted.
+- Mechanism: (1) `CommandEncoder::finish` validates per command, so one big
+  encoder costs ~4x a small one (146.6us vs 38.0us debug); the fixed part of
+  `submit` (~42us) is the only real saving. (2) Sequential dispatch pipelines
+  host encoding with GPU execution, while a shared encoder serializes all
+  host work before the GPU starts; the submission saving is consumed by the
+  later GPU start plus a longer single drain. (3) Error-scope pops are cheap
+  (1.9us); they were never the bottleneck. Per-op piece costs (debug, one
+  65536 reduction): create 3.9us, encode 6.8us, finish 38.0us, submit 42.8us,
+  wait 99.5us.
+- Follow-up: the true per-dispatch costs are finish-time validation and the
+  fixed submit+wait round-trip (~130us). Candidates that attack those
+  directly: pre-validated compute bundles for repeatedly dispatched prepared
+  ops, and kernel fusion across reductions (fewer passes, not fewer submits).
+  Map-reduction (dot/norm) facade batching still needs a core seam first.
+- Re-open trigger: a measured caller batching 32+ reductions per round-trip,
+  or a platform where submit (not finish or GPU start) dominates.
+
 ## HEPH-WGPU-READBACK-COMPLETION-407 [patch] — resolved
 
 - Priority: correctness. Target version: 0.20.3.
