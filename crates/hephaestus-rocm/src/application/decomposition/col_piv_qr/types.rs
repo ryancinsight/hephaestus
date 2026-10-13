@@ -1,5 +1,5 @@
 use eunomia::{Pod, Zeroable};
-use hephaestus_core::{BlockWidth, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, ComputeDevice, DeviceBuffer, HephaestusError, Result};
 use leto::Layout;
 
 use crate::RocmDevice;
@@ -10,10 +10,10 @@ pub(crate) const WIDTH: BlockWidth = BlockWidth::DEFAULT;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(crate) struct ColPivQrMeta {
-    rows: u32,
-    cols: u32,
-    pivots: u32,
-    k: u32,
+    pub(crate) rows: u32,
+    pub(crate) cols: u32,
+    pub(crate) pivots: u32,
+    pub(crate) k: u32,
 }
 
 const _: () = assert!(core::mem::size_of::<ColPivQrMeta>() == 16);
@@ -21,16 +21,16 @@ const _: () = assert!(core::mem::size_of::<ColPivQrMeta>() == 16);
 /// Column-pivoted QR result with device-backed **Q**, **R**, and permutation.
 pub struct GpuColPivQrDecomposition {
     /// Host-side reference retained for scalar least-squares solves.
-    inner: leto_ops::ColPivQrDecomposition<f32>,
+    pub(crate) inner: leto_ops::ColPivQrDecomposition<f32>,
     /// Materialized orthogonal factor **Q** on the device.
-    q: RocmBuffer<f32>,
+    pub(crate) q: RocmBuffer<f32>,
     /// Upper-triangular factor **R** on the device.
-    r: RocmBuffer<f32>,
+    pub(crate) r: RocmBuffer<f32>,
     /// Column permutation, where each entry is the original column at that position.
-    permutation: Vec<usize>,
-    rank: usize,
-    rows: usize,
-    cols: usize,
+    pub(crate) permutation: Vec<usize>,
+    pub(crate) rank: usize,
+    pub(crate) rows: usize,
+    pub(crate) cols: usize,
 }
 
 impl GpuColPivQrDecomposition {

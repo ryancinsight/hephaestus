@@ -1,5 +1,3 @@
-use super::types::ColPivQrMeta;
-
 pub(crate) fn kernel_source() -> String {
     r#"
 struct ColPivQrMeta {

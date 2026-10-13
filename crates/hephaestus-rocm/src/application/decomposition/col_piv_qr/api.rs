@@ -1,4 +1,6 @@
-use hephaestus_core::{HephaestusError, IdentityOp, Result, map_layout_err};
+use hephaestus_core::{
+    ComputeDevice, DeviceBuffer, HephaestusError, IdentityOp, Result, map_layout_err,
+};
 use leto::Layout;
 
 use crate::RocmDevice;
