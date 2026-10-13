@@ -5,7 +5,7 @@ use crate::infrastructure::buffer::WgpuBuffer;
 use eunomia::Pod;
 use hephaestus_core::{HephaestusError, Result, validate_slice_alignment};
 use std::borrow::Cow;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 impl WgpuDevice {
     pub(super) fn download_into<T: Pod>(
@@ -232,13 +232,17 @@ impl WgpuDevice {
         // staging allocation on the way out, aborting the pending `map_async`
         // rather than recycling a buffer with a live mapping request.
         let mapping = MappingLifecycle(&staging);
+        let wait_started = Instant::now();
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: Some(submission_index),
                 timeout: Some(timeout),
             })
             .map_err(|error| poll_failure(label, timeout, &error))?;
-        completion.result()?;
+        // A concurrent WGPU poller can own the extracted callback while this
+        // submission wait returns. Wait for its publication before accessing
+        // mapped bytes, consuming only the original wait budget's remainder.
+        completion.wait(wait_started, timeout, label)?;
 
         // byte_len comes from byte_size::<T>(n) = n * size_of::<T>(), which fits usize.
         let byte_len_usize = usize::try_from(byte_len)

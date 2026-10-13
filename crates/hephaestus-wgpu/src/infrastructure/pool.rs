@@ -1,7 +1,8 @@
 //! Transient buffer and readback-completion pooling.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use hephaestus_core::{HephaestusError, Result};
 
@@ -15,6 +16,8 @@ const MAP_FAILED: u8 = 2;
 #[derive(Debug)]
 struct MapCompletionSlot {
     state: AtomicU8,
+    delivery: Mutex<()>,
+    delivered: Condvar,
     retained_claimed: AtomicBool,
     retained_users: AtomicU8,
 }
@@ -23,6 +26,8 @@ impl MapCompletionSlot {
     fn new() -> Self {
         Self {
             state: AtomicU8::new(MAP_PENDING),
+            delivery: Mutex::new(()),
+            delivered: Condvar::new(),
             retained_claimed: AtomicBool::new(false),
             retained_users: AtomicU8::new(0),
         }
@@ -77,20 +82,63 @@ impl MapCompletion {
     }
 
     fn finish(self, state: u8) {
+        let slot = self.slot();
+        // The same guard protects publication/notification and the reader's
+        // predicate check/parking, so notification cannot be lost between
+        // checking MAP_PENDING and going to sleep. No user code runs under it.
+        let _delivery = slot
+            .delivery
+            .lock()
+            .expect("invariant: completion delivery guard cannot be poisoned");
         // The release publishes the callback result to the reader's acquire.
-        self.slot().state.store(state, Ordering::Release);
+        slot.state.store(state, Ordering::Release);
+        slot.delivered.notify_one();
     }
 
-    pub(crate) fn result(&self) -> Result<()> {
+    /// Wait for callback publication within the submission's original budget.
+    ///
+    /// WGPU may extract this callback on a different polling thread and invoke
+    /// it after this reader's submission wait returns. Submission completion
+    /// alone therefore does not establish callback delivery. A terminal acquire
+    /// load is the readback precondition; a wakeup alone is not sufficient.
+    ///
+    /// Every park uses `timeout - started.elapsed()`, including after spurious
+    /// wakeups. Pending state at expiry is a timeout, never a mapping failure.
+    /// Reader ownership spans this wait; callback ownership spans notification.
+    /// Their joint reclamation preserves retained and overflow generation safety.
+    pub(crate) fn wait(&self, started: Instant, timeout: Duration, context: &str) -> Result<()> {
+        let slot = self.slot();
+        let mut state = slot.state.load(Ordering::Acquire);
+        if state == MAP_PENDING {
+            let mut delivery = slot
+                .delivery
+                .lock()
+                .expect("invariant: completion delivery guard cannot be poisoned");
+            loop {
+                state = slot.state.load(Ordering::Acquire);
+                if state != MAP_PENDING {
+                    break;
+                }
+                let remaining = timeout.saturating_sub(started.elapsed());
+                if remaining.is_zero() {
+                    return Err(HephaestusError::DeviceWaitTimeout {
+                        deadline: timeout,
+                        message: format!("{context}: map_async callback delivery"),
+                    });
+                }
+                (delivery, _) = slot
+                    .delivered
+                    .wait_timeout(delivery, remaining)
+                    .expect("invariant: completion delivery guard cannot be poisoned");
+            }
+        }
         // The acquire observes all callback work sequenced before completion.
-        match self.slot().state.load(Ordering::Acquire) {
+        match state {
             MAP_SUCCEEDED => Ok(()),
             MAP_FAILED => Err(HephaestusError::TransferFailed {
                 message: "buffer mapping failed".to_owned(),
             }),
-            _ => Err(HephaestusError::TransferFailed {
-                message: "map_async callback was not delivered after device completion".to_owned(),
-            }),
+            _ => unreachable!("invariant: a completed mapping has a terminal result"),
         }
     }
 }
@@ -255,6 +303,10 @@ impl Drop for PooledBuffer {
 }
 
 #[cfg(test)]
+#[path = "pool/completion_wait_tests.rs"]
+mod completion_wait_tests;
+
+#[cfg(test)]
 mod completion_tests {
     use super::*;
 
@@ -365,16 +417,16 @@ mod completion_tests {
         first_callback.finish(MAP_SUCCEEDED);
         second_callback.finish(MAP_FAILED);
         overflow_callback.finish(MAP_SUCCEEDED);
-        match first_reader.result() {
+        match first_reader.wait(Instant::now(), Duration::ZERO, "first") {
             Ok(()) => {}
             Err(error) => panic!("successful completion reported {error:?}"),
         }
         assert!(matches!(
-            second_reader.result(),
+            second_reader.wait(Instant::now(), Duration::ZERO, "second"),
             Err(HephaestusError::TransferFailed { message })
                 if message == "buffer mapping failed"
         ));
-        match overflow_reader.result() {
+        match overflow_reader.wait(Instant::now(), Duration::ZERO, "overflow") {
             Ok(()) => {}
             Err(error) => panic!("successful overflow completion reported {error:?}"),
         }
@@ -392,9 +444,9 @@ mod completion_tests {
         let (reader, callback) = pool.acquire();
         assert_eq!(pool.retained_in_flight_count(), 1);
         assert!(matches!(
-            reader.result(),
-            Err(HephaestusError::TransferFailed { message })
-                if message == "map_async callback was not delivered after device completion"
+            reader.wait(Instant::now(), Duration::ZERO, "pending"),
+            Err(HephaestusError::DeviceWaitTimeout { deadline, message })
+                if deadline == Duration::ZERO && message == "pending: map_async callback delivery"
         ));
 
         drop(reader);
@@ -411,7 +463,7 @@ mod completion_tests {
         let (reused_reader, reused_callback) = pool.acquire();
         assert_eq!(pool.overflow_allocation_count(), 1);
         reused_callback.finish(MAP_SUCCEEDED);
-        match reused_reader.result() {
+        match reused_reader.wait(Instant::now(), Duration::ZERO, "reused") {
             Ok(()) => {}
             Err(error) => panic!("reused completion reported {error:?}"),
         }
