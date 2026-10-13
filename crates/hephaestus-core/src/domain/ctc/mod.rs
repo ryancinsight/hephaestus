@@ -49,6 +49,7 @@
 //! backward passes. The upstream seed, by contrast, is checked on the host
 //! where the check is free.
 
+mod kernel;
 mod ops;
 mod params;
 mod problem;
@@ -57,6 +58,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
+pub use kernel::CtcKernel;
 pub use ops::{CtcOps, CtcStepOps, drive_ctc_forward};
 pub use params::{CtcBackwardParams, CtcStepParams};
 pub use problem::{CtcProblem, CtcSampleMeta};

@@ -156,6 +156,35 @@ pub trait MultiStorageDevice: ComputeDevice {
     fn storage_binding<T: Pod>(binding: u32, buffer: &Self::Buffer<T>) -> Self::StorageBinding<'_>;
 }
 
+/// Construction contract for C-dialect multi-storage kernels.
+///
+/// CUDA C and HIP C kernels share one construction shape — C source text, an
+/// entry point, flat storage-binding ordinals, a block shape, and shared
+/// memory bytes — compiled at dispatch time by the provider runtime. Backends
+/// whose kernels need richer layouts (bind-group tables, device handles)
+/// keep their own inherent constructors and do not implement this trait.
+/// Generic consumers (the shared CTC kernel) build through this seam so one
+/// monomorphized implementation serves every flat-argument backend.
+pub trait FlatMultiStorageKernel: Sized {
+    /// Construct a kernel from C-dialect source and a flat binding layout.
+    ///
+    /// `storage_bindings` declares the expected flat pointer argument order.
+    /// The POD parameter block is passed as the final kernel argument.
+    ///
+    /// # Errors
+    /// Returns [`HephaestusError::DispatchFailed`] when the entry point is
+    /// empty, no storage bindings are declared, a binding is duplicated, or a
+    /// block dimension is zero.
+    fn new(
+        label: &'static str,
+        source: &'static str,
+        entry_point: &'static str,
+        storage_bindings: &[u32],
+        block: [u32; 3],
+        shared_bytes: u32,
+    ) -> Result<Self>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
