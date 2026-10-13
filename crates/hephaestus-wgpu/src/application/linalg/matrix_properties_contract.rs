@@ -1,4 +1,4 @@
-use super::with_row_major_matrix;
+use super::properties::with_row_major_matrix;
 use leto::Layout;
 
 #[test]

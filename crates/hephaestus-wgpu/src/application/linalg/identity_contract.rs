@@ -6,7 +6,8 @@
     )
 )]
 
-use super::{MatmulZero, MatrixIdentityScalar, identity_buffer_layout, identity_shader_source};
+use super::identity::{identity_buffer_layout, identity_shader_source};
+use super::scalars::{MatmulZero, MatrixIdentityScalar};
 use hephaestus_core::{DialectScalar, Wgsl};
 
 #[repr(transparent)]
