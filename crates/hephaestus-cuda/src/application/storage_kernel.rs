@@ -12,8 +12,8 @@ use std::marker::PhantomData;
 
 use eunomia::Pod;
 use hephaestus_core::{
-    BinaryStorageKernel, DeviceBuffer, DispatchGrid, HephaestusError, MultiStorageDevice,
-    MultiStorageKernel, Result, UnaryStorageKernel,
+    BinaryStorageKernel, DeviceBuffer, DispatchGrid, FlatMultiStorageKernel, HephaestusError,
+    MultiStorageDevice, MultiStorageKernel, Result, UnaryStorageKernel,
 };
 use smallvec::SmallVec;
 
@@ -113,6 +113,26 @@ impl CudaMultiStorageKernel {
             shared_bytes,
             source_hash: source_hash(label, entry_point, source),
         })
+    }
+}
+
+impl FlatMultiStorageKernel for CudaMultiStorageKernel {
+    fn new(
+        label: &'static str,
+        source: &'static str,
+        entry_point: &'static str,
+        storage_bindings: &[u32],
+        block: [u32; 3],
+        shared_bytes: u32,
+    ) -> Result<Self> {
+        Self::new(
+            label,
+            source,
+            entry_point,
+            storage_bindings,
+            block,
+            shared_bytes,
+        )
     }
 }
 

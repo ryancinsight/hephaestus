@@ -51,7 +51,7 @@ pub use domain::convolution::{
 };
 pub use domain::cross_product::{CrossProductOps, validate_cross_product_lengths};
 pub use domain::ctc::{
-    CtcBackwardParams, CtcOps, CtcProblem, CtcSampleMeta, CtcStateBuffers, CtcStepOps,
+    CtcBackwardParams, CtcKernel, CtcOps, CtcProblem, CtcSampleMeta, CtcStateBuffers, CtcStepOps,
     CtcStepParams, drive_ctc_forward,
 };
 pub use domain::decomposition::{
@@ -87,7 +87,8 @@ pub use domain::interpolation::{
     InterpolationMode, InterpolationOps, validate_interpolation_shape,
 };
 pub use domain::kernel::{
-    BinaryStorageKernel, DispatchGrid, MultiStorageDevice, MultiStorageKernel, UnaryStorageKernel,
+    BinaryStorageKernel, DispatchGrid, FlatMultiStorageKernel, MultiStorageDevice,
+    MultiStorageKernel, UnaryStorageKernel,
 };
 pub use domain::launch::BlockWidth;
 pub use domain::loss::{
