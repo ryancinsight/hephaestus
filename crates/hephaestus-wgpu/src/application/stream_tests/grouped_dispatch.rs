@@ -1,4 +1,9 @@
 use super::*;
+use hephaestus_core::{
+    DispatchGrid, GroupedBinding, GroupedCommandStream, GroupedKernelDevice, GroupedKernelSequence,
+    HephaestusError,
+};
+use std::marker::PhantomData;
 
 pub(crate) fn grouped_command_stream_dispatches_multi_group_wgsl_kernel() {
     let Some(device) = try_device() else {

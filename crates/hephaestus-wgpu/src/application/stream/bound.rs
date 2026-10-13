@@ -11,7 +11,8 @@ use crate::application::bindings::BindGroups;
 use crate::application::prepared::{device_owner, validate_device_owner};
 use crate::infrastructure::device::{PipelineCache, WgpuDevice};
 
-use super::{WgpuGroupedPrepared, WgpuGroupedSequence, build_grouped_bind_groups};
+use super::grouped::build_grouped_bind_groups;
+use super::{WgpuGroupedPrepared, WgpuGroupedSequence};
 
 /// A grouped WGPU dispatch with fixed buffers and launch geometry.
 ///

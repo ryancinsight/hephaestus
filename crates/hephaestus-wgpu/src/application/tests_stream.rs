@@ -1,4 +1,5 @@
 use super::*;
+use hephaestus_core::{GroupedKernelSource, Wgsl};
 use std::borrow::Cow;
 
 use hephaestus_core::{

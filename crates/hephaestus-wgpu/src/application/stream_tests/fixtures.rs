@@ -1,4 +1,6 @@
 use super::*;
+use crate::infrastructure::device::WgpuDevice;
+use hephaestus_core::{GroupedKernelSource, KernelSource, Wgsl};
 
 #[repr(C)]
 #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
