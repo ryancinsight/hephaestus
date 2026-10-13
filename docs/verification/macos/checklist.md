@@ -35,13 +35,16 @@ Target version: **0.20.4**. Change class: **[patch]**. Phase: **Closure**.
 - [x] [patch] Integrate upstream `cf811ae9`; partition its new utility modules
   into typed dispatch and host decomposition type/solve leaves, with direct
   device uploads and every existing numerical oracle retained.
+- [x] [patch] Replace 64 moved upstream casts; preserve native probe-input bits
+  and reference results, pointer identity, grids, and Python integers. Validate
+  CUDA argument word boundaries before dispatch; pass all 780 workspace tests.
 - [ ] [patch] Pass the final exact-head hosted Metal/provider gates and merge.
 - [x] [patch] Preserve standalone Git dependency identities in Cargo.lock;
   synchronize version, README, backlog, audit, and changelog evidence.
 
 Evidence (2026-10-13, aarch64 macOS, Rust 1.95.0, standalone `--locked`
-dependency graph): 146 default WGPU/Metal, 80 minimal WGPU, 83
-decomposition-only WGPU, 80 sparse-only WGPU, and 341 core/conformance/host
+dependency graph): 148 default WGPU/Metal, 82 minimal WGPU, 85
+decomposition-only WGPU, 82 sparse-only WGPU, and 341 core/conformance/host
 Nextest tests pass with zero skips; four doctests pass. Both Clippy surfaces
 pass with warnings denied, and rustdoc passes with `RUSTDOCFLAGS='-D warnings'`.
 The consolidated integration suites retain 191 default, 142 minimal, 189
@@ -53,7 +56,8 @@ executes all three binding clauses; the CUDA test has no hardware evidence on
 this Mac. A manual extension build under `PYO3_BUILD_EXTENSION_MODULE=1` imports
 and computes exact 515-element Metal results; its linkage contains no Python
 interpreter library.
-The complete Rust 1.97.0 workspace run passes 777 tests with zero Nextest skips.
+The initial Rust 1.97.0 workspace run passes 777 tests with zero Nextest skips;
+after upstream conversion closure, all 780 pass with the three new contracts.
 Nine focused driver/compiler loader contracts pass; the dependency fixture
 computes `x*x + x + 1` as 7, 13 and 31 before its owned dependency is removed.
 CUDA hardware clauses remain unavailable here; these counts establish portable
@@ -70,3 +74,6 @@ Acceptance: successful Metal acquisition retains `Backend::Metal`; all
 advertised WGPU operation contracts pass through that adapter. Incompatible
 limits and missing required devices fail. The existing 60-second per-test
 timeout remains the verification bound.
+
+The complete workspace doctest run includes the Python binding under default
+embedding linkage and passes six executable examples with warnings denied.

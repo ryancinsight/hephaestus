@@ -94,3 +94,24 @@ type from the Leto solve bridge. Callers upload through `ComputeDevice` directly
 the internal upload-only forwarding function is removed. Public definitions,
 solve order, buffers, errors, numerical inputs, and value oracles remain identical.
 The inherited QR routing optimization and source partitions remain in the merge.
+
+The upstream merge also moves 64 bare conversion sites into new leaf files.
+CUDA launch arguments use `ptr::from_mut(...).cast()`, preserving each stack
+argument's address and lifetime. Matmul workgroup counts derive from dimensions
+already checked by `GpuMatrixLayout`; `ceil(n/16)` has the same value at the
+validated word width. Batch counts and reduction lengths must fit the kernels'
+unsigned 32-bit arguments before any dispatch. Batch chunks satisfy
+`offset + chunk <= count <= u32::MAX`; reduction counts decrease by ceiling
+division with the validated block width. Neither argument can truncate.
+
+Canary inputs use one native-precision generator. Integer samples, dyadic
+fractions, 1/10, and each format's E constant retain every original input bit;
+the test checks both operand arrays for all four builtins at both precisions.
+The associated `Reference` type declares the binary64 CPU truth used to grade
+lowering accuracy. Generic reference evaluation retains the native libm result
+bits; live precision probes still execute on Metal. GPU arithmetic does not
+widen. Cache tags preserve the original builtin discriminants. Python returns
+native-width permutation indices as the same exact Python integers, avoiding
+an unnecessary intermediate widening. Existing fixtures, tolerances, workloads,
+errors, and public numerical APIs remain unchanged. Oversized CUDA counts now
+return a typed dispatch failure instead of truncating their kernel arguments.

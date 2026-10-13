@@ -1,3 +1,4 @@
+use eunomia::FloatElement;
 use hephaestus_core::{
     AxisReductionOps, CombineExpr, ComputeDevice, IdentityToken, OpIdentity, StridedView, SumOp,
 };
@@ -29,7 +30,7 @@ where
     let axis_len = 500usize;
     let rows = 3usize;
     let host: Vec<f32> = (0..rows * axis_len)
-        .map(|index| (index % 97) as f32 * 0.1 + 0.01)
+        .map(|index| f32::from_count(index % 97) * 0.1 + 0.01)
         .collect();
     let source = device.upload(&host).expect("fixture upload");
     let out = device.alloc_zeroed::<f32>(rows).expect("output alloc");
@@ -52,7 +53,7 @@ where
     for row in 0..rows {
         let view = leto_input.view();
         let abs_sum: f32 = (0..axis_len).map(|col| view[[row, col]].abs()).sum();
-        let tolerance = abs_sum * axis_len as f32 * f32::EPSILON * 4.0;
+        let tolerance = abs_sum * f32::from_count(axis_len) * f32::EPSILON * 4.0;
         assert!(
             (got[row] - expected[row]).abs() <= tolerance,
             "{name}: axis sum row {row} = {} must match Leto's sequential sum {} within \

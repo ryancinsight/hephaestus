@@ -44,7 +44,7 @@
   features, both preferences, bounded enumeration, capacity rejection, and
   exact 257-element unsigned addition across a workgroup boundary.
 - Evidence: aarch64 macOS, Rust 1.95.0, standalone `--locked` graph on
-  2026-10-13: 146 default WGPU/Metal, 80 minimal, 83 decomposition-only, 80
+  2026-10-13: 148 default WGPU/Metal, 82 minimal, 85 decomposition-only, 82
   sparse-only, and 341 core/conformance/host Nextest tests pass with zero skips.
   The consolidated suites retain 191/142/189/147 named cases in those four
   feature configurations. Both facade surfaces, warning-denied default/minimal
@@ -75,6 +75,14 @@
   dispatch and host decomposition type/solve responsibilities replace them.
   Direct `ComputeDevice` uploads remove the internal forwarding helper. The
   inherited QR routing and all numerical oracles remain intact.
+- Upstream integration conversion finding: 64 moved casts fail the same
+  added-line publication rule. CUDA argument pointers use lossless standard
+  construction; launch grids use validated dimensions; full batch/reduction
+  counts reject unsigned-word overflow before dispatch. Native canary inputs
+  preserve all original bits with an explicit associated CPU reference type.
+  Python permutation metadata retains its native index width and exact Python
+  integer values. Strict workspace Clippy and all 780 tests pass with required
+  Metal, including three new bit-pattern/reference/word-boundary tests.
 - Python link finding: the deprecated workspace-wide `extension-module`
   feature suppresses the Python library needed by Rust binding test binaries.
   Remove it and retain the existing Maturin >= 1.9.4 environment-selected

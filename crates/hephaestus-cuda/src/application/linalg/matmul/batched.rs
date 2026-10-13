@@ -2,7 +2,7 @@ use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 use leto::Layout;
 
-use crate::application::linalg::{map_layout, map_layout_err, to_i64};
+use crate::application::linalg::{map_layout, map_layout_err, to_i64, to_u32};
 use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
@@ -11,7 +11,7 @@ use super::shaders::{BatchedMatmulKernel, batched_matmul_shader_source};
 
 /// CUDA's hardware grid.z dimension limit (fixed at 65535 across every
 /// current compute capability, unlike grid.x/y which scale with it).
-const MAX_GRID_Z: usize = 65_535;
+const MAX_GRID_Z: u32 = 65_535;
 
 /// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` on the CUDA device.
 ///
@@ -60,6 +60,10 @@ where
     if batch == 0 || m == 0 || n == 0 || lhs_k == 0 {
         return Ok(());
     }
+
+    // The kernel uses an unsigned 32-bit batch index, including chunk offsets.
+    // Validate the complete extent before compiling or dispatching any chunk.
+    let batch_words = to_u32(batch, "batched matmul batch count")?;
 
     let lhs_batch_stride = if lhs_batch == 1 {
         0
@@ -111,8 +115,8 @@ where
         batched_matmul_shader_source::<T>()
     })?;
 
-    let workgroups_x = n.div_ceil(16) as u32;
-    let workgroups_y = m.div_ceil(16) as u32;
+    let workgroups_x = b_meta.shape[1].div_ceil(16);
+    let workgroups_y = a_meta.shape[0].div_ceil(16);
 
     let mut a_ptr = lhs.buffer.raw();
     let mut b_ptr = rhs.buffer.raw();
@@ -124,34 +128,31 @@ where
     let mut b_batch_stride_val = b_batch_stride;
     let mut c_batch_stride_val = c_batch_stride;
 
-    let mut batch_offset = 0usize;
-    while batch_offset < batch {
-        let chunk = (batch - batch_offset).min(MAX_GRID_Z);
-        let mut batch_offset_val = batch_offset as u32;
+    let mut batch_offset = 0_u32;
+    while batch_offset < batch_words {
+        let chunk = (batch_words - batch_offset).min(MAX_GRID_Z);
+        let mut batch_offset_val = batch_offset;
 
         // Argument list mirrors `batched_matmul_kernel(const T*, const T*, T*,
         // MatrixLayout, MatrixLayout, MatrixLayout, long long, long long,
         // long long, unsigned int)`.
         let mut args: [*mut std::ffi::c_void; 10] = [
-            &mut a_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut b_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut c_ptr as *mut u64 as *mut std::ffi::c_void,
-            &mut a_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-                as *mut std::ffi::c_void,
-            &mut b_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-                as *mut std::ffi::c_void,
-            &mut c_meta_val as *mut crate::application::linalg::GpuMatrixLayout
-                as *mut std::ffi::c_void,
-            &mut a_batch_stride_val as *mut i64 as *mut std::ffi::c_void,
-            &mut b_batch_stride_val as *mut i64 as *mut std::ffi::c_void,
-            &mut c_batch_stride_val as *mut i64 as *mut std::ffi::c_void,
-            &mut batch_offset_val as *mut u32 as *mut std::ffi::c_void,
+            std::ptr::from_mut(&mut a_ptr).cast(),
+            std::ptr::from_mut(&mut b_ptr).cast(),
+            std::ptr::from_mut(&mut c_ptr).cast(),
+            std::ptr::from_mut(&mut a_meta_val).cast(),
+            std::ptr::from_mut(&mut b_meta_val).cast(),
+            std::ptr::from_mut(&mut c_meta_val).cast(),
+            std::ptr::from_mut(&mut a_batch_stride_val).cast(),
+            std::ptr::from_mut(&mut b_batch_stride_val).cast(),
+            std::ptr::from_mut(&mut c_batch_stride_val).cast(),
+            std::ptr::from_mut(&mut batch_offset_val).cast(),
         ];
 
         launch_kernel(
             device,
             &kernel,
-            LaunchConfig::batched_planar(workgroups_x, workgroups_y, chunk as u32, 16, 16),
+            LaunchConfig::batched_planar(workgroups_x, workgroups_y, chunk, 16, 16),
             &mut args,
         )?;
 

@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use eunomia::Pod;
+use eunomia::{FloatElement, Pod};
 use hephaestus_core::{BlockWidth, ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};
 
 use crate::application::elementwise::encode_elementwise;
@@ -95,80 +95,126 @@ fn probe_source<T: DialectScalar<Wgsl>>(builtin: MathBuiltin) -> String {
 
 const PROBE_LEN: usize = 8;
 
-type TruthFn = fn(f64, f64) -> f64;
-type ProbeInputs = ([f64; PROBE_LEN], [f64; PROBE_LEN], TruthFn);
+type ProbeInputs<T> = ([T; PROBE_LEN], [T; PROBE_LEN]);
 
-/// Probe inputs plus the CPU-truth function, all in f64 space.
-fn probe_inputs(builtin: MathBuiltin) -> ProbeInputs {
+/// Generate the original probe values in the selected native precision.
+/// Integer operands are exact at both widths; 1/2, 5/2, and 1/10 round to
+/// the same bits as the original literals. E uses the format's published
+/// constant. GPU inputs never widen through the CPU reference precision.
+fn probe_inputs<T: ScalarProbe>(builtin: MathBuiltin) -> ProbeInputs<T> {
+    let half = T::ONE / T::from_integer(2);
+    let tenth = T::ONE / T::from_integer(10);
     match builtin {
-        // Inputs stay in f32 range at both widths (e^100 would overflow f32).
         MathBuiltin::Exp => (
-            [1.0, 0.5, -1.0, 2.0, 10.0, -10.0, 0.0, 20.0],
-            [0.0; PROBE_LEN],
-            (|x, _| x.exp()) as fn(f64, f64) -> f64,
+            [
+                T::ONE,
+                half,
+                -T::ONE,
+                T::from_integer(2),
+                T::from_integer(10),
+                T::from_integer(-10),
+                T::ZERO,
+                T::from_integer(20),
+            ],
+            [T::ZERO; PROBE_LEN],
         ),
         MathBuiltin::Log => (
             [
-                1.0,
-                core::f64::consts::E,
-                0.5,
-                2.0,
-                10.0,
-                100.0,
-                0.1,
-                1000.0,
+                T::ONE,
+                T::MATH_E,
+                half,
+                T::from_integer(2),
+                T::from_integer(10),
+                T::from_integer(100),
+                tenth,
+                T::from_integer(1000),
             ],
-            [0.0; PROBE_LEN],
-            (|x, _| x.ln()) as fn(f64, f64) -> f64,
+            [T::ZERO; PROBE_LEN],
         ),
         MathBuiltin::Pow => (
-            [2.0, 9.0, core::f64::consts::E, 4.0, 1.5, 10.0, 0.5, 3.0],
-            [10.0, 0.5, 1.0, 3.0, 2.5, 2.0, 0.5, 3.0],
-            f64::powf,
+            [
+                T::from_integer(2),
+                T::from_integer(9),
+                T::MATH_E,
+                T::from_integer(4),
+                T::ONE + half,
+                T::from_integer(10),
+                half,
+                T::from_integer(3),
+            ],
+            [
+                T::from_integer(10),
+                half,
+                T::ONE,
+                T::from_integer(3),
+                T::from_integer(5) / T::from_integer(2),
+                T::from_integer(2),
+                half,
+                T::from_integer(3),
+            ],
         ),
         MathBuiltin::Tanh => (
-            [-3.0, -1.0, -0.5, 0.0, 0.5, 1.0, 3.0, 10.0],
-            [0.0; PROBE_LEN],
-            (|x, _| x.tanh()) as fn(f64, f64) -> f64,
+            [
+                T::from_integer(-3),
+                -T::ONE,
+                -half,
+                T::ZERO,
+                half,
+                T::ONE,
+                T::from_integer(3),
+                T::from_integer(10),
+            ],
+            [T::ZERO; PROBE_LEN],
         ),
     }
 }
 
-trait ScalarProbe: DialectScalar<Wgsl> + Pod + Copy {
-    fn from_probe(value: f64) -> Self;
-    fn rel_err(gpu: Self, cpu: f64) -> f64;
+fn reference_value<T: FloatElement>(builtin: MathBuiltin, lhs: T, rhs: T) -> T {
+    match builtin {
+        MathBuiltin::Exp => lhs.exp(),
+        MathBuiltin::Log => lhs.ln(),
+        MathBuiltin::Pow => lhs.powf(rhs),
+        MathBuiltin::Tanh => lhs.tanh(),
+    }
+}
+
+trait ScalarProbe: DialectScalar<Wgsl> + FloatElement + Pod + core::ops::Neg<Output = Self> {
+    /// CPU oracle precision required to distinguish binary32-grade lowering
+    /// from native binary64 results. This never selects GPU arithmetic.
+    type Reference: FloatElement;
+    const MATH_E: Self;
+    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64;
 }
 
 impl ScalarProbe for f32 {
-    fn from_probe(value: f64) -> Self {
-        value as f32
-    }
+    type Reference = f64;
+    const MATH_E: Self = core::f32::consts::E;
 
-    fn rel_err(gpu: Self, cpu: f64) -> f64 {
+    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64 {
+        // Exact widening is confined to error measurement against the oracle.
         ((f64::from(gpu) - cpu).abs() / cpu.abs().max(1e-30)).min(f64::INFINITY)
     }
 }
 
 impl ScalarProbe for f64 {
-    fn from_probe(value: f64) -> Self {
-        value
-    }
+    type Reference = f64;
+    const MATH_E: Self = core::f64::consts::E;
 
-    fn rel_err(gpu: Self, cpu: f64) -> f64 {
+    fn rel_err(gpu: Self, cpu: Self::Reference) -> f64 {
         ((gpu - cpu).abs() / cpu.abs().max(1e-300)).min(f64::INFINITY)
     }
 }
 
-fn probe_with<T: ScalarProbe>(
+fn probe_with<T: ScalarProbe<Reference = f64>>(
     device: &WgpuDevice,
     builtin: MathBuiltin,
     width: CanaryWidth,
 ) -> Result<PrecisionReport> {
-    let (lhs_host, rhs_host, truth) = probe_inputs(builtin);
-    let input = device.upload(&lhs_host.map(T::from_probe))?;
+    let (lhs_host, rhs_host) = probe_inputs::<T>(builtin);
+    let input = device.upload(&lhs_host)?;
     let output = device.alloc_uninitialized::<T>(PROBE_LEN)?;
     let rhs_buffer: Option<_> = if builtin == MathBuiltin::Pow {
-        Some(device.upload(&rhs_host.map(T::from_probe))?)
+        Some(device.upload(&rhs_host)?)
     } else {
         None
     };
@@ -195,7 +241,7 @@ fn probe_with<T: ScalarProbe>(
     let key = (
         TypeId::of::<CanaryProbe>(),
         TypeId::of::<T>(),
-        builtin as u32,
+        builtin.cache_tag(),
     );
     let pipeline = try_cached_pipeline(device, key, "hephaestus-canary", || {
         probe_source::<T>(builtin)
@@ -203,15 +249,16 @@ fn probe_with<T: ScalarProbe>(
     let groups = workgroups(PROBE_LEN, BlockWidth::DEFAULT)?;
     encode_elementwise(device, &pipeline, "hephaestus-canary", &entries, groups)?;
     let actual = device.download_owned(&output)?;
+    let (reference_lhs, reference_rhs) = probe_inputs::<T::Reference>(builtin);
     let mut max_relative_error = 0.0_f64;
     for (index, gpu) in actual.iter().enumerate() {
-        let expected = truth(lhs_host[index], rhs_host[index]);
+        let expected = reference_value(builtin, reference_lhs[index], reference_rhs[index]);
         max_relative_error = max_relative_error.max(T::rel_err(*gpu, expected));
     }
     Ok(PrecisionReport {
         builtin,
         width,
-        samples: PROBE_LEN as u32,
+        samples: u32::try_from(PROBE_LEN).expect("the fixed probe length fits a device word"),
         max_relative_error,
     })
 }
@@ -242,3 +289,6 @@ pub fn probe_precision(
         CanaryWidth::F64 => probe_with::<f64>(device, builtin, width),
     }
 }
+
+#[cfg(test)]
+mod tests;

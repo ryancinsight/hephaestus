@@ -51,7 +51,7 @@ impl GpuLuDecomposition {
             });
         }
         if self.n == 0 {
-            return device.upload(&[] as &[f32]);
+            return device.upload::<f32>(&[]);
         }
 
         let mut rhs_host = vec![0.0f32; self.n];

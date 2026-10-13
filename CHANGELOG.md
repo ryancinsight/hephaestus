@@ -13,6 +13,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ### Fixed
 
+- [patch] Replace moved upstream casts with lossless pointers, checked kernel
+  count words, validated launch dimensions, native canary inputs with an
+  associated CPU reference precision, and native Python permutation indices.
+  Reject oversized CUDA counts before dispatch. Preserve fixture bits and
+  numerical oracles; add bit-pattern, reference, and count-boundary tests.
+- [patch] Include Python in workspace doctests under the restored embedding
+  link contract; Maturin retains environment-selected extension-only linking.
+
 - [patch] Integrate current upstream QR routing and source partitions; separate
   typed comparison/arithmetic dispatch and host decomposition type/solve
   responsibilities, and replace the internal upload helper with direct device

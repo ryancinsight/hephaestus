@@ -1,6 +1,5 @@
 use hephaestus_core::{
-    AxisReductionDispatch, AxisReductionMeta, BlockWidth, DeviceBuffer, HephaestusError, Result,
-    plan_axis_reduction,
+    AxisReductionDispatch, BlockWidth, DeviceBuffer, HephaestusError, Result, plan_axis_reduction,
 };
 
 use crate::CudaDevice;
@@ -59,9 +58,9 @@ pub(crate) fn launch_axis_dispatch<T>(
 
     // Argument list mirrors `axis_reduction_kernel(AxisReductionMeta, const T*, T*)`.
     let mut args: [*mut std::ffi::c_void; 3] = [
-        &mut meta_val as *mut AxisReductionMeta as *mut std::ffi::c_void,
-        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut out_ptr as *mut u64 as *mut std::ffi::c_void,
+        std::ptr::from_mut(&mut meta_val).cast(),
+        std::ptr::from_mut(&mut in_ptr).cast(),
+        std::ptr::from_mut(&mut out_ptr).cast(),
     ];
 
     launch_kernel(
