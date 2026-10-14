@@ -44,6 +44,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc
   previously claimed ties round toward the lower index. (Rescued from
   #427, slice 11d.)
+- [patch] Range-check CUDA rank-2 product addresses host-side
+  (`validate_signed_address_range` rejects maximum corner addresses
+  past `i32::MAX`, keeping every kernel address term in signed range;
+  negative strides still pass when they fit; batched needs no bound —
+  it widens to `long long`), and write zeros (not success-without-write)
+  for empty shared extents in `matmul`/`batched_matmul`, covered by a
+  host-side metadata oracle and a required-device empty-product matrix.
+  Record the dense-product evidence and the slice-6 seam parity in
+  ADRs 0044/0062–0064/0066–0068/0070. (Rescued from #427, slice 11j.)
 - [minor] Generalize `DenseVectorOps` over a compiler-enforced
   `VectorScalar`/`VectorFactor` dialect matrix (CUDA C, HIP C, WGSL;
   `f32` + `f64`), monomorphizing one kernel spelling per

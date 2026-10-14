@@ -115,3 +115,9 @@ Coeus can bind `argmax`/`argmin` on WGPU (and the host reference pair)
 today. CUDA/ROCm/Metal implementations and the aggregate fold are follow-up
 items, as is `topk` itself (a materially different algorithm) and a
 lane-internal parallel reduction for large-axis workloads.
+
+2026-10-09: CUDA/ROCm/Metal now implement `ArgReduceOps` — one thread per
+output lane scanning the reduced axis, matching the WGSL algorithm
+(including the first-strict-improvement tie-break) so all backends agree
+bit-for-bit; `min`/`axis` bake into the pipeline key. CUDA verified on
+RTX 5080 hardware; ROCm/Metal compile-gated to their platforms.
