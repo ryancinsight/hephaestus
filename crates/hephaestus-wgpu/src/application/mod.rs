@@ -29,6 +29,8 @@ pub mod attention;
 pub mod axis_reduction_seam;
 /// Per-builtin driver capability canary for WGSL.
 pub mod canary;
+/// Device-neutral n-D concatenation seam implementation.
+pub mod cat_seam;
 /// Native WGSL regular and transposed convolution.
 pub mod convolution;
 /// Device-neutral batched cross-product seam implementation.
@@ -38,16 +40,28 @@ pub mod cross_product_seam;
 pub mod decomposition_seam;
 /// Device-neutral dense product seam implementation.
 pub mod dense_product_seam;
+/// Device-neutral inner-product seam implementation.
+pub mod dot_seam;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
 /// Device-neutral embedding-table gather seam implementation.
 pub mod embedding_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
+/// Device-neutral n-D gather seam implementation.
+pub mod gather_seam;
+/// Device-neutral n-D scatter-assignment seam implementation.
+pub mod index_put_seam;
+/// Device-neutral n-D index-selection seam implementation.
+pub mod index_select_seam;
 /// Device-neutral rank-2 axis resampling (nearest / linear) seam.
 pub mod interpolation_seam;
 /// Native WGSL mean cross-entropy.
 pub mod loss;
+/// Device-neutral n-D masked-fill seam.
+pub mod masked_fill_seam;
+/// Device-neutral nonzero-coordinate seam implementation.
+pub mod nonzero_seam;
 /// Device-neutral n-D padding seam.
 pub mod pad_seam;
 /// Runtime-parameter unary elementwise dispatch.
@@ -66,9 +80,17 @@ pub mod roll_seam;
 pub mod scan;
 /// Device-neutral prefix/scan seam implementation.
 pub mod scan_seam;
+/// Device-neutral n-D scatter-add seam implementation.
+pub mod scatter_seam;
+/// Device-neutral stable-sort seam implementation.
+pub mod sort_seam;
 #[cfg(feature = "sparse")]
 /// GPU Compressed Sparse Row (CSR) sparse matrix operations.
 pub mod sparse;
+/// Device-neutral n-D splitting seam implementation.
+pub mod split_seam;
+/// Device-neutral n-D stacking seam implementation.
+pub mod stack_seam;
 /// Provider-owned stateful parameter updates.
 pub mod stateful_update;
 /// Generic WGSL storage-kernel dispatch.
@@ -77,6 +99,8 @@ pub mod storage_kernel;
 pub mod stream;
 /// Strided-layout-aware dispatch over leto layout metadata.
 pub mod strided;
+/// Device-neutral n-D tiling seam implementation.
+pub mod tile_seam;
 /// Device-neutral rank-2 top-k selection seam implementation.
 pub mod topk_seam;
 /// Device-neutral rank-2 triangular masking (tril / triu) seam.
@@ -85,5 +109,7 @@ pub mod triangular_seam;
 /// Dense vector-operation seam implementation.
 pub mod vector;
 pub mod volume;
+/// Device-neutral n-D conditional-selection seam implementation.
+pub mod where_seam;
 /// Native WGSL pooling and sliding-window operations.
 pub mod window;

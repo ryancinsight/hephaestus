@@ -73,6 +73,9 @@ mod cross_product_contracts;
 #[path = "ctc_contracts.rs"]
 mod ctc_contracts;
 
+#[path = "cat_contracts.rs"]
+mod cat_contracts;
+
 #[cfg(feature = "decomposition")]
 #[path = "decomposition_contracts.rs"]
 mod decomposition_contracts;
@@ -85,6 +88,9 @@ mod dense_vector;
 
 #[path = "dense_vector_contracts.rs"]
 mod dense_vector_contracts;
+
+#[path = "dot_contracts.rs"]
+mod dot_contracts;
 
 #[path = "elementwise_contracts.rs"]
 mod elementwise_contracts;
@@ -104,8 +110,23 @@ mod fusion_contracts;
 #[path = "fixed_fd_contracts.rs"]
 mod fixed_fd_contracts;
 
+#[path = "gather_contracts.rs"]
+mod gather_contracts;
+
+#[path = "index_put_contracts.rs"]
+mod index_put_contracts;
+
+#[path = "index_select_contracts.rs"]
+mod index_select_contracts;
+
 #[path = "interpolation_contracts.rs"]
 mod interpolation_contracts;
+
+#[path = "masked_fill_contracts.rs"]
+mod masked_fill_contracts;
+
+#[path = "nonzero_contracts.rs"]
+mod nonzero_contracts;
 
 #[path = "pad_contracts.rs"]
 mod pad_contracts;
@@ -125,12 +146,24 @@ mod roll_contracts;
 #[path = "scan_contracts.rs"]
 mod scan_contracts;
 
+#[path = "scatter_contracts.rs"]
+mod scatter_contracts;
+
 #[path = "seam_contracts.rs"]
 mod seam_contracts;
+
+#[path = "sort_contracts.rs"]
+mod sort_contracts;
 
 #[cfg(feature = "sparse")]
 #[path = "sparse_contracts.rs"]
 mod sparse_contracts;
+
+#[path = "split_contracts.rs"]
+mod split_contracts;
+
+#[path = "stack_contracts.rs"]
+mod stack_contracts;
 
 #[path = "stateful_update_contracts.rs"]
 mod stateful_update_contracts;
@@ -153,6 +186,9 @@ mod stencil_laplacian;
 #[path = "strided.rs"]
 mod strided;
 
+#[path = "tile_contracts.rs"]
+mod tile_contracts;
+
 #[path = "transfer_contracts.rs"]
 mod transfer_contracts;
 
@@ -170,6 +206,9 @@ mod volume_ray_integral;
 
 #[path = "wgpu_reexport.rs"]
 mod wgpu_reexport;
+
+#[path = "where_contracts.rs"]
+mod where_contracts;
 
 type ContractCase = (&'static str, fn());
 
@@ -333,6 +372,7 @@ contract_cases!(
     convolution_contracts::wgpu_satisfies_the_convolution_contract,
     cross_product_contracts::wgpu_satisfies_the_cross_product_contract,
     ctc_contracts::wgpu_satisfies_the_ctc_contract,
+    cat_contracts::wgpu_satisfies_the_cat_contract,
     #[cfg(feature = "decomposition")]
     decomposition_contracts::non_blocked_decomposition_heap_readbacks_are_provider_owned,
     #[cfg(feature = "decomposition")]
@@ -346,6 +386,8 @@ contract_cases!(
     dense_vector::reductions_match_the_cpu_reference,
     dense_vector::prepared_reductions_reuse_their_bound_allocation,
     dense_vector::mismatched_lengths_are_rejected,
+    dot_contracts::wgpu_satisfies_the_dot_contract,
+    dot_contracts::wgpu_satisfies_the_dot_contract_f64,
     elementwise_contracts::wgpu_satisfies_the_elementwise_contract,
     embedding_contracts::wgpu_satisfies_the_embedding_gather_contract,
     fft_contracts::prepared_fft_device_preflight_is_public_and_typed,
@@ -357,7 +399,12 @@ contract_cases!(
     fusion_contracts::wgpu_fusion_respects_precision_capabilities,
     fixed_fd_contracts::wgpu_satisfies_the_fixed_fd_contract,
     full_reduction_contracts::wgpu_satisfies_the_full_reduction_contract,
+    gather_contracts::wgpu_satisfies_the_gather_contract,
+    index_put_contracts::wgpu_satisfies_the_index_put_contract,
+    index_select_contracts::wgpu_satisfies_the_index_select_contract,
     interpolation_contracts::wgpu_satisfies_the_interpolation_contract,
+    masked_fill_contracts::wgpu_satisfies_the_masked_fill_contract,
+    nonzero_contracts::wgpu_satisfies_the_nonzero_contract,
     pad_contracts::wgpu_satisfies_the_pad_contract,
     parameterized_unary_contracts::wgpu_satisfies_the_parameterized_unary_contract,
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
@@ -365,6 +412,7 @@ contract_cases!(
     ray_integral_contracts::wgpu_satisfies_the_ray_integral_contract,
     roll_contracts::wgpu_satisfies_the_roll_contract,
     scan_contracts::wgpu_satisfies_the_scan_contract,
+    scatter_contracts::wgpu_satisfies_the_scatter_contract,
     seam_contracts::full_reduction_honors_output_offset,
     seam_contracts::empty_full_reductions_write_operator_identities,
     seam_contracts::prepared_elementwise_rejects_cross_device_dispatch,
@@ -374,8 +422,11 @@ contract_cases!(
     seam_contracts::invalid_external_expression_is_a_typed_preparation_error,
     seam_contracts::invalid_external_combine_is_a_typed_preparation_error,
     seam_contracts::full_reduction_rejects_foreign_buffers_before_mutation,
+    sort_contracts::wgpu_satisfies_the_sort_contract,
     #[cfg(feature = "sparse")]
     sparse_contracts::wgpu_satisfies_the_sparse_operator_contract,
+    split_contracts::wgpu_satisfies_the_split_contract,
+    stack_contracts::wgpu_satisfies_the_stack_contract,
     stateful_update_contracts::wgpu_satisfies_the_stateful_update_contract,
     stateful_update_contracts::wgpu_stateful_update_respects_precision_capabilities,
     stateful_update_contracts::foreign_device_buffers_fail_before_mutation,
@@ -408,6 +459,7 @@ contract_cases!(
     strided::strided_unary_broadcasts_input_to_output_shape,
     strided::strided_scalar_matches_binary_broadcast_semantics,
     strided::non_default_block_width_produces_identical_results,
+    tile_contracts::wgpu_satisfies_the_tile_contract,
     transfer_contracts::wgpu_satisfies_the_transfer_contract,
     triangular_contracts::wgpu_satisfies_the_triangular_contract,
     triangular_contracts::oversized_storage_binding_fails_before_output_mutation,
@@ -425,15 +477,16 @@ contract_cases!(
     volume_ray_integral::step_size_does_not_change_a_uniform_integral,
     volume_ray_integral::oblique_ray_matches_cpu_reference,
     wgpu_reexport::provider_exports_wgpu_abi_types,
+    where_contracts::wgpu_satisfies_the_where_contract,
 );
 
-// The registration inventory partitions into disjoint sets: 142 unconditional
+// The registration inventory partitions into disjoint sets: 156 unconditional
 // cases, 44 decomposition-only cases, two sparse-only cases, and three cases
 // enabled by either optional feature. Native-precision capability/rejection
 // contracts belong to the unconditional set. These cardinalities retain the
 // independent migration guard for every feature combination.
 const EXPECTED_CONTRACT_CASES: usize =
-    142 + if cfg!(feature = "decomposition") {
+    156 + if cfg!(feature = "decomposition") {
         44
     } else {
         0
