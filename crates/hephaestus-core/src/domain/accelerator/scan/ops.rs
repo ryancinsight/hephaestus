@@ -1,4 +1,4 @@
-﻿use core::marker::PhantomData;
+use core::marker::PhantomData;
 
 use eunomia::Pod;
 use leto::Layout;

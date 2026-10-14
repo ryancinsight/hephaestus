@@ -1,4 +1,5 @@
 use super::*;
+use leto::Layout;
 
 #[test]
 fn validate_square_operand_accepts_square_and_rejects_rectangular() {
