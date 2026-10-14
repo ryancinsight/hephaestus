@@ -2,6 +2,15 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## Unreleased
+
+- [minor] Add thirteen device-neutral shape/indexing seams — `CatOps`,
+  `DotOps`, `GatherOps`, `IndexPutOps`, `IndexSelectOps`, `MaskedFillOps`,
+  `NonzeroOps`, `ScatterOps`, `SortOps`, `SplitOps`, `StackOps`, `TileOps`,
+  `WhereOps` — with conformance clauses differentially oracled against leto
+  and host reference implementors. Generalize `HostBuffer::aliases` across
+  element types via allocation identity. (Rescued from #427, slice 1.)
+
 ## [0.20.4] - 2026-10-13
 
 ### Added
