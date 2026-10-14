@@ -13,19 +13,25 @@
 
 <a id="heph-wgpu-fusion-1"></a>
 
-## HEPH-WGPU-FUSION-1 — Fuse reduction passes to cut per-dispatch commands [minor] — todo
-- Priority: tightening.
-- Hypothesis: fusing each reduction tree (and map+reduce pairs) into fewer
-  compute passes reduces both per-dispatch `finish` validation (scales with
-  command count) and per-pass WDDM drain latency (~25us/pass measured on RTX
-  5080), the two costs shared-encoder batching could not remove
-  (HEPH-WGPU-REDUCTION-BATCH-1).
-- Scope: spike first on one op family (full reduction, N=65536): fuse levels
-  where the workgroup math admits it, prove exact-value equality with direct
-  dispatch, and measure end-to-end on RTX 5080 WDDM. Ship only on a measured
-  win; close unfavorably with numbers otherwise.
-- Acceptance: same gates as any perf increment (strict Clippy, rustdoc,
-  required-device lanes).
+## HEPH-WGPU-FUSION-1 — Fuse reduction passes to cut per-dispatch commands — resolved (falsified, not shipped)
+- Priority: tightening. No version bump: no code changed.
+- Finding 1: single full reductions at N<=65536 are already single-pass (the
+  tree uses the grid-stride final kernel whenever `len <= width^2`); there
+  are no levels to fuse there.
+- Finding 2: fusing the 2-pass dot (map + final) into one single-workgroup
+  pass loses end-to-end on RTX 5080 WDDM despite strictly less work.
+  Interleaved A/B/A/B, N=65536 f32, exact value 131072 verified:
+  strided-decode fusion 302us vs 167us baseline (serial div/mod
+  concentration); contiguous fusion 143-156us vs 124-150us baseline, losing
+  in all four pairings. Occupancy/parallelism beats pass count; the
+  ~100-150us submit+wait round-trip floor dominates either way.
+- Finding 3: every fusable same-grid pair is already fused (the map pass
+  fuses map+workgroup-reduce); remaining cross-grid fusion is the
+  serialization Finding 2 falsifies, at any N.
+- Residual direction: small-op GPU latency is WDDM floor-bound. The remaining
+  lever is CPU/GPU placement (route small reductions to leto below the
+  crossover), which is caller-context work for coeus/athena consumers, not a
+  hephaestus kernel change. Re-open only with a caller-measured crossover.
 
 <a id="heph-wgpu-reduction-batch-1"></a>
 
