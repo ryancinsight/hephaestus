@@ -195,7 +195,7 @@ pub use pad::assert_pad_contract;
 pub use parameterized_unary::assert_parameterized_unary_contract;
 pub use random_init::assert_random_init_contract;
 pub use ray_integral::assert_ray_integral_contract;
-pub use roll::{RollContractFixtures, assert_roll_contract, assert_roll_contract_for_scalar};
+pub use roll::assert_roll_contract;
 pub use scan::{assert_scan_contract, assert_scan_leto_contract};
 pub use scatter::{assert_scatter_contract, assert_scatter_order_contract};
 pub use sort::{assert_sort_contract, assert_sort_special_float_values};

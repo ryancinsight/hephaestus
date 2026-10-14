@@ -133,6 +133,7 @@ pub type RocmPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, RocmD
 pub use application::fixed_fd::{
     FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, RocmFixedFd3DOps,
 };
+pub use application::roll_seam::RocmRollOps;
 pub use application::scatter_seam::RocmScatterOps;
 pub use application::sort_seam::RocmSortOps;
 pub use application::sparse::seam::RocmSparseOps;

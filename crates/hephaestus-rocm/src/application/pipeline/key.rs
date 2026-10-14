@@ -169,6 +169,10 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    Roll {
+        scalar: TypeId,
+        width: u32,
+    },
     Tile {
         scalar: TypeId,
         width: u32,

@@ -62,6 +62,8 @@ pub mod random;
 pub mod random_seam;
 /// Reduction operations.
 pub mod reduction;
+/// Device-neutral n-D circular-shift seam implementation.
+pub mod roll_seam;
 /// Scan operations.
 pub mod scan;
 /// Device-neutral scan seam implementation.

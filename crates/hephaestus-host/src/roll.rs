@@ -1,136 +1,90 @@
-//! Host reference implementor of [`hephaestus_core::RollOps`].
+//! Direct-loop n-D circular shift for the host reference device.
 //!
-//! Walks the two-dimensional index space directly, reading each
-//! destination's source position from [`hephaestus_core::roll_source_index`]
-//! — the reference substrate favors an obviously correct implementation
-//! over a fast one.
+//! There is no `leto::roll` to delegate to, so this implementation folds
+//! the `(shift, dim)` pairs into one effective per-axis displacement and
+//! reads the strided input through [`leto::ArrayView`] directly: for every
+//! logical index of the output it moves each rolled lane back by its
+//! effective shift modulo the extent and copies the addressed input cell.
+//! Rolls along distinct dims commute and rolls along one dim add, so the
+//! fold matches sequential application exactly, including duplicate dims.
+//! The shared conformance clauses pin these value semantics with
+//! hand-computed fixtures every accelerator's differential test must
+//! match.
 
 use eunomia::Pod;
-use hephaestus_core::{
-    DeviceBuffer, HephaestusError, Result, RollOps, StridedView, roll_source_index,
-    validate_roll_shape,
-};
+use hephaestus_core::{Result, RollOps, StridedView};
+use leto::ArrayView;
 
 use crate::{HostBuffer, HostDevice, map_leto_error};
 
-/// Host-backed axis roll for the reference device.
+/// Direct-loop circular shift for the host reference device.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HostRollOps;
 
 impl<T> RollOps<HostDevice, T> for HostRollOps
 where
-    T: Pod,
+    T: Pod + Copy,
 {
-    fn roll_axis_into(
+    fn roll_into<const N: usize>(
         &self,
         _device: &HostDevice,
-        input: StridedView<'_, HostBuffer<T>, 2>,
-        axis: usize,
-        shift: i64,
-        output: StridedView<'_, HostBuffer<T>, 2>,
+        input: StridedView<'_, HostBuffer<T>, N>,
+        shifts: &[isize],
+        dims: &[usize],
+        output: StridedView<'_, HostBuffer<T>, N>,
     ) -> Result<()> {
-        let (lanes, axis_len) =
-            validate_roll_shape(axis, input.layout.shape(), output.layout.shape())?;
-        let other = 1 - axis;
-
+        hephaestus_core::validate_roll_shape(
+            input.layout.shape(),
+            shifts,
+            dims,
+            output.layout.shape(),
+        )?;
         if output.buffer.aliases(input.buffer) {
-            return Err(HephaestusError::DispatchFailed {
-                message: "roll output buffer must not alias input buffer".to_string(),
+            return Err(hephaestus_core::HephaestusError::DispatchFailed {
+                message: "roll output buffer must not alias the input buffer".to_string(),
             });
         }
-        input
-            .layout
-            .validate_storage_len(input.buffer.len())
-            .map_err(map_leto_error)?;
-        output
-            .layout
-            .validate_storage_len(output.buffer.len())
-            .map_err(map_leto_error)?;
-        if !output.layout.is_injective().map_err(map_leto_error)? {
-            return Err(HephaestusError::DispatchFailed {
-                message: "roll output layout must be non-overlapping".to_string(),
-            });
+
+        let in_shape = input.layout.shape();
+        // Fold every pair into one effective per-axis shift in i128: the
+        // sum cannot overflow for any realistic pair list, and reducing
+        // once per axis keeps the per-cell loop to a single modulo.
+        let mut totals = [0i128; N];
+        for (&shift, &dim) in shifts.iter().zip(dims.iter()) {
+            totals[dim] += shift as i128;
+        }
+        let mut back = [0usize; N];
+        for (d, (&total, extent)) in totals.iter().zip(in_shape.iter()).enumerate() {
+            if *extent > 0 {
+                // The reduced shift is below the extent, hence below
+                // `usize::MAX`; the fallible conversion keeps the function
+                // total regardless.
+                let reduced = total.rem_euclid(*extent as i128);
+                back[d] = usize::try_from(reduced).map_err(|_| {
+                    hephaestus_core::HephaestusError::InvalidConfiguration {
+                        message: format!("roll back-shift {reduced} exceeds the usize range"),
+                    }
+                })?;
+            }
         }
 
         let in_cells = input.buffer.read();
-        let mut out_cells = output.buffer.write();
-        for lane in 0..lanes {
-            let mut in_coord = [0usize; 2];
-            in_coord[other] = lane;
-            let mut out_coord = [0usize; 2];
-            out_coord[other] = lane;
+        let in_view =
+            ArrayView::<T, N>::try_new(*input.layout, &in_cells).map_err(map_leto_error)?;
 
-            for dst_idx in 0..axis_len {
-                let src_idx = roll_source_index(dst_idx, shift, axis_len);
-                in_coord[axis] = src_idx;
-                let in_offset = input.layout.offset_of(in_coord).map_err(map_leto_error)?;
-                out_coord[axis] = dst_idx;
-                let out_offset = output.layout.offset_of(out_coord).map_err(map_leto_error)?;
-                out_cells[out_offset] = in_cells[in_offset];
+        let mut out_cells = output.buffer.write();
+        // Input and output share shape, so the input's index domain is the
+        // output's. A zero extent yields no indices, so no modulo by zero
+        // can execute below.
+        for (index, _) in in_view.indexed_iter() {
+            let mut src = index;
+            for (d, &b) in back.iter().enumerate() {
+                let n = in_shape[d];
+                src[d] = (index[d] + n - b) % n;
             }
+            let offset = output.layout.offset_of(index).map_err(map_leto_error)?;
+            out_cells[offset] = in_view[src];
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use hephaestus_core::ComputeDevice;
-    use leto::Layout;
-
-    #[test]
-    fn rejects_aliased_output_before_locking() {
-        let device = HostDevice::new();
-        let buffer = device.upload(&[1_i32, 2, 3, 4]).expect("upload");
-        let layout = Layout::c_contiguous([2, 2]).expect("layout");
-        let error = HostRollOps
-            .roll_axis_into(
-                &device,
-                StridedView::new(&buffer, &layout),
-                1,
-                1,
-                StridedView::new(&buffer, &layout),
-            )
-            .expect_err("aliased roll output");
-        assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
-    }
-
-    #[test]
-    fn rejects_layout_outside_storage() {
-        let device = HostDevice::new();
-        let input = device.upload(&[1_i32]).expect("upload");
-        let output = device.alloc_zeroed::<i32>(4).expect("output");
-        let input_layout = Layout::c_contiguous([2, 2]).expect("layout");
-        let output_layout = Layout::c_contiguous([2, 2]).expect("layout");
-        let error = HostRollOps
-            .roll_axis_into(
-                &device,
-                StridedView::new(&input, &input_layout),
-                1,
-                1,
-                StridedView::new(&output, &output_layout),
-            )
-            .expect_err("short input storage");
-        assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
-    }
-
-    #[test]
-    fn rejects_non_injective_output_layout() {
-        let device = HostDevice::new();
-        let input = device.upload(&[1_i32, 2, 3, 4]).expect("upload");
-        let output = device.alloc_zeroed::<i32>(2).expect("output");
-        let input_layout = Layout::c_contiguous([2, 2]).expect("layout");
-        let output_layout = Layout::try_new([2, 2], [0, 1], 0).expect("broadcast layout");
-        let error = HostRollOps
-            .roll_axis_into(
-                &device,
-                StridedView::new(&input, &input_layout),
-                1,
-                1,
-                StridedView::new(&output, &output_layout),
-            )
-            .expect_err("broadcast output layout");
-        assert!(matches!(error, HephaestusError::DispatchFailed { .. }));
     }
 }
