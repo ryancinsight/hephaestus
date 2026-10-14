@@ -44,10 +44,12 @@ pub mod application;
 
 pub use application::attention::CudaAttentionOps;
 pub use application::axis_reduction_seam::CudaAxisReductionOps;
+pub use application::cat_seam::CudaCatOps;
 pub use application::convolution::CudaConvolutionOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::CudaDecompositionOps;
 pub use application::dense_product_seam::CudaDenseProductOps;
+pub use application::dot_seam::CudaDotOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -63,6 +65,9 @@ pub use application::elementwise::{
 pub use application::elementwise_seam::CudaElementwiseOps;
 pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
 pub use application::fusion::{CudaFusionOps, CudaFusionScalar};
+pub use application::gather_seam::CudaGatherOps;
+pub use application::index_put_seam::CudaIndexPutOps;
+pub use application::index_select_seam::CudaIndexSelectOps;
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -72,6 +77,8 @@ pub use application::linalg::{
     norm_l1, norm_l2, norm_max, pinv, trace,
 };
 pub use application::loss::{CtcKernel, CudaCrossEntropyOps, CudaCtcOps};
+pub use application::masked_fill_seam::CudaMaskedFillOps;
+pub use application::nonzero_seam::CudaNonzeroOps;
 pub use application::parameterized_elementwise::CudaParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
@@ -107,7 +114,11 @@ pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaD
 pub use application::fixed_fd::{
     CudaFixedFd3DOps, FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme,
 };
+pub use application::scatter_seam::CudaScatterOps;
+pub use application::sort_seam::CudaSortOps;
 pub use application::sparse::seam::CudaSparseOps;
+pub use application::split_seam::CudaSplitOps;
+pub use application::stack_seam::CudaStackOps;
 pub use application::staggered::{
     CudaStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,
 };
@@ -126,12 +137,14 @@ pub use application::strided::{
     scalar_elementwise_strided_into, unary_elementwise_strided, unary_elementwise_strided_dyn_into,
     unary_elementwise_strided_into,
 };
+pub use application::tile_seam::CudaTileOps;
 pub use application::vector::{
     CudaVectorOps, PreparedDot as CudaPreparedDot, PreparedL2Norm as CudaPreparedNorm,
 };
 pub use application::volume::{
     CudaRayIntegralOps, FieldGeometry, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::where_seam::CudaWhereOps;
 pub use application::window::{CudaPoolingOps, CudaSlidingWindowOps};
 pub use hephaestus_core::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
