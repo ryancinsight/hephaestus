@@ -1,4 +1,4 @@
-﻿use crate::domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect};
+use crate::domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect};
 use crate::domain::launch::BlockWidth;
 use crate::domain::ops::{CombineExpr, IdentityToken};
 
