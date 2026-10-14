@@ -6,6 +6,7 @@ use super::marker::{
     LeakyReluGradOp, LeakyReluOp, SoftshrinkGradOp, SoftshrinkOp, ThresholdGradOp, ThresholdOp,
 };
 use crate::domain::dialect::{CudaC, HipC, Wgsl};
+use crate::domain::ops::unary_math::wgsl_expm1_expr;
 
 impl ParameterizedUnaryExpr<Wgsl> for HardtanhOp {
     const EXPR: &'static str = "select(select(x, second, x > second), first, x < first)";
@@ -47,8 +48,15 @@ impl ParameterizedUnaryExpr<Wgsl> for SoftshrinkGradOp {
     const EXPR: &'static str = "select(0.0, 1.0, (x > first) || (x < -first))";
 }
 
+// The negative branch renders the shared `expm1` fragment at `x / first`
+// (Taylor core under `|x / first| < 0.5`, direct `exp - 1` outside),
+// scaled by `first`; the kink branch is exact.
 impl ParameterizedUnaryExpr<Wgsl> for CeluOp {
-    const EXPR: &'static str = "select(first * (exp(x / first) - 1.0), x, x >= 0.0)";
+    const EXPR: &'static str = concat!(
+        "select(first * (",
+        wgsl_expm1_expr!("(x / first)"),
+        "), x, x >= 0.0)"
+    );
 }
 
 impl ParameterizedUnaryExpr<Wgsl> for CeluGradOp {
@@ -98,7 +106,7 @@ macro_rules! impl_c_family {
         }
 
         impl ParameterizedUnaryExpr<$dialect> for CeluOp {
-            const EXPR: &'static str = "x >= 0.0f ? x : first * (expf(x / first) - 1.0f)";
+            const EXPR: &'static str = "x >= 0.0f ? x : first * expm1(x / first)";
         }
 
         impl ParameterizedUnaryExpr<$dialect> for CeluGradOp {

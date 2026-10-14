@@ -4,6 +4,15 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Render the `CeluOp` negative arm through the shared
+  degree-8 `expm1` fragment (WGSL, re-rooted at `x / first`) and the
+  native `expm1` builtin (C dialects), replacing the naive `exp - 1`
+  transcription that cancels to zero near `x = 0`; the GPU spellings
+  now match the host value function. Generalize the `wgsl_expm1_expr`
+  composer over its input expression with a byte-identical default
+  expansion. Add paren-balance pins for the erfc and self-gated
+  expression families plus a `CeluOp` rendering test. (Rescued from
+  #427, slice 11g.)
 - [patch] Correct the `InterpolationMode::Nearest` tie-break contract:
   `frac >= 0.5` advances to the upper index on every backend (host,
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc

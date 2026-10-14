@@ -236,3 +236,39 @@ fn writable_layout_validation_uses_bounded_sparse_fallback() {
             if message == "output layout must be non-overlapping"
     ));
 }
+
+#[test]
+fn celu_renders_the_shared_expm1_fragment_without_cancellation() {
+    // The negative arm must spell `expm1(x / first)`, matching the host
+    // value function: the naive `exp - 1` transcription cancels to zero
+    // near `x = 0` (see `celu_uses_exp_m1_to_avoid_negative_tail_cancellation`).
+    for expr in [
+        <CeluOp as ParameterizedUnaryExpr<Wgsl>>::EXPR,
+        <CeluOp as ParameterizedUnaryExpr<CudaC>>::EXPR,
+        <CeluOp as ParameterizedUnaryExpr<HipC>>::EXPR,
+    ] {
+        assert!(
+            !expr.contains("exp(x / first) - 1") && !expr.contains("expf(x / first) - 1"),
+            "celu rendering must not transcribe exp-minus-one: {expr}"
+        );
+        let mut depth = 0i32;
+        for byte in expr.bytes() {
+            if byte == b'(' {
+                depth += 1;
+            }
+            if byte == b')' {
+                depth -= 1;
+            }
+            assert!(depth >= 0, "unbalanced parens in: {expr}");
+        }
+        assert_eq!(depth, 0, "unbalanced parens in: {expr}");
+    }
+    assert!(
+        <CeluOp as ParameterizedUnaryExpr<Wgsl>>::EXPR.contains("abs((x / first)) < 0.5"),
+        "wgsl celu must nest the shared degree-8 Taylor arm"
+    );
+    assert!(
+        <CeluOp as ParameterizedUnaryExpr<CudaC>>::EXPR.contains("expm1(x / first)"),
+        "c celu must call the native expm1 builtin"
+    );
+}
