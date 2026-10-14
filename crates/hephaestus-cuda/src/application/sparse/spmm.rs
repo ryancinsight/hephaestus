@@ -146,12 +146,24 @@ pub fn spmm_into<
     // Argument list mirrors `spmm_kernel(SpmmMeta, const T*, const unsigned int*,
     // const unsigned int*, const T*, T*)`.
     let mut args: [*mut std::ffi::c_void; 6] = [
-        core::ptr::addr_of_mut!(meta_val).cast::<SpmmMeta>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(values_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(col_indices_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(row_ptr_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(b_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(c_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val)
+            .cast::<SpmmMeta>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(values_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(col_indices_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(row_ptr_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(b_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(c_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
     ];
 
     launch_kernel(

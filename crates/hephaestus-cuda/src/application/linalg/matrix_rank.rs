@@ -214,11 +214,21 @@ where
     // Argument list mirrors `matrix_properties_kernel(RankMeta, const T*, T*,
     // unsigned int*, T*)`.
     let mut args: [*mut std::ffi::c_void; 5] = [
-        core::ptr::addr_of_mut!(meta_val).cast::<RankMeta>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(in_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(scratch_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(rank_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(det_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val)
+            .cast::<RankMeta>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(in_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(scratch_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(rank_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(det_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
     ];
 
     // Sequential Gaussian elimination: a single-thread launch by design.

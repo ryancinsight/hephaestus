@@ -57,10 +57,18 @@ where
 
     // Argument list mirrors `binary_strided_kernel(Meta, const T*, const T*, T*)`.
     let mut args: [*mut std::ffi::c_void; 4] = [
-        core::ptr::addr_of_mut!(meta_val).cast::<StridedMeta>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(a_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(b_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(out_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val)
+            .cast::<StridedMeta>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(a_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(b_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(out_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
     ];
 
     launch_kernel(
@@ -101,9 +109,15 @@ where
 
     // Argument list mirrors `unary_strided_kernel(Meta, const T*, T*)`.
     let mut args: [*mut std::ffi::c_void; 3] = [
-        core::ptr::addr_of_mut!(meta_val).cast::<StridedMeta>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(a_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(out_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val)
+            .cast::<StridedMeta>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(a_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(out_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
     ];
 
     launch_kernel(
@@ -146,10 +160,18 @@ where
 
     // Argument list mirrors `scalar_strided_kernel(Meta, const T*, T, T*)`.
     let mut args: [*mut std::ffi::c_void; 4] = [
-        core::ptr::addr_of_mut!(meta_val).cast::<StridedMeta>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(a_ptr).cast::<u64>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(scalar_val).cast::<T>() as *mut std::ffi::c_void,
-        core::ptr::addr_of_mut!(out_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val)
+            .cast::<StridedMeta>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(a_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(scalar_val)
+            .cast::<T>()
+            .cast::<std::ffi::c_void>(),
+        core::ptr::addr_of_mut!(out_ptr)
+            .cast::<u64>()
+            .cast::<std::ffi::c_void>(),
     ];
 
     launch_kernel(
