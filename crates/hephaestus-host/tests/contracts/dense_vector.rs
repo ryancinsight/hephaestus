@@ -16,7 +16,12 @@ fn download<const LEN: usize>(
 
 #[test]
 fn host_satisfies_the_dense_vector_contract() {
-    assert_dense_vector_contract(&HostDevice::new(), &HostDenseVectorOps);
+    assert_dense_vector_contract::<_, _, f32>(&HostDevice::new(), &HostDenseVectorOps);
+}
+
+#[test]
+fn host_satisfies_the_dense_vector_contract_f64() {
+    assert_dense_vector_contract::<_, _, f64>(&HostDevice::new(), &HostDenseVectorOps);
 }
 
 /// `axpy(y, y, 2)` is `y += 2y`: each cell is read before it is written, so

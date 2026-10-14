@@ -71,6 +71,8 @@ pub trait L2NormScalar:
 
 impl L2NormScalar for f32 {}
 
+impl L2NormScalar for f64 {}
+
 struct PreparedMapReduction<T> {
     pipeline: Option<wgpu::ComputePipeline>,
     bind_group: Option<wgpu::BindGroup>,

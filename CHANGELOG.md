@@ -9,6 +9,16 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc
   previously claimed ties round toward the lower index. (Rescued from
   #427, slice 11d.)
+- [minor] Generalize `DenseVectorOps` over a compiler-enforced
+  `VectorScalar`/`VectorFactor` dialect matrix (CUDA C, HIP C, WGSL;
+  `f32` + `f64`), monomorphizing one kernel spelling per
+  backend/scalar instead of `f32`-only implementations. The shared
+  dense-vector oracle runs per scalar over exactly representable
+  fixtures; host and CUDA/ROCm run both widths, WGSL gates `f64` on
+  `ShaderF64`, and Metal stays `f32` on hardware. The trailing
+  `RetainedReductions` implementor blocks are omitted: they belong to
+  the retained-reduction program, not this port. (Rescued from #427,
+  slice 11e.)
 - [minor] Add thirteen device-neutral shape/indexing seams — `CatOps`,
   `DotOps`, `GatherOps`, `IndexPutOps`, `IndexSelectOps`, `MaskedFillOps`,
   `NonzeroOps`, `ScatterOps`, `SortOps`, `SplitOps`, `StackOps`, `TileOps`,

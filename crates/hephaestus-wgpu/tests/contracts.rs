@@ -379,6 +379,7 @@ contract_cases!(
     decomposition_contracts::wgpu_satisfies_the_decomposition_contract,
     dense_product_contracts::wgpu_satisfies_the_dense_product_contract,
     dense_vector_contracts::wgpu_satisfies_the_dense_vector_contract,
+    dense_vector_contracts::wgpu_satisfies_the_dense_vector_contract_f64,
     dense_vector::axpy_matches_the_cpu_reference,
     dense_vector::xpay_matches_the_cpu_reference,
     dense_vector::scale_and_copy_match_the_cpu_reference,
@@ -480,13 +481,13 @@ contract_cases!(
     where_contracts::wgpu_satisfies_the_where_contract,
 );
 
-// The registration inventory partitions into disjoint sets: 156 unconditional
+// The registration inventory partitions into disjoint sets: 157 unconditional
 // cases, 44 decomposition-only cases, two sparse-only cases, and three cases
 // enabled by either optional feature. Native-precision capability/rejection
 // contracts belong to the unconditional set. These cardinalities retain the
 // independent migration guard for every feature combination.
 const EXPECTED_CONTRACT_CASES: usize =
-    156 + if cfg!(feature = "decomposition") {
+    157 + if cfg!(feature = "decomposition") {
         44
     } else {
         0

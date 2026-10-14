@@ -164,7 +164,7 @@ pub use domain::topk::{TopKOps, validate_topk_shape};
 pub use domain::triangular::{
     TriangularMode, TriangularOps, triangular_keeps, validate_triangular_shape,
 };
-pub use domain::vector::{DenseVectorOps, RetainedReductions};
+pub use domain::vector::{DenseVectorOps, RetainedReductions, VectorFactor, VectorScalar};
 pub use domain::view::{DynamicStridedView, StridedOperand, StridedView};
 pub use domain::volume::{FieldGeometry, RAY_STRIDE, RayIntegralOps, validate_ray_line_integrals};
 pub use domain::where_cond::{WhereOps, validate_where_shape};
