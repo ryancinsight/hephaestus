@@ -189,6 +189,38 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    Interpolation {
+        scalar: TypeId,
+        width: u32,
+        nearest: bool,
+    },
+    AdaptivePooling {
+        scalar: TypeId,
+        width: u32,
+        maximum: bool,
+    },
+    ArgReduce {
+        scalar: TypeId,
+        width: u32,
+        min: bool,
+    },
+    TopK {
+        scalar: TypeId,
+        width: u32,
+    },
+    Triangular {
+        scalar: TypeId,
+        width: u32,
+        upper: bool,
+    },
+    CrossProduct {
+        scalar: TypeId,
+        width: u32,
+    },
+    Pad {
+        scalar: TypeId,
+        width: u32,
+    },
 }
 
 #[cfg(feature = "decomposition")]

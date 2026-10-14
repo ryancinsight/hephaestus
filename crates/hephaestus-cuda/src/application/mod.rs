@@ -1,5 +1,9 @@
 //! Monomorphized compute dispatch over the CUDA device.
 
+/// Device-neutral adaptive-pooling seam implementation.
+pub mod adaptive_pooling_seam;
+/// Device-neutral rank-2 argmax/argmin seam implementation.
+pub mod arg_reduce_seam;
 /// Native scaled dot-product attention operations.
 pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
@@ -8,6 +12,8 @@ pub mod axis_reduction_seam;
 pub mod cat_seam;
 /// Native regular and transposed convolution operations.
 pub mod convolution;
+/// Device-neutral batched cross-product seam implementation.
+pub mod cross_product_seam;
 /// Device-neutral decomposition seam implementation.
 #[cfg(feature = "decomposition")]
 pub mod decomposition_seam;
@@ -33,6 +39,8 @@ pub mod gather_seam;
 pub mod index_put_seam;
 /// Device-neutral n-D index-selection seam implementation.
 pub mod index_select_seam;
+/// Device-neutral rank-2 axis-resampling seam implementation.
+pub mod interpolation_seam;
 /// Linear algebra operations (matmul, batch matmul, trace, dot, norms).
 pub mod linalg;
 /// Native mean cross-entropy operations.
@@ -41,6 +49,8 @@ pub mod loss;
 pub mod masked_fill_seam;
 /// Device-neutral nonzero-coordinate seam implementation.
 pub mod nonzero_seam;
+/// Device-neutral n-D padding seam implementation.
+pub mod pad_seam;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 /// Pipeline compilation and launch helpers.
@@ -79,6 +89,10 @@ pub mod stream;
 pub mod strided;
 /// Device-neutral n-D tiling seam implementation.
 pub mod tile_seam;
+/// Device-neutral rank-2 top-k selection seam implementation.
+pub mod topk_seam;
+/// Device-neutral rank-2 triangular masking seam implementation.
+pub mod triangular_seam;
 /// Dense vector recurrences and prepared reductions.
 pub mod vector;
 /// Volume ray-integral kernels.

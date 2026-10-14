@@ -1,5 +1,9 @@
 //! ROCm application-layer compute operations.
 
+/// Device-neutral adaptive-pooling seam implementation.
+pub mod adaptive_pooling_seam;
+/// Device-neutral rank-2 argmax/argmin seam implementation.
+pub mod arg_reduce_seam;
 /// Native HIP scaled dot-product attention.
 pub mod attention;
 /// Rank-2 axis reductions over leto layouts.
@@ -11,6 +15,8 @@ pub mod cat_seam;
 /// Native HIP regular and transposed convolution.
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub mod convolution;
+/// Device-neutral batched cross-product seam implementation.
+pub mod cross_product_seam;
 /// Device-resident dense matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;
@@ -39,6 +45,8 @@ pub mod gather_seam;
 pub mod index_put_seam;
 /// Device-neutral n-D index-selection seam implementation.
 pub mod index_select_seam;
+/// Device-neutral rank-2 axis-resampling seam implementation.
+pub mod interpolation_seam;
 /// Rank-2 matrix multiplication over strided layouts.
 pub mod linalg;
 /// Native HIP mean cross-entropy.
@@ -47,6 +55,8 @@ pub mod loss;
 pub mod masked_fill_seam;
 /// Device-neutral nonzero-coordinate seam implementation.
 pub mod nonzero_seam;
+/// Device-neutral n-D padding seam implementation.
+pub mod pad_seam;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 pub(crate) mod pipeline;
@@ -90,6 +100,10 @@ pub mod strided;
 pub mod strided_elementwise;
 /// Device-neutral n-D tiling seam implementation.
 pub mod tile_seam;
+/// Device-neutral rank-2 top-k selection seam implementation.
+pub mod topk_seam;
+/// Device-neutral rank-2 triangular masking seam implementation.
+pub mod triangular_seam;
 /// Dense vector recurrences and prepared reductions.
 pub mod vector;
 /// Volume ray-integral kernels.

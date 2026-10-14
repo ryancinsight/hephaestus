@@ -59,3 +59,58 @@ where
         "{name}: top-2 indices must match, including the tied row's first-two-occurrences rule"
     );
 }
+
+/// Top-2 over the same fixture through non-dense output views: `values`
+/// transposed (`[3, 2]` with strides `[1, 3]`) at offset 1 inside an
+/// 8-cell buffer, `indices` dense.
+///
+/// Each output follows its own layout independently: the seam takes two
+/// `StridedView`s, so assuming either is dense-packed (or that they share
+/// strides) silently writes the wrong cells. Untouched cells must stay
+/// zero, pinning the offset as well as the strides.
+pub fn assert_topk_strided_output_contract<D, K>(device: &D, ops: &K)
+where
+    D: ComputeDevice,
+    K: TopKOps<D, i32>,
+{
+    let name = device.backend_name();
+    let in_layout = Layout::c_contiguous([3, 4]).expect("input layout");
+    let input = device.upload(&fixture()).expect("fixture upload");
+
+    // out(lane, slot) = 1 + lane + 3*slot: lane 0 -> cells {1,4},
+    // lane 1 -> {2,5}, lane 2 -> {3,6}; cells 0 and 7 stay zero.
+    let val_layout = Layout::try_new([3, 2], [1, 3], 1).expect("transposed values layout");
+    let values = device.alloc_zeroed::<i32>(8).expect("values alloc");
+    let idx_layout = Layout::c_contiguous([3, 2]).expect("dense indices layout");
+    let indices = device.alloc_zeroed::<u32>(6).expect("indices alloc");
+
+    ops.topk_axis_into(
+        device,
+        StridedView::new(&input, &in_layout),
+        1,
+        2,
+        StridedView::new(&values, &val_layout),
+        StridedView::new(&indices, &idx_layout),
+    )
+    .expect("topk strided-output dispatch");
+
+    let mut got_vals = vec![0i32; 8];
+    let mut got_idxs = vec![0u32; 6];
+    device
+        .download(&values, &mut got_vals)
+        .expect("download values");
+    device
+        .download(&indices, &mut got_idxs)
+        .expect("download indices");
+
+    assert_eq!(
+        got_vals,
+        vec![0, 9, 2, 8, 5, 2, 7, 0],
+        "{name}: strided top-2 values must land at their layout offsets"
+    );
+    assert_eq!(
+        got_idxs,
+        vec![2, 0, 0, 1, 1, 0],
+        "{name}: dense top-2 indices must match alongside strided values"
+    );
+}

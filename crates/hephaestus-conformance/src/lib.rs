@@ -206,7 +206,7 @@ pub use staggered::assert_staggered_3d_contract;
 pub use stateful_update::{StatefulUpdateWidth, assert_stateful_update_contract};
 pub use stencil::assert_stencil_contract;
 pub use tile::assert_tile_contract;
-pub use topk::assert_topk_contract;
+pub use topk::{assert_topk_contract, assert_topk_strided_output_contract};
 pub use transfer::assert_transfer_contract;
 pub use triangular::assert_triangular_contract;
 pub use typed_elementwise::assert_typed_elementwise_contract;

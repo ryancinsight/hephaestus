@@ -29,6 +29,22 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `reduction/axis_ops` to `reduction/seams`, and rename the CUDA strided
   suites to `binary`/`common`. Module paths are unchanged; `#[path]`
   attributes removed. (Rescued from #427, slice 5.)
+- [minor] Implement seven advanced seams (`AdaptivePoolingOps`,
+  `ArgReduceOps`, `CrossProductOps`, `InterpolationOps`, `PadOps`,
+  `TopKOps`, `TriangularOps`) over CUDA C++, Metal, and HIP C++ with
+  `PipelineKey` variants and per-seam contract suites, closing the
+  backend-parity gap behind the device-neutral traits. Strengthen the
+  shared conformance oracles: a strided-output top-2 clause (transposed
+  values at nonzero offset alongside dense indices), full
+  triangular-solve clauses over the host oracle with a packed-input
+  rejection clause, and a degenerate-shape clause that also pins the
+  column-major path. Fix the WGSL top-k kernel to address each output
+  through its own strides and offset (the uniform already carried them;
+  the shader ignored them and always wrote dense), extending `TopKMeta`
+  with independent values/indices stride fields; Metal inherits the fix
+  through delegation. Publicize `TriangularStorage` for cross-backend
+  test reuse; widen the ROCm linalg integer conversions to `pub(crate)`
+  for seam dispatch. (Rescued from #427, slice 6.)
 
 ## [0.20.4] - 2026-10-13
 

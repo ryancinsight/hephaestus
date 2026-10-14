@@ -19,7 +19,6 @@ pub fn assert_triangular_contract<D, M>(device: &D, ops: &M)
 where
     D: ComputeDevice,
     M: TriangularOps<D, i32>,
-    D::Buffer<i32>: Clone,
 {
     let name = device.backend_name();
     let layout = Layout::c_contiguous([3, 3]).expect("layout");
@@ -356,7 +355,9 @@ where
         );
     }
 
-    let alias = input.clone();
+    // Two views over the one owning buffer observe exactly the aliasing a
+    // cloned handle would, without requiring `Clone` on owning buffers
+    // (CUDA/ROCm/Metal free on drop).
     let before = device
         .download_owned(&input)
         .expect("alias fixture download");
@@ -366,7 +367,7 @@ where
             StridedView::new(&input, &layout),
             TriangularMode::Lower,
             0,
-            StridedView::new(&alias, &layout),
+            StridedView::new(&input, &layout),
         )
         .expect_err("triangular dispatch must reject aliased input/output");
     assert!(

@@ -10,9 +10,12 @@ pub mod application;
 /// Metal device and buffer infrastructure.
 pub mod infrastructure;
 
+pub use application::adaptive_pooling_seam::MetalAdaptivePoolingOps;
+pub use application::arg_reduce_seam::MetalArgReduceOps;
 pub use application::attention::MetalAttentionOps;
 pub use application::axis_reduction_seam::MetalAxisReductionOps;
 pub use application::convolution::MetalConvolutionOps;
+pub use application::cross_product_seam::MetalCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::{
     MetalCholeskyDecomposition, MetalDecompositionOps, MetalLuDecomposition, MetalQrDecomposition,
@@ -33,6 +36,7 @@ pub use application::elementwise::{
 pub use application::elementwise_seam::MetalElementwiseOps;
 pub use application::full_reduction_seam::MetalFullReductionOps;
 pub use application::fusion::MetalFusionOps;
+pub use application::interpolation_seam::MetalInterpolationOps;
 pub use application::linalg::{
     batched_matmul, batched_matmul_into, det, dot, kron, kron_into, matexp, matmul, matmul_into,
     matpow, matrix_rank, matrix_rank_with_tolerance, norm_l1, norm_l2, norm_max, pinv, trace,
@@ -43,6 +47,7 @@ pub use application::linalg_traits::{
     AsGpuMatrixOperand, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
 };
 pub use application::loss::{CtcKernel, MetalCrossEntropyOps, MetalCtcOps};
+pub use application::pad_seam::MetalPadOps;
 pub use application::parameterized_elementwise::{
     MetalParameterizedUnaryOps, parameterized_unary_strided_into,
 };
@@ -90,6 +95,8 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::topk_seam::MetalTopKOps;
+pub use application::triangular_seam::MetalTriangularOps;
 pub use application::vector::{MetalPreparedDot, MetalPreparedNorm, MetalVectorOps};
 pub use application::volume::{
     FieldGeometry, MetalRayIntegralOps, RAY_STRIDE, ray_line_integrals, ray_line_integrals_into,
