@@ -12,6 +12,6 @@ use hephaestus_metal::{MetalDevice, MetalVectorOps};
 fn metal_satisfies_the_dense_vector_contract() {
     let device = MetalDevice::try_default()
         .expect("Metal dense-vector conformance requires a physical device");
-    let ops = MetalVectorOps::new(&device).expect("vector kernels compile");
+    let ops = MetalVectorOps::<f32>::new(&device).expect("vector kernels compile");
     assert_dense_vector_contract(&device, &ops);
 }

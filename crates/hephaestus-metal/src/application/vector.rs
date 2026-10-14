@@ -1,7 +1,9 @@
 //! Metal implementation of the dense vector-operation seam.
 
-use hephaestus_core::{DenseVectorOps, Result};
-use hephaestus_wgpu::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
+use hephaestus_core::{
+    DenseVectorOps, IdentityToken, MaxOp, OpIdentity, Result, VectorFactor, VectorScalar, Wgsl,
+};
+use hephaestus_wgpu::{L2NormScalar, WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 
 use crate::infrastructure::buffer::MetalBuffer;
 use crate::infrastructure::device::MetalDevice;
@@ -11,21 +13,21 @@ use crate::infrastructure::device::MetalDevice;
 /// Metal uses the existing WGPU dispatch substrate configured with the native
 /// Metal backend. The bundle is constructed once so shader preparation stays
 /// outside iterative solver operations.
-pub struct MetalVectorOps {
-    inner: WgpuVectorOps,
+pub struct MetalVectorOps<T> {
+    inner: WgpuVectorOps<T>,
 }
 
 /// Prepared dot product bound to the allocations used during preparation.
-pub struct MetalPreparedDot {
-    inner: WgpuPreparedDot<f32>,
+pub struct MetalPreparedDot<T> {
+    inner: WgpuPreparedDot<T>,
 }
 
 /// Prepared Euclidean norm bound to the allocation used during preparation.
-pub struct MetalPreparedNorm {
-    inner: WgpuPreparedNorm<f32>,
+pub struct MetalPreparedNorm<T> {
+    inner: WgpuPreparedNorm<T>,
 }
 
-impl MetalVectorOps {
+impl<T: VectorScalar<Wgsl> + VectorFactor<Wgsl>> MetalVectorOps<T> {
     /// Compile the dense vector kernels on the Metal-selected device.
     ///
     /// # Errors
@@ -38,32 +40,34 @@ impl MetalVectorOps {
     }
 }
 
-impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
+impl<T> DenseVectorOps<MetalDevice, T> for MetalVectorOps<T>
+where
+    T: VectorScalar<Wgsl>
+        + VectorFactor<Wgsl>
+        + L2NormScalar
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, Wgsl>,
+{
     type PreparedDot<'a>
-        = MetalPreparedDot
+        = MetalPreparedDot<T>
     where
         Self: 'a;
     type PreparedNorm<'a>
-        = MetalPreparedNorm
+        = MetalPreparedNorm<T>
     where
         Self: 'a;
 
     fn copy_vector(
         &self,
         device: &MetalDevice,
-        source: &MetalBuffer<f32>,
-        target: &MetalBuffer<f32>,
+        source: &MetalBuffer<T>,
+        target: &MetalBuffer<T>,
     ) -> Result<()> {
         self.inner
             .copy_vector(device.wgpu_device(), &source.inner, &target.inner)
     }
 
-    fn scale_vector(
-        &self,
-        device: &MetalDevice,
-        target: &MetalBuffer<f32>,
-        factor: f32,
-    ) -> Result<()> {
+    fn scale_vector(&self, device: &MetalDevice, target: &MetalBuffer<T>, factor: T) -> Result<()> {
         self.inner
             .scale_vector(device.wgpu_device(), &target.inner, factor)
     }
@@ -71,9 +75,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn axpy(
         &self,
         device: &MetalDevice,
-        target: &MetalBuffer<f32>,
-        source: &MetalBuffer<f32>,
-        factor: f32,
+        target: &MetalBuffer<T>,
+        source: &MetalBuffer<T>,
+        factor: T,
     ) -> Result<()> {
         self.inner
             .axpy(device.wgpu_device(), &target.inner, &source.inner, factor)
@@ -82,9 +86,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn xpay(
         &self,
         device: &MetalDevice,
-        target: &MetalBuffer<f32>,
-        source: &MetalBuffer<f32>,
-        factor: f32,
+        target: &MetalBuffer<T>,
+        source: &MetalBuffer<T>,
+        factor: T,
     ) -> Result<()> {
         self.inner
             .xpay(device.wgpu_device(), &target.inner, &source.inner, factor)
@@ -93,9 +97,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn subtract_into(
         &self,
         device: &MetalDevice,
-        left: &MetalBuffer<f32>,
-        right: &MetalBuffer<f32>,
-        output: &MetalBuffer<f32>,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+        output: &MetalBuffer<T>,
     ) -> Result<()> {
         self.inner.subtract_into(
             device.wgpu_device(),
@@ -108,9 +112,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn add_into(
         &self,
         device: &MetalDevice,
-        left: &MetalBuffer<f32>,
-        right: &MetalBuffer<f32>,
-        output: &MetalBuffer<f32>,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+        output: &MetalBuffer<T>,
     ) -> Result<()> {
         self.inner.add_into(
             device.wgpu_device(),
@@ -123,9 +127,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn multiply_into(
         &self,
         device: &MetalDevice,
-        left: &MetalBuffer<f32>,
-        right: &MetalBuffer<f32>,
-        output: &MetalBuffer<f32>,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+        output: &MetalBuffer<T>,
     ) -> Result<()> {
         self.inner.multiply_into(
             device.wgpu_device(),
@@ -138,9 +142,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn divide_into(
         &self,
         device: &MetalDevice,
-        left: &MetalBuffer<f32>,
-        right: &MetalBuffer<f32>,
-        output: &MetalBuffer<f32>,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+        output: &MetalBuffer<T>,
     ) -> Result<()> {
         self.inner.divide_into(
             device.wgpu_device(),
@@ -153,10 +157,10 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn prepare_dot<'a>(
         &self,
         device: &MetalDevice,
-        left: &'a MetalBuffer<f32>,
-        right: &'a MetalBuffer<f32>,
+        left: &'a MetalBuffer<T>,
+        right: &'a MetalBuffer<T>,
     ) -> Result<Self::PreparedDot<'a>> {
-        Ok(MetalPreparedDot {
+        Ok(MetalPreparedDot::<T> {
             inner: self
                 .inner
                 .prepare_dot(device.wgpu_device(), &left.inner, &right.inner)?,
@@ -167,9 +171,9 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
         &self,
         device: &MetalDevice,
         prepared: &Self::PreparedDot<'a>,
-        left: &MetalBuffer<f32>,
-        right: &MetalBuffer<f32>,
-    ) -> Result<f32> {
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+    ) -> Result<T> {
         self.inner.dot_prepared(
             device.wgpu_device(),
             &prepared.inner,
@@ -181,20 +185,20 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
     fn prepare_norm_l2<'a>(
         &self,
         device: &MetalDevice,
-        vector: &'a MetalBuffer<f32>,
+        vector: &'a MetalBuffer<T>,
     ) -> Result<Self::PreparedNorm<'a>> {
-        Ok(MetalPreparedNorm {
+        Ok(MetalPreparedNorm::<T> {
             inner: self
                 .inner
                 .prepare_norm_l2(device.wgpu_device(), &vector.inner)?,
         })
     }
 
-    fn norm_l1(&self, device: &MetalDevice, vector: &MetalBuffer<f32>) -> Result<f32> {
+    fn norm_l1(&self, device: &MetalDevice, vector: &MetalBuffer<T>) -> Result<T> {
         self.inner.norm_l1(device.wgpu_device(), &vector.inner)
     }
 
-    fn norm_max(&self, device: &MetalDevice, vector: &MetalBuffer<f32>) -> Result<f32> {
+    fn norm_max(&self, device: &MetalDevice, vector: &MetalBuffer<T>) -> Result<T> {
         self.inner.norm_max(device.wgpu_device(), &vector.inner)
     }
 
@@ -202,8 +206,8 @@ impl DenseVectorOps<MetalDevice, f32> for MetalVectorOps {
         &self,
         device: &MetalDevice,
         prepared: &Self::PreparedNorm<'a>,
-        vector: &MetalBuffer<f32>,
-    ) -> Result<f32> {
+        vector: &MetalBuffer<T>,
+    ) -> Result<T> {
         self.inner
             .norm_l2_prepared(device.wgpu_device(), &prepared.inner, &vector.inner)
     }

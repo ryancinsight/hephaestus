@@ -53,7 +53,7 @@ use super::error::Result;
 ///
 /// Floating-point NaN and infinity behaviour follows the kernel
 /// dialect's declared capability: see
-/// [`KernelDialect::IEEE_SPECIAL_VALUES`](crate::KernelDialect::IEEE_SPECIAL_VALUES)
+/// [`KernelDialect::IEEE_SPECIAL_VALUES`]
 /// (ADR 0043) for what is and is not promised per dialect.
 pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     /// Prepared resources for a dot product over a fixed operand pair.

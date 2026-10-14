@@ -4,11 +4,13 @@
 //! this module because they share private state: splitting them would only
 //! widen field and helper visibility across the boundary.
 
+use core::marker::PhantomData;
+
 use eunomia::Pod;
-use hephaestus_core::RetainedReductions;
 use hephaestus_core::{
     Binding, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
-    HephaestusError, KernelDevice, Result,
+    HephaestusError, IdentityToken, KernelDevice, MaxOp, OpIdentity, Result, VectorFactor,
+    VectorScalar, Wgsl,
 };
 
 use hephaestus_core::{AddOp, BlockWidth, DivOp, MulOp, SubOp};
@@ -25,10 +27,10 @@ use super::kernels::{AxpyKernel, ScaleKernel, VectorParams, XpayKernel, workgrou
 ///
 /// Shader compilation happens once here rather than per operation, which is
 /// what makes the seam usable inside an iteration loop.
-pub struct WgpuVectorOps {
-    scale: WgpuPrepared<ScaleKernel>,
-    axpy: WgpuPrepared<AxpyKernel>,
-    xpay: WgpuPrepared<XpayKernel>,
+pub struct WgpuVectorOps<T> {
+    scale: WgpuPrepared<ScaleKernel<T>>,
+    axpy: WgpuPrepared<AxpyKernel<T>>,
+    xpay: WgpuPrepared<XpayKernel<T>>,
 }
 
 /// Prepared dot product bound to the allocations it was built against.
@@ -44,7 +46,7 @@ pub struct WgpuPreparedNorm<T> {
     input: WgpuBuffer<T>,
 }
 
-impl WgpuVectorOps {
+impl<T: VectorScalar<Wgsl> + VectorFactor<Wgsl>> WgpuVectorOps<T> {
     /// Compile the in-place vector kernels on `device`.
     ///
     /// # Errors
@@ -52,12 +54,30 @@ impl WgpuVectorOps {
     /// Returns a shader preparation or device failure.
     pub fn new(device: &WgpuDevice) -> Result<Self> {
         Ok(Self {
-            scale: device.prepare(&ScaleKernel)?,
-            axpy: device.prepare(&AxpyKernel)?,
-            xpay: device.prepare(&XpayKernel)?,
+            scale: device.prepare(&ScaleKernel(PhantomData))?,
+            axpy: device.prepare(&AxpyKernel(PhantomData))?,
+            xpay: device.prepare(&XpayKernel(PhantomData))?,
         })
     }
 
+    fn dispatch_binary(
+        &self,
+        device: &WgpuDevice,
+        prepared: &WgpuPrepared<AxpyKernel<T>>,
+        target: &WgpuBuffer<T>,
+        source: &WgpuBuffer<T>,
+        factor: T,
+    ) -> Result<()> {
+        device.dispatch(
+            prepared,
+            &[Binding::read_write(target), Binding::read(source)],
+            &VectorParams::new(factor, target.len())?,
+            Self::grid(target.len())?,
+        )
+    }
+}
+
+impl<T> WgpuVectorOps<T> {
     fn require_equal_lengths(left: usize, right: usize) -> Result<()> {
         if left == right {
             Ok(())
@@ -71,10 +91,10 @@ impl WgpuVectorOps {
 
     /// Reject a prepared handle whose operand is a different allocation than
     /// the one it was bound to, which would otherwise reduce the wrong memory.
-    fn require_same_allocation<T: Pod>(
+    fn require_same_allocation<U: Pod>(
         role: &str,
-        expected: &WgpuBuffer<T>,
-        actual: &WgpuBuffer<T>,
+        expected: &WgpuBuffer<U>,
+        actual: &WgpuBuffer<U>,
     ) -> Result<()> {
         if expected.raw() == actual.raw() {
             Ok(())
@@ -96,44 +116,35 @@ impl WgpuVectorOps {
         })
     }
 
-    fn dispatch_binary(
-        &self,
-        device: &WgpuDevice,
-        prepared: &WgpuPrepared<AxpyKernel>,
-        target: &WgpuBuffer<f32>,
-        source: &WgpuBuffer<f32>,
-        factor: f32,
-    ) -> Result<()> {
-        device.dispatch(
-            prepared,
-            &[Binding::read_write(target), Binding::read(source)],
-            &VectorParams::new(factor, target.len())?,
-            Self::grid(target.len())?,
-        )
-    }
-
-    fn download_scalar<T: L2NormScalar>(device: &WgpuDevice, scalar: &WgpuBuffer<T>) -> Result<T> {
-        let mut host = [T::zeroed(); 1];
+    fn download_scalar<U: L2NormScalar>(device: &WgpuDevice, scalar: &WgpuBuffer<U>) -> Result<U> {
+        let mut host = [U::zeroed(); 1];
         device.download(scalar, &mut host)?;
         Ok(host[0])
     }
 }
 
-impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
+impl<T> DenseVectorOps<WgpuDevice, T> for WgpuVectorOps<T>
+where
+    T: VectorScalar<Wgsl>
+        + VectorFactor<Wgsl>
+        + L2NormScalar
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, Wgsl>,
+{
     type PreparedDot<'a>
-        = WgpuPreparedDot<f32>
+        = WgpuPreparedDot<T>
     where
         Self: 'a;
     type PreparedNorm<'a>
-        = WgpuPreparedNorm<f32>
+        = WgpuPreparedNorm<T>
     where
         Self: 'a;
 
     fn copy_vector(
         &self,
         device: &WgpuDevice,
-        source: &WgpuBuffer<f32>,
-        target: &WgpuBuffer<f32>,
+        source: &WgpuBuffer<T>,
+        target: &WgpuBuffer<T>,
     ) -> Result<()> {
         Self::require_equal_lengths(source.len(), target.len())?;
         if source.is_empty() {
@@ -144,12 +155,7 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         stream.submit()
     }
 
-    fn scale_vector(
-        &self,
-        device: &WgpuDevice,
-        target: &WgpuBuffer<f32>,
-        factor: f32,
-    ) -> Result<()> {
+    fn scale_vector(&self, device: &WgpuDevice, target: &WgpuBuffer<T>, factor: T) -> Result<()> {
         if target.is_empty() {
             return Ok(());
         }
@@ -164,9 +170,9 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
     fn axpy(
         &self,
         device: &WgpuDevice,
-        target: &WgpuBuffer<f32>,
-        source: &WgpuBuffer<f32>,
-        factor: f32,
+        target: &WgpuBuffer<T>,
+        source: &WgpuBuffer<T>,
+        factor: T,
     ) -> Result<()> {
         Self::require_equal_lengths(target.len(), source.len())?;
         if target.is_empty() {
@@ -178,9 +184,9 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
     fn xpay(
         &self,
         device: &WgpuDevice,
-        target: &WgpuBuffer<f32>,
-        source: &WgpuBuffer<f32>,
-        factor: f32,
+        target: &WgpuBuffer<T>,
+        source: &WgpuBuffer<T>,
+        factor: T,
     ) -> Result<()> {
         Self::require_equal_lengths(target.len(), source.len())?;
         if target.is_empty() {
@@ -197,68 +203,68 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
     fn subtract_into(
         &self,
         device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-        output: &WgpuBuffer<f32>,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+        output: &WgpuBuffer<T>,
     ) -> Result<()> {
         Self::require_equal_lengths(left.len(), right.len())?;
         Self::require_equal_lengths(left.len(), output.len())?;
         if left.is_empty() {
             return Ok(());
         }
-        binary_elementwise_into::<SubOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+        binary_elementwise_into::<SubOp, T>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn add_into(
         &self,
         device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-        output: &WgpuBuffer<f32>,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+        output: &WgpuBuffer<T>,
     ) -> Result<()> {
         Self::require_equal_lengths(left.len(), right.len())?;
         Self::require_equal_lengths(left.len(), output.len())?;
         if left.is_empty() {
             return Ok(());
         }
-        binary_elementwise_into::<AddOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+        binary_elementwise_into::<AddOp, T>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn multiply_into(
         &self,
         device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-        output: &WgpuBuffer<f32>,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+        output: &WgpuBuffer<T>,
     ) -> Result<()> {
         Self::require_equal_lengths(left.len(), right.len())?;
         Self::require_equal_lengths(left.len(), output.len())?;
         if left.is_empty() {
             return Ok(());
         }
-        binary_elementwise_into::<MulOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+        binary_elementwise_into::<MulOp, T>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn divide_into(
         &self,
         device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-        output: &WgpuBuffer<f32>,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+        output: &WgpuBuffer<T>,
     ) -> Result<()> {
         Self::require_equal_lengths(left.len(), right.len())?;
         Self::require_equal_lengths(left.len(), output.len())?;
         if left.is_empty() {
             return Ok(());
         }
-        binary_elementwise_into::<DivOp, f32>(device, left, right, output, BlockWidth::DEFAULT)
+        binary_elementwise_into::<DivOp, T>(device, left, right, output, BlockWidth::DEFAULT)
     }
 
     fn prepare_dot<'a>(
         &self,
         device: &WgpuDevice,
-        left: &'a WgpuBuffer<f32>,
-        right: &'a WgpuBuffer<f32>,
+        left: &'a WgpuBuffer<T>,
+        right: &'a WgpuBuffer<T>,
     ) -> Result<Self::PreparedDot<'a>> {
         Self::require_equal_lengths(left.len(), right.len())?;
         let layout = Self::layout(left.len())?;
@@ -283,9 +289,9 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         &self,
         device: &WgpuDevice,
         prepared: &Self::PreparedDot<'a>,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-    ) -> Result<f32> {
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+    ) -> Result<T> {
         Self::require_same_allocation("dot left operand", &prepared.left, left)?;
         Self::require_same_allocation("dot right operand", &prepared.right, right)?;
         prepared.operation.dispatch(device)?;
@@ -295,7 +301,7 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
     fn prepare_norm_l2<'a>(
         &self,
         device: &WgpuDevice,
-        vector: &'a WgpuBuffer<f32>,
+        vector: &'a WgpuBuffer<T>,
     ) -> Result<Self::PreparedNorm<'a>> {
         let layout = Self::layout(vector.len())?;
         Ok(WgpuPreparedNorm {
@@ -310,13 +316,13 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         })
     }
 
-    fn norm_l1(&self, device: &WgpuDevice, vector: &WgpuBuffer<f32>) -> Result<f32> {
+    fn norm_l1(&self, device: &WgpuDevice, vector: &WgpuBuffer<T>) -> Result<T> {
         let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
             hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!("norm operand layout rejected: {error}"),
             }
         })?;
-        let result = crate::application::linalg::norm_l1::<f32, 1>(
+        let result = crate::application::linalg::norm_l1::<T, 1>(
             device,
             crate::application::strided::StridedOperand {
                 buffer: vector,
@@ -326,13 +332,13 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         Self::download_scalar(device, &result)
     }
 
-    fn norm_max(&self, device: &WgpuDevice, vector: &WgpuBuffer<f32>) -> Result<f32> {
+    fn norm_max(&self, device: &WgpuDevice, vector: &WgpuBuffer<T>) -> Result<T> {
         let layout = leto::Layout::c_contiguous([vector.len()]).map_err(|error| {
             hephaestus_core::HephaestusError::DispatchFailed {
                 message: format!("norm operand layout rejected: {error}"),
             }
         })?;
-        let result = crate::application::linalg::norm_max::<f32, 1>(
+        let result = crate::application::linalg::norm_max::<T, 1>(
             device,
             crate::application::strided::StridedOperand {
                 buffer: vector,
@@ -346,55 +352,10 @@ impl DenseVectorOps<WgpuDevice, f32> for WgpuVectorOps {
         &self,
         device: &WgpuDevice,
         prepared: &Self::PreparedNorm<'a>,
-        vector: &WgpuBuffer<f32>,
-    ) -> Result<f32> {
+        vector: &WgpuBuffer<T>,
+    ) -> Result<T> {
         Self::require_same_allocation("norm operand", &prepared.input, vector)?;
         prepared.operation.dispatch(device)?;
         Self::download_scalar(device, prepared.operation.output())
-    }
-}
-
-impl RetainedReductions<WgpuDevice, f32> for WgpuVectorOps {
-    // The WGPU prepared forms already own their operands: `WgpuBuffer` is a
-    // shared handle, so cloning it keeps the allocation alive without copying
-    // device memory. The retained and borrowing forms are therefore the same
-    // resources reached through different lifetimes.
-    type RetainedDot = WgpuPreparedDot<f32>;
-    type RetainedNorm = WgpuPreparedNorm<f32>;
-
-    fn retain_dot(
-        &self,
-        device: &WgpuDevice,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-    ) -> Result<Self::RetainedDot> {
-        self.prepare_dot(device, left, right)
-    }
-
-    fn dot_retained(
-        &self,
-        device: &WgpuDevice,
-        retained: &Self::RetainedDot,
-        left: &WgpuBuffer<f32>,
-        right: &WgpuBuffer<f32>,
-    ) -> Result<f32> {
-        self.dot_prepared(device, retained, left, right)
-    }
-
-    fn retain_norm_l2(
-        &self,
-        device: &WgpuDevice,
-        vector: &WgpuBuffer<f32>,
-    ) -> Result<Self::RetainedNorm> {
-        self.prepare_norm_l2(device, vector)
-    }
-
-    fn norm_l2_retained(
-        &self,
-        device: &WgpuDevice,
-        retained: &Self::RetainedNorm,
-        vector: &WgpuBuffer<f32>,
-    ) -> Result<f32> {
-        self.norm_l2_prepared(device, retained, vector)
     }
 }
