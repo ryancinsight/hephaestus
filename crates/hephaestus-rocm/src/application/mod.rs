@@ -74,6 +74,8 @@ pub mod random;
 pub mod random_seam;
 /// Contiguous multi-pass tree reductions.
 pub mod reduction;
+/// Device-neutral n-D circular-shift seam implementation.
+pub mod roll_seam;
 /// Device-neutral n-D scatter-add seam implementation.
 pub mod scatter_seam;
 /// Device-neutral stable-sort seam implementation.

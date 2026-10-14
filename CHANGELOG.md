@@ -13,6 +13,17 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   expansion. Add paren-balance pins for the erfc and self-gated
   expression families plus a `CeluOp` rendering test. (Rescued from
   #427, slice 11g.)
+- [minor] Generalize `RollOps` from rank-2 `roll_axis_into` to n-D
+  multi-shift `roll_into` (`shifts`/`dims` parallel slices, `torch.roll`
+  semantics): per-axis shifts fold in `i128` and reduce once per axis,
+  empty shapes roll vacuously, and aliased outputs are rejected before
+  mutation. New `CudaRollOps`/`RocmRollOps` C-dialect kernels (keyed by
+  `PipelineKey::Roll`) and `MetalRollOps` over the shared WGSL
+  implementation; the shared oracle pins value, identity, empty,
+  geometry-rejection, aliasing, and offset/stride-view clauses (the
+  strided clause is new: the rescue oracle only covered contiguous
+  views, regressing the rank-2 oracle's non-contiguous case). (Rescued
+  from #427, slice 11f.)
 - [patch] Correct the `InterpolationMode::Nearest` tie-break contract:
   `frac >= 0.5` advances to the upper index on every backend (host,
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc

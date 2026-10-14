@@ -119,6 +119,7 @@ pub type CudaPreparedScan<'op, T> = hephaestus_core::PreparedAxisScan<'op, CudaD
 pub use application::fixed_fd::{
     CudaFixedFd3DOps, FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme,
 };
+pub use application::roll_seam::CudaRollOps;
 pub use application::scatter_seam::CudaScatterOps;
 pub use application::sort_seam::CudaSortOps;
 pub use application::sparse::seam::CudaSparseOps;
