@@ -56,6 +56,10 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `blocked` re-exports. The shared `validate_finite` helper widens to
   `pub(super)` for the family modules. Module paths are unchanged.
   (Rescued from #427, slice 8.)
+- [minor] Implement the thirteen shape/indexing seams over Metal
+  (`MetalCatOps` … `MetalWhereOps`) by delegating to the WGSL
+  implementors, with per-seam contract suites. (Rescued from #427,
+  slice 11a.)
 
 ## [0.20.4] - 2026-10-13
 
