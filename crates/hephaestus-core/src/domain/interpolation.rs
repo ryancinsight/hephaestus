@@ -31,8 +31,9 @@ use crate::domain::view::StridedView;
 /// Resampling kernel selected at the operation boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InterpolationMode {
-    /// Sample the input element closest to the mapped source coordinate
-    /// (ties round toward the lower index).
+    /// Sample the input element closest to the mapped source coordinate:
+    /// `frac < 0.5` keeps the lower index, `frac >= 0.5` advances (ties
+    /// round toward the upper index).
     Nearest,
     /// Linearly blend the two input elements bracketing the mapped source
     /// coordinate.

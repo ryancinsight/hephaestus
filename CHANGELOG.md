@@ -4,6 +4,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## Unreleased
 
+- [patch] Correct the `InterpolationMode::Nearest` tie-break contract:
+  `frac >= 0.5` advances to the upper index on every backend (host,
+  WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc
+  previously claimed ties round toward the lower index. (Rescued from
+  #427, slice 11d.)
 - [minor] Add thirteen device-neutral shape/indexing seams — `CatOps`,
   `DotOps`, `GatherOps`, `IndexPutOps`, `IndexSelectOps`, `MaskedFillOps`,
   `NonzeroOps`, `ScatterOps`, `SortOps`, `SplitOps`, `StackOps`, `TileOps`,
