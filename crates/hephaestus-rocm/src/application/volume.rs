@@ -79,6 +79,12 @@ extern "C" __global__ void ray_line_integrals(
     float step = params.values[10];
     float3 o = make_float3(rays[i * 6u], rays[i * 6u + 1u], rays[i * 6u + 2u]);
     float3 d = make_float3(rays[i * 6u + 3u], rays[i * 6u + 4u], rays[i * 6u + 5u]);
+    // A zero direction carries no world direction; reject it before the
+    // slab divisions below can form 0 * inf NaNs.
+    if (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f) {
+        out[i] = 0.0f;
+        return;
+    }
     float3 bmin = origin;
     float3 bmax = make_float3(
         origin.x + (float)(nx - 1u) * spacing.x,
@@ -100,20 +106,31 @@ extern "C" __global__ void ray_line_integrals(
     float3 tmax = make_float3(fmaxf(t1.x, t2.x), fmaxf(t1.y, t2.y), fmaxf(t1.z, t2.z));
     float t_enter = fmaxf(fmaxf(tmin.x, tmin.y), tmin.z);
     float t_exit = fminf(fminf(tmax.x, tmax.y), tmax.z);
+    // The domain is the ray from its origin: clamp the line chord to the
+    // forward half-line so inside origins start at t = 0 and backward rays
+    // miss. The march length is in world units: scale the parameter chord
+    // by the direction length so non-unit directions integrate field dl.
+    t_enter = fmaxf(t_enter, 0.0f);
     if (t_exit < t_enter) {
         out[i] = 0.0f;
         return;
     }
-    float len = t_exit - t_enter;
+    float dir_len = sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+    float param_len = t_exit - t_enter;
+    float len = param_len * dir_len;
     if (len <= 0.0f) {
         out[i] = 0.0f;
         return;
     }
     unsigned int n = max((unsigned int)ceilf(len / step), 1u);
     float actual = len / (float)n;
+    // March in parameter space but weight in world units: the midpoint
+    // parameter advances by the parameter segment while each sample weighs
+    // the world segment, so the march covers exactly the clamped chord.
+    float t_step = param_len / (float)n;
     float acc = 0.0f;
     for (unsigned int s = 0u; s < n; ++s) {
-        float tmid = t_enter + ((float)s + 0.5f) * actual;
+        float tmid = t_enter + ((float)s + 0.5f) * t_step;
         float3 p = make_float3(
             (o.x + d.x * tmid - origin.x) / spacing.x,
             (o.y + d.y * tmid - origin.y) / spacing.y,
