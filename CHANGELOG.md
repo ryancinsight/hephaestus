@@ -24,6 +24,13 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   strided clause is new: the rescue oracle only covered contiguous
   views, regressing the rank-2 oracle's non-contiguous case). (Rescued
   from #427, slice 11f.)
+- [patch] Emit the scalar header prelude from the CUDA unary and all
+  three strided elementwise shader builders: without it, `F16`/`BF16`
+  dispatches fail NVRTC compilation (dense binary/scalar already
+  emitted it). Cover with a PTX oracle asserting native `.f16`/`.bf16`
+  instructions and rejecting widened `.f32` arithmetic, plus a
+  required-device exact-bits scalar matrix over dense/strided
+  binary/unary/scalar forms. (Rescued from #427, slice 11h.)
 - [patch] Correct the `InterpolationMode::Nearest` tie-break contract:
   `frac >= 0.5` advances to the upper index on every backend (host,
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc

@@ -10,7 +10,7 @@ use hephaestus_core::{
     Result,
 };
 
-fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
+pub(crate) fn shader_source<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
         r#"{prelude}
 extern "C" __global__ void scalar_kernel(
@@ -100,24 +100,4 @@ where
     let out = device.alloc_uninitialized::<T>(a.len())?;
     scalar_elementwise_into::<Op, T>(device, a, scalar, &out, BlockWidth::DEFAULT)?;
     Ok(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::shader_source;
-    use hephaestus_core::{AddOp, BinaryExpr, CudaC, DialectScalar};
-
-    #[test]
-    fn source_declares_header_backed_scalars() {
-        let f16_source = shader_source::<AddOp, eunomia::F16>();
-        let bf16_source = shader_source::<AddOp, eunomia::Bf16>();
-        assert!(f16_source.starts_with(<eunomia::F16 as DialectScalar<CudaC>>::PRELUDE));
-        assert!(bf16_source.starts_with(<eunomia::Bf16 as DialectScalar<CudaC>>::PRELUDE));
-    }
-
-    #[test]
-    fn source_preserves_scalar_expression() {
-        let source = shader_source::<AddOp, f32>();
-        assert!(source.contains(<AddOp as BinaryExpr<CudaC>>::EXPR));
-    }
 }
