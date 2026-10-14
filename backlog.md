@@ -317,37 +317,6 @@
 
 <a id="heph-cuda-elementwise-scalar-declarations"></a>
 
-## HEPH-CUDA-ELEMENTWISE-SCALAR-DECLARATIONS — Compile admitted elementwise scalars [patch] — todo
-- Outcome: CUDA elementwise operations compile every scalar admitted by their bounds and preserve each operation's native scalar contract.
-- Scope: existing CUDA binary/unary/scalar generators and shared tests; enumerate dependent scalar-bound generators before changing declaration composition. No dense-product scope expansion or widened arithmetic.
-- Evidence: source-only review at `28769e1` plus product correction finds `elementwise/binary.rs::shader_source` and `elementwise/scalar.rs::shader_source` emit `T::TYPE_TOKEN` without its required declarations, although their bounds admit F16/Bf16. No elementwise device reproduction has run.
-- Acceptance: reproduce missing declarations with real required-device operations; migrate generators to the shared dialect declaration owner; exact/derived-bound value and PTX oracles cover admitted types and reject unsupported native arithmetic.
-- Dependencies: [scalar declaration owner](#heph-cuda-dense-product-scalars); priority P1; risk: dispatch failure. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: strict affected Clippy, bounded required-device scalar matrix, generated instruction review, docs and independent review.
-- Last-update: 2026-09-08.
-
-<a id="heph-cuda-product-address-range"></a>
-
-## HEPH-CUDA-PRODUCT-ADDRESS-RANGE — Preserve representable product addresses [patch] — todo
-- Outcome: rank-2 CUDA matrix and Kronecker products address validated layouts without signed 32-bit truncation or multiplication overflow.
-- Scope: product metadata conversion and address generation, shared product tests and [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md); no unrelated kernels.
-- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/mod.rs::map_layout` admits u32 origins and i32 strides, while `matmul.rs` and `kron.rs` cast origins and coordinate products to signed int. No large-address device reproduction has run.
-- Acceptance: reproduce with bounded metadata/source oracles at origins >= 2^31 and products beyond i32; derive checked signed address bounds, preserve negative strides, verify generated arithmetic and ordinary real-device strided products. Never execute a known invalid address natively.
-- Dependencies: scalar compiler correction; priority P1; risk: device addressing correctness. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: focused metadata/codegen and required-device product tests, strict affected Clippy, docs and independent review; retain explicit physical-memory coverage limits.
-- Last-update: 2026-09-08.
-
-<a id="heph-cuda-product-empty-sum"></a>
-
-## HEPH-CUDA-PRODUCT-EMPTY-SUM — Write zero for empty matrix sums [patch] — todo
-- Outcome: matrix products with zero shared extent write the additive identity to every logical output cell while preserving storage outside the output view.
-- Scope: CUDA matrix and batched products, allocating forms and shared product tests; no unrelated zero-size operations.
-- Evidence: source-only review of `28769e1` plus scalar-correction diff: `linalg/matmul.rs::matmul_into` and `batched_matmul_into` return success when the shared extent is zero even with nonempty output; allocating forms therefore leave their output unwritten. No device reproduction has run.
-- Acceptance: first reproduce `[m,0] * [0,n]` and batched equivalents with cloned nonzero sentinel outputs; assert exact zeros, untouched strided backing cells and unchanged inputs. Empty output remains a no-op; allocating forms return initialized zeros.
-- Dependencies: scalar compiler correction; priority P1; risk: incorrect numeric output. Authority: repository Change through merge; integrator assigned on claim.
-- Verification: all admitted scalar instantiations, dense/strided outputs and batches under required-device nextest budgets, strict affected Clippy, [ADR 0044](docs/adr/0044-device-neutral-dense-product-seam.md) contract update and independent review.
-- Last-update: 2026-09-08.
-
 <a id="heph-lockfile-queue-latency"></a>
 
 ## HEPH-LOCKFILE-QUEUE-LATENCY: Bound hosted guard queue latency [patch] - todo
@@ -940,18 +909,20 @@ status ledger that stood here is program history; recover any entry with
 - Acceptance: a per-operator sweep over the failing ranges on each available backend; tolerances cite the chosen form's source; the WGSL `log` accuracy bound is confirmed against the specification's accuracy table before any form relies on it; Metal is measured wherever a macOS host is available, since its default math mode may fold the cancellation-free forms.
 - Dependencies: none for the renderings; the host clauses exercising these operators wait on it (ADR 0061 Consequences). Priority P1; risk: silent wrong values at tails.
 - Verification: strict Clippy, device sweeps on the RTX 5080 (Vulkan, DX12, CUDA), and on Metal where a macOS host is available (otherwise the Metal gap is recorded as residual risk), doc sync, independent review.
-- Last-update: 2026-09-18.
-
-<a id="heph-ray-integral-direction-contract"></a>
-
-## HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT — Integrate rays in world length for any direction [patch] — todo
-- Outcome: `RayIntegralOps` states whether the integral covers the whole line or the ray from its origin, and returns `∫ field dl` in world units for a direction of any non-zero length.
-- Scope: `RayIntegralOps` docs in `crates/hephaestus-core/src/domain/volume.rs`, the wgpu, CUDA, HIP and Metal kernels, the host implementor, and the conformance clause.
-- Evidence: every kernel weights samples by the chord length in the ray parameter `t` (`acc * actual`), which is world length only when `|direction| = 1`; a direction `2·u` halves the result. `t_enter` may be negative, so a ray starting inside the volume also integrates behind its origin. The clause uses unit directions and outside origins only, so neither behaviour is pinned. Source reading at `origin/master` 2026-09-18; no device run.
-- Acceptance: the contract names the integration domain; a clause case with a non-unit direction and one with an origin inside the volume, both against analytical oracles, pass on every backend and the host.
-- Dependencies: none. Priority P2; risk: silently scaled integrals for callers passing unnormalized directions.
-- Verification: strict Clippy, device clause runs (RTX 5080: Vulkan, DX12, CUDA), host nextest, doc sync.
-- Last-update: 2026-09-18.
+- Status: 2026-10-14 — the #427 rescue branch carries a 17-file ULP-sweep
+  oracle system (`crates/hephaestus-conformance/src/accuracy/`, new) plus
+  four backend sweep drivers; ported verbatim it compiles on master, and
+  11/16 sweeps fail as true kernel findings, not oracle defects: missing
+  ±inf guards for 8 forms (gelu, gelu-grad, gelu-tanh, gelu-tanh-grad,
+  silu, silu-grad, mish, mish-grad — WGSL evaluates `-inf * 0` = NaN
+  where the defining value is ∓0); erfc systematic divergence (971/4363
+  over bound, worst 25336 ULP); log1p 9.52 vs 6 (possible driver `log`
+  accuracy); celu 11M ULP at x=-1e-8, PARTIALLY cured by #484 (GPU now
+  renders `expm1`; re-sweep to confirm, do not assume). Next step: port
+  the oracle system first, then harden kernels until 16/16 pass under
+  this item's derived-bounds discipline (difficulty never justifies
+  narrowing).
+- Last-update: 2026-10-14.
 
 <a id="heph-wgsl-f64-transcendentals-1"></a>
 
@@ -968,3 +939,83 @@ status ledger that stood here is program history; recover any entry with
   lavapipe and NVIDIA Vulkan, with special values (NaN, +-Inf, overflow and
   underflow edges) asserted against CPU truth.
 - Needs: none. Next step: derive the `exp` reduction and its bound.
+
+<a id="heph-retained-reductions-1"></a>
+
+## HEPH-RETAINED-REDUCTIONS-1 — Retained-reduction providers on all backends [minor] — todo
+- Outcome: every backend implements `RetainedReductions` (retain dense
+  map-reduction outputs for reuse) with a shared conformance oracle.
+- Scope: `crates/hephaestus-core/src/domain/vector.rs` (trait exists);
+  five backend `vector`/`dense_vector` files (trailing impl blocks
+  omitted from #482); new
+  `crates/hephaestus-conformance/src/retained_reduction/` oracle; five
+  backend `retained_reduction_contracts.rs` tests;
+  `into_retained`/`retain_dense_*`/`dispatch_with` in map-reduction files.
+- Evidence: ~587 lines of new backend behavior on
+  `rescue/green-hephaestus-20261012` (reference implementation; port, do
+  not redesign). Deferred from the #427 selective rescue: the CUDA/ROCm/
+  WGSL paths need a GPU executor (CI is adapterless there; a local CUDA
+  device exists for the CUDA leg).
+- Acceptance: oracle contracts pass per backend on available hardware;
+  adapterless legs compile and skip cleanly.
+- Dependencies: none. Priority P2.
+- Verification: shared oracle per backend, strict Clippy, doc sync,
+  independent review.
+- Last-update: 2026-10-14.
+
+<a id="heph-rocm-product-validation-1"></a>
+
+## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo
+- Outcome: ROCm matrix and Kronecker products get the checked-address and
+  empty-sum contracts #487 landed for CUDA.
+- Scope: `crates/hephaestus-rocm/src/application/linalg/` (`mod.rs`,
+  `kron.rs`, `matmul/{single,batched}.rs`),
+  `tests/dense_product_contracts.rs`.
+- Evidence: #487 landed CUDA-only because the #427 rescue has no ROCm
+  equivalent to port.
+- Acceptance: `validate_signed_address_range` + the 9-case oracle ported;
+  kron/single call sites wired (verify the HIP batched kernel widens to
+  `long long` before excluding it); k=0 dispatches-and-zeroes (verify
+  zero-tile behavior of the HIP kernel first); empty-product device
+  matrix mirrored. No ROCm hardware locally or in CI: land behind the
+  existing compile gates + adapterless legs; do not land blind device
+  claims.
+- Dependencies: none. Priority P1; risk: device addressing correctness.
+- Verification: focused metadata/codegen and adapterless product tests,
+  strict affected Clippy, docs and independent review.
+- Last-update: 2026-10-14.
+
+<a id="heph-roll-f64-gpu-1"></a>
+
+## HEPH-ROLL-F64-GPU-1 — Run the n-D roll contract at f64 on CUDA/ROCm [patch] — todo
+- Outcome: the #483 n-D roll contract runs at f64 on CUDA and ROCm devices.
+- Scope: `crates/hephaestus-{cuda,rocm}/tests/roll_contracts.rs` (one line
+  each).
+- Evidence: #483 runs i32+f32 on GPU; `CudaRollOps`/`RocmRollOps` are
+  generic over `DialectScalar` so f64 compiles, but no device was
+  available to verify dispatch.
+- Acceptance: add the f64 lines when a CUDA/ROCm device is at hand and
+  watch them pass; do not land blind.
+- Dependencies: none. Priority P3.
+- Verification: required-device contract run.
+- Last-update: 2026-10-14.
+
+<a id="heph-backend-contract-fold-1"></a>
+
+## HEPH-BACKEND-CONTRACT-FOLD-1 — Fold all seams into assert_backend_contract [minor] — todo
+- Outcome: every device-neutral seam folds into the
+  `assert_backend_contract` aggregate with per-backend instantiation.
+- Scope: `crates/hephaestus-conformance/src/assert_backend.rs`, five
+  backend aggregate instantiations.
+- Evidence: the #427 rescue's 37-seam fold cannot compile today (6
+  backend×seam pairs missing: cuda/rocm/metal × Embedding/Roll — roll
+  landed in #483, embedding is the named blocker). The rescue
+  `assert_backend.rs` is the reference; re-derive, do not copy (it also
+  de-genericizes some parameters).
+- Acceptance: `BackendUnderTest` extended with the missing seams;
+  aggregate instantiates per backend with all seams bound.
+- Dependencies: [HEPH-EMBEDDING-GATHER-PROVIDER-1](#heph-embedding-gather-provider-1).
+  Priority P3.
+- Verification: aggregate contract suite per backend, strict Clippy,
+  independent review.
+- Last-update: 2026-10-14.
