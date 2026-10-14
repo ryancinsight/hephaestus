@@ -1,4 +1,7 @@
 use super::*;
+use crate::domain::dialect::{CudaC, DialectScalar, HipC};
+use crate::domain::launch::BlockWidth;
+use crate::domain::ops::{CombineExpr, CumProdOp, CumSumOp};
 
 #[test]
 fn c_family_source_declares_the_tiled_shared_memory_contract() {

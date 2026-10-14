@@ -45,6 +45,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   through delegation. Publicize `TriangularStorage` for cross-backend
   test reuse; widen the ROCm linalg integer conversions to `pub(crate)`
   for seam dispatch. (Rescued from #427, slice 6.)
+- [patch] Split the 572-line `accelerator/scan.rs` into a `scan/`
+  hierarchy (`dialect`, `entry`, `launch`, `ops`) following the
+  `window/` precedent, and move `tests_scan.rs` to `scan/tests.rs`,
+  removing the `#[path]` attribute. Module paths and the public
+  surface are unchanged. (Rescued from #427, slice 7.)
 
 ## [0.20.4] - 2026-10-13
 
