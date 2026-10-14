@@ -10,7 +10,7 @@ pub mod scalar;
 /// Unary elementwise operations.
 pub mod unary;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "cuda"))]
 mod tests;
 
 pub use binary::{
