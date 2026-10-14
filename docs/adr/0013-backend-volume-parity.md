@@ -31,6 +31,13 @@ the same slab intersection, midpoint count, and trilinear interpolation
 equations as the WGPU kernel. Reordered floating-point accumulation is not
 introduced by this one-thread-per-ray implementation.
 
+Revision 2026-10-09 (HEPH-RAY-INTEGRAL-DIRECTION-CONTRACT): the domain is the
+ray from its origin and the march is in world units on every backend. The line
+chord is clamped to `t >= 0`, the parameter chord is scaled by `|d|`, midpoints
+advance by the parameter segment while weighing the world segment, and zero
+directions integrate to zero. Unit directions from outside the volume march
+bitwise-identically to before.
+
 ## Alternatives rejected
 
 - Keep the volume API WGPU-only: this leaves a concrete capability gap between
@@ -51,4 +58,7 @@ length, a miss, an affine field whose trilinear interpolation is exact, and
 invalid-step handling; CUDA, ROCm, and Metal also exercise packed-ray mismatch
 through their backend entry points. Hosted backend lanes run these focused
 contracts with required-device environment variables; adapterless container
-runs remain compile/test evidence and are not hardware evidence.
+runs remain compile/test evidence and are not hardware evidence. The device
+contracts additionally pin the direction domain: a doubled direction integrates
+the same world chord, an inside origin integrates from `t = 0`, and backward
+rays and zero directions integrate to exactly zero.

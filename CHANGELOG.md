@@ -31,6 +31,14 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   instructions and rejecting widened `.f32` arithmetic, plus a
   required-device exact-bits scalar matrix over dense/strided
   binary/unary/scalar forms. (Rescued from #427, slice 11h.)
+- [patch] Fix the ray-integral direction contract on every backend: clamp
+  the line chord to the forward half-line (`t >= 0`), scale the
+  parameter chord by `|d|` into world units (midpoints advance by the
+  parameter segment, samples weigh the world segment), and integrate
+  zero directions to zero instead of forming `0 * inf` NaNs. Unit
+  directions from outside march bitwise-identically to before. The
+  shared oracle pins non-unit, inside-origin, backward, and zero cases.
+  (Rescued from #427, slice 11i.)
 - [patch] Correct the `InterpolationMode::Nearest` tie-break contract:
   `frac >= 0.5` advances to the upper index on every backend (host,
   WGSL, CUDA C++, HIP C++) and in the shared oracle; the domain doc

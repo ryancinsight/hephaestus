@@ -9,8 +9,11 @@
 //! on the device (upload the volume once, download one scalar per ray).
 //!
 //! Semantics match a midpoint ray-marcher exactly: rays that miss the box (or
-//! graze with `L ≤ 0`) integrate to `0`; samples falling outside the node range
-//! after clipping (floating-point boundary rounding) contribute `0`.
+//! graze with `L <= 0`), rays pointing away from the box, and zero directions
+//! integrate to `0`; the parameter chord is clamped to the forward half-line
+//! `t >= 0` and scaled by the direction length into world units, so non-unit
+//! directions integrate the same world chord. Samples falling outside the node
+//! range after clipping (floating-point boundary rounding) contribute `0`.
 
 use crate::application::pipeline::{cached_pipeline, workgroups};
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -73,6 +76,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     let bmin = origin;
     let bmax = origin + vec3<f32>(dims - vec3<u32>(1u)) * spacing;
 
+    // A zero direction carries no world direction; reject it before the
+    // slab divisions below can form 0 * inf NaNs.
+    if (d.x == 0.0 && d.y == 0.0 && d.z == 0.0) {{
+        out[i] = 0.0;
+        return;
+    }}
+
     // Slab intersection with the node-centre AABB (axis-parallel rays handled by
     // the inf products resolving to +/-inf, min/max discarding them).
     let inv = vec3<f32>(1.0) / d;
@@ -82,20 +92,30 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
     let tmax = max(t1, t2);
     var t_enter = max(max(tmin.x, tmin.y), tmin.z);
     var t_exit = min(min(tmax.x, tmax.y), tmax.z);
+    // The domain is the ray from its origin: clamp the line chord to the
+    // forward half-line so inside origins start at t = 0 and backward rays
+    // miss. The march length is in world units: scale the parameter chord
+    // by the direction length so non-unit directions integrate field dl.
+    t_enter = max(t_enter, 0.0);
     if (t_exit < t_enter) {{
         out[i] = 0.0;
         return;
     }}
-    let len = t_exit - t_enter;
+    let param_len = t_exit - t_enter;
+    let len = param_len * length(d);
     if (len <= 0.0) {{
         out[i] = 0.0;
         return;
     }}
     let n = max(u32(ceil(len / step)), 1u);
     let actual = len / f32(n);
+    // March in parameter space but weight in world units: the midpoint
+    // parameter advances by the parameter segment while each sample weighs
+    // the world segment, so the march covers exactly the clamped chord.
+    let t_step = param_len / f32(n);
     var acc = 0.0;
     for (var s = 0u; s < n; s = s + 1u) {{
-        let tmid = t_enter + (f32(s) + 0.5) * actual;
+        let tmid = t_enter + (f32(s) + 0.5) * t_step;
         let p = (o + d * tmid - origin) / spacing;
         acc = acc + sample_trilinear(p, dims);
     }}
@@ -109,9 +129,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
 /// Integrate `field` along each packed ray, writing one integral per ray to `out`.
 ///
 /// `rays` holds [`RAY_STRIDE`] `f32`s per ray (`origin.xyz`, then a direction
-/// whose length defines the parameterization — pass unit directions so `step`
-/// and the result are in world units). `out.len` selects the ray count; misses
-/// integrate to `0`.
+/// of any non-zero length: the parameter chord is scaled by `|d|` so `step`
+/// and the result are in world units. `out.len` selects the ray count; misses,
+/// backward rays, and zero directions integrate to `0`.
 ///
 /// # Errors
 /// [`hephaestus_core::HephaestusError`] if `rays` is not

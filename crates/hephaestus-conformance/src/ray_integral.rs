@@ -3,8 +3,9 @@
 //! Each clause is generic over the device and the seam, so every backend runs
 //! the same assertions against analytical oracles: a uniform field integrates
 //! to `value × chord length`, midpoint sampling integrates an affine field
-//! exactly, a uniform integral is step-size independent, and a ray missing
-//! the volume integrates to zero.
+//! exactly, a uniform integral is step-size independent, a ray missing
+//! the volume integrates to zero, and the integral is in world units for a
+//! direction of any non-zero length over the ray from its origin.
 //!
 //! ## Tolerance derivation
 //!
@@ -12,7 +13,9 @@
 //! magnitude ≤ `0.5`. Naive `f32` summation error is bounded by
 //! `n · ε · Σ|terms| ≈ 128 · 1.2e-7 · 4 ≈ 6e-5`; the assertions use `1e-4`,
 //! under twice that bound. The miss oracle is exact: no step samples the
-//! volume, so the accumulator never leaves zero.
+//! volume, so the accumulator never leaves zero. The non-unit-direction and
+//! inside-origin cases march no more terms than the fine step-dependence
+//! case, so the same bound covers them.
 
 use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{ComputeDevice, FieldGeometry, RAY_STRIDE, RayIntegralOps};
@@ -109,6 +112,36 @@ where
         (coarse - fine).abs() < SUM_BOUND,
         "{name}: step dependence: {coarse} vs {fine}"
     );
+
+    // World units for a non-unit direction: doubling the direction halves
+    // the parameter chord but the world chord stays 16, so the integral
+    // stays 0.25 · 16 = 4.
+    let rays = [-10.0, 4.0, 4.0, 2.0, 0.0, 0.0];
+    let got = run(device, ops, &uniform, &rays, 0.5);
+    assert!(
+        (got[0] - 4.0).abs() < SUM_BOUND,
+        "{name}: non-unit direction integral {} != 4.0",
+        got[0]
+    );
+
+    // The domain is the ray from its origin: a ray starting at x = 4
+    // inside the volume integrates t in [0, 12] (world chord 12), not the
+    // whole line (chord 16), so the integral is 0.25 · 12 = 3. A ray
+    // pointing away from the volume integrates nothing behind its origin,
+    // and a zero direction carries no world direction at all.
+    let rays = [
+        4.0, 4.0, 4.0, 1.0, 0.0, 0.0, // inside origin
+        -10.0, 4.0, 4.0, -1.0, 0.0, 0.0, // backward
+        4.0, 4.0, 4.0, 0.0, 0.0, 0.0, // zero direction
+    ];
+    let got = run(device, ops, &uniform, &rays, 0.5);
+    assert!(
+        (got[0] - 3.0).abs() < SUM_BOUND,
+        "{name}: inside-origin integral {} != 3.0",
+        got[0]
+    );
+    assert_eq!(got[1], 0.0, "{name}: a backward ray must integrate to 0");
+    assert_eq!(got[2], 0.0, "{name}: a zero direction must integrate to 0");
 
     // An output shorter than the ray count is rejected and untouched.
     let field = device.upload(&uniform).expect("field upload");

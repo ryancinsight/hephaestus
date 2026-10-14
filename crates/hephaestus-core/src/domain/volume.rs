@@ -133,6 +133,14 @@ use crate::domain::device::ComputeDevice;
 /// kernels ship it, not before. Ray records are `RAY_STRIDE` floats:
 /// `[origin xyz, direction xyz]`.
 ///
+/// The domain is the ray from its origin: parameter `t` runs from
+/// `max(t_enter, 0)` to `t_exit`, so only the forward half-line is
+/// integrated and a ray pointing away from the volume yields zero. Both
+/// the marching length and `step` are in world units: the parameter chord
+/// is scaled by the direction length `|d|`, so a non-unit direction gives
+/// the same integral as its normalized form. A zero direction carries no
+/// world direction and integrates to zero.
+///
 /// Implementors are zero-sized per-backend markers. A bound of
 /// `R: RayIntegralOps<D>` costs nothing at runtime and every call
 /// monomorphizes to the backend's own kernel dispatch.
