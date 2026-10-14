@@ -157,10 +157,37 @@ impl_math_unary_exprs!(
 /// The WGSL `expm1` spelling as a reusable fragment: `elu`'s negative arm
 /// is exactly `expm1`, so [`EluOp`](super::EluOp) nests this whole select
 /// rather than duplicating the Taylor coefficients (the `GeluOp`/
-/// `GeluGradOp` fragment precedent in `activation.rs`).
+/// `GeluGradOp` fragment precedent in `activation.rs`). The optional
+/// argument re-roots the fragment at another input expression (callers
+/// parenthesize it); the bare form renders at `x`.
 macro_rules! wgsl_expm1_expr {
     () => {
-        "select(exp(x) - 1.0, x * (1.0 + x * (0.5 + x * (0.16666666666666666 + x * (0.041666666666666664 + x * (0.008333333333333333 + x * (0.001388888888888889 + x * (0.0001984126984126984 + x * 0.0000248015873015873))))))), abs(x) < 0.5)"
+        wgsl_expm1_expr!("x")
+    };
+    ($x:literal) => {
+        concat!(
+            "select(exp(",
+            $x,
+            ") - 1.0, ",
+            $x,
+            " * (1.0 + ",
+            $x,
+            " * (0.5 + ",
+            $x,
+            " * (0.16666666666666666 + ",
+            $x,
+            " * (0.041666666666666664 + ",
+            $x,
+            " * (0.008333333333333333 + ",
+            $x,
+            " * (0.001388888888888889 + ",
+            $x,
+            " * (0.0001984126984126984 + ",
+            $x,
+            " * 0.0000248015873015873))))))), abs(",
+            $x,
+            ") < 0.5)"
+        )
     };
 }
 pub(crate) use wgsl_expm1_expr;
