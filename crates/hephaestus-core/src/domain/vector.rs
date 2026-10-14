@@ -3,6 +3,7 @@
 use eunomia::Pod;
 
 use super::device::ComputeDevice;
+use super::dialect::{CudaC, DialectScalar, HipC, KernelDialect, Wgsl};
 use super::error::Result;
 
 /// Backend-neutral dense vector operations for iterative solvers.
@@ -246,6 +247,144 @@ pub trait DenseVectorOps<D: ComputeDevice, T: Pod> {
     ///
     /// Returns the backend dispatch failure.
     fn norm_max(&self, device: &D, vector: &D::Buffer<T>) -> Result<T>;
+}
+
+/// Scalar representable in the dense-vector kernels of dialect `L`.
+///
+/// This is the compiler-enforced scalar matrix for [`DenseVectorOps`]: a
+/// backend implements the seam for `T` exactly when `T: VectorScalar<L>`
+/// (plus the reduction-identity bounds each operation needs). Integers are
+/// deliberately absent: the host seam bounds `T` by leto's `RealScalar`
+/// (floats only), and the norm family has no integer meaning there, so a
+/// GPU integer implementation would diverge from the reference rather than
+/// match it.
+///
+/// # Backend × scalar matrix
+///
+/// | Backend | Scalars | `f64` availability |
+/// |---|---|---|
+/// | Host (CPU reference) | every `T: Pod + RealScalar` | always; GPU results are asserted against it |
+/// | CUDA | `f32`, `f64` | always; no feature gate |
+/// | ROCm | `f32`, `f64` | tests are Linux-gated, so Windows checks compilation only |
+/// | WGSL | `f32`, `f64` | needs the `ShaderF64` device feature, else the case skips |
+/// | Metal | `f32` on hardware | compiles through the shared WGSL sources but always skips: Apple targets cannot offer `ShaderF64` |
+///
+/// Coverage is differential: the shared `hephaestus-conformance` suite
+/// asserts every GPU result against the host reference per scalar, so each
+/// row holds only where its tests ran on hardware.
+pub trait VectorScalar<L: KernelDialect>: DialectScalar<L> {
+    /// Spell `factor * multiplicand + addend` in this dialect for this scalar.
+    ///
+    /// Called once per kernel build, never on a dispatch path. The `f32`
+    /// spellings preserve each backend's existing fused instruction; other
+    /// scalars use whatever the dialect guarantees for them.
+    #[must_use]
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String;
+}
+
+impl VectorScalar<CudaC> for f32 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        format!("fmaf({factor}, {multiplicand}, {addend})")
+    }
+}
+
+impl VectorScalar<CudaC> for f64 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        format!("fma({factor}, {multiplicand}, {addend})")
+    }
+}
+
+impl VectorScalar<HipC> for f32 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        format!("fmaf({factor}, {multiplicand}, {addend})")
+    }
+}
+
+impl VectorScalar<HipC> for f64 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        format!("fma({factor}, {multiplicand}, {addend})")
+    }
+}
+
+impl VectorScalar<Wgsl> for f32 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        format!("fma({factor}, {multiplicand}, {addend})")
+    }
+}
+
+impl VectorScalar<Wgsl> for f64 {
+    fn madd_expr(factor: &str, multiplicand: &str, addend: &str) -> String {
+        // Plain multiply-add: WGSL's `fma` is only guaranteed for `f32`, and
+        // this spelling matches the host evaluation order exactly.
+        format!("({factor} * {multiplicand} + {addend})")
+    }
+}
+
+/// Scalar whose factor rides a sixteen-byte `u32`-word uniform block in dialect `L`.
+///
+/// Dialects where every scalar can appear directly in a uniform block (CUDA,
+/// HIP) do not need this: they widen the factor instead. WGSL needs it
+/// because an `f64` field would force the `FLOAT64` shader capability onto
+/// every kernel, including `f32` ones, so each scalar declares its own
+/// uniform layout within its own capability: `f32` reconstructs the factor
+/// from exact words with a shader-side `bitcast`, while `f64` — whose
+/// shader already requires `FLOAT64` — reads it as a native field. (A
+/// shader-side `bitcast<f64>` from `u32` words is not an option: naga
+/// rejects every such spelling.)
+///
+/// Every declaration describes the same sixteen host bytes: `len` at offset
+/// 0, then the factor's exact bits at the offsets the declaration names.
+/// [`Self::uniform_block`] and [`Self::PARAMS_DECL`] live in the same impl
+/// so the words and the layout they are read under cannot drift apart.
+pub trait VectorFactor<L: KernelDialect>: DialectScalar<L> {
+    /// The `Params` uniform-block declaration for this scalar's kernels.
+    const PARAMS_DECL: &'static str;
+
+    /// The exact sixteen-byte uniform block: word 0 echoes `len` (already
+    /// range-checked by the caller) so each impl reads as the complete
+    /// memory image, and the remaining words place the factor's exact bits
+    /// at the offsets [`Self::PARAMS_DECL`] names.
+    #[must_use]
+    fn uniform_block(len: u32, factor: Self) -> [u32; 4];
+
+    /// Spell the factor load from the `params` uniform value in this dialect.
+    ///
+    /// Called once per kernel build, never on a dispatch path. Each spelling
+    /// reconstructs the factor bit-exactly within its own scalar's shader
+    /// capability: no `f64` value appears in an `f32` shader.
+    #[must_use]
+    fn factor_expr(params: &str) -> String;
+}
+
+impl VectorFactor<Wgsl> for f32 {
+    const PARAMS_DECL: &'static str =
+        "struct Params {\n    len: u32,\n    lo: u32,\n    hi: u32,\n    _pad: u32,\n}";
+
+    fn uniform_block(len: u32, factor: Self) -> [u32; 4] {
+        [len, factor.to_bits(), 0, 0]
+    }
+
+    fn factor_expr(params: &str) -> String {
+        format!("bitcast<f32>({params}.lo)")
+    }
+}
+
+impl VectorFactor<Wgsl> for f64 {
+    // `factor` sits at offset 8 with 8-byte alignment, so the struct is
+    // exactly sixteen bytes: the same image the host words below describe.
+    const PARAMS_DECL: &'static str =
+        "struct Params {\n    len: u32,\n    _pad: u32,\n    factor: f64,\n}";
+
+    fn uniform_block(len: u32, factor: Self) -> [u32; 4] {
+        let bits = factor.to_bits();
+        // Bit shifts, not byte order: exact on every target. The words land
+        // at bytes 8..16, which is where `PARAMS_DECL` reads the `f64`.
+        [len, 0, bits as u32, (bits >> 32) as u32]
+    }
+
+    fn factor_expr(params: &str) -> String {
+        format!("{params}.factor")
+    }
 }
 
 /// Reduction resources a consumer can **retain** across iterations.
