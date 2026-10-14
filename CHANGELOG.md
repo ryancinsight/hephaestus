@@ -50,6 +50,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `window/` precedent, and move `tests_scan.rs` to `scan/tests.rs`,
   removing the `#[path]` attribute. Module paths and the public
   surface are unchanged. (Rescued from #427, slice 7.)
+- [patch] Split the 564-line `domain/decomposition.rs` into a
+  `decomposition/` hierarchy (`cholesky`, `lu`, `qr`, `validate`) with
+  `mod.rs` re-exporting the unchanged public surface, including the
+  `blocked` re-exports. The shared `validate_finite` helper widens to
+  `pub(super)` for the family modules. Module paths are unchanged.
+  (Rescued from #427, slice 8.)
 
 ## [0.20.4] - 2026-10-13
 
