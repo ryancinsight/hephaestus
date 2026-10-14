@@ -561,5 +561,4 @@ pub fn split_packed_lu(packed: &[f32], n: usize) -> Result<(Vec<f32>, Vec<f32>)>
 }
 
 #[cfg(test)]
-#[path = "tests_decomposition.rs"]
 mod tests;

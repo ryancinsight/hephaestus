@@ -19,7 +19,6 @@ mod storage;
 mod storage_bindings;
 
 #[cfg(test)]
-#[path = "../tests_stream.rs"]
 mod tests;
 
 pub use bound::WgpuBoundGroupedDispatch;

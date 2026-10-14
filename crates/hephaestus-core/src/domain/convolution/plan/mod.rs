@@ -9,5 +9,4 @@ pub use forward::{plan_convolution_forward, plan_transposed_convolution_forward}
 pub use plans::{ConvolutionPlan, TransposedConvolutionPlan};
 
 #[cfg(test)]
-#[path = "../plan_tests.rs"]
 mod tests;

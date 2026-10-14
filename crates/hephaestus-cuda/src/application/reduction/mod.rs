@@ -20,5 +20,4 @@ pub(crate) use plan::{
 pub(crate) use shaders::{axis_reduction_shader_source, mean_axis_shader_source, shader_source};
 
 #[cfg(test)]
-#[path = "../tests_reduction.rs"]
 mod tests;

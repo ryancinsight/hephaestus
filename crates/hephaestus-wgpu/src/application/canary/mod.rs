@@ -47,5 +47,4 @@ pub use verdict::{
 };
 
 #[cfg(test)]
-#[path = "../tests_canary.rs"]
 mod tests;

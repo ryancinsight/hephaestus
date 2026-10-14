@@ -23,6 +23,12 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `WgpuTileOps`, `WgpuWhereOps`) with `*_into` caller-storage entry
   points, registered as 14 cases in the consolidated integration
   contracts (156 unconditional). (Rescued from #427, slice 2.)
+- [patch] Move flat `tests_*` suites into their owning module hierarchies
+  (`reduction/tests`, `canary/tests`, `stream/tests`, `col_piv_qr/tests`,
+  `decomposition/tests`, `convolution/plan/tests`), rename
+  `reduction/axis_ops` to `reduction/seams`, and rename the CUDA strided
+  suites to `binary`/`common`. Module paths are unchanged; `#[path]`
+  attributes removed. (Rescued from #427, slice 5.)
 
 ## [0.20.4] - 2026-10-13
 
