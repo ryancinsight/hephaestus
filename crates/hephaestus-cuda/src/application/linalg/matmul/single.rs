@@ -2,7 +2,7 @@ use eunomia::Pod;
 use hephaestus_core::{ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, Result};
 use leto::Layout;
 
-use crate::application::linalg::{map_layout, map_layout_err};
+use crate::application::linalg::{map_layout, map_layout_err, validate_signed_address_range};
 use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
 use crate::application::strided::StridedOperand;
 use crate::{CudaBuffer, CudaDevice};
@@ -56,10 +56,16 @@ where
         });
     }
 
-    if rows == 0 || cols == 0 || lhs_shared == 0 {
+    // Empty output is a no-op. A zero shared extent still dispatches: the
+    // kernel runs zero tiles and writes the additive identity to every
+    // logical output cell without reading either operand.
+    if rows == 0 || cols == 0 {
         return Ok(());
     }
 
+    validate_signed_address_range(lhs.layout, "lhs")?;
+    validate_signed_address_range(rhs.layout, "rhs")?;
+    validate_signed_address_range(out.layout, "output")?;
     let a_meta = map_layout(lhs.layout)?;
     let b_meta = map_layout(rhs.layout)?;
     let c_meta = map_layout(out.layout)?;

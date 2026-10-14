@@ -67,3 +67,12 @@ re-declaring its own `Meta` struct and WGSL preamble — deferred until a third
 consumer makes that consolidation's shared home concrete (consolidation
 fires on the second occurrence; the shared home is chosen at the third when
 two independent per-seam `Meta` layouts already exist to compare).
+
+2026-10-10: CUDA/ROCm/Metal now implement `PadOps` for every rank up to 8
+— the WGSL seam's packed-metadata decode loop ported verbatim, with the
+176-byte `PadMeta` crossing as a by-value kernel argument (matching the
+CUDA strided-elementwise launches) and `fill` by value; the only
+algorithmic delta is accumulating `in_off` under the in-bounds arm so an
+out-of-range wrapped index never feeds signed address arithmetic. CUDA
+verified on RTX 5080 hardware (i32 + f32); ROCm/Metal compile-gated to
+their platforms; Metal delegates to the WGSL seam.

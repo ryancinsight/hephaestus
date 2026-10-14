@@ -57,7 +57,10 @@ where
         .validate_storage_len(out.buffer.len())
         .map_err(map_layout_err)?;
 
-    if batch == 0 || m == 0 || n == 0 || lhs_k == 0 {
+    // Empty output is a no-op. A zero shared extent still dispatches: the
+    // kernel runs zero tiles and writes the additive identity to every
+    // logical output cell without reading either operand.
+    if batch == 0 || m == 0 || n == 0 {
         return Ok(());
     }
 

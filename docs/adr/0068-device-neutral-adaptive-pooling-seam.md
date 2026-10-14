@@ -70,3 +70,7 @@ pair) today for 1D adaptive pooling, closing the
 composes two calls at the call site (documented above), so no separate
 binding is needed for it. CUDA/ROCm/Metal implementations and the aggregate
 fold are follow-up items.
+
+2026-10-10: CUDA/ROCm/Metal now implement `AdaptivePoolingOps` following
+the WGSL kernel's window-derivation formula (CUDA verified on RTX 5080
+hardware; ROCm/Metal compile-gated to their platforms).
