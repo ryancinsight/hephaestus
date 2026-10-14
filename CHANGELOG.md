@@ -60,6 +60,11 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   (`MetalCatOps` … `MetalWhereOps`) by delegating to the WGSL
   implementors, with per-seam contract suites. (Rescued from #427,
   slice 11a.)
+- [docs] Record the thirteen shape/indexing seam decisions as ADRs
+  0073–0085 (renumbered from the #427 tip's 0071–0078/0080–0084; the
+  roll record is superseded by ADR 0069), each with a revision note
+  marking the landed CUDA/ROCm/Metal coverage. (Rescued from #427,
+  slice 11b.)
 
 ## [0.20.4] - 2026-10-13
 
