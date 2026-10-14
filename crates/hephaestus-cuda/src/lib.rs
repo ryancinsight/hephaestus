@@ -42,10 +42,13 @@ mod infrastructure;
 /// Monomorphized CUDA compute dispatch.
 pub mod application;
 
+pub use application::adaptive_pooling_seam::CudaAdaptivePoolingOps;
+pub use application::arg_reduce_seam::CudaArgReduceOps;
 pub use application::attention::CudaAttentionOps;
 pub use application::axis_reduction_seam::CudaAxisReductionOps;
 pub use application::cat_seam::CudaCatOps;
 pub use application::convolution::CudaConvolutionOps;
+pub use application::cross_product_seam::CudaCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::CudaDecompositionOps;
 pub use application::dense_product_seam::CudaDenseProductOps;
@@ -68,6 +71,7 @@ pub use application::fusion::{CudaFusionOps, CudaFusionScalar};
 pub use application::gather_seam::CudaGatherOps;
 pub use application::index_put_seam::CudaIndexPutOps;
 pub use application::index_select_seam::CudaIndexSelectOps;
+pub use application::interpolation_seam::CudaInterpolationOps;
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
 pub use application::linalg::{
@@ -79,6 +83,7 @@ pub use application::linalg::{
 pub use application::loss::{CtcKernel, CudaCrossEntropyOps, CudaCtcOps};
 pub use application::masked_fill_seam::CudaMaskedFillOps;
 pub use application::nonzero_seam::CudaNonzeroOps;
+pub use application::pad_seam::CudaPadOps;
 pub use application::parameterized_elementwise::CudaParameterizedUnaryOps;
 pub use application::parameterized_elementwise::parameterized_unary_strided_into;
 pub use application::prepared_axis_reduction::{
@@ -138,6 +143,8 @@ pub use application::strided::{
     unary_elementwise_strided_into,
 };
 pub use application::tile_seam::CudaTileOps;
+pub use application::topk_seam::CudaTopKOps;
+pub use application::triangular_seam::CudaTriangularOps;
 pub use application::vector::{
     CudaVectorOps, PreparedDot as CudaPreparedDot, PreparedL2Norm as CudaPreparedNorm,
 };

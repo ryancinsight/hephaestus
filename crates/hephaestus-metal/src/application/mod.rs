@@ -1,11 +1,17 @@
 //! Compute dispatch delegation to Metal.
 
+/// Device-neutral adaptive-pooling seam implementation.
+pub mod adaptive_pooling_seam;
+/// Device-neutral rank-2 argmax/argmin seam implementation.
+pub mod arg_reduce_seam;
 /// Zero-copy attention delegation to Metal-selected WGPU.
 pub mod attention;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Zero-copy convolution delegation to Metal-selected WGPU.
 pub mod convolution;
+/// Device-neutral batched cross-product seam implementation.
+pub mod cross_product_seam;
 /// Matrix decompositions.
 #[cfg(feature = "decomposition")]
 pub mod decomposition;
@@ -22,12 +28,16 @@ pub mod elementwise_seam;
 pub mod full_reduction_seam;
 /// Runtime-rank expression fusion implemented by the Metal provider.
 pub mod fusion;
+/// Device-neutral rank-2 axis-resampling seam implementation.
+pub mod interpolation_seam;
 /// Linear algebra operations.
 pub mod linalg;
 /// Fluent dense-matrix traits.
 pub mod linalg_traits;
 /// Zero-copy mean cross-entropy delegation to Metal-selected WGPU.
 pub mod loss;
+/// Device-neutral n-D padding seam implementation.
+pub mod pad_seam;
 /// Runtime-parameter unary elementwise seam implementation.
 pub mod parameterized_elementwise;
 /// Reusable dot-product and L2-norm map-reduction plans.
@@ -56,6 +66,10 @@ pub mod storage_kernel;
 pub mod stream;
 /// Strided layout wrappers.
 pub mod strided;
+/// Device-neutral rank-2 top-k selection seam implementation.
+pub mod topk_seam;
+/// Device-neutral rank-2 triangular masking seam implementation.
+pub mod triangular_seam;
 /// Dense vector recurrence operations.
 pub mod vector;
 /// Volume ray-integral delegation.
