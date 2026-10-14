@@ -18,6 +18,6 @@ use leto::Layout;
 
 #[path = "strided/binary.rs"]
 mod binary;
-#[path = "strided/common.rs"]
-mod common;
-pub(crate) use common::*;
+#[path = "strided/fixtures.rs"]
+mod fixtures;
+pub(crate) use fixtures::*;

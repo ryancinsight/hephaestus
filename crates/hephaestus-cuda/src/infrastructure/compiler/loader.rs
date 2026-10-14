@@ -81,7 +81,7 @@ impl std::error::Error for LoadError {
 }
 
 #[derive(Debug)]
-#[allow(non_snake_case)]
+#[expect(non_snake_case, reason = "NVRTC C symbol names")]
 pub(super) struct NvrtcDriver {
     _lib: Library,
     pub(super) nvrtcCreateProgram: unsafe extern "C" fn(
@@ -117,7 +117,6 @@ impl NvrtcDriver {
             .as_ref()
     }
 
-    #[allow(non_snake_case)]
     fn from_library(lib: Library) -> Result<Self, LoadError> {
         // SAFETY: each symbol is resolved from the retained NVRTC library by
         // its documented exported name. The function pointer types match the

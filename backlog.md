@@ -1,84 +1,5 @@
 # Backlog — hephaestus
 
-<a id="heph-wgpu-bundle-1"></a>
-
-## HEPH-WGPU-BUNDLE-1 — Pre-validated compute bundles for repeated dispatches — resolved (infeasible)
-- Priority: tightening. No version bump: no code changed.
-- Cause: wgpu 30 exposes render bundles only; there is no
-  `ComputeBundle`/`create_compute_bundle_encoder`/`execute_bundles` API, and a
-  finished `CommandBuffer` is single-submit. The item's mechanism does not
-  exist. Verified against wgpu 30.0.0 sources on 2026-10-13.
-- Redirect: HEPH-WGPU-FUSION-1 below is the remaining candidate against
-  per-dispatch finish validation and per-pass WDDM latency.
-
-<a id="heph-wgpu-fusion-1"></a>
-
-## HEPH-WGPU-FUSION-1 — Fuse reduction passes to cut per-dispatch commands — resolved (falsified, not shipped)
-- Priority: tightening. No version bump: no code changed.
-- Finding 1: single full reductions at N<=65536 are already single-pass (the
-  tree uses the grid-stride final kernel whenever `len <= width^2`); there
-  are no levels to fuse there.
-- Finding 2: fusing the 2-pass dot (map + final) into one single-workgroup
-  pass loses end-to-end on RTX 5080 WDDM despite strictly less work.
-  Interleaved A/B/A/B, N=65536 f32, exact value 131072 verified:
-  strided-decode fusion 302us vs 167us baseline (serial div/mod
-  concentration); contiguous fusion 143-156us vs 124-150us baseline, losing
-  in all four pairings. Occupancy/parallelism beats pass count; the
-  ~100-150us submit+wait round-trip floor dominates either way.
-- Finding 3: every fusable same-grid pair is already fused (the map pass
-  fuses map+workgroup-reduce); remaining cross-grid fusion is the
-  serialization Finding 2 falsifies, at any N.
-- Residual direction: small-op GPU latency is WDDM floor-bound. The remaining
-  lever is CPU/GPU placement (route small reductions to leto below the
-  crossover), which is caller-context work for coeus/athena consumers, not a
-  hephaestus kernel change. Re-open only with a caller-measured crossover.
-
-<a id="heph-wgpu-reduction-batch-1"></a>
-
-## HEPH-WGPU-REDUCTION-BATCH-1 — Batched full-reduction dispatch — resolved (falsified, not shipped)
-- Priority: tightening. No version bump: no code changed.
-- Hypothesis: one `FullReductionOps::dispatch_many_full` seam method sharing
-  a single encoder/submission across N prepared reductions would remove
-  per-op submit overhead (default per-op loop on other backends).
-- Falsification (2026-10-13, RTX 5080 WDDM, criterion, 8x f32 full reduction
-  + one wait): N=65536 sequential 520us vs batched 513us (1.01x); N=256
-  sequential 202us vs batched 176us (1.15x). A correct implementation with
-  exact-value conformance on WGPU/CUDA/host was built, measured, and reverted.
-- Mechanism: (1) `CommandEncoder::finish` validates per command, so one big
-  encoder costs ~4x a small one (146.6us vs 38.0us debug); the fixed part of
-  `submit` (~42us) is the only real saving. (2) Sequential dispatch pipelines
-  host encoding with GPU execution, while a shared encoder serializes all
-  host work before the GPU starts; the submission saving is consumed by the
-  later GPU start plus a longer single drain. (3) Error-scope pops are cheap
-  (1.9us); they were never the bottleneck. Per-op piece costs (debug, one
-  65536 reduction): create 3.9us, encode 6.8us, finish 38.0us, submit 42.8us,
-  wait 99.5us.
-- Follow-up: the true per-dispatch costs are finish-time validation and the
-  fixed submit+wait round-trip (~130us). Candidates that attack those
-  directly: pre-validated compute bundles for repeatedly dispatched prepared
-  ops, and kernel fusion across reductions (fewer passes, not fewer submits).
-  Map-reduction (dot/norm) facade batching still needs a core seam first.
-- Re-open trigger: a measured caller batching 32+ reductions per round-trip,
-  or a platform where submit (not finish or GPU start) dominates.
-
-## HEPH-WGPU-READBACK-COMPLETION-407 [patch] — resolved
-
-- Priority: correctness. Target version: 0.20.3.
-- Finding: completed GPU submissions can precede callback publication when
-  another WGPU polling thread owns the extracted mapping callbacks.
-- Resolution: wait on per-slot guarded notification with the submission's
-  remaining timeout budget. Preserve reader/callback ownership, pre-submission
-  overflow allocation, typed transfer/timeout errors, and staging unmap.
-- Evidence: the unchanged runtime fails the concurrent Metal regression with
-  the #407 callback-pending error. The corrected required-device parallel
-  contracts pass 8/8 repeated runs (64 test executions and 16,384 regression
-  readbacks). WGPU Nextest passes 84/85 tests; the sole failure is the unchanged
-  aggregate's two unsupported FP64 acquisition clauses. Seven slot/Loom tests,
-  default/minimal-library Clippy, four doctests, and warning-denied rustdoc pass.
-- Residual: this host lacks native shader FP64. The unchanged required-device
-  aggregate rejects its two optional FP64 acquisition clauses; this correction
-  does not alter precision tests or serialize the shared-device harness.
-
 <a id="heph-macos-metal-conformance-1"></a>
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo
@@ -605,20 +526,18 @@
 - Verification: local formatting, core/WGPU compilation, focused Nextest, and
   a device-required hosted WGPU contract run at the exact implementation head.
 
-## HEPH-MOIRAI-PACKAGE-1 [patch] — in progress
+<a id="heph-moirai-package-1"></a>
+
+## HEPH-MOIRAI-PACKAGE-1 [patch] — blocked
 
 - Owner: Codex `/root`; scope: root dependency package identities and registry
   versions, clean lockfile, focused WGPU resolution gate, and release records.
 - Acceptance: the `moirai` Rust import resolves package `moirai-runtime` from
   Moirai's default branch without compatibility code, and all six publishable
   packages pass exact-source crates.io dry runs.
-- Status: the exact external graph resolves Moirai `b7988419`, Leto
-  `a5d53ca9`, and the published package identity; format and the focused locked
-  WGPU package check pass. Exact-head CI exposed stale Mnemosyne patch keys;
-  those keys now match the published package identities. The first crates.io
-  dry run then rejected unversioned normal Git dependencies before upload; all
-  normal path and Git dependencies now carry their registry versions. Exact-
-  source dry runs, hosted verification, and merge remain.
+- Blocked by: the moirai-0.9 provider advance (moirai-sync `^0.8.2` no longer
+  resolves against Moirai HEAD 0.9.2); this branch carries that advance.
+  Re-open if 0.9 resolution regresses.
 
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
 

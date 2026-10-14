@@ -14,7 +14,10 @@ use std::sync::Arc;
 // adapter info/limits) is irrelevant here: a BackendDevice is constructed
 // once per Python device object and matched per call, never stored in bulk.
 // Boxing would add an indirection to every dispatch for no measurable win.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one device per Python object; boxing adds per-dispatch indirection"
+)]
 #[derive(Clone)]
 pub(crate) enum BackendDevice {
     Wgpu(WgpuDevice),
