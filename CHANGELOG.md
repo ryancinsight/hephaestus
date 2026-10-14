@@ -13,6 +13,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - [minor] Implement the thirteen shape/indexing seams over CUDA C++
   (`CudaCatOps` … `CudaWhereOps`) with thirteen `PipelineKey` variants
   and per-seam contract suites. (Rescued from #427, slice 3.)
+- [minor] Implement the thirteen shape/indexing seams over HIP C++
+  (`RocmCatOps` … `RocmWhereOps`) with thirteen `PipelineKey` variants
+  and per-seam contract suites. (Rescued from #427, slice 4.)
 
 ## [0.20.4] - 2026-10-13
 
