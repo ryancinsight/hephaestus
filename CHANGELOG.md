@@ -10,6 +10,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
   `WhereOps` — with conformance clauses differentially oracled against leto
   and host reference implementors. Generalize `HostBuffer::aliases` across
   element types via allocation identity. (Rescued from #427, slice 1.)
+- [minor] Implement the thirteen shape/indexing seams over CUDA C++
+  (`CudaCatOps` … `CudaWhereOps`) with thirteen `PipelineKey` variants
+  and per-seam contract suites. (Rescued from #427, slice 3.)
 
 ## [0.20.4] - 2026-10-13
 

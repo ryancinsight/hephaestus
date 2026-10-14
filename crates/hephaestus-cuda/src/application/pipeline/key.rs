@@ -135,6 +135,59 @@ pub(crate) enum PipelineKey {
         entry: &'static str,
         scalar: TypeId,
     },
+    Cat {
+        scalar: TypeId,
+        width: u32,
+    },
+    Split {
+        scalar: TypeId,
+        width: u32,
+    },
+    Stack {
+        scalar: TypeId,
+        width: u32,
+    },
+    Gather {
+        scalar: TypeId,
+        width: u32,
+    },
+    Scatter {
+        scalar: TypeId,
+        width: u32,
+    },
+    IndexSelect {
+        scalar: TypeId,
+        width: u32,
+    },
+    IndexPut {
+        scalar: TypeId,
+        width: u32,
+        accumulate: bool,
+    },
+    MaskedFill {
+        scalar: TypeId,
+        width: u32,
+    },
+    Tile {
+        scalar: TypeId,
+        width: u32,
+    },
+    Where {
+        scalar: TypeId,
+        width: u32,
+    },
+    Sort {
+        scalar: TypeId,
+        width: u32,
+    },
+    Nonzero {
+        scalar: TypeId,
+        width: u32,
+    },
+    Dot {
+        scalar: TypeId,
+        width: u32,
+    },
 }
 
 /// Collision-safe identity for a runtime-generated fusion kernel.
