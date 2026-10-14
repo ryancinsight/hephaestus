@@ -223,10 +223,10 @@ where
         // Argument list mirrors `sort_kernel(SortNdMeta, const T*, T*,
         // unsigned int*)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut meta as *mut SortNdMeta).cast(),
-            (&mut in_ptr as *mut DevicePtr).cast(),
-            (&mut vals_ptr as *mut DevicePtr).cast(),
-            (&mut idx_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<SortNdMeta>().cast(),
+            core::ptr::addr_of_mut!(in_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(vals_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(idx_ptr).cast::<DevicePtr>().cast(),
         ];
         launch_kernel(
             device,

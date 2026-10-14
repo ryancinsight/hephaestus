@@ -148,9 +148,11 @@ where
 
         // Argument list mirrors `tile_kernel(TileNdMeta, const T*, T*)`.
         let mut args: [*mut core::ffi::c_void; 3] = [
-            (&mut meta as *mut TileNdMeta).cast(),
-            (&mut input_ptr as *mut DevicePtr).cast(),
-            (&mut out_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<TileNdMeta>().cast(),
+            core::ptr::addr_of_mut!(input_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
         ];
         launch_kernel(
             device,

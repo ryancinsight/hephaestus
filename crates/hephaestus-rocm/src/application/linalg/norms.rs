@@ -233,10 +233,14 @@ where
             let mut b_ptr: DevicePtr = self.b.raw();
             let mut output_ptr: DevicePtr = self.partial.raw();
             let mut args: [*mut core::ffi::c_void; 4] = [
-                (&mut meta as *mut MapReductionMeta).cast(),
-                (&mut a_ptr as *mut DevicePtr).cast(),
-                (&mut b_ptr as *mut DevicePtr).cast(),
-                (&mut output_ptr as *mut DevicePtr).cast(),
+                core::ptr::addr_of_mut!(meta)
+                    .cast::<MapReductionMeta>()
+                    .cast(),
+                core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+                core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+                core::ptr::addr_of_mut!(output_ptr)
+                    .cast::<DevicePtr>()
+                    .cast(),
             ];
             launch_kernel(
                 &self.device,

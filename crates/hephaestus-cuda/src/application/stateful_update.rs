@@ -157,11 +157,13 @@ where
     let mut gradient_ptr = operands.gradient.buffer.raw();
     let mut state_zero_ptr = state_zero.buffer.raw();
     let mut common: [*mut core::ffi::c_void; 5] = [
-        (&mut meta as *mut StatefulUpdateMeta).cast(),
-        (&mut parameters as *mut P).cast(),
-        (&mut parameter_ptr as *mut u64).cast(),
-        (&mut gradient_ptr as *mut u64).cast(),
-        (&mut state_zero_ptr as *mut u64).cast(),
+        core::ptr::addr_of_mut!(meta)
+            .cast::<StatefulUpdateMeta>()
+            .cast(),
+        core::ptr::addr_of_mut!(parameters).cast::<P>().cast(),
+        core::ptr::addr_of_mut!(parameter_ptr).cast::<u64>().cast(),
+        core::ptr::addr_of_mut!(gradient_ptr).cast::<u64>().cast(),
+        core::ptr::addr_of_mut!(state_zero_ptr).cast::<u64>().cast(),
     ];
     let config = LaunchConfig::linear(grid_size(len, width)?, width);
     if let Some(state_one) = operands.states.get(1) {
@@ -172,7 +174,7 @@ where
             common[2],
             common[3],
             common[4],
-            (&mut state_one_ptr as *mut u64).cast(),
+            core::ptr::addr_of_mut!(state_one_ptr).cast::<u64>().cast(),
         ];
         launch_kernel(device, &kernel, config, &mut args)
     } else {

@@ -40,12 +40,20 @@ impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSpmv<'_, T> {
         let mut output_ptr: DevicePtr = self.output.raw();
         let mut nrows = self.nrows;
         let mut args: [*mut core::ffi::c_void; 6] = [
-            (&mut values_ptr as *mut DevicePtr).cast(),
-            (&mut col_indices_ptr as *mut DevicePtr).cast(),
-            (&mut row_ptr_ptr as *mut DevicePtr).cast(),
-            (&mut x_ptr as *mut DevicePtr).cast(),
-            (&mut output_ptr as *mut DevicePtr).cast(),
-            (&mut nrows as *mut u32).cast(),
+            core::ptr::addr_of_mut!(values_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(col_indices_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(row_ptr_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(x_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(output_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(nrows).cast::<u32>().cast(),
         ];
         launch_kernel(
             self.device,
@@ -96,12 +104,20 @@ impl<T: DialectScalar<HipC> + leto_ops::Scalar + Pod> PreparedSpmm<'_, T> {
         let mut rhs_ptr: DevicePtr = self.rhs.buffer.raw();
         let mut output_ptr: DevicePtr = self.output.raw();
         let mut args: [*mut core::ffi::c_void; 6] = [
-            (&mut meta as *mut SpmmMeta).cast(),
-            (&mut values_ptr as *mut DevicePtr).cast(),
-            (&mut col_indices_ptr as *mut DevicePtr).cast(),
-            (&mut row_ptr_ptr as *mut DevicePtr).cast(),
-            (&mut rhs_ptr as *mut DevicePtr).cast(),
-            (&mut output_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<SpmmMeta>().cast(),
+            core::ptr::addr_of_mut!(values_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(col_indices_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(row_ptr_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(rhs_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(output_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(
             self.device,

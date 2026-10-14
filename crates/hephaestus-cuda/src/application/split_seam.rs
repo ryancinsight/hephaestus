@@ -184,9 +184,9 @@ where
 
             // Argument list mirrors `split_kernel(SplitMeta, const T*, T*)`.
             let mut args: [*mut core::ffi::c_void; 3] = [
-                (&mut meta as *mut SplitMeta).cast(),
-                (&mut input_ptr as *mut u64).cast(),
-                (&mut out_ptr as *mut u64).cast(),
+                core::ptr::addr_of_mut!(meta).cast::<SplitMeta>().cast(),
+                core::ptr::addr_of_mut!(input_ptr).cast::<u64>().cast(),
+                core::ptr::addr_of_mut!(out_ptr).cast::<u64>().cast(),
             ];
             launch_kernel(
                 device,

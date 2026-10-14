@@ -68,10 +68,12 @@ where
     let mut rhs_ptr: DevicePtr = rhs.raw();
     let mut output_ptr: DevicePtr = output.raw();
     let mut args: [*mut core::ffi::c_void; 4] = [
-        (&mut meta as *mut StridedMeta).cast(),
-        (&mut lhs_ptr as *mut DevicePtr).cast(),
-        (&mut rhs_ptr as *mut DevicePtr).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+        core::ptr::addr_of_mut!(lhs_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(rhs_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(
         device,
@@ -105,9 +107,13 @@ where
     let mut input_ptr: DevicePtr = input.raw();
     let mut output_ptr: DevicePtr = output.raw();
     let mut args: [*mut core::ffi::c_void; 3] = [
-        (&mut meta as *mut StridedMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+        core::ptr::addr_of_mut!(input_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(
         device,
@@ -143,10 +149,14 @@ where
     let mut scalar = scalar;
     let mut output_ptr: DevicePtr = output.raw();
     let mut args: [*mut core::ffi::c_void; 4] = [
-        (&mut meta as *mut StridedMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut scalar as *mut T).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+        core::ptr::addr_of_mut!(input_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(scalar).cast::<T>().cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(
         device,

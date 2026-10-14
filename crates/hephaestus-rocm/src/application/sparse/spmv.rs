@@ -90,12 +90,18 @@ pub fn spmv_into<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     let mut y_ptr: DevicePtr = y.raw();
     let mut nrows_arg = nrows_u32;
     let mut args: [*mut core::ffi::c_void; 6] = [
-        (&mut values_ptr as *mut DevicePtr).cast(),
-        (&mut col_indices_ptr as *mut DevicePtr).cast(),
-        (&mut row_ptr_ptr as *mut DevicePtr).cast(),
-        (&mut x_ptr as *mut DevicePtr).cast(),
-        (&mut y_ptr as *mut DevicePtr).cast(),
-        (&mut nrows_arg as *mut u32).cast(),
+        core::ptr::addr_of_mut!(values_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(col_indices_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(row_ptr_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(x_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(y_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(nrows_arg).cast::<u32>().cast(),
     ];
     launch_kernel(
         device,

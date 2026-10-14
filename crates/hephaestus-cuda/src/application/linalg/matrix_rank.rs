@@ -214,11 +214,11 @@ where
     // Argument list mirrors `matrix_properties_kernel(RankMeta, const T*, T*,
     // unsigned int*, T*)`.
     let mut args: [*mut std::ffi::c_void; 5] = [
-        &mut meta_val as *mut RankMeta as *mut std::ffi::c_void,
-        &mut in_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut scratch_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut rank_ptr as *mut u64 as *mut std::ffi::c_void,
-        &mut det_ptr as *mut u64 as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(meta_val).cast::<RankMeta>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(in_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(scratch_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(rank_ptr).cast::<u64>() as *mut std::ffi::c_void,
+        core::ptr::addr_of_mut!(det_ptr).cast::<u64>() as *mut std::ffi::c_void,
     ];
 
     // Sequential Gaussian elimination: a single-thread launch by design.

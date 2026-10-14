@@ -79,10 +79,12 @@ where
     let mut zero = T::ZERO;
     let mut one = T::ONE;
     let mut args: [*mut core::ffi::c_void; 4] = [
-        (&mut output_ptr as *mut crate::infrastructure::DevicePtr).cast(),
-        (&mut rows as *mut u32).cast(),
-        (&mut zero as *mut T).cast(),
-        (&mut one as *mut T).cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<crate::infrastructure::DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(rows).cast::<u32>().cast(),
+        core::ptr::addr_of_mut!(zero).cast::<T>().cast(),
+        core::ptr::addr_of_mut!(one).cast::<T>().cast(),
     ];
     launch_kernel(
         device,

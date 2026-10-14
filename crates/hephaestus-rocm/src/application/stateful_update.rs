@@ -178,21 +178,35 @@ where
             .buffer
             .raw();
         let mut args: [*mut core::ffi::c_void; 6] = [
-            (&mut meta as *mut StatefulUpdateMeta).cast(),
-            (&mut parameters as *mut P).cast(),
-            (&mut parameter as *mut DevicePtr).cast(),
-            (&mut gradient as *mut DevicePtr).cast(),
-            (&mut state_zero as *mut DevicePtr).cast(),
-            (&mut state_one as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta)
+                .cast::<StatefulUpdateMeta>()
+                .cast(),
+            core::ptr::addr_of_mut!(parameters).cast::<P>().cast(),
+            core::ptr::addr_of_mut!(parameter)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(gradient).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(state_zero)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(state_one)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(device, &kernel, config, &mut args)
     } else {
         let mut args: [*mut core::ffi::c_void; 5] = [
-            (&mut meta as *mut StatefulUpdateMeta).cast(),
-            (&mut parameters as *mut P).cast(),
-            (&mut parameter as *mut DevicePtr).cast(),
-            (&mut gradient as *mut DevicePtr).cast(),
-            (&mut state_zero as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta)
+                .cast::<StatefulUpdateMeta>()
+                .cast(),
+            core::ptr::addr_of_mut!(parameters).cast::<P>().cast(),
+            core::ptr::addr_of_mut!(parameter)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(gradient).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(state_zero)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(device, &kernel, config, &mut args)
     }

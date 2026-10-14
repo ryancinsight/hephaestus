@@ -167,12 +167,18 @@ where
     let mut b_meta = b_meta;
     let mut out_meta = out_meta;
     let mut args: [*mut core::ffi::c_void; 6] = [
-        (&mut a_ptr as *mut DevicePtr).cast(),
-        (&mut b_ptr as *mut DevicePtr).cast(),
-        (&mut out_ptr as *mut DevicePtr).cast(),
-        (&mut a_meta as *mut GpuMatrixLayout).cast(),
-        (&mut b_meta as *mut GpuMatrixLayout).cast(),
-        (&mut out_meta as *mut GpuMatrixLayout).cast(),
+        core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(a_meta)
+            .cast::<GpuMatrixLayout>()
+            .cast(),
+        core::ptr::addr_of_mut!(b_meta)
+            .cast::<GpuMatrixLayout>()
+            .cast(),
+        core::ptr::addr_of_mut!(out_meta)
+            .cast::<GpuMatrixLayout>()
+            .cast(),
     ];
     launch_kernel(
         device,

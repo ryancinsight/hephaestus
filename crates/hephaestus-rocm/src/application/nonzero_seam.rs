@@ -215,10 +215,14 @@ where
         // Argument list mirrors `nonzero_kernel(NonzeroNdMeta, const
         // T*, unsigned int*, unsigned int*)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut meta as *mut NonzeroNdMeta).cast(),
-            (&mut in_ptr as *mut DevicePtr).cast(),
-            (&mut coords_ptr as *mut DevicePtr).cast(),
-            (&mut count_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<NonzeroNdMeta>().cast(),
+            core::ptr::addr_of_mut!(in_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(coords_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(count_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(
             device,

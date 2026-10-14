@@ -233,9 +233,15 @@ pub(crate) fn launch_with_meta(
     let mut input_ptr = input;
     let mut output_ptr = output;
     let mut args: [*mut core::ffi::c_void; 3] = [
-        (&mut meta as *mut AxisReductionMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta)
+            .cast::<AxisReductionMeta>()
+            .cast(),
+        core::ptr::addr_of_mut!(input_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(
         device,

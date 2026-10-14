@@ -179,21 +179,29 @@ where
         // Argument list mirrors `topk_kernel(const T*, T*, unsigned int*,
         // int x6, unsigned int x6)`.
         let mut args: [*mut core::ffi::c_void; 15] = [
-            (&mut input_ptr as *mut u64).cast(),
-            (&mut vals_ptr as *mut u64).cast(),
-            (&mut idx_ptr as *mut u64).cast(),
-            (&mut in_stride_axis as *mut i32).cast(),
-            (&mut in_stride_lane as *mut i32).cast(),
-            (&mut val_stride_axis as *mut i32).cast(),
-            (&mut val_stride_lane as *mut i32).cast(),
-            (&mut idx_stride_axis as *mut i32).cast(),
-            (&mut idx_stride_lane as *mut i32).cast(),
-            (&mut in_offset as *mut u32).cast(),
-            (&mut val_offset as *mut u32).cast(),
-            (&mut idx_offset as *mut u32).cast(),
-            (&mut axis_len_val as *mut u32).cast(),
-            (&mut lanes_val as *mut u32).cast(),
-            (&mut k_val as *mut u32).cast(),
+            core::ptr::addr_of_mut!(input_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(vals_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(idx_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(in_stride_axis).cast::<i32>().cast(),
+            core::ptr::addr_of_mut!(in_stride_lane).cast::<i32>().cast(),
+            core::ptr::addr_of_mut!(val_stride_axis)
+                .cast::<i32>()
+                .cast(),
+            core::ptr::addr_of_mut!(val_stride_lane)
+                .cast::<i32>()
+                .cast(),
+            core::ptr::addr_of_mut!(idx_stride_axis)
+                .cast::<i32>()
+                .cast(),
+            core::ptr::addr_of_mut!(idx_stride_lane)
+                .cast::<i32>()
+                .cast(),
+            core::ptr::addr_of_mut!(in_offset).cast::<u32>().cast(),
+            core::ptr::addr_of_mut!(val_offset).cast::<u32>().cast(),
+            core::ptr::addr_of_mut!(idx_offset).cast::<u32>().cast(),
+            core::ptr::addr_of_mut!(axis_len_val).cast::<u32>().cast(),
+            core::ptr::addr_of_mut!(lanes_val).cast::<u32>().cast(),
+            core::ptr::addr_of_mut!(k_val).cast::<u32>().cast(),
         ];
         launch_kernel(
             device,
