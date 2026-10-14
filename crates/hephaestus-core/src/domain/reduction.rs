@@ -37,8 +37,8 @@ use crate::domain::view::StridedView;
 use eunomia::{Pod, Zeroable};
 use leto::Layout;
 
-mod axis_ops;
-pub use axis_ops::AxisReductionOps;
+mod seams;
+pub use seams::AxisReductionOps;
 
 /// Device-neutral full-array reduction over a strided n-D operand to a
 /// single scalar stored in a one-element output buffer.
@@ -318,5 +318,4 @@ pub fn plan_axis_reduction(
 }
 
 #[cfg(test)]
-#[path = "tests_reduction.rs"]
 mod tests;

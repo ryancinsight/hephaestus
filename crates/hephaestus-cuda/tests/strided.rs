@@ -16,8 +16,8 @@ use hephaestus_cuda::{
 };
 use leto::Layout;
 
-#[path = "strided/fixtures.rs"]
-mod fixtures;
-#[path = "strided/strided_views.rs"]
-mod strided_views;
-pub(crate) use fixtures::*;
+#[path = "strided/binary.rs"]
+mod binary;
+#[path = "strided/common.rs"]
+mod common;
+pub(crate) use common::*;

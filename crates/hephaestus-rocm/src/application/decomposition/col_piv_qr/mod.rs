@@ -19,5 +19,4 @@ pub use types::GpuColPivQrDecomposition;
 pub(crate) use source::kernel_source;
 
 #[cfg(test)]
-#[path = "../tests_col_piv_qr.rs"]
 mod tests;

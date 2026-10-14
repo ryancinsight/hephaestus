@@ -20,5 +20,4 @@ pub use prepared::{
 };
 
 #[cfg(test)]
-#[path = "../tests_reduction.rs"]
 mod tests;
