@@ -29,11 +29,13 @@ pub use application::canary::{
     BuiltinVerdict, CanaryWidth, MathBuiltin, PrecisionGrade, PrecisionReport, builtin_verdict,
     probe_precision, require_builtin, require_expr_safe, scan_builtins, width_of,
 };
+pub use application::cat_seam::{WgpuCatOps, cat_into};
 pub use application::convolution::WgpuConvolutionOps;
 pub use application::cross_product_seam::WgpuCrossProductOps;
 #[cfg(feature = "decomposition")]
 pub use application::decomposition_seam::WgpuDecompositionOps;
 pub use application::dense_product_seam::WgpuDenseProductOps;
+pub use application::dot_seam::WgpuDotOps;
 pub use application::elementwise::{
     AbsOp, AcosOp, AcoshOp, AddOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DivOp,
     EluGradOp, EluOp, EqOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeOp,
@@ -52,6 +54,9 @@ pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
 pub use application::fft::{WgpuFftOps, WgpuFftScalar, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
 pub use application::fusion::{WgpuFusionOps, WgpuFusionScalar};
+pub use application::gather_seam::{WgpuGatherOps, gather_into};
+pub use application::index_put_seam::{WgpuIndexPutOps, index_put_into};
+pub use application::index_select_seam::{WgpuIndexSelectOps, index_select_into};
 pub use application::interpolation_seam::WgpuInterpolationOps;
 #[cfg(feature = "decomposition")]
 pub use application::linalg::MatrixDecompose;
@@ -68,6 +73,8 @@ pub use application::loss::{
     CtcKernel, PreparedCrossEntropyBackward, PreparedCrossEntropyForward, WgpuCrossEntropyOps,
     WgpuCtcOps,
 };
+pub use application::masked_fill_seam::{WgpuMaskedFillOps, masked_fill_into};
+pub use application::nonzero_seam::{WgpuNonzeroOps, nonzero_into};
 pub use application::pad_seam::{WgpuPadOps, pad_into};
 pub use application::parameterized_elementwise::{
     CeluGradOp, CeluOp, HardshrinkGradOp, HardshrinkOp, HardtanhGradOp, HardtanhOp,
@@ -93,12 +100,16 @@ pub use application::scan::{
     scan_axis_into, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
 };
 pub use application::scan_seam::{PreparedScan, WgpuScanOps};
+pub use application::scatter_seam::{WgpuScatterOps, scatter_add_into};
+pub use application::sort_seam::{WgpuSortOps, sort_into};
 #[cfg(feature = "sparse")]
 pub use application::sparse::{
     GpuCsrMatrix, PreparedSparseDispatch, PreparedSpmm, PreparedSpmv, WgpuSparseOps, prepare_spmm,
     prepare_spmv, prepare_spmv_many, spmm, spmm_into, spmv, spmv_into, spmv_many, spmv_many_into,
     submit_prepared_sparse_batch,
 };
+pub use application::split_seam::{WgpuSplitOps, split_into};
+pub use application::stack_seam::{WgpuStackOps, stack_into};
 pub use application::stateful_update::WgpuStatefulUpdateOps;
 pub use application::stencil::WgpuStencilOps;
 pub use application::stencil::{
@@ -124,12 +135,14 @@ pub use application::strided::{
     scalar_elementwise_strided, scalar_elementwise_strided_into, unary_elementwise_strided,
     unary_elementwise_strided_into,
 };
+pub use application::tile_seam::{WgpuTileOps, tile_into};
 pub use application::topk_seam::WgpuTopKOps;
 pub use application::triangular_seam::WgpuTriangularOps;
 pub use application::vector::{WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 pub use application::volume::{
     FieldGeometry, RAY_STRIDE, WgpuRayIntegralOps, ray_line_integrals, ray_line_integrals_into,
 };
+pub use application::where_seam::{WgpuWhereOps, where_into};
 pub use application::window::{
     PreparedPoolingBackward, PreparedPoolingForward, PreparedSlidingWindowFold,
     PreparedSlidingWindowUnfold, WgpuPoolingOps, WgpuSlidingWindowOps, WgpuWindowScalar,
