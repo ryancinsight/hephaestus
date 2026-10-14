@@ -12,7 +12,7 @@ use hephaestus_core::{
 
 pub use hephaestus_core::{AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp};
 
-fn shader_source<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
+pub(crate) fn shader_source<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
         r#"{prelude}
 extern "C" __global__ void binary_kernel(
@@ -177,28 +177,4 @@ where
     let out = device.alloc_uninitialized::<T>(lhs.len())?;
     binary_elementwise_into::<Op, T>(device, lhs, rhs, &out, BlockWidth::DEFAULT)?;
     Ok(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::shader_source;
-    use hephaestus_core::{AddOp, BinaryExpr, CudaC, DialectScalar};
-
-    fn assert_declared<T: DialectScalar<CudaC>>() {
-        let source = shader_source::<T>("lhs + rhs");
-        assert!(source.starts_with(T::PRELUDE));
-        assert!(source.contains(T::TYPE_TOKEN));
-    }
-
-    #[test]
-    fn source_declares_header_backed_scalars() {
-        assert_declared::<eunomia::F16>();
-        assert_declared::<eunomia::Bf16>();
-    }
-
-    #[test]
-    fn source_preserves_binary_expression() {
-        let source = shader_source::<f32>(<AddOp as BinaryExpr<CudaC>>::EXPR);
-        assert!(source.contains("out[i] = lhs + rhs;"));
-    }
 }

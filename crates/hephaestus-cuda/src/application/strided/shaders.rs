@@ -5,7 +5,7 @@ use hephaestus_core::{BinaryExpr, CudaC, DialectScalar, UnaryExpr};
 
 pub(crate) fn binary_shader<T: DialectScalar<CudaC>>(expr: &'static str) -> String {
     format!(
-        r#"
+        r#"{prelude}
 {meta}
 extern "C" __global__ void binary_strided_kernel(
     Meta lmeta,
@@ -23,6 +23,7 @@ extern "C" __global__ void binary_strided_kernel(
     out[o_off] = {expr};
 }}
 "#,
+        prelude = T::PRELUDE,
         meta = CUDA_META,
         ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
@@ -32,7 +33,7 @@ extern "C" __global__ void binary_strided_kernel(
 
 pub(crate) fn unary_shader<Op: UnaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 {meta}
 extern "C" __global__ void unary_strided_kernel(
     Meta lmeta,
@@ -48,6 +49,7 @@ extern "C" __global__ void unary_strided_kernel(
     out[o_off] = {expr};
 }}
 "#,
+        prelude = T::PRELUDE,
         meta = CUDA_META,
         ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,
@@ -57,7 +59,7 @@ extern "C" __global__ void unary_strided_kernel(
 
 pub(crate) fn scalar_shader<Op: BinaryExpr<CudaC>, T: DialectScalar<CudaC>>() -> String {
     format!(
-        r#"
+        r#"{prelude}
 {meta}
 extern "C" __global__ void scalar_strided_kernel(
     Meta lmeta,
@@ -75,6 +77,7 @@ extern "C" __global__ void scalar_strided_kernel(
     out[o_off] = {expr};
 }}
 "#,
+        prelude = T::PRELUDE,
         meta = CUDA_META,
         ty = T::TYPE_TOKEN,
         decode = CUDA_DECODE,

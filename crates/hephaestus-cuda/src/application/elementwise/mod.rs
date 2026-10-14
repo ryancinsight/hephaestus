@@ -10,6 +10,9 @@ pub mod scalar;
 /// Unary elementwise operations.
 pub mod unary;
 
+#[cfg(all(test, feature = "cuda"))]
+mod tests;
+
 pub use binary::{
     AddOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, PowOp, SubOp, binary_elementwise,
     binary_elementwise_into, binary_elementwise_typed, binary_elementwise_typed_into,
