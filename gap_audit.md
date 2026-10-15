@@ -4,7 +4,7 @@
 
 - Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.
 - Resolution: a bounded compatible interval on both Leto layers, preserving the currently merged graph and every Rust implementation/test byte.
-- Source acceptance closes: exact-base hosted native/API gates, fresh unseeded review consumers and the real downstream 0.47 graph pass. Default/registry availability remains provider-first; [the record](docs/verification/leto-borrowed-csr-compatibility.md) separates those claims.
+- Version ownership: concurrent main publishes 0.22.1, so this compatibility patch targets 0.22.2 and preserves current CUDA fixes. Repeat actual source/hosted checks and downstream lock verification; default/registry availability remains provider-first. [The record](docs/verification/leto-borrowed-csr-compatibility.md) separates prior/current revision claims.
 
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 

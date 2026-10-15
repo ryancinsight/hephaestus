@@ -1,52 +1,47 @@
 # Leto 0.47 compatibility for borrowed CSR consumers
 
-Base: `672c5abc88f3984e2b7ece439b3dd4ed5f1f7f68`. Target: 0.22.1. Classification: [patch].
+Base: `b03e91761cc929d046bd0d911bd573c699560d8e`. Target: 0.22.2. Classification: [patch].
 This isolated export leaves every existing checkout and its owner untouched.
 
 ## Contract
 
-Leto draft #362 implements accepted ADR 0036. Its 0.47 addition preserves the
-existing default-index/ordering and scalar/SIMD APIs; its minor API comparison
-against 0.46 reports no removal. This provider uses the existing layout, array
-and operation vocabulary. No new CSR API appears in its public interface.
+Leto #362 implements accepted ADR 0036. Its additive 0.47 API preserves the
+existing default-index/ordering and scalar/SIMD APIs. This provider uses the
+existing layout, array and operation vocabulary; no CSR API enters its public
+interface. Accept `>=0.46.0, <0.48.0` for both Leto layers, retaining the merged
+0.46 cohort and admitting the verified 0.47 line. Later pre-1.0 minor lines
+require a new compatibility audit.
 
-The old `^0.46.0` requirement rejects the source graph when Coeus selects 0.47.
-Accept `>=0.46.0, <0.48.0` for both Leto layers. The interval retains the
-current 0.46 cohort and admits the verified additive 0.47 line; later pre-1.0
-minor lines require a new compatibility audit. Every first-party source stays
-canonical, with one resolved provider identity. No conversion adapter, path
-patch, manifest revision pin, backend feature or Rust source changes.
+Every first-party source remains canonical, with one resolved provider
+identity. No conversion adapter, path patch, manifest revision pin, backend
+feature or Rust source changes. The committed lock follows merged defaults
+(currently Leto 0.46). Independent Coeus review #533 exercises the actual 0.47
+source graph before claiming that integration.
 
-Published packages whose dependency closure changes receive patch versions.
-The committed lock retains merged provider defaults (currently Leto 0.46).
-A separate review consumer must exercise Leto 0.47 and both matching provider
-bindings before Coeus claims its complete graph. This source compatibility
-change does not authorize provider merge, registry publication or Pages.
+## Current-base preservation and version ownership
 
-## Executed source evidence
-
-Runtime source: `a153f475fbee1042fc323a845400da89c9737c94`. All Rust implementation/test files and
-all external locked packages remain byte-identical to the recorded current
-base. Manifest resolution and `metadata --offline --locked` pass without local
-path/patch overrides or manifest revision pins.
-
-All actual hosted candidate checks pass. The exact-source API/dependency/
-version/lock/ADR gates pass; configured release/informational jobs remain
-separate from a release authorization. CI evidence:
+The first candidate `a153f475` passes host verification, real Metal, WGPU
+software-adapter, adapterless CUDA/ROCm and actual locked-source API gates in
 [run 38781083047](https://github.com/ryancinsight/hephaestus/actions/runs/38781083047).
-Host verification, real macOS Metal, WGPU software-adapter and adapterless
-CUDA/ROCm gates pass. NVIDIA/AMD hardware jobs do not execute; no such hardware
-result or registry publication is claimed. A fresh unseeded review-source
-consumer resolves seven canonical providers with zero excess identities.
+Its unseeded review-source consumer resolves seven canonical providers without
+an excess identity. Those results apply to that recorded runtime revision.
 
-The actual Coeus 0.47 review graph passes 1272 native cases, strict workspace
-Clippy, 159 doctests and thirteen strict/isolation memory cases in each borrow
-model. These establish the real matching provider boundary, independently of
-the committed 0.46 graph. Coeus's new hosted memory job is being rechecked after
-correcting its interpreter installer. Its unseeded defaults still require the
-provider reviews to integrate first.
+Concurrent main changes #496/#498 publish 0.22.1 while this review is open.
+The version guard rejects reusing that published version for different source.
+This candidate therefore preserves the complete current main, including both
+CUDA reduction fixes, and advances the compatibility patch to 0.22.2.
+All 1337 current Rust files and all 228 external locked records remain
+byte-identical to the new base. Only compatibility/version metadata and
+review documentation differ. The current head requires its own hosted gates;
+prior-head green results do not establish current-head acceptance.
+
+The actual Coeus 0.47 integration has independent native, strict, doctest,
+exact-value/performance and strict-isolation memory evidence in its review.
+After this provider revision changes, its complete lock and applicable checks
+must follow the new exact source. Default/registry availability remains a
+provider-first integration gate.
 
 No main merge, tag, registry publication or Pages deployment occurs in this
-compatibility review. Those external outcomes require their own actual checks
-and authorization. This closure changes records only; runtime source above
-remains the reproducible implementation reference.
+compatibility review. NVIDIA/AMD hardware execution is separate from
+adapterless hosted checks. External outcomes require their own actual checks
+and authorization.

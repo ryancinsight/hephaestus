@@ -9,7 +9,7 @@ dependency edge.
 
 Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**. Much like `leto` serves as the non-differentiable CPU array vocabulary, `hephaestus` serves as the shared GPU buffer and compute substrate. It decouples high-level packages (such as `apollo` spectral transforms and `coeus` tensor backends) so they can share device contexts and memory allocations without direct dependencies, mirroring the role of **CuPy** in the Python (NumPy/SciPy) ecosystem.
 
-Hephaestus 0.22.1 follows the Eunomia 0.10 cohort and accepts Leto 0.46/0.47
+Hephaestus 0.22.2 follows the Eunomia 0.10 cohort and accepts Leto 0.46/0.47
 layouts through the same provider API.
 Direct consumers advance those pre-1.0 provider requirements together; device
 operations and numerical contracts remain unchanged. Backend verification uses
