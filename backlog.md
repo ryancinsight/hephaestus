@@ -1,5 +1,15 @@
 # Backlog — hephaestus
 
+<a id="heph-eunomia-010-cohort"></a>
+## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — todo
+
+- Priority: correctness.
+- Outcome: Hephaestus 0.22 consumes one Eunomia 0.10/Leto 0.46 provider identity without Rust implementation changes.
+- Scope: workspace/internal and provider versions, canonical lock, pre-1.0 migration and backend CI's exact source graph. Existing macOS/kernel work retains its owner.
+- Acceptance: strict workspace Clippy, complete host and available Metal value/rejection tests, docs/doctests, API comparisons and applicable hosted backend CI on the exact candidate.
+- Dependency: Hermes #260 is merged/published. Moirai #623 and Leto's 0.46 cohort integrate before the final default-source refresh. Registry publication remains a separate ordered release.
+- Next step: validate the reviewed graph and submit an independent provider PR, then repeat the fresh consumer after upstream integration.
+
 <a id="heph-macos-metal-conformance-1"></a>
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo

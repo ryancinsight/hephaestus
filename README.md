@@ -9,6 +9,11 @@ dependency edge.
 
 Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**. Much like `leto` serves as the non-differentiable CPU array vocabulary, `hephaestus` serves as the shared GPU buffer and compute substrate. It decouples high-level packages (such as `apollo` spectral transforms and `coeus` tensor backends) so they can share device contexts and memory allocations without direct dependencies, mirroring the role of **CuPy** in the Python (NumPy/SciPy) ecosystem.
 
+Hephaestus 0.22 follows the Eunomia 0.10 numeric cohort and Leto 0.46 layouts.
+Direct consumers advance those pre-1.0 provider requirements together; device
+operations and numerical contracts remain unchanged. Backend verification uses
+the committed Git graph without checkout-local path substitutions.
+
 ## Naming
 
 Hephaestus is the god of the forge: the place where the stack's compute
@@ -22,13 +27,13 @@ re-exports the contract layer and each backend, so a consumer names one dependen
 
 ```toml
 # contracts only — compiles on a machine with no accelerator
-hephaestus-compute = "0.19"
+hephaestus-compute = "0.22"
 
 # portable compute; on macOS acquire WgpuDevice::try_metal
-hephaestus-compute = { version = "0.19", features = ["wgpu", "decomposition", "sparse"] }
+hephaestus-compute = { version = "0.22", features = ["wgpu", "decomposition", "sparse"] }
 
 # NVIDIA; execution needs a driver and runtime kernel compilation needs NVRTC
-hephaestus-compute = { version = "0.19", features = ["cuda", "decomposition"] }
+hephaestus-compute = { version = "0.22", features = ["cuda", "decomposition"] }
 ```
 
 No backend is enabled by default: a default backend would make every consumer of

@@ -3,9 +3,9 @@ name: Metal Backend
 on:
   push:
     branches: [master]
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/rocm-cargo-config.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
   pull_request:
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/rocm-cargo-config.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +21,8 @@ concurrency:
 env:
   RUST_TOOLCHAIN: 1.95.0
 
+# Cargo.lock owns provider identity in every backend lane. Do not replace its
+# Git sources with sibling paths or rewrite the dependency graph during a gate.
 jobs:
   metal:
     name: macOS Metal contracts
@@ -33,45 +35,6 @@ jobs:
           path: hephaestus
           persist-credentials: false
 
-      # Hephaestus uses sibling path dependencies in the supported Atlas
-      # checkout topology. Keep the topology intact instead of rewriting
-      # manifests for one hosted runner.
-      - name: Check out Leto
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/leto
-          path: leto
-          persist-credentials: false
-
-      - name: Check out Hermes
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/hermes
-          ref: 5415802e01bebb52ba719e6eb832f96605732af0 # v0.8.1 workspace
-          path: hermes
-          persist-credentials: false
-
-      - name: Check out Eunomia
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/eunomia
-          path: eunomia
-          persist-credentials: false
-
-      - name: Check out Mnemosyne
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Mnemosyne
-          path: mnemosyne
-          persist-credentials: false
-
-      - name: Check out Moirai
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Moirai
-          path: moirai
-          persist-credentials: false
-
       - name: Install the pinned Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable action
         with:
@@ -81,16 +44,6 @@ jobs:
       - name: Install nextest
         shell: bash
         run: cargo install cargo-nextest --locked
-
-      - name: Configure the checkout-local Cargo graph
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/.cargo"
-          sed "s|/workspace|$GITHUB_WORKSPACE|g" \
-            "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
-            > "$GITHUB_WORKSPACE/.cargo/config.toml"
-          cargo "+$RUST_TOOLCHAIN" update --manifest-path "$GITHUB_WORKSPACE/hephaestus/Cargo.toml" --workspace
 
       - name: Check Metal feature surfaces
         working-directory: hephaestus

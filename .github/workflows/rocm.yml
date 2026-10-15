@@ -28,6 +28,8 @@ env:
   RUST_TOOLCHAIN: 1.95.0
   ROCM_IMAGE: rocm/dev-ubuntu-24.04:7.2.4
 
+# Cargo.lock owns provider identity in every backend lane. Do not replace its
+# Git sources with sibling paths or rewrite the dependency graph during a gate.
 jobs:
   rocm-container:
     name: ROCm feature and adapterless contracts
@@ -38,47 +40,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: hephaestus
-          persist-credentials: false
-
-      # The current Hephaestus development graph uses sibling path
-      # dependencies. Keep CI's checkout topology identical to the supported
-      # Atlas checkout rather than rewriting those dependencies for CI.
-      - name: Check out Leto
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/leto
-          path: leto
-          persist-credentials: false
-
-      - name: Check out Hermes
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/hermes
-          # Leto main currently requires the 0.4.1 workspace contract; keep
-          # the sibling checkout aligned until that dependency migration lands.
-          ref: v0.4.1
-          path: hermes
-          persist-credentials: false
-
-      - name: Check out Eunomia
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/eunomia
-          path: eunomia
-          persist-credentials: false
-
-      - name: Check out Mnemosyne
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Mnemosyne
-          path: mnemosyne
-          persist-credentials: false
-
-      - name: Check out Moirai
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Moirai
-          path: moirai
           persist-credentials: false
 
       - name: Build and test in the AMD ROCm development image
@@ -111,21 +72,11 @@ jobs:
               rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
               rustup toolchain install stable --profile minimal
               cargo +stable install cargo-nextest --locked
-              # Hermes currently uses a sibling Eunomia path dependency after
-              # its monorepo cutover. Patch the git source to the checked-out
-              # workspace so path resolution remains valid in CI.
-              mkdir -p /workspace/.cargo
-              cp /workspace/hephaestus/.github/rocm-cargo-config.toml /workspace/.cargo/config.toml
-              cargo "+$RUST_TOOLCHAIN" update --manifest-path /workspace/hephaestus/Cargo.toml --workspace
               cargo "+$RUST_TOOLCHAIN" fmt --check
-              # Hephaestus currently consumes sibling Atlas path crates while
-              # their migration versions are unpublished. Resolve that
-              # checkout-local graph once; every verification gate below then
-              # runs against the generated lockfile with --locked.
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --features decomposition --all-targets
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets
-              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm,decomposition --all-targets
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --all-targets --locked
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --no-default-features --features decomposition --all-targets --locked
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm --all-targets --locked
+              cargo "+$RUST_TOOLCHAIN" check --package hephaestus-rocm --features rocm,decomposition --all-targets --locked
               cargo "+$RUST_TOOLCHAIN" clippy --package hephaestus-rocm --features rocm,decomposition --all-targets --no-deps --locked -- -D warnings
               cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-rocm --features rocm,decomposition --locked
               cargo "+$RUST_TOOLCHAIN" test --package hephaestus-rocm --features rocm,decomposition --doc --locked
@@ -144,42 +95,6 @@ jobs:
           path: hephaestus
           persist-credentials: false
 
-      - name: Check out Leto
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/leto
-          path: leto
-          persist-credentials: false
-
-      - name: Check out Hermes
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/hermes
-          ref: v0.4.1
-          path: hermes
-          persist-credentials: false
-
-      - name: Check out Eunomia
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/eunomia
-          path: eunomia
-          persist-credentials: false
-
-      - name: Check out Mnemosyne
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Mnemosyne
-          path: mnemosyne
-          persist-credentials: false
-
-      - name: Check out Moirai
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancinsight/Moirai
-          path: moirai
-          persist-credentials: false
-
       - name: Inspect the AMD runtime
         shell: bash
         run: |
@@ -196,15 +111,6 @@ jobs:
       - name: Install nextest
         shell: bash
         run: cargo install cargo-nextest --locked
-
-      - name: Configure the checkout-local Cargo graph
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/.cargo"
-          cp "$GITHUB_WORKSPACE/hephaestus/.github/rocm-cargo-config.toml" \
-            "$GITHUB_WORKSPACE/.cargo/config.toml"
-          cargo "+$RUST_TOOLCHAIN" update --manifest-path "$GITHUB_WORKSPACE/hephaestus/Cargo.toml" --workspace
 
       - name: Run required-device contracts
         working-directory: hephaestus

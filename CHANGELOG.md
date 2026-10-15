@@ -2,6 +2,23 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
+## [0.22.0] - Unreleased
+
+### Breaking
+
+- [minor] Advance the public provider cohort to Eunomia 0.10, Aequitas 0.3,
+  Leto/Leto-ops 0.46 and Moirai-sync 0.9.3. Direct Rust consumers must align
+  those requirements with Hephaestus 0.22 so layout and scalar types share
+  one identity. Existing trait signatures and all Rust implementations/tests
+  remain unchanged; ADR 0086 records the pre-1.0 migration boundary.
+
+### Changed
+
+- Run backend CI against the committed Git provider graph under `--locked`.
+  Remove obsolete sibling-provider checkouts, path overrides and lock rewrites;
+  preserve every feature, device contract, assertion and timeout. Exact-source
+  API comparison uses the actual committed base/head locks.
+
 ## [0.21.0] - 2026-10-15
 
 ### Changed (breaking, pre-1.0)
