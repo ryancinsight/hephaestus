@@ -706,7 +706,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7a584238c3da61b7d38f09b1da1b277ff20816aa"
+source = "git+https://github.com/ryancinsight/hermes.git#ac60146aabf4b8a280729b559d667055cd0ef94e"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7a584238c3da61b7d38f09b1da1b277ff20816aa"
+source = "git+https://github.com/ryancinsight/hermes.git#ac60146aabf4b8a280729b559d667055cd0ef94e"
 dependencies = [
  "eunomia",
  "mnemosyne-memory",
@@ -731,7 +731,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7a584238c3da61b7d38f09b1da1b277ff20816aa"
+source = "git+https://github.com/ryancinsight/hermes.git#ac60146aabf4b8a280729b559d667055cd0ef94e"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -741,7 +741,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7a584238c3da61b7d38f09b1da1b277ff20816aa"
+source = "git+https://github.com/ryancinsight/hermes.git#ac60146aabf4b8a280729b559d667055cd0ef94e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -751,7 +751,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#7a584238c3da61b7d38f09b1da1b277ff20816aa"
+source = "git+https://github.com/ryancinsight/hermes.git#ac60146aabf4b8a280729b559d667055cd0ef94e"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -811,7 +811,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#ed23133368498ff5aa6a380800b7b5d5c85bd25b"
+source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#ed23133368498ff5aa6a380800b7b5d5c85bd25b"
+source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -1030,7 +1030,7 @@ dependencies = [
 [[package]]
 name = "moirai-core"
 version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#27c5e314fc79740da0c2c08855e93045d8f7458e"
+source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
 dependencies = [
  "bytemuck",
  "libc",
@@ -1042,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "moirai-sync"
 version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#27c5e314fc79740da0c2c08855e93045d8f7458e"
+source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
 dependencies = [
  "libc",
  "moirai-core",
@@ -1052,7 +1052,7 @@ dependencies = [
 [[package]]
 name = "moirai-utils"
 version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#27c5e314fc79740da0c2c08855e93045d8f7458e"
+source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
 
 [[package]]
 name = "munge"

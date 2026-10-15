@@ -9,8 +9,9 @@
 - [x] Remove stale CI provider substitutions; preserve all backend features, contracts and timeouts.
 - [x] Verify one source per provider, unchanged registry records and an unchanged Rust implementation/test tree.
 - [x] Pass formatting, strict workspace Clippy, all 959 native tests with required Metal (zero skips), docs and doctests.
-- [ ] Pass five portable exact-source API comparisons plus the ROCm comparison inside its Linux SDK lane, and applicable hosted backend gates on the final head.
-- [ ] Integrate upstream providers, refresh the source lock and repeat fresh-consumer verification.
+- [x] Execute five portable API graph comparisons plus the ROCm comparison in its Linux SDK and applicable hosted backend gates at `4cce2705`; repeat all applicable gates for the refreshed source before merging PR #493.
+- [x] Integrate Moirai/Leto and refresh all eight default provider identities without changing registry records.
+- [ ] Record final-head fresh-consumer, hosted acceptance and six 0.22.0 registry receipts in [PR #493](https://github.com/ryancinsight/hephaestus/pull/493).
 
 The [macOS verification checklist](docs/verification/macos/checklist.md) retains
 its existing hardware and kernel scope; this increment changes dependency
