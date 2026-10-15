@@ -32,13 +32,22 @@ This candidate therefore preserves the complete current main, including both
 CUDA reduction fixes, and advances the compatibility patch to 0.22.2.
 All 1337 current Rust files and all 228 external locked records remain
 byte-identical to the new base. Only compatibility/version metadata and
-review documentation differ. The current head requires its own hosted gates;
-prior-head green results do not establish current-head acceptance.
+review documentation differ. Runtime `e867be0d346064ea5f956a8f78f81c31bff88af4` passes every actual hosted
+gate: host native/strict/docs, real Metal, WGPU software-adapter, CUDA/ROCm
+feature and adapterless contracts, all six locked-source API comparisons,
+and version/dependency/lock/ADR guards. The portable API/host record is
+[run 38792609338](https://github.com/ryancinsight/hephaestus/actions/runs/38792609338).
+NVIDIA/AMD hardware and configured release/informational jobs skip. A new
+unseeded 0.22.2 review-source consumer resolves seven providers with no excess
+identity. No registry/default availability claim follows from those results.
 
 The actual Coeus 0.47 integration has independent native, strict, doctest,
 exact-value/performance and strict-isolation memory evidence in its review.
-After this provider revision changes, its complete lock and applicable checks
-must follow the new exact source. Default/registry availability remains a
+Coeus's complete current-main review lock selects this exact source and
+passes 1272 native cases, strict all-workspace/all-target Clippy, 159 doctests
+and warning-denied documentation. All 231 registry records match Coeus main.
+The provider's source and the downstream CPU kernel have explicit revision
+receipts; later documentation-only commits preserve their bytes. Default/registry availability remains a
 provider-first integration gate.
 
 No main merge, tag, registry publication or Pages deployment occurs in this
