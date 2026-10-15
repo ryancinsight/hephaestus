@@ -24,8 +24,8 @@ use hephaestus_cuda::{
     kron, matmul, matmul_into, matpow, norm_l1, norm_l2, norm_max, prepare_dot,
     prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into, prepare_norm_l2,
     prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, prod_axis,
-    prod_axis_into, reduce_axis, reduction, reduction_with_width, scalar_elementwise,
-    scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
+    prod_axis_into, reduce_axis, reduce_axis_into, reduction, reduction_with_width,
+    scalar_elementwise, scalar_elementwise_into, scan_axis, submit_prepared_axis_reduction_batch,
     submit_prepared_reduction_batch, suffix_prod, suffix_prod_into, suffix_sum, suffix_sum_into,
     trace, unary_elementwise, unary_elementwise_into,
 };
