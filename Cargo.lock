@@ -20,7 +20,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "aequitas"
 version = "0.2.2"
-source = "git+https://github.com/ryancinsight/aequitas#eadb2261b9926c4406d1299f1d671943e806c937"
+source = "git+https://github.com/ryancinsight/aequitas#d57e4c4284cad24b53aae437812e46d82e5cdefc"
 dependencies = [
  "eunomia",
  "typenum",
@@ -392,7 +392,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "eunomia"
 version = "0.9.1"
-source = "git+https://github.com/ryancinsight/eunomia#ee7c6911652ee7438566d5def1d6d4f519abc7fd"
+source = "git+https://github.com/ryancinsight/eunomia#0f4898f86856980b1825805e27fa80f587caf821"
 dependencies = [
  "bytemuck",
  "eunomia-derive",
@@ -405,7 +405,7 @@ dependencies = [
 [[package]]
 name = "eunomia-derive"
 version = "0.9.1"
-source = "git+https://github.com/ryancinsight/eunomia#ee7c6911652ee7438566d5def1d6d4f519abc7fd"
+source = "git+https://github.com/ryancinsight/eunomia#0f4898f86856980b1825805e27fa80f587caf821"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -706,7 +706,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.8.2"
-source = "git+https://github.com/ryancinsight/hermes.git#8648f280daed75d872ee87c2b93a3c177a4c41c1"
+source = "git+https://github.com/ryancinsight/hermes.git#b4d73c94ebce3699d0162ea9196ec6f45fe28af0"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.8.2"
-source = "git+https://github.com/ryancinsight/hermes.git#8648f280daed75d872ee87c2b93a3c177a4c41c1"
+source = "git+https://github.com/ryancinsight/hermes.git#b4d73c94ebce3699d0162ea9196ec6f45fe28af0"
 dependencies = [
  "eunomia",
  "mnemosyne-memory",
@@ -731,7 +731,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.8.2"
-source = "git+https://github.com/ryancinsight/hermes.git#8648f280daed75d872ee87c2b93a3c177a4c41c1"
+source = "git+https://github.com/ryancinsight/hermes.git#b4d73c94ebce3699d0162ea9196ec6f45fe28af0"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -741,7 +741,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.8.2"
-source = "git+https://github.com/ryancinsight/hermes.git#8648f280daed75d872ee87c2b93a3c177a4c41c1"
+source = "git+https://github.com/ryancinsight/hermes.git#b4d73c94ebce3699d0162ea9196ec6f45fe28af0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -751,7 +751,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.8.2"
-source = "git+https://github.com/ryancinsight/hermes.git#8648f280daed75d872ee87c2b93a3c177a4c41c1"
+source = "git+https://github.com/ryancinsight/hermes.git#b4d73c94ebce3699d0162ea9196ec6f45fe28af0"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -811,7 +811,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.45.2"
-source = "git+https://github.com/ryancinsight/leto.git#987c2145492ca61b9f824ad2125683ce4e37c667"
+source = "git+https://github.com/ryancinsight/leto.git#248fe4f63c674f6fca1f89ac19c1f817e67bc417"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.45.2"
-source = "git+https://github.com/ryancinsight/leto.git#987c2145492ca61b9f824ad2125683ce4e37c667"
+source = "git+https://github.com/ryancinsight/leto.git#248fe4f63c674f6fca1f89ac19c1f817e67bc417"
 dependencies = [
  "eunomia",
  "hermes-simd",
