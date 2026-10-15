@@ -7,6 +7,8 @@ mod named;
 mod plan;
 mod shaders;
 
+#[cfg(test)]
+pub(crate) use axis::is_dense_scalar_layout;
 pub use axis::{reduce_axis, reduce_axis_into};
 pub use full::{reduction, reduction_with_width};
 pub use mean::{mean_axis, mean_axis_into};

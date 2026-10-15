@@ -14,6 +14,20 @@ use super::full::reduction;
 use super::plan::{launch_axis_dispatch, plan_axis_reduction_dispatch};
 use super::shaders::axis_reduction_shader_source;
 
+/// Whether a rank-2 layout is a dense scalar collapse along `axis` —
+/// one output over a C-contiguous full-extent input.
+///
+/// Strides on unit extents are don't-care: a left-padded `[1, n]` spelling
+/// with strides `[0, 1]` addresses the same dense block as canonical `[n, 1]`.
+pub(crate) fn is_dense_scalar_layout(layout: &Layout<2>, axis: usize) -> bool {
+    let shape = layout.shape();
+    let scalar_output = (axis == 0 && shape[1] == 1) || (axis == 1 && shape[0] == 1);
+    // Dense stride/offset judgment belongs to leto: `is_c_contiguous`
+    // already ignores strides on unit extents, so consumer spellings such
+    // as left-padded `[1, n]` with strides `[0, 1]` qualify.
+    scalar_output && layout.is_c_contiguous()
+}
+
 /// Whether a rank-2 axis reduction collapses to a scalar over a dense
 /// full-buffer input — exactly a full reduction.
 ///
@@ -24,15 +38,11 @@ use super::shaders::axis_reduction_shader_source;
 /// what make the two spellings identical element-for-element.
 fn is_dense_scalar_reduction<T>(input: &StridedOperand<'_, T, 2>, axis: usize) -> bool {
     let shape = input.layout.shape();
-    let scalar_output = (axis == 0 && shape[1] == 1) || (axis == 1 && shape[0] == 1);
-    if !scalar_output || input.layout.offset() != 0 {
-        return false;
-    }
-    let strides = input.layout.strides();
-    let dense_row_major = isize::try_from(shape[1]) == Ok(strides[0]) && strides[1] == 1;
     // Non-empty: on an empty axis the kernel path writes the identity while
     // the full reduction returns an empty buffer, so empty stays slow.
-    dense_row_major && !input.buffer.is_empty() && input.buffer.len() == shape[0] * shape[1]
+    is_dense_scalar_layout(input.layout, axis)
+        && !input.buffer.is_empty()
+        && input.buffer.len() == shape[0] * shape[1]
 }
 
 /// Reduce a rank-2 strided matrix along `axis`, preserving the reduced axis as length one.

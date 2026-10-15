@@ -361,4 +361,23 @@ fn scalar_axis_reduction_matches_full_reduction() {
     let mut got_offset = [0.0f32; 1];
     dev.download(&offset_sum, &mut got_offset).unwrap();
     assert_eq!(got_offset, [21.0]);
+
+    // Left-padded consumer spelling (`[1, 6]` with strides `[0, 1]`):
+    // the unit-axis stride is don't-care, so this takes the fast path
+    // and reduces the same dense block.
+    let left_padded = Layout::try_new([1, 6], [0, 1], 0).expect("valid test layout");
+    let left_padded_sum = reduce_axis::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &left_padded,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_left_padded = [0.0f32; 1];
+    dev.download(&left_padded_sum, &mut got_left_padded)
+        .unwrap();
+    assert_eq!(got_left_padded, [21.0]);
 }
