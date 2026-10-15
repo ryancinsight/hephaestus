@@ -1,5 +1,30 @@
 # Backlog — hephaestus
 
+<a id="heph-provider-release-contract"></a>
+## HEPH-PROVIDER-RELEASE-CONTRACT — Version and validate the current provider graph [major] — blocked
+- Priority: verification.
+- Evidence: the [0.20.4 release gate](https://github.com/ryancinsight/hephaestus/actions/runs/38665509568)
+  fails on required vector trait parameters and removed public CTC/QR structs.
+  Core alone passes 196 checks; that does not establish a complete release pass.
+- Outcome: version the existing source/internal edges as 0.21.0 (ADR 0086),
+  retaining all algorithms, coverage, fixture values, and existing timeouts.
+- Resolved registry blocker: Eunomia and eunomia-derive 0.9.2 are published
+  from `06848422be64b878a5c205a976e4643d2a3e48a5`; the trusted publisher
+  receipts identify that source. At Hephaestus `05173d6a`, the blocking
+  [release API/core package run](https://github.com/ryancinsight/hephaestus/actions/runs/38671405892)
+  and standard verification of all six pending packages pass.
+- Latest-provider reconciliation: select current reviewed Eunomia, Leto,
+  Hermes, Aequitas, Themis and Moirai defaults; preserve reproducible locked
+  revisions and rerun final-head gates. Eunomia main still declares 0.9.1;
+  the separate registry graph selects the published compatible 0.9.2 release.
+- Latest-source local evidence: 444 core/host/facade/conformance tests pass
+  with zero skips; strict workspace Clippy, warning-denied docs and all
+  doctests pass. Hosted API/package and backend CI must be rerun at this head.
+- Acceptance: exact-head ordinary native/docs/lint and blocking API/package
+  gates pass before merge/publication; Coeus/Apollo requirements advance together.
+  Miri remains deferred and unverified.
+
+
 <a id="heph-macos-metal-conformance-1"></a>
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo

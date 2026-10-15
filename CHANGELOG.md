@@ -2,7 +2,17 @@
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
-## Unreleased
+## [0.21.0] - 2026-10-15
+
+### Changed (breaking, pre-1.0)
+
+- Correct the release boundary for the existing generic vector traits and
+  removed CUDA/ROCm CTC and WGPU QR implementation structs. Consumers
+  supply the scalar type parameter and use current provider operation
+  entry points. No algorithm or test changes accompany this version fix.
+  See ADR 0086. The ordinary package gate still requires published Eunomia
+  Bessel methods; a source checkout alone does not validate publication.
+
 
 - [patch] Render the `CeluOp` negative arm through the shared
   degree-8 `expm1` fragment (WGSL, re-rooted at `x / first`) and the

@@ -94,3 +94,4 @@
 | [0083](0083-device-neutral-sort-seam.md) | Device-neutral n-D stable-sort seam | Accepted |
 | [0084](0084-device-neutral-nonzero-seam.md) | Device-neutral n-D nonzero-coordinate seam | Accepted |
 | [0085](0085-device-neutral-dot-seam.md) | Device-neutral inner-product seam | Accepted |
+| [0086](0086-version-existing-provider-breaks.md) | Version the existing provider API breaks | Accepted |
