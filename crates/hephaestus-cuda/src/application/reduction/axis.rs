@@ -1,7 +1,7 @@
 use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DialectScalar, HephaestusError, IdentityToken,
-    OpIdentity, Result,
+    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
+    IdentityToken, OpIdentity, Result,
 };
 use leto::Layout;
 
@@ -10,10 +10,36 @@ use crate::application::pipeline::{PipelineKey, cached_kernel};
 use crate::application::strided::{StridedOperand, map_layout_err};
 use crate::infrastructure::buffer::CudaBuffer;
 
+use super::full::reduction;
 use super::plan::{launch_axis_dispatch, plan_axis_reduction_dispatch};
 use super::shaders::axis_reduction_shader_source;
 
+/// Whether a rank-2 axis reduction collapses to a scalar over a dense
+/// full-buffer input — exactly a full reduction.
+///
+/// The axis kernel spawns one thread per output with serial per-thread
+/// accumulation, so a scalar reduction over N elements runs on ONE thread
+/// (~13.5ms at N=1M, measured). The parallel full reduction does the same
+/// work in ~120us end-to-end. The dense full-buffer conditions below are
+/// what make the two spellings identical element-for-element.
+fn is_dense_scalar_reduction<T>(input: &StridedOperand<'_, T, 2>, axis: usize) -> bool {
+    let shape = input.layout.shape();
+    let scalar_output = (axis == 0 && shape[1] == 1) || (axis == 1 && shape[0] == 1);
+    if !scalar_output || input.layout.offset() != 0 {
+        return false;
+    }
+    let strides = input.layout.strides();
+    let dense_row_major = isize::try_from(shape[1]) == Ok(strides[0]) && strides[1] == 1;
+    // Non-empty: on an empty axis the kernel path writes the identity while
+    // the full reduction returns an empty buffer, so empty stays slow.
+    dense_row_major && !input.buffer.is_empty() && input.buffer.len() == shape[0] * shape[1]
+}
+
 /// Reduce a rank-2 strided matrix along `axis`, preserving the reduced axis as length one.
+///
+/// A scalar reduction over a dense full-buffer input dispatches to the
+/// parallel full reduction instead of the one-thread-per-output axis kernel;
+/// all other shapes take the axis path.
 pub fn reduce_axis_into<Op, T>(
     device: &CudaDevice,
     input: StridedOperand<'_, T, 2>,
@@ -28,6 +54,12 @@ where
     let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(());
     };
+
+    if is_dense_scalar_reduction(&input, axis) {
+        let full = reduction::<Op, T>(device, input.buffer)?;
+        device.copy_buffer(&full, output.buffer)?;
+        return Ok(());
+    }
 
     let key = PipelineKey::AxisReduction {
         op: std::any::TypeId::of::<Op>(),
@@ -58,6 +90,9 @@ where
         return Err(HephaestusError::DispatchFailed {
             message: format!("axis {axis} is out of bounds for rank-2 reduction"),
         });
+    }
+    if is_dense_scalar_reduction(&input, axis) {
+        return reduction::<Op, T>(device, input.buffer);
     }
     let mut output_shape = input.layout.shape();
     output_shape[axis] = 1;

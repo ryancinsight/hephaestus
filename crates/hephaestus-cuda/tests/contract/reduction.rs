@@ -278,3 +278,87 @@ fn reduction_axis_reduction_generic_matches_cpu() {
         .unwrap();
     assert_eq!(got_empty_product, [1.0, 1.0]);
 }
+
+#[test]
+fn scalar_axis_reduction_matches_full_reduction() {
+    let Some(dev) = device("scalar_axis_reduction_matches_full_reduction") else {
+        return;
+    };
+
+    let host_in = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let a = dev.upload(&host_in).unwrap();
+
+    // Row vector reduced along axis 1: dense scalar, takes the full-reduction
+    // fast path instead of the one-thread-per-output axis kernel.
+    let row_layout = Layout::c_contiguous([1, 6]).unwrap();
+    let row_sum = reduce_axis::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &row_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_row = [0.0f32; 1];
+    dev.download(&row_sum, &mut got_row).unwrap();
+    assert_eq!(got_row, [21.0]);
+
+    // Column vector reduced along axis 0: same fast path, other orientation.
+    let col_layout = Layout::c_contiguous([6, 1]).unwrap();
+    let col_sum = reduce_axis::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &col_layout,
+        },
+        0,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_col = [0.0f32; 1];
+    dev.download(&col_sum, &mut got_col).unwrap();
+    assert_eq!(got_col, [21.0]);
+
+    // The into-variant writes the caller's buffer through the same path.
+    let into_output = dev.alloc_zeroed::<f32>(1).unwrap();
+    let into_layout = Layout::c_contiguous([1, 1]).unwrap();
+    reduce_axis_into::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &a,
+            layout: &row_layout,
+        },
+        1,
+        StridedOperand {
+            buffer: &into_output,
+            layout: &into_layout,
+        },
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_into = [0.0f32; 1];
+    dev.download(&into_output, &mut got_into).unwrap();
+    assert_eq!(got_into, [21.0]);
+
+    // A strided scalar view (nonzero offset) stays on the kernel path and
+    // must still reduce exactly the addressed elements.
+    let padded = dev
+        .upload(&[0.0f32, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 0.0])
+        .unwrap();
+    let offset_layout = Layout::try_new([1, 6], [6, 1], 1).expect("valid test layout");
+    let offset_sum = reduce_axis::<SumOp, f32>(
+        &dev,
+        StridedOperand {
+            buffer: &padded,
+            layout: &offset_layout,
+        },
+        1,
+        BlockWidth::DEFAULT,
+    )
+    .unwrap();
+    let mut got_offset = [0.0f32; 1];
+    dev.download(&offset_sum, &mut got_offset).unwrap();
+    assert_eq!(got_offset, [21.0]);
+}
