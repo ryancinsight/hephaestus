@@ -1,5 +1,21 @@
 # Backlog — hephaestus
 
+<a id="heph-provider-release-contract"></a>
+## HEPH-PROVIDER-RELEASE-CONTRACT — Version and validate the current provider graph [major] — blocked
+- Priority: verification.
+- Evidence: the [0.20.4 release gate](https://github.com/ryancinsight/hephaestus/actions/runs/38665509568)
+  fails on required vector trait parameters and removed public CTC/QR structs.
+  Core alone passes 196 checks; that does not establish a complete release pass.
+- Outcome: version the existing source/internal edges as 0.21.0 (ADR 0086),
+  retaining all algorithms, coverage, fixture values, and existing timeouts.
+- Package blocker: current core dry-run fails three E0599 errors because
+  published Eunomia 0.9.1 lacks Bessel methods. Verify/release the compatible
+  Eunomia 0.9.2 maintenance increment, then validate packages in dependency order.
+- Acceptance: exact-head ordinary native/docs/lint and blocking API/package
+  gates pass before merge/publication; Coeus/Apollo requirements advance together.
+  Miri remains deferred and unverified.
+
+
 <a id="heph-macos-metal-conformance-1"></a>
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo
