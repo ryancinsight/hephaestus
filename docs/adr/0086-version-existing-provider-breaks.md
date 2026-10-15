@@ -57,7 +57,6 @@ and identifies that merge source and publisher run:
 | hephaestus-host 0.21.0 | `d20c21cfbf91993ec9b577ce34793358d839fd17e4af789a21b83dde705e829e` |
 
 The provider publication item is complete. Consumer integration remains in
-Coeus PR #528 and Apollo PR #669; the latter is a draft whose readiness
-request was rejected by automatic approval review. No consumer release is
-claimed. Miri remains deferred and unverified; NVIDIA/AMD hardware is also
+Coeus PR #528 and Apollo PR #669. Their exact-head CI and release gates
+remain prerequisites for consumer publication. No consumer release is claimed. Miri remains deferred and unverified; NVIDIA/AMD hardware is also
 unverified. Existing test coverage and timeouts are unchanged.
