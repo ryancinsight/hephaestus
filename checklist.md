@@ -8,8 +8,8 @@
 - [x] Align workspace/internal and provider requirements and document direct-consumer migration.
 - [x] Remove stale CI provider substitutions; preserve all backend features, contracts and timeouts.
 - [x] Verify one source per provider, unchanged registry records and an unchanged Rust implementation/test tree.
-- [ ] Pass formatting, strict Clippy, host/available Metal values, docs and doctests.
-- [ ] Pass exact-source API comparison and hosted backend gates on the final head.
+- [x] Pass formatting, strict workspace Clippy, all 959 native tests with required Metal (zero skips), docs and doctests.
+- [ ] Pass five portable exact-source API comparisons plus the ROCm comparison inside its Linux SDK lane, and applicable hosted backend gates on the final head.
 - [ ] Integrate upstream providers, refresh the source lock and repeat fresh-consumer verification.
 
 The [macOS verification checklist](docs/verification/macos/checklist.md) retains

@@ -40,9 +40,29 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: hephaestus
+          fetch-depth: 0
           persist-credentials: false
 
+      - name: Check out the locked API verifier
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancinsight/atlas
+          ref: 7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
+          path: atlas
+          persist-credentials: false
+
+      - name: Install the API comparison tool
+        if: github.event_name == 'pull_request'
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+        with:
+          tool: cargo-semver-checks@0.49.0
+          checksum: true
+
       - name: Build and test in the AMD ROCm development image
+        env:
+          API_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          API_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -56,7 +76,13 @@ jobs:
             fi
             sleep $((attempt * 10))
           done
+          api_mount=()
+          if [[ -n "$API_BASE" ]]; then
+            api_mount=(--volume "$(command -v cargo-semver-checks):/usr/local/bin/cargo-semver-checks:ro")
+          fi
           docker run --rm --network host \
+            "${api_mount[@]}" \
+            --env API_BASE --env API_HEAD \
             --env "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/hephaestus \
@@ -65,7 +91,7 @@ jobs:
               set -euo pipefail
               export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config rocm-hip-runtime-dev
+              apt-get install --yes --no-install-recommends ca-certificates curl git build-essential pkg-config python3 rocm-hip-runtime-dev
               curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
               . "$HOME/.cargo/env"
               rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
@@ -81,6 +107,15 @@ jobs:
               cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-rocm --features rocm,decomposition --locked
               cargo "+$RUST_TOOLCHAIN" test --package hephaestus-rocm --features rocm,decomposition --doc --locked
               cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-rocm --features rocm,decomposition --no-deps --locked
+              if [ -n "$API_BASE" ]; then
+                rustup toolchain install 1.97.0 --profile minimal
+                git config --global --add safe.directory /workspace/hephaestus
+                python3 /workspace/atlas/scripts/atlas_semver_locked.py \
+                  --repo /workspace/hephaestus --base "$API_BASE" --head "$API_HEAD" \
+                  --package hephaestus-rocm --toolchain 1.97.0 \
+                  --report /workspace/semver-rocm.json
+                cat /workspace/semver-rocm.json
+              fi
             '
 
   rocm-hardware:

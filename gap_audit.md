@@ -4,6 +4,7 @@
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.
 - Verification boundary: old backend lanes substituted stale sibling Hermes/Mnemosyne checkouts and rewrote the lock. All lanes now use the committed Git graph with `--locked`; no device assertion, feature or timeout changes.
+- API boundary: ROCm intentionally rejects its production feature on macOS. Its complete API comparison runs with the actual Linux SDK; the other five package surfaces remain in the shared exact-source gate. Native ARM executes 959 tests with required Metal, zero skips; strict Clippy, docs and doctests pass.
 - Residual: reviewed upstream sources require provider-first integration before fresh-default and registry gates can establish availability. Native Metal and adapterless CUDA/ROCm evidence do not establish NVIDIA/AMD hardware execution.
 
 ## [HEPH-WGPU-READBACK-COMPLETION-407] Mapping callback publication [patch] — resolved

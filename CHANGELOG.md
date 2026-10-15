@@ -17,7 +17,9 @@ SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 - Run backend CI against the committed Git provider graph under `--locked`.
   Remove obsolete sibling-provider checkouts, path overrides and lock rewrites;
   preserve every feature, device contract, assertion and timeout. Exact-source
-  API comparison uses the actual committed base/head locks.
+  API comparison uses the actual committed base/head locks. Its ROCm
+  all-feature comparison runs inside the Linux SDK lane; the five portable
+  package comparisons remain in the shared gate.
 
 ## [0.21.0] - 2026-10-15
 
