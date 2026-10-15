@@ -60,3 +60,17 @@ The provider publication item is complete. Consumer integration remains in
 Coeus PR #528 and Apollo PR #669. Their exact-head CI and release gates
 remain prerequisites for consumer publication. No consumer release is claimed. Miri remains deferred and unverified; NVIDIA/AMD hardware is also
 unverified. Existing test coverage and timeouts are unchanged.
+
+## Eunomia 0.10 cohort application
+
+2026-10-15: Advance the next pre-1.0 boundary to 0.22 when consuming Eunomia
+0.10, Aequitas 0.3, Leto/Leto-ops 0.46 and Moirai-sync 0.9.3. Direct consumers
+must advance those requirements together; old/new provider types cannot cross
+one nominal Rust boundary. No operation, trait signature, Rust implementation,
+fixture or numerical bound changes. This applies the existing provider-source
+ownership rule rather than adding a conversion layer.
+
+The final lock refresh follows upstream integration. Backend gates use that
+same committed Git graph; obsolete sibling path patches and lock rewrites are
+removed. Exact-source API/native/hosted evidence remains required, and source
+acceptance does not establish registry publication or unavailable GPU hardware.

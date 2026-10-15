@@ -574,7 +574,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-compute"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "hephaestus-core",
  "hephaestus-cuda",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-conformance"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-core"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-cuda"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-host"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "eunomia",
  "hephaestus-conformance",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-metal"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-python"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-rocm"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "cubecl-hip-sys",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "aequitas",
  "criterion",
@@ -810,8 +810,8 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.45.2"
-source = "git+https://github.com/ryancinsight/leto.git#7172e57343dff9c699e5f51e99b3dd0dfe1105e9"
+version = "0.46.0"
+source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -822,8 +822,8 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.45.2"
-source = "git+https://github.com/ryancinsight/leto.git#7172e57343dff9c699e5f51e99b3dd0dfe1105e9"
+version = "0.46.0"
+source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -931,7 +931,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-arena"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "eunomia",
  "libc",
@@ -944,7 +944,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-backend"
 version = "0.6.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "mnemosyne-memory-core",
 ]
@@ -952,12 +952,12 @@ dependencies = [
 [[package]]
 name = "mnemosyne-build-util"
 version = "0.2.1"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 
 [[package]]
 name = "mnemosyne-decay"
 version = "0.3.3"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
@@ -967,7 +967,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-heap"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "libc",
  "melinoe",
@@ -982,7 +982,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-local"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "melinoe",
  "mnemosyne-arena",
@@ -997,7 +997,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-memory"
 version = "0.10.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "eunomia",
  "mnemosyne-arena",
@@ -1012,7 +1012,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-memory-core"
 version = "0.3.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "loom",
 ]
@@ -1020,7 +1020,7 @@ dependencies = [
 [[package]]
 name = "mnemosyne-prof"
 version = "0.2.1"
-source = "git+https://github.com/ryancinsight/Mnemosyne#481c74527a80cfbeb8855bb844a2965bdc9d345a"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#481c74527a80cfbeb8855bb844a2965bdc9d345a"
 dependencies = [
  "backtrace",
  "mnemosyne-build-util",

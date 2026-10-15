@@ -48,10 +48,13 @@ jobs:
   # Atlas ATLAS-SEMVER-GATE-FLEETWIDE-2026-08-28.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
     with:
-      package: hephaestus-core,hephaestus-cuda,hephaestus-host,hephaestus-metal,hephaestus-rocm,hephaestus-wgpu
+      # ROCm's all-feature comparison runs in rocm.yml with its Linux SDK.
+      package: hephaestus-core,hephaestus-cuda,hephaestus-host,hephaestus-metal,hephaestus-wgpu
       rust-toolchain: 1.97.0
+      dependency-contract: locked
+      atlas-ref: 7a5a1036973b81dee0e20321942ce0c7e2bf9f9b
     permissions:
       contents: read
 
