@@ -1,5 +1,11 @@
 # Gap Audit - hephaestus
 
+## HEPH-LETO-047-COMPAT — additive provider rejection [patch]
+
+- Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.
+- Resolution: a bounded compatible interval on both Leto layers, preserving the currently merged graph and every Rust implementation/test byte.
+- Verification: exact-base native/API/default-consumer gates and the downstream 0.47 review graph remain pending; [the record](docs/verification/leto-borrowed-csr-compatibility.md) separates these claims.
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.
