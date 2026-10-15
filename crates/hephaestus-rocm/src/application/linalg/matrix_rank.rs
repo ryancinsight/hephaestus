@@ -204,11 +204,17 @@ fn matrix_properties_with_tolerance<T: MatrixRankScalar>(
     let mut rank_ptr: DevicePtr = rank_out.raw();
     let mut determinant_ptr: DevicePtr = determinant.raw();
     let mut args: [*mut core::ffi::c_void; 5] = [
-        (&mut meta as *mut RankMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut scratch_ptr as *mut DevicePtr).cast(),
-        (&mut rank_ptr as *mut DevicePtr).cast(),
-        (&mut determinant_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta).cast::<RankMeta>().cast(),
+        core::ptr::addr_of_mut!(input_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(scratch_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(rank_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(determinant_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(device, &kernel, LaunchConfig::planar(1, 1, 1, 1), &mut args)?;
 

@@ -68,10 +68,10 @@ where
     let mut scalar_val = scalar;
     let mut out_ptr: DevicePtr = out.raw();
     let mut args: [*mut core::ffi::c_void; 4] = [
-        (&mut a_ptr as *mut DevicePtr).cast(),
-        (&mut scalar_val as *mut T).cast(),
-        (&mut out_ptr as *mut DevicePtr).cast(),
-        (&mut n_val as *mut u32).cast(),
+        core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(scalar_val).cast::<T>().cast(),
+        core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(n_val).cast::<u32>().cast(),
     ];
     launch_kernel(
         device,

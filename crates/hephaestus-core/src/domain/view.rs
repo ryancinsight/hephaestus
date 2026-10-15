@@ -108,7 +108,9 @@ mod tests {
     #[test]
     fn view_is_copy_regardless_of_buffer_type() {
         // A deliberately non-Copy, non-Clone stand-in for a backend buffer.
-        struct OpaqueBuffer(#[allow(dead_code)] Vec<u8>);
+        struct OpaqueBuffer(
+            #[expect(dead_code, reason = "stand-in field proves Copy without reads")] Vec<u8>,
+        );
 
         let buffer = OpaqueBuffer(vec![1, 2, 3]);
         let layout = Layout::c_contiguous([3]).expect("rank-1 layout");

@@ -90,10 +90,10 @@ where
         // Argument list mirrors `cross_product_kernel(const T*, const T*,
         // T*, unsigned int)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut a_ptr as *mut DevicePtr).cast(),
-            (&mut b_ptr as *mut DevicePtr).cast(),
-            (&mut out_ptr as *mut DevicePtr).cast(),
-            (&mut triples_val as *mut u32).cast(),
+            core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(triples_val).cast::<u32>().cast(),
         ];
         launch_kernel(
             device,

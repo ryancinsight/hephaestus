@@ -193,10 +193,12 @@ where
             let mut b_ptr = self.b.raw();
             let mut output_ptr = self.partial.raw();
             let mut args: [*mut core::ffi::c_void; 4] = [
-                (&mut meta as *mut MapReductionMeta).cast(),
-                (&mut a_ptr as *mut u64).cast(),
-                (&mut b_ptr as *mut u64).cast(),
-                (&mut output_ptr as *mut u64).cast(),
+                core::ptr::addr_of_mut!(meta)
+                    .cast::<MapReductionMeta>()
+                    .cast(),
+                core::ptr::addr_of_mut!(a_ptr).cast::<u64>().cast(),
+                core::ptr::addr_of_mut!(b_ptr).cast::<u64>().cast(),
+                core::ptr::addr_of_mut!(output_ptr).cast::<u64>().cast(),
             ];
             launch_kernel(
                 &self.device,

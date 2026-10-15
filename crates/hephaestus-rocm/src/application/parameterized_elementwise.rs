@@ -74,11 +74,15 @@ where
     let [mut first, mut second] = parameters;
     let mut output_ptr: DevicePtr = output.raw();
     let mut args: [*mut core::ffi::c_void; 5] = [
-        (&mut meta as *mut StridedMeta).cast(),
-        (&mut input_ptr as *mut DevicePtr).cast(),
-        (&mut first as *mut f32).cast(),
-        (&mut second as *mut f32).cast(),
-        (&mut output_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+        core::ptr::addr_of_mut!(input_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(first).cast::<f32>().cast(),
+        core::ptr::addr_of_mut!(second).cast::<f32>().cast(),
+        core::ptr::addr_of_mut!(output_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
     ];
     launch_kernel(
         device,

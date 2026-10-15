@@ -225,16 +225,24 @@ where
                 message: "batched matmul batch offset exceeds u32 range".to_string(),
             })?;
         let mut args: [*mut core::ffi::c_void; 10] = [
-            (&mut a_ptr as *mut DevicePtr).cast(),
-            (&mut b_ptr as *mut DevicePtr).cast(),
-            (&mut c_ptr as *mut DevicePtr).cast(),
-            (&mut a_meta as *mut GpuMatrixLayout).cast(),
-            (&mut b_meta as *mut GpuMatrixLayout).cast(),
-            (&mut c_meta as *mut GpuMatrixLayout).cast(),
-            (&mut a_batch_stride as *mut i64).cast(),
-            (&mut b_batch_stride as *mut i64).cast(),
-            (&mut c_batch_stride as *mut i64).cast(),
-            (&mut batch_offset_value as *mut u32).cast(),
+            core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(c_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(a_meta)
+                .cast::<GpuMatrixLayout>()
+                .cast(),
+            core::ptr::addr_of_mut!(b_meta)
+                .cast::<GpuMatrixLayout>()
+                .cast(),
+            core::ptr::addr_of_mut!(c_meta)
+                .cast::<GpuMatrixLayout>()
+                .cast(),
+            core::ptr::addr_of_mut!(a_batch_stride).cast::<i64>().cast(),
+            core::ptr::addr_of_mut!(b_batch_stride).cast::<i64>().cast(),
+            core::ptr::addr_of_mut!(c_batch_stride).cast::<i64>().cast(),
+            core::ptr::addr_of_mut!(batch_offset_value)
+                .cast::<u32>()
+                .cast(),
         ];
         launch_kernel(
             device,

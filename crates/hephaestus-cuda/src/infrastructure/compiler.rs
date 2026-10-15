@@ -5,9 +5,9 @@ mod loader;
 
 use loader::NvrtcDriver;
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "NVRTC C API names")]
 pub type nvrtcProgram = *mut std::ffi::c_void;
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "NVRTC C API names")]
 pub type nvrtcResult = i32;
 
 /// A loaded CUDA module and one resolved kernel function handle.

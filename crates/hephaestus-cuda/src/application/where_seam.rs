@@ -193,11 +193,11 @@ where
         // Argument list mirrors `where_kernel(WhereNdMeta, const T*,
         // const T*, const T*, T*)`.
         let mut args: [*mut core::ffi::c_void; 5] = [
-            (&mut meta as *mut WhereNdMeta).cast(),
-            (&mut cond_ptr as *mut u64).cast(),
-            (&mut true_ptr as *mut u64).cast(),
-            (&mut false_ptr as *mut u64).cast(),
-            (&mut out_ptr as *mut u64).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<WhereNdMeta>().cast(),
+            core::ptr::addr_of_mut!(cond_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(true_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(false_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<u64>().cast(),
         ];
         launch_kernel(
             device,

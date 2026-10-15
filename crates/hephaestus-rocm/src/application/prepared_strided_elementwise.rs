@@ -62,9 +62,13 @@ where
         let mut output_ptr: DevicePtr = self.output.raw();
         // Argument list mirrors `unary_strided_kernel(Meta, const T*, T*)`.
         let mut args: [*mut core::ffi::c_void; 3] = [
-            (&mut meta as *mut StridedMeta).cast(),
-            (&mut input_ptr as *mut DevicePtr).cast(),
-            (&mut output_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+            core::ptr::addr_of_mut!(input_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
+            core::ptr::addr_of_mut!(output_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(
             device,
@@ -107,10 +111,12 @@ where
         let mut output_ptr: DevicePtr = self.output.raw();
         // Argument list mirrors `binary_strided_kernel(Meta, const T*, const T*, T*)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut meta as *mut StridedMeta).cast(),
-            (&mut lhs_ptr as *mut DevicePtr).cast(),
-            (&mut rhs_ptr as *mut DevicePtr).cast(),
-            (&mut output_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<StridedMeta>().cast(),
+            core::ptr::addr_of_mut!(lhs_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(rhs_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(output_ptr)
+                .cast::<DevicePtr>()
+                .cast(),
         ];
         launch_kernel(
             device,
@@ -293,10 +299,12 @@ where
         let mut out_ptr: DevicePtr = self.out.raw();
         // Argument list mirrors `scalar_strided_kernel(Meta, const T*, T, T*)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut meta_val as *mut StridedMeta).cast(),
-            (&mut a_ptr as *mut DevicePtr).cast(),
-            (&mut scalar_val as *mut T).cast(),
-            (&mut out_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta_val)
+                .cast::<StridedMeta>()
+                .cast(),
+            core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(scalar_val).cast::<T>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
         ];
         launch_kernel(
             device,

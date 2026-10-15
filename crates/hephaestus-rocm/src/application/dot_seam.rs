@@ -177,10 +177,10 @@ where
         // Argument list mirrors `dot_kernel(DotNdMeta, const T*, const
         // T*, T*)`.
         let mut args: [*mut core::ffi::c_void; 4] = [
-            (&mut meta as *mut DotNdMeta).cast(),
-            (&mut a_ptr as *mut DevicePtr).cast(),
-            (&mut b_ptr as *mut DevicePtr).cast(),
-            (&mut out_ptr as *mut DevicePtr).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<DotNdMeta>().cast(),
+            core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
         ];
         launch_kernel(
             device,

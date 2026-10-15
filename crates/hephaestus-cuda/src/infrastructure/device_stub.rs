@@ -18,13 +18,22 @@ use crate::infrastructure::buffer::CudaBuffer;
 #[derive(Clone, Debug)]
 pub struct CudaDevice {
     _private: core::convert::Infallible,
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "stub never constructed; fields keep the contract shape"
+    )]
     pub(crate) pipeline_cache:
         std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<PipelineKey, ()>>,
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "stub never constructed; fields keep the contract shape"
+    )]
     pub(crate) fusion_pipeline_cache:
         std::sync::Arc<moirai_sync::sync::ConcurrentHashMap<FusionPipelineKey, ()>>,
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "stub never constructed; fields keep the contract shape"
+    )]
     topology: Option<std::sync::Arc<themis::GpuTopology>>,
 }
 

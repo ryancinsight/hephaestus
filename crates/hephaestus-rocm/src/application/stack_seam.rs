@@ -189,9 +189,11 @@ where
 
             // Argument list mirrors `stack_kernel(StackMeta, const T*, T*)`.
             let mut args: [*mut core::ffi::c_void; 3] = [
-                (&mut meta as *mut StackMeta).cast(),
-                (&mut input_ptr as *mut DevicePtr).cast(),
-                (&mut out_ptr as *mut DevicePtr).cast(),
+                core::ptr::addr_of_mut!(meta).cast::<StackMeta>().cast(),
+                core::ptr::addr_of_mut!(input_ptr)
+                    .cast::<DevicePtr>()
+                    .cast(),
+                core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
             ];
             launch_kernel(
                 device,

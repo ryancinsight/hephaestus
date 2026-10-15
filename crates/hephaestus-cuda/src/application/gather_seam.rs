@@ -203,11 +203,11 @@ where
         // Argument list mirrors `gather_kernel(GatherNdMeta, const T*,
         // const unsigned int*, T*, unsigned int*)`.
         let mut args: [*mut core::ffi::c_void; 5] = [
-            (&mut meta as *mut GatherNdMeta).cast(),
-            (&mut input_ptr as *mut u64).cast(),
-            (&mut index_ptr as *mut u64).cast(),
-            (&mut out_ptr as *mut u64).cast(),
-            (&mut flag_ptr as *mut u64).cast(),
+            core::ptr::addr_of_mut!(meta).cast::<GatherNdMeta>().cast(),
+            core::ptr::addr_of_mut!(input_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(index_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(flag_ptr).cast::<u64>().cast(),
         ];
         launch_kernel(
             device,

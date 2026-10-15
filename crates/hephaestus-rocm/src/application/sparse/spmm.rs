@@ -154,12 +154,18 @@ pub fn spmm_into<T: DialectScalar<HipC> + leto_ops::Scalar + Pod>(
     let mut b_ptr: DevicePtr = b.buffer.raw();
     let mut c_ptr: DevicePtr = c.raw();
     let mut args: [*mut core::ffi::c_void; 6] = [
-        (&mut meta_arg as *mut SpmmMeta).cast(),
-        (&mut values_ptr as *mut DevicePtr).cast(),
-        (&mut col_indices_ptr as *mut DevicePtr).cast(),
-        (&mut row_ptr_ptr as *mut DevicePtr).cast(),
-        (&mut b_ptr as *mut DevicePtr).cast(),
-        (&mut c_ptr as *mut DevicePtr).cast(),
+        core::ptr::addr_of_mut!(meta_arg).cast::<SpmmMeta>().cast(),
+        core::ptr::addr_of_mut!(values_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(col_indices_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(row_ptr_ptr)
+            .cast::<DevicePtr>()
+            .cast(),
+        core::ptr::addr_of_mut!(b_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(c_ptr).cast::<DevicePtr>().cast(),
     ];
     launch_kernel(
         device,

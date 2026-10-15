@@ -278,12 +278,14 @@ where
         // Empty index/values buffers pass null pointers the kernel never
         // dereferences: with `sel_len == 0` the scan loop runs zero times.
         let mut args: [*mut core::ffi::c_void; 6] = [
-            (&mut meta as *mut IndexPutNdMeta).cast(),
-            (&mut input_ptr as *mut u64).cast(),
-            (&mut index_ptr as *mut u64).cast(),
-            (&mut values_ptr as *mut u64).cast(),
-            (&mut out_ptr as *mut u64).cast(),
-            (&mut flag_ptr as *mut u64).cast(),
+            core::ptr::addr_of_mut!(meta)
+                .cast::<IndexPutNdMeta>()
+                .cast(),
+            core::ptr::addr_of_mut!(input_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(index_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(values_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(out_ptr).cast::<u64>().cast(),
+            core::ptr::addr_of_mut!(flag_ptr).cast::<u64>().cast(),
         ];
         launch_kernel(
             device,

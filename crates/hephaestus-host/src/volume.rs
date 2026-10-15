@@ -11,6 +11,8 @@
 //! outside the node range contributes zero, as in the kernels, where leto's
 //! interpolation would clamp.
 
+use eunomia::FloatElement;
+use eunomia::convert::IntegerTarget;
 use hephaestus_core::{
     FieldGeometry, HephaestusError, RAY_STRIDE, RayIntegralOps, Result, validate_ray_line_integrals,
 };
@@ -37,8 +39,9 @@ fn chord(origin: [f32; 3], direction: [f32; 3], geometry: &FieldGeometry) -> Opt
     for axis in 0..3 {
         let low = geometry.origin[axis];
         // `dims - 1` nodes span the box; dims are validated below 2^24, so
-        // the conversion is exact.
-        let high = low + (geometry.dims[axis] - 1) as f32 * geometry.spacing[axis];
+        // the conversion is exact (single round-to-nearest, as `as` performs).
+        let high =
+            low + f32::from_integer(i64::from(geometry.dims[axis] - 1)) * geometry.spacing[axis];
         // An axis-parallel ray divides by zero; the resulting infinities fall
         // out of the min/max below exactly as in the kernels.
         let inverse = 1.0 / direction[axis];
@@ -54,10 +57,13 @@ fn chord(origin: [f32; 3], direction: [f32; 3], geometry: &FieldGeometry) -> Opt
 /// Number of march segments for a chord, as the kernels count them.
 fn segment_count(length: f32, step: f32) -> Result<u32> {
     let segments = (length / step).ceil().max(1.0);
-    // `u32::MAX as f32` rounds up to 2^32, so the bound is strict: every
-    // whole `f32` below it converts exactly.
-    if segments < u32::MAX as f32 {
-        Ok(segments as u32)
+    // `u32::MAX as f32` rounds up to 2^32, spelled here as a literal so no
+    // conversion appears: the bound is strict, and every whole `f32` below
+    // it converts exactly.
+    if segments < 4_294_967_296.0 {
+        u32::try_from_rounded(segments).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("ray segment count {segments} is not a whole u32"),
+        })
     } else {
         Err(HephaestusError::DispatchFailed {
             message: format!(
@@ -82,10 +88,17 @@ impl RayIntegralOps<HostDevice> for HostRayIntegralOps {
         let field_cells = field.read();
         let ray_cells = rays.read();
         validate_ray_line_integrals(field_cells.len(), geometry, ray_cells.len(), out_len, step)?;
-        let dims = geometry.dims.map(|extent| extent as usize);
+        let mut dims = [0_usize; 3];
+        for (slot, extent) in dims.iter_mut().zip(geometry.dims) {
+            *slot = usize::try_from(extent).map_err(|_| HephaestusError::DispatchFailed {
+                message: format!("volume extent {extent} exceeds usize"),
+            })?;
+        }
         let layout = Layout::c_contiguous(dims).map_err(map_leto_error)?;
         let volume = ArrayView::try_new(layout, &field_cells).map_err(map_leto_error)?;
-        let last_node = geometry.dims.map(|extent| (extent - 1) as f32);
+        let last_node = geometry
+            .dims
+            .map(|extent| f32::from_integer(i64::from(extent - 1)));
 
         let mut integrals = Vec::with_capacity(out_len);
         for ray in ray_cells.chunks_exact(RAY_STRIDE) {
@@ -113,11 +126,11 @@ impl RayIntegralOps<HostDevice> for HostRayIntegralOps {
             let parameter_length = exit - enter;
             let length = parameter_length * direction_length;
             let segments = segment_count(length, step)?;
-            let segment = length / segments as f32;
-            let parameter_step = parameter_length / segments as f32;
+            let segment = length / f32::from_integer(i64::from(segments));
+            let parameter_step = parameter_length / f32::from_integer(i64::from(segments));
             let mut sum = 0.0f32;
             for index in 0..segments {
-                let t = enter + (index as f32 + 0.5) * parameter_step;
+                let t = enter + (f32::from_integer(i64::from(index)) + 0.5) * parameter_step;
                 let node = [0, 1, 2].map(|axis| {
                     (origin[axis] + direction[axis] * t - geometry.origin[axis])
                         / geometry.spacing[axis]

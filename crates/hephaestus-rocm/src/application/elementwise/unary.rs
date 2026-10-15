@@ -74,9 +74,9 @@ where
     let mut a_ptr: DevicePtr = a.raw();
     let mut out_ptr: DevicePtr = out.raw();
     let mut args: [*mut core::ffi::c_void; 3] = [
-        (&mut a_ptr as *mut DevicePtr).cast(),
-        (&mut out_ptr as *mut DevicePtr).cast(),
-        (&mut n_val as *mut u32).cast(),
+        core::ptr::addr_of_mut!(a_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(out_ptr).cast::<DevicePtr>().cast(),
+        core::ptr::addr_of_mut!(n_val).cast::<u32>().cast(),
     ];
     launch_kernel(
         device,
