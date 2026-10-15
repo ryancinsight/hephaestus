@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.22.2] - Unreleased
+
+### Fixed
+
+- [patch] Accept Leto/Leto-ops 0.46 and its additive 0.47 line through matching
+  `>=0.46.0, <0.48.0` constraints. This preserves existing consumers and lets
+  Coeus use the checked borrowed-CSR provider without duplicate layout types.
+  All Rust APIs, implementations, tests and backend features remain unchanged.
+  The committed provider lock continues to follow merged defaults.
+
+
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## [0.22.0] - Unreleased

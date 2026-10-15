@@ -1,6 +1,16 @@
 # Hephaestus provider compatibility checklist
 
-**Target Version**: 0.22.0
+**Target Version**: 0.22.2
+
+## HEPH-LETO-047-COMPAT [patch]
+
+- [x] Audit current defaults, active ownership and the unchanged public provider vocabulary.
+- [x] Retain 0.46 and admit 0.47 with matching canonical Leto constraints; update affected package versions and migration records.
+- [x] Verify the current-main 0.22.2 source graph, strict diagnostics, native values, all six API comparisons and an unseeded review-source consumer.
+- [x] Verify the real Coeus 0.47 review graph and every actual hosted provider check at `e867be0d`; keep publication/required-device evidence separate.
+
+
+**Previous cohort target**: 0.22.0
 
 ## HEPH-EUNOMIA-010-COHORT [minor]
 

@@ -1,5 +1,14 @@
 # Backlog — hephaestus
 
+<a id="heph-leto-047-compat"></a>
+## HEPH-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — review
+
+- Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
+- Target: 0.22.2. Coeus recovery #533 needs this binding after Leto #362.
+- Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration.
+- Evidence: `e867be0d` passes every actual hosted native/strict/API/device-capable gate and fresh review-source resolution; Coeus consumes the exact 0.22.2 source in its passing native/strict/doc graph. Both concurrent CUDA fixes remain intact.
+- Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
+
 <a id="heph-eunomia-010-cohort"></a>
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — source complete
 
