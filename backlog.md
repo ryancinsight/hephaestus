@@ -941,23 +941,35 @@ status ledger that stood here is program history; recover any entry with
 
 <a id="heph-cuda-reduce-throughput-1"></a>
 
-## HEPH-CUDA-REDUCE-THROUGHPUT-1 — Diagnose CUDA full-reduction throughput collapse [patch] — todo
-- Outcome: CUDA full reductions run at memory-bandwidth pace.
-- Scope: `hephaestus-cuda` reduction kernels (full/map-reduction) and the
-  submit/sync path. `coeus-cuda` delegates to `HephaestusBackend` identically
-  to `coeus-wgpu` (verified by reading), so the defect is below Coeus.
+## HEPH-CUDA-REDUCE-THROUGHPUT-1 — Fix CUDA axis-reduction serial collapse [patch] — todo
+- Outcome: CUDA reductions run at memory-bandwidth pace.
+- Scope: `hephaestus-cuda` axis-reduction kernel + plan (the Coeus entry path),
+  then the Coeus full-reduction seam. `coeus-cuda` delegates identically to
+  `coeus-wgpu` (verified by reading), so the defect is below Coeus.
 - Evidence: caller-measured 2026-10-14 (RTX 5080, driver 610.60) via the
   Coeus `ops_bench` reduction-crossover group (f32 scalar sum end to end,
   scalar readback included): CUDA device path 96us at n=256 rising
   linearly to 13.5ms at n=1048576 (~3.4ns/B, about 300MB/s on a ~1TB/s
   part); the same workload on WGPU runs 89us to 0.79ms (17x faster at
-  1M). Host staging (one download plus the CPU reduction) beats the CUDA
-  device path at every measured size. Suspects are unexamined: missing
-  grid-stride/blocking, per-launch NVRTC, sync-per-block, or an accidental
-  host fallback in the reduction path.
-- Acceptance: root cause identified and fixed; bandwidth-paced reduction
-  at 1M+ elements; the Coeus CUDA staging threshold (currently 1048576,
-  covering only the measured-winning range) re-measured and revisited.
+  1M). Host staging beats the CUDA device path at every measured size.
+- Root cause (proven 2026-10-15, same host): `coeus_ops::sum` reshapes to
+  [N] and calls `sum_axis(axis=0)`; the seam ranks to [1,N] and dispatches
+  `axis_reduction_kernel`, which spawns ONE THREAD PER OUTPUT that loops
+  the whole axis serially (`reduction/shaders.rs`). At N=1M one thread
+  executes 1M dependent FP adds. Direct hephaestus-cuda probe (no Coeus):
+  13.39/13.55ms steady-state at [1,1M] — reproduces the 13.5ms exactly.
+  The parallel full reduction on the same box does 1M in ~120us
+  end-to-end (~20us kernel) but is unreachable from Coeus (no seam);
+  launch path is async and NVRTC is cached (ruled out).
+- Fix directions: (A) parallelize the axis kernel (intra-block tree +
+  grid-stride over the axis; `plan_axis_reduction` is CUDA-local in
+  practice — only hephaestus-cuda consumes it); (B) add a Coeus
+  full-reduction seam and route scalar reductions through it (~100x on
+  the measured workload). (A) fixes the class (long-axis multi-output
+  collapses identically); (B) fixes the symptom fastest.
+- Acceptance: root-cause fix landed; bandwidth-paced reduction at 1M+
+  elements; the Coeus CUDA staging threshold (currently 1048576)
+  re-measured and revisited.
 - Dependencies: none. Priority P1; risk: every CUDA reduction pays 10-20x.
 - Verification: device measurement before/after on the same host and
   workload, strict Clippy, independent review.
