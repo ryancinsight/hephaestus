@@ -811,7 +811,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.47.0"
-source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#60af9bad4e30bdd8dc056f49e9311c817ed66158"
+source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#b6e5a54194bdd6bec25307510a4427dd068a5b35"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.47.0"
-source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#60af9bad4e30bdd8dc056f49e9311c817ed66158"
+source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#b6e5a54194bdd6bec25307510a4427dd068a5b35"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -1848,9 +1848,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.53.3"
+version = "1.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
 dependencies = [
  "pin-project-lite",
 ]

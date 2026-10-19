@@ -8,9 +8,8 @@
 <a id="heph-leto-047-compat"></a>
 ## HEPH-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — blocked
 
-- Priority: integration.
+- Priority: integration; target: 0.22.2. Coeus recovery #533 needs this binding after Leto #362.
 - Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
-- Target: 0.22.2. Coeus recovery #533 needs this binding after Leto #362.
 - Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration. Evidence: prior hosted/source receipts remain in `docs/verification/review-source-resolution.md`; current acceptance is pending.
 - Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
 
@@ -23,6 +22,7 @@
 - Acceptance: strict workspace Clippy, complete host and available Metal value/rejection tests, docs/doctests, API comparisons and applicable hosted backend CI on the exact candidate.
 - Dependency: Moirai #623 and Leto #363 are merged at `44a962f0` and `8b4ab407`; the refreshed lock selects all eight provider defaults. Preserve master #494 (`b91180aa`) as a merge parent. All 204 registry records and every Rust source remain identical to that base.
 - Integration record: [PR #493](https://github.com/ryancinsight/hephaestus/pull/493) owns final-head native, portable/Linux-SDK API, hosted backend, fresh-consumer and publication evidence. Merge follows all applicable checks and Leto 0.46 registry receipts; automatic publication is authorized. Manual NVIDIA/AMD hardware execution remains unverified.
+- Blocker/receipts (folded from the retired checklist): record the final-head fresh-consumer run, hosted acceptance, and the six 0.22.0 registry receipts on PR #493; the macOS verification checklist (docs/verification/macos/checklist.md) retains its hardware and kernel scope.
 
 <a id="heph-macos-metal-conformance-1"></a>
 
