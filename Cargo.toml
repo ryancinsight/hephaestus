@@ -77,7 +77,7 @@ themis = { package = "themis-topology", version = "0.11.1", git = "https://githu
 # Keep the operation layer on the same default Leto source identity as the
 # metadata layer.
 leto-ops = { version = "0.46.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "mnemosyne-memory", "topology"] }
-moirai-sync = { version = "0.9.3", git = "https://github.com/ryancinsight/Moirai.git" }
+moirai-sync = { version = "0.10.0", git = "https://github.com/ryancinsight/Moirai.git" }
 # ── Python FFI ──
 # Rust tests embed Python; Maturin >= 1.9.4 selects extension-only linking
 # through PYO3_BUILD_EXTENSION_MODULE for wheel builds.

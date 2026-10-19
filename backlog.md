@@ -1,7 +1,7 @@
 # Backlog — hephaestus
 
 <a id="heph-eunomia-010-cohort"></a>
-## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — source complete
+## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 
 - Priority: correctness.
 - Outcome: Hephaestus 0.22 consumes one Eunomia 0.10/Leto 0.46 provider identity without Rust implementation changes.
@@ -9,6 +9,7 @@
 - Acceptance: strict workspace Clippy, complete host and available Metal value/rejection tests, docs/doctests, API comparisons and applicable hosted backend CI on the exact candidate.
 - Dependency: Moirai #623 and Leto #363 are merged at `44a962f0` and `8b4ab407`; the refreshed lock selects all eight provider defaults. Preserve master #494 (`b91180aa`) as a merge parent. All 204 registry records and every Rust source remain identical to that base.
 - Integration record: [PR #493](https://github.com/ryancinsight/hephaestus/pull/493) owns final-head native, portable/Linux-SDK API, hosted backend, fresh-consumer and publication evidence. Merge follows all applicable checks and Leto 0.46 registry receipts; automatic publication is authorized. Manual NVIDIA/AMD hardware execution remains unverified.
+- Blocker/receipts (folded from the retired checklist): record the final-head fresh-consumer run, hosted acceptance, and the six 0.22.0 registry receipts on PR #493; the macOS verification checklist (docs/verification/macos/checklist.md) retains its hardware and kernel scope.
 
 <a id="heph-macos-metal-conformance-1"></a>
 
