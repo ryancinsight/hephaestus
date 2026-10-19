@@ -10,7 +10,8 @@
 - [x] Pass actual required-device Metal/WGPU and unchanged artifact/lock checks.
 - [x] Pass all five exact-source portable patch API comparisons (223 checks each).
 - [x] Fix seven feature-only CUDA imports and pass strict minimal/default native selections.
-- [ ] Record final CUDA API and hosted final-head gates; retain provider-first availability and pending Aequitas renewal in `docs/verification/moirai-010-cohort.md`.
+- [x] Renew the final CUDA API comparison (223 patch checks) and Rust 1.95 strict modes.
+- [ ] Record hosted final-head gates; retain provider-first availability and pending Aequitas renewal in `docs/verification/moirai-010-cohort.md`.
 
 ## HEPH-LETO-047-COMPAT [patch]
 

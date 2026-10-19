@@ -37,7 +37,11 @@ with strict minimal/default Clippy and the unchanged CUDA native suites. The
 minimal mode previously fails first on the production import and then on six
 test imports; all seven imports now follow their existing cfg uses. Test bodies,
 feature activation and dispatch remain unchanged. Final CUDA API/source and
-hosted receipts are recorded separately. ROCm's production-feature/API check belongs to its existing
+hosted receipts are recorded separately. The final CUDA comparison at
+`893276ca` passes all 223 patch checks (30 tool skips); the other four package
+source trees remain identical to `aecba2ce`. Both CUDA modes pass strict Clippy
+on Rust 1.95 and 1.97. Existing adapterless selections pass 139 minimal and
+250 default cases; these are not NVIDIA hardware execution receipts. ROCm's production-feature/API check belongs to its existing
 Linux SDK lane. This Mac provides no NVIDIA/AMD device execution evidence.
 Provider-first default-branch and registry availability remains an integration
 gate for unseeded consumers. Coeus Miri remains deferred and unverified.

@@ -2,9 +2,9 @@
 
 ## [0.22.2] - Unreleased
 
-- Scope CUDA reduction and decomposition-test imports to the same features as their existing uses, restoring strict no-default all-target diagnostics without changing operations or cases.
-
 ### Fixed
+
+- [patch] Scope CUDA reduction and decomposition-test imports to the same features as their existing uses, restoring strict no-default all-target diagnostics without changing operations or cases.
 
 - [patch] Advance private synchronization dependencies to Moirai-sync 0.10 and
   verify the shared graph with the current Leto 0.47 candidate. Keep the reserved
@@ -13,8 +13,9 @@
 - [patch] Accept Leto/Leto-ops 0.46 and its additive 0.47 line through matching
   `>=0.46.0, <0.48.0` constraints. This preserves existing consumers and lets
   Coeus use the checked borrowed-CSR provider without duplicate layout types.
-  All Rust APIs, implementations, tests and backend features remain unchanged.
-  The committed provider lock continues to follow merged defaults.
+  Rust APIs, operations, test cases and backend features remain unchanged;
+  feature-only imports follow their existing guards. The canonical review lock
+  selects Leto 0.47 and the current Moirai 0.10 default.
 
 
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
