@@ -2,7 +2,8 @@
 
 This continues #497 at reserved 0.22.2. Owner `bb296d724b196e2939d6e68a066aaaf3c92a8194`
 already contains current master `b03e91761cc929d046bd0d911bd573c699560d8e`.
-Every Rust implementation and test remains byte-identical to the owner head.
+Every kernel and test body remains identical to the owner head. The only Rust
+edit scopes CUDA-only/decomposition-only imports to their existing feature guards.
 
 The canonical Moirai-sync requirement advances from 0.9.3 to 0.10.0. Normal
 Cargo selects Moirai `68466225913301d30281b134d42b17c604baf78e`, Leto 0.47.0
@@ -26,12 +27,25 @@ ARM64 Mac verification, with the committed canonical review graph:
 
 The final Leto revision changes documentation only relative to the device-tested
 `b994b32c` source; its Rust and dependency bytes are identical. Native host checks
-also execute after that canonical lock refresh. No numerical/backend implementation
+also execute after that canonical lock refresh. No numerical/backend operation
 changes are part of this migration. Moirai-sync is used in private CUDA pipeline
 cache fields; no new public synchronization type enters the facade.
 
-The exact-source portable API comparison and hosted final-head receipts are
-recorded separately. ROCm's production-feature/API check belongs to its existing
+Five exact-source portable patch API comparisons pass 223 checks each (30 tool
+skips each) at `aecba2ce`. The subsequent CUDA import-only change is checked
+with strict minimal/default Clippy and the unchanged CUDA native suites. The
+minimal mode previously fails first on the production import and then on six
+test imports; all seven imports now follow their existing cfg uses. Test bodies,
+feature activation and dispatch remain unchanged. Final CUDA API/source and
+hosted receipts are recorded separately. ROCm's production-feature/API check belongs to its existing
 Linux SDK lane. This Mac provides no NVIDIA/AMD device execution evidence.
 Provider-first default-branch and registry availability remains an integration
 gate for unseeded consumers. Coeus Miri remains deferred and unverified.
+
+Aequitas #141 proposes law 0.4.0 / binding 0.2.0 at `8c50883a`; ADR 0020,
+owner #140 coordination and review/hosted/release acceptance remain pending.
+This source retains the current coherent 0.3 intermediate graph. No generic
+Quantity::powi or TaggedDimension caller occurs here; `Laplacian2DParams::new`
+exposes Length<f32> at `domain/stencil.rs:32` and must renew its nominal provider
+identity together with Leto's typed constructor after the target is accepted.
+That renewal requires fresh graph/API/native/package qualification.

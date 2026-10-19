@@ -8,7 +8,9 @@
 - [x] Resolve canonical Moirai-sync 0.10 and the reviewed Leto 0.47 source.
 - [x] Verify 444 host/core/conformance tests, strict workspace diagnostics and docs.
 - [x] Pass actual required-device Metal/WGPU and unchanged artifact/lock checks.
-- [ ] Record exact-source API and hosted final-head gates; retain provider-first default/registry limits in `docs/verification/moirai-010-cohort.md`.
+- [x] Pass all five exact-source portable patch API comparisons (223 checks each).
+- [x] Fix seven feature-only CUDA imports and pass strict minimal/default native selections.
+- [ ] Record final CUDA API and hosted final-head gates; retain provider-first availability and pending Aequitas renewal in `docs/verification/moirai-010-cohort.md`.
 
 ## HEPH-LETO-047-COMPAT [patch]
 

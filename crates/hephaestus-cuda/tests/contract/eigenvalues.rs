@@ -1,3 +1,4 @@
+#[cfg(feature = "decomposition")]
 use super::*;
 
 #[cfg(feature = "decomposition")]

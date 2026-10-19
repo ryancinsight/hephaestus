@@ -2,6 +2,8 @@
 
 ## [0.22.2] - Unreleased
 
+- Scope CUDA reduction and decomposition-test imports to the same features as their existing uses, restoring strict no-default all-target diagnostics without changing operations or cases.
+
 ### Fixed
 
 - [patch] Advance private synchronization dependencies to Moirai-sync 0.10 and

@@ -1,3 +1,4 @@
+#[cfg(feature = "decomposition")]
 use super::*;
 
 /// The blocked-LU differential is one shared clause (SUBSTRATE-003): the

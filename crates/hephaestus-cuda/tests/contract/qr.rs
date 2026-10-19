@@ -1,3 +1,4 @@
+#[cfg(feature = "decomposition")]
 use super::*;
 
 /// The blocked-QR differential is one shared clause (SUBSTRATE-003): the

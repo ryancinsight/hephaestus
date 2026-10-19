@@ -11,6 +11,7 @@
 //! Hardware CI sets `HEPHAESTUS_CUDA_REQUIRE_DEVICE=1` so acquisition failure
 //! fails the lane instead of being reported as device evidence.
 
+#[cfg(feature = "decomposition")]
 use hephaestus_core::test_support::assert_rejects;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, ComputeDeviceCapabilities, DenseVectorOps, DeviceBuffer,

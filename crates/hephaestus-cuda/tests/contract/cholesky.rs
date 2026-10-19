@@ -1,3 +1,4 @@
+#[cfg(feature = "decomposition")]
 use super::*;
 
 /// The blocked-Cholesky differential is one shared clause (SUBSTRATE-003):

@@ -1,7 +1,9 @@
 use eunomia::Pod;
+#[cfg(feature = "cuda")]
+use hephaestus_core::HephaestusError;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    IdentityToken, OpIdentity, Result, reduction_pass_count, validate_reduction_width,
+    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, IdentityToken,
+    OpIdentity, Result, reduction_pass_count, validate_reduction_width,
 };
 
 use crate::CudaDevice;
