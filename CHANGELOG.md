@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — review-source continuation
+
+### Changed
+- [patch] Name existing Leto362 review sources for fresh current-Moirai resolution;
+  retain0.22.2, all backend bytes and exact-head/platform release gates.
+
 ## [0.22.2] - Unreleased
 
 ### Fixed

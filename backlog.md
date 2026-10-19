@@ -1,21 +1,21 @@
 # Backlog — hephaestus
 
 <a id="heph-moirai-010-cohort"></a>
-## HEPH-MOIRAI-010-COHORT — Current synchronization provider [patch] — review
-
-- Target 0.22.2 in #497: Moirai-sync 0.10, current master, canonical Leto 0.47 review lock; preserve backend code, features and gates. Evidence: `docs/verification/moirai-010-cohort.md`; default/registry availability remains provider-first.
+## HEPH-MOIRAI-010-COHORT — Current provider and fresh review sources [patch] — blocked
+- Priority: integration; target0.22.2 in497, current Moirai0.10; preserve all backend code, features and gates. Fresh normal Leto362 branch selectors resolve current0.47 without inherited pins; remove them after provider-first default integration.
+- Evidence: `docs/verification/moirai-010-cohort.md` and `docs/verification/review-source-resolution.md`; final metadata review, hosted/platform acceptance and accepted Aequitas141 renewal remain. No merge/publication.
 
 <a id="heph-leto-047-compat"></a>
-## HEPH-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — review
+## HEPH-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — blocked
 
+- Priority: integration.
 - Outcome: retain Leto 0.46 compatibility and admit 0.47 through one canonical provider identity, without Rust or backend changes.
 - Target: 0.22.2. Coeus recovery #533 needs this binding after Leto #362.
-- Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration.
-- Evidence: `e867be0d` passes every actual hosted native/strict/API/device-capable gate and fresh review-source resolution; Coeus consumes the exact 0.22.2 source in its passing native/strict/doc graph. Both concurrent CUDA fixes remain intact.
+- Acceptance: unchanged Rust/source identities; canonical locked resolution; native, strict Clippy, exact API and fresh-consumer checks; real 0.47 downstream integration. Evidence: prior hosted/source receipts remain in `docs/verification/review-source-resolution.md`; current acceptance is pending.
 - Boundary: no main merge, registry publication or Pages authorization. See [verification](docs/verification/leto-borrowed-csr-compatibility.md).
 
 <a id="heph-eunomia-010-cohort"></a>
-## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — source complete
+## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 
 - Priority: correctness.
 - Outcome: Hephaestus 0.22 consumes one Eunomia 0.10/Leto 0.46 provider identity without Rust implementation changes.

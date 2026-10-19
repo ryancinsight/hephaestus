@@ -2,6 +2,12 @@
 
 **Target Version**: 0.22.2
 
+## HEPH-REVIEW-SOURCE-RESOLUTION [patch]
+- [x] Preserve owner497's current-Moirai update and all runtime bytes.
+- [x] Resolve a fresh normal graph through existing Leto362 review sources.
+- [ ] Review exact metadata head and complete platform/hosted acceptance.
+- [ ] Renew downstream Athena and accepted Aequitas141 consumers in order.
+
 ## HEPH-MOIRAI-010-COHORT [patch]
 
 - [x] Preserve owner/current-master history and the reserved 0.22.2 version.
@@ -34,6 +40,6 @@
 - [x] Integrate Moirai/Leto and refresh all eight default provider identities without changing registry records.
 - [ ] Record final-head fresh-consumer, hosted acceptance and six 0.22.0 registry receipts in [PR #493](https://github.com/ryancinsight/hephaestus/pull/493).
 
-The [macOS verification checklist](docs/verification/macos/checklist.md) retains
+The [macOS verification checklist](macos/checklist.md) retains
 its existing hardware and kernel scope; this increment changes dependency
 compatibility and the graph used for verification.

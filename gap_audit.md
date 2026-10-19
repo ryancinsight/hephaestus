@@ -1,5 +1,10 @@
 # Gap Audit - hephaestus
 
+## HEPH-REVIEW-SOURCE-RESOLUTION [patch] — review
+Fresh dependency discovery requires explicit existing Leto362 branch selectors;
+inherited lock objects alone do not supply current-default availability. See
+`docs/verification/review-source-resolution.md`; preserve owner runtime and gates.
+
 ## HEPH-MOIRAI-010-COHORT — stale synchronization requirement [patch]
 
 - `^0.9.3` excludes the current Moirai-sync default. The 0.22.2 continuation requires 0.10 and resolves the reviewed Leto 0.47 source through canonical Git URLs, without source overrides or backend changes.
@@ -9,14 +14,14 @@
 
 - Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.
 - Resolution: a bounded compatible interval on both Leto layers, preserving the currently merged graph and every Rust implementation/test byte.
-- Version ownership: concurrent main publishes 0.22.1, so this compatibility patch targets 0.22.2 and preserves current CUDA fixes. All actual source/hosted checks and the downstream native/strict/doc graph pass at `e867be0d`; default/registry availability remains provider-first. [The record](docs/verification/leto-borrowed-csr-compatibility.md) separates prior/current revision claims.
+- The original cohort source/version and acceptance record is retained in `docs/verification/review-source-resolution.md`; current review and provider-first gates remain pending.
 
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.
 - Verification boundary: old backend lanes substituted stale sibling Hermes/Mnemosyne checkouts and rewrote the lock. All lanes now use the committed Git graph with `--locked`; no device assertion, feature or timeout changes.
 - API boundary: ROCm intentionally rejects its production feature on macOS. Its complete API comparison runs with the actual Linux SDK; the other five package surfaces remain in the shared exact-source gate. Native ARM executes 959 tests with required Metal, zero skips; strict Clippy, docs and doctests pass.
-- Integration: master #494 (`b91180aa`) advances the same numeric providers; retain it as a parent and refresh all eight Git identities to current defaults, including merged Moirai `44a962f0`, Leto `8b4ab407` and Hermes `ac60146a`. All 204 registry records and every Rust source match that base.
+- The original cohort source/version and acceptance record is retained in `docs/verification/review-source-resolution.md`; current review and provider-first gates remain pending.
 - Residual: [PR #493](https://github.com/ryancinsight/hephaestus/pull/493) records the refreshed head's native/API/hosted acceptance, unseeded-consumer verification and actual ordered 0.22 publication receipts. Native Metal and adapterless CUDA/ROCm evidence do not establish NVIDIA/AMD hardware execution.
 
 ## [HEPH-WGPU-READBACK-COMPLETION-407] Mapping callback publication [patch] — resolved
