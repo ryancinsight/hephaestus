@@ -1,5 +1,10 @@
 # Gap Audit - hephaestus
 
+## HEPH-MOIRAI-010-COHORT — stale synchronization requirement [patch]
+
+- `^0.9.3` excludes the current Moirai-sync default. The 0.22.2 continuation requires 0.10 and resolves the reviewed Leto 0.47 source through canonical Git URLs, without source overrides or backend changes.
+- Native host/core/conformance, strict workspace diagnostics and docs pass. Required-device/API/hosted acceptance and provider-first default availability remain distinct; see `docs/verification/moirai-010-cohort.md`.
+
 ## HEPH-LETO-047-COMPAT — additive provider rejection [patch]
 
 - Finding: `^0.46.0` excludes Leto's compatible 0.47 borrowed-CSR addition and prevents one source identity across the Coeus/array/device graph.

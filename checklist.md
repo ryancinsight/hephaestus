@@ -2,6 +2,14 @@
 
 **Target Version**: 0.22.2
 
+## HEPH-MOIRAI-010-COHORT [patch]
+
+- [x] Preserve owner/current-master history and the reserved 0.22.2 version.
+- [x] Resolve canonical Moirai-sync 0.10 and the reviewed Leto 0.47 source.
+- [x] Verify 444 host/core/conformance tests, strict workspace diagnostics and docs.
+- [x] Pass actual required-device Metal/WGPU and unchanged artifact/lock checks.
+- [ ] Record exact-source API and hosted final-head gates; retain provider-first default/registry limits in `docs/verification/moirai-010-cohort.md`.
+
 ## HEPH-LETO-047-COMPAT [patch]
 
 - [x] Audit current defaults, active ownership and the unchanged public provider vocabulary.

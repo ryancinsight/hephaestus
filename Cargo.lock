@@ -810,8 +810,8 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
+version = "0.47.0"
+source = "git+https://github.com/ryancinsight/leto.git#b44b9f07b0fefab0f576ba971051514aca1c8ad6"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -822,8 +822,8 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#8b4ab407a90c15205405fa6c4d02d04d7a3835ad"
+version = "0.47.0"
+source = "git+https://github.com/ryancinsight/leto.git#b44b9f07b0fefab0f576ba971051514aca1c8ad6"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -1029,8 +1029,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-core"
-version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
+version = "0.10.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#68466225913301d30281b134d42b17c604baf78e"
 dependencies = [
  "bytemuck",
  "libc",
@@ -1041,8 +1041,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-sync"
-version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
+version = "0.10.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#68466225913301d30281b134d42b17c604baf78e"
 dependencies = [
  "libc",
  "moirai-core",
@@ -1051,8 +1051,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-utils"
-version = "0.9.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#44a962f0fe5888a1bbbfd5da210ef4128686ada5"
+version = "0.10.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#68466225913301d30281b134d42b17c604baf78e"
 
 [[package]]
 name = "munge"
@@ -1794,8 +1794,8 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 
 [[package]]
 name = "themis-topology"
-version = "0.11.1"
-source = "git+https://github.com/ryancinsight/themis#63c544108fc0e8408bf2096ddaf8e99dfa49f90c"
+version = "0.11.2"
+source = "git+https://github.com/ryancinsight/themis#5595fc0a5fdae7d9c017a26023f8960b8f8511fb"
 dependencies = [
  "libc",
  "melinoe",

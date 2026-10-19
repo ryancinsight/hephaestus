@@ -1,5 +1,10 @@
 # Backlog — hephaestus
 
+<a id="heph-moirai-010-cohort"></a>
+## HEPH-MOIRAI-010-COHORT — Current synchronization provider [patch] — review
+
+- Target 0.22.2 in #497: Moirai-sync 0.10, current master, canonical Leto 0.47 review lock; preserve backend code, features and gates. Evidence: `docs/verification/moirai-010-cohort.md`; default/registry availability remains provider-first.
+
 <a id="heph-leto-047-compat"></a>
 ## HEPH-LETO-047-COMPAT — Accept the additive borrowed-CSR provider [patch] — review
 

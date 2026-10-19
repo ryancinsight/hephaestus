@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- [patch] Advance private synchronization dependencies to Moirai-sync 0.10 and
+  verify the shared graph with the current Leto 0.47 candidate. Keep the reserved
+  0.22.2 version, public device contracts and both merged CUDA fixes intact.
+
 - [patch] Accept Leto/Leto-ops 0.46 and its additive 0.47 line through matching
   `>=0.46.0, <0.48.0` constraints. This preserves existing consumers and lets
   Coeus use the checked borrowed-CSR provider without duplicate layout types.
