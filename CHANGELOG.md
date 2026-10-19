@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.22.2] - Unreleased
+
+### Changed
+
+- [patch] Retain Leto/Leto-ops 0.46 while admitting the reviewed 0.47 provider.
+- [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
+  Keep the current locked 0.10 graph buildable; tighten final provider floors
+  after the approved releases and canonical consumer checks complete.
+- Require the Aequitas 0.3.1 compatibility bridge and admit the approved 0.4 cohort.
+- Keep NumPy, PyO3 and pyo3-build-config on matching 0.29/0.30 families as
+  selected by Eunomia's optional NumPy boundary; preserve all Python/GPU features.
+
 SemVer 2.0.0; pre-1.0 minor bumps may include breaking changes (documented).
 
 ## [0.22.0] - Unreleased

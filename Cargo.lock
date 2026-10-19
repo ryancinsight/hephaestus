@@ -19,8 +19,8 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aequitas"
-version = "0.3.0"
-source = "git+https://github.com/ryancinsight/aequitas#84c5f03514ebe69473bbaa7cd51828f1ed3ca068"
+version = "0.3.1"
+source = "git+https://github.com/ryancinsight/aequitas#1bc917c4c909596b4fb16b4b6c239587f442c1a1"
 dependencies = [
  "eunomia",
  "typenum",
@@ -574,7 +574,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-compute"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "hephaestus-core",
  "hephaestus-cuda",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-conformance"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-core"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-cuda"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-host"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "eunomia",
  "hephaestus-conformance",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-metal"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-python"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "eunomia",
  "hephaestus-core",
@@ -661,12 +661,12 @@ dependencies = [
  "leto-ops",
  "numpy",
  "pyo3",
- "pyo3-build-config",
+ "pyo3-build-config 0.30.1",
 ]
 
 [[package]]
 name = "hephaestus-rocm"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "cubecl-hip-sys",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "aequitas",
  "criterion",
@@ -811,7 +811,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#d3feb7162a51e2e44d2243919e96df1624ab9116"
+source = "git+https://github.com/ryancinsight/leto.git#545ccb132eb42139e90cebc96659ebda85339453"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.46.0"
-source = "git+https://github.com/ryancinsight/leto.git#d3feb7162a51e2e44d2243919e96df1624ab9116"
+source = "git+https://github.com/ryancinsight/leto.git#545ccb132eb42139e90cebc96659ebda85339453"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -1176,7 +1176,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "pyo3",
- "pyo3-build-config",
+ "pyo3-build-config 0.29.3",
  "rustc-hash 2.1.3",
 ]
 
@@ -1435,7 +1435,7 @@ dependencies = [
  "libc",
  "once_cell",
  "portable-atomic",
- "pyo3-build-config",
+ "pyo3-build-config 0.29.3",
  "pyo3-ffi",
  "pyo3-macros",
 ]
@@ -1450,13 +1450,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyo3-build-config"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70130e2b6dd1ee589a8788026a429561ca5c40fa7a2fa7914c2282eddae24700"
+dependencies = [
+ "target-lexicon",
+]
+
+[[package]]
 name = "pyo3-ffi"
 version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfc0b8e19df29aad7086cf977bb0c2a2f143e30567eb113e9cf72b62ca698330"
 dependencies = [
  "libc",
- "pyo3-build-config",
+ "pyo3-build-config 0.29.3",
 ]
 
 [[package]]
@@ -1848,9 +1857,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.53.3"
+version = "1.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
 dependencies = [
  "pin-project-lite",
 ]
