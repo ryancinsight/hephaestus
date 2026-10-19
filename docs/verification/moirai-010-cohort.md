@@ -46,8 +46,8 @@ Linux SDK lane. This Mac provides no NVIDIA/AMD device execution evidence.
 Provider-first default-branch and registry availability remains an integration
 gate for unseeded consumers. Coeus Miri remains deferred and unverified.
 
-Aequitas #141 proposes law 0.4.0 / binding 0.2.0 at `8c50883a`; ADR 0020,
-owner #140 coordination and review/hosted/release acceptance remain pending.
+Aequitas #141 proposes law 0.4.0 / binding 0.2.0 at `8c50883a`; ADR 0020 and the normal version plan are approved by the user on2026-10-19;
+owner #140 source coordination and actual review/hosted/release gates remain.
 This source retains the current coherent 0.3 intermediate graph. No generic
 Quantity::powi or TaggedDimension caller occurs here; `Laplacian2DParams::new`
 exposes Length<f32> at `domain/stencil.rs:32` and must renew its nominal provider

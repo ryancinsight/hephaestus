@@ -23,3 +23,24 @@ That dependency is explicit and is not a permanent older-provider workaround.
 No merge, release dispatch, tag, publication, credential or service action is
 performed. Coeus Miri remains deferred and unverified; this Mac does not supply
 NVIDIA/AMD runtime verification.
+
+Independent review receipt `1703948fe524f2273b952bbcab35e2fe4d5702dca5f957c961d99110bc517eaf`
+technically clears the earlier pushed heads and the supplied frozen selector/
+binding trees for consolidation. It excludes this subsequent CSR/module/record
+consolidation and requires a new exact-head review. Its P2 findings concern the
+stale PR descriptions: historical performance/hosted claims and unchanged-source/
+lock claims must be replaced with the actual final source and gate evidence.
+The server-side required-status configurations remain unverified after denied
+403 reads. That access boundary is not retried or routed around. No merge occurs.
+
+The final fresh canonical review lock selects Leto/core-ops0.47 at
+`60af9bad4e30bdd8dc056f49e9311c817ed66158` through the same existing branch
+selector for both layers. The current native/private sync provider stays
+Moirai0.10 at `68466225`. The inherited 228-external-record byte-preservation
+claim does not describe this graph: normal fresh resolution changes external
+records. Relative to main `b03e9176`, seven Rust files change only feature-scoped
+imports; function/test bodies remain unchanged. Exact lock/source deltas and
+final-head native/API/hosted results are recorded in the consolidation receipt.
+
+The current normal version plan and ADR0020 are approved. The final public
+PR evidence description and combined independent review remain separate gates.

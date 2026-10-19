@@ -811,7 +811,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.47.0"
-source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#b44b9f07b0fefab0f576ba971051514aca1c8ad6"
+source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#60af9bad4e30bdd8dc056f49e9311c817ed66158"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.47.0"
-source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#b44b9f07b0fefab0f576ba971051514aca1c8ad6"
+source = "git+https://github.com/ryancinsight/leto.git?branch=codex%2Fsparse-forward-contracts#60af9bad4e30bdd8dc056f49e9311c817ed66158"
 dependencies = [
  "eunomia",
  "hermes-simd",

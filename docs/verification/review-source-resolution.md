@@ -34,8 +34,9 @@ package publication, service action or credential change occurs.
 
 [Aequitas141](https://github.com/ryancinsight/aequitas/pull/141) proposes law0.4.0
 and binding0.2.0; implementation8c50883a01516aab8a22323d817cb8f27f59b307
-is independently reviewed separately. ADR0020 acceptance, owner140 version
-coordination and hosted/free-threaded/book gates remain pending. Current0.3 is
+is independently reviewed separately. The user approves ADR0020 and the normal version/common NumPy-PyO3.30 plan
+on2026-10-19. Owner140 source coordination and actual hosted/free-threaded/book
+gates remain pending. Current0.3 is
 the verified public cohort for this checkpoint, not a permanent older-version
 workaround. Do not consume an unaccepted candidate or edit its provider sources.
 
