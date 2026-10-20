@@ -12,9 +12,11 @@
 
 use hephaestus_core::{ComputeDevice, DialectScalar, ElementwiseOps, GeluGradOp, UnaryExpr};
 
+use super::runner::with_normal_erfc_result;
+
 use super::{
-    SweepDialect, above_flush_floor, assert_unary_sweep_abs_within, assert_unary_sweep_within,
-    sweep_inputs, without_subnormals,
+    SweepDialect, assert_unary_sweep_abs_within, assert_unary_sweep_within, sweep_inputs,
+    without_subnormals,
 };
 
 /// 2048 points over each of `[-3, -1.4]` and `[-0.1, 4]`, 256 over the
@@ -82,27 +84,30 @@ fn far_inputs() -> Vec<f32> {
         &[
             -7.0,  // far-band handoff (also covered by the mid sweep)
             -10.0, // deep tail interior
-            -12.5, // WGSL flush floor: the last swept subnormal-free input
-            -12.6, -13.0, // past the floor (CUDA/HIP only)
+            -12.5, // former fixed floor; the erfc intermediate stays normal below it
+            -12.6, -13.0, // normal erfc intermediate and final result on WGSL too
         ],
     )
 }
 
 fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
-    above_flush_floor(&without_subnormals(inputs), -12.5)
+    with_normal_erfc_result(&without_subnormals(inputs), |x| {
+        -x * core::f32::consts::FRAC_1_SQRT_2
+    })
 }
 
 /// Sweep [`GeluGradOp`](hephaestus_core::GeluGradOp) on one backend.
 ///
-/// Bounds grade with the `2z²` conditioning like `gelu.rs`: main `16`
-/// ULP, mid `64` ULP on the C dialects and `128` ULP on WGSL, far `256`
-/// ULP. The HIP `erfcf` row is the CUDA row carried unconfirmed — no
-/// HIP-published row was found; any excess on hardware CI is a finding.
-/// The root window sweeps separately at the absolute floor: CUDA `2e-7`,
-/// HIP `2e-7`, WGSL `3e-7` (the forms' absolute rounding over unit-scale
-/// terms, plus margin). WGSL additionally drops `x < -12.5`, where the
-/// true result is subnormal and flushing is permitted; CUDA and HIP sweep
-/// the tail as IEEE.
+/// Existing targets remain unchanged: all main bands `16` ULP; CUDA/HIP
+/// mid `64`, WGSL mid `128`, all far bands `256` ULP. The root window keeps
+/// its absolute floor: CUDA/HIP `2e-7`, WGSL `3e-7`. The HIP row remains
+/// unconfirmed on hardware; these targets have no portable composition proof.
+/// WGSL combines the erfc and Gaussian terms before halving, so the normal
+/// result at `-13` does not depend on a subnormal half-erfc intermediate.
+/// Tail selection follows normality of `erfc(-x/√2)`, retaining `-12.6` and
+/// `-13`. Farther negative inputs whose erfc intermediate is subnormal remain
+/// unqualified even when the final derivative is normal. CUDA and HIP retain
+/// their IEEE tail sweep.
 pub fn assert_gelu_grad_sweep<D, E>(device: &D, ops: &E, dialect: SweepDialect)
 where
     D: ComputeDevice,

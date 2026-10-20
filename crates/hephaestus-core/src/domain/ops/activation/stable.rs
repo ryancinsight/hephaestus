@@ -9,9 +9,8 @@
 //! CUDA verifies them on-device, and the string pins record the shared
 //! spelling until HIP hardware says otherwise.
 //!
-//! The WGSL spellings below are master's own, moved verbatim out of the
-//! literal table (which cannot hold macro-built C strings): this module
-//! changes no WGSL rendering.
+//! The WGSL GELU-tanh gradient also bounds its eagerly evaluated operands
+//! before polynomial evaluation and uses a nonoverflowing sigmoid product.
 
 use super::super::UnaryExpr;
 use super::super::{GeluTanhGradOp, GeluTanhOp, MishGradOp, MishOp, SiluGradOp, SiluOp};
@@ -257,14 +256,70 @@ impl UnaryExpr<HipC> for GeluTanhOp {
     const EXPR: &'static str = c_gelu_tanh_expr!();
 }
 
-// `s + 2x·s(1−s)·c0·(1 + 3c1·x²)` in sigmoid form, taking the input per ADR
-// 0061 Decision 7. `1 − s` goes direct below `w = 2.47` and independent
-// above (`GELU_TANH_GRAD_CROSSOVER`). Either saturation at exactly zero
-// returns `s`: past `|x| ≈ 5e19` the `x²` factor overflows, and forming the
-// product would make `0·inf` (the value function's early-out, mirrored
-// here). Both infinities guard explicitly.
+// WGSL select evaluates both arms. Bound every polynomial operand first:
+// q=clamp(x,-40,40), |w|<4632, q²<=1600. With e=exp(-|w|), e is in [0,1]
+// and s(1-s)=e/(1+e)² uses neither an overflowing exp nor cancellation.
+// Every intermediate stays finite for finite x, including discarded arms.
+// For |x|>=40, the exact derivative differs from its 0/1 limit by less than
+// 14000*exp(-4600)<1e-1990. The envelope decreases farther out because its
+// cubic exponential dominates the degree-three prefactor. This is below half
+// a binary64 subnormal ULP, so the same saturation is valid for both lane
+// widths. The outer selects enforce those exact limits only after making
+// their eagerly evaluated alternative safe. C/HIP retain their lazy arms.
+macro_rules! wgsl_gelu_tanh_grad_x {
+    () => {
+        "clamp(x, -40.0, 40.0)"
+    };
+}
+
+macro_rules! wgsl_gelu_tanh_grad_e {
+    () => {
+        concat!(
+            "exp(-abs(2.0 * (0.7978845608 * (",
+            wgsl_gelu_tanh_grad_x!(),
+            " + 0.044715 * ",
+            wgsl_gelu_tanh_grad_x!(),
+            " * ",
+            wgsl_gelu_tanh_grad_x!(),
+            " * ",
+            wgsl_gelu_tanh_grad_x!(),
+            "))))"
+        )
+    };
+}
+
+macro_rules! wgsl_gelu_tanh_grad_s {
+    () => {
+        concat!(
+            "select((",
+            wgsl_gelu_tanh_grad_e!(),
+            ") / (1.0 + ",
+            wgsl_gelu_tanh_grad_e!(),
+            "), 1.0 / (1.0 + ",
+            wgsl_gelu_tanh_grad_e!(),
+            "), x >= 0.0)"
+        )
+    };
+}
+
 impl UnaryExpr<Wgsl> for GeluTanhGradOp {
-    const EXPR: &'static str = "select(select((1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) + 2.0 * x * (1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * (1.0 / (1.0 + exp(2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * 0.7978845608 * (1.0 + 0.134145 * x * x), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)";
+    const EXPR: &'static str = concat!(
+        "select(select((",
+        wgsl_gelu_tanh_grad_s!(),
+        " + (2.0 * ",
+        wgsl_gelu_tanh_grad_x!(),
+        ") * ((",
+        wgsl_gelu_tanh_grad_e!(),
+        ") / ((1.0 + ",
+        wgsl_gelu_tanh_grad_e!(),
+        ") * (1.0 + ",
+        wgsl_gelu_tanh_grad_e!(),
+        "))) * 0.7978845608 * (1.0 + 0.134145 * ",
+        wgsl_gelu_tanh_grad_x!(),
+        " * ",
+        wgsl_gelu_tanh_grad_x!(),
+        ")), 1.0, x >= 40.0), 0.0, x <= -40.0)"
+    );
 }
 impl UnaryExpr<CudaC> for GeluTanhGradOp {
     const EXPR: &'static str = c_gelu_tanh_grad_expr!();

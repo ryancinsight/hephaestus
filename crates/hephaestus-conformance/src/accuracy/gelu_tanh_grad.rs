@@ -3,14 +3,12 @@
 //! The renderings take the input (ADR 0061 Decision 7) and rewrite the
 //! textbook `0.5·(1+tanh(z)) + 0.5·x·(1-tanh(z)²)·z'(x)` around the uniform
 //! stabilized sigmoid `s = sigmoid(2z)`: `s + 2·x·s·(1-s)·c0·(1+3·c1·x²)`
-//! with `1 - s` direct below `w = 2.47` and independent (`sigmoid(-w)`)
-//! above (`GELU_TANH_GRAD_CROSSOVER`, the measured optimum — the direct
-//! branch keeps the single-form multiplication order, the independent
-//! branch pre-groups the saturation). Either saturation at exactly zero
-//! returns `s`: past `|x| ≈ 5e19` the `x²` factor overflows, and forming
-//! the product would make `0·∞`. Both infinities guard explicitly (`+∞`
-//! to `1`, `-∞` to `0`); the unguarded form makes `±∞·0`. The sweep
-//! covers the crossover, the cubic-driven tail, the structural specials,
+//! in the C dialects, with their existing crossover and short-circuit
+//! saturation guards. WGSL uses `e = exp(-abs(2z))`, `s·(1-s) = e/(1+e)²`,
+//! and bounds the polynomial argument before eager evaluation. Explicit
+//! limits at `x <= -40` and `x >= 40` preserve the rounded f64/f32 limits
+//! without forming a finite-input overflow. The sweep covers the crossover,
+//! the cubic-driven tail, finite saturation controls, structural specials,
 //! and — absolutely — the root window near `x = -0.7525`, where relative
 //! ULP scoring is vacuous. The negative side grades by `|x|³`
 //! conditioning, as `gelu_tanh.rs` does.
@@ -108,8 +106,9 @@ fn far_inputs() -> Vec<f32> {
     )
 }
 
-fn finite_saturation_inputs() -> [f32; 12] {
+fn finite_saturation_inputs() -> [f32; 18] {
     let edge = 20.0_f32;
+    let handoff = 40.0_f32;
     [
         -edge.next_up(),
         -edge,
@@ -117,6 +116,12 @@ fn finite_saturation_inputs() -> [f32; 12] {
         edge.next_down(),
         edge,
         edge.next_up(),
+        -handoff.next_up(),
+        -handoff,
+        -handoff.next_down(),
+        handoff.next_down(),
+        handoff,
+        handoff.next_up(),
         -1e20,
         1e20,
         -1e30,

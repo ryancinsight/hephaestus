@@ -1,5 +1,33 @@
 # Backlog — hephaestus
 
+<a id="heph-kernel-tail-accuracy"></a>
+## HEPH-KERNEL-TAIL-ACCURACY — shipped unary findings [patch] — todo (device/portable qualification pending)
+
+- Priority: correctness. Target: 0.27.1; private correction only.
+- Finding 1: former erfc 8.9 and GELU/gradient -12.5 filters exclude normal
+  controls. Restore reference-normal erfc coverage (9/9.19, -12.6/-13) and
+  group gradient terms before halving at -13. Normal final values farther
+  into the subnormal-erfc-intermediate interval remain unqualified.
+- Finding 2: WGSL GELU-tanh gradient overflows on finite huge inputs despite
+  outer selects. Bound operands before eager evaluation, use a nonoverflowing
+  sigmoid product, and retain saturation/handoff/ordinary controls under
+  unchanged targets. CPU/source checks do not qualify devices or performance.
+- Finding 3: six final-source allowed-intrinsic countermodels exceed existing
+  erfc/GELU/softplus/SiLU/Mish/Mish-gradient targets. Portable composition
+  remains open and separate; preserve strict tests. The owner/coordinator must
+  select controlled intrinsic budgets or adapter/driver/compiler qualification.
+- Preserved final-tree sampled evidence: WGPU 116/116 and Metal 112/112 plus
+  217/217 pass; overlapping invocations are not summed. Historical Mish
+  failures are not attributed to the final source.
+- Execution limit: directed Metal acquisition is AdapterUnavailable, 0/27 lanes
+  executed; no retry through escalation, another adapter or a service.
+- Acceptance: independent exact-diff review, applicable CPU/API/package/device
+  gates, workflow/deployment assessment, current owner/base and consumer graph
+  reconciliation before public action/release. #508 retained reductions remain untouched. Coeus #585/Miri, FFI/Python, service/process and Harmonia holds remain.
+- Detail: [analysis](docs/verification/accuracy/design.md) and
+  [active checklist](docs/verification/accuracy/checklist.md).
+
+
 <a id="heph-eunomia-010-cohort"></a>
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 

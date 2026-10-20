@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.27.1] - Unreleased
+
+### Fixed
+
+- [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
+  evaluation and use a nonoverflowing sigmoid product. Finite saturated
+  inputs keep their rounded zero/one limits, including both signs of
+  `1e20`, `1e30`, and the largest finite binary32 value.
+- [patch] Restore normal erfc/GELU/gradient tail controls using reference
+  erfc-intermediate normality; combine the GELU-gradient terms before
+  halving to avoid the subnormal half-erfc at `x = -13`. Keep all existing
+  ULP/absolute targets. Device acceptance is pending; farther normal final
+  results with subnormal erfc intermediates remain unqualified.
+
+### Verification limits
+
+- [patch] Track all three shipped 0.26 findings in the kernel-tail backlog.
+  Existing sampled WGSL targets lack a portable composition proof; six
+  allowed-intrinsic countermodels remain open. CPU arithmetic/source checks
+  do not establish device accuracy or performance. No release is qualified
+  by this private correction alone.
+
+
 ## [0.27.0] - Unreleased
 
 ### Added

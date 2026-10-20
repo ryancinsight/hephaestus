@@ -42,13 +42,15 @@ impl UnaryExpr<CudaC> for GeluOp {
 // Exact GELU gradient: the `Φ` term reuses `GeluOp`'s Chebyshev composer
 // verbatim — zero new coefficients — and adds the Gaussian term once
 // (it needs no correction: its decay is the true asymptotic). Both
-// infinities guard explicitly. The C spelling likewise calls the native
-// `erfc`/`exp` builtins unsuffixed.
+// infinities guard explicitly. WGSL combines the two normal terms before
+// halving: at x=-13, erfc is normal but 0.5*erfc is subnormal and may flush
+// even though the final gradient is normal. The C spelling retains native
+// `erfc`/`exp` and its IEEE intermediate behavior.
 impl UnaryExpr<Wgsl> for GeluGradOp {
     const EXPR: &'static str = concat!(
-        "select(select((0.5 * ",
+        "select(select((0.5 * (",
         wgsl_gelu_erfc_expr!(),
-        " + (x) * exp(-(0.5 * (x) * (x))) * 0.3989422804014327), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
+        " + (x) * (2.0 * exp(-(0.5 * (x) * (x)))) * 0.3989422804014327)), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
