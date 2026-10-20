@@ -116,14 +116,14 @@ fn far_inputs() -> Vec<f32> {
 /// sigmoid, the sum, plus margin); HIP `8` ULP (the CUDA rows carried
 /// unconfirmed — any excess on hardware CI is a finding); WGSL `32` ULP
 /// (the `tanh` term at two-band softplus plus driver grade above
-/// `sp = 0.036` — past the bad zone four sweep rounds pin at
-/// `x = -3.40` on both CI drivers — and the corrected middle arm
-/// below: `t1` at Taylor `3.9` plus fragment plus assembly (`5.2` at
-/// `0.456` sensitivity), `w2` at assembly `3.0` (`4.4` at `1.45`
+/// `sp = 0.064` — past the bad zone five sweep rounds pin at
+/// `x = -2.89` — and the second-order middle arm below: `t2` at
+/// Taylor `0.05` plus fragment plus assembly (`9.1` at `0.63`
+/// sensitivity), `w2` at assembly `3.0` (`4.9` at `1.63`
 /// sensitivity), and the sigmoid at the RECORDED small-arg `exp`
 /// grade (`≈ 8` ULP on NVIDIA, inferred from the round-5 local
-/// failure — `11.6` at `1.45` sensitivity — with Apple and lavapipe
-/// running tighter): `≈ 23` worst-case on the loosest known `exp`,
+/// failure — `13.0` at `1.63` sensitivity — with Apple and lavapipe
+/// running tighter): `≈ 27` worst-case on the loosest known `exp`,
 /// plus margin. The `sech²` term and the sum fold into the assembly
 /// count. The root
 /// window sweeps separately at the absolute floor: CUDA `2e-7`, HIP
