@@ -208,9 +208,21 @@ fn map_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
 }
 
 pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
-    device: RocmDevice,
+    resources: MapReductionResources<T>,
     a: &'a RocmBuffer<T>,
     b: &'a RocmBuffer<T>,
+    _operation: PhantomData<Op>,
+}
+
+/// Owned dispatch resources behind the borrowing and retained map-reduction
+/// plans.
+///
+/// Both plans launch through [`MapReductionResources::launch`], so their
+/// dispatches cannot drift apart: the borrowing form passes its borrowed
+/// operands' pointers, the retained form passes the pointers its caller
+/// presents after the provenance check.
+pub(crate) struct MapReductionResources<T> {
+    device: RocmDevice,
     meta: MapReductionMeta,
     partial: RocmBuffer<T>,
     kernel: Option<Arc<RocmKernel>>,
@@ -218,19 +230,14 @@ pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
     width: BlockWidth,
     shared_bytes: u32,
     reduction: Option<PreparedReductionPlan<T>>,
-    _operation: PhantomData<Op>,
 }
 
-impl<Op, T, const N: usize> PreparedMapReduction<'_, Op, T, N>
-where
-    Op: MapReductionOp,
-    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
-{
-    pub(crate) fn dispatch(&self) -> Result<()> {
+impl<T> MapReductionResources<T> {
+    fn launch(&self, a_raw: DevicePtr, b_raw: DevicePtr) -> Result<()> {
         if let Some(kernel) = &self.kernel {
             let mut meta = self.meta;
-            let mut a_ptr: DevicePtr = self.a.raw();
-            let mut b_ptr: DevicePtr = self.b.raw();
+            let mut a_ptr: DevicePtr = a_raw;
+            let mut b_ptr: DevicePtr = b_raw;
             let mut output_ptr: DevicePtr = self.partial.raw();
             let mut args: [*mut core::ffi::c_void; 4] = [
                 core::ptr::addr_of_mut!(meta)
@@ -255,17 +262,105 @@ where
         Ok(())
     }
 
-    pub(crate) fn output(&self) -> &RocmBuffer<T> {
+    fn output(&self) -> &RocmBuffer<T> {
         self.reduction
             .as_ref()
             .map_or(&self.partial, PreparedReductionPlan::output)
     }
 
-    pub(crate) fn into_output(self) -> RocmBuffer<T> {
+    fn into_output(self) -> RocmBuffer<T> {
         match self.reduction {
             Some(reduction) => reduction.into_output(),
             None => self.partial,
         }
+    }
+}
+
+/// Owned twin of [`PreparedMapReduction`]: the same dispatch resources with
+/// `Copy` operand provenance instead of operand borrows.
+///
+/// `RocmBuffer` owns its allocation, so a retained handle cannot keep the
+/// prepare-time operands alive by cloning. It does not need to: the launch
+/// reads its operand pointers at dispatch time, so this form requires the
+/// live buffers at every dispatch and launches only over the passed
+/// pointers after the provenance check in
+/// [`dispatch_with`](Self::dispatch_with). A retained handle therefore
+/// reduces exactly the memory its caller presents on that dispatch — the
+/// stored provenance is never dereferenced, only compared, so dropping the
+/// prepare-time buffers cannot dangle a later dispatch.
+///
+/// The check is load-bearing for memory safety, not just caller hygiene:
+/// the launch configuration was derived from the prepare-time shape, so a
+/// dispatch over differently-sized memory would read out of bounds. That is
+/// why the check lives inside [`dispatch_with`](Self::dispatch_with)
+/// rather than with the caller.
+pub(crate) struct RetainedMapReduction<Op, T, const N: usize> {
+    resources: MapReductionResources<T>,
+    a_raw: DevicePtr,
+    a_len: usize,
+    b_raw: DevicePtr,
+    b_len: usize,
+    _operation: PhantomData<Op>,
+}
+
+impl<Op, T, const N: usize> PreparedMapReduction<'_, Op, T, N>
+where
+    Op: MapReductionOp,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
+{
+    pub(crate) fn dispatch(&self) -> Result<()> {
+        self.resources.launch(self.a.raw(), self.b.raw())
+    }
+
+    pub(crate) fn output(&self) -> &RocmBuffer<T> {
+        self.resources.output()
+    }
+
+    pub(crate) fn into_output(self) -> RocmBuffer<T> {
+        self.resources.into_output()
+    }
+
+    pub(crate) fn into_retained(self) -> RetainedMapReduction<Op, T, N> {
+        let (a, b) = (self.a, self.b);
+        RetainedMapReduction {
+            resources: self.resources,
+            a_raw: a.raw(),
+            a_len: a.len(),
+            b_raw: b.raw(),
+            b_len: b.len(),
+            _operation: PhantomData,
+        }
+    }
+}
+
+impl<Op, T, const N: usize> RetainedMapReduction<Op, T, N>
+where
+    Op: MapReductionOp,
+    T: DialectScalar<HipC> + Pod + OpIdentity<Op::ReduceOp> + IdentityToken<Op::ReduceOp, HipC>,
+{
+    /// Launch over `a` and `b` after verifying they are the retained
+    /// allocations.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when either buffer names a different device
+    /// allocation than the plan was retained against, or when a native
+    /// launch fails.
+    pub(crate) fn dispatch_with(&self, a: &RocmBuffer<T>, b: &RocmBuffer<T>) -> Result<()> {
+        if a.raw() != self.a_raw
+            || a.len() != self.a_len
+            || b.raw() != self.b_raw
+            || b.len() != self.b_len
+        {
+            return Err(HephaestusError::DispatchFailed {
+                message: "retained reduction received different device allocations".to_string(),
+            });
+        }
+        self.resources.launch(a.raw(), b.raw())
+    }
+
+    pub(crate) fn output(&self) -> &RocmBuffer<T> {
+        self.resources.output()
     }
 }
 
@@ -295,21 +390,23 @@ where
     let len = a_layout.checked_size().map_err(map_layout_err)?;
     if len == 0 {
         return Ok(PreparedMapReduction {
-            device: device.clone(),
+            resources: MapReductionResources {
+                device: device.clone(),
+                meta: MapReductionMeta {
+                    shape: [1; 4],
+                    a_strides: [0; 4],
+                    b_strides: [0; 4],
+                    offsets: [0; 4],
+                },
+                partial: device.upload(&[T::IDENTITY])?,
+                kernel: None,
+                groups: 0,
+                width: BlockWidth::DEFAULT,
+                shared_bytes: 0,
+                reduction: None,
+            },
             a,
             b,
-            meta: MapReductionMeta {
-                shape: [1; 4],
-                a_strides: [0; 4],
-                b_strides: [0; 4],
-                offsets: [0; 4],
-            },
-            partial: device.upload(&[T::IDENTITY])?,
-            kernel: None,
-            groups: 0,
-            width: BlockWidth::DEFAULT,
-            shared_bytes: 0,
-            reduction: None,
             _operation: PhantomData,
         });
     }
@@ -363,16 +460,18 @@ where
     };
 
     Ok(PreparedMapReduction {
-        device: device.clone(),
+        resources: MapReductionResources {
+            device: device.clone(),
+            meta,
+            partial,
+            kernel: Some(kernel),
+            groups,
+            width,
+            shared_bytes,
+            reduction,
+        },
         a,
         b,
-        meta,
-        partial,
-        kernel: Some(kernel),
-        groups,
-        width,
-        shared_bytes,
-        reduction,
         _operation: PhantomData,
     })
 }

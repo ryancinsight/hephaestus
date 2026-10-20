@@ -33,7 +33,8 @@ pub use matrix::{
 };
 pub use matrix_rank::{MatrixRankScalar, det, matrix_rank, matrix_rank_with_tolerance};
 pub(crate) use norms::{
-    DotMap, PreparedMapReduction, SquareMap, prepare_map_reduction_with_layouts,
+    DotMap, PreparedMapReduction, RetainedMapReduction, SquareMap,
+    prepare_map_reduction_with_layouts,
 };
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 pub use pinv_matexp::{matexp, pinv};

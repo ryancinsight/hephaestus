@@ -1,14 +1,18 @@
 //! ROCm implementation of the backend-neutral dense vector-operation seam.
 
-pub use crate::application::prepared_map_reduction::{PreparedDot, PreparedL2Norm};
-use crate::application::prepared_map_reduction::{prepare_dense_dot, prepare_dense_norm_l2};
+pub use crate::application::prepared_map_reduction::{
+    PreparedDot, PreparedL2Norm, RetainedDot, RetainedL2Norm,
+};
+use crate::application::prepared_map_reduction::{
+    prepare_dense_dot, prepare_dense_norm_l2, retain_dense_dot, retain_dense_norm_l2,
+};
 use crate::application::storage_kernel::{RocmMultiStorageKernel, RocmStorageBinding};
 use crate::{AddOp, DivOp, MulOp, RocmBuffer, RocmDevice, binary_elementwise_into};
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
     HephaestusError, HipC, IdentityToken, KernelDevice, MaxOp, MultiStorageKernel, OpIdentity,
-    Result, SubOp, SumOp, VectorScalar,
+    Result, RetainedReductions, SubOp, SumOp, VectorScalar,
 };
 use std::marker::PhantomData;
 
@@ -421,5 +425,57 @@ where
         }
         prepared.dispatch()?;
         Self::scalar(device, prepared.output())
+    }
+}
+
+impl<T> RetainedReductions<RocmDevice, T> for RocmVectorOps<T>
+where
+    T: VectorScalar<HipC>
+        + Into<f64>
+        + Zeroable
+        + OpIdentity<SumOp>
+        + IdentityToken<SumOp, HipC>
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, HipC>,
+{
+    type RetainedDot = RetainedDot<T>;
+    type RetainedNorm = RetainedL2Norm<T, 1>;
+
+    fn retain_dot(
+        &self,
+        device: &RocmDevice,
+        left: &RocmBuffer<T>,
+        right: &RocmBuffer<T>,
+    ) -> Result<Self::RetainedDot> {
+        retain_dense_dot(device, left, right)
+    }
+
+    fn dot_retained(
+        &self,
+        device: &RocmDevice,
+        retained: &Self::RetainedDot,
+        left: &RocmBuffer<T>,
+        right: &RocmBuffer<T>,
+    ) -> Result<T> {
+        retained.dispatch_with(left, right)?;
+        Self::scalar(device, retained.output())
+    }
+
+    fn retain_norm_l2(
+        &self,
+        device: &RocmDevice,
+        vector: &RocmBuffer<T>,
+    ) -> Result<Self::RetainedNorm> {
+        retain_dense_norm_l2(device, vector)
+    }
+
+    fn norm_l2_retained(
+        &self,
+        device: &RocmDevice,
+        retained: &Self::RetainedNorm,
+        vector: &RocmBuffer<T>,
+    ) -> Result<T> {
+        retained.dispatch_with(vector)?;
+        Self::scalar(device, retained.output())
     }
 }
