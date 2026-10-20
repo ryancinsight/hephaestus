@@ -40,6 +40,21 @@ second metadata ABI, source generator, cache, or launch path. Static and
 dynamic rank-eight elementwise dispatch, plus rank-eight L1 and max reduction,
 remain differentially verified against host layout references.
 
+## Revision — 2026-10-20 (core-owned C-dialect generator)
+
+The C-dialect kernel source, layout record, pipeline key, and scalar
+vocabulary move from the CUDA/ROCm providers into `hephaestus_core::fusion`,
+monomorphized per backend dialect: `FusionScalar<L>`,
+`elementwise_source`, `reduction_source`, `FusionLayoutInfo`,
+`FusionPipelineKey`, and the broadcast-shape helper. CUDA and HIP compile
+byte-identical kernels from the single generator, pinned by core tests; the
+`CudaFusionScalar`, `RocmFusionScalar`, and `WgpuFusionScalar` twins are
+deleted, with WGPU and Metal rebinding to `FusionScalar<Wgsl>`. WGSL keeps
+its own generator: its binding model and address widths are a separate ABI,
+not a spelling of the C one. Generated kernel text is unchanged on every
+backend. Coeus rebinds its scalar supertraits to `FusionScalar<CudaC/Wgsl>`
+in a follow-up pinned to this release.
+
 ## Cross-repository driver
 
 Leto `LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02`; Coeus fused elementwise

@@ -7,17 +7,13 @@ use std::sync::Arc;
 use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DynamicStridedView, FusedElementwiseOps,
-    FusedExpression, FusedReduction, FusedReductionOps, HephaestusError, Result,
+    FusedExpression, FusedReduction, FusedReductionOps, FusionLayoutInfo, FusionPipelineKey,
+    FusionScalar, HephaestusError, MAX_FUSION_RANK, Result, elementwise_source,
+    fusion_expression_shape, reduction_source, validate_c_expression_source,
 };
 
 use crate::CudaDevice;
-use crate::application::fusion::source::{
-    CudaFusionScalar, FusionLayoutInfo, MAX_FUSION_RANK, elementwise_source, reduction_source,
-    validate_expression_source,
-};
-use crate::application::pipeline::{
-    FusionPipelineKey, LaunchConfig, cached_fusion_kernel, grid_size, launch_kernel,
-};
+use crate::application::pipeline::{LaunchConfig, cached_fusion_kernel, grid_size, launch_kernel};
 use crate::infrastructure::buffer::CudaBuffer;
 
 struct FusedElementwiseKernel;
@@ -111,35 +107,6 @@ fn validate_common<T>(
         })
 }
 
-fn expression_shape<T: Pod>(
-    inputs: &[DynamicStridedView<'_, CudaBuffer<T>>],
-) -> Result<Box<[usize]>> {
-    let rank = inputs
-        .iter()
-        .map(|input| input.layout.ndim())
-        .max()
-        .unwrap_or(0);
-    let mut shape = vec![1usize; rank];
-    for input in inputs {
-        let shift = rank - input.layout.ndim();
-        for (axis, &dimension) in input.layout.shape.iter().enumerate() {
-            let target_axis = axis + shift;
-            let target = &mut shape[target_axis];
-            if *target == 1 {
-                *target = dimension;
-            } else if dimension != 1 && *target != dimension {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!(
-                        "CUDA fusion inputs have incompatible broadcast shapes {:?} and {:?}",
-                        shape, input.layout.shape
-                    ),
-                });
-            }
-        }
-    }
-    Ok(shape.into_boxed_slice())
-}
-
 fn metadata_for_elementwise<T>(
     inputs: &[DynamicStridedView<'_, CudaBuffer<T>>],
     output: DynamicStridedView<'_, CudaBuffer<T>>,
@@ -168,7 +135,7 @@ fn reduction_metadata<T: Pod>(
     output: DynamicStridedView<'_, CudaBuffer<T>>,
     axis: usize,
 ) -> Result<(Vec<FusionLayoutInfo>, usize)> {
-    let shape = expression_shape(inputs)?;
+    let shape = fusion_expression_shape(inputs)?;
     if axis >= shape.len() {
         return Err(HephaestusError::InvalidConfiguration {
             message: format!(
@@ -240,7 +207,7 @@ fn submit<T>(
     source: impl FnOnce() -> Result<String>,
 ) -> Result<()>
 where
-    T: CudaFusionScalar,
+    T: FusionScalar<CudaC>,
 {
     let output_len =
         output
@@ -296,11 +263,11 @@ pub(crate) fn fused_elementwise_into<T, E>(
     output: DynamicStridedView<'_, CudaBuffer<T>>,
 ) -> Result<()>
 where
-    T: CudaFusionScalar,
+    T: FusionScalar<CudaC>,
     E: FusedExpression<CudaC>,
 {
     let expression_source = expression.source();
-    validate_expression_source(&expression_source)?;
+    validate_c_expression_source(&expression_source)?;
     validate_common(device, inputs, output)?;
     let metadata = metadata_for_elementwise(inputs, output)?;
     let source_expression = expression_source.into_owned();
@@ -317,7 +284,12 @@ where
             expression: expression_key,
             entry: "fused_elementwise_kernel",
         },
-        move || Ok(elementwise_source::<T>(inputs.len(), &source_expression)),
+        move || {
+            Ok(elementwise_source::<CudaC, T>(
+                inputs.len(),
+                &source_expression,
+            ))
+        },
     )
 }
 
@@ -330,11 +302,11 @@ pub(crate) fn fused_reduce_into<T, E>(
     output: DynamicStridedView<'_, CudaBuffer<T>>,
 ) -> Result<()>
 where
-    T: CudaFusionScalar,
+    T: FusionScalar<CudaC>,
     E: FusedExpression<CudaC>,
 {
     let expression_source = expression.source();
-    validate_expression_source(&expression_source)?;
+    validate_c_expression_source(&expression_source)?;
     validate_common(device, inputs, output)?;
     let (metadata, axis_length) = reduction_metadata(inputs, output, axis)?;
     if matches!(
@@ -372,7 +344,13 @@ where
             expression: expression_key,
             entry: "fused_reduction_kernel",
         },
-        move || reduction_source::<T>(inputs.len(), &source_expression, reduction),
+        move || {
+            Ok(reduction_source::<CudaC, T>(
+                inputs.len(),
+                &source_expression,
+                reduction,
+            ))
+        },
     )
 }
 
@@ -382,7 +360,7 @@ pub struct CudaFusionOps;
 
 impl<T> FusedElementwiseOps<CudaDevice, T> for CudaFusionOps
 where
-    T: CudaFusionScalar,
+    T: FusionScalar<CudaC>,
 {
     type Dialect = CudaC;
 
@@ -402,7 +380,7 @@ where
 
 impl<T> FusedReductionOps<CudaDevice, T> for CudaFusionOps
 where
-    T: CudaFusionScalar,
+    T: FusionScalar<CudaC>,
 {
     type Dialect = CudaC;
 

@@ -4,4 +4,3 @@ mod dispatch;
 mod source;
 
 pub use dispatch::WgpuFusionOps;
-pub use source::WgpuFusionScalar;

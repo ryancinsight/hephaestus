@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.24.0] - Unreleased
+
+### Changed
+
+- [minor] Own the C-dialect fusion generator and scalar vocabulary once in
+  `hephaestus_core::fusion`: `FusionScalar<L>`, `elementwise_source`,
+  `reduction_source`, `FusionLayoutInfo`, `FusionPipelineKey`, and the shape
+  helpers are monomorphized per backend dialect. CUDA and HIP compile
+  byte-identical kernels from the single generator (pinned by tests).
+  Removes `CudaFusionScalar`, `RocmFusionScalar`, `WgpuFusionScalar`, and the
+  per-backend source twins. Consumers rebind to `FusionScalar<CudaC/HipC/Wgsl>`
+  (coeus follow-up). WGSL keeps its own generator (separate ABI).
+
 ## [0.22.2] - Unreleased
 
 ### Changed

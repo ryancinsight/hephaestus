@@ -4,8 +4,9 @@ use hephaestus_core::{
     DeviceLimits, DevicePreference, HephaestusError, Result,
 };
 
-use crate::application::pipeline::{FusionPipelineKey, PipelineKey};
+use crate::application::pipeline::PipelineKey;
 use crate::infrastructure::buffer::CudaBuffer;
+use hephaestus_core::FusionPipelineKey;
 
 /// Stub CUDA device for builds without the `cuda` feature.
 ///

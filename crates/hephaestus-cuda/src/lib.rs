@@ -67,7 +67,7 @@ pub use application::elementwise::{
 };
 pub use application::elementwise_seam::CudaElementwiseOps;
 pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
-pub use application::fusion::{CudaFusionOps, CudaFusionScalar};
+pub use application::fusion::CudaFusionOps;
 pub use application::gather_seam::CudaGatherOps;
 pub use application::index_put_seam::CudaIndexPutOps;
 pub use application::index_select_seam::CudaIndexSelectOps;

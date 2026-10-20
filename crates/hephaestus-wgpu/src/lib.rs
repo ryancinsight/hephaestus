@@ -53,7 +53,7 @@ pub use application::embedding_seam::WgpuEmbeddingOps;
 pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
 pub use application::fft::{WgpuFftOps, WgpuFftScalar, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
-pub use application::fusion::{WgpuFusionOps, WgpuFusionScalar};
+pub use application::fusion::WgpuFusionOps;
 pub use application::gather_seam::{WgpuGatherOps, gather_into};
 pub use application::index_put_seam::{WgpuIndexPutOps, index_put_into};
 pub use application::index_select_seam::{WgpuIndexSelectOps, index_select_into};

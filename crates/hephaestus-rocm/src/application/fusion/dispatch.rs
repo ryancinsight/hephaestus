@@ -6,13 +6,11 @@ use std::any::TypeId;
 use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, DeviceBuffer, DynamicStridedView, FusedElementwiseOps,
-    FusedExpression, FusedReduction, FusedReductionOps, HephaestusError, HipC, Result,
+    FusedExpression, FusedReduction, FusedReductionOps, FusionLayoutInfo, FusionScalar,
+    HephaestusError, HipC, MAX_FUSION_RANK, Result, elementwise_source, fusion_expression_shape,
+    reduction_source, validate_c_expression_source,
 };
 
-use crate::application::fusion::source::{
-    FusionLayoutInfo, MAX_FUSION_RANK, RocmFusionScalar, elementwise_source, reduction_source,
-    validate_expression_source,
-};
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
@@ -110,35 +108,6 @@ fn validate_common<T: Pod>(
         })
 }
 
-fn expression_shape<T: Pod>(
-    inputs: &[DynamicStridedView<'_, RocmBuffer<T>>],
-) -> Result<Box<[usize]>> {
-    let rank = inputs
-        .iter()
-        .map(|input| input.layout.ndim())
-        .max()
-        .unwrap_or(0);
-    let mut shape = vec![1usize; rank];
-    for input in inputs {
-        let shift = rank - input.layout.ndim();
-        for (axis, &dimension) in input.layout.shape.iter().enumerate() {
-            let target_axis = axis + shift;
-            let target = &mut shape[target_axis];
-            if *target == 1 {
-                *target = dimension;
-            } else if dimension != 1 && *target != dimension {
-                return Err(HephaestusError::DispatchFailed {
-                    message: format!(
-                        "ROCm fusion inputs have incompatible broadcast shapes {:?} and {:?}",
-                        shape, input.layout.shape
-                    ),
-                });
-            }
-        }
-    }
-    Ok(shape.into_boxed_slice())
-}
-
 fn metadata_for_elementwise<T: Pod>(
     inputs: &[DynamicStridedView<'_, RocmBuffer<T>>],
     output: DynamicStridedView<'_, RocmBuffer<T>>,
@@ -167,7 +136,7 @@ fn reduction_metadata<T: Pod>(
     output: DynamicStridedView<'_, RocmBuffer<T>>,
     axis: usize,
 ) -> Result<(Vec<FusionLayoutInfo>, usize)> {
-    let shape = expression_shape(inputs)?;
+    let shape = fusion_expression_shape(inputs)?;
     if axis >= shape.len() {
         return Err(HephaestusError::InvalidConfiguration {
             message: format!(
@@ -263,7 +232,7 @@ fn submit<T>(
     source: impl FnOnce() -> Result<String>,
 ) -> Result<()>
 where
-    T: RocmFusionScalar,
+    T: FusionScalar<HipC>,
 {
     let output_len =
         output
@@ -318,11 +287,11 @@ pub(crate) fn fused_elementwise_into<T, E>(
     output: DynamicStridedView<'_, RocmBuffer<T>>,
 ) -> Result<()>
 where
-    T: RocmFusionScalar,
+    T: FusionScalar<HipC>,
     E: FusedExpression<HipC>,
 {
     let expression_source = expression.source();
-    validate_expression_source(&expression_source)?;
+    validate_c_expression_source(&expression_source)?;
     validate_common(device, inputs, output)?;
     let metadata = metadata_for_elementwise(inputs, output)?;
     let source_expression = expression_source.into_owned();
@@ -338,7 +307,12 @@ where
             expression: source_expression.clone(),
             entry: "fused_elementwise_kernel",
         },
-        move || Ok(elementwise_source::<T>(inputs.len(), &source_expression)),
+        move || {
+            Ok(elementwise_source::<HipC, T>(
+                inputs.len(),
+                &source_expression,
+            ))
+        },
     )
 }
 
@@ -351,11 +325,11 @@ pub(crate) fn fused_reduce_into<T, E>(
     output: DynamicStridedView<'_, RocmBuffer<T>>,
 ) -> Result<()>
 where
-    T: RocmFusionScalar,
+    T: FusionScalar<HipC>,
     E: FusedExpression<HipC>,
 {
     let expression_source = expression.source();
-    validate_expression_source(&expression_source)?;
+    validate_c_expression_source(&expression_source)?;
     validate_common(device, inputs, output)?;
     let (metadata, axis_length) = reduction_metadata(inputs, output, axis)?;
     if matches!(
@@ -392,7 +366,13 @@ where
             expression: format!("{reduction:?}:{source_expression}"),
             entry: "fused_reduction_kernel",
         },
-        move || reduction_source::<T>(inputs.len(), &source_expression, reduction),
+        move || {
+            Ok(reduction_source::<HipC, T>(
+                inputs.len(),
+                &source_expression,
+                reduction,
+            ))
+        },
     )
 }
 
@@ -402,7 +382,7 @@ pub struct RocmFusionOps;
 
 impl<T> FusedElementwiseOps<RocmDevice, T> for RocmFusionOps
 where
-    T: RocmFusionScalar,
+    T: FusionScalar<HipC>,
 {
     type Dialect = HipC;
 
@@ -422,7 +402,7 @@ where
 
 impl<T> FusedReductionOps<RocmDevice, T> for RocmFusionOps
 where
-    T: RocmFusionScalar,
+    T: FusionScalar<HipC>,
 {
     type Dialect = HipC;
 
