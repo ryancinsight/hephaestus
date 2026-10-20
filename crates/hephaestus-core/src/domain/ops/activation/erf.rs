@@ -12,7 +12,13 @@ macro_rules! wgsl_erf_expr {
 
 macro_rules! wgsl_erfc_expr {
     () => {
-        concat!("(1.0 - ", wgsl_erf_expr!(), ")")
+        concat!(
+            "select((2.0 - ",
+            wgsl_erfc_nr_pos!("(abs(x))"),
+            "), ",
+            wgsl_erfc_nr_pos!("(abs(x))"),
+            ", (x) >= 0.0)"
+        )
     };
 }
 

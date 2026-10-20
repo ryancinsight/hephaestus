@@ -210,15 +210,13 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // clause's `1e-5`.
 impl UnaryExpr<Wgsl> for MishOp {
     const EXPR: &'static str = concat!(
-        "select(select(x * exp(x), x * tanh(",
+        "select(select(select(x * exp(x), x * tanh(",
         wgsl_softplus_expr!(),
-        "), x > -14.5), x, x > 9.0)"
+        "), x > -14.5), x, x > 9.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
-impl UnaryExpr<CudaC> for MishOp {
-    const EXPR: &'static str = "x * tanh(log1p(exp(x)))";
-}
+// The C spelling lives in `stable.rs`: a macro-built stabilized form.
 
 // Mish gradient (KERNEL-TAIL): the naive `tanh(log(1 + exp(x)))` lead
 // term reads `0` on the negative tail, missing `~3%` of the total at
@@ -238,7 +236,7 @@ impl UnaryExpr<CudaC> for MishOp {
 // the `MishOp` precedent.
 impl UnaryExpr<Wgsl> for MishGradOp {
     const EXPR: &'static str = concat!(
-        "select(exp(x) * (1.0 + x), select(",
+        "select(select(select(exp(x) * (1.0 + x), select(",
         wgsl_softplus_expr!(),
         // Parenthesized: the fragment is `max + select(...)`, which is
         // only `+`-safe — under `*` the bare form re-associates.
@@ -252,10 +250,8 @@ impl UnaryExpr<Wgsl> for MishGradOp {
         wgsl_softplus_expr!(),
         ") * tanh(",
         wgsl_softplus_expr!(),
-        ")) * (1.0 / (1.0 + exp(-x))), x > -7.0), x > -14.5)"
+        ")) * (1.0 / (1.0 + exp(-x))), x > -7.0), x > -14.5), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
-impl UnaryExpr<CudaC> for MishGradOp {
-    const EXPR: &'static str = "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))";
-}
+// The C spelling lives in `stable.rs`: a macro-built stabilized form.

@@ -4,11 +4,10 @@ use super::UnaryExpr;
 use super::{
     AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, EluGradOp,
     EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
-    GeluTanhGradOp, GeluTanhOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp,
-    IdentityOp, LgammaOp, LnOp, Log1pOp, Log2Op, Log10Op, MishGradOp, MishOp, NegOp, RecipOp,
-    ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp, SinOp,
-    SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp, SoftsignOp, SqrtOp, TanOp,
-    TanhGradOp, TanhOp, TruncOp,
+    HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp, IdentityOp, LgammaOp, LnOp,
+    Log1pOp, Log2Op, Log10Op, NegOp, RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp,
+    SigmoidOp, SignOp, SinOp, SincOp, SinhOp, SoftplusGradOp, SoftplusOp, SoftsignGradOp,
+    SoftsignOp, SqrtOp, TanOp, TanhGradOp, TanhOp, TruncOp,
 };
 use crate::domain::dialect::HipC;
 
@@ -58,47 +57,37 @@ impl_hip_unary_exprs!(
     (LgammaOp, "lgamma(x)"),
     (SincOp, "((x) == 0.0f ? 1.0f : sin(x) / (x))"),
     // Native `erfc` (see activation.rs); the unsuffixed builtin keeps f64 served.
-    (GeluOp, "0.5f * x * erfc(-x * 0.7071067811865476f)"),
+    (
+        GeluOp,
+        "(x) < -3.402823466e+38f ? -0.0f : 0.5f * x * erfc(-x * 0.7071067811865476f)"
+    ),
     // Native `erfc` (see activation.rs); the unsuffixed builtins keep f64 served.
     (
         GeluGradOp,
-        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : 0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f)"
     ),
     (ReluOp, "max(x, 0.0f)"),
     (ReluGradOp, "x > 0.0f ? 1.0f : 0.0f"),
-    (SigmoidOp, "1.0f / (1.0f + exp(-x))"),
+    (
+        SigmoidOp,
+        "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))"
+    ),
     (SigmoidGradOp, "x * (1.0f - x)"),
     (TanhOp, "tanh(x)"),
     (TanhGradOp, "1.0f - x * x"),
-    // Sigmoid identity (see activation.rs); the unsuffixed `exp` keeps f64 served.
-    (
-        GeluTanhOp,
-        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
-    ),
-    // Sigmoid algebra (see activation.rs); the unsuffixed `exp` keeps f64 served.
-    (
-        GeluTanhGradOp,
-        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
-    ),
-    (SiluOp, "x / (1.0f + exp(-x))"),
-    (
-        SiluGradOp,
-        "(1.0f / (1.0f + exp(-x))) * (1.0f + x * (1.0f - (1.0f / (1.0f + exp(-x)))))"
-    ),
+    // GeluTanhOp, GeluTanhGradOp, SiluOp, and SiluGradOp live in
+    // `activation/stable.rs`: macro-built stabilized forms.
     // Stable `max + log1p` form (see activation.rs); native builtins keep f64.
     (
         SoftplusOp,
         "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
     ),
-    (SoftplusGradOp, "1.0f / (1.0f + exp(-x))"),
-    // Native `log1p` under the `tanh` (see activation.rs); the unsuffixed
-    // builtins keep f64 served.
-    (MishOp, "x * tanh(log1p(exp(x)))"),
-    // Stable `max + log1p` softplus under the `tanh` (see activation.rs).
     (
-        MishGradOp,
-        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
+        SoftplusGradOp,
+        "x <= 0.0f ? exp(x) / (1.0f + exp(x)) : 1.0f / (1.0f + exp(-x))"
     ),
+    // MishOp and MishGradOp live in `activation/stable.rs`: macro-built
+    // stabilized forms.
     // Native `expm1` on the negative arm (see activation.rs); the unsuffixed
     // builtin keeps f64 served.
     (EluOp, "((x) >= 0.0f ? (x) : expm1(x))"),
