@@ -212,17 +212,19 @@
 
 ## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm [minor] [arch] — todo
 - Priority: feature.
-- Outcome: the fused-expression dispatch seam that wgpu and cuda already
-  implement gains a ROCm implementor, so backend choice does not change which
-  expressions fuse. The canonical WGPU expression dispatch passes on Metal
-  under HEPH-MACOS-METAL-CONFORMANCE-1.
-- Scope: port the existing wgpu/cuda fused-dispatch design to rocm
-  through the generic accelerator layer; no per-vendor algorithm fork.
+- Status: `RocmFusionOps` landed; the C-dialect generator, scalar
+  vocabulary, layout record, and pipeline key are now owned once in
+  `hephaestus_core::fusion` (ADR 0055 rev. 2026-10-20) with CUDA/HIP
+  byte-identity pinned by tests, and the per-backend twins deleted.
+  Remaining: the canonical WGPU expression dispatch passes on Metal under
+  HEPH-MACOS-METAL-CONFORMANCE-1.
+- Outcome: Metal leg of fusion conformance verified.
+- Scope: execution evidence only; no further fusion code is planned here.
 - Driver: coeus consumer audit — coeus cannot rely on fusion outside
   wgpu/cuda today.
-- Verification: conformance parity across all four backends, strict Clippy,
-  independent review.
-- Last-update: 2026-09-26.
+- Verification: Metal fusion contracts green in hosted backend CI, strict
+  Clippy, independent review.
+- Last-update: 2026-10-20.
 
 <a id="heph-rocm-windows-hip-runtime-1"></a>
 
