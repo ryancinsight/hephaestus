@@ -7,9 +7,9 @@
 
 use hephaestus_core::{
     DynamicStridedView, FusedElementwiseOps, FusedExpression, FusedReduction, FusedReductionOps,
-    Result, Wgsl,
+    FusionScalar, Result, Wgsl,
 };
-use hephaestus_wgpu::{WgpuBuffer, WgpuFusionOps, WgpuFusionScalar};
+use hephaestus_wgpu::{WgpuBuffer, WgpuFusionOps};
 
 use crate::{MetalBuffer, MetalDevice};
 
@@ -40,7 +40,7 @@ pub struct MetalFusionOps;
 
 impl<T> FusedElementwiseOps<MetalDevice, T> for MetalFusionOps
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
 {
     type Dialect = Wgsl;
 
@@ -65,7 +65,7 @@ where
 
 impl<T> FusedReductionOps<MetalDevice, T> for MetalFusionOps
 where
-    T: WgpuFusionScalar,
+    T: FusionScalar<Wgsl>,
 {
     type Dialect = Wgsl;
 
