@@ -80,7 +80,7 @@ pub use application::elementwise::{
 pub use application::elementwise_seam::RocmElementwiseOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
-pub use application::fusion::{RocmFusionOps, RocmFusionScalar};
+pub use application::fusion::RocmFusionOps;
 pub use application::gather_seam::RocmGatherOps;
 pub use application::index_put_seam::RocmIndexPutOps;
 pub use application::index_select_seam::RocmIndexSelectOps;
