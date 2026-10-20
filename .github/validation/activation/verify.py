@@ -168,8 +168,13 @@ def diagnostic_identity(path):
                                    'features': field_value(line, 'enabled_features'),
                                    'device_limits': field_value(line, 'device_limits')})
             if 'exact intrinsic witness result' in line:
-                error = float(field_value(line, 'error_ulp'))
-                bound = float(field_value(line, 'target_ulp'))
+                # Tracing span attributes repeat target_ulp before the result message.
+                payload = line.partition('exact intrinsic witness result ')[2]
+                for marker in ['error_ulp', 'target_ulp']:
+                    matches = re.findall(r'(?<![A-Za-z0-9_])' + marker + '=', payload)
+                    require(len(matches) <= 1, 'duplicate diagnostic field ' + marker)
+                error = float(field_value(payload, 'error_ulp'))
+                bound = float(field_value(payload, 'target_ulp'))
                 require(math.isfinite(error) and error <= bound, 'focused witness exceeds unchanged target')
                 witnesses += 1
     require(len(identities) == 1 and witnesses == 6, 'missing exact diagnostic identity/six results')

@@ -322,11 +322,14 @@ class DiagnosticContract(TemporaryRecords):
         line = 'observed adapter; absent native compiler/driver versions remain unknown '
         line += ' '.join(f'{name}={identity[key]}' for name, key in
                          [('adapter', 'adapter'), ('enabled_features', 'features'), ('device_limits', 'device_limits')]) + '\n'
-        return identity, [line] + [f'exact intrinsic witness result error_ulp={index / 2} target_ulp=3\n' for index in range(count)]
+        return identity, [line] + [f'2026-10-20T23:25:01Z INFO witness{{target_ulp=3}}:assert: contracts: '
+            f'exact intrinsic witness result error_ulp={index / 2} target_ulp=3\n' for index in range(count)]
 
     def test_nested_quoted_debug_fields_and_six_witnesses(self):
         identity, lines = self.diagnostic()
         self.assertEqual(verify.diagnostic_identity(self.write('diagnostic.txt', ''.join(lines))), identity)
+        boundary = [x.replace('error_ulp=2.5', 'error_ulp=3') for x in lines]
+        self.assertEqual(verify.diagnostic_identity(self.write('boundary.txt', ''.join(boundary))), identity)
         self.assertEqual(verify.field_value('a=Limits { tuple: (2, [4, 8]) } b=3', 'a'),
                          'Limits { tuple: (2, [4, 8]) }')
         self.rejected('missing diagnostic field', verify.field_value, 'adapter=Some(7)', 'enabled_features')
@@ -336,7 +339,10 @@ class DiagnosticContract(TemporaryRecords):
         for changed, reason in [(lines[:-1], 'six results'), (lines + [lines[0]], 'identity/six'),
                                 (lines + [lines[-1]], 'six results'),
                                 ([x.replace('error_ulp=2.5', 'error_ulp=3.5') for x in lines], 'exceeds'),
-                                ([x.replace('error_ulp=2.5', 'error_ulp=NaN') for x in lines], 'exceeds')]:
+                                ([x.replace('error_ulp=2.5', 'error_ulp=NaN') for x in lines], 'exceeds'),
+                                ([x.replace(' target_ulp=3\n', '\n') for x in lines], 'missing diagnostic field'),
+                                ([x.replace(' target_ulp=3\n', ' target_ulp=3 target_ulp=4\n') for x in lines], 'duplicate diagnostic field'),
+                                ([x.replace('error_ulp=2.5', 'error_ulp=2.5 error_ulp=1') for x in lines], 'duplicate diagnostic field')]:
             with self.subTest(reason=reason):
                 self.rejected(reason, verify.diagnostic_identity, self.write('bad-diagnostic.txt', ''.join(changed)))
 
