@@ -87,11 +87,11 @@ fn far_inputs() -> Vec<f32> {
 /// plus `expf` `2`, `tanhf` at `2`, the product, plus margin); HIP `8`
 /// ULP (the CUDA rows carried unconfirmed — any excess on hardware CI is
 /// a finding); WGSL `16` ULP (the two-band softplus at its `softplus.rs`
-/// main analysis; `tanh` only above `sp = 0.018`, past the bad-`tanh`
-/// edge two sweep rounds pin at `x = -4.2` on Metal, and the corrected
-/// `x·S·(1-S²/3)` composition below, whose Taylor remainder peaks at
-/// `0.24` ULP at the `-4` edge; the product, plus margin). The mid band
-/// carries the driver-`exp` grade:
+/// main analysis; `tanh` only above `sp = 0.030`, past the bad zone
+/// three sweep rounds pin at `x = -3.68` on both CI drivers, and the
+/// corrected `x·S·(1-S²/3)` composition below, whose Taylor remainder
+/// peaks at `1.75` ULP at the `-3.5` edge; the product, plus margin).
+/// The mid band carries the driver-`exp` grade:
 /// CUDA/HIP `8` ULP, WGSL `64` ULP (as `silu.rs`). The far band carries
 /// the subnormal-intermediate envelope (`≈ 230` at the deepest
 /// normal-result input, as `silu.rs` derives): CUDA/HIP `256`, WGSL
