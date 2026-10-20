@@ -178,6 +178,8 @@ pub use elementwise::{
 };
 pub use embedding::{
     assert_embedding_gather_contract, assert_embedding_gather_rejects_out_of_range_index,
+    assert_embedding_scatter_add_accumulates_in_position_order,
+    assert_embedding_scatter_add_contract, assert_embedding_scatter_add_rejects_out_of_range_index,
 };
 pub use fixed_fd::assert_fixed_fd_3d_contract;
 pub use full_reduction::assert_full_reduction_contract;

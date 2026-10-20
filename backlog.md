@@ -123,20 +123,24 @@
 
 ## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Embedding-gather gradient (scatter-add) [minor] — todo
 - Priority: feature.
-- Status: `EmbeddingOps<D, T>::gather_into` (host + wgpu) delivered per ADR
-  0065, with an atomic-flag out-of-range rejection on the device path.
-  Narrowed to the gradient counterpart, which this increment does not cover.
-- Outcome: the backward pass for embedding gather — scatter-add gradients
-  into a table-shaped gradient buffer at the same indices `gather_into` read.
-- Scope: core seam addition, wgpu device implementor first (including Metal;
-  cuda/rocm follow), conformance vs a host-loop reference (accumulation order must be
-  documented since scatter-add is not commutative-associative in float
-  rounding across execution orders).
+- Status: `EmbeddingOps::scatter_add_into` delivered per ADR 0087 — host +
+  wgpu (two-pass range-check + output-parallel accumulate), ascending
+  position-order contract with an order-sensitive conformance fixture, plus
+  rejection clauses incl. the empty-table edge. Narrowed to the cuda/rocm
+  implementors and the `assert_backend_contract` aggregate fold (deferred
+  until a seam has every provider implementation).
+- Outcome: `scatter_add_into` implemented for cuda/rocm. The canonical WGPU
+  implementation passes on Metal under HEPH-MACOS-METAL-CONFORMANCE-1.
+- Scope: per-backend implementors following the existing wgpu kernels'
+  algorithms (ascending position order, matching algorithm, not just
+  contract); conformance already covers the shared clauses, so this item is
+  implementation-only.
 - Driver: coeus consumer audit — needed for the embedding-lookup layer's
   training path.
-- Verification: differential + repeated-index accumulation + out-of-range
-  rejection tests per backend, strict Clippy, independent review.
-- Last-update: 2026-09-26.
+- Verification: existing differential + repeated-index accumulation (incl.
+  the order-sensitive fixture) + out-of-range rejection tests per backend,
+  strict Clippy, independent review.
+- Last-update: 2026-10-20.
 
 <a id="heph-interpolation-provider-1"></a>
 
