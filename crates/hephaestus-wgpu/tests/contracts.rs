@@ -49,6 +49,9 @@ fn device_or_skip() -> Option<WgpuDevice> {
         .clone()
 }
 
+#[path = "accuracy_sweeps.rs"]
+mod accuracy_sweeps;
+
 #[path = "adaptive_pooling_contracts.rs"]
 mod adaptive_pooling_contracts;
 

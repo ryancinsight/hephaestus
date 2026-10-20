@@ -12,17 +12,17 @@ fn combine_and_identity_agree_per_dialect() {
     assert_eq!(<NegOp as UnaryExpr<HipC>>::EXPR, "-x");
     assert_eq!(
         <GeluTanhOp as UnaryExpr<Wgsl>>::EXPR,
-        "x / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))"
+        "select(x / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x)))), -0.0, (x) < -3.402823466e+38)"
     );
     assert_eq!(
         <GeluTanhOp as UnaryExpr<CudaC>>::EXPR,
-        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
+        "(x) < -3.402823466e+38f ? -0.0f : (x) * ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))"
     );
     assert_eq!(
         <GeluTanhOp as UnaryExpr<HipC>>::EXPR,
-        "x / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))"
+        "(x) < -3.402823466e+38f ? -0.0f : (x) * ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))"
     );
-    assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("exp(-x)"));
+    assert!(<SiluGradOp as UnaryExpr<CudaC>>::EXPR.contains("2.63f"));
     assert_eq!(
         <SoftplusOp as UnaryExpr<CudaC>>::EXPR,
         "((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))"
@@ -33,27 +33,38 @@ fn combine_and_identity_agree_per_dialect() {
     );
     assert_eq!(
         <MishOp as UnaryExpr<CudaC>>::EXPR,
-        "x * tanh(log1p(exp(x)))"
+        "(x) < -3.402823466e+38f ? -0.0f : (x) * tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))"
     );
-    assert_eq!(<MishOp as UnaryExpr<HipC>>::EXPR, "x * tanh(log1p(exp(x)))");
+    assert_eq!(
+        <MishOp as UnaryExpr<HipC>>::EXPR,
+        "(x) < -3.402823466e+38f ? -0.0f : (x) * tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))"
+    );
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x * tanh(max(x, 0.0) +"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
+    assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.75)"));
+    // The middle arm composes the second-order `t2` (pin the `2/15`
+    // literal): the first-order gap exceeds the bound past `-3.12`.
+    assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("0.13333334"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains(", x, x > 9.0)"));
     assert_eq!(
         <MishGradOp as UnaryExpr<CudaC>>::EXPR,
-        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) + (x) * ((((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) <= 1.55f ? 1.0f - tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) * tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) : ((4.0f * exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) / ((1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) * (1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))))))) * (((x)) <= 0.0f ? exp(((x))) / (1.0f + exp(((x)))) : 1.0f / (1.0f + exp(-((x))))))"
     );
     assert_eq!(
         <MishGradOp as UnaryExpr<HipC>>::EXPR,
-        "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) + (x) * ((((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) <= 1.55f ? 1.0f - tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) * tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) : ((4.0f * exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) / ((1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) * (1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))))))) * (((x)) <= 0.0f ? exp(((x))) / (1.0f + exp(((x)))) : 1.0f / (1.0f + exp(-((x))))))"
     );
     assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) * (1.0 + x)"));
-    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -7.0)"));
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.75)"));
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("0.13333334"));
     assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
     // The middle-arm `(1 - sp^2)` parenthesizes the fragment: it is
     // `max + select(...)`, only `+`-safe, and the bare form under `*`
     // re-associates (`1 - max + sel*max + sel`, the `-5.46e-3` defect).
     assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("(1.0 - ("));
+    // The middle-arm `(1-sp²)` carries the `2S⁴/3` correction (pin the
+    // `/1.5` divisor): the uncorrected gap peaks at `19` ULP at `-3.3`.
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("/ 1.5)"));
     assert_eq!(
         <EluOp as UnaryExpr<CudaC>>::EXPR,
         "((x) >= 0.0f ? (x) : expm1(x))"
@@ -105,42 +116,41 @@ fn combine_and_identity_agree_per_dialect() {
     assert_eq!(<LgammaOp as UnaryExpr<CudaC>>::EXPR, "lgamma(x)");
     assert_eq!(<LgammaOp as UnaryExpr<HipC>>::EXPR, "lgamma(x)");
     assert!(<ErfOp as UnaryExpr<Wgsl>>::EXPR.contains("1.061405429"));
-    assert!(<ErfcOp as UnaryExpr<Wgsl>>::EXPR.starts_with("(1.0 - "));
+    assert!(<ErfcOp as UnaryExpr<Wgsl>>::EXPR.starts_with("select((2.0 - "));
     assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("676.5203681218851"));
     assert!(<LgammaOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) > 3.402823466e+38"));
     assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("0.7071067811865476"));
     assert_eq!(
         <GeluOp as UnaryExpr<CudaC>>::EXPR,
-        "0.5f * x * erfc(-x * 0.7071067811865476f)"
+        "(x) < -3.402823466e+38f ? -0.0f : 0.5f * x * erfc(-x * 0.7071067811865476f)"
     );
     assert_eq!(
         <GeluOp as UnaryExpr<HipC>>::EXPR,
-        "0.5f * x * erfc(-x * 0.7071067811865476f)"
+        "(x) < -3.402823466e+38f ? -0.0f : 0.5f * x * erfc(-x * 0.7071067811865476f)"
     );
-    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.0)"));
-    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0406)"));
-    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("-1.0250950928e+3"));
+    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("1.26551223"));
+    assert!(<GeluOp as UnaryExpr<Wgsl>>::EXPR.contains("(x) < -3.402823466e+38"));
     assert_eq!(
         <GeluGradOp as UnaryExpr<CudaC>>::EXPR,
-        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : 0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f)"
     );
     assert_eq!(
         <GeluGradOp as UnaryExpr<HipC>>::EXPR,
-        "0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : 0.5f * erfc(-x * 0.7071067811865476f) + x * exp(-0.5f * x * x) * 0.3989422804014327f)"
     );
-    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -2.0)"));
-    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0406)"));
+    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("1.26551223"));
+    assert!(<GeluGradOp as UnaryExpr<Wgsl>>::EXPR.contains("(x) > 3.402823466e+38"));
     assert_eq!(
         <GeluTanhGradOp as UnaryExpr<Wgsl>>::EXPR,
-        "(1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) + 2.0 * x * (1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * (1.0 / (1.0 + exp(2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * 0.7978845608 * (1.0 + 0.134145 * x * x)"
+        "select(select((1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) + 2.0 * x * (1.0 / (1.0 + exp(-2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * (1.0 / (1.0 + exp(2.0 * (0.7978845608 * (x + 0.044715 * x * x * x))))) * 0.7978845608 * (1.0 + 0.134145 * x * x), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
     assert_eq!(
         <GeluTanhGradOp as UnaryExpr<CudaC>>::EXPR,
-        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 2.47f ? (((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (1.0f - ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) == 0.0f ? ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) + 2.0f * (x) * ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (1.0f - ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x))) : ((((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) == 0.0f ? ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) + 2.0f * (x) * (((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x)))))"
     );
     assert_eq!(
         <GeluTanhGradOp as UnaryExpr<HipC>>::EXPR,
-        "(1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) + 2.0f * x * (1.0f / (1.0f + exp(-2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * (1.0f / (1.0f + exp(2.0f * (0.7978845608f * (x + 0.044715f * x * x * x))))) * 0.7978845608f * (1.0f + 0.134145f * x * x)"
+        "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 2.47f ? (((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (1.0f - ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) == 0.0f ? ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) + 2.0f * (x) * ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (1.0f - ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x))) : ((((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) == 0.0f ? ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) : ((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) + 2.0f * (x) * (((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))) <= 0.0f ? exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp((((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))) : 1.0f / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))))) * (exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x))))) / (1.0f + exp(-(((0.7978845608f * (x + 0.044715f * x * x * x)) + (0.7978845608f * (x + 0.044715f * x * x * x)))))))) * 0.7978845608f * (1.0f + 3.0f * 0.044715f * (x) * (x)))))"
     );
     assert_eq!(
         <SignOp as UnaryExpr<Wgsl>>::EXPR,
@@ -152,12 +162,12 @@ fn combine_and_identity_agree_per_dialect() {
     );
     // KERNEL-TAIL: the WGSL tail forms branch — the expm1 small arm is
     // the degree-8 Taylor series at |x| < 0.5 (pin the 1/6 Horner
-    // coefficient), the log1p small arm the degree-6 Chebyshev form at
-    // |x| < 0.15 (pin its leading coefficient) — and both keep the naive
-    // transcription as the outer arm.
+    // coefficient), log1p is musl's `log1pf` core in four bands — and the
+    // forms keep a direct transcription as an outer arm.
     for expr in [
         <Expm1Op as UnaryExpr<Wgsl>>::EXPR,
         <Log1pOp as UnaryExpr<Wgsl>>::EXPR,
+        <MishOp as UnaryExpr<Wgsl>>::EXPR,
         <MishGradOp as UnaryExpr<Wgsl>>::EXPR,
         <GeluGradOp as UnaryExpr<Wgsl>>::EXPR,
     ] {
@@ -189,8 +199,8 @@ fn combine_and_identity_agree_per_dialect() {
     assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.5"));
     assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("0.16666666666666666"));
     assert!(<Expm1Op as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) - 1.0"));
-    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("abs(x) < 0.15"));
-    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("1.00000010489199531"));
+    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("(x) >= -0.2928932188134525"));
+    assert!(<Log1pOp as UnaryExpr<Wgsl>>::EXPR.contains("0.40000972152"));
     // KERNEL-TAIL: the WGSL softplus tree is `max + C(-|x|)` with three
     // nested Chebyshev arms (pin each crossover plus the log2 leading
     // coefficient of the near arm and the ~1.0 leading coefficient of

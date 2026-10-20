@@ -191,6 +191,27 @@ macro_rules! wgsl_expm1_expr {
     };
 }
 pub(crate) use wgsl_expm1_expr;
+// `log1p` in four bands over musl's `log1pf` k = 0 polynomial core (ADR
+// 0061 Decision 6): the retired `log(1 + x)` direct arm lost the `1 + x`
+// rounding below `|x| = 0.15` (`9.5` ULP at `x = -0.2`). The lower/main
+// bands evaluate the core at a shifted argument plus the exact `±ln 2`
+// shift; the outer bands keep the direct `log`, whose argument is exact
+// there (`1 + x` rounds only inside `(0.5, 2)`); `x > 1` and `x <= -0.5`
+// (`u > 2`, `u < 0.5`) sit under the relative part of the spec table. The
+// pole needs no guard (`log(0)` is `-inf`, `log` of a negative is NaN).
+macro_rules! wgsl_log1p_expr {
+    () => {
+        concat!(
+            "select(select(select(select(log(1.0 + (x)), (0.0 - (0.6931471805599453 + ",
+            wgsl_l1p_core!("((1.0 / (2.0 * (1.0 + (x)))) - 1.0)"),
+            ")), (x) >= -0.5), ",
+            wgsl_l1p_core!("(x)"),
+            ", (x) >= -0.2928932188134525), (0.6931471805599453 + ",
+            wgsl_l1p_core!("(((x) - 1.0) * 0.5)"),
+            "), (x) > 0.4142135623730951), log(1.0 + (x)), (x) > 1.0)"
+        )
+    };
+}
 impl UnaryExpr<Wgsl> for Expm1Op {
     const EXPR: &'static str = wgsl_expm1_expr!();
     const SUPPORTS_F64: bool = false;
@@ -199,7 +220,7 @@ impl UnaryExpr<CudaC> for Expm1Op {
     const EXPR: &'static str = "expm1(x)";
 }
 impl UnaryExpr<Wgsl> for Log1pOp {
-    const EXPR: &'static str = "select(log(1.0 + x), (x * (1.00000010489199531 + x * ((-5.00000091861519613e-1) + x * (3.33272810783040052e-1 + x * ((-2.49946998041162383e-1) + x * (2.05754288391658408e-1 + x * (-1.71704947320801854e-1))))))), abs(x) < 0.15)";
+    const EXPR: &'static str = wgsl_log1p_expr!();
     const SUPPORTS_F64: bool = false;
 }
 impl UnaryExpr<CudaC> for Log1pOp {

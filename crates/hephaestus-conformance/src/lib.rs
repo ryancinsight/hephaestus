@@ -31,6 +31,8 @@
 //! order cannot change the result and no tolerance is applicable. A clause that
 //! needed an epsilon would state its derivation at the assertion site.
 
+/// Per-operator accuracy sweeps over the failing ranges (ADR 0061 Decision 6).
+pub mod accuracy;
 /// Contract clauses for the
 /// [`AdaptivePoolingOps`](hephaestus_core::AdaptivePoolingOps) seam.
 pub mod adaptive_pooling;
@@ -149,6 +151,12 @@ pub mod typed_elementwise;
 /// Contract clauses for the device-neutral conditional-selection seam.
 pub mod where_cond;
 
+pub use accuracy::{
+    SweepDialect, assert_celu_sweep, assert_elu_sweep, assert_erfc_sweep, assert_expm1_sweep,
+    assert_gelu_grad_sweep, assert_gelu_sweep, assert_gelu_tanh_grad_sweep, assert_gelu_tanh_sweep,
+    assert_log1p_sweep, assert_mish_grad_sweep, assert_mish_sweep, assert_sigmoid_sweep,
+    assert_silu_grad_sweep, assert_silu_sweep, assert_softplus_grad_sweep, assert_softplus_sweep,
+};
 pub use adaptive_pooling::assert_adaptive_pooling_contract;
 pub use arg_reduce::{assert_arg_reduce_contract, assert_arg_reduce_transposed_view_contract};
 pub use assert_backend::{BackendUnderTest, assert_backend_contract};

@@ -7,4 +7,5 @@ mod gelu;
 mod grads;
 mod lgamma;
 mod softplus_mish;
+mod stable;
 mod table;

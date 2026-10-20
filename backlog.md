@@ -836,30 +836,6 @@ status ledger that stood here is program history; recover any entry with
   - [x] Re-base `coeus-cuda` onto `hephaestus-cuda` once `hephaestus-cuda` is delivered.
 - [ ] [minor] moirai: GPU co-scheduling adapter over hephaestus (moirai Stage D).
 
-<a id="heph-kernel-tail-accuracy"></a>
-
-## HEPH-KERNEL-TAIL-ACCURACY — Correct cancellation, overflow and tail underflow in operator renderings [patch] — todo
-- Outcome: every operator rendering listed in [ADR 0061](docs/adr/0061-operator-value-semantics.md) Decision 6 stays within a tolerance derived from its chosen form's published relative bound against the operator's value function, on Vulkan, DX12 and Metal (WGSL), CUDA C and HIP C.
-- Scope: `crates/hephaestus-core/src/domain/ops.rs` and `parameterized.rs` renderings of Expm1, Log1p, Elu, Celu, Softplus, Mish, MishGrad, Erfc (WGSL), Gelu, GeluGrad, GeluTanh, GeluTanhGrad, Silu, SiluGrad, and the tests pinning their strings; no value-function or seam change.
-- Evidence: ADR 0061 reviews two to five measured the defects and the rejected candidate forms in f32 against f64 (recorded in Decision 6); no device run yet.
-- Acceptance: a per-operator sweep over the failing ranges on each available backend; tolerances cite the chosen form's source; the WGSL `log` accuracy bound is confirmed against the specification's accuracy table before any form relies on it; Metal is measured wherever a macOS host is available, since its default math mode may fold the cancellation-free forms.
-- Dependencies: none for the renderings; the host clauses exercising these operators wait on it (ADR 0061 Consequences). Priority P1; risk: silent wrong values at tails.
-- Verification: strict Clippy, device sweeps on the RTX 5080 (Vulkan, DX12, CUDA), and on Metal where a macOS host is available (otherwise the Metal gap is recorded as residual risk), doc sync, independent review.
-- Status: 2026-10-14 — the #427 rescue branch carries a 17-file ULP-sweep
-  oracle system (`crates/hephaestus-conformance/src/accuracy/`, new) plus
-  four backend sweep drivers; ported verbatim it compiles on master, and
-  11/16 sweeps fail as true kernel findings, not oracle defects: missing
-  ±inf guards for 8 forms (gelu, gelu-grad, gelu-tanh, gelu-tanh-grad,
-  silu, silu-grad, mish, mish-grad — WGSL evaluates `-inf * 0` = NaN
-  where the defining value is ∓0); erfc systematic divergence (971/4363
-  over bound, worst 25336 ULP); log1p 9.52 vs 6 (possible driver `log`
-  accuracy); celu 11M ULP at x=-1e-8, PARTIALLY cured by #484 (GPU now
-  renders `expm1`; re-sweep to confirm, do not assume). Next step: port
-  the oracle system first, then harden kernels until 16/16 pass under
-  this item's derived-bounds discipline (difficulty never justifies
-  narrowing).
-- Last-update: 2026-10-14.
-
 <a id="heph-wgsl-f64-transcendentals-1"></a>
 
 ## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo

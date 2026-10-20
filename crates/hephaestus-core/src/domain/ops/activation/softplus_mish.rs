@@ -193,14 +193,26 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // reports `SUPPORTS_F64 = false` per the `SoftplusOp` precedent
 // (nested selects, f32-graded arms). `tanh` is unreliable across
 // drivers at both extremes — of a tiny input (Metal returns exactly
-// `0`; lavapipe returned `2^-25` for `9.35e-14` — the suite's first
+// `0` at the smallest scales and stays defective up to `sp = 0.055`
+// (the sweep measures `16k` ULP worst at `S = 4.8e-5`, with failures
+// spanning `[-10, -2.89]` across five rounds: a quotient-form `1/s`
+// tail plus per-driver knots); lavapipe returned `2^-25`
+// for `9.35e-14` — the suite's first
 // tiny input to `tanh`, which has no tiny-value coverage) and of a
 // large one (Apple's unguarded `tanh` forms `inf/inf = NaN` past
 // `S = 44.4`) — so the spelling guards on `x` instead of trusting it
 // there: at `x <= -14.5` it takes `x * exp(x)` (there the fragment
 // itself is on its bare-`exp` arm, so this reuses its value while
 // skipping the `tanh`; `tanh(S) = S` to `1e-13` there and the arms
-// agree to `2.5e-7` at the boundary), and at `x > 9` it takes `x`
+// agree to `2.5e-7` at the boundary); on `(-14.5, -2.75]` it takes `x`
+// times `t2 = S·(1-S²·(1/3-2S²/15))` (parenthesized: the fragment is
+// `max + select(...)`, only `+`-safe — the `MishGradOp` precedent;
+// closed-form Taylor, hand-verifiable: the remainder `17S⁶/315`
+// peaks at `0.05` ULP at the `-2.75` edge). The top arm starts past
+// the bad zone: the tanh defect spans `[-10, -2.89]` across five
+// rounds (lavapipe spikes `18.2` ULP worst at `x = -2.90`, Metal's
+// nub ends at `-3.27`), so `-2.75` clears it by 29 points; and at
+// `x > 9` it takes `x`
 // itself (`tanh(S)` rounds to exactly `1` past `S = 8.66`, and
 // `S(x) > x`, so both arms agree exactly at the boundary). All
 // `select` arms evaluate (the discarded `NaN`/`inf` never trap — the
@@ -210,15 +222,23 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // clause's `1e-5`.
 impl UnaryExpr<Wgsl> for MishOp {
     const EXPR: &'static str = concat!(
-        "select(select(x * exp(x), x * tanh(",
+        "select(select(select(select(x * exp(x), x * (",
         wgsl_softplus_expr!(),
-        "), x > -14.5), x, x > 9.0)"
+        ") * (1.0 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ") * (0.33333334 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ") * 0.13333334)), x > -14.5), x * tanh(",
+        wgsl_softplus_expr!(),
+        "), x > -2.75), x, x > 9.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
-impl UnaryExpr<CudaC> for MishOp {
-    const EXPR: &'static str = "x * tanh(log1p(exp(x)))";
-}
+// The C spelling lives in `stable.rs`: a macro-built stabilized form.
 
 // Mish gradient (KERNEL-TAIL): the naive `tanh(log(1 + exp(x)))` lead
 // term reads `0` on the negative tail, missing `~3%` of the total at
@@ -230,32 +250,49 @@ impl UnaryExpr<CudaC> for MishOp {
 // `x`: at `x <= -14.5` it takes `exp(x)·(1 + x)` directly (there the
 // fragment is on its bare-`exp` arm and `tanh(sp) = sp` to `1e-13`,
 // so this is the composition with no `tanh` at all); on
-// `(-14.5, -7]` it takes `sp + x·(1-sp²)·σ(x)` with the fragment value
-// (`tanh(sp) = sp` to `2.7e-7`, `30x` inside the bound); above `-7` the
-// full `tanh` form (`sp > 9e-4`, safe on every probed driver). No
-// `tanh` text appears below the top arm, so no driver ever evaluates
-// it on a tiny input. Nested selects report `SUPPORTS_F64 = false` per
-// the `MishOp` precedent.
+// `(-14.5, -2.75]` it takes `t2 + x·w2·σ(x)` with `t2 =
+// sp·(1-sp²·(1/3-2sp²/15))` and `w2 = 1-sp²·(1-sp²/1.5)` (closed-form
+// Taylor, hand-verifiable: the remainders peak at `0.05` ULP (`t2`)
+// and `0.36` ULP (`w2`) at the `-2.75` edge; the uncorrected `(1-sp²)`
+// gap `2S⁴/3` peaks at `19` ULP at `-3.3` — the round-5 local failure
+// unmasked it — while the `sech²` alternative would carry
+// unsuppressed `exp` error); above `-2.75` the full `tanh` form. The
+// boundary is shared with `MishOp`: the tanh defect spans `[-10,
+// -2.89]` across five rounds, so `-2.75` clears it by 29 points. No
+// `tanh` text appears below the top arm, so no
+// driver ever evaluates it on a tiny input. Nested selects report
+// `SUPPORTS_F64 = false` per the `MishOp` precedent.
 impl UnaryExpr<Wgsl> for MishGradOp {
     const EXPR: &'static str = concat!(
-        "select(exp(x) * (1.0 + x), select(",
+        "select(select(select(exp(x) * (1.0 + x), select((",
         wgsl_softplus_expr!(),
+        ") * (1.0 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ") * (0.33333334 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ") * 0.13333334))",
         // Parenthesized: the fragment is `max + select(...)`, which is
         // only `+`-safe — under `*` the bare form re-associates.
         " + x * (1.0 - (",
         wgsl_softplus_expr!(),
         ") * (",
         wgsl_softplus_expr!(),
-        ")) * (1.0 / (1.0 + exp(-x))), tanh(",
+        ") * (1.0 - (",
+        wgsl_softplus_expr!(),
+        ") * (",
+        wgsl_softplus_expr!(),
+        ") / 1.5)) * (1.0 / (1.0 + exp(-x))), tanh(",
         wgsl_softplus_expr!(),
         ") + x * (1.0 - tanh(",
         wgsl_softplus_expr!(),
         ") * tanh(",
         wgsl_softplus_expr!(),
-        ")) * (1.0 / (1.0 + exp(-x))), x > -7.0), x > -14.5)"
+        ")) * (1.0 / (1.0 + exp(-x))), x > -2.75), x > -14.5), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
-impl UnaryExpr<CudaC> for MishGradOp {
-    const EXPR: &'static str = "tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) + x * (1.0f - tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x)))) * tanh(((x) > 0.0f ? (x) : 0.0f) + log1p(exp(-fabs(x))))) * (1.0f / (1.0f + exp(-x)))";
-}
+// The C spelling lives in `stable.rs`: a macro-built stabilized form.

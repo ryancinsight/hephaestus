@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.26.0] - Unreleased
+
+### Added
+
+- [minor] Port the HEPH-KERNEL-TAIL-ACCURACY sweep oracle
+  (`hephaestus_conformance::accuracy`, 17 files): per-operator ULP sweeps
+  over the failing ranges against the `f64` value-function reference, with
+  vendor-table-derived bounds, plus sweep drivers for CUDA, ROCm, Metal,
+  and WGPU.
+
+### Fixed
+
+- [minor] Stabilize the tail-sensitive unary renderings the sweeps grade:
+  two-sided sigmoid/softplus-grad C forms (the one-sided form overflowed
+  to `0` past `x = -88.73`); `±inf` guards on the gelu/silu/mish/gelu-tanh
+  families in all dialects; Numerical Recipes `erfcc` Chebyshev core for
+  WGSL `erfc`/`gelu`/`gelu-grad` (the retired `1 - erf` spelling cancelled
+  to `25k` ULP); musl `log1pf` four-band core for WGSL `log1p`. All 16
+  sweeps pass on CUDA and Vulkan; ROCm/HIP shares the C spellings.
+
 ## [0.25.0] - Unreleased
 
 ### Added
