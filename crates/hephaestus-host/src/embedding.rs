@@ -1,11 +1,18 @@
 //! Host reference implementor of [`hephaestus_core::EmbeddingOps`].
 //!
-//! A direct per-row copy loop with an immediate typed rejection on the first
+//! Direct per-row loops with an immediate typed rejection on the first
 //! out-of-range index — the host has direct memory access, so there is no
-//! analog of the device backend's atomic-flag-then-check step.
+//! analog of the device backend's atomic-flag-then-check step. The
+//! scatter-add runs in ascending index-position order, which is the
+//! accumulation order the seam contract pins for every backend.
+
+use std::ops::AddAssign;
 
 use eunomia::Pod;
-use hephaestus_core::{EmbeddingOps, HephaestusError, Result, validate_embedding_gather_shape};
+use hephaestus_core::{
+    EmbeddingOps, HephaestusError, Result, validate_embedding_gather_shape,
+    validate_embedding_scatter_add_shape,
+};
 
 use crate::operands::require_disjoint_output;
 use crate::{HostBuffer, HostDevice};
@@ -14,7 +21,7 @@ use crate::{HostBuffer, HostDevice};
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HostEmbeddingOps;
 
-impl<T: Pod + Copy> EmbeddingOps<HostDevice, T> for HostEmbeddingOps {
+impl<T: Pod + Copy + AddAssign> EmbeddingOps<HostDevice, T> for HostEmbeddingOps {
     fn gather_into(
         &self,
         _device: &HostDevice,
@@ -51,6 +58,51 @@ impl<T: Pod + Copy> EmbeddingOps<HostDevice, T> for HostEmbeddingOps {
             let out_base = row * embedding_dim;
             out_cells[out_base..out_base + embedding_dim]
                 .copy_from_slice(&table_cells[table_base..table_base + embedding_dim]);
+        }
+        Ok(())
+    }
+
+    fn scatter_add_into(
+        &self,
+        _device: &HostDevice,
+        grad_table: &HostBuffer<T>,
+        num_embeddings: usize,
+        embedding_dim: usize,
+        indices: &HostBuffer<u32>,
+        grad_output: &HostBuffer<T>,
+    ) -> Result<()> {
+        require_disjoint_output(grad_output, grad_output, grad_table)?;
+
+        let index_cells = indices.read();
+        let grad_cells = grad_output.read();
+        let updates = validate_embedding_scatter_add_shape(
+            grad_table.read().len(),
+            num_embeddings,
+            embedding_dim,
+            index_cells.len(),
+            grad_cells.len(),
+        )?;
+
+        let mut table_cells = grad_table.write();
+        for row in 0..updates {
+            let index = usize::try_from(index_cells[row]).map_err(|_| {
+                HephaestusError::InvalidConfiguration {
+                    message: format!("embedding index at position {row} exceeds the usize range"),
+                }
+            })?;
+            if index >= num_embeddings {
+                return Err(HephaestusError::InvalidConfiguration {
+                    message: format!(
+                        "embedding index {index} at position {row} is out of \
+                         range for {num_embeddings} embeddings"
+                    ),
+                });
+            }
+            let table_base = index * embedding_dim;
+            let grad_base = row * embedding_dim;
+            for d in 0..embedding_dim {
+                table_cells[table_base + d] += grad_cells[grad_base + d];
+            }
         }
         Ok(())
     }
