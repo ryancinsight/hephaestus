@@ -114,13 +114,18 @@ fn far_inputs() -> Vec<f32> {
 /// Bounds: main CUDA `8` ULP (the `tanh` term at softplus `4` plus
 /// `tanhf` `2`, the `sech²` term at softplus plus `expf` plus `/`, the
 /// sigmoid, the sum, plus margin); HIP `8` ULP (the CUDA rows carried
-/// unconfirmed — any excess on hardware CI is a finding); WGSL `16` ULP
+/// unconfirmed — any excess on hardware CI is a finding); WGSL `32` ULP
 /// (the `tanh` term at two-band softplus plus driver grade above
-/// `sp = 0.030` — past the bad zone three sweep rounds pin at
-/// `x = -3.68` on both CI drivers — the corrected `S·(1-S²/3)`
-/// composition below (Taylor remainder `1.75` ULP at the `-3.5` edge),
-/// the `sech²` and sigmoid terms at the small-arg `exp` grade the
-/// current bound already assumes, the sum, plus margin). The root
+/// `sp = 0.036` — past the bad zone four sweep rounds pin at
+/// `x = -3.40` on both CI drivers — and the corrected middle arm
+/// below: `t1` at Taylor `3.9` plus fragment plus assembly (`5.2` at
+/// `0.456` sensitivity), `w2` at assembly `3.0` (`4.4` at `1.45`
+/// sensitivity), and the sigmoid at the RECORDED small-arg `exp`
+/// grade (`≈ 8` ULP on NVIDIA, inferred from the round-5 local
+/// failure — `11.6` at `1.45` sensitivity — with Apple and lavapipe
+/// running tighter): `≈ 23` worst-case on the loosest known `exp`,
+/// plus margin. The `sech²` term and the sum fold into the assembly
+/// count. The root
 /// window sweeps separately at the absolute floor: CUDA `2e-7`, HIP
 /// `2e-7`, WGSL `3e-7` (the forms' absolute rounding over unit-scale
 /// terms, plus margin). The mid band carries the driver-`exp` grade:
@@ -142,7 +147,7 @@ where
     dialect.check::<E::Dialect>();
     let (max_ulp, mid_ulp, far_ulp, abs_floor) = match dialect {
         SweepDialect::CudaC | SweepDialect::HipC => (8.0, 8.0, 256.0, 2e-7),
-        SweepDialect::Wgsl => (16.0, 64.0, 256.0, 3e-7),
+        SweepDialect::Wgsl => (32.0, 64.0, 256.0, 3e-7),
     };
     let main = main_inputs();
     let root = root_inputs();
