@@ -28,9 +28,10 @@ paths unchanged; this correction targets that current base. The
 - [x] [patch] Model folded self-equality plus suppressing clamps and preserve
   two rejected comparison prototypes. The private shared-magnitude candidate
   retains finite outputs without changing any fixture or threshold.
-- [ ] [patch] Review the magnitude-selection source delta independently
-  before pushing it, then qualify the unchanged structural controls on the
-  required automatic backend gates. CPU stress checks do not qualify Metal.
+- [x] [patch] Independently review the magnitude-selection source delta
+  ec650afe and record all six exact-source automatic workflow successes.
+  Preserve its compiler limitations and earlier failure history. This does
+  not qualify the later private normal-tail delta.
 - [ ] [patch] Obtain independent review of the final private diff and assess
   current owner/base overlap plus workflow/deployment side effects before
   any public draft or CI action.
@@ -38,9 +39,13 @@ paths unchanged; this correction targets that current base. The
   actual required device backends. The local WGPU Metal attempt already
   returned `AdapterUnavailable` before dispatch: **0/27 lanes executed**.
   Do not retry acquisition through escalation, another adapter or a service.
-- [ ] [patch] Resolve the remaining normal-final/subnormal-erfc-intermediate
-  GELU/gradient interval with a scaled formulation or an explicit accepted
-  qualification limit; reference-normal filtering is not full tail closure.
+- [x] [patch] Reproduce the remaining normal-result selection failures on
+  the accepted-source baseline; prepare a private scaled-erfc/Gaussian
+  formulation and final-reference selector with last-normal controls under
+  unchanged tolerances. CPU/source verification does not close device gates.
+- [ ] [patch] Independently review and qualify this private normal-tail delta
+  on the required backends, including the final two normal-result inputs
+  whose reference margins above MIN are smaller than 256 subnormal ULP.
 - [ ] [patch] Resolve the six allowed-intrinsic countermodels through an
   owner/coordinator accuracy-contract decision and supporting proof or
   adapter/driver/compiler qualification. Preserve strict existing tests;

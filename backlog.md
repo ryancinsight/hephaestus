@@ -6,17 +6,22 @@
 - Priority: correctness. Target: 0.27.1; private correction only.
 - Finding 1: former erfc 8.9 and GELU/gradient -12.5 filters exclude normal
   controls. Restore reference-normal erfc coverage (9/9.19, -12.6/-13) and
-  group gradient terms before halving at -13. Normal final values farther
-  into the subnormal-erfc-intermediate interval remain unqualified.
+  group gradient terms before halving at -13. A further private source
+  correction factors the shared erfc correction from the Gaussian below
+  -13, scales the gradient Gaussian by 512 and selects by final reference
+  normality. Directed last-normal controls preserve the existing 256 ULP
+  bound. Independent review and actual backend qualification remain open.
 - Finding 2: WGSL GELU-tanh gradient overflows on finite huge inputs despite
   outer selects. Bound operands before eager evaluation, use a nonoverflowing
   sigmoid product, and retain saturation/handoff/ordinary controls under
   unchanged targets. CPU/source checks do not qualify devices or performance.
 - Automatic [PR #509](https://github.com/ryancinsight/hephaestus/pull/509)
-  at the reviewed forwarding head passes CI/lock/CUDA/ROCm/WGPU (116 contracts); Metal retains
-  three NaN violations (90/112 pass, one fails, 21 unrun). Earlier failures
-  remain. A private magnitude-selected follow-up preserves finite outputs;
-  its source requires independent review and renewed actual backend gates.
+  at historical f3193138 passes CI/lock/CUDA/ROCm/WGPU (116 contracts);
+  Metal retains three NaN violations (90/112 pass, one fails, 21 unrun).
+  The independently reviewed magnitude-selection head ec650afe subsequently
+  passes all six automatic workflows, including sampled Metal contracts.
+  Earlier failures remain preserved. This private normal-tail delta still
+  needs independent review and renewed required backend qualification.
 - Finding 3: six final-source allowed-intrinsic countermodels exceed existing
   erfc/GELU/softplus/SiLU/Mish/Mish-gradient targets. Portable composition
   remains open and separate; preserve strict tests. The owner/coordinator must

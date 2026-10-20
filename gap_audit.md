@@ -15,11 +15,18 @@
   and saturation, removing clamp/self-equality and a separate negative guard.
   Native models and optimizer stress observations support this mechanism;
   actual Metal compilation/execution and independent review remain pending.
+  Those are historical failures. The subsequent independently reviewed
+  magnitude-selection head ec650afe passes all six automatic workflows.
+  That evidence does not qualify this later private normal-tail delta.
   The earlier failures and every threshold remain unchanged.
-- Coverage residual: normal final GELU/gradient results with subnormal erfc
-  intermediates still need a scaled formulation or explicit qualification.
-  Portable-bound correction remains separate; no tolerance increase is
-  accepted as resolution of allowed-intrinsic countermodels.
+- Normal-tail source follow-up: final-reference selection and a shared
+  scaled-erfc correction cover the formerly excluded normal-result interval
+  in CPU arithmetic models. The gradient uses a Gaussian scaled by 512
+  inside exp, with reciprocal scaling folded into its coefficients. Directed
+  last-normal controls retain the unchanged 256 ULP target. Independent
+  review, actual backend execution and compiler/performance qualification of
+  this private delta remain open. Portable-bound design stays separate; no
+  tolerance increase resolves allowed-intrinsic countermodels.
 - Evidence boundary: final shipped sampled WGPU/Metal passes remain valid;
   historical Mish failures are not final-source failures. Local directed
   Metal acquisition returns AdapterUnavailable before dispatch (0/27 lanes),

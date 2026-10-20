@@ -57,15 +57,27 @@ pub fn without_subnormals(inputs: &[f32]) -> Vec<f32> {
 
 /// Keep inputs whose reference erfc result is normal at the rounded shader
 /// argument. This is a coverage criterion, not a portable error-bound proof.
-/// For GELU it also keeps the shared erfc intermediate normal; normal final
-/// outputs farther into a subnormal-intermediate interval remain explicit
-/// qualification debt. Nonfinite structural controls always remain selected.
+/// Nonfinite structural controls always remain selected.
 pub(super) fn with_normal_erfc_result(inputs: &[f32], argument: impl Fn(f32) -> f32) -> Vec<f32> {
     inputs
         .iter()
         .copied()
         .filter(|&x| {
             !x.is_finite() || ErfcOp::apply(f64::from(argument(x))) >= f64::from(f32::MIN_POSITIVE)
+        })
+        .collect()
+}
+
+/// Keep finite inputs with zero or normal final reference results, plus the
+/// nonfinite structural controls. Intermediate normality must not exclude
+/// normal final results from the WGSL conformance sweep.
+pub(super) fn with_normal_unary_result<Op: UnaryValue>(inputs: &[f32]) -> Vec<f32> {
+    inputs
+        .iter()
+        .copied()
+        .filter(|&x| {
+            let reference = Op::apply(f64::from(x));
+            !x.is_finite() || reference == 0.0 || reference.abs() >= f64::from(f32::MIN_POSITIVE)
         })
         .collect()
 }

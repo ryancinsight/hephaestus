@@ -7,18 +7,21 @@
 - [patch] Use one magnitude predicate for bounded WGSL GELU-tanh-gradient
   operands and saturation. Remove the clamp/self-equality dependency and
   separate negative comparison implicated by retained NaN failures. Preserve
-  native scalar typing, structural controls and thresholds; actual Metal
-  validation of this private follow-up remains pending.
+  native scalar typing, structural controls and thresholds. The accepted
+  magnitude-selection source passes its six automatic workflows; that
+  evidence does not qualify the later private normal-tail correction.
 
 - [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
   evaluation and use a nonoverflowing sigmoid product. Finite saturated
   inputs keep their rounded zero/one limits, including both signs of
   `1e20`, `1e30`, and the largest finite binary32 value.
-- [patch] Restore normal erfc/GELU/gradient tail controls using reference
-  erfc-intermediate normality; combine the GELU-gradient terms before
-  halving to avoid the subnormal half-erfc at `x = -13`. Keep all existing
-  ULP/absolute targets. Device acceptance is pending; farther normal final
-  results with subnormal erfc intermediates remain unqualified.
+- [patch] Extend WGSL GELU/gradient sweeps through their final normal
+  reference results, retaining directed last-normal and adjacent subnormal
+  controls. Below `-13`, factor the shared erfc correction from the Gaussian;
+  scale the gradient Gaussian by 512 and fold its reciprocal into the
+  coefficients to avoid subnormal intermediates. Preserve native scalar
+  typing, C/HIP expressions and every ULP/absolute target. CPU reference
+  verification does not establish device, compiler or performance acceptance.
 
 ### Verification limits
 

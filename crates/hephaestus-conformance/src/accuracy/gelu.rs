@@ -13,7 +13,7 @@
 
 use hephaestus_core::{ComputeDevice, DialectScalar, ElementwiseOps, GeluOp, UnaryExpr};
 
-use super::runner::with_normal_erfc_result;
+use super::runner::with_normal_unary_result;
 
 use super::{SweepDialect, assert_unary_sweep_within, sweep_inputs, without_subnormals};
 
@@ -67,15 +67,23 @@ fn far_inputs() -> Vec<f32> {
             -7.0,  // far-band handoff (also covered by the mid sweep)
             -10.0, // deep tail interior
             -12.5, // former fixed floor; the erfc intermediate stays normal below it
-            -12.6, -13.0, // normal erfc intermediate and final result on WGSL too
+            -12.6,
+            -13.0,                       // retained normal erfc/intermediate controls
+            f32::from_bits(0xc14f_ffff), // adjacent original-composer handoff
+            f32::from_bits(0xc150_0001), // adjacent scaled-composer handoff
+            f32::from_bits(0xc150_014b), // old gradual model exceeds 256 ULP
+            f32::from_bits(0xc150_0c85), // first old-selector exclusion
+            f32::from_bits(0xc151_818a), // old gradual-model worst tail witness
+            -13.1,                       // normal final result whose erfc intermediate is subnormal
+            f32::from_bits(0xc152_5705), // penultimate normal-result input
+            f32::from_bits(0xc152_5706), // last normal-result input
+            f32::from_bits(0xc152_5707), // adjacent subnormal-result control
         ],
     )
 }
 
 fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
-    with_normal_erfc_result(&without_subnormals(inputs), |x| {
-        -x * core::f32::consts::FRAC_1_SQRT_2
-    })
+    with_normal_unary_result::<GeluOp>(&without_subnormals(inputs))
 }
 
 /// Sweep [`GeluOp`](hephaestus_core::GeluOp) on one backend.
@@ -84,10 +92,10 @@ fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
 /// `256` ULP; WGSL main `32`, mid `128`, far `256` ULP. The HIP row remains
 /// unconfirmed on hardware. A legal WGSL intrinsic perturbation can exceed
 /// the main target; these sampled targets have no portable composition proof.
-/// WGSL tail selection follows the normality of the `erfc(-x/√2)`
-/// intermediate, including `-12.6` and `-13`. Farther negative inputs can
-/// still have a normal final GELU result with a subnormal erfc intermediate;
-/// that interval remains unqualified, rather than being declared subnormal.
+/// WGSL tail selection follows final reference normality, including the
+/// last normal-result input. Below `-13` the shared Chebyshev correction
+/// factors out the Gaussian to avoid a subnormal erfc intermediate.
+/// Source/reference checks do not establish device or portable accuracy.
 /// CUDA and HIP retain their IEEE tail sweep.
 pub fn assert_gelu_sweep<D, E>(device: &D, ops: &E, dialect: SweepDialect)
 where
@@ -124,9 +132,32 @@ mod tests {
     #[test]
     fn wgsl_sweep_keeps_directed_normal_gelu_tails() {
         let inputs = wgsl_inputs(&far_inputs());
-        for x in [-12.6, -13.0] {
+        for x in [
+            -12.6,
+            -13.0,
+            -13.1,
+            f32::from_bits(0xc152_5705),
+            f32::from_bits(0xc152_5706),
+        ] {
             assert!(GeluOp::apply(f64::from(x)).abs() >= f64::from(f32::MIN_POSITIVE));
             assert!(inputs.contains(&x), "normal GELU tail removed at {x}");
+        }
+        let next = f32::from_bits(0xc152_5707);
+        assert!(GeluOp::apply(f64::from(next)).abs() < f64::from(f32::MIN_POSITIVE));
+        assert!(!inputs.contains(&next));
+    }
+
+    #[test]
+    fn wgsl_selection_preserves_existing_gelu_coverage_and_specials() {
+        for inputs in [main_inputs(), mid_inputs(), far_inputs()] {
+            let selected = wgsl_inputs(&inputs);
+            let previous =
+                super::super::runner::with_normal_erfc_result(&without_subnormals(&inputs), |x| {
+                    -x * core::f32::consts::FRAC_1_SQRT_2
+                });
+            for x in previous {
+                assert!(selected.iter().any(|y| y.to_bits() == x.to_bits()));
+            }
         }
     }
 }

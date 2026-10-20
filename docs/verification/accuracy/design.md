@@ -110,28 +110,77 @@ The old erfc cap 8.9 excludes 308,857 normal-result binary32 inputs through
 and gradient floor -12.5 also excludes normal values at -12.6 and -13,
 where even the shared erfc intermediate is normal.
 
-The shared selection criterion compares the f64 erfc reference at the
-rounded binary32 shader argument with `f32::MIN_POSITIVE`. It keeps
-nonfinite structural controls and removes subnormal inputs through the
-existing helper. Erfc uses x; GELU and its gradient use the rounded
-`-x*FRAC_1_SQRT_2` argument. This restores a strict superset of the former
-selected tail values. It defines coverage, not an intrinsic error budget.
+Erfc selection compares its f64 reference at the rounded binary32 input
+with `f32::MIN_POSITIVE`. The accepted #509 source also applies that criterion
+to the rounded `-x*FRAC_1_SQRT_2` erfc intermediate for GELU/gradient. At -13,
+combining the two normal gradient terms before halving avoids the premature
+flush of the subnormal half-erfc. That accepted-source change and its prior
+failures/receipts remain preserved.
 
-At -13, the erfc intermediate is about `1.22343e-38`, which is normal,
-but multiplying it by 0.5 first produces a subnormal intermediate. WGSL
-may flush that term even though the final derivative is about `-1.03373e-36`
-and normal. Reassociate the same identity as
-`0.5*(erfc(-x/sqrt(2)) + x*(2*exp(-x*x/2))/sqrt(2*pi))`.
-The doubled exponential is formed before multiplying x, so this grouping
-also avoids introducing a new `2*x` overflow on huge finite inputs.
-Combining the normal terms before halving avoids this specific premature
-flush. It preserves the expression-only operation seam.
+### Private normal-result interval correction
 
-Farther negative inputs can still produce normal final GELU/gradient
-values from a subnormal erfc intermediate. That interval remains explicitly
-unqualified; full coverage needs a scaled formulation or an accepted
-qualification limit. References themselves do not guarantee that every
-allowed intrinsic evaluation stays normal at the exact boundary.
+The intermediate criterion first excludes x = -13.003056526184082
+(bits `0xc1500c85`). MPFR at 256 and 512 bits agrees with the actual f64
+value functions on the precise final-normal endpoints:
+
+| Operation | Last normal-result input | Input bits | Excluded normal inputs |
+|---|---:|---|---:|
+| GELU | -13.146245956420898 | `0xc1525706` | 150146 |
+| GELU gradient | -13.34188175201416 | `0xc1557859` | 355285 |
+
+The first excluded input still has a true-normal erfc at the exact argument;
+rounding the shader argument excludes that one extra lane. The true erfc is
+subnormal from the next input. The Gaussian exp(-x*x/2) also becomes subnormal
+before the gradient's final-normal endpoint, at bits `0xc153765b`.
+
+For x < -13, let z = abs(x)/sqrt(2) and r = exp(z*z)*erfc(z).
+The implementation approximates r by t*exp(N(t)), where t = 1/(1+z/2)
+and N is the existing Numerical Recipes erfc exponent correction. One shared
+coefficient macro serves erfc and this scaled erfc; the emitted erfc
+expression remains byte-identical. Before rounding, the exact identities are
+
+```
+GELU(x) = (0.5*x*r)*exp(-x*x/2)
+GELU'(x) = (r/1024 + x/(512*sqrt(2*pi)))*exp(-x*x/2 + ln(512)).
+```
+
+The first Gaussian stays normal throughout GELU's normal-result tail. The
+second stays normal throughout the gradient's normal-result tail; reciprocal
+scaling folds into its coefficients, avoiding a final divide or a product of
+two Gaussian factors that could be regrouped into a subnormal intermediate.
+The finite discarded expressions remain bounded except the nonpositive
+Gaussian exponent may become negative infinity after a huge squared input;
+its exponential is zero. Explicit infinity guards and the existing f64
+capability flags remain. No host value function, C/HIP expression, threshold,
+execution profile or public API changes.
+
+Conformance selection now uses the final f64 operation reference: zero and
+normal final results plus nonfinite structural controls. Existing selected
+main/root/mid/far inputs remain, and the previously excluded normal lanes
+are restored. Directed tests include -13.1, gradient -13.3, the final two
+normal inputs, and the next subnormal-reference input, which the selector
+excludes. No reference-margin filter, clamp or bias hides the endpoint.
+The actual-expression CPU model reproduces a further accepted-source
+GELU witness at bits `0xc150014b`: its gradual-underflow error exceeds
+256 ULP even before the old selector's first exclusion. Directed far-band
+controls retain this witness, both handoff neighbors and the Gaussian's
+first-subnormal transition. The new gradient may produce negative zero for
+a huge finite negative input where the old expression produces positive
+zero; the unchanged sweep scores both at zero ULP. The explicit negative
+infinity guard still returns positive zero.
+The last-normal references sit only 83.9656 (GELU) and 63.3345 (gradient)
+subnormal ULP above MIN; a legal flush following an underestimated numerical
+result can therefore cause a large error even when the pre-flush error is
+below 256 ULP. Endpoint controls matter in addition to interior sweeps.
+
+This is a concrete CPU/source correction under explicit arithmetic models,
+not a portable intrinsic proof or device receipt. Controlled broader exp
+perturbation profiles can still violate the target and flush a final-normal
+endpoint. Those stress witnesses are separate from the six existing portable
+countermodels, not a proof of a newly allowed intrinsic profile. Full compiler
+reassociation/transcendental transformations remain unqualified. Eager WGSL
+selection adds tail work; actual performance is unmeasured. Independent review
+and required actual backend validation of this private delta remain pending.
 
 ## Portable composition finding remains open
 
