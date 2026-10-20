@@ -1,11 +1,11 @@
 use crate::CudaDevice;
-use hephaestus_core::{BlockWidth, HephaestusError, Result};
+use hephaestus_core::{BlockWidth, FusionPipelineKey, HephaestusError, Result};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 mod key;
 
-pub(crate) use key::{FusionPipelineKey, PipelineKey};
+pub(crate) use key::PipelineKey;
 
 #[cfg(feature = "cuda")]
 pub(crate) use crate::infrastructure::compiler::SafeCachedKernel;
