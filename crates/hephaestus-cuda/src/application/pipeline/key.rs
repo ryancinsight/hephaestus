@@ -154,6 +154,14 @@ pub(crate) enum PipelineKey {
         scalar: TypeId,
         width: u32,
     },
+    EmbeddingGather {
+        scalar: TypeId,
+        width: u32,
+    },
+    EmbeddingScatter {
+        scalar: TypeId,
+        width: u32,
+    },
     IndexSelect {
         scalar: TypeId,
         width: u32,

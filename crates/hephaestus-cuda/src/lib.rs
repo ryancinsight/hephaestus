@@ -66,6 +66,7 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::CudaElementwiseOps;
+pub use application::embedding_seam::CudaEmbeddingOps;
 pub use application::full_reduction_seam::{CudaFullReductionOps, CudaPreparedFullReduction};
 pub use application::fusion::CudaFusionOps;
 pub use application::gather_seam::CudaGatherOps;

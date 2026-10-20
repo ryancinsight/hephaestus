@@ -78,6 +78,7 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::RocmElementwiseOps;
+pub use application::embedding_seam::RocmEmbeddingOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
 pub use application::full_reduction_seam::{RocmFullReductionOps, RocmPreparedFullReduction};
 pub use application::fusion::RocmFusionOps;
