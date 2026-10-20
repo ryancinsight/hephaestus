@@ -24,7 +24,7 @@ use crate::application::pipeline::{
 };
 use crate::application::prepared_reduction::PreparedReductionPlan;
 use crate::application::strided::{MAX_STRIDED_RANK, StridedOperand, pad_shape, pad_strides};
-use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
+use crate::infrastructure::buffer::CudaBuffer;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -193,7 +193,7 @@ pub(crate) struct MapReductionResources<T> {
 }
 
 impl<T> MapReductionResources<T> {
-    fn launch(&self, a_raw: DevicePtr, b_raw: DevicePtr) -> Result<()> {
+    fn launch(&self, a_raw: u64, b_raw: u64) -> Result<()> {
         if let Some(kernel) = &self.kernel {
             let mut meta = self.meta;
             let mut a_ptr = a_raw;
@@ -254,9 +254,9 @@ impl<T> MapReductionResources<T> {
 /// rather than with the caller.
 pub(crate) struct RetainedMapReduction<Op, T, const N: usize> {
     resources: MapReductionResources<T>,
-    a_raw: DevicePtr,
+    a_raw: u64,
     a_len: usize,
-    b_raw: DevicePtr,
+    b_raw: u64,
     b_len: usize,
     _operation: PhantomData<Op>,
 }
