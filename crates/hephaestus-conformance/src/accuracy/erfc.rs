@@ -88,10 +88,16 @@ fn far_inputs() -> Vec<f32> {
 /// was under-margined. `32` carries the band's margin convention over the
 /// cross-driver measured worst, as the far band does). The positive tail
 /// sweeps in two
-/// graded bands: mid `64` ULP and far `256` ULP on WGSL (worst-case
-/// envelope `z²`-rounding plus driver-`exp` plus evaluation: about `40`
-/// at `z = 6`, about `131` at the `8.9` cap, where the driver measures 126
-/// ULP worst at `x = 8.81`), CUDA `5` and HIP `4` ULP on both (the native
+/// graded bands: mid `128` ULP and far `256` ULP on WGSL (worst-case
+/// envelope `z²`-rounding plus driver-`exp` plus evaluation: the analytic
+/// composition ceiling sits just under `128` at `z = 6` (`36` from `z²`
+/// rounding, `9` Horner, `2` form, `77` spec-`exp`, `1` division, `0.5`
+/// product — every term at max at once, which never co-occurs), and
+/// lavapipe measures `89.2` worst at `x = 5.81`, inside it; about `131`
+/// at the `8.9` cap, where the driver measures 126 ULP worst at
+/// `x = 8.81`). `128` covers the measured worst with margin and the
+/// ceiling barely: a driver nearer the spec `exp` envelope would force
+/// `256`, so any excess is a finding. CUDA `5` and HIP `4` ULP on both (the native
 /// builtin holds its row across the bands — it forms no `z²`). WGSL
 /// additionally caps the far band at `x = 8.9`, where the true result goes
 /// subnormal and flushing is permitted; CUDA and HIP sweep the tail as
@@ -108,7 +114,7 @@ where
     let (max_ulp, mid_ulp, far_ulp) = match dialect {
         SweepDialect::CudaC => (5.0, 5.0, 5.0),
         SweepDialect::HipC => (4.0, 4.0, 4.0),
-        SweepDialect::Wgsl => (32.0, 64.0, 256.0),
+        SweepDialect::Wgsl => (32.0, 128.0, 256.0),
     };
     let main = main_inputs();
     let mid = mid_inputs();

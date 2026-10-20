@@ -87,8 +87,10 @@ fn far_inputs() -> Vec<f32> {
 /// plus `expf` `2`, `tanhf` at `2`, the product, plus margin); HIP `8`
 /// ULP (the CUDA rows carried unconfirmed — any excess on hardware CI is
 /// a finding); WGSL `16` ULP (the two-band softplus at its `softplus.rs`
-/// main analysis, `tanh` at the canary-Exact grade cut `3.4`, the
-/// product, plus margin). The mid band carries the driver-`exp` grade:
+/// main analysis; `tanh` only above `sp = 9e-4`, where the grad sweep
+/// proves every CI driver safe, and the direct `x·sp` composition
+/// below, whose `tanh(S) = S` step costs at most `2.8e-7` at the `-7`
+/// edge; the product, plus margin). The mid band carries the driver-`exp` grade:
 /// CUDA/HIP `8` ULP, WGSL `64` ULP (as `silu.rs`). The far band carries
 /// the subnormal-intermediate envelope (`≈ 230` at the deepest
 /// normal-result input, as `silu.rs` derives): CUDA/HIP `256`, WGSL

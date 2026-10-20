@@ -193,14 +193,21 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // reports `SUPPORTS_F64 = false` per the `SoftplusOp` precedent
 // (nested selects, f32-graded arms). `tanh` is unreliable across
 // drivers at both extremes — of a tiny input (Metal returns exactly
-// `0`; lavapipe returned `2^-25` for `9.35e-14` — the suite's first
+// `0` at the smallest scales and degrades steeply below `sp = 9e-4`:
+// the accuracy sweep measures `16k` ULP worst at `S = 4.8e-5`;
+// lavapipe returned `2^-25` for `9.35e-14` — the suite's first
 // tiny input to `tanh`, which has no tiny-value coverage) and of a
 // large one (Apple's unguarded `tanh` forms `inf/inf = NaN` past
 // `S = 44.4`) — so the spelling guards on `x` instead of trusting it
 // there: at `x <= -14.5` it takes `x * exp(x)` (there the fragment
 // itself is on its bare-`exp` arm, so this reuses its value while
 // skipping the `tanh`; `tanh(S) = S` to `1e-13` there and the arms
-// agree to `2.5e-7` at the boundary), and at `x > 9` it takes `x`
+// agree to `2.5e-7` at the boundary); on `(-14.5, -7]` it takes `x`
+// times the fragment value directly (parenthesized: the fragment is
+// `max + select(...)`, only `+`-safe — the `MishGradOp` precedent;
+// `tanh(S) = S` to `2.8e-7` at the `-7` edge and sub-ULP below `-8.5`,
+// so no driver ever evaluates `tanh` below the `sp = 9e-4` floor the
+// grad sweep proves safe); and at `x > 9` it takes `x`
 // itself (`tanh(S)` rounds to exactly `1` past `S = 8.66`, and
 // `S(x) > x`, so both arms agree exactly at the boundary). All
 // `select` arms evaluate (the discarded `NaN`/`inf` never trap — the
@@ -210,9 +217,11 @@ impl UnaryExpr<CudaC> for SoftplusOp {
 // clause's `1e-5`.
 impl UnaryExpr<Wgsl> for MishOp {
     const EXPR: &'static str = concat!(
-        "select(select(select(x * exp(x), x * tanh(",
+        "select(select(select(select(x * exp(x), x * (",
         wgsl_softplus_expr!(),
-        "), x > -14.5), x, x > 9.0), -0.0, (x) < -3.402823466e+38)"
+        "), x > -14.5), x * tanh(",
+        wgsl_softplus_expr!(),
+        "), x > -7.0), x, x > 9.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
