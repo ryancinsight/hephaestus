@@ -368,3 +368,14 @@ pub fn assert_parameterized_sweep_within<D, P, Op>(
         inputs.len()
     );
 }
+
+/// Capture CPU fixture-regression diagnostics without changing device execution.
+#[cfg(test)]
+pub(super) fn trace() -> tracing::subscriber::DefaultGuard {
+    tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+            .with_test_writer()
+            .finish(),
+    )
+}

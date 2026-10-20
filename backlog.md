@@ -26,6 +26,11 @@
   erfc/GELU/softplus/SiLU/Mish/Mish-gradient targets. Portable composition
   remains open and separate; preserve strict tests. The owner/coordinator must
   select controlled intrinsic budgets or adapter/driver/compiler qualification.
+- Private contract-disposition proposal: retain all six exact witness inputs
+  and actual-value/cohort diagnostics under unchanged targets. CPU guards show
+  five missing inputs; SiLU -6 was already sampled. No device cohort is accepted
+  by these fixtures. Full actual results, exposed identity limits, independent
+  review and owner/coordinator acceptance remain required; see the analysis.
 - Preserved final-tree sampled evidence: WGPU 116/116 and Metal 112/112 plus
   217/217 pass; overlapping invocations are not summed. Historical Mish
   failures are not attributed to the final source.

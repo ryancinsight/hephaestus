@@ -30,9 +30,12 @@ fn main_inputs() -> Vec<f32> {
         10.0,
         4096,
         &[
-            88.73, 89.0, 100.0, // positive saturation interior
-            -10.0, // tail-band handoff (also covered by the mid sweep)
-            0.0,   // +0 (the builder adds -0)
+            88.73,
+            89.0,
+            100.0,                       // positive saturation interior
+            f32::from_bits(0xc0c0_0000), // exact allowed-exp countermodel (-6)
+            -10.0,                       // tail-band handoff (also covered by the mid sweep)
+            0.0,                         // +0 (the builder adds -0)
         ],
     );
     inputs.extend(sweep_inputs(10.0, 120.0, 256, &[]));
@@ -133,4 +136,27 @@ where
     assert_unary_sweep_within::<D, E, SiluOp>(device, ops, "silu", &main, max_ulp);
     assert_unary_sweep_within::<D, E, SiluOp>(device, ops, "silu-mid", &mid, mid_ulp);
     assert_unary_sweep_within::<D, E, SiluOp>(device, ops, "silu-far", &far, far_ulp);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wgsl_sweep_retains_intrinsic_countermodel() {
+        let _trace = super::super::runner::trace();
+        let _assert = tracing::info_span!(
+            "assert",
+            op = "silu",
+            contract = "exact_countermodel_selection"
+        )
+        .entered();
+        let witness = f32::from_bits(0xc0c0_0000);
+        let inputs = above_flush_floor(&without_subnormals(&main_inputs()), -87.0);
+        assert!(
+            inputs.contains(&witness),
+            "exact intrinsic countermodel input removed: {:08x}",
+            witness.to_bits()
+        );
+    }
 }

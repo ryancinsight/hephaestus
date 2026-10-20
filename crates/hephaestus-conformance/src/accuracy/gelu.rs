@@ -30,8 +30,9 @@ fn main_inputs() -> Vec<f32> {
         4.0,
         4096,
         &[
-            -3.0, // mid-band handoff (also covered by the mid sweep)
-            0.0,  // +0 (the builder adds -0)
+            -3.0,                        // mid-band handoff (also covered by the mid sweep)
+            f32::from_bits(0xc036_f400), // exact allowed-exp countermodel
+            0.0,                         // +0 (the builder adds -0)
         ],
     );
     inputs.extend(sweep_inputs(4.0, 20.0, 256, &[]));
@@ -159,5 +160,22 @@ mod tests {
                 assert!(selected.iter().any(|y| y.to_bits() == x.to_bits()));
             }
         }
+    }
+    #[test]
+    fn wgsl_sweep_retains_intrinsic_countermodel() {
+        let _trace = super::super::runner::trace();
+        let _assert = tracing::info_span!(
+            "assert",
+            op = "gelu",
+            contract = "exact_countermodel_selection"
+        )
+        .entered();
+        let witness = f32::from_bits(0xc036_f400);
+        let inputs = wgsl_inputs(&main_inputs());
+        assert!(
+            inputs.contains(&witness),
+            "exact intrinsic countermodel input removed: {:08x}",
+            witness.to_bits()
+        );
     }
 }

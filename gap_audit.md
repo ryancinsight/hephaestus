@@ -27,6 +27,11 @@
   review, actual backend execution and compiler/performance qualification of
   this private delta remain open. Portable-bound design stays separate; no
   tolerance increase resolves allowed-intrinsic countermodels.
+- The private observed-cohort proposal adds explicit six-witness fixtures and
+  retained actual-value/source/lock/adapter diagnostics, preserving every target
+  and production expression. Five selection guards fail on the base; SiLU -6
+  already occurs in its dense grid. Qualification remains pending actual
+  device results, reviewed identity limits and owner/coordinator acceptance.
 - Evidence boundary: final shipped sampled WGPU/Metal passes remain valid;
   historical Mish failures are not final-source failures. Local directed
   Metal acquisition returns AdapterUnavailable before dispatch (0/27 lanes),

@@ -10,25 +10,33 @@
 //!
 //! ## Bound discipline
 //!
-//! Every bound is derived from its form's published error source, never tuned
-//! to the measurement:
+//! The numbers below are unchanged conformance targets. A native-builtin
+//! allowance is an input to an error analysis, not a proof that its composition
+//! meets the operator target:
 //!
-//! - C-family renderings that call one native builtin cite that builtin's
-//!   vendor table row (CUDA Programming Guide Table 17, HIP math API), plus
-//!   `0.5` ULP per correctly-rounded `+ - *` and the table row for `/`
-//!   (CUDA `2` without `-prec-div`, which NVRTC does not set).
-//! - WGSL renderings cite the WGSL floating-point accuracy table as
-//!   implemented by the WebGPU CTS (`+ - *` correctly rounded, `/` at `2.5`
-//!   ULP, `exp` at `3 + 2|x|` ULP, `log` at `2^-21` absolute for `x` in
-//!   `[0.5, 2]` and `3` ULP outside), plus the live canary grade the
-//!   `hephaestus-wgpu` canary probes on the attached adapter: forms that need
-//!   `log` near `1` to behave relatively (where the spec floor is absolute)
-//!   are sound only where the canary holds, which the sweep then verifies per
-//!   backend rather than assumes.
+//! - C-family entries cite the CUDA Programming Guide Table 17 and HIP math
+//!   API builtin rows, plus arithmetic costs (`0.5` ULP per correctly rounded
+//!   `+ - *` under round-to-nearest, CUDA `/` at `2` ULP without `-prec-div`,
+//!   which NVRTC does not set). Hardware evidence remains backend-specific.
+//! - WGSL entries cite the concrete accuracy table: `/` at `2.5` ULP, `exp`
+//!   at `3 + 2|x|` ULP, and `log` at `2^-21` absolute for `x` in `[0.5, 2]`
+//!   and `3` ULP outside, together with its permitted arithmetic rounding and
+//!   reassociation rules. The small-argument `exp`/`log` canary grades on the
+//!   attached adapter are sampled evidence rather than stronger table bounds.
+//!   The six allowed-intrinsic countermodels recorded in the accuracy design
+//!   exceed operator targets while respecting individual builtin allowances.
+//!   Neither the table entries nor the canary establish a portable bound for
+//!   the full composition across every legal intrinsic/compiler result.
 //!
-//! A sweep that exceeds its bound is a finding, not a tuning prompt:
-//! investigate the form, the builtin, or the reference, and widen a bound
-//! only with the cause recorded at the bound.
+//! Existing targets, input domains, mathematical operations and supported
+//! backends remain unchanged. Explicit adapter/driver/compiler qualification
+//! requires retained actual results and cohort identity plus independent review
+//! and owner/coordinator acceptance. Unknown identity fields stay unknown. A
+//! passing sweep provides evidence only for its observed configuration; no
+//! sample proves a universal WGSL composition guarantee.
+//!
+//! A sweep that exceeds its target is a finding to investigate. It must not be
+//! made green by increasing that target to fit the observation.
 //!
 //! ## Canary coverage note
 //!

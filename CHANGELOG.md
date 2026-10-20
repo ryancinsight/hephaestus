@@ -23,6 +23,14 @@
   typing, C/HIP expressions and every ULP/absolute target. CPU reference
   verification does not establish device, compiler or performance acceptance.
 
+### Added
+
+- [patch] Retain exact inputs for the six allowed-intrinsic countermodels in
+  existing accuracy sweeps. Add a focused canonical-WGPU test and retained
+  success diagnostics with actual values, unchanged targets, expressions and
+  adapter/source/lock/toolchain identity. Observed-cohort qualification remains
+  pending actual results, independent review and owner/coordinator acceptance.
+
 ### Verification limits
 
 - [patch] Track all three shipped 0.26 findings in the kernel-tail backlog.

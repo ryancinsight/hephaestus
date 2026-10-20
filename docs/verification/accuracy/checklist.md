@@ -50,6 +50,10 @@ paths unchanged; this correction targets that current base. The
   owner/coordinator accuracy-contract decision and supporting proof or
   adapter/driver/compiler qualification. Preserve strict existing tests;
   do not increase tolerances to fit observations.
+  The private observed-cohort proposal adds exact witness fixtures and retained
+  diagnostics only; it does not close this item. Actual six-witness results,
+  full-suite results and metadata limits require independent review and an
+  owner/coordinator acceptance decision under unchanged targets.
 - [ ] [patch] Revalidate all applicable package/API/backend gates and the
   current consumer graph before merge, publication or consumer admission.
 

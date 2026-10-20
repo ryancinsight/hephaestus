@@ -45,8 +45,9 @@ fn mid_inputs() -> Vec<f32> {
         6.0,
         256,
         &[
-            3.0, // mid-band handoff (also covered by the main sweep)
-            6.0, // far-band handoff (also covered by the far sweep)
+            3.0,                         // mid-band handoff (also covered by the main sweep)
+            6.0,                         // far-band handoff (also covered by the far sweep)
+            f32::from_bits(0x40b7_df3c), // exact allowed-exp countermodel
         ],
     )
 }
@@ -135,5 +136,22 @@ mod tests {
         assert!(inputs.iter().any(|x| x.is_nan()));
         assert!(inputs.contains(&f32::INFINITY));
         assert!(inputs.contains(&f32::NEG_INFINITY));
+    }
+    #[test]
+    fn wgsl_sweep_retains_intrinsic_countermodel() {
+        let _trace = super::super::runner::trace();
+        let _assert = tracing::info_span!(
+            "assert",
+            op = "erfc",
+            contract = "exact_countermodel_selection"
+        )
+        .entered();
+        let witness = f32::from_bits(0x40b7_df3c);
+        let inputs = without_subnormals(&mid_inputs());
+        assert!(
+            inputs.contains(&witness),
+            "exact intrinsic countermodel input removed: {:08x}",
+            witness.to_bits()
+        );
     }
 }

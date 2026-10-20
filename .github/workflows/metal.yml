@@ -3,9 +3,9 @@ name: Metal Backend
 on:
   push:
     branches: [master]
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml", ".github/scripts/intrinsic_qualification_identity.py"]
   pull_request:
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml", ".github/scripts/intrinsic_qualification_identity.py"]
   workflow_dispatch:
 
 permissions:
@@ -88,3 +88,19 @@ jobs:
             --doc --locked
           cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-wgpu --package hephaestus-metal \
             --no-deps --locked
+
+      - name: Retain exact intrinsic witness qualification diagnostics
+        working-directory: hephaestus
+        env:
+          WGPU_BACKEND: "metal"
+          HEPHAESTUS_WGPU_REQUIRE_DEVICE: "1"
+          HEPHAESTUS_METAL_REQUIRE_DEVICE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/intrinsic_qualification_identity.py
+          # Additional focused evidence; the full mandatory suites above stay unchanged.
+          # Nextest retains the existing 60-second termination bound.
+          cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-wgpu \
+            --test contracts --locked --success-output immediate \
+            --test-threads 1 -- --exact intrinsic_qualification::exact_intrinsic_witness_qualification

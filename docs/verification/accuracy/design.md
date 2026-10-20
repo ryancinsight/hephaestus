@@ -208,3 +208,46 @@ The shipped complete final-tree WGPU 116/116 and Metal 112/112 plus
 restored intervals nor establish a portable composition bound. The local
 directed attempt returns `AdapterUnavailable` before all 27 planned lanes;
 zero execute, and no alternative acquisition route is authorized here.
+
+## Proposed observed-cohort disposition (pending qualification)
+
+The existing qualification option preserves the same mathematical operations,
+supported backends, native-f64 capabilities, swept domains and numeric targets.
+It does not assert that every legal WGSL intrinsic approximation or compiler
+transformation meets those targets. The six allowed-intrinsic CPU countermodels
+remain valid and are not observed GPU failures. No hardware cohort is accepted
+by this source change alone.
+
+The six exact binary32 witness inputs are explicit edges in their existing named
+sweeps: erfc-mid `0x40b7df3c` at 128 ULP, GELU `0xc036f400` at 32 ULP, softplus
+`0xc1000000` and SiLU `0xc0c00000` at 16 ULP, and Mish/Mish-gradient `0xc0200000`
+at 16/32 ULP. SiLU's existing dense grid already included its witness; the other
+five were absent. CPU fixture regressions retain this distinction.
+
+A separate focused canonical-WGPU test,
+`intrinsic_qualification::exact_intrinsic_witness_qualification`, executes all
+six through the same unary seam and records actual input/output bits, the f64
+value-function reference and its bits, ULP error, unchanged target, full WGSL
+expression template and actual adapter identity. It logs all six numeric
+results before asserting their targets. The complete mandatory suites still
+run. Additional automatic-workflow diagnostics retain successful focused-test
+output and source/tree, manifest/lock hashes, locked WGPU/Naga versions, Rust
+compiler, OS and exposed host-tool identities. Required-device flags prevent
+an unavailable adapter from becoming a successful qualification run. Optional
+local execution without an adapter records zero witnesses and is not evidence.
+
+Native shader-compiler versions and empty driver fields are explicitly unknown
+when the platform does not expose them. Rust, Naga and Xcode versions are
+provenance, not substitute proof of a driver compiler version. The evidence
+must identify the observed configuration without inventing missing versions.
+Any accepted scope must name that observed stack and its metadata limits;
+other devices, drivers and compiler modes remain unqualified by that receipt.
+A future target miss remains a correctness finding at the same target.
+
+This proposal leaves the version-scoped contract checklist item open. Closure
+requires actual exact-head witness and full-suite results, independently
+reviewed identity binding, and an owner/coordinator decision accepting the
+observed cohort under the unchanged targets. Preparation alone supplies no device execution or performance evidence.
+Performance evidence remains a separate applicable requirement. Existing toward-zero
+handoff differences, native-fast NaN limitations and unmeasured hardware and
+portable-composition guarantees remain unresolved.
