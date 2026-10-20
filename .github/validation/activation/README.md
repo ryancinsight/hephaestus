@@ -88,8 +88,9 @@ summaries. Driver/compiler/staging caches are additional. Child completion
 and system CPU usage. This is observational accounting, not hard OS memory
 enforcement or a whole-host/process-tree memory cap.
 
-During local CPU preparation, native `/usr/bin/time` failed reading
-`kern.clockrate` with EPERM before the requested Git child executed. The optional
+During local CPU preparation, native `/usr/bin/time` reported EPERM reading
+`kern.clockrate` and returned exit 1; retained stdout proves the Git child emitted
+its head hash. The metric-query ordering is not established. The optional
 `sysctl -n hw.memsize` read also failed with EPERM and was incorrectly repeated
 once in the next preflight. Both failures are retained externally. All such
 queries are removed; physical host RAM remains null/unavailable, with no retry
