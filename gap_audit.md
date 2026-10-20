@@ -8,6 +8,12 @@
   bounds eager operands, restores directed reference-normal erfc coverage,
   and groups GELU-gradient terms before halving at -13. Existing tolerance
   gates, C/HIP expressions and public value-function contracts remain.
+- Post-draft evidence: automatic WGPU/Metal contracts on
+  [PR #509](https://github.com/ryancinsight/hephaestus/pull/509) fail the
+  GELU-tanh-gradient NaN controls. The private follow-up sanitizes that input
+  before bounded work and explicitly forwards NaN afterward. CPU models
+  cover NaN-propagating and NaN-suppressing clamps; source review and actual
+  backend acceptance of this delta remain pending. Thresholds stay fixed.
 - Coverage residual: normal final GELU/gradient results with subnormal erfc
   intermediates still need a scaled formulation or explicit qualification.
   Portable-bound correction remains separate; no tolerance increase is

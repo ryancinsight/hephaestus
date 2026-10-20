@@ -37,6 +37,48 @@ the binary32 threshold. Using 40 preserves the existing f64 capability;
 the smaller binary32-only saturation threshold is not imposed on f64.
 NaN-input portability is not inferred from this finite-input argument.
 
+## Post-draft NaN control regression
+
+The first automatic WGPU and Metal runs on PR #509 fail the existing
+GELU-tanh-gradient main sweep: three violations each, worst input NaN.
+This is separate from the blocked local directed acquisition. The available
+backend gates remain red, and no later sweep bands or finite-saturation
+clauses are inferred from those failed invocations.
+
+The original CPU model uses std::clamp, whose unordered comparisons preserve
+NaN. WGSL floating clamp can use min/max or median behavior, and finite-math
+assumptions do not provide a portable NaN-propagation guarantee. A controlled
+clamp that selects either finite bound reproduces the lost-NaN class on the
+actual earlier expression; this models a possible mechanism, not observed
+intermediate values from a GPU.
+
+The private follow-up computes `p = !(x == x)`, uses
+`q = clamp(select(x, 0, p), -40, 40)` for the eager work and selects the
+original x when p is true after the finite/infinite limits. Thus the IEEE
+classification model forwards NaN and keeps its discarded numerical path
+finite, while every finite input and infinity follows the earlier bounded
+arithmetic. This is expressed in the lane's own scalar type; no binary32-only
+bitcast or removal of f64 capability is introduced.
+
+Negated equality matters: the pinned Naga SPIR-V backend emits an ordered
+inequality for floating `!=`, so `x != x` cannot classify NaN there. Ordered
+equality is false on NaN; logical negation supplies the intended predicate.
+CPU source/IR checks must retain that distinction. See the
+[pinned Naga lowering](https://github.com/gfx-rs/wgpu/blob/40f4a34ebaf56f9a046231f54125ad046239d3f3/naga/src/back/spv/block.rs)
+and [WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation).
+
+Native binary32/binary64 models use four rounding modes, gradual/per-operation
+flushing and three clamp NaN profiles (propagate, lower bound, upper bound).
+The earlier expression loses NaN in 128 of 192 NaN observations; this private
+candidate loses none. All 2,880 finite tanh-gradient observations stay safe,
+and 5,760 finite observations across the two modeled gradients retain their
+bits and exception flags. Infinity limits and the nonzero binary64 -20 tail
+remain. These are controlled CPU models, not a new GPU execution receipt.
+The full WGSL finite-math assumption still prevents a universal NaN contract
+from being inferred. This source delta returns for independent review before
+push; actual backend revalidation and the broader tail/portable/cohort gates
+remain open. No NaN fixture, threshold, workflow or execution profile changes.
+
 ## Tail selection and half-erfc evaluation
 
 The old erfc cap 8.9 excludes 308,857 normal-result binary32 inputs through

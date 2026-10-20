@@ -22,6 +22,12 @@ paths unchanged; this correction targets that current base. The
 - [x] [patch] Complete scoped CPU/library tests, strict lint/docs/fmt,
   and actual-expression arithmetic checks; retain commands,
   revisions and results in the coordinator's review receipt.
+- [x] [patch] Reproduce the post-draft structural-NaN failure with actual
+  expression models whose clamp may propagate NaN or select either bound;
+  validate the private forwarding correction without removing any fixture.
+- [ ] [patch] Review the NaN-forwarding source delta independently before
+  pushing it; then qualify the unchanged structural controls on the required
+  automatic backend gates. The public draft's earlier WGPU/Metal runs fail.
 - [ ] [patch] Obtain independent review of the final private diff and assess
   current owner/base overlap plus workflow/deployment side effects before
   any public draft or CI action.

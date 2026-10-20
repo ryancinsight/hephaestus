@@ -256,6 +256,13 @@ impl UnaryExpr<HipC> for GeluTanhOp {
     const EXPR: &'static str = c_gelu_tanh_expr!();
 }
 
+// Forward NaN input explicitly instead of relying on clamp/exp propagation.
+// The self-equality test is negated: Naga lowers floating-point `!=` to
+// an ordered SPIR-V comparison, which cannot classify NaN. Substitute zero before eager polynomial work,
+// then select the original NaN after the finite/infinite limits. Finite
+// operands/arithmetic stay unchanged; infinities keep bounded intermediates.
+// This preserves the intended special-value contract; device qualification
+// remains required under WGSL's finite-math assumption.
 // WGSL select evaluates both arms. Bound every polynomial operand first:
 // q=clamp(x,-40,40), |w|<4632, q²<=1600. With e=exp(-|w|), e is in [0,1]
 // and s(1-s)=e/(1+e)² uses neither an overflowing exp nor cancellation.
@@ -268,7 +275,7 @@ impl UnaryExpr<HipC> for GeluTanhOp {
 // their eagerly evaluated alternative safe. C/HIP retain their lazy arms.
 macro_rules! wgsl_gelu_tanh_grad_x {
     () => {
-        "clamp(x, -40.0, 40.0)"
+        "clamp(select(x, 0.0, !(x == x)), -40.0, 40.0)"
     };
 }
 
@@ -304,6 +311,7 @@ macro_rules! wgsl_gelu_tanh_grad_s {
 
 impl UnaryExpr<Wgsl> for GeluTanhGradOp {
     const EXPR: &'static str = concat!(
+        "select(",
         "select(select((",
         wgsl_gelu_tanh_grad_s!(),
         " + (2.0 * ",
@@ -318,7 +326,8 @@ impl UnaryExpr<Wgsl> for GeluTanhGradOp {
         wgsl_gelu_tanh_grad_x!(),
         " * ",
         wgsl_gelu_tanh_grad_x!(),
-        ")), 1.0, x >= 40.0), 0.0, x <= -40.0)"
+        ")), 1.0, x >= 40.0), 0.0, x <= -40.0)",
+        ", x, !(x == x))"
     );
 }
 impl UnaryExpr<CudaC> for GeluTanhGradOp {

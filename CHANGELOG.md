@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- [patch] Forward NaN inputs explicitly through the bounded WGSL GELU-tanh
+  gradient and sanitize its eagerly evaluated polynomial operand. Preserve
+  existing structural controls and every threshold; device validation of
+  this follow-up remains pending.
+
 - [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
   evaluation and use a nonoverflowing sigmoid product. Finite saturated
   inputs keep their rounded zero/one limits, including both signs of
