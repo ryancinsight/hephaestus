@@ -13,7 +13,7 @@
   sigmoid product, and retain saturation/handoff/ordinary controls under
   unchanged targets. CPU/source checks do not qualify devices or performance.
 - Automatic [PR #509](https://github.com/ryancinsight/hephaestus/pull/509)
-  at f3193138 passes CI/lock/CUDA/ROCm/WGPU (116 contracts); Metal retains
+  at the reviewed forwarding head passes CI/lock/CUDA/ROCm/WGPU (116 contracts); Metal retains
   three NaN violations (90/112 pass, one fails, 21 unrun). Earlier failures
   remain. A private magnitude-selected follow-up preserves finite outputs;
   its source requires independent review and renewed actual backend gates.

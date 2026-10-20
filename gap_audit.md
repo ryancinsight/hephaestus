@@ -9,7 +9,7 @@
   and groups GELU-gradient terms before halving at -13. Existing tolerance
   gates, C/HIP expressions and public value-function contracts remain.
 - Post-draft evidence: automatic WGPU contracts on
-  [PR #509](https://github.com/ryancinsight/hephaestus/pull/509) at f3193138
+  [PR #509](https://github.com/ryancinsight/hephaestus/pull/509) at the reviewed forwarding head
   pass all 116; Metal retains three GELU-tanh-gradient NaN violations.
   The private follow-up shares one magnitude predicate for bounded operands
   and saturation, removing clamp/self-equality and a separate negative guard.
