@@ -115,8 +115,11 @@ fn far_inputs() -> Vec<f32> {
 /// `tanhf` `2`, the `sech²` term at softplus plus `expf` plus `/`, the
 /// sigmoid, the sum, plus margin); HIP `8` ULP (the CUDA rows carried
 /// unconfirmed — any excess on hardware CI is a finding); WGSL `12` ULP
-/// (the `tanh` term at two-band softplus plus the canary-Exact grade cut
-/// `3.4`, the `sech²` and sigmoid terms, the sum, plus margin). The root
+/// (the `tanh` term at two-band softplus plus driver grade above
+/// `sp = 0.018` — past the bad-`tanh` edge two sweep rounds pin at
+/// `x = -4.2` on Metal — the corrected `S·(1-S²/3)` composition below
+/// (Taylor remainder `0.24` ULP at the `-4` edge), the `sech²` and
+/// sigmoid terms, the sum, plus margin). The root
 /// window sweeps separately at the absolute floor: CUDA `2e-7`, HIP
 /// `2e-7`, WGSL `3e-7` (the forms' absolute rounding over unit-scale
 /// terms, plus margin). The mid band carries the driver-`exp` grade:

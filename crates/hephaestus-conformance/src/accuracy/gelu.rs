@@ -74,9 +74,12 @@ fn far_inputs() -> Vec<f32> {
 
 /// Sweep [`GeluOp`](hephaestus_core::GeluOp) on one backend.
 ///
-/// Bounds grade with the `2z²` conditioning: main `16` ULP on every
-/// dialect (`2·2.12² + erfcf 4 + products`, plus margin), mid `64` ULP on
-/// the C dialects and `128` ULP on WGSL (the WGSL mid adds the driver's
+/// Bounds grade with the `2z²` conditioning: main `16` ULP on the C
+/// dialects (`2·2.12² + erfcf 4 + products`, plus margin) and `32` ULP
+/// on WGSL (the Chebyshev evaluation's driver-`exp` over arguments past
+/// `-5`, as `erfc.rs` derives; lavapipe measures `18.4` worst at
+/// `x = -2.89`), mid `64` ULP on the C dialects and `128` ULP on WGSL
+/// (the WGSL mid adds the driver's
 /// large-argument `exp` grade inside the Chebyshev evaluation), far `256`
 /// ULP on every dialect. The HIP `erfcf` row is the CUDA row carried
 /// unconfirmed — no HIP-published row was found; any excess on hardware CI
@@ -94,7 +97,7 @@ where
     dialect.check::<E::Dialect>();
     let (max_ulp, mid_ulp, far_ulp) = match dialect {
         SweepDialect::CudaC | SweepDialect::HipC => (16.0, 64.0, 256.0),
-        SweepDialect::Wgsl => (16.0, 128.0, 256.0),
+        SweepDialect::Wgsl => (32.0, 128.0, 256.0),
     };
     let main = main_inputs();
     let mid = mid_inputs();

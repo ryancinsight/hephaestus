@@ -41,6 +41,7 @@ fn combine_and_identity_agree_per_dialect() {
     );
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x * tanh(max(x, 0.0) +"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
+    assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0)"));
     assert!(<MishOp as UnaryExpr<Wgsl>>::EXPR.contains(", x, x > 9.0)"));
     assert_eq!(
         <MishGradOp as UnaryExpr<CudaC>>::EXPR,
@@ -51,7 +52,7 @@ fn combine_and_identity_agree_per_dialect() {
         "(x) > 3.402823466e+38f ? 1.0f : ((x) < -3.402823466e+38f ? 0.0f : tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) + (x) * ((((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) <= 1.55f ? 1.0f - tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) * tanh(((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))) : ((4.0f * exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) / ((1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x))))))) * (1.0f + exp(-2.0f * ((x) <= 0.0f ? log1p(exp((x))) : (x) + log1p(exp(-((x)))))))))) * (((x)) <= 0.0f ? exp(((x))) / (1.0f + exp(((x)))) : 1.0f / (1.0f + exp(-((x))))))"
     );
     assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("exp(x) * (1.0 + x)"));
-    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -7.0)"));
+    assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -4.0)"));
     assert!(<MishGradOp as UnaryExpr<Wgsl>>::EXPR.contains("x > -14.5)"));
     // The middle-arm `(1 - sp^2)` parenthesizes the fragment: it is
     // `max + select(...)`, only `+`-safe, and the bare form under `*`
@@ -159,6 +160,7 @@ fn combine_and_identity_agree_per_dialect() {
     for expr in [
         <Expm1Op as UnaryExpr<Wgsl>>::EXPR,
         <Log1pOp as UnaryExpr<Wgsl>>::EXPR,
+        <MishOp as UnaryExpr<Wgsl>>::EXPR,
         <MishGradOp as UnaryExpr<Wgsl>>::EXPR,
         <GeluGradOp as UnaryExpr<Wgsl>>::EXPR,
     ] {
