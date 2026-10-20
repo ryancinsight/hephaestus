@@ -77,10 +77,17 @@ fn far_inputs() -> Vec<f32> {
 /// and the vendor table is generated from non-exhaustive tests, so the
 /// bound carries margin past both); HIP `4` ULP (the CUDA row carried
 /// unconfirmed — no HIP-published `erfcf` row was found; any excess on
-/// hardware CI is a finding); WGSL `16` ULP (the Chebyshev form at its
+/// hardware CI is a finding); WGSL `32` ULP (the Chebyshev form at its
 /// published `1.2e-7` fractional bound — about `2` ULP — plus Horner
-/// evaluation rounding, the `t` division at `2.5`, and canary-grade `exp`
-/// over its small arguments, plus margin). The positive tail sweeps in two
+/// evaluation rounding, the `t` division at `2.5`, and the driver's `exp`
+/// over arguments reaching `-10` at the `z = 3` handoff. The `exp` term
+/// dominates and varies by driver: lavapipe measures `18.0` ULP worst at
+/// `x = 2.19`, Metal `17.1` at `x = 2.84`, local Vulkan at most `16` —
+/// all inside the WGSL `(3 + 2|x|)` `exp` envelope (`14` and `21` at the
+/// two failing arguments), so the drivers conform and the old `16` bound
+/// was under-margined. `32` carries the band's margin convention over the
+/// cross-driver measured worst, as the far band does). The positive tail
+/// sweeps in two
 /// graded bands: mid `64` ULP and far `256` ULP on WGSL (worst-case
 /// envelope `z²`-rounding plus driver-`exp` plus evaluation: about `40`
 /// at `z = 6`, about `131` at the `8.9` cap, where the driver measures 126
@@ -101,7 +108,7 @@ where
     let (max_ulp, mid_ulp, far_ulp) = match dialect {
         SweepDialect::CudaC => (5.0, 5.0, 5.0),
         SweepDialect::HipC => (4.0, 4.0, 4.0),
-        SweepDialect::Wgsl => (16.0, 64.0, 256.0),
+        SweepDialect::Wgsl => (32.0, 64.0, 256.0),
     };
     let main = main_inputs();
     let mid = mid_inputs();
