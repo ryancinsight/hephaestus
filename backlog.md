@@ -36,6 +36,13 @@
   failures are not attributed to the final source.
 - Execution limit: directed Metal acquisition is AdapterUnavailable, 0/27 lanes
   executed; no retry through escalation, another adapter or a service.
+- Hosted evidence path: the existing automatic draft-PR Metal job has
+  succeeded on its GitHub-hosted macOS cohort. A validation-only wrapper
+  compares immutable base/head revisions after the full suite and exact-six
+  diagnostics on that same VM, with bounded preparation, unchanged targets,
+  retained raw samples and explicit identity limits. Local acquisition is
+  not retried; software Vulkan is not physical Metal evidence. See the
+  [comparison procedure](.github/validation/activation/README.md).
 - Acceptance: independent exact-diff review, applicable CPU/API/package/device
   gates, workflow/deployment assessment, current owner/base and consumer graph
   reconciliation before public action/release. #508 retained reductions remain untouched. Coeus #585/Miri, FFI/Python, service/process and Harmonia holds remain.

@@ -56,6 +56,13 @@ paths unchanged; this correction targets that current base. The
   owner/coordinator acceptance decision under unchanged targets.
 - [ ] [patch] Revalidate all applicable package/API/backend gates and the
   current consumer graph before merge, publication or consumer admission.
+- [ ] [patch] Independently review and execute the validation-only hosted
+  Metal comparison after the complete mandatory suite and exact-six
+  diagnostics. Bind immutable base/final comparison source, real output
+  checks, compiler/adapter identities, raw timing/noise and metadata limits
+  on one VM. Preserve existing budgets and targets. An unavailable,
+  cancelled, incomplete or unexplained baseline/head result does not close
+  numerical or performance qualification.
 
 CPU arithmetic models are not GPU execution receipts. Physical NVIDIA/AMD,
 DX12, device performance and portable composition guarantees remain

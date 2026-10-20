@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "repository": "ryancinsight/hephaestus",
+  "toolchain": "1.95.0",
+  "cohorts": {
+    "base": {
+      "revision": "6f4dd9b942d083a8183fc56c3502c8d8322277d1",
+      "tree": "fd2a98e66ec68c0a436b54e41e1060b8bfe63f51",
+      "expression_sha256": "6cf8e97bb49241364d98692cc56f2c736d9c3b9cf3fff1f346566881894cd288",
+      "external_package_graph_sha256": "c5a2c2e7febf568e9efd1c8938679973aa1f6ced6e5c0fa32ac2ff9332122515",
+      "external_packages": 228
+    },
+    "head": {
+      "revision": "9f7be89890dc07eb00dcf2521871d9dd31f23f65",
+      "tree": "7afb32d4547306128ca4d2e645879927dec82802",
+      "expression_sha256": "1210112585ea25d6053c195b95e320fe8c64deeb1c82fa36eedbea5f729924ac",
+      "external_package_graph_sha256": "c5a2c2e7febf568e9efd1c8938679973aa1f6ced6e5c0fa32ac2ff9332122515",
+      "external_packages": 228
+    }
+  },
+  "operations": [
+    "GeluOp",
+    "GeluGradOp",
+    "GeluTanhGradOp"
+  ],
+  "expression_exports": {
+    "operators": 8,
+    "dialects": 3
+  },
+  "sizes": [
+    65536,
+    1048576
+  ],
+  "samples": 9,
+  "batch": 8,
+  "warmups": 2,
+  "seed_linspace_points": 4096,
+  "bands": [
+    "ordinary",
+    "tail",
+    "finite-saturation"
+  ],
+  "order": [
+    "base",
+    "head",
+    "head",
+    "base"
+  ],
+  "budgets": {
+    "job_seconds": 2700,
+    "phase_seconds": 1320,
+    "artifact_reserve_seconds": 120,
+    "build_seconds": 300,
+    "export_manifest_seconds": 30,
+    "invocation_seconds": 120,
+    "wait_seconds": 15,
+    "build_jobs": 2,
+    "artifact_bytes": 104857600,
+    "setup_margin_seconds": 60
+  },
+  "timing_scope": "public dispatch plus device completion; excludes upload/readback/compilation",
+  "numerical_bounds": "unchanged existing per-input bands and joint shared-root endpoints",
+  "memory_contract": "fixed1048576-element maximum; logical case-owned host/device buffers plus seeds/references/failure summaries <=17MiB; driver/compiler/staging caches additional, measured childRSS; no hard OS RSS/AS enforcement",
+  "expected_baseline_predicates": "baseline_failures.json",
+  "baseline_prediction_scope": "Fixed exact input-bit/failure-class predicates from actual baseline expression CPU RNE/FTZ models; no blanket baseline exit1 exception"
+}

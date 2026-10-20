@@ -363,6 +363,14 @@ adapters; other adapters must reject those requests before changing any operand.
 The scoped [macOS acceptance checklist](docs/verification/macos/checklist.md)
 records local evidence and remaining hosted verification.
 
+After the complete Metal suite, automatic PR validation retains the six exact
+intrinsic witnesses and runs the [matched activation comparison](.github/validation/activation/README.md)
+on immutable base/head sources on the same hosted VM. The procedure preserves
+the numerical targets, records observed adapter/compiler identity and raw
+timings, and requires independent assessment of output checks and noise.
+Missing hardware, incomplete evidence or a green workflow alone does not
+establish numerical or performance acceptance.
+
 The `elementwise_into`, `reduction_width`, and `prepared_map_reduction`
 benchmarks run real WGPU dispatch and validate output values. The prepared
 map-reduction benchmark compares fixed-buffer prepared dot/L2 dispatch against

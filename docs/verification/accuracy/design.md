@@ -251,3 +251,34 @@ observed cohort under the unchanged targets. Preparation alone supplies no devic
 Performance evidence remains a separate applicable requirement. Existing toward-zero
 handoff differences, native-fast NaN limitations and unmeasured hardware and
 portable-composition guarantees remain unresolved.
+
+## Existing hosted validation route
+
+The local `AdapterUnavailable` is a known runtime outcome, not an approval
+denial. It is not retried. The existing automatic draft-PR Metal workflow has
+separate GitHub-hosted execution evidence; using that normal workflow requires
+no new runner registration, device access, settings change or manual dispatch.
+The software-Vulkan WGPU job remains software evidence. Historical Metal
+logs do not identify a physical GPU model or native driver compiler version.
+
+The [relocatable comparison](../../../.github/validation/activation/README.md)
+is validation infrastructure outside ordinary Cargo target discovery. It
+overlays the identical reviewed benchmark only into disposable immutable
+base/head checkouts, verifies actual compiled expressions and source/lock/
+feature identity, and preserves distinct optimized binaries. Both sources
+execute serially in the same existing hosted Metal job after its complete
+mandatory suite and focused exact-six diagnostics. Existing job/test limits,
+numerical bands, domains and production expressions remain unchanged.
+
+The procedure retains real computed-output checks, raw batches and order,
+observed adapter/driver/compiler provenance, timing scope and noise. Exposed
+SDK/standalone compiler versions are not substituted for an unknown runtime
+Metal JIT version. Only demonstrated baseline violations may be expected;
+other baseline or candidate failures require investigation. Cancellation,
+timeout, metadata mismatch or absent artifacts leaves evidence incomplete.
+
+Preparation and a green workflow alone do not establish performance or
+portable numerical acceptance. Actual final-revision observations and their
+limits require independent review and owner/coordinator disposition before
+any merge or publication. Coeus Miri remains deferred and unverified; the
+other hardware/service and consumer release holds retain their own scope.

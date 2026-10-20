@@ -63,6 +63,9 @@ def main():
             for name in (
                 "ImageOS", "ImageVersion", "RUNNER_OS", "RUNNER_ARCH",
                 "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_SHA",
+                "GITHUB_EVENT_NAME", "GITHUB_JOB", "GITHUB_REPOSITORY",
+                "GITHUB_HEAD_REF", "GITHUB_BASE_REF", "GITHUB_WORKFLOW_REF",
+                "GITHUB_WORKFLOW_SHA",
                 "RUST_TOOLCHAIN", "RUSTFLAGS", "WGPU_BACKEND",
             )
             if name in os.environ
@@ -77,6 +80,20 @@ def main():
     if platform.system() == "Darwin":
         record["macos"] = capture(["sw_vers"])
         record["xcode"] = capture(["xcodebuild", "-version"])
+        record["macos_sdk"] = {
+            "version": capture(["xcrun", "--sdk", "macosx", "--show-sdk-version"]),
+            "build_version": capture(["xcrun", "--sdk", "macosx", "--show-sdk-build-version"]),
+        }
+        record["standalone_metal_compiler"] = {
+            "path": capture(["xcrun", "--find", "metal"]),
+            "version": capture(["xcrun", "metal", "--version"]),
+            "scope": "standalone SDK tool; not the runtime driver Metal JIT",
+        }
+        record["runtime_metal_jit_version"] = {
+            "status": "unknown; not exposed by the adapter metadata",
+            "version": None,
+            "scope": "Xcode/SDK/standalone Metal versions are not substituted",
+        }
     elif platform.system() == "Linux":
         record["os_release"] = Path("/etc/os-release").read_text()
     print(json.dumps(record, sort_keys=True))

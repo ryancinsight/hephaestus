@@ -25,6 +25,11 @@
 
 ### Added
 
+- [patch] Prepare a relocatable, PR-only matched activation comparison after
+  the complete hosted Metal suite and exact-witness diagnostics. Preserve
+  base/head source, compiler, adapter and raw timing identities on one VM,
+  existing numerical targets and job/test budgets. Actual results and
+  reviewed cohort/performance acceptance remain required.
 - [patch] Retain exact inputs for the six allowed-intrinsic countermodels in
   existing accuracy sweeps. Add a focused canonical-WGPU test and retained
   success diagnostics with actual values, unchanged targets, expressions and

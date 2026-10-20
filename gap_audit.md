@@ -36,6 +36,13 @@
   historical Mish failures are not final-source failures. Local directed
   Metal acquisition returns AdapterUnavailable before dispatch (0/27 lanes),
   and no alternative acquisition is attempted. CPU models are not GPU output.
+- Hosted continuation: a separate validation-only draft can use the existing
+  automatic GitHub-hosted Metal workflow without new access or runners. Its
+  relocatable comparison runs after the unchanged complete suite and exact
+  witness diagnostics on one VM, preserving runtime budgets, output checks
+  and raw noise. This path supplies no acceptance until actual records and
+  source/adapter/compiler limits are independently reviewed; software WGPU
+  remains software evidence. The local unavailable acquisition is not retried.
 - Closure: exact private-diff review, applicable unchanged gates and device
   execution, owner/base reconciliation, current consumer qualification,
   and authorized lifecycle actions remain pending. See the restored
