@@ -85,8 +85,11 @@ fn far_inputs() -> Vec<f32> {
 /// Bounds: main CUDA `6` ULP (`expf` at `2`, `/` at `2` without
 /// `-prec-div`, products at `0.5`, plus margin); HIP `6` ULP (the CUDA
 /// rows carried unconfirmed — any excess on hardware CI is a finding);
-/// WGSL `8` ULP (the `sigmoid` main bound plus the `x` product). The mid
-/// band carries the driver-`exp` grade: CUDA/HIP `8` ULP (the native
+/// WGSL `16` ULP (the `sigmoid` main bound plus the `x` product, with
+/// the driver-`exp` term recorded at `≈ 6.6` — Metal measures `8.1`
+/// total worst at `x = -5.95`, inside the `(3+2|x|)` envelope — plus
+/// margin for cross-driver variance). The mid band carries the
+/// driver-`exp` grade: CUDA/HIP `8` ULP (the native
 /// builtin holds its row over normal intermediates, plus margin), WGSL
 /// `64` ULP (the Vulkan large-argument `exp` grade near `52` the
 /// `sigmoid` tail band records). The far band carries the
@@ -111,7 +114,7 @@ where
     dialect.check::<E::Dialect>();
     let (max_ulp, mid_ulp, far_ulp) = match dialect {
         SweepDialect::CudaC | SweepDialect::HipC => (6.0, 8.0, 256.0),
-        SweepDialect::Wgsl => (8.0, 64.0, 256.0),
+        SweepDialect::Wgsl => (16.0, 64.0, 256.0),
     };
     let main = main_inputs();
     let mid = mid_inputs();

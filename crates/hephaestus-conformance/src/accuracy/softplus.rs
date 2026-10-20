@@ -66,11 +66,13 @@ fn tail_inputs() -> Vec<f32> {
 ///
 /// Bounds: CUDA `4` ULP (`log1pf` at `1`, `expf` at `2` with unit input
 /// sensitivity, `+` at `0.5`, plus margin); HIP `4` ULP (`log1pf` at `1`,
-/// `expf` at `1` on its tested range, `+` at `0.5`, plus margin); WGSL `8`
-/// ULP (the two-band `log1p` rendering at its `6`-ULP bound over
-/// canary-grade `exp` at `1.7` over its eight samples, with
-/// unit input sensitivity, `+` at `0.5`, plus margin for cross-driver
-/// variance). WGSL additionally drops `x < -87`, where the true result is
+/// `expf` at `1` on its tested range, `+` at `0.5`, plus margin); WGSL `16`
+/// ULP (the two-band `log1p` rendering at its `6`-ULP bound over the
+/// driver `exp` at arguments to `-10` — lavapipe measures `9.9` total
+/// worst at `x = -7.68`, the `exp` term running `≈ 3.4` there against
+/// the canary `1.7`, inside the `(3+2|x|)` envelope — with unit input
+/// sensitivity, `+` at `0.5`, plus margin for cross-driver variance).
+/// WGSL additionally drops `x < -87`, where the true result is
 /// subnormal and flushing is permitted; CUDA and HIP sweep the tail as
 /// IEEE.
 /// The negative tail band `[-110, -10)` sweeps separately at the
@@ -94,7 +96,7 @@ where
     dialect.check::<E::Dialect>();
     let (max_ulp, tail_ulp) = match dialect {
         SweepDialect::CudaC | SweepDialect::HipC => (4.0, 4.0),
-        SweepDialect::Wgsl => (8.0, 64.0),
+        SweepDialect::Wgsl => (16.0, 64.0),
     };
     let main = main_inputs();
     let tail = tail_inputs();
