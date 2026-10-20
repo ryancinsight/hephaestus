@@ -26,7 +26,7 @@ use hephaestus_core::{
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
 };
-use crate::infrastructure::buffer::{CudaBuffer, DevicePtr};
+use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
 fn gather_source<T: DialectScalar<CudaC>>() -> String {
@@ -104,9 +104,11 @@ fn scatter_source<T: DialectScalar<CudaC> + IdentityToken<SumOp, CudaC>>() -> St
 /// differ.
 struct EmbeddingLaunch<'a, F> {
     device: &'a CudaDevice,
-    source: DevicePtr,
-    indices: DevicePtr,
-    dest: DevicePtr,
+    // Raw `u64` addresses: the adapterless stub has no `DevicePtr` alias,
+    // and the real alias is `u64` anyway.
+    source: u64,
+    indices: u64,
+    dest: u64,
     dim: u32,
     num: u32,
     rows: u32,
