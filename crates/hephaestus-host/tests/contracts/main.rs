@@ -26,6 +26,7 @@ mod pad;
 mod parameterized;
 mod random;
 mod reduction;
+mod retained_reduction;
 mod roll;
 mod scan;
 mod scatter;

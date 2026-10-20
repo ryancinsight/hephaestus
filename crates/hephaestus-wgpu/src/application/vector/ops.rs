@@ -7,6 +7,7 @@
 use core::marker::PhantomData;
 
 use eunomia::Pod;
+use hephaestus_core::RetainedReductions;
 use hephaestus_core::{
     Binding, CommandStream, ComputeDevice, DenseVectorOps, DeviceBuffer, DispatchGrid,
     HephaestusError, IdentityToken, KernelDevice, MaxOp, OpIdentity, Result, VectorFactor,
@@ -357,5 +358,57 @@ where
         Self::require_same_allocation("norm operand", &prepared.input, vector)?;
         prepared.operation.dispatch(device)?;
         Self::download_scalar(device, prepared.operation.output())
+    }
+}
+
+impl<T> RetainedReductions<WgpuDevice, T> for WgpuVectorOps<T>
+where
+    T: VectorScalar<Wgsl>
+        + VectorFactor<Wgsl>
+        + L2NormScalar
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, Wgsl>,
+{
+    // The WGPU prepared forms already own their operands: `WgpuBuffer` is a
+    // shared handle, so cloning it keeps the allocation alive without copying
+    // device memory. The retained and borrowing forms are therefore the same
+    // resources reached through different lifetimes.
+    type RetainedDot = WgpuPreparedDot<T>;
+    type RetainedNorm = WgpuPreparedNorm<T>;
+
+    fn retain_dot(
+        &self,
+        device: &WgpuDevice,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+    ) -> Result<Self::RetainedDot> {
+        self.prepare_dot(device, left, right)
+    }
+
+    fn dot_retained(
+        &self,
+        device: &WgpuDevice,
+        retained: &Self::RetainedDot,
+        left: &WgpuBuffer<T>,
+        right: &WgpuBuffer<T>,
+    ) -> Result<T> {
+        self.dot_prepared(device, retained, left, right)
+    }
+
+    fn retain_norm_l2(
+        &self,
+        device: &WgpuDevice,
+        vector: &WgpuBuffer<T>,
+    ) -> Result<Self::RetainedNorm> {
+        self.prepare_norm_l2(device, vector)
+    }
+
+    fn norm_l2_retained(
+        &self,
+        device: &WgpuDevice,
+        retained: &Self::RetainedNorm,
+        vector: &WgpuBuffer<T>,
+    ) -> Result<T> {
+        self.norm_l2_prepared(device, retained, vector)
     }
 }

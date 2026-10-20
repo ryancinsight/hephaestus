@@ -143,6 +143,9 @@ mod random_contracts;
 #[path = "ray_integral_contracts.rs"]
 mod ray_integral_contracts;
 
+#[path = "retained_reduction_contracts.rs"]
+mod retained_reduction_contracts;
+
 #[path = "roll_contracts.rs"]
 mod roll_contracts;
 
@@ -414,6 +417,8 @@ contract_cases!(
     #[cfg(any(feature = "decomposition", feature = "sparse"))]
     random_contracts::wgpu_satisfies_the_random_init_contract,
     ray_integral_contracts::wgpu_satisfies_the_ray_integral_contract,
+    retained_reduction_contracts::wgpu_satisfies_the_retained_reduction_contract,
+    retained_reduction_contracts::wgpu_satisfies_the_retained_reduction_contract_f64,
     roll_contracts::wgpu_satisfies_the_roll_contract,
     scan_contracts::wgpu_satisfies_the_scan_contract,
     scatter_contracts::wgpu_satisfies_the_scatter_contract,
@@ -484,13 +489,13 @@ contract_cases!(
     where_contracts::wgpu_satisfies_the_where_contract,
 );
 
-// The registration inventory partitions into disjoint sets: 157 unconditional
+// The registration inventory partitions into disjoint sets: 159 unconditional
 // cases, 44 decomposition-only cases, two sparse-only cases, and three cases
 // enabled by either optional feature. Native-precision capability/rejection
 // contracts belong to the unconditional set. These cardinalities retain the
 // independent migration guard for every feature combination.
 const EXPECTED_CONTRACT_CASES: usize =
-    157 + if cfg!(feature = "decomposition") {
+    159 + if cfg!(feature = "decomposition") {
         44
     } else {
         0

@@ -12,7 +12,7 @@
 //! storage.
 
 use eunomia::Pod;
-use hephaestus_core::{DenseVectorOps, HephaestusError, Result};
+use hephaestus_core::{DenseVectorOps, HephaestusError, Result, RetainedReductions};
 use leto::{ArrayView, Layout};
 use leto_ops::RealScalar;
 
@@ -36,6 +36,20 @@ pub struct HostPreparedDot<'a, T> {
 /// A Euclidean norm bound to its operand allocation.
 pub struct HostPreparedNorm<'a, T> {
     vector: &'a HostBuffer<T>,
+}
+
+/// An owned dot product bound to its operand allocations.
+///
+/// `HostBuffer` is a shared handle, so cloning it keeps the allocation
+/// alive: the retained and borrowing forms check the same identity.
+pub struct HostRetainedDot<T> {
+    left: HostBuffer<T>,
+    right: HostBuffer<T>,
+}
+
+/// An owned Euclidean norm bound to its operand allocation.
+pub struct HostRetainedNorm<T> {
+    vector: HostBuffer<T>,
 }
 
 /// Reject `operand` unless its length equals `reference`, the operand whose
@@ -256,5 +270,61 @@ where
 
     fn norm_max(&self, _device: &HostDevice, vector: &HostBuffer<T>) -> Result<T> {
         norm_of(vector, leto_ops::norm_max)
+    }
+}
+
+impl<T> RetainedReductions<HostDevice, T> for HostDenseVectorOps
+where
+    T: Pod + RealScalar,
+{
+    type RetainedDot = HostRetainedDot<T>;
+    type RetainedNorm = HostRetainedNorm<T>;
+
+    fn retain_dot(
+        &self,
+        _device: &HostDevice,
+        left: &HostBuffer<T>,
+        right: &HostBuffer<T>,
+    ) -> Result<Self::RetainedDot> {
+        with_operands(left, right, require_same_len)?;
+        Ok(HostRetainedDot {
+            left: left.clone(),
+            right: right.clone(),
+        })
+    }
+
+    fn dot_retained(
+        &self,
+        _device: &HostDevice,
+        retained: &Self::RetainedDot,
+        left: &HostBuffer<T>,
+        right: &HostBuffer<T>,
+    ) -> Result<T> {
+        require_same_allocation("dot left operand", &retained.left, left)?;
+        require_same_allocation("dot right operand", &retained.right, right)?;
+        with_operands(left, right, |left_cells, right_cells| {
+            require_same_len(left_cells, right_cells)?;
+            Ok(T::dot_slice(left_cells, right_cells))
+        })
+    }
+
+    fn retain_norm_l2(
+        &self,
+        _device: &HostDevice,
+        vector: &HostBuffer<T>,
+    ) -> Result<Self::RetainedNorm> {
+        Ok(HostRetainedNorm {
+            vector: vector.clone(),
+        })
+    }
+
+    fn norm_l2_retained(
+        &self,
+        _device: &HostDevice,
+        retained: &Self::RetainedNorm,
+        vector: &HostBuffer<T>,
+    ) -> Result<T> {
+        require_same_allocation("norm operand", &retained.vector, vector)?;
+        norm_of(vector, leto_ops::norm_l2)
     }
 }

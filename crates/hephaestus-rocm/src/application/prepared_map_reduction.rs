@@ -14,7 +14,8 @@ use leto::Layout;
 use crate::RocmDevice;
 use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
 use crate::application::linalg::{
-    DotMap, PreparedMapReduction, SquareMap, prepare_map_reduction_with_layouts,
+    DotMap, PreparedMapReduction, RetainedMapReduction, SquareMap,
+    prepare_map_reduction_with_layouts,
 };
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::RocmBuffer;
@@ -51,6 +52,15 @@ where
             && self.left.len() == left.len()
             && self.right.raw() == right.raw()
             && self.right.len() == right.len()
+    }
+
+    /// Forget the operand borrows into `Copy` provenance, keeping the
+    /// dispatch resources.
+    #[must_use]
+    pub fn into_retained(self) -> RetainedDot<T> {
+        RetainedDot {
+            inner: self.inner.into_retained(),
+        }
     }
 }
 
@@ -117,6 +127,51 @@ where
     Ok(PreparedDot { inner, left, right })
 }
 
+/// An owned ROCm vector dot-product plan over fixed dense inputs.
+///
+/// The [`RetainedReductions`](hephaestus_core::RetainedReductions) form of
+/// [`PreparedDot`]: identical dispatch resources, but the operand borrows
+/// are forgotten into provenance, so the plan can live in a workspace
+/// beside the vectors it measures. Every dispatch re-presents the live
+/// buffers and verifies them before launching.
+pub struct RetainedDot<T> {
+    inner: RetainedMapReduction<DotMap, T, 1>,
+}
+
+impl<T> RetainedDot<T>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
+{
+    /// Dispatch over `left` and `right` after verifying they are the
+    /// retained allocations, reusing the device-resident output.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when either buffer names a different device
+    /// allocation than the plan was retained against, or when a native
+    /// launch fails.
+    pub fn dispatch_with(&self, left: &RocmBuffer<T>, right: &RocmBuffer<T>) -> Result<()> {
+        self.inner.dispatch_with(left, right)
+    }
+
+    /// Return the stable one-element output buffer.
+    #[must_use]
+    pub fn output(&self) -> &RocmBuffer<T> {
+        self.inner.output()
+    }
+}
+
+pub(crate) fn retain_dense_dot<T>(
+    device: &RocmDevice,
+    left: &RocmBuffer<T>,
+    right: &RocmBuffer<T>,
+) -> Result<RetainedDot<T>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
+{
+    Ok(prepare_dense_dot(device, left, right)?.into_retained())
+}
+
 /// A reusable ROCm L2-norm plan over a fixed strided input.
 pub struct PreparedL2Norm<'a, T, const N: usize> {
     device: RocmDevice,
@@ -153,6 +208,17 @@ where
 
     pub(crate) fn matches(&self, input: &RocmBuffer<T>) -> bool {
         self.input.raw() == input.raw() && self.input.len() == input.len()
+    }
+
+    /// Forget the operand borrow into `Copy` provenance, keeping the
+    /// dispatch resources.
+    #[must_use]
+    pub fn into_retained(self) -> RetainedL2Norm<T, N> {
+        RetainedL2Norm {
+            device: self.device,
+            inner: self.inner.into_retained(),
+            output: self.output,
+        }
     }
 }
 
@@ -210,4 +276,56 @@ where
         output: device.alloc_zeroed::<T>(1)?,
         input,
     })
+}
+
+/// An owned ROCm L2-norm plan over a fixed input.
+///
+/// The [`RetainedReductions`](hephaestus_core::RetainedReductions) form of
+/// [`PreparedL2Norm`]: identical dispatch resources, but the operand borrow
+/// is forgotten into provenance, so the plan can live in a workspace
+/// beside the vector it measures. Every dispatch re-presents the live
+/// buffer and verifies it before launching.
+pub struct RetainedL2Norm<T, const N: usize> {
+    device: RocmDevice,
+    inner: RetainedMapReduction<SquareMap, T, N>,
+    output: RocmBuffer<T>,
+}
+
+impl<T, const N: usize> RetainedL2Norm<T, N>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
+{
+    /// Dispatch the retained `sqrt(Σ x²)` operation over `input` after
+    /// verifying it is the retained allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when `input` names a different device
+    /// allocation than the plan was retained against, or when a native
+    /// elementwise, reduction, or square root launch fails.
+    pub fn dispatch_with(&self, input: &RocmBuffer<T>) -> Result<()> {
+        self.inner.dispatch_with(input, input)?;
+        unary_elementwise_into::<SqrtOp, T>(
+            &self.device,
+            self.inner.output(),
+            &self.output,
+            BlockWidth::DEFAULT,
+        )
+    }
+
+    /// Return the stable one-element output buffer.
+    #[must_use]
+    pub fn output(&self) -> &RocmBuffer<T> {
+        &self.output
+    }
+}
+
+pub(crate) fn retain_dense_norm_l2<T>(
+    device: &RocmDevice,
+    input: &RocmBuffer<T>,
+) -> Result<RetainedL2Norm<T, 1>>
+where
+    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
+{
+    Ok(prepare_dense_norm_l2(device, input)?.into_retained())
 }

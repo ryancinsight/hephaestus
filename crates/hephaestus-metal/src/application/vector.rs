@@ -1,7 +1,8 @@
 //! Metal implementation of the dense vector-operation seam.
 
 use hephaestus_core::{
-    DenseVectorOps, IdentityToken, MaxOp, OpIdentity, Result, VectorFactor, VectorScalar, Wgsl,
+    DenseVectorOps, IdentityToken, MaxOp, OpIdentity, Result, RetainedReductions, VectorFactor,
+    VectorScalar, Wgsl,
 };
 use hephaestus_wgpu::{L2NormScalar, WgpuPreparedDot, WgpuPreparedNorm, WgpuVectorOps};
 
@@ -210,5 +211,69 @@ where
     ) -> Result<T> {
         self.inner
             .norm_l2_prepared(device.wgpu_device(), &prepared.inner, &vector.inner)
+    }
+}
+
+impl<T> RetainedReductions<MetalDevice, T> for MetalVectorOps<T>
+where
+    T: VectorScalar<Wgsl>
+        + VectorFactor<Wgsl>
+        + L2NormScalar
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, Wgsl>,
+{
+    // Same resources as the borrowing form, as on the WGPU substrate: the
+    // prepared handles already own their operands through shared buffers.
+    type RetainedDot = MetalPreparedDot<T>;
+    type RetainedNorm = MetalPreparedNorm<T>;
+
+    fn retain_dot(
+        &self,
+        device: &MetalDevice,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+    ) -> Result<Self::RetainedDot> {
+        Ok(MetalPreparedDot::<T> {
+            inner: self
+                .inner
+                .retain_dot(device.wgpu_device(), &left.inner, &right.inner)?,
+        })
+    }
+
+    fn dot_retained(
+        &self,
+        device: &MetalDevice,
+        retained: &Self::RetainedDot,
+        left: &MetalBuffer<T>,
+        right: &MetalBuffer<T>,
+    ) -> Result<T> {
+        self.inner.dot_retained(
+            device.wgpu_device(),
+            &retained.inner,
+            &left.inner,
+            &right.inner,
+        )
+    }
+
+    fn retain_norm_l2(
+        &self,
+        device: &MetalDevice,
+        vector: &MetalBuffer<T>,
+    ) -> Result<Self::RetainedNorm> {
+        Ok(MetalPreparedNorm::<T> {
+            inner: self
+                .inner
+                .retain_norm_l2(device.wgpu_device(), &vector.inner)?,
+        })
+    }
+
+    fn norm_l2_retained(
+        &self,
+        device: &MetalDevice,
+        retained: &Self::RetainedNorm,
+        vector: &MetalBuffer<T>,
+    ) -> Result<T> {
+        self.inner
+            .norm_l2_retained(device.wgpu_device(), &retained.inner, &vector.inner)
     }
 }

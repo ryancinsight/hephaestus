@@ -852,29 +852,6 @@ status ledger that stood here is program history; recover any entry with
   underflow edges) asserted against CPU truth.
 - Needs: none. Next step: derive the `exp` reduction and its bound.
 
-<a id="heph-retained-reductions-1"></a>
-
-## HEPH-RETAINED-REDUCTIONS-1 — Retained-reduction providers on all backends [minor] — todo
-- Outcome: every backend implements `RetainedReductions` (retain dense
-  map-reduction outputs for reuse) with a shared conformance oracle.
-- Scope: `crates/hephaestus-core/src/domain/vector.rs` (trait exists);
-  five backend `vector`/`dense_vector` files (trailing impl blocks
-  omitted from #482); new
-  `crates/hephaestus-conformance/src/retained_reduction/` oracle; five
-  backend `retained_reduction_contracts.rs` tests;
-  `into_retained`/`retain_dense_*`/`dispatch_with` in map-reduction files.
-- Evidence: ~587 lines of new backend behavior on
-  `rescue/green-hephaestus-20261012` (reference implementation; port, do
-  not redesign). Deferred from the #427 selective rescue: the CUDA/ROCm/
-  WGSL paths need a GPU executor (CI is adapterless there; a local CUDA
-  device exists for the CUDA leg).
-- Acceptance: oracle contracts pass per backend on available hardware;
-  adapterless legs compile and skip cleanly.
-- Dependencies: none. Priority P2.
-- Verification: shared oracle per backend, strict Clippy, doc sync,
-  independent review.
-- Last-update: 2026-10-14.
-
 <a id="heph-rocm-product-validation-1"></a>
 
 ## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.27.0] - Unreleased
+
+### Added
+
+- [minor] Implement `RetainedReductions` on all five backends
+  (HEPH-RETAINED-REDUCTIONS-1): host, WGPU, CUDA, ROCm, and Metal
+  retain dense map-reduction plans (`into_retained`,
+  `retain_dense_dot`/`retain_dense_norm_l2`, `dispatch_with` with
+  allocation verification), with the shared
+  `hephaestus_conformance::retained_reduction` oracle and one
+  conformance test per backend.
+
 ## [0.26.0] - Unreleased
 
 ### Added

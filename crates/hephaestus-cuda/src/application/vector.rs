@@ -1,14 +1,18 @@
 //! CUDA implementation of the backend-neutral dense vector-operation seam.
 
-pub use crate::application::prepared_map_reduction::{PreparedDot, PreparedL2Norm};
-use crate::application::prepared_map_reduction::{prepare_dense_dot, prepare_dense_norm_l2};
+pub use crate::application::prepared_map_reduction::{
+    PreparedDot, PreparedL2Norm, RetainedDot, RetainedL2Norm,
+};
+use crate::application::prepared_map_reduction::{
+    prepare_dense_dot, prepare_dense_norm_l2, retain_dense_dot, retain_dense_norm_l2,
+};
 use crate::application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
 use crate::{AddOp, CudaBuffer, CudaDevice, DivOp, MulOp, binary_elementwise_into};
 use eunomia::{Pod, Zeroable};
 use hephaestus_core::{
     BlockWidth, CommandStream, ComputeDevice, CudaC, DenseVectorOps, DeviceBuffer, DispatchGrid,
     HephaestusError, IdentityToken, KernelDevice, MaxOp, MultiStorageKernel, OpIdentity, Result,
-    SubOp, SumOp, VectorScalar,
+    RetainedReductions, SubOp, SumOp, VectorScalar,
 };
 use std::marker::PhantomData;
 
@@ -421,5 +425,57 @@ where
         }
         prepared.dispatch()?;
         Self::scalar(device, prepared.output())
+    }
+}
+
+impl<T> RetainedReductions<CudaDevice, T> for CudaVectorOps<T>
+where
+    T: VectorScalar<CudaC>
+        + Into<f64>
+        + Zeroable
+        + OpIdentity<SumOp>
+        + IdentityToken<SumOp, CudaC>
+        + OpIdentity<MaxOp>
+        + IdentityToken<MaxOp, CudaC>,
+{
+    type RetainedDot = RetainedDot<T>;
+    type RetainedNorm = RetainedL2Norm<T, 1>;
+
+    fn retain_dot(
+        &self,
+        device: &CudaDevice,
+        left: &CudaBuffer<T>,
+        right: &CudaBuffer<T>,
+    ) -> Result<Self::RetainedDot> {
+        retain_dense_dot(device, left, right)
+    }
+
+    fn dot_retained(
+        &self,
+        device: &CudaDevice,
+        retained: &Self::RetainedDot,
+        left: &CudaBuffer<T>,
+        right: &CudaBuffer<T>,
+    ) -> Result<T> {
+        retained.dispatch_with(left, right)?;
+        Self::scalar(device, retained.output())
+    }
+
+    fn retain_norm_l2(
+        &self,
+        device: &CudaDevice,
+        vector: &CudaBuffer<T>,
+    ) -> Result<Self::RetainedNorm> {
+        retain_dense_norm_l2(device, vector)
+    }
+
+    fn norm_l2_retained(
+        &self,
+        device: &CudaDevice,
+        retained: &Self::RetainedNorm,
+        vector: &CudaBuffer<T>,
+    ) -> Result<T> {
+        retained.dispatch_with(vector)?;
+        Self::scalar(device, retained.output())
     }
 }
