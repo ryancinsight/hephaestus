@@ -40,8 +40,8 @@ NVRTC library (`bin`, `bin/x64`, `lib64`, or `lib/<target>` installations).
 Missing headers produce compilation errors; header-free kernels need only NVRTC.
 
 Scalar extensions declare source headers through
-`hephaestus_core::DialectScalar<CudaC>::PRELUDE`. Implementations and qualified
-calls using the former `CudaFusionScalar::PRELUDE` move to that trait; see
+`hephaestus_core::DialectScalar<CudaC>::PRELUDE`; fusion reduction identities
+live on `hephaestus_core::FusionScalar<CudaC>`; see
 [ADR 0044](../../docs/adr/0044-device-neutral-dense-product-seam.md).
 
 `decomposition` implies `cuda`: it is not an independent host-only surface, so

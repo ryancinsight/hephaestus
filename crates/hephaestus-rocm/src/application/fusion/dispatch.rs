@@ -307,7 +307,12 @@ where
             expression: source_expression.clone(),
             entry: "fused_elementwise_kernel",
         },
-        move || Ok(elementwise_source::<HipC, T>(inputs.len(), &source_expression)),
+        move || {
+            Ok(elementwise_source::<HipC, T>(
+                inputs.len(),
+                &source_expression,
+            ))
+        },
     )
 }
 
@@ -361,7 +366,13 @@ where
             expression: format!("{reduction:?}:{source_expression}"),
             entry: "fused_reduction_kernel",
         },
-        move || Ok(reduction_source::<HipC, T>(inputs.len(), &source_expression, reduction)),
+        move || {
+            Ok(reduction_source::<HipC, T>(
+                inputs.len(),
+                &source_expression,
+                reduction,
+            ))
+        },
     )
 }
 

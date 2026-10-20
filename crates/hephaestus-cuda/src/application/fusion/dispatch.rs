@@ -284,7 +284,12 @@ where
             expression: expression_key,
             entry: "fused_elementwise_kernel",
         },
-        move || Ok(elementwise_source::<CudaC, T>(inputs.len(), &source_expression)),
+        move || {
+            Ok(elementwise_source::<CudaC, T>(
+                inputs.len(),
+                &source_expression,
+            ))
+        },
     )
 }
 
@@ -339,7 +344,13 @@ where
             expression: expression_key,
             entry: "fused_reduction_kernel",
         },
-        move || Ok(reduction_source::<CudaC, T>(inputs.len(), &source_expression, reduction)),
+        move || {
+            Ok(reduction_source::<CudaC, T>(
+                inputs.len(),
+                &source_expression,
+                reduction,
+            ))
+        },
     )
 }
 

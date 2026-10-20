@@ -6,7 +6,8 @@ use std::sync::Arc;
 use eunomia::Pod;
 use hephaestus_core::{
     ComputeDevice, DeviceBuffer, DynamicStridedView, FusedElementwiseOps, FusedExpression,
-    FusedReduction, FusedReductionOps, FusionScalar, HephaestusError, MAX_FUSION_RANK, Result, Wgsl,
+    FusedReduction, FusedReductionOps, FusionScalar, HephaestusError, MAX_FUSION_RANK, Result,
+    Wgsl,
 };
 
 use crate::application::bindings::BindGroupEntries;
