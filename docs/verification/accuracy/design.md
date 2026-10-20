@@ -14,16 +14,18 @@ Let `a = sqrt(2/pi)`, `b = 0.044715`, `z = a(x + b*x^3)` and
 
 WGSL `select` evaluates its arguments eagerly. Selecting a limit around an
 already overflowing polynomial therefore does not prevent `0*infinity`.
-The new expression first sets `q = clamp(x, -40, 40)`, then forms
+The new expression first sets `p = abs(x) >= 40` and `q = select(x, 0, p)`, then forms
 `w = 2*a*(q+b*q^3)` and `e = exp(-abs(w))`. It evaluates the sigmoid as
 `e/(1+e)` for negative x, `1/(1+e)` for nonnegative x, and its product as
 `s*(1-s) = e/((1+e)*(1+e))`.
 
-For finite input, `|q|<=40`, `q^2<=1600`, `|w|<4632`, and `0<=e<=1`.
+For finite input, `|q|<40`, `q^2<1600`, `|w|<4632`, and `0<=e<=1`.
 The exp argument never becomes positive; the denominator is in `[1,4]`.
 The degree-three derivative factor stays finite. All eagerly evaluated
-alternatives are safe before the outer selections enforce 0 at `x<=-40`
-and 1 at `x>=40`. Permitted underflow may produce zero but cannot introduce
+alternatives are safe before `select(g, select(q, 1, x>=0), p)` enforces
+zero on negative saturated inputs and one on positive saturated inputs.
+Here g is the numerical derivative computed above. q is zero whenever p is
+true; using this typed q also keeps the nested select valid for binary64. Permitted underflow may produce zero but cannot introduce
 the previous overflowing polynomial or zero-times-infinity path.
 
 For `r=|x|>=40`, the error from the appropriate limit is bounded by
@@ -39,45 +41,67 @@ NaN-input portability is not inferred from this finite-input argument.
 
 ## Post-draft NaN control regression
 
-The first automatic WGPU and Metal runs on PR #509 fail the existing
-GELU-tanh-gradient main sweep: three violations each, worst input NaN.
-This is separate from the blocked local directed acquisition. The available
-backend gates remain red, and no later sweep bands or finite-saturation
-clauses are inferred from those failed invocations.
+Retain both generations of automatic PR #509 failures. At b79c2682,
+WGPU and Metal each fail three retained NaN controls. At f3193138, the
+explicit NaN-forwarding source passes WGPU's 116 contracts, but Metal
+still fails three of 2,833 main-sweep inputs at the unchanged 32 ULP bound:
+90 of 112 contracts pass, one fails and 21 remain unrun. CI, lockfile,
+CUDA and ROCm workflows pass; their existing physical NVIDIA/AMD skips
+remain skips. The failed Metal invocation does not reach this sweep's
+later root/tail/finite-saturation clauses.
 
-The original CPU model uses std::clamp, whose unordered comparisons preserve
-NaN. WGSL floating clamp can use min/max or median behavior, and finite-math
-assumptions do not provide a portable NaN-propagation guarantee. A controlled
-clamp that selects either finite bound reproduces the lost-NaN class on the
-actual earlier expression; this models a possible mechanism, not observed
-intermediate values from a GPU.
+The f3193138 source uses `!(x == x)` around a clamp. Source review confirms
+that Naga retains that predicate in IR, MSL and SPIR-V; this does not constrain
+later compiler optimization. WGSL permits a finite-math assumption. A
+self-comparison may then be folded, leaving a NaN-suppressing min/max clamp.
+The exact Metal intermediate values and optimized machine code are unavailable;
+this mechanism is an inference, not an observed Metal trace.
 
-The private follow-up computes `p = !(x == x)`, uses
-`q = clamp(select(x, 0, p), -40, 40)` for the eager work and selects the
-original x when p is true after the finite/infinite limits. Thus the IEEE
-classification model forwards NaN and keeps its discarded numerical path
-finite, while every finite input and infinity follows the earlier bounded
-arithmetic. This is expressed in the lane's own scalar type; no binary32-only
-bitcast or removal of f64 capability is introduced.
+A native C++ optimizer witness supplies another warning. With the actual
+exported expression and finite-math enabled, self-equality disappears and
+ARM's finite-math `<=` selection can accept unordered inputs. Replacing
+`x<=-40` with `-x>=40` is canonicalized back and does not resolve the witness.
+Both unsuccessful private prototypes remain in the coordinator's evidence.
+These NaN stress inputs lie outside that compiler mode's assumptions;
+the observations are optimization evidence, not C++ conformance or a substitute
+for Metal qualification.
 
-Negated equality matters: the pinned Naga SPIR-V backend emits an ordered
-inequality for floating `!=`, so `x != x` cannot classify NaN there. Ordered
-equality is false on NaN; logical negation supplies the intended predicate.
-CPU source/IR checks must retain that distinction. See the
-[pinned Naga lowering](https://github.com/gfx-rs/wgpu/blob/40f4a34ebaf56f9a046231f54125ad046239d3f3/naga/src/back/spv/block.rs)
-and [WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation).
+The private candidate removes both dependencies. Its polynomial uses
+`q = select(x, 0, abs(x)>=40)`. Its final output is
+`select(g, select(q, 1, x>=0), abs(x)>=40)`.
+For a finite input inside the threshold, q is exactly x and g follows the
+same native arithmetic as f3193138. Outside, q is zero, all eagerly evaluated
+arithmetic remains finite, and the shared predicate selects the same exact
+zero/one saturation. Infinities also select q zero. Under ordered NaN
+comparisons, the magnitude predicate is false and q remains NaN in the
+numerical path. No clamp, explicit self-classification, separate negative
+comparison, binary32-only bitcast, new intrinsic or scalar API is introduced.
+The typed q in the zero arm preserves the existing binary64 capability.
 
-Native binary32/binary64 models use four rounding modes, gradual/per-operation
-flushing and three clamp NaN profiles (propagate, lower bound, upper bound).
-The earlier expression loses NaN in 128 of 192 NaN observations; this private
-candidate loses none. All 2,880 finite tanh-gradient observations stay safe,
-and 5,760 finite observations across the two modeled gradients retain their
-bits and exception flags. Infinity limits and the nonzero binary64 -20 tail
-remain. These are controlled CPU models, not a new GPU execution receipt.
-The full WGSL finite-math assumption still prevents a universal NaN contract
-from being inferred. This source delta returns for independent review before
-push; actual backend revalidation and the broader tail/portable/cohort gates
-remain open. No NaN fixture, threshold, workflow or execution profile changes.
+Native binary32/binary64 expression models cover 16 NaN sign/class/payload
+patterns, four rounding modes, gradual/per-operation flushing, three clamp
+NaN profiles and honored/folded self-equality. f3193138 loses 512 of 1,536
+NaN observations in that controlled model; the candidate loses none.
+All 11,520 finite observations across both gradients preserve output bits;
+5,760 tanh-gradient checks stay finite without invalid/overflow, and infinity
+limits and the nonzero binary64 -20 tail remain. In 1,152 saturated cases,
+full CPU flags differ because discarded underflow/inexact work is removed;
+no universal exception-flag identity is claimed. The native optimizer stress
+witness also retains NaN for the candidate at its tested inputs. These are
+scoped models and optimizer observations, not a new GPU execution receipt.
+
+Naga 30.0.1 validates/emits the eight concrete binary32 expressions to IR,
+MSL 2.4 and SPIR-V. It also validates/emits the changed binary64 gradient to
+IR/SPIR-V; Metal has no binary64 acceptance here. Other seven binary32
+outputs remain identical. The candidate has no clamp, equality or negative
+`<=` comparison in this path. Raw binary32 SPIR-V instruction count changes
+from 249 to 222; this is not a timing or register-pressure claim.
+
+The full [WGSL finite-math assumption](https://www.w3.org/TR/WGSL/#floating-point-evaluation)
+still prevents a universal NaN guarantee from being inferred. This source
+delta returns for independent review before push; actual backend revalidation
+and the broader tail/portable/cohort/performance gates remain open. No NaN
+fixture, threshold, workflow or execution profile changes.
 
 ## Tail selection and half-erfc evaluation
 

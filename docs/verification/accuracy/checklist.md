@@ -22,12 +22,15 @@ paths unchanged; this correction targets that current base. The
 - [x] [patch] Complete scoped CPU/library tests, strict lint/docs/fmt,
   and actual-expression arithmetic checks; retain commands,
   revisions and results in the coordinator's review receipt.
-- [x] [patch] Reproduce the post-draft structural-NaN failure with actual
-  expression models whose clamp may propagate NaN or select either bound;
-  validate the private forwarding correction without removing any fixture.
-- [ ] [patch] Review the NaN-forwarding source delta independently before
-  pushing it; then qualify the unchanged structural controls on the required
-  automatic backend gates. The public draft's earlier WGPU/Metal runs fail.
+- [x] [patch] Preserve earlier WGPU/Metal NaN failures and the f3193138
+  terminal results: five workflows succeed (WGPU 116/116); Metal retains
+  three NaN violations, with 90 passes, one failure and 21 unrun contracts.
+- [x] [patch] Model folded self-equality plus suppressing clamps and preserve
+  two rejected comparison prototypes. The private shared-magnitude candidate
+  retains finite outputs without changing any fixture or threshold.
+- [ ] [patch] Review the magnitude-selection source delta independently
+  before pushing it, then qualify the unchanged structural controls on the
+  required automatic backend gates. CPU stress checks do not qualify Metal.
 - [ ] [patch] Obtain independent review of the final private diff and assess
   current owner/base overlap plus workflow/deployment side effects before
   any public draft or CI action.

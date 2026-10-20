@@ -4,10 +4,11 @@
 
 ### Fixed
 
-- [patch] Forward NaN inputs explicitly through the bounded WGSL GELU-tanh
-  gradient and sanitize its eagerly evaluated polynomial operand. Preserve
-  existing structural controls and every threshold; device validation of
-  this follow-up remains pending.
+- [patch] Use one magnitude predicate for bounded WGSL GELU-tanh-gradient
+  operands and saturation. Remove the clamp/self-equality dependency and
+  separate negative comparison implicated by retained NaN failures. Preserve
+  native scalar typing, structural controls and thresholds; actual Metal
+  validation of this private follow-up remains pending.
 
 - [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
   evaluation and use a nonoverflowing sigmoid product. Finite saturated
